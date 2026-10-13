@@ -1,6 +1,7 @@
 package generators
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -64,4 +65,112 @@ func TestValidateGeneratorCode(t *testing.T) {
 	if err := ValidateGeneratorCode("unknown_engine", "123"); err == nil {
 		t.Errorf("expected error for unknown generator type, got nil")
 	}
+}
+
+func TestLookup(t *testing.T) {
+	for _, genType := range AllowedGeneratorTypes() {
+		g, err := Lookup(genType)
+		if err != nil {
+			t.Fatalf("Lookup(%q): %v", genType, err)
+		}
+		if g.Type() != genType {
+			t.Errorf("Lookup(%q).Type() = %q", genType, g.Type())
+		}
+	}
+	if _, err := Lookup("ean13"); !errors.Is(err, ErrInvalidGeneratorType) {
+		t.Errorf("Lookup(ean13): got %v, want ErrInvalidGeneratorType", err)
+	}
+}
+
+func TestEncodeSymbolShapes(t *testing.T) {
+	cases := []struct {
+		genType, payload, ec string
+		cols, rows, quiet    int
+	}{
+		{TypeQR, "HELLO WORLD", "", 21, 21, 4},
+		{TypeQR, "https://bam.example/a/7c9e6679-7425-40de-944b-e07fc1f90ae7", "H", 41, 41, 4},
+		{TypeMicroQR, "BAM-42", "", 13, 13, 2},
+		{TypeMicroQR, "BAM-42", "Q", 17, 17, 2},
+		{TypeCode128, "1234", "", 11*4 + 13, 1, 10},
+	}
+	for _, c := range cases {
+		g, err := Lookup(c.genType)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sym, err := g.Encode(c.payload, c.ec)
+		if err != nil {
+			t.Fatalf("%s %q: %v", c.genType, c.payload, err)
+		}
+		if sym.Cols != c.cols || sym.Rows != c.rows || sym.QuietZone != c.quiet || len(sym.Dark) != sym.Cols*sym.Rows {
+			t.Errorf("%s %q at %q: got %d×%d (quiet %d, %d modules), want %d×%d (quiet %d)",
+				c.genType, c.payload, c.ec, sym.Cols, sym.Rows, sym.QuietZone, len(sym.Dark), c.cols, c.rows, c.quiet)
+		}
+	}
+}
+
+func TestEncodeRejectsBadInput(t *testing.T) {
+	cases := []struct {
+		genType, payload, ec string
+		want                 error
+	}{
+		{TypeQR, "x", "X", ErrInvalidErrorCorrection},
+		{TypeMicroQR, "A", "H", ErrInvalidErrorCorrection},
+		{TypeCode128, "A", "L", ErrInvalidErrorCorrection},
+		{TypeQR, "bad\xffutf8", "", ErrInvalidCharacterSet},
+		{TypeMicroQR, "lower", "", ErrInvalidCharacterSet},
+		{TypeCode128, "", "", ErrEmptyCode},
+		// Valid as an asset key (M4-L), but too long once Q is requested.
+		{TypeMicroQR, strings.Repeat("A", 21), "Q", ErrInvalidCodeLength},
+	}
+	for _, c := range cases {
+		g, err := Lookup(c.genType)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := g.Encode(c.payload, c.ec); !errors.Is(err, c.want) {
+			t.Errorf("%s %q at %q: got %v, want %v", c.genType, c.payload, c.ec, err, c.want)
+		}
+	}
+}
+
+// lowestLevel is the error correction level every validated payload must fit.
+var lowestLevel = map[string]string{TypeQR: "L", TypeMicroQR: "L", TypeCode128: ""}
+
+func TestValidatedCapacityBoundariesEncode(t *testing.T) {
+	cases := map[string][]string{
+		TypeQR:      {strings.Repeat("a", QRMaxBytes), strings.Repeat("€", QRMaxBytes/3)},
+		TypeMicroQR: {strings.Repeat("7", MicroQRMaxNumeric), strings.Repeat("Z", MicroQRMaxAlphanumeric)},
+		TypeCode128: {strings.Repeat("~", Code128MaxLength), strings.Repeat("9", Code128MaxLength)},
+	}
+	for genType, payloads := range cases {
+		g, _ := Lookup(genType)
+		for _, p := range payloads {
+			if err := g.Validate(p); err != nil {
+				t.Fatalf("%s: boundary payload rejected: %v", genType, err)
+			}
+			if _, err := g.Encode(p, lowestLevel[genType]); err != nil {
+				t.Errorf("%s: validated %d-byte payload failed to encode: %v", genType, len(p), err)
+			}
+		}
+	}
+}
+
+// FuzzValidatedPayloadsEncode checks the registry's promise: a code that may be
+// assigned to an asset can always be printed.
+func FuzzValidatedPayloadsEncode(f *testing.F) {
+	for _, seed := range []string{"MQR-12345", "0123456789", "https://example.org/a/1", "BAM-ASSET-001", " $%*+-./:"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, payload string) {
+		for _, genType := range AllowedGeneratorTypes() {
+			g, _ := Lookup(genType)
+			if g.Validate(payload) != nil {
+				continue
+			}
+			if _, err := g.Encode(payload, lowestLevel[genType]); err != nil {
+				t.Errorf("%s accepted %q but cannot encode it: %v", genType, payload, err)
+			}
+		}
+	})
 }
