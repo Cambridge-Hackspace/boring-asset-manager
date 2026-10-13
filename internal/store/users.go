@@ -151,10 +151,14 @@ func (s *Store) CreateUser(email, password string, isActive bool) (*models.User,
 }
 
 // UpdateUserStatus updates an active user's status with Anti-Lockout enforcement.
+// Archived (deleted) users cannot be reactivated and are reported as not found.
 func (s *Store) UpdateUserStatus(userID string, isActive bool) error {
 	u, err := s.GetUserByID(userID)
 	if err != nil {
 		return err
+	}
+	if u.ArchivedAt != nil {
+		return ErrUserNotFound
 	}
 
 	// If deactivating an active user, check anti-lockout invariant
@@ -236,11 +240,19 @@ func (s *Store) AssignUserRole(userID, roleID string) error {
 	return err
 }
 
-// RemoveUserRole revokes a role from a user with Anti-Lockout enforcement.
+// RemoveUserRole revokes a role from a user with Anti-Lockout enforcement. The guard only
+// applies when the revocation actually strips users:manage from an active user, i.e. the
+// user is active, holds this role, the role grants users:manage, and no other role of the
+// user grants it.
 func (s *Store) RemoveUserRole(userID, roleID string) error {
+	u, err := s.GetUserByID(userID)
+	if err != nil {
+		return err
+	}
+
 	var roleHasManage int
-	err := s.QueryRow(`
-		SELECT COUNT(*) 
+	err = s.QueryRow(`
+		SELECT COUNT(*)
 		FROM role_permissions rp
 		JOIN permissions p ON rp.permission_id = p.id
 		WHERE rp.role_id = ? AND p.key = ?
@@ -249,7 +261,26 @@ func (s *Store) RemoveUserRole(userID, roleID string) error {
 		return err
 	}
 
-	if roleHasManage > 0 {
+	var userHasRole int
+	err = s.QueryRow("SELECT COUNT(*) FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID).Scan(&userHasRole)
+	if err != nil {
+		return err
+	}
+
+	var otherManageRoles int
+	err = s.QueryRow(`
+		SELECT COUNT(*)
+		FROM user_roles ur
+		JOIN role_permissions rp ON ur.role_id = rp.role_id
+		JOIN permissions p ON rp.permission_id = p.id
+		WHERE ur.user_id = ? AND ur.role_id <> ? AND p.key = ?
+	`, userID, roleID, rbac.PermUsersManage).Scan(&otherManageRoles)
+	if err != nil {
+		return err
+	}
+
+	isActiveUser := u.IsActive && u.ArchivedAt == nil
+	if isActiveUser && userHasRole > 0 && roleHasManage > 0 && otherManageRoles == 0 {
 		activeAdmins, err := s.CountActiveAdmins()
 		if err != nil {
 			return err
