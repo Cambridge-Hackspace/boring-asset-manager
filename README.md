@@ -256,11 +256,11 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
   | `{{field.<key>}}` | The asset's value for that corpus field (empty when unset) |
   | `{{base_url}}` | `server.base_url` from the configuration |
 
-  Unknown placeholders and unknown field keys are rejected when the template is saved. A `generator` element without a `content_binding` encodes `{{asset.code.<its generator_type>}}`, and rendering fails for an asset that has no code of that type. Resolved generator payloads go through the same validator as asset generator keys before they are encoded.
+  Unknown placeholders and unknown field keys are rejected when the template is saved. A field deleted later simply resolves to an empty string. A `generator` element without a `content_binding` encodes `{{asset.code.<its generator_type>}}`, and rendering fails for an asset that has no code of that type. Resolved generator payloads go through the same validator as asset generator keys before they are encoded.
 * **Element types:**
   * `generator`: `generator_type` (`qr`, `micro_qr` or `code128`); optional `error_correction` (QR `L`, `M` (default), `Q`, `H`; Micro QR `L` (default), `M`, `Q`); optional `quiet_zone` in modules (defaults: QR 4, Micro QR 2, Code 128 10). The symbol is drawn centered, at the largest whole number of dots per module that fits the box; rendering fails if that is under 2 dots. Code 128 bars fill the box height.
   * `text`: `font_size` (pt), `font_weight` (`normal`/`bold`), `font_family` (`sans`/`mono`), `align` (`left`/`center`/`right`), `wrap` (default `false`) and `min_font_size` (default 6). Text that overflows its box shrinks in 0.5 pt steps down to `min_font_size`, then is cut short with an ellipsis.
-  * `static_image`: `image_id` names an uploaded PNG or JPEG, scaled to fit the box with its aspect ratio kept. Uploads are recorded in the `images` table and stored under `storage.local_path/images/`. SVG images are not supported, since there is no dependable pure-Go SVG rasterizer.
+  * `static_image`: `image_id` names an uploaded PNG or JPEG, scaled to fit the box with its aspect ratio kept. Uploads are recorded in the `images` table and stored under `storage.local_path/images/`; `GET /api/v1/images/{id}` returns the metadata and `/content` the image itself. SVG images are not supported, since there is no dependable pure-Go SVG rasterizer.
 
 ### 4.2 Generator Interfaces
 
@@ -278,6 +278,8 @@ type Generator interface {
     // Validate applies the asset key rules; every payload it accepts encodes
     // at the lowest error correction level.
     Validate(payload string) error
+    // ErrorCorrectionLevels lists accepted levels, default first (none for Code 128).
+    ErrorCorrectionLevels() []string
     // Encode validates, then encodes; "" selects the default level.
     Encode(payload string, errorCorrection string) (Symbol, error)
 }
@@ -437,10 +439,10 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 * [x] Add Go fuzz targets asserting that every payload `Validate` accepts encodes at the lowest error correction level.
 
 #### Sub-Phase 3.2: Template Specification, Storage & API
-* [ ] Implement the template parser and validator (§4.1), with errors that name the offending element and property.
-* [ ] Implement the content binding parser and resolver.
-* [ ] Implement template store operations and the REST API (`/api/v1/templates`): reads need `assets:read`, writes need `templates:manage`.
-* [ ] Add migration `002` for the `images` table and the image API (`/api/v1/images`): PNG or JPEG up to 2 MiB, uploads need `templates:manage`, and deleting an image a template still uses is refused.
+* [x] Implement the template parser and validator (§4.1, `internal/labels`), rejecting unknown properties, with errors that name the offending element and property.
+* [x] Implement the content binding parser and resolver.
+* [x] Implement template store operations and the REST API (`/api/v1/templates`): reads need `assets:read`, writes need `templates:manage`. Validation failures return `400` with a `details` list of `{path, message}`; a `PUT` cannot change a template's ID.
+* [x] Add migration `002` for the `images` table and the image API (`/api/v1/images`): PNG or JPEG up to 2 MiB and 4096 × 4096 pixels, uploads need `templates:manage`, and deleting an image a template still uses is refused with `409`.
 
 #### Sub-Phase 3.3: Layout & Rendering
 * [ ] Implement unit conversion, dot-grid layout, module snapping and quiet zones.

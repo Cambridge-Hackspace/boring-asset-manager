@@ -16,6 +16,7 @@ import (
 func setupTestServer(t *testing.T) (*Server, *models.User, string) {
 	t.Helper()
 	cfg := config.DefaultConfig()
+	cfg.Storage.LocalPath = t.TempDir()
 
 	st := setupTestStore(t)
 

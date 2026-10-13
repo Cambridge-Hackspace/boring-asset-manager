@@ -121,15 +121,14 @@ type AssetWithDetails struct {
 	EffectiveFields []EffectiveField    `json:"effective_fields"`
 }
 
-// Template represents a physical label layout specification.
-type Template struct {
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Units      string          `json:"units"` // "mm", "in"
-	Width      float64         `json:"width"`
-	Height     float64         `json:"height"`
-	DPI        int             `json:"dpi"`
-	LayoutJSON json.RawMessage `json:"layout_json"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+// Image is an uploaded PNG or JPEG placed on labels by static_image elements.
+type Image struct {
+	ID          string    `json:"id"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	WidthPx     int       `json:"width_px"`
+	HeightPx    int       `json:"height_px"`
+	ByteSize    int64     `json:"byte_size"`
+	SHA256      string    `json:"sha256"`
+	CreatedAt   time.Time `json:"created_at"`
 }

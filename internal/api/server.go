@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -19,6 +20,7 @@ const Version = "0.1.0-alpha"
 type Server struct {
 	cfg        *config.Config
 	store      *store.Store
+	images     *filestore.Images
 	httpServer *http.Server
 }
 
@@ -27,8 +29,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux := http.NewServeMux()
 
 	s := &Server{
-		cfg:   cfg,
-		store: st,
+		cfg:    cfg,
+		store:  st,
+		images: filestore.NewImages(cfg.Storage.LocalPath),
 	}
 
 	// Unauthenticated public endpoints
@@ -70,6 +73,20 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetAsset)))
 	mux.Handle("PUT /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUpdateAsset)))
 	mux.Handle("DELETE /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsDelete)(http.HandlerFunc(s.handleDeleteAsset)))
+
+	// Label templates
+	mux.Handle("GET /api/v1/templates", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListTemplates)))
+	mux.Handle("POST /api/v1/templates", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleCreateTemplate)))
+	mux.Handle("GET /api/v1/templates/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetTemplate)))
+	mux.Handle("PUT /api/v1/templates/{id}", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleUpdateTemplate)))
+	mux.Handle("DELETE /api/v1/templates/{id}", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleDeleteTemplate)))
+
+	// Images placed on labels
+	mux.Handle("GET /api/v1/images", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListImages)))
+	mux.Handle("POST /api/v1/images", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleUploadImage)))
+	mux.Handle("GET /api/v1/images/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetImage)))
+	mux.Handle("GET /api/v1/images/{id}/content", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetImageContent)))
+	mux.Handle("DELETE /api/v1/images/{id}", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleDeleteImage)))
 
 	// Wrap root handler with session extraction middleware
 	rootHandler := Authenticate(st)(mux)
