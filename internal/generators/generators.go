@@ -44,6 +44,9 @@ type Generator interface {
 	// this type. Every payload it accepts encodes at the lowest error
 	// correction level.
 	Validate(payload string) error
+	// ErrorCorrectionLevels lists the levels Encode accepts, default first.
+	// It is empty for symbologies without error correction.
+	ErrorCorrectionLevels() []string
 	// Encode validates payload and encodes it at the given error correction
 	// level; "" selects the generator's default.
 	Encode(payload string, errorCorrection string) (Symbol, error)

@@ -2,6 +2,7 @@ package generators
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -173,4 +174,29 @@ func FuzzValidatedPayloadsEncode(f *testing.F) {
 			}
 		}
 	})
+}
+
+// TestErrorCorrectionLevelsAreAccepted keeps the advertised levels and Encode
+// in agreement, including the default listed first.
+func TestErrorCorrectionLevelsAreAccepted(t *testing.T) {
+	payload := map[string]string{TypeQR: "BAM", TypeMicroQR: "BAM", TypeCode128: "BAM"}
+	for _, genType := range AllowedGeneratorTypes() {
+		g, _ := Lookup(genType)
+		levels := g.ErrorCorrectionLevels()
+		for _, level := range levels {
+			if _, err := g.Encode(payload[genType], level); err != nil {
+				t.Errorf("%s rejects advertised level %q: %v", genType, level, err)
+			}
+		}
+		def, err := g.Encode(payload[genType], "")
+		if err != nil {
+			t.Fatalf("%s default: %v", genType, err)
+		}
+		if len(levels) > 0 {
+			first, _ := g.Encode(payload[genType], levels[0])
+			if !reflect.DeepEqual(def, first) {
+				t.Errorf("%s: default level differs from first advertised level %q", genType, levels[0])
+			}
+		}
+	}
 }
