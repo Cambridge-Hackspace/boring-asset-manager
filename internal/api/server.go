@@ -47,6 +47,30 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PATCH /api/v1/users/{id}/status", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateUserStatus)))
 	mux.Handle("DELETE /api/v1/users/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteUser)))
 
+	// Field Corpus endpoints
+	mux.Handle("GET /api/v1/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListFields)))
+	mux.Handle("POST /api/v1/fields", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCreateField)))
+	mux.Handle("GET /api/v1/fields/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetField)))
+	mux.Handle("PUT /api/v1/fields/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateField)))
+	mux.Handle("DELETE /api/v1/fields/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteField)))
+
+	// Category Hierarchy & Field Inheritance endpoints
+	mux.Handle("GET /api/v1/categories", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListCategories)))
+	mux.Handle("POST /api/v1/categories", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCreateCategory)))
+	mux.Handle("GET /api/v1/categories/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategory)))
+	mux.Handle("PUT /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateCategory)))
+	mux.Handle("DELETE /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategory)))
+	mux.Handle("GET /api/v1/categories/{id}/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategoryEffectiveFields)))
+	mux.Handle("POST /api/v1/categories/{id}/fields", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleAssignCategoryField)))
+	mux.Handle("DELETE /api/v1/categories/{id}/fields/{field_id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleRemoveCategoryField)))
+
+	// Asset Registry & Dynamic Field Values endpoints
+	mux.Handle("GET /api/v1/assets", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListAssets)))
+	mux.Handle("POST /api/v1/assets", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleCreateAsset)))
+	mux.Handle("GET /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetAsset)))
+	mux.Handle("PUT /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUpdateAsset)))
+	mux.Handle("DELETE /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsDelete)(http.HandlerFunc(s.handleDeleteAsset)))
+
 	// Wrap root handler with session extraction middleware
 	rootHandler := Authenticate(st)(mux)
 
