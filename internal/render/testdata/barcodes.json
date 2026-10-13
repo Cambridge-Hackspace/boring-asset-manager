@@ -1,0 +1,36 @@
+[
+ {
+  "file": "image_inches.png",
+  "payloads": []
+ },
+ {
+  "file": "image_inches.mono.png",
+  "payloads": []
+ },
+ {
+  "file": "micro_code128.png",
+  "payloads": [
+   "BAM-0042",
+   "TOOL-0042"
+  ]
+ },
+ {
+  "file": "micro_code128.mono.png",
+  "payloads": [
+   "BAM-0042",
+   "TOOL-0042"
+  ]
+ },
+ {
+  "file": "qr_label.png",
+  "payloads": [
+   "https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"
+  ]
+ },
+ {
+  "file": "qr_label.mono.png",
+  "payloads": [
+   "https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"
+  ]
+ }
+]
