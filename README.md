@@ -154,9 +154,9 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 * **Custom IDs Restricted Per-Generator:**
 * Assets can be assigned custom, human-readable IDs or system-allocated short sequences that are strictly validated and constrained per generator type:
-  * **Micro QR (`micro_qr`):** Constrained by physical matrix bounds and version capacity (M1–M4). Custom IDs are restricted to the QR alphanumeric character set (`0-9`, `A-Z`, space, `$%*+-./:`) and strictly capped to the largest symbol's (M4-L) payload limits: 35 characters for purely numeric codes, 21 characters otherwise.
+  * **Micro QR (`micro_qr`):** Constrained by physical matrix bounds and version capacity (M2–M4). Custom IDs are restricted to the QR alphanumeric character set (`0-9`, `A-Z`, space, `$%*+-./:`) and strictly capped to the largest symbol's (M4-L) payload limits: 35 characters for purely numeric codes, 21 characters otherwise.
   * **Standard QR (`qr`):** Supports arbitrary UTF-8 payloads up to 2953 encoded bytes (version 40-L byte mode) and dynamic URL templates (`{base_url}/a/{asset_uuid}` or custom slug).
-  * **Code 128 (`code128`):** Restricted to standard 128 ASCII character set with linear density constraints.
+  * **Code 128 (`code128`):** Restricted to printable ASCII (32–126) and at most 80 characters, so labels stay scannable.
 * **Uniqueness Invariant:** The compound key `(generator_type, assigned_code)` must be unique across all active assets, guaranteeing that scanning any generated code resolves unambiguously to a single asset.
 
 
@@ -275,7 +275,10 @@ type Symbol struct {
 
 type Generator interface {
     Type() string
+    // Validate applies the asset key rules; every payload it accepts encodes
+    // at the lowest error correction level.
     Validate(payload string) error
+    // Encode validates, then encodes; "" selects the default level.
     Encode(payload string, errorCorrection string) (Symbol, error)
 }
 ```
@@ -283,9 +286,9 @@ type Generator interface {
 Generators return modules, not images: sizing and drawing belong to layout, which is what keeps modules on whole dots.
 
 * **QR Code (`qr`):** Model 2, versions 1–40, error correction L/M/Q/H. A payload is encoded as a single segment in the most compact of numeric, alphanumeric or byte mode; UTF-8 is written as plain bytes with no ECI header, which is what phone scanners expect. The smallest version that fits is used, and the mask is chosen by the standard's penalty rules.
-* **Micro QR Code (`micro_qr`):** versions M1–M4 in numeric or alphanumeric mode, the smallest version that fits at the requested error correction, mask chosen by the Micro QR evaluation rule. Asset keys are validated against M4-L capacity, so a template asking for `M` or `Q` can reject a long code at render time.
-* **Code 128 (`code128`):** code sets B and C, switching to C for runs of four or more digits, with the modulo-103 check symbol.
-* All three encoders are written in-house and share one GF(256) Reed–Solomon encoder between the QR flavors. Go QR libraries exist, but none implements Micro QR, and owning all three keeps output deterministic for golden tests.
+* **Micro QR Code (`micro_qr`):** versions M2–M4 in numeric or alphanumeric mode, the smallest version that fits at the requested error correction, mask chosen by the Micro QR evaluation rule. M1 is never used: it detects errors but cannot correct them, so a scuffed label would stop scanning. Asset keys are validated against M4-L capacity, so a template asking for `M` or `Q` can reject a long code at render time.
+* **Code 128 (`code128`):** code sets B and C with the modulo-103 check symbol. Following ISO/IEC 15417 Annex E, a symbol starts in C when it begins with four or more digits, and switches to C for a run of four digits at the end or six elsewhere.
+* All three encoders are written in-house as standalone packages (`internal/generators/qr`, `microqr`, `code128`) that know nothing of the registry; the QR flavors share private helpers for Reed–Solomon, bit packing and matrix layout. Go QR libraries exist, but none implements Micro QR, and owning all three keeps output deterministic for golden tests.
 
 ### 4.3 Output Formats
 
@@ -425,13 +428,13 @@ When implementing this repository from scratch, complete the following milestone
 Sub-phases land in order, each with its tests, and leave the tree releasable. The only new module dependency planned is `golang.org/x/image`.
 
 #### Sub-Phase 3.1: Symbology Encoders
-* [ ] Implement a shared bit buffer and GF(256) Reed–Solomon encoder.
-* [ ] Implement the QR Code encoder (versions 1–40, error correction L/M/Q/H, numeric/alphanumeric/byte modes, penalty-based mask selection).
-* [ ] Implement the Micro QR encoder (M1–M4, numeric/alphanumeric modes, Micro QR mask evaluation).
-* [ ] Implement the Code 128 encoder (code sets B and C, check symbol).
-* [ ] Replace the `ValidateGeneratorCode` switch with a generator registry implementing §4.2, keeping its current validation behavior and tests.
-* [ ] Check in golden module matrices generated by `tools/goldens` with Python's `segno` (QR and Micro QR, with version and mask pinned). Valid Code 128 encodings are not unique, so Code 128 is verified by decoding with `zxing-cpp` instead.
-* [ ] Add Go fuzz targets asserting that every payload `Validate` accepts also encodes.
+* [x] Implement a shared bit buffer and GF(256) Reed–Solomon encoder.
+* [x] Implement the QR Code encoder (versions 1–40, error correction L/M/Q/H, numeric/alphanumeric/byte modes, penalty-based mask selection).
+* [x] Implement the Micro QR encoder (M2–M4, numeric/alphanumeric modes, Micro QR mask evaluation).
+* [x] Implement the Code 128 encoder (code sets B and C, check symbol).
+* [x] Replace the `ValidateGeneratorCode` switch with a generator registry implementing §4.2, keeping its current validation behavior and tests.
+* [x] Check in golden module matrices generated by [`tools/goldens`](tools/goldens/README.md) with Python's `segno` (QR and Micro QR, with version and mask pinned). Valid Code 128 encodings are not unique, so Code 128 is verified by decoding with `zxing-cpp` instead.
+* [x] Add Go fuzz targets asserting that every payload `Validate` accepts encodes at the lowest error correction level.
 
 #### Sub-Phase 3.2: Template Specification, Storage & API
 * [ ] Implement the template parser and validator (§4.1), with errors that name the offending element and property.
