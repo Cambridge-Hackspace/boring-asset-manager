@@ -312,11 +312,34 @@ When implementing this repository from scratch, complete the following milestone
 
 ### Phase 1: Foundation & Infrastructure
 
-* [ ] Establish Go module structure (`cmd/bam`, `internal/api`, `internal/models`, `internal/store`, `internal/config`).
-* [ ] Implement TOML configuration loader using environment variable fallback.
-* [ ] Set up database abstraction layer with support for pure-Go SQLite (`modernc.org/sqlite` for CGO-free cross-compilation), PostgreSQL, and MariaDB.
-* [ ] Implement CLI commands (`init`, `migrate`, `admin create`, `serve`).
-* [ ] Implement database-backed sessions and RBAC middleware with anti-lockout checks.
+#### Completed Skeleton & Base Tooling
+* [x] Establish Go module structure (`cmd/bam`, `internal/api`, `internal/models`, `internal/store`, `internal/config`, `internal/auth`, `internal/rbac`, `internal/cli`).
+* [x] Implement TOML configuration loader with environment variable overrides (`BAM_SERVER_*`, `BAM_DATABASE_*`, `BAM_DB_PATH`, `BAM_STORAGE_*`).
+* [x] Set up database abstraction layer with pure-Go SQLite (`modernc.org/sqlite` WAL mode) and embedded migration runner with 16 core schema tables.
+* [x] Implement CLI commands (`init`, `migrate`, `admin create`, `serve`, `version`).
+* [x] Onboard to `reaper` ([`.reaper.toml`](.reaper.toml)) with remote execution proven on Proxmox VM.
+
+#### Sub-Phase 1.1: Database-Backed Sessions & RBAC Store Engine
+* [x] Implement session CRUD in store (`CreateSession`, `GetSession`, `DeleteSession`, `CleanExpiredSessions`).
+* [x] Implement case-insensitive user lookup and user-role-permission SQL join for union resolution.
+* [x] Implement store-level anti-lockout invariant enforcement on user deactivation, deletion, and admin role revocation.
+
+#### Sub-Phase 1.2: Multi-Dialect Store Support (PostgreSQL & MariaDB)
+* [ ] Integrate pure-Go PostgreSQL (`github.com/lib/pq`) and MariaDB (`github.com/go-sql-driver/mysql`) drivers while preserving `CGO_ENABLED=0` cross-compilation.
+* [ ] Implement dialect-aware connection pooling and configuration in `store.Open()`.
+* [ ] Validate dialect compatibility across migrations and SQL operations for SQLite, PostgreSQL, and MariaDB.
+
+#### Sub-Phase 1.3: HTTP Cookie Management & RBAC Middleware
+* [ ] Implement stateful session cookie management (`bam_session`, `HttpOnly`, `SameSite=Lax`, secure detection).
+* [ ] Implement `Authenticate` middleware resolving sessions and injecting user + permissions map into request context.
+* [ ] Implement `RequireAuth` and `RequirePermission` authorization middlewares with `401 Unauthorized` and `403 Forbidden` responses.
+
+#### Sub-Phase 1.4: Authentication & User Administration API
+* [ ] Implement session authentication endpoints: `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`.
+* [ ] Implement user administration endpoints (`GET /api/v1/users`, `POST /api/v1/users`, `PATCH /api/v1/users/{id}/status`, `DELETE /api/v1/users/{id}`).
+* [ ] Enforce anti-lockout rejection (`400 Bad Request`) when attempting to deactivate or delete the last active user with `users:manage`.
+* [ ] Prove complete Phase 1 test battery via `reaper test` in remote ephemeral VM.
+
 
 ### Phase 2: Core Domain & Schema
 
