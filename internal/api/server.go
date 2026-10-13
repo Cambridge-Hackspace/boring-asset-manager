@@ -1,0 +1,100 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+)
+
+// Version is the current application version.
+const Version = "0.1.0-alpha"
+
+// Server wraps the HTTP server and dependencies.
+type Server struct {
+	cfg        *config.Config
+	store      *store.Store
+	httpServer *http.Server
+}
+
+// NewServer initializes a new Server with route registration.
+func NewServer(cfg *config.Config, st *store.Store) *Server {
+	mux := http.NewServeMux()
+
+	s := &Server{
+		cfg:   cfg,
+		store: st,
+	}
+
+	mux.HandleFunc("GET /healthz", s.handleHealthz)
+	mux.HandleFunc("GET /readyz", s.handleReadyz)
+	mux.HandleFunc("GET /api/v1/info", s.handleInfo)
+
+	s.httpServer = &http.Server{
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	return s
+}
+
+// Handler returns the underlying http.Handler (useful for httptest).
+func (s *Server) Handler() http.Handler {
+	return s.httpServer.Handler
+}
+
+// Start begins listening and serving HTTP requests.
+func (s *Server) Start() error {
+	return s.httpServer.ListenAndServe()
+}
+
+// Shutdown gracefully shuts down the server.
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	status := "healthy"
+	dbStatus := "connected"
+	httpCode := http.StatusOK
+
+	if err := s.store.Ping(); err != nil {
+		status = "degraded"
+		dbStatus = fmt.Sprintf("disconnected: %v", err)
+		httpCode = http.StatusServiceUnavailable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpCode)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":   status,
+		"database": dbStatus,
+		"time":     time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ready": true,
+	})
+}
+
+func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"name":     "BAM! (Boring Asset Manager)",
+		"version":  Version,
+		"base_url": s.cfg.Server.BaseURL,
+		"dialect":  s.store.Dialect,
+	})
+}

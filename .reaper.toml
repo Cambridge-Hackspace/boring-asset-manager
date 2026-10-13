@@ -1,0 +1,61 @@
+# boring-asset-manager as a reaper tenant.
+#
+# Follows the tenant contract in docs/tenants.md and testing methodology
+# in docs/testing-methodology.md:
+# - Disposable remote VM execution on Proxmox VE (ubuntu-26.04)
+# - Toolchain arrives as a digest-pinned container image
+# - Build caches (GOCACHE, GOMODCACHE) mapped to tank/cache so resets stay fast
+# - Ephemeral test state (SQLite database, file uploads) mapped to $REAPER_STATE
+#   so in-guest ZFS rollback returns state to pristine between runs in seconds.
+
+schema = 1
+project = "boring-asset-manager"
+
+guests = ["ubuntu-26.04"]
+exec = "container"
+
+[build]
+# golang:1.23-bookworm (digest-pinned; tags are forbidden by reaper schema)
+image = "docker.io/library/golang@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db"
+cmd = """
+GOCACHE=$REAPER_CACHE_GOCACHE \
+GOPATH=$REAPER_CACHE_GOPATH \
+go build -v -o /dev/null ./cmd/bam"""
+cache = ["gocache", "gopath"]
+
+[run]
+# Runs tests with test database and file storage directed to $REAPER_STATE.
+# Inherits build.image since exec is container.
+cmd = """
+GOCACHE=$REAPER_CACHE_GOCACHE \
+GOPATH=$REAPER_CACHE_GOPATH \
+BAM_DB_PATH=$REAPER_STATE/bam_test.db \
+BAM_STORAGE_PATH=$REAPER_STATE/uploads \
+go test -v -race ./..."""
+
+[sync]
+exclude = [
+  "/bin/",
+  "/data/",
+  "/out/",
+  "/frontend/node_modules/",
+  "/frontend/dist/",
+]
+
+[reset]
+# tank/state is the only dataset reset/snapshot touches.
+# Rollback resets SQLite databases and uploads between test passes.
+datasets = ["state"]
+
+[resources]
+cores = 4
+ram_gb = 8
+
+[profiles.dev]
+ttl = "2h"
+warm_cache = true
+
+[profiles.nightly]
+ttl = "12h"
+# Cold cache to guarantee repeatable builds from scratch
+warm_cache = false
