@@ -347,3 +347,26 @@ When implementing this repository from scratch, complete the following milestone
 * [ ] Implement Discord webhook dispatcher for consumables marked running low.
 * [ ] Write integration test suites covering inheritance conflict resolution, anti-lockout logic, and template vector compilation.
 
+---
+
+## 8. Ephemeral Test Harness (`reaper`) & Testing Methodology
+
+BAM is onboarded as a tenant of [`reaper`](https://forge.axonibyte.com/axonibyte/reaper) via [`.reaper.toml`](.reaper.toml) for fast, isolated pre-push validation on remote ephemeral Proxmox VE virtual machines.
+
+### 8.1 The Pre-Push Loop
+```bash
+reaper up        # Provisions remote VM, lays out ZFS pools, fetches pinned toolchains
+reaper test      # Syncs uncommitted working tree -> builds -> ZFS state rollback -> runs test suite
+reaper down      # Tears down remote VM (cull daemon provides automatic TTL backstop)
+```
+
+### 8.2 Testing Portfolio
+Following the "Portfolio of Oracles" methodology:
+1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, Argon2id auth, boundary decoders, and deterministic cross-language barcode golden files.
+2. **Tier 4 — Server Contract Tests:** RBAC permission union resolution and anti-lockout invariants tested as in-process pure functions without database dependencies.
+3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence.
+4. **Tier 7 — Seeded Fuzzing:** Deterministic input fuzzing asserting no 500 crashes, valid JSON envelopes, and daemon liveness.
+5. **Tier 8 — Concurrency Harnesses:** Simultaneous write simulations for inventory threshold decrements and per-generator ID allocations, asserting stored state consistency.
+6. **State Rollback:** Ephemeral databases and uploads live under `$REAPER_STATE` (`tank/state`), enabling near-instantaneous ZFS rollbacks to `@pristine` between test iterations.
+
+
