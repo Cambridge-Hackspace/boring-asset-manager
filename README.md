@@ -11,19 +11,18 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 ## 1. System Architecture & Tech Stack
 
 ### Core Philosophy
-- **Self-Contained Deployment:** Distributed as a single compiled binary for FreeBSD and Linux (cross-compilable to Windows).
+- **Self-Contained Deployment:** Distributed as a single compiled binary for FreeBSD, Linux, and Windows with effortless `CGO_ENABLED=0` cross-compilation.
 - **Embedded Frontend:** The Go backend serves the compiled Single Page Application (SPA) directly via `embed.FS`.
-- **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, master secrets). All operational settings, webhooks, and layouts live inside the database.
+- **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, master secrets). All operational settings, network printer definitions, webhooks, and layouts live inside the database.
 
 ### Technology Choices
 - **Backend:** Go 1.22+ (Standard library `net/http` or router such as `chi`).
-- **Database Abstraction:** Dialect-agnostic SQL driver supporting **SQLite3** (with WAL mode), **PostgreSQL 14+**, and **MariaDB 10.6+**. Migrations managed via embedded SQL scripts (`golang-migrate` or custom embedded schema runner).
+- **Database Abstraction:** Dialect-agnostic SQL driver supporting **SQLite3** (via pure-Go `modernc.org/sqlite` with WAL mode for seamless cross-compilation without C toolchains), **PostgreSQL 14+**, and **MariaDB 10.6+**. Migrations managed via embedded SQL scripts (`golang-migrate` or custom embedded schema runner).
 - **Frontend:** TypeScript + Svelte (or React/Vite) with a lightweight 2D canvas/SVG label layout engine and Tailwind CSS for accessible, high-contrast, colorful category UI components.
-- **Label Generation:** Native Go vector rendering:
-  - **SVG:** Native vector template compilation.
-  - **PNG:** High-DPI rasterization via Go vector rasterizers (e.g., `fogleman/gg` or `srwiley/oksvg`).
-  - **PDF:** Vector document creation (e.g., `jung-kurt/gofpdf` or `signintech/gopdf`).
-- **Barcode & Matrix Engine:** Go-native QR Code and Micro QR generation interfaces.
+- **Label Generation & Printing:**
+  - **Native Go Vector/Raster Engines:** SVG template compilation, high-DPI PNG rasterization (e.g., `fogleman/gg`, `srwiley/oksvg`), and PDF vector document creation (e.g., `jung-kurt/gofpdf`, `signintech/gopdf`).
+  - **Direct Network Printing:** Direct raw TCP socket dispatch (Port 9100) supporting Brother ESC/P and raster command streams directly to network-connected thermal printers (such as Brother QL-810W) without desktop driver or print dialog dependencies.
+- **Barcode & Matrix Engine:** Go-native QR Code and Micro QR generation interfaces with per-generator payload and character set constraint validation.
 
 ---
 
@@ -104,6 +103,18 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 * **Global Field Corpus (`fields`):**
 * Columns: `id (UUID)`, `key (snake_case)`, `label (string)`, `validation_type (string: text|number|date|url|select)`, `options (JSON nullable)`.
+* **Options Schema (`options` JSON):** For `select` validation types, `options` stores a structured JSON schema with selectable choices and an optional default value:
+  ```json
+  {
+    "choices": [
+      { "label": "Operational", "value": "operational" },
+      { "label": "Needs Repair", "value": "needs_repair" },
+      { "label": "Decommissioned", "value": "decommissioned" }
+    ],
+    "default": "operational"
+  }
+  ```
+  *(Enforces unique values per choice and verifies that `default`, if present, corresponds to an existing choice value).*
 
 
 * **Category Hierarchy (`categories`):**
@@ -134,13 +145,18 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 
 * **Generator ID Mapping (`asset_generator_keys`):**
-* Allows mapping compact, deterministic, or constrained strings to an asset for constrained barcodes:
+* Maps compact, deterministic, or custom constrained strings to an asset for constrained barcodes:
 * `asset_id (UUID)`
 * `generator_type (string: "qr" | "micro_qr" | "code128")`
 * `assigned_code (string, unique per generator_type)`
 
+* **Custom IDs Restricted Per-Generator:**
+* Assets can be assigned custom, human-readable IDs or system-allocated short sequences that are strictly validated and constrained per generator type:
+  * **Micro QR (`micro_qr`):** Constrained by physical matrix bounds and version capacity (M1–M4). Custom IDs are restricted to allowed character sets (e.g., uppercase alphanumeric) and strictly capped to the version's payload limits (e.g., 10–35 alphanumeric characters).
+  * **Standard QR (`qr`):** Supports arbitrary UTF-8 payloads and dynamic URL templates (`{base_url}/a/{asset_uuid}` or custom slug).
+  * **Code 128 (`code128`):** Restricted to standard 128 ASCII character set with linear density constraints.
+* **Uniqueness Invariant:** The compound key `(generator_type, assigned_code)` must be unique across all active assets, guaranteeing that scanning any generated code resolves unambiguously to a single asset.
 
-* Generator engines enforce character set and min/max length constraints during code generation (e.g., Micro QR code size limits).
 
 
 
@@ -181,7 +197,7 @@ Templates are stored as structured JSON/YAML definitions specifying physical can
       "y": 3.0,
       "width": 23.0,
       "height": 23.0,
-      "content_binding": "url_prefix:[https://bam.local/a/](https://bam.local/a/){{asset.id}}"
+      "content_binding": "url_prefix:https://bam.local/a/{{asset.id}}"
     },
     {
       "type": "text",
@@ -230,11 +246,13 @@ type Generator interface {
 * **Micro QR Code:** Enforces tight payload budgets (alphanumeric/byte limits based on version M1–M4).
 * **Standard QR Code:** Dynamic URL prefixes (`{base_url}/a/{asset_uuid}`) with selectable error correction levels (L, M, Q, H).
 
-### 4.3 Output Formats
+### 4.3 Output Formats & Direct Network Dispatch
 
 1. **SVG:** Base interchange format used by the frontend canvas preview editor.
 2. **PNG:** High-resolution 300+ DPI rasterization for Brother QL raster drivers / CUPS thermal queues.
 3. **PDF:** Vector-accurate standard page layouts for printing batch sheets or continuous rolls.
+4. **Direct Network Printing (Raw Socket / Port 9100):** BAM communicates directly over the local network with IP-enabled thermal label printers (e.g., Brother QL-810W) via raw TCP sockets on port 9100. The backend compiles the template into native printer raster/ESC-P commands and streams the payload directly to the device, enabling one-click hardware label dispensing without client-side print dialogs or local printer drivers.
+
 
 ---
 
@@ -276,10 +294,10 @@ type Generator interface {
 
 
 
-### 6.2 Bulk Label Printing
+### 6.2 Bulk Label Printing & Network Dispatch
 
-* Endpoint accepts an array of asset IDs and a target template ID.
-* Streams back a multi-page PDF or a stitched raster archive matching the template's dimensions and roll constraints.
+* **Export Mode:** Endpoint accepts an array of asset IDs and a target template ID, streaming back a multi-page PDF or a stitched raster archive matching the template's dimensions and roll constraints.
+* **Network Dispatch Mode:** Endpoint allows streaming generated batch print jobs directly to a configured IP thermal printer over raw TCP (Port 9100) for rapid hardware dispensing.
 
 ---
 
@@ -296,34 +314,36 @@ When implementing this repository from scratch, complete the following milestone
 
 * [ ] Establish Go module structure (`cmd/bam`, `internal/api`, `internal/models`, `internal/store`, `internal/config`).
 * [ ] Implement TOML configuration loader using environment variable fallback.
-* [ ] Set up database abstraction layer with support for SQLite, PostgreSQL, and MariaDB.
+* [ ] Set up database abstraction layer with support for pure-Go SQLite (`modernc.org/sqlite` for CGO-free cross-compilation), PostgreSQL, and MariaDB.
 * [ ] Implement CLI commands (`init`, `migrate`, `admin create`, `serve`).
 * [ ] Implement database-backed sessions and RBAC middleware with anti-lockout checks.
 
 ### Phase 2: Core Domain & Schema
 
-* [ ] Implement global field corpus CRUD.
+* [ ] Implement global field corpus CRUD with JSON schema validation for `select` options.
 * [ ] Implement category hierarchy (tree traversal, cycle detection, field inheritance calculator).
-* [ ] Implement asset registry (UUID generation, multi-category assignment, fallback to Uncategorized).
+* [ ] Implement asset registry (UUID generation, multi-category assignment, per-generator custom ID validation, fallback to Uncategorized).
 * [ ] Implement dynamic field value persistence.
 
 ### Phase 3: Generator & Label Rendering Engine
 
-* [ ] Implement barcode generator interface with QR and Micro QR engines.
+* [ ] Implement barcode generator interface with QR and Micro QR engines (enforcing per-generator character set and payload limits).
 * [ ] Build the declarative template parser (JSON/YAML schema validation).
 * [ ] Implement SVG/PNG/PDF rendering pipelines matching physical dimensions (mm/in).
-* [ ] Implement single and batch label export endpoints.
+* [ ] Implement single and batch label export endpoints (downloadable streams).
+* [ ] Implement direct network printer dispatch client (Raw TCP socket / Port 9100 for Brother QL raster / ESC-P streams).
 
 ### Phase 4: Frontend Application
 
 * [ ] Initialize TypeScript + Vite SPA inside `frontend/`.
 * [ ] Embed compiled assets into the Go binary using Go 1.16+ `embed.FS`.
 * [ ] Build category navigation views with accessible color coding.
-* [ ] Implement asset management views with dynamic input forms based on inherited fields.
-* [ ] Implement visual template editor (canvas-based node positioning and binding configuration).
+* [ ] Implement asset management views with dynamic input forms based on inherited fields and generator ID validation.
+* [ ] Implement visual template editor (canvas-based node positioning and binding configuration) with print preview and direct network print triggers.
 
 ### Phase 5: Batch Operations & Webhooks
 
 * [ ] Implement CSV parser with strict category pre-flight checks and column mapper.
 * [ ] Implement Discord webhook dispatcher for consumables marked running low.
 * [ ] Write integration test suites covering inheritance conflict resolution, anti-lockout logic, and template vector compilation.
+
