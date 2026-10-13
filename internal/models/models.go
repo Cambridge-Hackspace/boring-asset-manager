@@ -135,13 +135,15 @@ type Image struct {
 
 // Printer is a network label printer.
 type Printer struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Driver    string    `json:"driver"`
-	Model     string    `json:"model"`
-	Host      string    `json:"host"`
-	Port      int       `json:"port"`
-	Media     string    `json:"media"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Driver string `json:"driver"`
+	Model  string `json:"model"`
+	Host   string `json:"host"`
+	Port   int    `json:"port"`
+	Media  string `json:"media"`
+	// Options are driver options as a JSON object; absent means defaults.
+	Options   json.RawMessage `json:"options,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }

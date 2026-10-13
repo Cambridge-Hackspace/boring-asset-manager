@@ -47,6 +47,26 @@ func TestPrinterLifecycle(t *testing.T) {
 		t.Errorf("update not stored: %+v", reloaded)
 	}
 
+	// Options are validated by the driver, stored compactly and read back.
+	p.Options = []byte(`{ "cut" : false }`)
+	if _, err := st.UpdatePrinter(*p); err != nil {
+		t.Fatalf("setting options: %v", err)
+	}
+	if reloaded, _ := st.GetPrinter(p.ID); string(reloaded.Options) != `{"cut":false}` {
+		t.Errorf("options stored as %q", reloaded.Options)
+	}
+	p.Options = []byte(`{"speed":9}`)
+	if _, err := st.UpdatePrinter(*p); !errors.Is(err, printers.ErrInvalidPrinter) {
+		t.Errorf("unknown option: got %v, want ErrInvalidPrinter", err)
+	}
+	p.Options = []byte("null")
+	if _, err := st.UpdatePrinter(*p); err != nil {
+		t.Fatal(err)
+	}
+	if reloaded, _ := st.GetPrinter(p.ID); reloaded.Options != nil {
+		t.Errorf("null options stored as %q", reloaded.Options)
+	}
+
 	list, err := st.ListPrinters()
 	if err != nil || len(list) != 1 {
 		t.Errorf("ListPrinters() = %v, %v", list, err)

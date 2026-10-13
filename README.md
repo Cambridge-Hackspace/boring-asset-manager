@@ -302,12 +302,30 @@ Batch exports produce a multi-page PDF or a ZIP of PNGs named by asset ID (§6.2
 
 ### 4.4 Printers & Direct Network Dispatch
 
-Printers are configured through `/api/v1/printers` (`settings:manage`; anyone with `labels:print` can list them) and stored in the `printers` table: name, driver, model, host, port (default 9100) and the media currently loaded. `GET /api/v1/printers/drivers` lists the supported models and rolls. Phase 3 ships one driver, `brother_ql`, for the QL-810W and QL-820NWB:
+Any number of printers can be configured through `/api/v1/printers` (`settings:manage`; anyone with `labels:print` can list them). Each is stored in the `printers` table with a name, driver, model, host, port (default 9100), the media currently loaded, and driver `options` as a JSON object.
+
+Printer families are supported by **drivers** (`internal/printers`), registered by name and chosen per printer:
+
+```go
+type Driver interface {
+    Info() DriverInfo                                // models, media and options, for clients
+    Validate(s Settings) error                       // model, media and options of a printer
+    Plan(s Settings, label LabelSpec) (Plan, error)  // fit check; ErrDoesNotFit → 422
+}
+
+type Plan interface {
+    Encode(labels []*image.Gray) ([]byte, error)     // 1-bit labels in, one print job out
+}
+```
+
+The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` (raw TCP today). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models, media and options.
+
+Phase 3 ships one driver, `brother_ql`, for the QL-810W and QL-820NWB. Its only option is `cut` (default `true`): cut each label off as it finishes, or let the tape feed on uncut.
 
 * **Media catalog:** each supported roll records its width, whether it is die-cut (and if so its label length), its printable width in head dots and how many pins sit beside the tape. Phase 3 covers DK-22210 (29 mm continuous), DK-22205 (62 mm continuous) and DK-11201 (29 × 90 mm die-cut). Two-color black/red media (DK-22251) is out of scope.
 * **Fit check:** before any asset is laid out, the template must suit the loaded media, or the request fails with `422`. Its DPI must be 300 and one side must be the tape width (±0.5 mm). A template whose height is the tape width is rotated 90° counterclockwise. On die-cut media the other side must be the label length; continuous labels must be 25–1000 mm long.
 * **Printable area:** the printer cannot reach the tape edges, so the rendered label is cropped to the printable area around its center: 306 of the 343 dots across 29 mm tape (about 1.5 mm lost on each side), 696 across 62 mm, and on DK-11201 991 of 1063 dots along the label (about 3 mm at each end). Keep elements clear of those margins.
-* **Raster stream:** each label is rendered 1-bit at 300 DPI and encoded as described in Brother's QL-800 series raster command reference: invalidate, initialize, then per label raster mode, print information, auto-cut, margins and TIFF compression, PackBits-compressed raster lines (90 bytes for each line of the 720-pin head, mirrored because the first pin sits at the right of the tape) and a print command. Every label is cut off as it finishes.
+* **Raster stream:** each label is rendered 1-bit at 300 DPI and encoded as described in Brother's QL-800 series raster command reference: invalidate, initialize, then per label raster mode, print information, auto-cut, margins and TIFF compression, PackBits-compressed raster lines (90 bytes for each line of the 720-pin head, mirrored because the first pin sits at the right of the tape) and a print command. With `cut` on, every label is cut off as it finishes.
 * **Transport:** raw TCP to port 9100 with dial and write timeouts. Jobs are serialized per printer address so concurrent requests never interleave their streams; an unreachable printer returns `502`. A job counts as printed once the printer has accepted the whole stream; reading back printer status is a later improvement.
 
 ---
