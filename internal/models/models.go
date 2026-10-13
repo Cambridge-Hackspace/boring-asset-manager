@@ -81,6 +81,13 @@ type CategoryField struct {
 	IsRequired bool   `json:"is_required"`
 }
 
+// EffectiveField represents a field resolved through category inheritance.
+type EffectiveField struct {
+	Field            Field  `json:"field"`
+	IsRequired       bool   `json:"is_required"`
+	SourceCategoryID string `json:"source_category_id,omitempty"`
+}
+
 // Asset represents a tracked physical item.
 type Asset struct {
 	ID         string     `json:"id"`
@@ -103,6 +110,15 @@ type AssetGeneratorKey struct {
 	AssetID       string `json:"asset_id"`
 	GeneratorType string `json:"generator_type"` // "qr", "micro_qr", "code128"
 	AssignedCode  string `json:"assigned_code"`
+}
+
+// AssetWithDetails represents an aggregate view of an asset with its relations.
+type AssetWithDetails struct {
+	Asset           Asset               `json:"asset"`
+	Categories      []Category          `json:"categories"`
+	GeneratorKeys   []AssetGeneratorKey `json:"generator_keys"`
+	FieldValues     map[string]string   `json:"field_values"` // key -> value
+	EffectiveFields []EffectiveField    `json:"effective_fields"`
 }
 
 // Template represents a physical label layout specification.

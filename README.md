@@ -343,10 +343,31 @@ When implementing this repository from scratch, complete the following milestone
 
 ### Phase 2: Core Domain & Schema
 
-* [ ] Implement global field corpus CRUD with JSON schema validation for `select` options.
-* [ ] Implement category hierarchy (tree traversal, cycle detection, field inheritance calculator).
-* [ ] Implement asset registry (UUID generation, multi-category assignment, per-generator custom ID validation, fallback to Uncategorized).
-* [ ] Implement dynamic field value persistence.
+#### Sub-Phase 2.1: Global Field Corpus & Dynamic Select Schema Validation
+* [x] Implement Field store operations (`CreateField`, `GetFieldByID`, `GetFieldByKey`, `ListFields`, `UpdateField`, `DeleteField`).
+* [x] Implement validation logic for field types (`text`, `number`, `date`, `url`, `select`).
+* [x] Implement JSON schema parser & validator for `select` options (`choices` uniqueness, non-empty, optional `default` constraint).
+* [x] Implement Field corpus HTTP REST API (`/api/v1/fields`).
+
+#### Sub-Phase 2.2: Category Hierarchy, Single-Parent Tree Traversal, Cycle Detection & Field Inheritance Engine
+* [x] Implement Category store operations (`CreateCategory`, `GetCategoryByID`, `ListCategories`, `UpdateCategory`, `DeleteCategory`).
+* [x] Implement cycle detection algorithm preventing circular references in category single-parent trees.
+* [x] Implement `category_fields` associative bindings with requirement flags (`is_required`).
+* [x] Implement recursive ancestor tree traversal and field inheritance engine with conflict resolution (Required overrides Optional).
+* [x] Implement Category hierarchy HTTP REST API (`/api/v1/categories` and `/api/v1/categories/{id}/fields`).
+
+#### Sub-Phase 2.3: Asset Registry, Generator ID Constraints & Uncategorized System State
+* [x] Implement virtual/system `Uncategorized` category fallback for assets without user categories (hiding when asset count is 0).
+* [x] Implement constrained generator key validators (`micro_qr` capacity/charset, `qr` UTF-8 payload, `code128` ASCII).
+* [x] Implement compound uniqueness invariant `(generator_type, assigned_code)` across active assets.
+* [x] Implement Asset store operations (`CreateAsset`, `GetAssetByID`, `ListAssets`, `UpdateAsset`, `DeleteAsset`) with multi-category join.
+* [x] Implement data retention invariant ensuring field values are never discarded upon category detachment.
+
+#### Sub-Phase 2.4: Dynamic Field Value Persistence, Full REST API & End-to-End Test Battery
+* [x] Implement dynamic field value validation matching effective inherited category fields.
+* [x] Implement Asset HTTP REST API (`/api/v1/assets`).
+* [x] Build comprehensive integration test battery across fields, categories, inheritance, asset persistence, and generator keys.
+* [x] Verify complete Phase 2 test suite via `reaper test` with remote ephemeral ZFS rollback.
 
 ### Phase 3: Generator & Label Rendering Engine
 
