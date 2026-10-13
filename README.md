@@ -16,7 +16,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 - **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, master secrets). All operational settings, network printer definitions, webhooks, and layouts live inside the database.
 
 ### Technology Choices
-- **Backend:** Go 1.22+ (Standard library `net/http` or router such as `chi`).
+- **Backend:** Go 1.23+ (Standard library `net/http` or router such as `chi`).
 - **Database Abstraction:** Dialect-agnostic SQL driver supporting **SQLite3** (via pure-Go `modernc.org/sqlite` with WAL mode for seamless cross-compilation without C toolchains), **PostgreSQL 14+**, and **MariaDB 10.6+**. Migrations managed via embedded SQL scripts (`golang-migrate` or custom embedded schema runner).
 - **Frontend:** TypeScript + Svelte (or React/Vite) with a lightweight 2D canvas/SVG label layout engine and Tailwind CSS for accessible, high-contrast, colorful category UI components.
 - **Label Generation & Printing:**
@@ -171,7 +171,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 ### 3.4 Sessions & Authentication
 
-* **Local Credentials:** Email (case-insensitive, unique) + password hashed via Argon2id or bcrypt.
+* **Local Credentials:** Email (case-insensitive, unique) + password hashed via bcrypt (cost 12).
 * **TOTP (RFC 6238):** Optional two-factor authentication flag per user.
 * **Session Store:** Stateful sessions stored in the active database (`sessions` table) referenced via an `HttpOnly`, `SameSite=Lax`, `Secure` cookie.
 
@@ -408,7 +408,7 @@ reaper down      # Tears down remote VM (cull daemon provides automatic TTL back
 
 ### 8.2 Testing Portfolio
 Following the "Portfolio of Oracles" methodology:
-1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, Argon2id auth, boundary decoders, and deterministic cross-language barcode golden files.
+1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, bcrypt password hashing, boundary decoders, and deterministic cross-language barcode golden files.
 2. **Tier 4 — Server Contract Tests:** RBAC permission union resolution and anti-lockout invariants tested as in-process pure functions without database dependencies.
 3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence. The store and API suites run against PostgreSQL and MariaDB by pointing them at a server (see §8.3).
 4. **Tier 7 — Seeded Fuzzing:** Deterministic input fuzzing asserting no 500 crashes, valid JSON envelopes, and daemon liveness.
