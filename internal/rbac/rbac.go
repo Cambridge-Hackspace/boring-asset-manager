@@ -14,6 +14,7 @@ const (
 	PermCategoriesManage = "categories:manage"
 	PermSettingsManage   = "settings:manage"
 	PermUsersManage      = "users:manage"
+	PermLabelsPrint      = "labels:print"
 )
 
 var (
@@ -31,6 +32,7 @@ func AllPermissions() []string {
 		PermCategoriesManage,
 		PermSettingsManage,
 		PermUsersManage,
+		PermLabelsPrint,
 	}
 }
 

@@ -127,6 +127,26 @@ func RequirePermission(permKey string) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireAnyPermission allows the request when the user holds at least one of
+// the listed permissions.
+func RequireAnyPermission(permKeys ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if CurrentUser(r.Context()) == nil {
+				writeJSONError(w, http.StatusUnauthorized, "Authentication required")
+				return
+			}
+			for _, p := range permKeys {
+				if HasPermission(r.Context(), p) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			writeJSONError(w, http.StatusForbidden, "Forbidden: insufficient permissions")
+		})
+	}
+}
+
 // ErrorResponse represents a standardized JSON API error structure.
 type ErrorResponse struct {
 	Error string `json:"error"`

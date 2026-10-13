@@ -9,6 +9,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -21,6 +22,7 @@ type Server struct {
 	cfg        *config.Config
 	store      *store.Store
 	images     *filestore.Images
+	dispatcher *printers.Dispatcher
 	httpServer *http.Server
 }
 
@@ -29,9 +31,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux := http.NewServeMux()
 
 	s := &Server{
-		cfg:    cfg,
-		store:  st,
-		images: filestore.NewImages(cfg.Storage.LocalPath),
+		cfg:        cfg,
+		store:      st,
+		images:     filestore.NewImages(cfg.Storage.LocalPath),
+		dispatcher: printers.NewDispatcher(),
 	}
 
 	// Unauthenticated public endpoints
@@ -92,6 +95,16 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/assets/{id}/label", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetLabel)))
 	mux.Handle("POST /api/v1/templates/preview", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handlePreviewTemplate)))
 	mux.Handle("POST /api/v1/labels/export", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportLabels)))
+
+	// Network printers
+	canSeePrinters := RequireAnyPermission(rbac.PermLabelsPrint, rbac.PermSettingsManage)
+	mux.Handle("GET /api/v1/printers/drivers", canSeePrinters(http.HandlerFunc(s.handlePrinterDrivers)))
+	mux.Handle("GET /api/v1/printers", canSeePrinters(http.HandlerFunc(s.handleListPrinters)))
+	mux.Handle("GET /api/v1/printers/{id}", canSeePrinters(http.HandlerFunc(s.handleGetPrinter)))
+	mux.Handle("POST /api/v1/printers", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleCreatePrinter)))
+	mux.Handle("PUT /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUpdatePrinter)))
+	mux.Handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
+	mux.Handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
 
 	// Wrap root handler with session extraction middleware
 	rootHandler := LimitRequestBodies(Authenticate(st)(mux))

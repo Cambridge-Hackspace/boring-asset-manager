@@ -302,12 +302,13 @@ Batch exports produce a multi-page PDF or a ZIP of PNGs named by asset ID (§6.2
 
 ### 4.4 Printers & Direct Network Dispatch
 
-Printers are configured through the API and stored in the `printers` table: name, driver, model, host, port (default 9100) and the media currently loaded. Phase 3 ships one driver, `brother_ql`, targeting the QL-810W:
+Printers are configured through `/api/v1/printers` (`settings:manage`; anyone with `labels:print` can list them) and stored in the `printers` table: name, driver, model, host, port (default 9100) and the media currently loaded. `GET /api/v1/printers/drivers` lists the supported models and rolls. Phase 3 ships one driver, `brother_ql`, for the QL-810W and QL-820NWB:
 
-* **Media catalog:** each supported roll records its width, whether it is die-cut (and if so its label length), and its printable width and offset in head dots. Phase 3 covers DK-22210 (29 mm continuous), DK-22205 (62 mm continuous) and DK-11201 (29 × 90 mm die-cut). Two-color black/red media (DK-22251) is out of scope.
-* **Fit check:** before anything is sent, the template must suit the loaded media. Its DPI must be 300, one side must match the media width (landscape templates are rotated 90° automatically), and on die-cut media the other side must match the label length.
-* **Raster stream:** each label is rendered 1-bit at 300 DPI and encoded as described in Brother's QL-800 series raster command reference: invalidate, initialize, raster mode, print information, auto-cut and margins, then PackBits-compressed raster lines (90 bytes for each line of the 720-dot head) and the print command, cutting after the job's last label.
-* **Transport:** raw TCP to port 9100 with dial and write timeouts. Jobs are serialized per printer so concurrent requests never interleave their streams. A job counts as printed once the printer has accepted the whole stream; reading back printer status is a later improvement.
+* **Media catalog:** each supported roll records its width, whether it is die-cut (and if so its label length), its printable width in head dots and how many pins sit beside the tape. Phase 3 covers DK-22210 (29 mm continuous), DK-22205 (62 mm continuous) and DK-11201 (29 × 90 mm die-cut). Two-color black/red media (DK-22251) is out of scope.
+* **Fit check:** before any asset is laid out, the template must suit the loaded media, or the request fails with `422`. Its DPI must be 300 and one side must be the tape width (±0.5 mm). A template whose height is the tape width is rotated 90° counterclockwise. On die-cut media the other side must be the label length; continuous labels must be 25–1000 mm long.
+* **Printable area:** the printer cannot reach the tape edges, so the rendered label is cropped to the printable area around its center: 306 of the 343 dots across 29 mm tape (about 1.5 mm lost on each side), 696 across 62 mm, and on DK-11201 991 of 1063 dots along the label (about 3 mm at each end). Keep elements clear of those margins.
+* **Raster stream:** each label is rendered 1-bit at 300 DPI and encoded as described in Brother's QL-800 series raster command reference: invalidate, initialize, then per label raster mode, print information, auto-cut, margins and TIFF compression, PackBits-compressed raster lines (90 bytes for each line of the 720-pin head, mirrored because the first pin sits at the right of the tape) and a print command. Every label is cut off as it finishes.
+* **Transport:** raw TCP to port 9100 with dial and write timeouts. Jobs are serialized per printer address so concurrent requests never interleave their streams; an unreachable printer returns `502`. A job counts as printed once the printer has accepted the whole stream; reading back printer status is a later improvement.
 
 ---
 
@@ -352,7 +353,7 @@ Printers are configured through the API and stored in the `printers` table: name
 ### 6.2 Bulk Label Printing & Network Dispatch
 
 * **Export Mode:** `POST /api/v1/labels/export` takes a template ID, up to 500 distinct asset IDs and a format (`pdf` or `zip`, with `"mono": true` for 1-bit PNGs), and streams back a multi-page PDF or a ZIP of PNGs named `<asset_id>.png`.
-* **Network Dispatch Mode:** `POST /api/v1/printers/{id}/print` takes a template ID, asset IDs and a copy count, checks the template against the printer's media (§4.4), and streams the job to the printer over TCP port 9100.
+* **Network Dispatch Mode:** `POST /api/v1/printers/{id}/print` (`labels:print`) takes a template ID, asset IDs and a copy count (1–20, at most 500 labels in all), checks the template against the printer's media (§4.4), and streams the job to the printer over TCP port 9100.
 * **All or nothing:** every asset is bound and validated before any output is produced, so a batch either renders completely or fails with `422` and a list of `{asset_id, path, message}` for the assets that could not be rendered. Archived assets are never labeled.
 
 ---
@@ -457,12 +458,12 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 * [x] Cap request body sizes on every endpoint: 1 MiB, refused with `413` when declared up front; image uploads keep their own limit.
 
 #### Sub-Phase 3.5: Brother QL Network Printing
-* [ ] Add migration `003` for the `printers` table, and the `labels:print` permission.
-* [ ] Implement the media catalog, fit check and automatic rotation.
-* [ ] Implement the raster command encoder with PackBits compression.
-* [ ] Implement the TCP dispatcher with timeouts and per-printer job serialization.
-* [ ] Implement the printer REST API (`/api/v1/printers`, managed with `settings:manage`) and `POST /api/v1/printers/{id}/print` (`labels:print`).
-* [ ] Test against an in-process fake printer that parses the command stream and rebuilds each label's bitmap for comparison with the 1-bit render, plus a golden byte stream per media.
+* [x] Add migration `003` for the `printers` table, and the `labels:print` permission.
+* [x] Implement the media catalog, fit check, printable-area crop and automatic rotation (`internal/printers/brotherql`).
+* [x] Implement the raster command encoder with PackBits compression.
+* [x] Implement the TCP dispatcher with timeouts and per-printer job serialization (`internal/printers`).
+* [x] Implement the printer REST API (`/api/v1/printers`, managed with `settings:manage`) and `POST /api/v1/printers/{id}/print` (`labels:print`).
+* [x] Test against an in-process fake printer that decodes the command stream and rebuilds each label's bitmap for comparison with the 1-bit render, plus a golden byte stream per media.
 * [ ] Check printing on a real QL-810W (manual; outside reaper).
 
 ### Phase 4: Frontend Application
