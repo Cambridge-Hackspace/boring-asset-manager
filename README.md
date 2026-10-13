@@ -20,9 +20,9 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 - **Database Abstraction:** Dialect-agnostic SQL driver supporting **SQLite3** (via pure-Go `modernc.org/sqlite` with WAL mode for seamless cross-compilation without C toolchains), **PostgreSQL 14+**, and **MariaDB 10.6+**. Migrations managed via embedded SQL scripts (`golang-migrate` or custom embedded schema runner).
 - **Frontend:** TypeScript + Svelte (or React/Vite) with a lightweight 2D canvas/SVG label layout engine and Tailwind CSS for accessible, high-contrast, colorful category UI components.
 - **Label Generation & Printing:**
-  - **Native Go Vector/Raster Engines:** SVG template compilation, high-DPI PNG rasterization (e.g., `fogleman/gg`, `srwiley/oksvg`), and PDF vector document creation (e.g., `jung-kurt/gofpdf`, `signintech/gopdf`).
-  - **Direct Network Printing:** Direct raw TCP socket dispatch (Port 9100) supporting Brother ESC/P and raster command streams directly to network-connected thermal printers (such as Brother QL-810W) without desktop driver or print dialog dependencies.
-- **Barcode & Matrix Engine:** Go-native QR Code and Micro QR generation interfaces with per-generator payload and character set constraint validation.
+  - **Pure-Go Rendering:** One layout engine feeds SVG, PNG and PDF backends (§4). Fonts, glyph outlines and rasterization come from `golang.org/x/image` (the embedded Go fonts, OpenType parsing and its vector rasterizer); the PDF writer is a small in-house one so output stays deterministic.
+  - **Direct Network Printing:** Raw TCP dispatch (port 9100) of Brother QL raster command streams to network thermal printers such as the Brother QL-810W, with no desktop driver or print dialog.
+- **Barcode & Matrix Engine:** In-house QR Code, Micro QR and Code 128 encoders with per-generator payload and character set validation (§4.2).
 
 ---
 
@@ -165,7 +165,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 ### 3.3 RBAC Security Matrix
 
 * **Tables:** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`.
-* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`).
+* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, and from Phase 3 `labels:print`). Seeding grants every permission to the `admin` role, including permissions added by later releases.
 * **Union Principle:** When a user is assigned multiple roles, their effective permissions are the strict union of all granted rights across all assigned roles.
 * **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, or role removal that results in zero active users possessing the `users:manage` permission.
 
@@ -179,13 +179,23 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 ## 4. Label Template Engine & Print Subsystem
 
+Every label passes through the same three stages, whichever format it ends up in:
+
+```
+template + asset ──► bind ──► layout (whole printer dots) ──► SVG │ PNG │ PDF │ Brother QL raster
+```
+
+1. **Bind** resolves each element's `content_binding` against the asset, its field values and its generator keys.
+2. **Layout** converts the template's physical units into dots at the template's DPI, snaps every barcode module to a whole number of dots, and sets text with the embedded fonts. Its output is a scene of rectangles, glyph outlines and images, measured in dots.
+3. **Backends** draw that scene. Text is drawn as outlines rather than font references, so SVG, PDF and PNG agree at the template's DPI and never depend on the fonts installed where they are viewed.
+
 ### 4.1 Declarative Template Specification
 
-Templates are stored as structured JSON/YAML definitions specifying physical canvas bounds and responsive placement nodes:
+A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `height` and `dpi` are columns, and `elements` is kept in `layout_json`. The API reads and writes it as one JSON document:
 
 ```json
 {
-  "id": "tpl_brother_ql_standard_29x90",
+  "id": "brother_ql_29x90",
   "name": "Standard Die-Cut 29mm x 90mm",
   "units": "mm",
   "width": 90.0,
@@ -195,11 +205,12 @@ Templates are stored as structured JSON/YAML definitions specifying physical can
     {
       "type": "generator",
       "generator_type": "qr",
+      "error_correction": "M",
       "x": 3.0,
       "y": 3.0,
       "width": 23.0,
       "height": 23.0,
-      "content_binding": "url_prefix:https://bam.local/a/{{asset.id}}"
+      "content_binding": "{{base_url}}/a/{{asset.id}}"
     },
     {
       "type": "text",
@@ -209,7 +220,7 @@ Templates are stored as structured JSON/YAML definitions specifying physical can
       "height": 6.0,
       "font_size": 14,
       "font_weight": "bold",
-      "content_binding": "field:name"
+      "content_binding": "{{asset.name}}"
     },
     {
       "type": "text",
@@ -218,7 +229,8 @@ Templates are stored as structured JSON/YAML definitions specifying physical can
       "width": 58.0,
       "height": 4.0,
       "font_size": 9,
-      "content_binding": "asset:id"
+      "font_family": "mono",
+      "content_binding": "{{field.location}}"
     },
     {
       "type": "static_image",
@@ -226,35 +238,71 @@ Templates are stored as structured JSON/YAML definitions specifying physical can
       "y": 18.0,
       "width": 10.0,
       "height": 8.0,
-      "asset_path": "/static/branding/logo.svg"
+      "image_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
     }
   ]
 }
-
 ```
+
+* **ID:** a slug matching `^[a-z0-9][a-z0-9_-]{0,63}$`, chosen by the author.
+* **Canvas:** `units` is `mm` or `in`; `width` and `height` are positive; `dpi` is 150–600 (Brother QL printers print at 300). Positions and sizes use the template's units with the origin at the top-left corner, and every element must lie inside the canvas. `font_size` is always in points.
+* **Content bindings:** `content_binding` is literal text with `{{...}}` placeholders:
+
+  | Placeholder | Resolves to |
+  |---|---|
+  | `{{asset.id}}` | The asset's UUID |
+  | `{{asset.name}}` | The asset's name |
+  | `{{asset.code.<generator_type>}}` | The asset's assigned code for that generator, e.g. `{{asset.code.micro_qr}}` |
+  | `{{field.<key>}}` | The asset's value for that corpus field (empty when unset) |
+  | `{{base_url}}` | `server.base_url` from the configuration |
+
+  Unknown placeholders and unknown field keys are rejected when the template is saved. A `generator` element without a `content_binding` encodes `{{asset.code.<its generator_type>}}`, and rendering fails for an asset that has no code of that type. Resolved generator payloads go through the same validator as asset generator keys before they are encoded.
+* **Element types:**
+  * `generator`: `generator_type` (`qr`, `micro_qr` or `code128`); optional `error_correction` (QR `L`, `M` (default), `Q`, `H`; Micro QR `L` (default), `M`, `Q`); optional `quiet_zone` in modules (defaults: QR 4, Micro QR 2, Code 128 10). The symbol is drawn centered, at the largest whole number of dots per module that fits the box; rendering fails if that is under 2 dots. Code 128 bars fill the box height.
+  * `text`: `font_size` (pt), `font_weight` (`normal`/`bold`), `font_family` (`sans`/`mono`), `align` (`left`/`center`/`right`), `wrap` (default `false`) and `min_font_size` (default 6). Text that overflows its box shrinks in 0.5 pt steps down to `min_font_size`, then is cut short with an ellipsis.
+  * `static_image`: `image_id` names an uploaded PNG or JPEG, scaled to fit the box with its aspect ratio kept. Uploads are recorded in the `images` table and stored under `storage.local_path/images/`. SVG images are not supported, since there is no dependable pure-Go SVG rasterizer.
 
 ### 4.2 Generator Interfaces
 
 ```go
-type Generator interface {
-    Type() string
-    Validate(code string) error
-    GenerateVector(code string, width, height float64) ([]byte, error)
-    GenerateRaster(code string, dpi int) ([]byte, error)
+// Symbol is an encoded barcode as a grid of modules. Linear symbologies
+// (Code 128) have a single row, which layout stretches to the element height.
+type Symbol struct {
+    Cols, Rows int
+    QuietZone  int    // standard quiet zone, in modules
+    Dark       []bool // row-major, len(Dark) == Cols*Rows
 }
 
+type Generator interface {
+    Type() string
+    Validate(payload string) error
+    Encode(payload string, errorCorrection string) (Symbol, error)
+}
 ```
 
-* **Micro QR Code:** Enforces tight payload budgets (alphanumeric/byte limits based on version M1–M4).
-* **Standard QR Code:** Dynamic URL prefixes (`{base_url}/a/{asset_uuid}`) with selectable error correction levels (L, M, Q, H).
+Generators return modules, not images: sizing and drawing belong to layout, which is what keeps modules on whole dots.
 
-### 4.3 Output Formats & Direct Network Dispatch
+* **QR Code (`qr`):** Model 2, versions 1–40, error correction L/M/Q/H. A payload is encoded as a single segment in the most compact of numeric, alphanumeric or byte mode; UTF-8 is written as plain bytes with no ECI header, which is what phone scanners expect. The smallest version that fits is used, and the mask is chosen by the standard's penalty rules.
+* **Micro QR Code (`micro_qr`):** versions M1–M4 in numeric or alphanumeric mode, the smallest version that fits at the requested error correction, mask chosen by the Micro QR evaluation rule. Asset keys are validated against M4-L capacity, so a template asking for `M` or `Q` can reject a long code at render time.
+* **Code 128 (`code128`):** code sets B and C, switching to C for runs of four or more digits, with the modulo-103 check symbol.
+* All three encoders are written in-house and share one GF(256) Reed–Solomon encoder between the QR flavors. Go QR libraries exist, but none implements Micro QR, and owning all three keeps output deterministic for golden tests.
 
-1. **SVG:** Base interchange format used by the frontend canvas preview editor.
-2. **PNG:** High-resolution 300+ DPI rasterization for Brother QL raster drivers / CUPS thermal queues.
-3. **PDF:** Vector-accurate standard page layouts for printing batch sheets or continuous rolls.
-4. **Direct Network Printing (Raw Socket / Port 9100):** BAM communicates directly over the local network with IP-enabled thermal label printers (e.g., Brother QL-810W) via raw TCP sockets on port 9100. The backend compiles the template into native printer raster/ESC-P commands and streams the payload directly to the device, enabling one-click hardware label dispensing without client-side print dialogs or local printer drivers.
+### 4.3 Output Formats
 
+1. **SVG:** the interchange format for the frontend editor preview. Adjacent dark modules merge into rectangles; text is glyph outlines.
+2. **PNG:** rendered at the template's DPI, as 8-bit grayscale for previews or 1-bit black and white for printing. Barcode modules are never anti-aliased.
+3. **PDF:** one page per label, sized exactly to the label, with vector barcodes and text and images embedded as Flate-compressed bitmaps. Output is byte-for-byte deterministic: no timestamps or random document IDs.
+
+Batch exports produce a multi-page PDF or a ZIP of PNGs named by asset ID (§6.2).
+
+### 4.4 Printers & Direct Network Dispatch
+
+Printers are configured through the API and stored in the `printers` table: name, driver, model, host, port (default 9100) and the media currently loaded. Phase 3 ships one driver, `brother_ql`, targeting the QL-810W:
+
+* **Media catalog:** each supported roll records its width, whether it is die-cut (and if so its label length), and its printable width and offset in head dots. Phase 3 covers DK-22210 (29 mm continuous), DK-22205 (62 mm continuous) and DK-11201 (29 × 90 mm die-cut). Two-color black/red media (DK-22251) is out of scope.
+* **Fit check:** before anything is sent, the template must suit the loaded media. Its DPI must be 300, one side must match the media width (landscape templates are rotated 90° automatically), and on die-cut media the other side must match the label length.
+* **Raster stream:** each label is rendered 1-bit at 300 DPI and encoded as described in Brother's QL-800 series raster command reference: invalidate, initialize, raster mode, print information, auto-cut and margins, then PackBits-compressed raster lines (90 bytes for each line of the 720-dot head) and the print command, cutting after the job's last label.
+* **Transport:** raw TCP to port 9100 with dial and write timeouts. Jobs are serialized per printer so concurrent requests never interleave their streams. A job counts as printed once the printer has accepted the whole stream; reading back printer status is a later improvement.
 
 ---
 
@@ -298,8 +346,9 @@ type Generator interface {
 
 ### 6.2 Bulk Label Printing & Network Dispatch
 
-* **Export Mode:** Endpoint accepts an array of asset IDs and a target template ID, streaming back a multi-page PDF or a stitched raster archive matching the template's dimensions and roll constraints.
-* **Network Dispatch Mode:** Endpoint allows streaming generated batch print jobs directly to a configured IP thermal printer over raw TCP (Port 9100) for rapid hardware dispensing.
+* **Export Mode:** `POST /api/v1/labels/export` takes a template ID, up to 500 asset IDs and a format (`pdf` or `zip`), and streams back a multi-page PDF or a ZIP of PNGs.
+* **Network Dispatch Mode:** `POST /api/v1/printers/{id}/print` takes a template ID, asset IDs and a copy count, checks the template against the printer's media (§4.4), and streams the job to the printer over TCP port 9100.
+* **All or nothing:** every asset is bound and validated before any output is produced, so a batch either renders completely or fails with a list of the assets that could not be rendered.
 
 ---
 
@@ -373,11 +422,43 @@ When implementing this repository from scratch, complete the following milestone
 
 ### Phase 3: Generator & Label Rendering Engine
 
-* [ ] Implement barcode generator interface with QR and Micro QR engines (enforcing per-generator character set and payload limits).
-* [ ] Build the declarative template parser (JSON/YAML schema validation).
-* [ ] Implement SVG/PNG/PDF rendering pipelines matching physical dimensions (mm/in).
-* [ ] Implement single and batch label export endpoints (downloadable streams).
-* [ ] Implement direct network printer dispatch client (Raw TCP socket / Port 9100 for Brother QL raster / ESC-P streams).
+Sub-phases land in order, each with its tests, and leave the tree releasable. The only new module dependency planned is `golang.org/x/image`.
+
+#### Sub-Phase 3.1: Symbology Encoders
+* [ ] Implement a shared bit buffer and GF(256) Reed–Solomon encoder.
+* [ ] Implement the QR Code encoder (versions 1–40, error correction L/M/Q/H, numeric/alphanumeric/byte modes, penalty-based mask selection).
+* [ ] Implement the Micro QR encoder (M1–M4, numeric/alphanumeric modes, Micro QR mask evaluation).
+* [ ] Implement the Code 128 encoder (code sets B and C, check symbol).
+* [ ] Replace the `ValidateGeneratorCode` switch with a generator registry implementing §4.2, keeping its current validation behavior and tests.
+* [ ] Check in golden module matrices generated by `tools/goldens` with Python's `segno` (QR and Micro QR, with version and mask pinned). Valid Code 128 encodings are not unique, so Code 128 is verified by decoding with `zxing-cpp` instead.
+* [ ] Add Go fuzz targets asserting that every payload `Validate` accepts also encodes.
+
+#### Sub-Phase 3.2: Template Specification, Storage & API
+* [ ] Implement the template parser and validator (§4.1), with errors that name the offending element and property.
+* [ ] Implement the content binding parser and resolver.
+* [ ] Implement template store operations and the REST API (`/api/v1/templates`): reads need `assets:read`, writes need `templates:manage`.
+* [ ] Add migration `002` for the `images` table and the image API (`/api/v1/images`): PNG or JPEG up to 2 MiB, uploads need `templates:manage`, and deleting an image a template still uses is refused.
+
+#### Sub-Phase 3.3: Layout & Rendering
+* [ ] Implement unit conversion, dot-grid layout, module snapping and quiet zones.
+* [ ] Implement text layout with the embedded Go fonts (Regular, Bold, Mono): measuring, wrapping, shrink-to-fit and ellipsis.
+* [ ] Implement the SVG, PNG (grayscale and 1-bit) and PDF backends.
+* [ ] Check in golden outputs for each backend, regenerated with `go test ./internal/render -update`; `tools/goldens` decodes the rendered barcodes with `zxing-cpp` to confirm they scan.
+
+#### Sub-Phase 3.4: Export Endpoints
+* [ ] Implement `GET /api/v1/assets/{id}/label?template_id=…&format=svg|png|pdf`.
+* [ ] Implement `POST /api/v1/templates/preview`, rendering an unsaved template as SVG against an asset or placeholder data, for the Phase 4 editor.
+* [ ] Implement `POST /api/v1/labels/export` (§6.2).
+* [ ] Cap request body sizes on every endpoint (1 MiB for JSON; uploads set their own limit).
+
+#### Sub-Phase 3.5: Brother QL Network Printing
+* [ ] Add migration `003` for the `printers` table, and the `labels:print` permission.
+* [ ] Implement the media catalog, fit check and automatic rotation.
+* [ ] Implement the raster command encoder with PackBits compression.
+* [ ] Implement the TCP dispatcher with timeouts and per-printer job serialization.
+* [ ] Implement the printer REST API (`/api/v1/printers`, managed with `settings:manage`) and `POST /api/v1/printers/{id}/print` (`labels:print`).
+* [ ] Test against an in-process fake printer that parses the command stream and rebuilds each label's bitmap for comparison with the 1-bit render, plus a golden byte stream per media.
+* [ ] Check printing on a real QL-810W (manual; outside reaper).
 
 ### Phase 4: Frontend Application
 
@@ -408,7 +489,7 @@ reaper down      # Tears down remote VM (cull daemon provides automatic TTL back
 
 ### 8.2 Testing Portfolio
 Following the "Portfolio of Oracles" methodology:
-1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, bcrypt password hashing, boundary decoders, and deterministic cross-language barcode golden files.
+1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, bcrypt password hashing, boundary decoders, and cross-language barcode golden files (module matrices from Python's `segno`, scan checks with `zxing-cpp`) alongside byte-exact SVG, PNG, PDF and printer-stream goldens.
 2. **Tier 4 — Server Contract Tests:** RBAC permission union resolution and anti-lockout invariants tested as in-process pure functions without database dependencies.
 3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence. The store and API suites run against PostgreSQL and MariaDB by pointing them at a server (see §8.3).
 4. **Tier 7 — Seeded Fuzzing:** Deterministic input fuzzing asserting no 500 crashes, valid JSON envelopes, and daemon liveness.
