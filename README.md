@@ -187,7 +187,7 @@ template + asset ──► bind ──► layout (whole printer dots) ──► 
 
 1. **Bind** resolves each element's `content_binding` against the asset, its field values and its generator keys.
 2. **Layout** converts the template's physical units into dots at the template's DPI, snaps every barcode module to a whole number of dots, and sets text with the embedded fonts. Its output is a scene of rectangles, glyph outlines and images, measured in dots.
-3. **Backends** draw that scene. Text is drawn as outlines rather than font references, so SVG, PDF and PNG agree at the template's DPI and never depend on the fonts installed where they are viewed.
+3. **Backends** draw that scene. Text is drawn as outlines rather than font references, so SVG, PDF and PNG agree at the template's DPI and never depend on the fonts installed where they are viewed. Every backend stacks images beneath text and text beneath barcodes, whatever the element order.
 
 ### 4.1 Declarative Template Specification
 
@@ -259,7 +259,7 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
   Unknown placeholders and unknown field keys are rejected when the template is saved. A field deleted later simply resolves to an empty string. A `generator` element without a `content_binding` encodes `{{asset.code.<its generator_type>}}`, and rendering fails for an asset that has no code of that type. Resolved generator payloads go through the same validator as asset generator keys before they are encoded.
 * **Element types:**
   * `generator`: `generator_type` (`qr`, `micro_qr` or `code128`); optional `error_correction` (QR `L`, `M` (default), `Q`, `H`; Micro QR `L` (default), `M`, `Q`); optional `quiet_zone` in modules (defaults: QR 4, Micro QR 2, Code 128 10). The symbol is drawn centered, at the largest whole number of dots per module that fits the box; rendering fails if that is under 2 dots. Code 128 bars fill the box height.
-  * `text`: `font_size` (pt), `font_weight` (`normal`/`bold`), `font_family` (`sans`/`mono`), `align` (`left`/`center`/`right`), `wrap` (default `false`) and `min_font_size` (default 6). Text that overflows its box shrinks in 0.5 pt steps down to `min_font_size`, then is cut short with an ellipsis.
+  * `text`: `font_size` (pt), `font_weight` (`normal`/`bold`), `font_family` (`sans`/`mono`), `align` (`left`/`center`/`right`), `wrap` (default `false`) and `min_font_size` (default 6). Lines break at newlines (and between words when wrapping). Text that overflows its box shrinks in 0.5 pt steps down to `min_font_size`, then is cut short with an ellipsis. The block is centered vertically in its box. The embedded Go fonts cover Latin, Greek and Cyrillic; other scripts render as empty boxes.
   * `static_image`: `image_id` names an uploaded PNG or JPEG, scaled to fit the box with its aspect ratio kept. Uploads are recorded in the `images` table and stored under `storage.local_path/images/`; `GET /api/v1/images/{id}` returns the metadata and `/content` the image itself. SVG images are not supported, since there is no dependable pure-Go SVG rasterizer.
 
 ### 4.2 Generator Interfaces
@@ -295,7 +295,7 @@ Generators return modules, not images: sizing and drawing belong to layout, whic
 ### 4.3 Output Formats
 
 1. **SVG:** the interchange format for the frontend editor preview. Adjacent dark modules merge into rectangles; text is glyph outlines.
-2. **PNG:** rendered at the template's DPI, as 8-bit grayscale for previews or 1-bit black and white for printing. Barcode modules are never anti-aliased.
+2. **PNG:** rendered at the template's DPI, as 8-bit grayscale for previews or 1-bit black and white for printing, where text is thresholded at 50% coverage and images are Floyd–Steinberg dithered. Barcode modules are never anti-aliased.
 3. **PDF:** one page per label, sized exactly to the label, with vector barcodes and text and images embedded as Flate-compressed bitmaps. Output is byte-for-byte deterministic: no timestamps or random document IDs.
 
 Batch exports produce a multi-page PDF or a ZIP of PNGs named by asset ID (§6.2).
@@ -427,7 +427,7 @@ When implementing this repository from scratch, complete the following milestone
 
 ### Phase 3: Generator & Label Rendering Engine
 
-Sub-phases land in order, each with its tests, and leave the tree releasable. The only new module dependency planned is `golang.org/x/image`.
+Sub-phases land in order, each with its tests, and leave the tree releasable. The only new module dependency is `golang.org/x/image`, held at v0.30.0, the last release that supports Go 1.23.
 
 #### Sub-Phase 3.1: Symbology Encoders
 * [x] Implement a shared bit buffer and GF(256) Reed–Solomon encoder.
@@ -445,10 +445,10 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 * [x] Add migration `002` for the `images` table and the image API (`/api/v1/images`): PNG or JPEG up to 2 MiB and 4096 × 4096 pixels, uploads need `templates:manage`, and deleting an image a template still uses is refused with `409`.
 
 #### Sub-Phase 3.3: Layout & Rendering
-* [ ] Implement unit conversion, dot-grid layout, module snapping and quiet zones.
-* [ ] Implement text layout with the embedded Go fonts (Regular, Bold, Mono): measuring, wrapping, shrink-to-fit and ellipsis.
-* [ ] Implement the SVG, PNG (grayscale and 1-bit) and PDF backends.
-* [ ] Check in golden outputs for each backend, regenerated with `go test ./internal/render -update`; `tools/goldens` decodes the rendered barcodes with `zxing-cpp` to confirm they scan.
+* [x] Implement unit conversion, dot-grid layout, module snapping and quiet zones (`internal/render`).
+* [x] Implement text layout with the embedded Go fonts (Regular, Bold, Mono, Mono Bold): measuring, wrapping, shrink-to-fit and ellipsis.
+* [x] Implement the SVG, PNG (grayscale and 1-bit) and PDF backends.
+* [x] Check in golden outputs for each backend, regenerated with `go test ./internal/render -update`; `tools/goldens/verify_renders.py` decodes the rendered barcodes with `zxing-cpp` to confirm they scan.
 
 #### Sub-Phase 3.4: Export Endpoints
 * [ ] Implement `GET /api/v1/assets/{id}/label?template_id=…&format=svg|png|pdf`.
