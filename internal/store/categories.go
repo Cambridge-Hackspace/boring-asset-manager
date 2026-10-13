@@ -21,10 +21,13 @@ const (
 )
 
 var (
-	ErrCategoryNotFound = errors.New("category not found")
-	ErrCycleDetected    = errors.New("cannot set parent: circular reference detected")
-	ErrSelfParent       = errors.New("category cannot be its own parent")
-	colorHexRegex       = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+	ErrCategoryNotFound             = errors.New("category not found")
+	ErrCycleDetected                = errors.New("cannot set parent: circular reference detected")
+	ErrSelfParent                   = errors.New("category cannot be its own parent")
+	ErrParentNotFound               = errors.New("parent category not found")
+	ErrSystemCategoryInTree         = errors.New("the system Uncategorized category cannot have a parent or children")
+	ErrRunningLowRequiresConsumable = errors.New("only consumable categories can be flagged as running low")
+	colorHexRegex                   = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 )
 
 // ValidateColorHex ensures color string is a valid 6-character hex code.
@@ -78,7 +81,7 @@ func (s *Store) DetectCycle(targetID string, proposedParentID *string) error {
 		var parent sql.NullString
 		err := s.QueryRow("SELECT parent_id FROM categories WHERE id = ?", currentID).Scan(&parent)
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("parent %w", ErrCategoryNotFound)
+			return ErrParentNotFound
 		}
 		if err != nil {
 			return fmt.Errorf("checking parent category %s: %w", currentID, err)
@@ -91,6 +94,19 @@ func (s *Store) DetectCycle(targetID string, proposedParentID *string) error {
 	}
 
 	return ErrCycleDetected
+}
+
+// validateCategoryAttributes enforces invariants shared by category creation and updates:
+// the Uncategorized system category stays outside the tree, and the running-low flag is
+// only meaningful for consumable categories.
+func validateCategoryAttributes(id string, parentID *string, isConsumable, isRunningLow bool) error {
+	if parentID != nil && (*parentID == UncategorizedCategoryID || id == UncategorizedCategoryID) {
+		return ErrSystemCategoryInTree
+	}
+	if isRunningLow && !isConsumable {
+		return ErrRunningLowRequiresConsumable
+	}
+	return nil
 }
 
 // CreateCategory creates a new category record with cycle validation.
@@ -109,6 +125,9 @@ func (s *Store) CreateCategory(name string, parentID *string, colorHex string, i
 		}
 	} else {
 		parentID = nil
+	}
+	if err := validateCategoryAttributes(categoryID, parentID, isConsumable, isRunningLow); err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -220,6 +239,9 @@ func (s *Store) UpdateCategory(id, name string, parentID *string, colorHex strin
 		}
 	} else {
 		parentID = nil
+	}
+	if err := validateCategoryAttributes(id, parentID, isConsumable, isRunningLow); err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
