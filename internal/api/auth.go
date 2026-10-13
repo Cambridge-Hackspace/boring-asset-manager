@@ -1,0 +1,92 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"sort"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
+)
+
+// LoginRequest defines the JSON body for authenticating a session.
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// handleLogin authenticates user credentials, creates a session, and sets the session cookie.
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Email == "" || req.Password == "" {
+		writeJSONError(w, http.StatusBadRequest, "Email and password are required")
+		return
+	}
+
+	user, err := s.store.GetUserByEmail(req.Email)
+	if err != nil || user == nil {
+		writeJSONError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+
+	if !user.IsActive {
+		writeJSONError(w, http.StatusUnauthorized, "Account is disabled")
+		return
+	}
+
+	if !auth.CheckPassword(req.Password, user.PasswordHash) {
+		writeJSONError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+
+	sess, err := s.store.CreateSession(user.ID, DefaultSessionTTL)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to create session")
+		return
+	}
+
+	SetSessionCookie(w, r, sess.ID, DefaultSessionTTL, s.cfg.Server.BaseURL)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user": user,
+	})
+}
+
+// handleLogout terminates the active session and clears the session cookie.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	sess := CurrentSession(r.Context())
+	if sess != nil {
+		_ = s.store.DeleteSession(sess.ID)
+	}
+
+	ClearSessionCookie(w, r, s.cfg.Server.BaseURL)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Logged out successfully",
+	})
+}
+
+// handleAuthMe returns current session details and effective user permissions.
+func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
+	user := CurrentUser(r.Context())
+	if user == nil {
+		writeJSONError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	permsMap := UserPermissions(r.Context())
+	var permsList []string
+	for k, v := range permsMap {
+		if v {
+			permsList = append(permsList, k)
+		}
+	}
+	sort.Strings(permsList)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user":        user,
+		"permissions": permsList,
+	})
+}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -21,7 +22,7 @@ type Server struct {
 	httpServer *http.Server
 }
 
-// NewServer initializes a new Server with route registration.
+// NewServer initializes a new Server with route registration and middleware chaining.
 func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux := http.NewServeMux()
 
@@ -30,13 +31,28 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		store: st,
 	}
 
+	// Unauthenticated public endpoints
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /readyz", s.handleReadyz)
 	mux.HandleFunc("GET /api/v1/info", s.handleInfo)
+	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
+
+	// Authenticated session endpoints
+	mux.Handle("POST /api/v1/auth/logout", RequireAuth(http.HandlerFunc(s.handleLogout)))
+	mux.Handle("GET /api/v1/auth/me", RequireAuth(http.HandlerFunc(s.handleAuthMe)))
+
+	// User administration endpoints (requires users:manage)
+	mux.Handle("GET /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListUsers)))
+	mux.Handle("POST /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateUser)))
+	mux.Handle("PATCH /api/v1/users/{id}/status", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateUserStatus)))
+	mux.Handle("DELETE /api/v1/users/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteUser)))
+
+	// Wrap root handler with session extraction middleware
+	rootHandler := Authenticate(st)(mux)
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      mux,
+		Handler:      rootHandler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
