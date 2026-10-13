@@ -1,9 +1,11 @@
-// Package printers validates network printer definitions and sends print
-// jobs to them over raw TCP (README §4.4).
+// Package printers holds network label printers: the drivers that turn
+// rendered labels into a printer's own language, the validation of printer
+// definitions, and the transport that delivers jobs (README §4.4).
 package printers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -12,66 +14,42 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 )
-
-// DriverBrotherQL is the only driver so far.
-const DriverBrotherQL = "brother_ql"
 
 // DefaultPort is the raw printing port.
 const DefaultPort = 9100
 
-// MediaInfo describes a roll for clients choosing what is loaded.
-type MediaInfo struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	WidthMM  float64 `json:"width_mm"`
-	LengthMM float64 `json:"length_mm,omitempty"`
-	DieCut   bool    `json:"die_cut"`
-}
-
-// DriverInfo lists what a driver supports.
-type DriverInfo struct {
-	Driver string      `json:"driver"`
-	Models []string    `json:"models"`
-	Media  []MediaInfo `json:"media"`
-}
-
-// Drivers describes every supported driver.
-func Drivers() []DriverInfo {
-	info := DriverInfo{Driver: DriverBrotherQL, Models: brotherql.Models()}
-	for _, id := range brotherql.MediaIDs() {
-		m, _ := brotherql.LookupMedia(id)
-		info.Media = append(info.Media, MediaInfo{ID: m.ID, Name: m.Name, WidthMM: m.WidthMM, LengthMM: m.LengthMM, DieCut: m.DieCut()})
-	}
-	return []DriverInfo{info}
-}
-
 // ErrInvalidPrinter is wrapped by every validation failure.
 var ErrInvalidPrinter = errors.New("invalid printer")
 
+// Settings are the driver-specific parts of a printer definition.
+type Settings struct {
+	Model string
+	Media string
+	// Options holds driver options as a JSON object; empty means defaults.
+	Options json.RawMessage
+}
+
 var hostnameRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$`)
 
-// Validate checks a printer definition.
-func Validate(name, driver, model, media, host string, port int) error {
+// Validate checks a printer definition: the generic fields here, the rest by
+// its driver.
+func Validate(name, driver, host string, port int, settings Settings) error {
 	if n := strings.TrimSpace(name); n == "" || len(n) > 255 {
 		return fmt.Errorf("%w: name must be 1-255 characters", ErrInvalidPrinter)
-	}
-	if driver != DriverBrotherQL {
-		return fmt.Errorf("%w: driver must be %q", ErrInvalidPrinter, DriverBrotherQL)
-	}
-	if !contains(brotherql.Models(), model) {
-		return fmt.Errorf("%w: model must be one of %s", ErrInvalidPrinter, strings.Join(brotherql.Models(), ", "))
-	}
-	if _, ok := brotherql.LookupMedia(media); !ok {
-		return fmt.Errorf("%w: media must be one of %s", ErrInvalidPrinter, strings.Join(brotherql.MediaIDs(), ", "))
 	}
 	if net.ParseIP(host) == nil && (len(host) > 253 || !hostnameRegex.MatchString(host)) {
 		return fmt.Errorf("%w: host must be an IP address or hostname", ErrInvalidPrinter)
 	}
 	if port < 1 || port > 65535 {
 		return fmt.Errorf("%w: port must be 1-65535", ErrInvalidPrinter)
+	}
+	d, err := Lookup(driver)
+	if err != nil {
+		return err
+	}
+	if err := d.Validate(settings); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidPrinter, err)
 	}
 	return nil
 }
@@ -85,11 +63,16 @@ func contains(list []string, s string) bool {
 	return false
 }
 
+// Transport delivers an encoded job to a printer.
+type Transport interface {
+	Send(ctx context.Context, host string, port int, job []byte) error
+}
+
 // ErrUnreachable is wrapped when a job cannot be delivered.
 var ErrUnreachable = errors.New("printer unreachable")
 
-// Dispatcher sends jobs over raw TCP, one at a time per printer address, so
-// concurrent jobs never interleave on a device.
+// Dispatcher is the raw TCP Transport. It sends jobs one at a time per
+// printer address, so concurrent jobs never interleave on a device.
 type Dispatcher struct {
 	DialTimeout  time.Duration
 	WriteTimeout time.Duration

@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -26,10 +26,12 @@ type PrinterRequest struct {
 	// Port defaults to 9100.
 	Port  int    `json:"port,omitempty"`
 	Media string `json:"media"`
+	// Options are driver options (see GET /api/v1/printers/drivers).
+	Options json.RawMessage `json:"options,omitempty"`
 }
 
 func (req PrinterRequest) printer(id string) models.Printer {
-	return models.Printer{ID: id, Name: req.Name, Driver: req.Driver, Model: req.Model, Host: req.Host, Port: req.Port, Media: req.Media}
+	return models.Printer{ID: id, Name: req.Name, Driver: req.Driver, Model: req.Model, Host: req.Host, Port: req.Port, Media: req.Media, Options: req.Options}
 }
 
 func (s *Server) handlePrinterDrivers(w http.ResponseWriter, r *http.Request) {
@@ -150,19 +152,23 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	media, known := brotherql.LookupMedia(p.Media)
-	if !known {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Printer has unknown media %q", p.Media))
+	driver, err := printers.Lookup(p.Driver)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Printer uses an unavailable driver: %v", err))
 		return
 	}
-	// Check the template against the loaded roll before laying out assets.
-	widthMM, heightMM := t.Width, t.Height
-	if t.Units == "in" {
-		widthMM, heightMM = widthMM*25.4, heightMM*25.4
+	// Check the template against the printer before laying out assets.
+	label := printers.LabelSpec{WidthMM: t.Width, HeightMM: t.Height, DPI: t.DPI}
+	if t.Units == labels.UnitsIn {
+		label.WidthMM, label.HeightMM = t.Width*25.4, t.Height*25.4
 	}
-	placement, err := media.Fit(widthMM, heightMM, t.DPI)
-	if err != nil {
+	plan, err := driver.Plan(store.PrinterSettings(p), label)
+	if errors.Is(err, printers.ErrDoesNotFit) {
 		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to plan the print job: %v", err))
 		return
 	}
 
@@ -171,26 +177,26 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	pages := make([]*image.Gray, 0, len(scenes)*req.Copies)
+	rendered := make([]*image.Gray, 0, len(scenes)*req.Copies)
 	for _, scene := range scenes {
-		page := media.Prepare(scene.Raster(true), placement)
+		img := scene.Raster(true)
 		for c := 0; c < req.Copies; c++ {
-			pages = append(pages, page)
+			rendered = append(rendered, img)
 		}
 	}
-	job, err := brotherql.EncodeJob(media, pages)
+	job, err := plan.Encode(rendered)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to encode print job: %v", err))
 		return
 	}
 
-	if err := s.dispatcher.Send(r.Context(), p.Host, p.Port, job); err != nil {
+	if err := s.transport.Send(r.Context(), p.Host, p.Port, job); err != nil {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"printer_id": p.ID,
-		"labels":     len(pages),
+		"labels":     len(rendered),
 		"bytes":      len(job),
 	})
 }

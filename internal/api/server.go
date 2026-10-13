@@ -22,7 +22,7 @@ type Server struct {
 	cfg        *config.Config
 	store      *store.Store
 	images     *filestore.Images
-	dispatcher *printers.Dispatcher
+	transport  printers.Transport
 	httpServer *http.Server
 }
 
@@ -31,10 +31,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux := http.NewServeMux()
 
 	s := &Server{
-		cfg:        cfg,
-		store:      st,
-		images:     filestore.NewImages(cfg.Storage.LocalPath),
-		dispatcher: printers.NewDispatcher(),
+		cfg:       cfg,
+		store:     st,
+		images:    filestore.NewImages(cfg.Storage.LocalPath),
+		transport: printers.NewDispatcher(),
 	}
 
 	// Unauthenticated public endpoints

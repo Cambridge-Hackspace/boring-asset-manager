@@ -3,6 +3,9 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"image"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +17,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
@@ -299,5 +303,131 @@ func TestPrintToAnUnreachablePrinter(t *testing.T) {
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"ql90","asset_ids":["`+asset.Asset.ID+`"]}`)
 	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "printer unreachable") {
 		t.Errorf("got %d %s, want 502", rec.Code, rec.Body.String())
+	}
+}
+
+// stubDriver is a second driver, registered only in tests, proving the print
+// path depends on the Driver interface rather than on Brother.
+type stubDriver struct{}
+
+func (stubDriver) Info() printers.DriverInfo {
+	return printers.DriverInfo{Driver: "stub", Models: []string{"Stub 1"}, Media: []printers.MediaInfo{{ID: "any", Name: "Any size"}}}
+}
+
+func (stubDriver) Validate(s printers.Settings) error {
+	if s.Model != "Stub 1" || s.Media != "any" {
+		return errors.New("model must be Stub 1 and media any")
+	}
+	return nil
+}
+
+func (stubDriver) Plan(s printers.Settings, label printers.LabelSpec) (printers.Plan, error) {
+	return stubPlan{}, nil
+}
+
+type stubPlan struct{}
+
+// Encode writes one line per label: its size and how many pixels are dark.
+func (stubPlan) Encode(labels []*image.Gray) ([]byte, error) {
+	var out strings.Builder
+	for _, l := range labels {
+		dark := 0
+		for _, v := range l.Pix {
+			if v == 0 {
+				dark++
+			}
+		}
+		fmt.Fprintf(&out, "STUB %dx%d %d\n", l.Bounds().Dx(), l.Bounds().Dy(), dark)
+	}
+	return []byte(out.String()), nil
+}
+
+func init() {
+	if err := printers.Register(stubDriver{}); err != nil {
+		panic(err)
+	}
+}
+
+func TestPrintThroughAnotherDriver(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ql := newFakeQL(t)
+
+	rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/printers/drivers", "")
+	if !strings.Contains(rec.Body.String(), `"driver":"stub"`) || !strings.Contains(rec.Body.String(), `"driver":"brother_ql"`) {
+		t.Errorf("drivers endpoint does not list both drivers: %s", rec.Body.String())
+	}
+
+	body := `{"name":"Stub","driver":"stub","model":"Stub 1","host":"127.0.0.1","port":` + strconv.Itoa(ql.port()) + `,"media":"any"}`
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("creating stub printer: %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Printer models.Printer `json:"printer"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", strings.Replace(body, `"Stub 1"`, `"QL-810W"`, 1)); rec.Code != http.StatusBadRequest {
+		t.Errorf("stub driver validation not applied: got %d", rec.Code)
+	}
+
+	// Any template size suits the stub, including one no Brother roll takes.
+	small := `{"id":"small","name":"Small","units":"mm","width":40,"height":20,"dpi":300,"elements":[
+	  {"type":"text","x":1,"y":1,"width":38,"height":18,"font_size":20,"content_binding":"{{asset.name}}"}]}`
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", small); rec.Code != http.StatusCreated {
+		t.Fatal(rec.Body.String())
+	}
+	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print",
+		`{"template_id":"small","copies":3,"asset_ids":["`+asset.Asset.ID+`"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("print: got %d %s", rec.Code, rec.Body.String())
+	}
+
+	jobs := ql.waitForJobs(t, 1, 3*time.Second)
+	if len(jobs) != 1 {
+		t.Fatalf("received %d jobs", len(jobs))
+	}
+	lines := strings.Split(strings.TrimSpace(string(jobs[0])), "\n")
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "STUB 472x236 ") || strings.HasSuffix(lines[0], " 0") {
+		t.Errorf("stub job = %q, want three non-blank 472x236 labels", jobs[0])
+	}
+}
+
+func TestPrinterOptionsReachTheJob(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ql := newFakeQL(t)
+
+	body := `{"name":"Uncut","driver":"brother_ql","model":"QL-810W","host":"127.0.0.1","port":` + strconv.Itoa(ql.port()) +
+		`,"media":"dk-11201","options":{"cut":false}}`
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"options":{"cut":false}`) {
+		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Printer models.Printer `json:"printer"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	bad := strings.Replace(body, `{"cut":false}`, `{"cut":false,"speed":2}`, 1)
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", strings.Replace(bad, `"Uncut"`, `"Other"`, 1)); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown option: got %d", rec.Code)
+	}
+
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", landscapeTemplate); rec.Code != http.StatusCreated {
+		t.Fatal(rec.Body.String())
+	}
+	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"ql90","asset_ids":["`+asset.Asset.ID+`"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
+	}
+	pages, err := brotherql.DecodeJob(ql.waitForJobs(t, 1, 3*time.Second)[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pages[0].AutoCut {
+		t.Error("printer configured not to cut, but the job switches the cutter on")
 	}
 }

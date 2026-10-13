@@ -3,45 +3,103 @@ package printers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"image"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 )
 
 func TestValidate(t *testing.T) {
-	ok := func(name, driver, model, media, host string, port int) {
+	brother := func(model, media, options string) Settings {
+		return Settings{Model: model, Media: media, Options: json.RawMessage(options)}
+	}
+	ok := func(name, driver, host string, port int, s Settings) {
 		t.Helper()
-		if err := Validate(name, driver, model, media, host, port); err != nil {
+		if err := Validate(name, driver, host, port, s); err != nil {
 			t.Errorf("rejected valid printer: %v", err)
 		}
 	}
-	bad := func(why, name, driver, model, media, host string, port int) {
+	bad := func(why, name, driver, host string, port int, s Settings) {
 		t.Helper()
-		if err := Validate(name, driver, model, media, host, port); !errors.Is(err, ErrInvalidPrinter) {
+		if err := Validate(name, driver, host, port, s); !errors.Is(err, ErrInvalidPrinter) {
 			t.Errorf("%s: got %v, want ErrInvalidPrinter", why, err)
 		}
 	}
-	ok("Front desk", DriverBrotherQL, "QL-810W", "dk-11201", "192.168.1.40", 9100)
-	ok("Workshop", DriverBrotherQL, "QL-820NWB", "dk-22205", "ql-workshop.lan", 9100)
-	ok("IPv6", DriverBrotherQL, "QL-810W", "dk-22210", "fd00::40", 9100)
-	bad("blank name", " ", DriverBrotherQL, "QL-810W", "dk-11201", "10.0.0.1", 9100)
-	bad("driver", "P", "zebra", "QL-810W", "dk-11201", "10.0.0.1", 9100)
-	bad("model", "P", DriverBrotherQL, "QL-700", "dk-11201", "10.0.0.1", 9100)
-	bad("media", "P", DriverBrotherQL, "QL-810W", "dk-9999", "10.0.0.1", 9100)
-	bad("host with scheme", "P", DriverBrotherQL, "QL-810W", "dk-11201", "tcp://10.0.0.1", 9100)
-	bad("host with port", "P", DriverBrotherQL, "QL-810W", "dk-11201", "printer:9100", 9100)
-	bad("empty host", "P", DriverBrotherQL, "QL-810W", "dk-11201", "", 9100)
-	bad("port", "P", DriverBrotherQL, "QL-810W", "dk-11201", "10.0.0.1", 70000)
+	ok("Front desk", DriverBrotherQL, "192.168.1.40", 9100, brother("QL-810W", "dk-11201", ""))
+	ok("Workshop", DriverBrotherQL, "ql-workshop.lan", 9100, brother("QL-820NWB", "dk-22205", `{"cut":false}`))
+	ok("IPv6", DriverBrotherQL, "fd00::40", 9100, brother("QL-810W", "dk-22210", "null"))
+	bad("blank name", " ", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-11201", ""))
+	bad("driver", "P", "zebra", "10.0.0.1", 9100, brother("QL-810W", "dk-11201", ""))
+	bad("model", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-700", "dk-11201", ""))
+	bad("media", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-9999", ""))
+	bad("unknown option", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-11201", `{"cutt":true}`))
+	bad("option type", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-11201", `{"cut":"yes"}`))
+	bad("host with scheme", "P", DriverBrotherQL, "tcp://10.0.0.1", 9100, brother("QL-810W", "dk-11201", ""))
+	bad("host with port", "P", DriverBrotherQL, "printer:9100", 9100, brother("QL-810W", "dk-11201", ""))
+	bad("empty host", "P", DriverBrotherQL, "", 9100, brother("QL-810W", "dk-11201", ""))
+	bad("port", "P", DriverBrotherQL, "10.0.0.1", 70000, brother("QL-810W", "dk-11201", ""))
 }
 
 func TestDriversDescribeEveryRoll(t *testing.T) {
 	d := Drivers()
-	if len(d) != 1 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != 3 {
+	if len(d) != 1 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != 3 || len(d[0].Options) != 1 {
 		t.Fatalf("Drivers() = %+v", d)
+	}
+}
+
+type namedDriver struct {
+	brotherQL
+	name string
+}
+
+func (n namedDriver) Info() DriverInfo { return DriverInfo{Driver: n.name} }
+
+func TestRegisterRejectsDuplicatesAndBlankNames(t *testing.T) {
+	if err := Register(namedDriver{name: DriverBrotherQL}); err == nil {
+		t.Error("registered brother_ql twice")
+	}
+	if err := Register(namedDriver{name: ""}); err == nil {
+		t.Error("registered a driver without a name")
+	}
+}
+
+func TestBrotherPlan(t *testing.T) {
+	d, err := Lookup(DriverBrotherQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := Settings{Model: "QL-810W", Media: "dk-11201"}
+
+	if _, err := d.Plan(settings, LabelSpec{WidthMM: 40, HeightMM: 20, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
+		t.Errorf("wrong size: got %v, want ErrDoesNotFit", err)
+	}
+
+	label := image.NewGray(image.Rect(0, 0, 1063, 343)) // 90 × 29 mm, all black
+	for _, cut := range []bool{true, false} {
+		settings.Options = json.RawMessage(`{"cut":` + strconv.FormatBool(cut) + `}`)
+		plan, err := d.Plan(settings, LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300})
+		if err != nil {
+			t.Fatal(err)
+		}
+		job, err := plan.Encode([]*image.Gray{label, label})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pages, err := brotherql.DecodeJob(job)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(pages) != 2 || len(pages[0].Lines) != 991 || pages[0].AutoCut != cut {
+			t.Errorf("cut=%v: decoded %d pages, %d lines, auto-cut %v", cut, len(pages), len(pages[0].Lines), pages[0].AutoCut)
+		}
 	}
 }
 

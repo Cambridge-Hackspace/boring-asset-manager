@@ -172,7 +172,7 @@ func TestEncodeJobGoldens(t *testing.T) {
 			lines = 400
 		}
 		pages := []*image.Gray{checkerPage(m, lines), markedLabel(m.PrintableDots, lines)}
-		stream, err := EncodeJob(m, pages)
+		stream, err := EncodeJob(m, pages, JobOptions{Cut: true})
 		if err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
@@ -198,7 +198,7 @@ func TestEncodeJobGoldens(t *testing.T) {
 			wantType = mediaDieCut
 		}
 		for i, p := range decoded {
-			if p.MediaType != wantType || p.WidthMM != byte(m.WidthMM) || p.LengthMM != byte(m.LengthMM) {
+			if p.MediaType != wantType || p.WidthMM != byte(m.WidthMM) || p.LengthMM != byte(m.LengthMM) || !p.AutoCut {
 				t.Errorf("%s page %d: print information %+v", id, i, p)
 			}
 			if got := PageImage(m, p); !bytes.Equal(got.Pix, pages[i].Pix) {
@@ -222,20 +222,20 @@ func TestEncodeJobGoldens(t *testing.T) {
 
 func TestEncodeJobRejectsMisshapenPages(t *testing.T) {
 	dk11201, _ := LookupMedia("dk-11201")
-	if _, err := EncodeJob(dk11201, nil); err == nil {
+	if _, err := EncodeJob(dk11201, nil, JobOptions{}); err == nil {
 		t.Error("empty job accepted")
 	}
-	if _, err := EncodeJob(dk11201, []*image.Gray{markedLabel(300, 991)}); err == nil {
+	if _, err := EncodeJob(dk11201, []*image.Gray{markedLabel(300, 991)}, JobOptions{}); err == nil {
 		t.Error("wrong width accepted")
 	}
-	if _, err := EncodeJob(dk11201, []*image.Gray{markedLabel(306, 500)}); err == nil {
+	if _, err := EncodeJob(dk11201, []*image.Gray{markedLabel(306, 500)}, JobOptions{}); err == nil {
 		t.Error("wrong die-cut length accepted")
 	}
 }
 
 func TestDecodeJobRejectsDamagedStreams(t *testing.T) {
 	m, _ := LookupMedia("dk-22210")
-	stream, err := EncodeJob(m, []*image.Gray{checkerPage(m, 300)})
+	stream, err := EncodeJob(m, []*image.Gray{checkerPage(m, 300)}, JobOptions{Cut: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,5 +248,32 @@ func TestDecodeJobRejectsDamagedStreams(t *testing.T) {
 		if _, err := DecodeJob(damaged); err == nil {
 			t.Errorf("%s stream accepted", name)
 		}
+	}
+}
+
+func TestEncodeJobWithoutCutting(t *testing.T) {
+	m, _ := LookupMedia("dk-22210")
+	page := checkerPage(m, 300)
+	cut, _ := EncodeJob(m, []*image.Gray{page}, JobOptions{Cut: true})
+	uncut, err := EncodeJob(m, []*image.Gray{page}, JobOptions{Cut: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(uncut, cmdCutEvery) {
+		t.Error("uncut job still sets a cut interval")
+	}
+	if !bytes.Contains(uncut, append(append([]byte{}, cmdVariousMode...), 0)) ||
+		!bytes.Contains(uncut, append(append([]byte{}, cmdExpandedMode...), 0)) {
+		t.Error("uncut job does not switch auto-cut and cut-at-end off")
+	}
+	decoded, err := DecodeJob(uncut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded[0].AutoCut || !bytes.Equal(PageImage(m, decoded[0]).Pix, page.Pix) {
+		t.Error("uncut job decoded wrongly")
+	}
+	if c, _ := DecodeJob(cut); !c[0].AutoCut {
+		t.Error("cut job decoded without auto-cut")
 	}
 }

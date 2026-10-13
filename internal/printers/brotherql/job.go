@@ -36,11 +36,17 @@ const (
 	cutAtEnd = 0x08 // expanded mode
 )
 
+// JobOptions are the per-printer choices that change the command stream.
+type JobOptions struct {
+	// Cut cuts each label off as it finishes. Without it the tape feeds
+	// on uncut, to be torn or cut by hand.
+	Cut bool
+}
+
 // EncodeJob builds the command stream that prints pages, each a label
 // already prepared for m (see Media.Prepare): PrintableDots wide, one row per
-// raster line, and dark wherever a pixel is below 50% gray. Every label is
-// cut off as it finishes.
-func EncodeJob(m Media, pages []*image.Gray) ([]byte, error) {
+// raster line, and dark wherever a pixel is below 50% gray.
+func EncodeJob(m Media, pages []*image.Gray, opts JobOptions) ([]byte, error) {
 	if len(pages) == 0 {
 		return nil, fmt.Errorf("brotherql: a job needs at least one page")
 	}
@@ -73,12 +79,19 @@ func EncodeJob(m Media, pages []*image.Gray) ([]byte, error) {
 		}
 		buf.Write(info[:])
 
-		buf.Write(cmdVariousMode)
-		buf.WriteByte(autoCut)
-		buf.Write(cmdCutEvery)
-		buf.WriteByte(1)
-		buf.Write(cmdExpandedMode)
-		buf.WriteByte(cutAtEnd)
+		if opts.Cut {
+			buf.Write(cmdVariousMode)
+			buf.WriteByte(autoCut)
+			buf.Write(cmdCutEvery)
+			buf.WriteByte(1)
+			buf.Write(cmdExpandedMode)
+			buf.WriteByte(cutAtEnd)
+		} else {
+			buf.Write(cmdVariousMode)
+			buf.WriteByte(0)
+			buf.Write(cmdExpandedMode)
+			buf.WriteByte(0)
+		}
 		buf.Write(cmdMargin)
 		_ = binary.Write(&buf, binary.LittleEndian, margin)
 		buf.Write(cmdCompressTIFF)
@@ -124,6 +137,8 @@ type Page struct {
 	MediaType byte
 	WidthMM   byte
 	LengthMM  byte
+	// AutoCut reports whether the page switched the cutter on.
+	AutoCut bool
 	// Lines holds each raster line's 90 bytes, uncompressed.
 	Lines [][]byte
 	// Last reports whether the page ended the job.
@@ -171,7 +186,16 @@ func DecodeJob(stream []byte) ([]Page, error) {
 			}
 			cur.MediaType, cur.WidthMM, cur.LengthMM = info[1], info[2], info[3]
 			expectLines = binary.LittleEndian.Uint32(info[4:8])
-		case bytes.HasPrefix(s, cmdVariousMode), bytes.HasPrefix(s, cmdCutEvery), bytes.HasPrefix(s, cmdExpandedMode):
+		case bytes.HasPrefix(s, cmdVariousMode):
+			cmd, err := take(4)
+			if err != nil {
+				return nil, err
+			}
+			if cur == nil {
+				return nil, fmt.Errorf("brotherql: mode setting before raster mode")
+			}
+			cur.AutoCut = cmd[3]&autoCut != 0
+		case bytes.HasPrefix(s, cmdCutEvery), bytes.HasPrefix(s, cmdExpandedMode):
 			if _, err := take(4); err != nil {
 				return nil, err
 			}
