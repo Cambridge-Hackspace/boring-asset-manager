@@ -325,20 +325,20 @@ When implementing this repository from scratch, complete the following milestone
 * [x] Implement store-level anti-lockout invariant enforcement on user deactivation, deletion, and admin role revocation.
 
 #### Sub-Phase 1.2: Multi-Dialect Store Support (PostgreSQL & MariaDB)
-* [ ] Integrate pure-Go PostgreSQL (`github.com/lib/pq`) and MariaDB (`github.com/go-sql-driver/mysql`) drivers while preserving `CGO_ENABLED=0` cross-compilation.
-* [ ] Implement dialect-aware connection pooling and configuration in `store.Open()`.
-* [ ] Validate dialect compatibility across migrations and SQL operations for SQLite, PostgreSQL, and MariaDB.
+* [x] Integrate pure-Go PostgreSQL (`github.com/lib/pq`) and MariaDB (`github.com/go-sql-driver/mysql`) drivers while preserving `CGO_ENABLED=0` cross-compilation.
+* [x] Implement dialect-aware connection pooling and configuration in `store.Open()`.
+* [x] Validate dialect compatibility across migrations and SQL operations for SQLite, PostgreSQL, and MariaDB.
 
 #### Sub-Phase 1.3: HTTP Cookie Management & RBAC Middleware
-* [ ] Implement stateful session cookie management (`bam_session`, `HttpOnly`, `SameSite=Lax`, secure detection).
-* [ ] Implement `Authenticate` middleware resolving sessions and injecting user + permissions map into request context.
-* [ ] Implement `RequireAuth` and `RequirePermission` authorization middlewares with `401 Unauthorized` and `403 Forbidden` responses.
+* [x] Implement stateful session cookie management (`bam_session`, `HttpOnly`, `SameSite=Lax`, secure detection).
+* [x] Implement `Authenticate` middleware resolving sessions and injecting user + permissions map into request context.
+* [x] Implement `RequireAuth` and `RequirePermission` authorization middlewares with `401 Unauthorized` and `403 Forbidden` responses.
 
 #### Sub-Phase 1.4: Authentication & User Administration API
-* [ ] Implement session authentication endpoints: `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`.
-* [ ] Implement user administration endpoints (`GET /api/v1/users`, `POST /api/v1/users`, `PATCH /api/v1/users/{id}/status`, `DELETE /api/v1/users/{id}`).
-* [ ] Enforce anti-lockout rejection (`400 Bad Request`) when attempting to deactivate or delete the last active user with `users:manage`.
-* [ ] Prove complete Phase 1 test battery via `reaper test` in remote ephemeral VM.
+* [x] Implement session authentication endpoints: `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`.
+* [x] Implement user administration endpoints (`GET /api/v1/users`, `POST /api/v1/users`, `PATCH /api/v1/users/{id}/status`, `DELETE /api/v1/users/{id}`).
+* [x] Enforce anti-lockout rejection (`400 Bad Request`) when attempting to deactivate or delete the last active user with `users:manage`.
+* [x] Prove complete Phase 1 test battery via `reaper test` in remote ephemeral VM.
 
 
 ### Phase 2: Core Domain & Schema

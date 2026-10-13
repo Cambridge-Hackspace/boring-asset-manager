@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS categories (
     name VARCHAR(255) NOT NULL,
     parent_id VARCHAR(36) REFERENCES categories(id) ON DELETE SET NULL,
     color_hex VARCHAR(16) NOT NULL DEFAULT '#3b82f6',
-    is_consumable BOOLEAN NOT NULL DEFAULT 0,
-    is_running_low BOOLEAN NOT NULL DEFAULT 0,
+    is_consumable BOOLEAN NOT NULL DEFAULT FALSE,
+    is_running_low BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS categories (
 CREATE TABLE IF NOT EXISTS category_fields (
     category_id VARCHAR(36) NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     field_id VARCHAR(36) NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
-    is_required BOOLEAN NOT NULL DEFAULT 0,
+    is_required BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (category_id, field_id)
 );
 
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     totp_secret VARCHAR(128),
-    is_active BOOLEAN NOT NULL DEFAULT 1,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     archived_at TIMESTAMP

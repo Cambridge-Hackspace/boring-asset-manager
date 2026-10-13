@@ -25,7 +25,7 @@ func (s *Store) CreateSession(userID string, ttl time.Duration) (*models.Session
 	expiresAt := now.Add(ttl)
 
 	query := `INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`
-	_, err = s.DB.Exec(query, token, userID, expiresAt, now)
+	_, err = s.Exec(query, token, userID, expiresAt, now)
 	if err != nil {
 		return nil, fmt.Errorf("inserting session: %w", err)
 	}
@@ -51,7 +51,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 			u.id, u.email, u.password_hash, u.totp_secret, u.is_active, u.created_at, u.updated_at, u.archived_at
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
-		WHERE s.id = ? AND s.expires_at > ? AND u.is_active = 1 AND u.archived_at IS NULL
+		WHERE s.id = ? AND s.expires_at > ? AND u.is_active = TRUE AND u.archived_at IS NULL
 	`
 
 	var (
@@ -59,7 +59,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 		u    models.User
 	)
 
-	err := s.DB.QueryRow(query, token, now).Scan(
+	err := s.QueryRow(query, token, now).Scan(
 		&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt,
 		&u.ID, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt,
 	)
@@ -76,7 +76,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 // DeleteSession revokes a session by its token.
 func (s *Store) DeleteSession(token string) error {
 	query := `DELETE FROM sessions WHERE id = ?`
-	_, err := s.DB.Exec(query, token)
+	_, err := s.Exec(query, token)
 	if err != nil {
 		return fmt.Errorf("deleting session: %w", err)
 	}
@@ -86,7 +86,7 @@ func (s *Store) DeleteSession(token string) error {
 // DeleteUserSessions revokes all sessions for a specific user (e.g., upon password reset or deactivation).
 func (s *Store) DeleteUserSessions(userID string) error {
 	query := `DELETE FROM sessions WHERE user_id = ?`
-	_, err := s.DB.Exec(query, userID)
+	_, err := s.Exec(query, userID)
 	if err != nil {
 		return fmt.Errorf("deleting user sessions: %w", err)
 	}
@@ -96,7 +96,7 @@ func (s *Store) DeleteUserSessions(userID string) error {
 // CleanExpiredSessions removes all sessions past their expiry timestamp.
 func (s *Store) CleanExpiredSessions() (int64, error) {
 	now := time.Now().UTC()
-	res, err := s.DB.Exec("DELETE FROM sessions WHERE expires_at <= ?", now)
+	res, err := s.Exec("DELETE FROM sessions WHERE expires_at <= ?", now)
 	if err != nil {
 		return 0, fmt.Errorf("cleaning expired sessions: %w", err)
 	}

@@ -14,7 +14,7 @@ import (
 var MigrationFiles embed.FS
 
 // Migrate executes all pending embedded SQL migrations idempotently inside a transaction.
-func Migrate(db *sql.DB) error {
+func Migrate(db *sql.DB, dialect string) error {
 	entries, err := MigrationFiles.ReadDir(".")
 	if err != nil {
 		return fmt.Errorf("reading embedded migrations: %w", err)
@@ -59,7 +59,8 @@ func Migrate(db *sql.DB) error {
 
 	for _, m := range migrationList {
 		var exists int
-		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", m.version).Scan(&exists)
+		checkQuery := rebind("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", dialect)
+		err := db.QueryRow(checkQuery, m.version).Scan(&exists)
 		if err != nil {
 			return fmt.Errorf("checking migration version %d: %w", m.version, err)
 		}
@@ -91,7 +92,8 @@ func Migrate(db *sql.DB) error {
 		}
 
 		// Record migration version
-		_, err = tx.Exec("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)", m.version, time.Now().UTC())
+		recordQuery := rebind("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)", dialect)
+		_, err = tx.Exec(recordQuery, m.version, time.Now().UTC())
 		if err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("recording migration %s: %w", m.filename, err)
@@ -103,6 +105,34 @@ func Migrate(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+func rebind(query, dialect string) string {
+	if dialect != "postgres" {
+		return query
+	}
+
+	var b strings.Builder
+	b.Grow(len(query) + 16)
+	paramIdx := 1
+	inString := false
+
+	for i := 0; i < len(query); i++ {
+		ch := query[i]
+		if ch == '\'' {
+			inString = !inString
+			b.WriteByte(ch)
+			continue
+		}
+		if ch == '?' && !inString {
+			b.WriteByte('$')
+			b.WriteString(strconv.Itoa(paramIdx))
+			paramIdx++
+		} else {
+			b.WriteByte(ch)
+		}
+	}
+	return b.String()
 }
 
 func splitSQLStatements(sqlScript string) []string {

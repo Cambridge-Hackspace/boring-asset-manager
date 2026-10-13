@@ -15,6 +15,8 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
 	"github.com/google/uuid"
 
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	_ "modernc.org/sqlite"
 )
 
@@ -53,6 +55,24 @@ func Open(cfg *config.DatabaseConfig) (*Store, error) {
 		db.SetMaxIdleConns(1)
 		db.SetConnMaxLifetime(0)
 
+	case "postgres":
+		db, err = sql.Open("postgres", cfg.DSN)
+		if err != nil {
+			return nil, fmt.Errorf("opening postgres database: %w", err)
+		}
+		db.SetMaxOpenConns(25)
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxLifetime(5 * time.Minute)
+
+	case "mariadb", "mysql":
+		db, err = sql.Open("mysql", cfg.DSN)
+		if err != nil {
+			return nil, fmt.Errorf("opening mariadb/mysql database: %w", err)
+		}
+		db.SetMaxOpenConns(25)
+		db.SetMaxIdleConns(5)
+		db.SetConnMaxLifetime(5 * time.Minute)
+
 	default:
 		return nil, fmt.Errorf("unsupported database dialect: %s", cfg.Type)
 	}
@@ -86,7 +106,7 @@ func (s *Store) Ping() error {
 
 // Migrate executes schema migrations.
 func (s *Store) Migrate() error {
-	return migrations.Migrate(s.DB)
+	return migrations.Migrate(s.DB, s.Dialect)
 }
 
 // SeedDefaultPermissionsAndRoles creates the standard permission set and default Administrator role.
@@ -101,13 +121,13 @@ func (s *Store) SeedDefaultPermissionsAndRoles() error {
 	allPerms := rbac.AllPermissions()
 	for _, permKey := range allPerms {
 		var exists int
-		err := tx.QueryRow("SELECT COUNT(*) FROM permissions WHERE key = ?", permKey).Scan(&exists)
+		err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM permissions WHERE key = ?", permKey).Scan(&exists)
 		if err != nil {
 			return fmt.Errorf("checking permission %s: %w", permKey, err)
 		}
 		if exists == 0 {
 			permID := uuid.NewString()
-			_, err = tx.Exec("INSERT INTO permissions (id, key, description) VALUES (?, ?, ?)", permID, permKey, "Core permission: "+permKey)
+			_, err = s.TxExec(tx, "INSERT INTO permissions (id, key, description) VALUES (?, ?, ?)", permID, permKey, "Core permission: "+permKey)
 			if err != nil {
 				return fmt.Errorf("inserting permission %s: %w", permKey, err)
 			}
@@ -116,10 +136,10 @@ func (s *Store) SeedDefaultPermissionsAndRoles() error {
 
 	// 2. Seed Admin Role
 	var adminRoleID string
-	err = tx.QueryRow("SELECT id FROM roles WHERE name = 'admin'").Scan(&adminRoleID)
+	err = s.TxQueryRow(tx, "SELECT id FROM roles WHERE name = 'admin'").Scan(&adminRoleID)
 	if err == sql.ErrNoRows {
 		adminRoleID = uuid.NewString()
-		_, err = tx.Exec("INSERT INTO roles (id, name, description) VALUES (?, 'admin', 'System Administrator with full access')", adminRoleID)
+		_, err = s.TxExec(tx, "INSERT INTO roles (id, name, description) VALUES (?, 'admin', 'System Administrator with full access')", adminRoleID)
 		if err != nil {
 			return fmt.Errorf("inserting admin role: %w", err)
 		}
@@ -128,7 +148,7 @@ func (s *Store) SeedDefaultPermissionsAndRoles() error {
 	}
 
 	// 3. Grant all permissions to admin role
-	rows, err := tx.Query("SELECT id FROM permissions")
+	rows, err := s.TxQuery(tx, "SELECT id FROM permissions")
 	if err != nil {
 		return fmt.Errorf("querying all permissions: %w", err)
 	}
@@ -145,12 +165,12 @@ func (s *Store) SeedDefaultPermissionsAndRoles() error {
 
 	for _, pid := range permIDs {
 		var hasRolePerm int
-		err := tx.QueryRow("SELECT COUNT(*) FROM role_permissions WHERE role_id = ? AND permission_id = ?", adminRoleID, pid).Scan(&hasRolePerm)
+		err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM role_permissions WHERE role_id = ? AND permission_id = ?", adminRoleID, pid).Scan(&hasRolePerm)
 		if err != nil {
 			return err
 		}
 		if hasRolePerm == 0 {
-			_, err = tx.Exec("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)", adminRoleID, pid)
+			_, err = s.TxExec(tx, "INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)", adminRoleID, pid)
 			if err != nil {
 				return fmt.Errorf("assigning permission %s to admin role: %w", pid, err)
 			}
@@ -185,18 +205,18 @@ func (s *Store) CreateAdminUser(email, password string) (*models.User, error) {
 	defer tx.Rollback()
 
 	var existingID string
-	err = tx.QueryRow("SELECT id FROM users WHERE email = ?", normalized).Scan(&existingID)
+	err = s.TxQueryRow(tx, "SELECT id FROM users WHERE email = ?", normalized).Scan(&existingID)
 	if err == nil {
 		// Update existing user password and activate
-		_, err = tx.Exec("UPDATE users SET password_hash = ?, is_active = 1, updated_at = ? WHERE id = ?", hash, now, existingID)
+		_, err = s.TxExec(tx, "UPDATE users SET password_hash = ?, is_active = ?, updated_at = ? WHERE id = ?", hash, true, now, existingID)
 		if err != nil {
 			return nil, fmt.Errorf("updating existing admin user: %w", err)
 		}
 		userID = existingID
 	} else if err == sql.ErrNoRows {
 		// Create new user
-		_, err = tx.Exec("INSERT INTO users (id, email, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)",
-			userID, normalized, hash, now, now)
+		_, err = s.TxExec(tx, "INSERT INTO users (id, email, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, normalized, hash, true, now, now)
 		if err != nil {
 			return nil, fmt.Errorf("inserting admin user: %w", err)
 		}
@@ -206,18 +226,18 @@ func (s *Store) CreateAdminUser(email, password string) (*models.User, error) {
 
 	// Ensure admin role exists and is assigned
 	var adminRoleID string
-	err = tx.QueryRow("SELECT id FROM roles WHERE name = 'admin'").Scan(&adminRoleID)
+	err = s.TxQueryRow(tx, "SELECT id FROM roles WHERE name = 'admin'").Scan(&adminRoleID)
 	if err != nil {
 		return nil, fmt.Errorf("finding admin role (run migrations and seed first): %w", err)
 	}
 
 	var hasUserRole int
-	err = tx.QueryRow("SELECT COUNT(*) FROM user_roles WHERE user_id = ? AND role_id = ?", userID, adminRoleID).Scan(&hasUserRole)
+	err = s.TxQueryRow(tx, "SELECT COUNT(*) FROM user_roles WHERE user_id = ? AND role_id = ?", userID, adminRoleID).Scan(&hasUserRole)
 	if err != nil {
 		return nil, err
 	}
 	if hasUserRole == 0 {
-		_, err = tx.Exec("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", userID, adminRoleID)
+		_, err = s.TxExec(tx, "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", userID, adminRoleID)
 		if err != nil {
 			return nil, fmt.Errorf("assigning admin role to user: %w", err)
 		}
@@ -244,10 +264,10 @@ func (s *Store) CountActiveAdmins() (int, error) {
 		JOIN user_roles ur ON u.id = ur.user_id
 		JOIN role_permissions rp ON ur.role_id = rp.role_id
 		JOIN permissions p ON rp.permission_id = p.id
-		WHERE u.is_active = 1 AND p.key = ?
+		WHERE u.is_active = TRUE AND p.key = ?
 	`
 	var count int
-	err := s.DB.QueryRow(query, rbac.PermUsersManage).Scan(&count)
+	err := s.QueryRow(query, rbac.PermUsersManage).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("counting active admins: %w", err)
 	}

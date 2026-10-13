@@ -24,7 +24,7 @@ func (s *Store) GetUserByID(id string) (*models.User, error) {
 		WHERE id = ?
 	`
 	var u models.User
-	err := s.DB.QueryRow(query, id).Scan(
+	err := s.QueryRow(query, id).Scan(
 		&u.ID, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -45,7 +45,7 @@ func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 		WHERE email = ? AND archived_at IS NULL
 	`
 	var u models.User
-	err := s.DB.QueryRow(query, normalized).Scan(
+	err := s.QueryRow(query, normalized).Scan(
 		&u.ID, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -65,7 +65,7 @@ func (s *Store) ListUsers() ([]models.User, error) {
 		WHERE archived_at IS NULL
 		ORDER BY created_at ASC
 	`
-	rows, err := s.DB.Query(query)
+	rows, err := s.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("querying users: %w", err)
 	}
@@ -93,9 +93,9 @@ func (s *Store) GetUserPermissions(userID string) (map[string]bool, error) {
 		JOIN role_permissions rp ON ur.role_id = rp.role_id
 		JOIN permissions p ON rp.permission_id = p.id
 		JOIN users u ON ur.user_id = u.id
-		WHERE ur.user_id = ? AND u.is_active = 1 AND u.archived_at IS NULL
+		WHERE ur.user_id = ? AND u.is_active = TRUE AND u.archived_at IS NULL
 	`
-	rows, err := s.DB.Query(query, userID)
+	rows, err := s.Query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("querying user permissions: %w", err)
 	}
@@ -136,7 +136,7 @@ func (s *Store) CreateUser(email, password string, isActive bool) (*models.User,
 	userID := uuid.NewString()
 
 	query := `INSERT INTO users (id, email, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-	_, err = s.DB.Exec(query, userID, normalized, hash, isActive, now, now)
+	_, err = s.Exec(query, userID, normalized, hash, isActive, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("inserting user: %w", err)
 	}
@@ -175,7 +175,7 @@ func (s *Store) UpdateUserStatus(userID string, isActive bool) error {
 	}
 
 	now := time.Now().UTC()
-	_, err = s.DB.Exec("UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?", isActive, now, userID)
+	_, err = s.Exec("UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?", isActive, now, userID)
 	if err != nil {
 		return fmt.Errorf("updating user status: %w", err)
 	}
@@ -213,7 +213,7 @@ func (s *Store) DeleteUser(userID string) error {
 
 	now := time.Now().UTC()
 	// Soft delete: set archived_at and is_active = false
-	_, err = s.DB.Exec("UPDATE users SET archived_at = ?, is_active = 0, updated_at = ? WHERE id = ?", now, now, userID)
+	_, err = s.Exec("UPDATE users SET archived_at = ?, is_active = ?, updated_at = ? WHERE id = ?", now, false, now, userID)
 	if err != nil {
 		return fmt.Errorf("archiving user: %w", err)
 	}
@@ -225,21 +225,21 @@ func (s *Store) DeleteUser(userID string) error {
 // AssignUserRole assigns a role to a user.
 func (s *Store) AssignUserRole(userID, roleID string) error {
 	var count int
-	err := s.DB.QueryRow("SELECT COUNT(*) FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID).Scan(&count)
+	err := s.QueryRow("SELECT COUNT(*) FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID).Scan(&count)
 	if err != nil {
 		return err
 	}
 	if count > 0 {
 		return nil
 	}
-	_, err = s.DB.Exec("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", userID, roleID)
+	_, err = s.Exec("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", userID, roleID)
 	return err
 }
 
 // RemoveUserRole revokes a role from a user with Anti-Lockout enforcement.
 func (s *Store) RemoveUserRole(userID, roleID string) error {
 	var roleHasManage int
-	err := s.DB.QueryRow(`
+	err := s.QueryRow(`
 		SELECT COUNT(*) 
 		FROM role_permissions rp
 		JOIN permissions p ON rp.permission_id = p.id
@@ -259,14 +259,14 @@ func (s *Store) RemoveUserRole(userID, roleID string) error {
 		}
 	}
 
-	_, err = s.DB.Exec("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID)
+	_, err = s.Exec("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID)
 	return err
 }
 
 // GetRoleByName retrieves a role record by name.
 func (s *Store) GetRoleByName(name string) (*models.Role, error) {
 	var r models.Role
-	err := s.DB.QueryRow("SELECT id, name, description FROM roles WHERE name = ?", name).Scan(&r.ID, &r.Name, &r.Description)
+	err := s.QueryRow("SELECT id, name, description FROM roles WHERE name = ?", name).Scan(&r.ID, &r.Name, &r.Description)
 	if err != nil {
 		return nil, err
 	}
