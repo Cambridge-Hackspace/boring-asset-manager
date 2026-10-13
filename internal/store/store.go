@@ -318,7 +318,7 @@ func (s *Store) CountActiveAdmins() (int, error) {
 		JOIN user_roles ur ON u.id = ur.user_id
 		JOIN role_permissions rp ON ur.role_id = rp.role_id
 		JOIN permissions p ON rp.permission_id = p.id
-		WHERE u.is_active = TRUE AND p.key = ?
+		WHERE u.is_active = TRUE AND u.archived_at IS NULL AND p.key = ?
 	`
 	var count int
 	err := s.QueryRow(query, rbac.PermUsersManage).Scan(&count)
