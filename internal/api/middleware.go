@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -143,4 +144,26 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// MaxRequestBytes caps request bodies on every endpoint except image uploads,
+// which set their own, larger limit.
+const MaxRequestBytes = 1 << 20
+
+// LimitRequestBodies rejects bodies over the limit with 413 before a handler
+// runs when the client declares the length, and otherwise stops reading at
+// the limit so a handler's decode fails.
+func LimitRequestBodies(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limit := int64(MaxRequestBytes)
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/images" {
+			limit = imageUploadLimit
+		}
+		if r.ContentLength > limit {
+			writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Request bodies are limited to %d bytes", limit))
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		next.ServeHTTP(w, r)
+	})
 }

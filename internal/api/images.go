@@ -29,6 +29,9 @@ const (
 	MaxImagePixels = 4096
 )
 
+// imageUploadLimit leaves headroom over MaxImageBytes for multipart framing.
+const imageUploadLimit = MaxImageBytes + 64<<10
+
 var imageContentTypes = map[string]string{"png": "image/png", "jpeg": "image/jpeg"}
 
 func (s *Server) handleListImages(w http.ResponseWriter, r *http.Request) {
@@ -77,8 +80,6 @@ func (s *Server) handleGetImageContent(w http.ResponseWriter, r *http.Request) {
 
 // handleUploadImage accepts a multipart form with the image in the "file" part.
 func (s *Server) handleUploadImage(w http.ResponseWriter, r *http.Request) {
-	// Leave headroom over the file limit for the multipart framing.
-	r.Body = http.MaxBytesReader(w, r.Body, MaxImageBytes+64<<10)
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		var tooBig *http.MaxBytesError

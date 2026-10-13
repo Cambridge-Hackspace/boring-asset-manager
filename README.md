@@ -351,9 +351,9 @@ Printers are configured through the API and stored in the `printers` table: name
 
 ### 6.2 Bulk Label Printing & Network Dispatch
 
-* **Export Mode:** `POST /api/v1/labels/export` takes a template ID, up to 500 asset IDs and a format (`pdf` or `zip`), and streams back a multi-page PDF or a ZIP of PNGs.
+* **Export Mode:** `POST /api/v1/labels/export` takes a template ID, up to 500 distinct asset IDs and a format (`pdf` or `zip`, with `"mono": true` for 1-bit PNGs), and streams back a multi-page PDF or a ZIP of PNGs named `<asset_id>.png`.
 * **Network Dispatch Mode:** `POST /api/v1/printers/{id}/print` takes a template ID, asset IDs and a copy count, checks the template against the printer's media (§4.4), and streams the job to the printer over TCP port 9100.
-* **All or nothing:** every asset is bound and validated before any output is produced, so a batch either renders completely or fails with a list of the assets that could not be rendered.
+* **All or nothing:** every asset is bound and validated before any output is produced, so a batch either renders completely or fails with `422` and a list of `{asset_id, path, message}` for the assets that could not be rendered. Archived assets are never labeled.
 
 ---
 
@@ -451,10 +451,10 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 * [x] Check in golden outputs for each backend, regenerated with `go test ./internal/render -update`; `tools/goldens/verify_renders.py` decodes the rendered barcodes with `zxing-cpp` to confirm they scan.
 
 #### Sub-Phase 3.4: Export Endpoints
-* [ ] Implement `GET /api/v1/assets/{id}/label?template_id=…&format=svg|png|pdf`.
-* [ ] Implement `POST /api/v1/templates/preview`, rendering an unsaved template as SVG against an asset or placeholder data, for the Phase 4 editor.
-* [ ] Implement `POST /api/v1/labels/export` (§6.2).
-* [ ] Cap request body sizes on every endpoint (1 MiB for JSON; uploads set their own limit).
+* [x] Implement `GET /api/v1/assets/{id}/label?template_id=…&format=svg|png|pdf` (`assets:read`; add `mono=true` for a 1-bit PNG). An asset the template cannot be filled for returns `422` naming the element.
+* [x] Implement `POST /api/v1/templates/preview` (`templates:manage`), rendering an unsaved template (its `id` may be omitted) as SVG against `asset_id` or placeholder data, for the Phase 4 editor.
+* [x] Implement `POST /api/v1/labels/export` (`assets:read`, §6.2).
+* [x] Cap request body sizes on every endpoint: 1 MiB, refused with `413` when declared up front; image uploads keep their own limit.
 
 #### Sub-Phase 3.5: Brother QL Network Printing
 * [ ] Add migration `003` for the `printers` table, and the `labels:print` permission.
