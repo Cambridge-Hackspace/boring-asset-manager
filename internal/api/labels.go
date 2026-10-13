@@ -285,25 +285,26 @@ type ExportRequest struct {
 	Mono bool `json:"mono,omitempty"`
 }
 
-// layoutBatch lays out every requested asset before anything is written, so
-// a batch either renders completely or not at all.
-func (s *Server) layoutBatch(w http.ResponseWriter, templateID string, assetIDs []string) (*labels.Template, []*render.Scene, bool) {
+// checkAssetIDs enforces the batch size and rejects repeated IDs.
+func checkAssetIDs(w http.ResponseWriter, assetIDs []string) bool {
 	if len(assetIDs) == 0 || len(assetIDs) > MaxExportAssets {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("asset_ids must list 1-%d assets", MaxExportAssets))
-		return nil, nil, false
+		return false
 	}
 	seen := make(map[string]bool, len(assetIDs))
 	for _, id := range assetIDs {
 		if seen[id] {
 			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("asset %s is listed more than once", id))
-			return nil, nil, false
+			return false
 		}
 		seen[id] = true
 	}
-	t, ok := s.loadTemplateFor(w, templateID)
-	if !ok {
-		return nil, nil, false
-	}
+	return true
+}
+
+// layoutBatch lays out every requested asset before anything is written, so
+// a batch either renders completely or not at all.
+func (s *Server) layoutBatch(w http.ResponseWriter, t *labels.Template, assetIDs []string) ([]*render.Scene, bool) {
 
 	images := s.newLabelImages()
 	scenes := make([]*render.Scene, 0, len(assetIDs))
@@ -312,7 +313,7 @@ func (s *Server) layoutBatch(w http.ResponseWriter, templateID string, assetIDs 
 		scene, problem, err := s.layoutAsset(t, id, images)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to render labels: %v", err))
-			return nil, nil, false
+			return nil, false
 		}
 		if problem != nil {
 			problems = append(problems, *problem)
@@ -325,9 +326,9 @@ func (s *Server) layoutBatch(w http.ResponseWriter, templateID string, assetIDs 
 			Error:   fmt.Sprintf("%d of %d labels cannot be rendered; nothing was produced", len(problems), len(assetIDs)),
 			Details: problems,
 		})
-		return nil, nil, false
+		return nil, false
 	}
-	return t, scenes, true
+	return scenes, true
 }
 
 // handleExportLabels renders a batch as one PDF or a ZIP of PNGs:
@@ -344,7 +345,14 @@ func (s *Server) handleExportLabels(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(exportWriteTimeout))
 
-	t, scenes, ok := s.layoutBatch(w, req.TemplateID, req.AssetIDs)
+	if !checkAssetIDs(w, req.AssetIDs) {
+		return
+	}
+	t, ok := s.loadTemplateFor(w, req.TemplateID)
+	if !ok {
+		return
+	}
+	scenes, ok := s.layoutBatch(w, t, req.AssetIDs)
 	if !ok {
 		return
 	}

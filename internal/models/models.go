@@ -132,3 +132,16 @@ type Image struct {
 	SHA256      string    `json:"sha256"`
 	CreatedAt   time.Time `json:"created_at"`
 }
+
+// Printer is a network label printer.
+type Printer struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Driver    string    `json:"driver"`
+	Model     string    `json:"model"`
+	Host      string    `json:"host"`
+	Port      int       `json:"port"`
+	Media     string    `json:"media"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
