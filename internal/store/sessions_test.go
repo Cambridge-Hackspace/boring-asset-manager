@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -9,19 +10,27 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 )
 
+// setupTestStore opens a migrated, seeded store. It uses a temporary SQLite file
+// unless BAM_TEST_DIALECT/BAM_TEST_DSN select a PostgreSQL or MariaDB server, in
+// which case each test gets its own ephemeral schema/database.
 func setupTestStore(t *testing.T) *Store {
 	t.Helper()
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "test.db")
 
-	cfg := &config.DatabaseConfig{
-		Type: "sqlite",
-		DSN:  dbPath + "?_journal=WAL&_busy_timeout=5000",
-	}
-
-	st, err := Open(cfg)
-	if err != nil {
-		t.Fatalf("opening store: %v", err)
+	var st *Store
+	if dialect := os.Getenv(TestDialectEnv); dialect != "" && dialect != "sqlite" {
+		ephemeral, cleanup, err := OpenEphemeral(dialect, os.Getenv(TestDSNEnv))
+		if err != nil {
+			t.Fatalf("opening ephemeral %s store: %v", dialect, err)
+		}
+		t.Cleanup(cleanup)
+		st = ephemeral
+	} else {
+		dbPath := filepath.Join(t.TempDir(), "test.db")
+		opened, err := Open(&config.DatabaseConfig{Type: "sqlite", DSN: dbPath})
+		if err != nil {
+			t.Fatalf("opening store: %v", err)
+		}
+		st = opened
 	}
 
 	if err := st.Migrate(); err != nil {

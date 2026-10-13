@@ -33,7 +33,7 @@ func (s *Store) CreateField(key, label, validationType string, rawOptions json.R
 		optionsStr = &str
 	}
 
-	query := `INSERT INTO fields (id, key, label, validation_type, options, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO fields (id, field_key, label, validation_type, options, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.Exec(query, fieldID, key, label, validationType, optionsStr, now, now)
 	if err != nil {
 		errMsg := strings.ToLower(err.Error())
@@ -56,7 +56,7 @@ func (s *Store) CreateField(key, label, validationType string, rawOptions json.R
 
 // GetFieldByID retrieves a field definition by its UUID.
 func (s *Store) GetFieldByID(id string) (*models.Field, error) {
-	query := `SELECT id, key, label, validation_type, options, created_at, updated_at FROM fields WHERE id = ?`
+	query := `SELECT id, field_key, label, validation_type, options, created_at, updated_at FROM fields WHERE id = ?`
 	var (
 		f          models.Field
 		optionsVal sql.NullString
@@ -81,7 +81,7 @@ func (s *Store) GetFieldByID(id string) (*models.Field, error) {
 
 // GetFieldByKey retrieves a field definition by its unique snake_case key.
 func (s *Store) GetFieldByKey(key string) (*models.Field, error) {
-	query := `SELECT id, key, label, validation_type, options, created_at, updated_at FROM fields WHERE key = ?`
+	query := `SELECT id, field_key, label, validation_type, options, created_at, updated_at FROM fields WHERE field_key = ?`
 	var (
 		f          models.Field
 		optionsVal sql.NullString
@@ -106,7 +106,7 @@ func (s *Store) GetFieldByKey(key string) (*models.Field, error) {
 
 // ListFields retrieves all registered field definitions ordered by key.
 func (s *Store) ListFields() ([]models.Field, error) {
-	query := `SELECT id, key, label, validation_type, options, created_at, updated_at FROM fields ORDER BY key ASC`
+	query := `SELECT id, field_key, label, validation_type, options, created_at, updated_at FROM fields ORDER BY field_key ASC`
 	rows, err := s.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("querying fields list: %w", err)

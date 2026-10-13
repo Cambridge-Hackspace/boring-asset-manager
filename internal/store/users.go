@@ -88,7 +88,7 @@ func (s *Store) ListUsers() ([]models.User, error) {
 // the strict union across all assigned roles.
 func (s *Store) GetUserPermissions(userID string) (map[string]bool, error) {
 	query := `
-		SELECT DISTINCT p.key
+		SELECT DISTINCT p.permission_key
 		FROM user_roles ur
 		JOIN role_permissions rp ON ur.role_id = rp.role_id
 		JOIN permissions p ON rp.permission_id = p.id
@@ -255,7 +255,7 @@ func (s *Store) RemoveUserRole(userID, roleID string) error {
 		SELECT COUNT(*)
 		FROM role_permissions rp
 		JOIN permissions p ON rp.permission_id = p.id
-		WHERE rp.role_id = ? AND p.key = ?
+		WHERE rp.role_id = ? AND p.permission_key = ?
 	`, roleID, rbac.PermUsersManage).Scan(&roleHasManage)
 	if err != nil {
 		return err
@@ -273,7 +273,7 @@ func (s *Store) RemoveUserRole(userID, roleID string) error {
 		FROM user_roles ur
 		JOIN role_permissions rp ON ur.role_id = rp.role_id
 		JOIN permissions p ON rp.permission_id = p.id
-		WHERE ur.user_id = ? AND ur.role_id <> ? AND p.key = ?
+		WHERE ur.user_id = ? AND ur.role_id <> ? AND p.permission_key = ?
 	`, userID, roleID, rbac.PermUsersManage).Scan(&otherManageRoles)
 	if err != nil {
 		return err

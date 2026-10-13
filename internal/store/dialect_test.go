@@ -32,8 +32,8 @@ func TestRebind(t *testing.T) {
 		{
 			name:     "postgres preserves question mark in literal string",
 			dialect:  "postgres",
-			query:    "SELECT * FROM settings WHERE key = ? AND description = 'is this valid?' AND active = ?",
-			expected: "SELECT * FROM settings WHERE key = $1 AND description = 'is this valid?' AND active = $2",
+			query:    "SELECT * FROM settings WHERE setting_key = ? AND description = 'is this valid?' AND active = ?",
+			expected: "SELECT * FROM settings WHERE setting_key = $1 AND description = 'is this valid?' AND active = $2",
 		},
 	}
 

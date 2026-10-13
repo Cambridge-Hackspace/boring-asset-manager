@@ -334,11 +334,11 @@ func (s *Store) RemoveCategoryField(categoryID, fieldID string) error {
 // GetDirectCategoryFields retrieves fields mapped directly to this category.
 func (s *Store) GetDirectCategoryFields(categoryID string) ([]models.EffectiveField, error) {
 	query := `
-		SELECT f.id, f.key, f.label, f.validation_type, f.options, f.created_at, f.updated_at, cf.is_required
+		SELECT f.id, f.field_key, f.label, f.validation_type, f.options, f.created_at, f.updated_at, cf.is_required
 		FROM category_fields cf
 		JOIN fields f ON cf.field_id = f.id
 		WHERE cf.category_id = ?
-		ORDER BY f.key ASC
+		ORDER BY f.field_key ASC
 	`
 	rows, err := s.Query(query, categoryID)
 	if err != nil {

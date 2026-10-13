@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +13,23 @@ import (
 
 //go:embed *.sql
 var MigrationFiles embed.FS
+
+var timestampTypeRegex = regexp.MustCompile(`\bTIMESTAMP\b`)
+
+// adaptDDL rewrites portable DDL for dialect quirks. On MariaDB/MySQL, TIMESTAMP
+// columns are limited to 2038, are converted through the session time zone, and
+// (with explicit_defaults_for_timestamp off, the default before MariaDB 10.10) the
+// first TIMESTAMP NOT NULL column of a table silently gains DEFAULT CURRENT_TIMESTAMP
+// ON UPDATE CURRENT_TIMESTAMP, which would rewrite created_at on every update.
+// DATETIME(6) has none of those behaviors.
+func adaptDDL(stmt, dialect string) string {
+	switch dialect {
+	case "mariadb", "mysql":
+		return timestampTypeRegex.ReplaceAllString(stmt, "DATETIME(6)")
+	default:
+		return stmt
+	}
+}
 
 // Migrate executes all pending embedded SQL migrations idempotently inside a transaction.
 func Migrate(db *sql.DB, dialect string) error {
@@ -49,10 +67,10 @@ func Migrate(db *sql.DB, dialect string) error {
 	})
 
 	// Ensure tracking table exists
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+	_, err = db.Exec(adaptDDL(`CREATE TABLE IF NOT EXISTS schema_migrations (
 		version INTEGER PRIMARY KEY,
 		applied_at TIMESTAMP NOT NULL
-	);`)
+	);`, dialect))
 	if err != nil {
 		return fmt.Errorf("creating schema_migrations table: %w", err)
 	}
@@ -85,7 +103,7 @@ func Migrate(db *sql.DB, dialect string) error {
 			if stmt == "" {
 				continue
 			}
-			if _, err := tx.Exec(stmt); err != nil {
+			if _, err := tx.Exec(adaptDDL(stmt, dialect)); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("executing statement in %s: %w\nSQL: %s", m.filename, err, stmt)
 			}

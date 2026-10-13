@@ -16,8 +16,6 @@ import (
 func setupTestServer(t *testing.T) (*Server, *models.User, string) {
 	t.Helper()
 	cfg := config.DefaultConfig()
-	cfg.Database.Type = "sqlite"
-	cfg.Database.DSN = ":memory:?_foreign_keys=1"
 
 	st := setupTestStore(t)
 

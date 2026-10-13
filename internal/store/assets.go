@@ -264,7 +264,7 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 
 	// Field values
 	fvQuery := `
-		SELECT f.key, afv.value
+		SELECT f.field_key, afv.value
 		FROM asset_field_values afv
 		JOIN fields f ON afv.field_id = f.id
 		WHERE afv.asset_id = ?
