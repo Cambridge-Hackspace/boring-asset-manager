@@ -1,0 +1,252 @@
+package brotherql
+
+import (
+	"bytes"
+	"errors"
+	"flag"
+	"image"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+var update = flag.Bool("update", false, "rewrite testdata/*.bin")
+
+func TestPackBitsKnownVector(t *testing.T) {
+	// Apple Technical Note TN1023.
+	raw := []byte{0xAA, 0xAA, 0xAA, 0x80, 0x00, 0x2A, 0xAA, 0xAA, 0xAA, 0xAA, 0x80, 0x00, 0x2A, 0x22,
+		0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA}
+	packed := []byte{0xFE, 0xAA, 0x02, 0x80, 0x00, 0x2A, 0xFD, 0xAA, 0x03, 0x80, 0x00, 0x2A, 0x22, 0xF7, 0xAA}
+	if got := packBits(raw); !bytes.Equal(got, packed) {
+		t.Errorf("packBits = % X, want % X", got, packed)
+	}
+	if got, err := unpackBits(packed); err != nil || !bytes.Equal(got, raw) {
+		t.Errorf("unpackBits = % X, %v", got, err)
+	}
+}
+
+func TestPackBitsRoundTrip(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+	for n := 0; n < 400; n++ {
+		data := make([]byte, rng.Intn(300))
+		for i := range data {
+			// Small alphabet so runs of every length appear.
+			data[i] = byte(rng.Intn(3))
+		}
+		packed := packBits(data)
+		got, err := unpackBits(packed)
+		if err != nil || !bytes.Equal(got, data) {
+			t.Fatalf("round trip of % X failed: % X, %v", data, got, err)
+		}
+		if len(packed) > len(data)+(len(data)+127)/128 {
+			t.Fatalf("%d bytes packed to %d", len(data), len(packed))
+		}
+	}
+	// A blank raster line compresses to two bytes.
+	if got := packBits(make([]byte, bytesPerLine)); len(got) != 2 {
+		t.Errorf("blank line packed to % X", got)
+	}
+}
+
+func TestFit(t *testing.T) {
+	dk22210, _ := LookupMedia("dk-22210")
+	dk11201, _ := LookupMedia("dk-11201")
+	dk22205, _ := LookupMedia("dk-22205")
+
+	cases := []struct {
+		name          string
+		media         Media
+		width, height float64
+		dpi           int
+		rotate        bool
+		fits          bool
+	}{
+		{"die-cut portrait", dk11201, 29, 90, 300, false, true},
+		{"die-cut landscape rotates", dk11201, 90, 29, 300, true, true},
+		{"die-cut within tolerance", dk11201, 29.2, 89.7, 300, false, true},
+		{"die-cut wrong length", dk11201, 29, 60, 300, false, false},
+		{"continuous portrait", dk22210, 29, 50, 300, false, true},
+		{"continuous landscape rotates", dk22205, 100, 62, 300, true, true},
+		{"continuous too short", dk22210, 29, 20, 300, false, false},
+		{"continuous too long", dk22210, 29, 1100, 300, false, false},
+		{"wrong width", dk22205, 50, 29, 300, false, false},
+		{"wrong dpi", dk22210, 29, 50, 203, false, false},
+	}
+	for _, c := range cases {
+		p, err := c.media.Fit(c.width, c.height, c.dpi)
+		if c.fits != (err == nil) {
+			t.Errorf("%s: err = %v, want fits=%v", c.name, err, c.fits)
+			continue
+		}
+		if err != nil && !errors.Is(err, ErrDoesNotFit) {
+			t.Errorf("%s: error does not wrap ErrDoesNotFit: %v", c.name, err)
+		}
+		if err == nil && p.Rotate != c.rotate {
+			t.Errorf("%s: rotate = %v, want %v", c.name, p.Rotate, c.rotate)
+		}
+	}
+}
+
+// markedLabel draws a dark dot near the top-left corner of a white label so
+// orientation can be checked.
+func markedLabel(w, h int) *image.Gray {
+	img := image.NewGray(image.Rect(0, 0, w, h))
+	for i := range img.Pix {
+		img.Pix[i] = 0xFF
+	}
+	for y := 40; y < 50; y++ {
+		for x := 40; x < 50; x++ {
+			img.Pix[y*img.Stride+x] = 0
+		}
+	}
+	return img
+}
+
+func darkBounds(img *image.Gray) image.Rectangle {
+	var r image.Rectangle
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			if img.Pix[y*img.Stride+x] < 0x80 {
+				r = r.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	return r
+}
+
+func TestPrepareCropsAndRotates(t *testing.T) {
+	dk11201, _ := LookupMedia("dk-11201")
+
+	// 29 × 90 mm at 300 DPI renders as 343 × 1063 dots; the printable window
+	// is 306 × 991 around the center, so the crop offset is (18, 36).
+	page := dk11201.Prepare(markedLabel(343, 1063), Placement{})
+	if b := page.Bounds(); b.Dx() != 306 || b.Dy() != 991 {
+		t.Fatalf("page is %v, want 306×991", b)
+	}
+	if got, want := darkBounds(page), image.Rect(22, 4, 32, 14); got != want {
+		t.Errorf("mark at %v, want %v", got, want)
+	}
+
+	// A 90 × 29 mm label turns counterclockwise: its top-left corner ends up
+	// at the bottom-left, so the mark moves from (40,40) to (40, 1063-50).
+	page = dk11201.Prepare(markedLabel(1063, 343), Placement{Rotate: true})
+	if b := page.Bounds(); b.Dx() != 306 || b.Dy() != 991 {
+		t.Fatalf("rotated page is %v, want 306×991", b)
+	}
+	if got, want := darkBounds(page), image.Rect(40-18, 1063-50-36, 50-18, 1063-40-36); got != want {
+		t.Errorf("rotated mark at %v, want %v", got, want)
+	}
+
+	dk22210, _ := LookupMedia("dk-22210")
+	if b := dk22210.Prepare(markedLabel(343, 600), Placement{}).Bounds(); b.Dx() != 306 || b.Dy() != 600 {
+		t.Errorf("continuous page is %v, want every line kept", b)
+	}
+}
+
+func checkerPage(m Media, lines int) *image.Gray {
+	img := image.NewGray(image.Rect(0, 0, m.PrintableDots, lines))
+	for y := 0; y < lines; y++ {
+		for x := 0; x < m.PrintableDots; x++ {
+			if (x/16+y/16)%2 == 0 && x != 0 {
+				continue
+			}
+			img.Pix[y*img.Stride+x] = 0xFF
+		}
+	}
+	// The leftmost column is dark on every line, so the right margin and
+	// mirroring are visible in the stream.
+	for y := 0; y < lines; y++ {
+		img.Pix[y*img.Stride] = 0
+	}
+	return img
+}
+
+// TestEncodeJobGoldens pins the byte stream for each roll and checks that
+// decoding it gives back exactly the pages that went in.
+func TestEncodeJobGoldens(t *testing.T) {
+	for _, id := range MediaIDs() {
+		m, _ := LookupMedia(id)
+		lines := m.PrintableLines
+		if lines == 0 {
+			lines = 400
+		}
+		pages := []*image.Gray{checkerPage(m, lines), markedLabel(m.PrintableDots, lines)}
+		stream, err := EncodeJob(m, pages)
+		if err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+
+		path := filepath.Join("testdata", id+".bin")
+		if *update {
+			if err := os.WriteFile(path, stream, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		} else if want, err := os.ReadFile(path); err != nil || !bytes.Equal(stream, want) {
+			t.Errorf("%s: stream differs from %s (%v)", id, path, err)
+		}
+
+		decoded, err := DecodeJob(stream)
+		if err != nil {
+			t.Fatalf("%s: decoding: %v", id, err)
+		}
+		if len(decoded) != 2 || decoded[0].Last || !decoded[1].Last {
+			t.Fatalf("%s: decoded %d pages with wrong print commands", id, len(decoded))
+		}
+		wantType := byte(mediaContinuous)
+		if m.DieCut() {
+			wantType = mediaDieCut
+		}
+		for i, p := range decoded {
+			if p.MediaType != wantType || p.WidthMM != byte(m.WidthMM) || p.LengthMM != byte(m.LengthMM) {
+				t.Errorf("%s page %d: print information %+v", id, i, p)
+			}
+			if got := PageImage(m, p); !bytes.Equal(got.Pix, pages[i].Pix) {
+				t.Errorf("%s page %d: decoded bitmap differs from the input", id, i)
+			}
+		}
+
+		// Pin 0 sits at the right of the tape: the page's leftmost column must
+		// land on the last printable pin, just inside the right margin.
+		lastPin := m.RightMarginDots + m.PrintableDots - 1
+		if decoded[0].Lines[0][lastPin/8]&(0x80>>uint(lastPin%8)) == 0 {
+			t.Errorf("%s: leftmost column is not on pin %d", id, lastPin)
+		}
+		for pin := 0; pin < m.RightMarginDots; pin++ {
+			if decoded[0].Lines[0][pin/8]&(0x80>>uint(pin%8)) != 0 {
+				t.Errorf("%s: pin %d beside the tape is set", id, pin)
+			}
+		}
+	}
+}
+
+func TestEncodeJobRejectsMisshapenPages(t *testing.T) {
+	dk11201, _ := LookupMedia("dk-11201")
+	if _, err := EncodeJob(dk11201, nil); err == nil {
+		t.Error("empty job accepted")
+	}
+	if _, err := EncodeJob(dk11201, []*image.Gray{markedLabel(300, 991)}); err == nil {
+		t.Error("wrong width accepted")
+	}
+	if _, err := EncodeJob(dk11201, []*image.Gray{markedLabel(306, 500)}); err == nil {
+		t.Error("wrong die-cut length accepted")
+	}
+}
+
+func TestDecodeJobRejectsDamagedStreams(t *testing.T) {
+	m, _ := LookupMedia("dk-22210")
+	stream, err := EncodeJob(m, []*image.Gray{checkerPage(m, 300)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, damaged := range map[string][]byte{
+		"truncated":      stream[:len(stream)-40],
+		"no final print": stream[:len(stream)-1],
+		"no invalidate":  stream[100:],
+		"trailing bytes": append(append([]byte{}, stream...), 0x00),
+	} {
+		if _, err := DecodeJob(damaged); err == nil {
+			t.Errorf("%s stream accepted", name)
+		}
+	}
+}
