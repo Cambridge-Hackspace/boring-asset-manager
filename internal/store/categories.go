@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -180,9 +181,14 @@ func (s *Store) ListCategories() ([]models.Category, error) {
 		all = append(all, c)
 	}
 
-	// Check if uncategorized has assets
+	// Check if uncategorized has active (non-archived) assets
 	var uncategorizedAssetCount int
-	_ = s.QueryRow("SELECT COUNT(*) FROM asset_categories WHERE category_id = ?", UncategorizedCategoryID).Scan(&uncategorizedAssetCount)
+	_ = s.QueryRow(`
+		SELECT COUNT(*)
+		FROM asset_categories ac
+		JOIN assets a ON ac.asset_id = a.id
+		WHERE ac.category_id = ? AND a.archived_at IS NULL
+	`, UncategorizedCategoryID).Scan(&uncategorizedAssetCount)
 
 	result := make([]models.Category, 0, len(all))
 	for _, cat := range all {
@@ -233,7 +239,7 @@ func (s *Store) UpdateCategory(id, name string, parentID *string, colorHex strin
 	return existing, nil
 }
 
-// DeleteCategory deletes a category record.
+// DeleteCategory deletes a category record, reattaching any assets it leaves without a category to Uncategorized.
 func (s *Store) DeleteCategory(id string) error {
 	if id == UncategorizedCategoryID {
 		return errors.New("cannot delete the system uncategorized category")
@@ -243,14 +249,34 @@ func (s *Store) DeleteCategory(id string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.EnsureUncategorizedCategory(); err != nil {
+		return err
+	}
 
-	// Any assets detached should be handled or foreign keys cascade
-	query := `DELETE FROM categories WHERE id = ?`
-	_, err = s.Exec(query, id)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning category deletion: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Asset bindings cascade away with the category; child categories become roots.
+	_, err = s.TxExec(tx, "DELETE FROM categories WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("deleting category: %w", err)
 	}
-	return nil
+
+	// Assets left without any category fall back to the system Uncategorized category.
+	_, err = s.TxExec(tx, `
+		INSERT INTO asset_categories (asset_id, category_id)
+		SELECT a.id, ?
+		FROM assets a
+		WHERE NOT EXISTS (SELECT 1 FROM asset_categories ac WHERE ac.asset_id = a.id)
+	`, UncategorizedCategoryID)
+	if err != nil {
+		return fmt.Errorf("reattaching orphaned assets to uncategorized: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // AssignCategoryField maps a field to a category with a required/optional constraint.
@@ -388,11 +414,14 @@ func (s *Store) GetEffectiveFieldsForCategories(categoryIDs []string) ([]models.
 		}
 	}
 
-	// 3. Return sorted slice
+	// 3. Return slice sorted by field key
 	result := make([]models.EffectiveField, 0, len(effectiveMap))
 	for _, ef := range effectiveMap {
 		result = append(result, ef)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Field.Key < result[j].Field.Key
+	})
 
 	return result, nil
 }

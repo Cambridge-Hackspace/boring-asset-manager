@@ -46,6 +46,60 @@ func (s *Store) normalizeCategories(categoryIDs []string) ([]string, error) {
 	return normalized, nil
 }
 
+// normalizeGeneratorKeys trims assigned codes, rejects duplicate generator types and
+// validates each code against its generator's character set and capacity constraints.
+func normalizeGeneratorKeys(keys []models.AssetGeneratorKey) ([]models.AssetGeneratorKey, error) {
+	normalized := make([]models.AssetGeneratorKey, 0, len(keys))
+	genTypeSeen := make(map[string]bool)
+	for _, gk := range keys {
+		gk.AssignedCode = strings.TrimSpace(gk.AssignedCode)
+		if genTypeSeen[gk.GeneratorType] {
+			return nil, fmt.Errorf("%w: %s", ErrDuplicateGenType, gk.GeneratorType)
+		}
+		genTypeSeen[gk.GeneratorType] = true
+
+		if err := generators.ValidateGeneratorCode(gk.GeneratorType, gk.AssignedCode); err != nil {
+			return nil, err
+		}
+		normalized = append(normalized, gk)
+	}
+	return normalized, nil
+}
+
+// resolveFieldValues validates supplied field values against the effective field set (falling
+// back to the global corpus for keys outside the asset's categories) and maps each field ID to
+// its trimmed value. Empty values are kept so callers can treat them as deletions; unknown keys
+// with empty values are ignored.
+//
+// It must run before a write transaction begins: the SQLite pool holds a single connection, so
+// a non-transactional lookup issued while a transaction is open would block forever.
+func (s *Store) resolveFieldValues(fieldMap map[string]models.EffectiveField, values map[string]string) (map[string]string, error) {
+	resolved := make(map[string]string, len(values))
+	for key, val := range values {
+		val = strings.TrimSpace(val)
+
+		var f *models.Field
+		if ef, ok := fieldMap[key]; ok {
+			f = &ef.Field
+		} else {
+			corpusField, err := s.GetFieldByKey(key)
+			if err != nil {
+				if val == "" {
+					continue
+				}
+				return nil, fmt.Errorf("unknown field key %q: %w", key, err)
+			}
+			f = corpusField
+		}
+
+		if err := fields.ValidateFieldValue(f, val); err != nil {
+			return nil, err
+		}
+		resolved[f.ID] = val
+	}
+	return resolved, nil
+}
+
 // CreateAsset creates an asset with multi-category bindings, validated generator keys, and dynamic field values.
 func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string) (*models.AssetWithDetails, error) {
 	name = strings.TrimSpace(name)
@@ -60,16 +114,9 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 	}
 
 	// 2. Validate generator keys
-	genTypeSeen := make(map[string]bool)
-	for _, gk := range generatorKeys {
-		if genTypeSeen[gk.GeneratorType] {
-			return nil, fmt.Errorf("%w: %s", ErrDuplicateGenType, gk.GeneratorType)
-		}
-		genTypeSeen[gk.GeneratorType] = true
-
-		if err := generators.ValidateGeneratorCode(gk.GeneratorType, gk.AssignedCode); err != nil {
-			return nil, err
-		}
+	generatorKeys, err = normalizeGeneratorKeys(generatorKeys)
+	if err != nil {
+		return nil, err
 	}
 
 	// 3. Resolve effective fields & validate field values
@@ -94,29 +141,11 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 		}
 	}
 
-	// Validate supplied values against field definitions
-	if fieldValues != nil {
-		for key, val := range fieldValues {
-			val = strings.TrimSpace(val)
-			if val == "" {
-				continue
-			}
-			ef, exists := fieldMap[key]
-			if !exists {
-				// Field could be an existing corpus field not directly required in this category
-				f, err := s.GetFieldByKey(key)
-				if err != nil {
-					return nil, fmt.Errorf("unknown field key %q: %w", key, err)
-				}
-				if err := fields.ValidateFieldValue(f, val); err != nil {
-					return nil, err
-				}
-			} else {
-				if err := fields.ValidateFieldValue(&ef.Field, val); err != nil {
-					return nil, err
-				}
-			}
-		}
+	// Validate supplied values against field definitions (corpus fields outside the
+	// asset's categories are accepted and retained)
+	resolvedValues, err := s.resolveFieldValues(fieldMap, fieldValues)
+	if err != nil {
+		return nil, err
 	}
 
 	// 4. Persistence Transaction
@@ -156,27 +185,13 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 	}
 
 	// Insert field values
-	if fieldValues != nil {
-		for key, val := range fieldValues {
-			val = strings.TrimSpace(val)
-			if val == "" {
-				continue
-			}
-			var fieldID string
-			if ef, ok := fieldMap[key]; ok {
-				fieldID = ef.Field.ID
-			} else {
-				f, _ := s.GetFieldByKey(key)
-				if f != nil {
-					fieldID = f.ID
-				}
-			}
-			if fieldID != "" {
-				_, err = s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", assetID, fieldID, val, now)
-				if err != nil {
-					return nil, fmt.Errorf("inserting field value: %w", err)
-				}
-			}
+	for fieldID, val := range resolvedValues {
+		if val == "" {
+			continue
+		}
+		_, err = s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", assetID, fieldID, val, now)
+		if err != nil {
+			return nil, fmt.Errorf("inserting field value: %w", err)
 		}
 	}
 
@@ -299,8 +314,9 @@ func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWith
 	}
 
 	if search != "" {
-		likeTerm := "%" + search + "%"
-		whereClauses = append(whereClauses, "(a.name LIKE ? OR a.id IN (SELECT asset_id FROM asset_generator_keys WHERE assigned_code LIKE ?))")
+		// LOWER() on both sides keeps matching case-insensitive on PostgreSQL, whose LIKE is case-sensitive.
+		likeTerm := "%" + strings.ToLower(search) + "%"
+		whereClauses = append(whereClauses, "(LOWER(a.name) LIKE ? OR a.id IN (SELECT asset_id FROM asset_generator_keys WHERE LOWER(assigned_code) LIKE ?))")
 		args = append(args, likeTerm, likeTerm)
 	}
 
@@ -360,16 +376,9 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 	}
 
 	// Validate generator keys
-	genTypeSeen := make(map[string]bool)
-	for _, gk := range generatorKeys {
-		if genTypeSeen[gk.GeneratorType] {
-			return nil, fmt.Errorf("%w: %s", ErrDuplicateGenType, gk.GeneratorType)
-		}
-		genTypeSeen[gk.GeneratorType] = true
-
-		if err := generators.ValidateGeneratorCode(gk.GeneratorType, gk.AssignedCode); err != nil {
-			return nil, err
-		}
+	generatorKeys, err = normalizeGeneratorKeys(generatorKeys)
+	if err != nil {
+		return nil, err
 	}
 
 	// Merge field values: start with existing field values, apply new ones
@@ -402,27 +411,9 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 	}
 
 	// Validate newly provided field values
-	if fieldValues != nil {
-		for key, val := range fieldValues {
-			val = strings.TrimSpace(val)
-			if val == "" {
-				continue
-			}
-			ef, exists := fieldMap[key]
-			if !exists {
-				f, err := s.GetFieldByKey(key)
-				if err != nil {
-					return nil, fmt.Errorf("unknown field key %q: %w", key, err)
-				}
-				if err := fields.ValidateFieldValue(f, val); err != nil {
-					return nil, err
-				}
-			} else {
-				if err := fields.ValidateFieldValue(&ef.Field, val); err != nil {
-					return nil, err
-				}
-			}
-		}
+	resolvedValues, err := s.resolveFieldValues(fieldMap, fieldValues)
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -469,28 +460,16 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 	}
 
 	// Upsert field values (Data Retention Rule: Existing values not mentioned are untouched!)
-	if fieldValues != nil {
-		for key, val := range fieldValues {
-			var fieldID string
-			if ef, ok := fieldMap[key]; ok {
-				fieldID = ef.Field.ID
-			} else {
-				f, _ := s.GetFieldByKey(key)
-				if f != nil {
-					fieldID = f.ID
-				}
-			}
-			if fieldID == "" {
-				continue
-			}
-
-			// Delete prior value for this specific field and insert new one
-			_, _ = s.TxExec(tx, "DELETE FROM asset_field_values WHERE asset_id = ? AND field_id = ?", id, fieldID)
-			if strings.TrimSpace(val) != "" {
-				_, err = s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", id, fieldID, strings.TrimSpace(val), now)
-				if err != nil {
-					return nil, err
-				}
+	for fieldID, val := range resolvedValues {
+		// Delete prior value for this specific field and insert new one
+		_, err = s.TxExec(tx, "DELETE FROM asset_field_values WHERE asset_id = ? AND field_id = ?", id, fieldID)
+		if err != nil {
+			return nil, err
+		}
+		if val != "" {
+			_, err = s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", id, fieldID, val, now)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -502,17 +481,34 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 	return s.GetAssetByID(id)
 }
 
-// DeleteAsset soft-deletes an asset by setting its archived_at timestamp.
+// DeleteAsset soft-deletes an asset by setting its archived_at timestamp and releasing its generator codes.
 func (s *Store) DeleteAsset(id string) error {
 	_, err := s.GetAssetByID(id)
 	if err != nil {
 		return err
 	}
 
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning archive transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	now := time.Now().UTC()
-	_, err = s.Exec("UPDATE assets SET archived_at = ?, updated_at = ? WHERE id = ?", now, now, id)
+	_, err = s.TxExec(tx, "UPDATE assets SET archived_at = ?, updated_at = ? WHERE id = ?", now, now, id)
 	if err != nil {
 		return fmt.Errorf("archiving asset: %w", err)
+	}
+
+	// Generator codes are unique only across active assets, so an archived asset
+	// releases its codes for reassignment.
+	_, err = s.TxExec(tx, "DELETE FROM asset_generator_keys WHERE asset_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("releasing generator keys: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing asset archive: %w", err)
 	}
 	return nil
 }
