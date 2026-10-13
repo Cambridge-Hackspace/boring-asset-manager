@@ -50,7 +50,7 @@ func DefaultConfig() *Config {
 		},
 		Database: DatabaseConfig{
 			Type: "sqlite",
-			DSN:  "data/bam.db?_journal=WAL&_busy_timeout=5000",
+			DSN:  "data/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)",
 		},
 		Storage: StorageConfig{
 			LocalPath: "./data/uploads",
@@ -110,7 +110,7 @@ func applyEnvOverrides(cfg *Config) {
 	// Convenience env for test runners such as reaper ($REAPER_STATE)
 	if dbPath := os.Getenv("BAM_DB_PATH"); dbPath != "" {
 		cfg.Database.Type = "sqlite"
-		cfg.Database.DSN = dbPath + "?_journal=WAL&_busy_timeout=5000"
+		cfg.Database.DSN = dbPath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	}
 
 	if storagePath := os.Getenv("BAM_STORAGE_LOCAL_PATH"); storagePath != "" {

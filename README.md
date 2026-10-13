@@ -39,7 +39,9 @@ session_secret = "replace-with-a-secure-random-64-char-string"
 [database]
 # Drivers: "sqlite", "postgres", "mariadb"
 type = "sqlite"
-dsn = "data/bam.db?_journal=WAL&_busy_timeout=5000"
+# SQLite DSNs use modernc.org/sqlite `_pragma` parameters. Foreign key
+# enforcement is always switched on by BAM regardless of the DSN.
+dsn = "data/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 
 [storage]
 local_path = "./data/uploads"
