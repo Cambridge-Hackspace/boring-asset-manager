@@ -33,13 +33,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !user.IsActive {
-		writeJSONError(w, http.StatusUnauthorized, "Account is disabled")
+	// Verify the password before revealing account state, so the disabled-account
+	// message cannot be used to probe which emails exist.
+	if !auth.CheckPassword(req.Password, user.PasswordHash) {
+		writeJSONError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
 
-	if !auth.CheckPassword(req.Password, user.PasswordHash) {
-		writeJSONError(w, http.StatusUnauthorized, "Invalid email or password")
+	if !user.IsActive {
+		writeJSONError(w, http.StatusUnauthorized, "Account is disabled")
 		return
 	}
 
