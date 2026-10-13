@@ -21,6 +21,17 @@ var (
 
 	// Micro QR alphanumeric charset: 0-9, A-Z, space, $, %, *, +, -, ., /, :
 	microQRCharsetRegex = regexp.MustCompile(`^[0-9A-Z $%*+\-./:]+$`)
+	microQRNumericRegex = regexp.MustCompile(`^[0-9]+$`)
+)
+
+// Symbol capacity limits at the lowest error-correction level.
+const (
+	// MicroQRMaxNumeric is the M4-L numeric-mode capacity.
+	MicroQRMaxNumeric = 35
+	// MicroQRMaxAlphanumeric is the M4-L alphanumeric-mode capacity.
+	MicroQRMaxAlphanumeric = 21
+	// QRMaxBytes is the version 40-L byte-mode capacity.
+	QRMaxBytes = 2953
 )
 
 // AllowedGeneratorTypes returns supported generator type identifiers.
@@ -47,20 +58,31 @@ func ValidateGeneratorCode(genType, code string) error {
 
 	switch genType {
 	case TypeMicroQR:
-		// Micro QR M1-M4 alphanumeric capacity is capped at 35 characters
-		length := utf8.RuneCountInString(code)
-		if length < 1 || length > 35 {
-			return fmt.Errorf("%w: micro_qr capacity is 1-35 characters (got %d)", ErrInvalidCodeLength, length)
-		}
 		if !microQRCharsetRegex.MatchString(code) {
 			return fmt.Errorf("%w: micro_qr only supports uppercase alphanumeric and ' $%%*+-./:' characters", ErrInvalidCharacterSet)
+		}
+		// The largest symbol (M4-L) holds 35 digits in numeric mode but only 21
+		// characters once any non-digit forces alphanumeric mode.
+		length := len(code)
+		if microQRNumericRegex.MatchString(code) {
+			if length > MicroQRMaxNumeric {
+				return fmt.Errorf("%w: numeric micro_qr capacity is 1-%d digits (got %d)", ErrInvalidCodeLength, MicroQRMaxNumeric, length)
+			}
+			return nil
+		}
+		if length > MicroQRMaxAlphanumeric {
+			return fmt.Errorf("%w: alphanumeric micro_qr capacity is 1-%d characters (got %d)", ErrInvalidCodeLength, MicroQRMaxAlphanumeric, length)
 		}
 		return nil
 
 	case TypeQR:
-		length := utf8.RuneCountInString(code)
-		if length < 1 || length > 2048 {
-			return fmt.Errorf("%w: qr payload must be 1-2048 characters (got %d)", ErrInvalidCodeLength, length)
+		if !utf8.ValidString(code) {
+			return fmt.Errorf("%w: qr payload must be valid UTF-8", ErrInvalidCharacterSet)
+		}
+		// Capacity is bounded by encoded bytes, not characters: multi-byte UTF-8
+		// runes consume several byte-mode codewords each.
+		if length := len(code); length > QRMaxBytes {
+			return fmt.Errorf("%w: qr payload must be 1-%d bytes (got %d)", ErrInvalidCodeLength, QRMaxBytes, length)
 		}
 		return nil
 

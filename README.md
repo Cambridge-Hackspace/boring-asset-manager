@@ -154,8 +154,8 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 * **Custom IDs Restricted Per-Generator:**
 * Assets can be assigned custom, human-readable IDs or system-allocated short sequences that are strictly validated and constrained per generator type:
-  * **Micro QR (`micro_qr`):** Constrained by physical matrix bounds and version capacity (M1–M4). Custom IDs are restricted to allowed character sets (e.g., uppercase alphanumeric) and strictly capped to the version's payload limits (e.g., 10–35 alphanumeric characters).
-  * **Standard QR (`qr`):** Supports arbitrary UTF-8 payloads and dynamic URL templates (`{base_url}/a/{asset_uuid}` or custom slug).
+  * **Micro QR (`micro_qr`):** Constrained by physical matrix bounds and version capacity (M1–M4). Custom IDs are restricted to the QR alphanumeric character set (`0-9`, `A-Z`, space, `$%*+-./:`) and strictly capped to the largest symbol's (M4-L) payload limits: 35 characters for purely numeric codes, 21 characters otherwise.
+  * **Standard QR (`qr`):** Supports arbitrary UTF-8 payloads up to 2953 encoded bytes (version 40-L byte mode) and dynamic URL templates (`{base_url}/a/{asset_uuid}` or custom slug).
   * **Code 128 (`code128`):** Restricted to standard 128 ASCII character set with linear density constraints.
 * **Uniqueness Invariant:** The compound key `(generator_type, assigned_code)` must be unique across all active assets, guaranteeing that scanning any generated code resolves unambiguously to a single asset.
 
