@@ -51,6 +51,8 @@ func (qrGenerator) Validate(payload string) error {
 
 var qrLevels = map[string]qr.Level{"": qr.M, "L": qr.L, "M": qr.M, "Q": qr.Q, "H": qr.H}
 
+func (qrGenerator) ErrorCorrectionLevels() []string { return []string{"M", "L", "Q", "H"} }
+
 func (g qrGenerator) Encode(payload, errorCorrection string) (Symbol, error) {
 	level, ok := qrLevels[errorCorrection]
 	if !ok {
@@ -96,6 +98,8 @@ func (microQRGenerator) Validate(payload string) error {
 
 var microQRLevels = map[string]microqr.Level{"": microqr.L, "L": microqr.L, "M": microqr.M, "Q": microqr.Q}
 
+func (microQRGenerator) ErrorCorrectionLevels() []string { return []string{"L", "M", "Q"} }
+
 func (g microQRGenerator) Encode(payload, errorCorrection string) (Symbol, error) {
 	level, ok := microQRLevels[errorCorrection]
 	if !ok {
@@ -132,6 +136,8 @@ func (code128Generator) Validate(payload string) error {
 	}
 	return nil
 }
+
+func (code128Generator) ErrorCorrectionLevels() []string { return nil }
 
 func (g code128Generator) Encode(payload, errorCorrection string) (Symbol, error) {
 	if errorCorrection != "" {
