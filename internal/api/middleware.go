@@ -129,6 +129,8 @@ func RequirePermission(permKey string) func(http.Handler) http.Handler {
 // ErrorResponse represents a standardized JSON API error structure.
 type ErrorResponse struct {
 	Error string `json:"error"`
+	// Details carries structured context, such as template validation problems.
+	Details any `json:"details,omitempty"`
 }
 
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
