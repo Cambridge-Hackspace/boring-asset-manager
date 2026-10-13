@@ -104,7 +104,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 ### 3.1 Field Corpus & Dynamic Inheritance
 
 * **Global Field Corpus (`fields`):**
-* Columns: `id (UUID)`, `key (snake_case)`, `label (string)`, `validation_type (string: text|number|date|url|select)`, `options (JSON nullable)`.
+* Columns: `id (UUID)`, `field_key` (snake_case; exposed as `key` in the API), `label (string)`, `validation_type (string: text|number|date|url|select)`, `options (JSON nullable)`.
 * **Options Schema (`options` JSON):** For `select` validation types, `options` stores a structured JSON schema with selectable choices and an optional default value:
   ```json
   {
@@ -329,7 +329,7 @@ When implementing this repository from scratch, complete the following milestone
 #### Sub-Phase 1.2: Multi-Dialect Store Support (PostgreSQL & MariaDB)
 * [x] Integrate pure-Go PostgreSQL (`github.com/lib/pq`) and MariaDB (`github.com/go-sql-driver/mysql`) drivers while preserving `CGO_ENABLED=0` cross-compilation.
 * [x] Implement dialect-aware connection pooling and configuration in `store.Open()`.
-* [x] Validate dialect compatibility across migrations and SQL operations for SQLite, PostgreSQL, and MariaDB.
+* [x] Validate dialect compatibility across migrations and SQL operations for SQLite, PostgreSQL, and MariaDB (store and API suites run against each via `BAM_TEST_DIALECT`; see §8.3).
 
 #### Sub-Phase 1.3: HTTP Cookie Management & RBAC Middleware
 * [x] Implement stateful session cookie management (`bam_session`, `HttpOnly`, `SameSite=Lax`, secure detection).
@@ -410,9 +410,24 @@ reaper down      # Tears down remote VM (cull daemon provides automatic TTL back
 Following the "Portfolio of Oracles" methodology:
 1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, Argon2id auth, boundary decoders, and deterministic cross-language barcode golden files.
 2. **Tier 4 — Server Contract Tests:** RBAC permission union resolution and anti-lockout invariants tested as in-process pure functions without database dependencies.
-3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence.
+3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence. The store and API suites run against PostgreSQL and MariaDB by pointing them at a server (see §8.3).
 4. **Tier 7 — Seeded Fuzzing:** Deterministic input fuzzing asserting no 500 crashes, valid JSON envelopes, and daemon liveness.
 5. **Tier 8 — Concurrency Harnesses:** Simultaneous write simulations for inventory threshold decrements and per-generator ID allocations, asserting stored state consistency.
 6. **State Rollback:** Ephemeral databases and uploads live under `$REAPER_STATE` (`tank/state`), enabling near-instantaneous ZFS rollbacks to `@pristine` between test iterations.
 
+### 8.3 Running the Suites Against PostgreSQL and MariaDB
 
+By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store and API suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
+
+```bash
+BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/
+
+BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/
+```
+
+Portability rules for schema and queries:
+* Write placeholders as `?`; `Store.Rebind` converts them to `$n` for PostgreSQL.
+* Avoid reserved identifiers (`key` is reserved in MariaDB, which is why the corpus, permission and settings columns are `field_key`, `permission_key` and `setting_key`).
+* Declare foreign keys at table level.
+* Use `TIMESTAMP` in migrations; the runner rewrites it to `DATETIME(6)` on MariaDB, where `TIMESTAMP` columns silently gain `ON UPDATE CURRENT_TIMESTAMP`.
+* The MariaDB driver is always opened with `parseTime=true` and `loc=UTC`.

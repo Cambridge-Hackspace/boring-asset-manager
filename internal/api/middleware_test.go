@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -12,17 +13,27 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
+// setupTestStore opens a migrated, seeded store: in-memory SQLite by default, or an
+// ephemeral PostgreSQL/MariaDB namespace when BAM_TEST_DIALECT/BAM_TEST_DSN are set.
 func setupTestStore(t *testing.T) *store.Store {
 	t.Helper()
-	cfg := &config.DatabaseConfig{
-		Type: "sqlite",
-		DSN:  ":memory:?_foreign_keys=1",
+
+	var st *store.Store
+	if dialect := os.Getenv(store.TestDialectEnv); dialect != "" && dialect != "sqlite" {
+		ephemeral, cleanup, err := store.OpenEphemeral(dialect, os.Getenv(store.TestDSNEnv))
+		if err != nil {
+			t.Fatalf("opening ephemeral %s store: %v", dialect, err)
+		}
+		t.Cleanup(cleanup)
+		st = ephemeral
+	} else {
+		opened, err := store.Open(&config.DatabaseConfig{Type: "sqlite", DSN: ":memory:"})
+		if err != nil {
+			t.Fatalf("opening test store: %v", err)
+		}
+		t.Cleanup(func() { _ = opened.Close() })
+		st = opened
 	}
-	st, err := store.Open(cfg)
-	if err != nil {
-		t.Fatalf("opening test store: %v", err)
-	}
-	t.Cleanup(func() { _ = st.Close() })
 
 	if err := st.Migrate(); err != nil {
 		t.Fatalf("migrating test store: %v", err)

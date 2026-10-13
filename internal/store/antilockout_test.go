@@ -50,7 +50,7 @@ func TestRemoveUserRoleOnlyGuardsEffectiveRevocations(t *testing.T) {
 		t.Fatalf("creating manager role: %v", err)
 	}
 	var manageID string
-	if err := st.QueryRow("SELECT id FROM permissions WHERE key = ?", rbac.PermUsersManage).Scan(&manageID); err != nil {
+	if err := st.QueryRow("SELECT id FROM permissions WHERE permission_key = ?", rbac.PermUsersManage).Scan(&manageID); err != nil {
 		t.Fatalf("looking up users:manage: %v", err)
 	}
 	if _, err := st.Exec("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)", managerRoleID, manageID); err != nil {

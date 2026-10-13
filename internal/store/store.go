@@ -14,9 +14,9 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 
-	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "modernc.org/sqlite"
 )
@@ -66,7 +66,11 @@ func Open(cfg *config.DatabaseConfig) (*Store, error) {
 		db.SetConnMaxLifetime(5 * time.Minute)
 
 	case "mariadb", "mysql":
-		db, err = sql.Open("mysql", cfg.DSN)
+		dsn, dsnErr := mariaDBDSN(cfg.DSN)
+		if dsnErr != nil {
+			return nil, fmt.Errorf("parsing mariadb dsn: %w", dsnErr)
+		}
+		db, err = sql.Open("mysql", dsn)
 		if err != nil {
 			return nil, fmt.Errorf("opening mariadb/mysql database: %w", err)
 		}
@@ -142,6 +146,19 @@ func sqliteDSN(dsn string) string {
 	return path + "?" + q.Encode()
 }
 
+// mariaDBDSN forces the driver options the store depends on: parseTime so DATETIME
+// columns scan into time.Time, and UTC as the connection location so timestamps
+// round-trip unchanged.
+func mariaDBDSN(dsn string) (string, error) {
+	mcfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return "", err
+	}
+	mcfg.ParseTime = true
+	mcfg.Loc = time.UTC
+	return mcfg.FormatDSN(), nil
+}
+
 // Close closes the database connection pool.
 func (s *Store) Close() error {
 	if s.DB != nil {
@@ -175,13 +192,13 @@ func (s *Store) SeedDefaultPermissionsAndRoles() error {
 	allPerms := rbac.AllPermissions()
 	for _, permKey := range allPerms {
 		var exists int
-		err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM permissions WHERE key = ?", permKey).Scan(&exists)
+		err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM permissions WHERE permission_key = ?", permKey).Scan(&exists)
 		if err != nil {
 			return fmt.Errorf("checking permission %s: %w", permKey, err)
 		}
 		if exists == 0 {
 			permID := uuid.NewString()
-			_, err = s.TxExec(tx, "INSERT INTO permissions (id, key, description) VALUES (?, ?, ?)", permID, permKey, "Core permission: "+permKey)
+			_, err = s.TxExec(tx, "INSERT INTO permissions (id, permission_key, description) VALUES (?, ?, ?)", permID, permKey, "Core permission: "+permKey)
 			if err != nil {
 				return fmt.Errorf("inserting permission %s: %w", permKey, err)
 			}
@@ -318,7 +335,7 @@ func (s *Store) CountActiveAdmins() (int, error) {
 		JOIN user_roles ur ON u.id = ur.user_id
 		JOIN role_permissions rp ON ur.role_id = rp.role_id
 		JOIN permissions p ON rp.permission_id = p.id
-		WHERE u.is_active = TRUE AND u.archived_at IS NULL AND p.key = ?
+		WHERE u.is_active = TRUE AND u.archived_at IS NULL AND p.permission_key = ?
 	`
 	var count int
 	err := s.QueryRow(query, rbac.PermUsersManage).Scan(&count)
