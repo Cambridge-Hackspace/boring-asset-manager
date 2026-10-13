@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func Open(cfg *config.DatabaseConfig) (*Store, error) {
 				}
 			}
 		}
-		db, err = sql.Open("sqlite", dsn)
+		db, err = sql.Open("sqlite", sqliteDSN(dsn))
 		if err != nil {
 			return nil, fmt.Errorf("opening sqlite database: %w", err)
 		}
@@ -86,6 +87,59 @@ func Open(cfg *config.DatabaseConfig) (*Store, error) {
 		DB:      db,
 		Dialect: cfg.Type,
 	}, nil
+}
+
+// sqliteDSN rewrites a SQLite DSN into the form understood by modernc.org/sqlite,
+// which only honors `_pragma`, `_time_format` and `_txlock` query parameters.
+// Legacy mattn-style `_journal`/`_journal_mode` and `_busy_timeout` parameters are
+// translated to their pragma equivalents, WAL mode and a 5s busy timeout are applied
+// when not otherwise specified, and foreign key enforcement is always enabled so that
+// the schema's ON DELETE CASCADE / SET NULL clauses take effect.
+func sqliteDSN(dsn string) string {
+	path, rawQuery, _ := strings.Cut(dsn, "?")
+	q, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		q = url.Values{}
+	}
+
+	pragmas := q["_pragma"]
+	hasPragma := func(name string) bool {
+		for _, p := range pragmas {
+			if strings.HasPrefix(strings.ToLower(strings.TrimSpace(p)), name) {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, legacy := range []string{"_journal", "_journal_mode"} {
+		if v := q.Get(legacy); v != "" && !hasPragma("journal_mode") {
+			pragmas = append(pragmas, "journal_mode("+v+")")
+		}
+		q.Del(legacy)
+	}
+	if v := q.Get("_busy_timeout"); v != "" && !hasPragma("busy_timeout") {
+		pragmas = append(pragmas, "busy_timeout("+v+")")
+	}
+	q.Del("_busy_timeout")
+	q.Del("_foreign_keys")
+	q.Del("_fk")
+
+	if !hasPragma("journal_mode") {
+		pragmas = append(pragmas, "journal_mode(WAL)")
+	}
+	if !hasPragma("busy_timeout") {
+		pragmas = append(pragmas, "busy_timeout(5000)")
+	}
+	filtered := pragmas[:0]
+	for _, p := range pragmas {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(p)), "foreign_keys") {
+			filtered = append(filtered, p)
+		}
+	}
+	q["_pragma"] = append(filtered, "foreign_keys(1)")
+
+	return path + "?" + q.Encode()
 }
 
 // Close closes the database connection pool.

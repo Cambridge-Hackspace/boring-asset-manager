@@ -64,7 +64,7 @@ local_path = "./custom_uploads"
 	if cfg2.Server.Port != 9999 {
 		t.Errorf("expected overridden port 9999, got %d", cfg2.Server.Port)
 	}
-	if cfg2.Database.DSN != "/tmp/reaper_state/test.db?_journal=WAL&_busy_timeout=5000" {
+	if cfg2.Database.DSN != "/tmp/reaper_state/test.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)" {
 		t.Errorf("expected overridden DSN, got %s", cfg2.Database.DSN)
 	}
 }
