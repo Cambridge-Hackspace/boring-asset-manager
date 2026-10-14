@@ -94,7 +94,7 @@
               <td class="py-2 text-right">
                 {#if canManage}
                   <span class="inline-flex flex-wrap justify-end gap-2">
-                    <button type="button" class="btn-secondary" onclick={() => (editing = f.id)}>Edit<span class="sr-only"> {f.label}</span></button>
+                    <button type="button" class="btn-secondary" aria-label="Edit {f.label}" onclick={() => (editing = f.id)}>Edit</button>
                     <ConfirmButton label="Delete" question="Delete “{f.label}” and every value recorded for it?" onconfirm={() => remove(f)} />
                   </span>
                 {/if}

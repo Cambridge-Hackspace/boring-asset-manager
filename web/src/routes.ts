@@ -12,6 +12,10 @@ import CategoryPage from './views/categories/CategoryPage.svelte';
 import FieldsPage from './views/fields/FieldsPage.svelte';
 import TemplatesPage from './views/templates/TemplatesPage.svelte';
 import TemplateEditor from './views/templates/TemplateEditor.svelte';
+import ImagesPage from './views/admin/ImagesPage.svelte';
+import PrintersPage from './views/admin/PrintersPage.svelte';
+import UsersPage from './views/admin/UsersPage.svelte';
+import AccountPage from './views/AccountPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -36,4 +40,8 @@ export const routes: Route[] = [
   { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates:manage'], nav: 'Templates' },
   { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates:manage'] },
   { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates:manage'] },
+  { pattern: '/images', component: ImagesPage, title: 'Images', permissions: ['templates:manage'], nav: 'Images' },
+  { pattern: '/printers', component: PrintersPage, title: 'Printers', permissions: ['settings:manage', 'labels:print'], nav: 'Printers' },
+  { pattern: '/users', component: UsersPage, title: 'Users', permissions: ['users:manage'], nav: 'Users' },
+  { pattern: '/account', component: AccountPage, title: 'Your account' },
 ];

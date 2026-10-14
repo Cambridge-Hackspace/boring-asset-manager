@@ -1,0 +1,121 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
+import PrinterForm from './PrinterForm.svelte';
+import UsersPage from './UsersPage.svelte';
+import AccountPage from '../AccountPage.svelte';
+import { fakeApi } from '../../test/fetch';
+import { session } from '../../lib/session.svelte';
+import type { DriverInfo } from '../../lib/models';
+
+const drivers: DriverInfo[] = [
+  {
+    driver: 'brother_ql',
+    models: ['QL-810W', 'QL-820NWB'],
+    model_dpi: { 'QL-810W': 300, 'QL-820NWB': 300 },
+    media: [{ id: 'dk-11201', name: 'DK-11201', width_mm: 29, length_mm: 90, die_cut: true }],
+    options: [{ name: 'cut', type: 'bool', default: true, description: 'Cut each label.' }],
+  },
+  {
+    driver: 'tspl',
+    models: ['Rollo X1038'],
+    model_dpi: { 'Rollo X1038': 203 },
+    media: [{ id: '4x6', name: '4 × 6 in', width_mm: 101.6, length_mm: 152.4, die_cut: true }],
+    options: [
+      { name: 'density', type: 'int', default: null, description: 'Darkness.' },
+      { name: 'rotate_180', type: 'bool', default: false, description: 'Flip.' },
+    ],
+  },
+];
+
+beforeEach(() => {
+  session.permissions = ['settings:manage', 'users:manage'];
+  session.user = { id: 'me', email: 'me@hackspace.org', is_active: true, created_at: '', updated_at: '' };
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe('PrinterForm', () => {
+  it('builds its fields from the chosen driver and sends only changed options', async () => {
+    const { sent } = fakeApi({ 'POST /printers': () => ({ status: 201, body: {} }) });
+    const onsaved = vi.fn();
+    render(PrinterForm, { drivers, onsaved, oncancel: () => {} });
+
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Rollo' } });
+    await fireEvent.change(screen.getByLabelText('Driver'), { target: { value: 'tspl' } });
+    expect((screen.getByLabelText('Model') as HTMLSelectElement).value).toBe('Rollo X1038');
+    expect(screen.getByRole('option', { name: 'Rollo X1038 (203 DPI)' })).toBeTruthy();
+    expect((screen.getByLabelText('Loaded media') as HTMLSelectElement).value).toBe('4x6');
+    expect(screen.queryByLabelText('cut')).toBeNull();
+
+    await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'device' } });
+    expect(screen.getByText(/\[printers\] devices setting/)).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('Address'), { target: { value: '/dev/usb/lp0' } });
+    await fireEvent.input(screen.getByLabelText('density'), { target: { value: '10' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Add printer' }));
+
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect(sent[0]!.body).toEqual({
+      name: 'Rollo',
+      driver: 'tspl',
+      model: 'Rollo X1038',
+      media: '4x6',
+      connection: { type: 'device', address: '/dev/usb/lp0' },
+      options: { density: 10 },
+    });
+  });
+});
+
+describe('UsersPage', () => {
+  function api(rolesPut: () => unknown) {
+    return fakeApi({
+      'GET /users': () => ({
+        users: [
+          { id: 'me', email: 'me@hackspace.org', is_active: true, created_at: '', updated_at: '', role_ids: ['admin'] },
+          { id: 'u2', email: 'bo@hackspace.org', is_active: true, created_at: '', updated_at: '', role_ids: [] },
+        ],
+      }),
+      'GET /roles': () => ({
+        roles: [
+          { id: 'admin', name: 'admin', description: '', permissions: ['users:manage'] },
+          { id: 'viewer', name: 'viewer', description: '', permissions: ['assets:read'] },
+        ],
+      }),
+      'PUT /users/me/roles': rolesPut,
+      'PUT /users/u2/roles': () => ({ role_ids: ['viewer'] }),
+    });
+  }
+
+  it('sets roles, and explains an anti-lockout refusal', async () => {
+    const { sent } = api(() => ({ status: 400, body: { error: "anti-lockout guard: operation rejected because at least one active user must retain 'users:manage'" } }));
+    render(UsersPage, { params: {} });
+
+    const bo = (await screen.findByRole('cell', { name: 'bo@hackspace.org' })).closest('tr')!;
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Roles for bo@hackspace.org' }));
+    await fireEvent.click(within(bo).getByRole('checkbox', { name: 'viewer' }));
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Save roles' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.path === '/users/u2/roles')).toBe(true));
+    expect(sent.find((r) => r.path === '/users/u2/roles')!.body).toEqual({ role_ids: ['viewer'] });
+    await screen.findByText('Roles updated for bo@hackspace.org.');
+
+    const me = screen.getByRole('cell', { name: 'me@hackspace.org (you)' }).closest('tr')!;
+    await fireEvent.click(within(me).getByRole('button', { name: 'Roles for me@hackspace.org' }));
+    await fireEvent.click(within(me).getByRole('checkbox', { name: 'admin' }));
+    await fireEvent.click(within(me).getByRole('button', { name: 'Save roles' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('would remove the last one');
+  });
+});
+
+describe('AccountPage', () => {
+  it('refuses mismatched passwords without asking the server', async () => {
+    const { sent } = fakeApi({});
+    render(AccountPage, { params: {} });
+    await fireEvent.input(screen.getByLabelText('Current password'), { target: { value: 'OldPass123!' } });
+    await fireEvent.input(screen.getByLabelText('New password'), { target: { value: 'NewPass123!' } });
+    await fireEvent.input(screen.getByLabelText('Repeat new password'), { target: { value: 'NewPass124!' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Change password' }));
+    expect(screen.getByRole('alert').textContent).toContain('do not match');
+    expect(sent).toHaveLength(0);
+  });
+});

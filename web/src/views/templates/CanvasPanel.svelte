@@ -2,21 +2,8 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Printer } from '../../lib/models';
+  import type { DriverInfo, Printer } from '../../lib/models';
   import { convertUnits, fromMM, isTemplateID, toMM, type TemplateDoc, type Units } from '../../lib/template';
-
-  interface MediaInfo {
-    id: string;
-    name: string;
-    width_mm: number;
-    length_mm?: number;
-    die_cut: boolean;
-  }
-  interface DriverInfo {
-    driver: string;
-    model_dpi: Record<string, number>;
-    media: MediaInfo[];
-  }
 
   // The template's own settings: name, ID, units, size and DPI, which can
   // be taken from a printer's loaded media; the printer's fit check runs as

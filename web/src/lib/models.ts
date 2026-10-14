@@ -124,3 +124,48 @@ export interface Printer {
   created_at: string;
   updated_at: string;
 }
+
+export interface DriverOption {
+  name: string;
+  type: 'bool' | 'string' | 'int';
+  default: unknown;
+  values?: string[];
+  description: string;
+}
+
+export interface DriverMedia {
+  id: string;
+  name: string;
+  width_mm: number;
+  length_mm?: number;
+  die_cut: boolean;
+}
+
+export interface DriverInfo {
+  driver: string;
+  models: string[];
+  model_dpi?: Record<string, number>;
+  media: DriverMedia[];
+  options?: DriverOption[];
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string;
+  permissions: Permission[];
+}
+
+export interface UserWithRoles extends User {
+  role_ids: string[];
+}
+
+export interface ImageInfo {
+  id: string;
+  filename: string;
+  content_type: string;
+  width_px: number;
+  height_px: number;
+  byte_size: number;
+  created_at: string;
+}
