@@ -664,7 +664,7 @@ Sub-phases land in order, each with its tests, and leave the tree releasable.
 * [x] The threshold and active count on the category form; running low and restocked actions; running-low categories on the home page.
 
 #### Sub-Phase 5.7: Integration Battery
-* [ ] HTTP-level suites on SQLite, PostgreSQL and MariaDB covering inheritance conflict resolution, anti-lockout under concurrency, template vector compilation across a database round trip, import atomicity, threshold crossings (including simultaneous archives) and exactly-once delivery to several channels.
+* [x] HTTP-level suites on SQLite, PostgreSQL and MariaDB covering inheritance conflict resolution, anti-lockout under concurrency, template vector compilation across a database round trip, import atomicity, threshold crossings (including simultaneous archives) and exactly-once delivery to several channels.
 
 ---
 
@@ -683,7 +683,7 @@ reaper down      # Tears down remote VM (cull daemon provides automatic TTL back
 Following the "Portfolio of Oracles" methodology:
 1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, bcrypt password hashing, boundary decoders, and cross-language barcode golden files (module matrices from Python's `segno`, scan checks with `zxing-cpp`) alongside byte-exact SVG, PNG, PDF and printer-stream goldens.
 2. **Tier 4 — Server Contract Tests:** RBAC permission union resolution and anti-lockout invariants tested as in-process pure functions without database dependencies.
-3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence. The store and API suites run against PostgreSQL and MariaDB by pointing them at a server (see §8.3).
+3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence. The store and API suites run against PostgreSQL and MariaDB by pointing them at a server (see §8.3). The integration battery (`internal/integration`) drives a real server over HTTP on each database: inheritance conflict resolution, administrators removing each other at the same moment, a template rendered before and after a database round trip (byte-identical SVG, and SVG and PDF goldens written on SQLite that every database must reproduce; `go test ./internal/integration/ -update` rewrites them), import atomicity, threshold crossings including simultaneous archives, and exactly-once delivery from several workers to several channels.
 4. **Tier 7 — Seeded Fuzzing:** Deterministic input fuzzing asserting no 500 crashes, valid JSON envelopes, and daemon liveness.
 5. **Tier 8 — Concurrency Harnesses:** Simultaneous write simulations for inventory threshold decrements and per-generator ID allocations, asserting stored state consistency.
 6. **State Rollback:** Ephemeral databases and uploads live under `$REAPER_STATE` (`tank/state`), enabling near-instantaneous ZFS rollbacks to `@pristine` between test iterations.
@@ -699,12 +699,12 @@ The Go suites, and therefore reaper, do not run these; adding them to the reaper
 
 ### 8.3 Running the Suites Against PostgreSQL and MariaDB
 
-By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store, API, notification and CSV suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
+By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store, API, notification, CSV and integration suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
 
 ```bash
-BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/
+BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/ ./internal/integration/
 
-BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/
+BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/ ./internal/integration/
 ```
 
 Portability rules for schema and queries:
