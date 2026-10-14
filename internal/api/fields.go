@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -28,7 +27,7 @@ type UpdateFieldRequest struct {
 func (s *Server) handleListFields(w http.ResponseWriter, r *http.Request) {
 	fields, err := s.store.ListFields()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list fields")
+		writeServerError(w, err, "list fields")
 		return
 	}
 	if fields == nil {
@@ -53,7 +52,7 @@ func (s *Server) handleGetField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to query field: %v", err))
+		writeServerError(w, err, "query field")
 		return
 	}
 
@@ -75,7 +74,7 @@ func (s *Server) handleCreateField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeStoreError(w, err, "create the field")
 		return
 	}
 
@@ -103,7 +102,7 @@ func (s *Server) handleUpdateField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeStoreError(w, err, "update the field")
 		return
 	}
 
@@ -125,7 +124,7 @@ func (s *Server) handleDeleteField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete field: %v", err))
+		writeStoreError(w, err, "delete the field")
 		return
 	}
 

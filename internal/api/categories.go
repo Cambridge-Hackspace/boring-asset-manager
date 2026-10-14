@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -49,7 +48,7 @@ type AssignCategoryFieldRequest struct {
 func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := s.store.ListCategories()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list categories")
+		writeServerError(w, err, "list categories")
 		return
 	}
 	if categories == nil {
@@ -74,13 +73,13 @@ func (s *Server) handleGetCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to query category: %v", err))
+		writeServerError(w, err, "query category")
 		return
 	}
 
 	count, err := s.store.ActiveCount(id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to count assets: %v", err))
+		writeServerError(w, err, "count assets")
 		return
 	}
 
@@ -98,12 +97,8 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cat, err := s.actingStore(r).CreateCategoryFrom(req.input())
-	if errors.Is(err, store.ErrCycleDetected) || errors.Is(err, store.ErrSelfParent) {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeStoreError(w, err, "create the category")
 		return
 	}
 
@@ -130,12 +125,8 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusNotFound, "Category not found")
 		return
 	}
-	if errors.Is(err, store.ErrCycleDetected) || errors.Is(err, store.ErrSelfParent) {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeStoreError(w, err, "update the category")
 		return
 	}
 
@@ -157,7 +148,7 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeStoreError(w, err, "delete the category")
 		return
 	}
 
@@ -184,7 +175,7 @@ func (s *Server) handleSetRunningLow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update category: %v", err))
+		writeServerError(w, err, "update the category")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"category": cat, "changed": changed})
@@ -202,13 +193,13 @@ func (s *Server) handleGetCategoryEffectiveFields(w http.ResponseWriter, r *http
 			writeJSONError(w, http.StatusNotFound, "Category not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err, "find the category")
 		return
 	}
 
 	effectiveFields, err := s.store.GetEffectiveCategoryFields(id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to compute inherited fields: %v", err))
+		writeServerError(w, err, "compute inherited fields")
 		return
 	}
 	if effectiveFields == nil {
@@ -245,7 +236,7 @@ func (s *Server) handleAssignCategoryField(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to assign field: %v", err))
+		writeStoreError(w, err, "assign the field")
 		return
 	}
 
@@ -264,7 +255,7 @@ func (s *Server) handleRemoveCategoryField(w http.ResponseWriter, r *http.Reques
 
 	err := s.store.RemoveCategoryField(id, fieldID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to remove field from category: %v", err))
+		writeStoreError(w, err, "remove the field from the category")
 		return
 	}
 
@@ -293,7 +284,7 @@ func (s *Server) handleEffectiveFieldsForAsset(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to compute inherited fields: %v", err))
+		writeServerError(w, err, "compute inherited fields")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"fields": fields})

@@ -62,7 +62,7 @@ func (s *Server) prepareImport(w http.ResponseWriter, data []byte, mapping []str
 		return nil, false
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to check the import: %v", err))
+		writeServerError(w, err, "check the import")
 		return nil, false
 	}
 	return plan, true
@@ -111,7 +111,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to import: %v", err))
+		writeServerError(w, err, "import the assets")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

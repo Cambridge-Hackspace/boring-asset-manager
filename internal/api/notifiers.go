@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -75,7 +74,7 @@ func (s *Server) handleNotifierDrivers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListChannels(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListChannels()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list channels: %v", err))
+		writeServerError(w, err, "list channels")
 		return
 	}
 	views := make([]channelView, 0, len(list))
@@ -170,7 +169,7 @@ func (s *Server) handleListDeliveries(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := s.store.ListDeliveries(limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list deliveries: %v", err))
+		writeServerError(w, err, "list deliveries")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deliveries": list})
@@ -187,7 +186,7 @@ func (s *Server) channelError(w http.ResponseWriter, err error) bool {
 	case errors.Is(err, store.ErrChannelNameExists):
 		writeJSONError(w, http.StatusConflict, err.Error())
 	default:
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeStoreError(w, err, "save the channel")
 	}
 	return true
 }

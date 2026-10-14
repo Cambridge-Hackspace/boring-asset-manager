@@ -39,7 +39,7 @@ var imageContentTypes = map[string]string{"png": "image/png", "jpeg": "image/jpe
 func (s *Server) handleListImages(w http.ResponseWriter, r *http.Request) {
 	images, err := s.store.ListImages()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list images")
+		writeServerError(w, err, "list images")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"images": images})
@@ -52,7 +52,7 @@ func (s *Server) handleGetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to query image: %v", err))
+		writeServerError(w, err, "query image")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"image": img})
@@ -65,12 +65,12 @@ func (s *Server) handleGetImageContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to query image: %v", err))
+		writeServerError(w, err, "query image")
 		return
 	}
 	data, err := s.images.Read(img.ID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Image file is missing from storage")
+		writeServerError(w, err, "read the image file")
 		return
 	}
 	w.Header().Set("Content-Type", img.ContentType)
@@ -133,12 +133,12 @@ func (s *Server) handleUploadImage(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   time.Now().UTC(),
 	}
 	if err := s.images.Save(img.ID, data); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to store the image")
+		writeServerError(w, err, "store the image")
 		return
 	}
 	if err := s.store.CreateImage(img); err != nil {
 		_ = s.images.Remove(img.ID)
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to record the image: %v", err))
+		writeServerError(w, err, "record the image")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"image": img})
@@ -159,7 +159,7 @@ func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	case err != nil:
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete image: %v", err))
+		writeServerError(w, err, "delete image")
 		return
 	}
 	// The record is gone, so a leftover file is only wasted space.

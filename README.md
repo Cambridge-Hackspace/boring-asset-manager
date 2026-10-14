@@ -795,7 +795,7 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] `svelte-check`, Vitest and Playwright in the reaper battery (§8.1).
 
 #### Sub-Phase 6.4: Error Mapping
-* [ ] Every handler answers a caller's mistake with `4xx` and only a failure of the server with `5xx`.
+* [x] Every handler answers a caller's mistake with `4xx` and only a failure of the server with `5xx`: database failures are told apart by their driver errors (`store.IsDatabaseFailure`), a lost race on a unique value is `409`, and a session or permissions that cannot be read are `500`, not a sign-out. A `500` names what failed and leaves the database's message to the log. `TestDatabaseFailuresAreServerErrors` drops the tables behind every endpoint's working request and checks none answers `4xx` or passes SQL on.
 
 #### Sub-Phase 6.5: Expensive Inputs
 * [ ] Requests whose cost is out of proportion to their size are bounded.

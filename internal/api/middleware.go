@@ -84,15 +84,22 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 			}
 
 			sess, u, err := st.GetSession(token)
-			if err != nil || sess == nil || u == nil {
-				// Invalid or expired session - continue as unauthenticated
+			if errors.Is(err, store.ErrSessionNotFound) {
+				// An unknown or expired session: continue as unauthenticated.
 				next.ServeHTTP(w, r)
 				return
 			}
-
+			// Otherwise the session could not be read. Answering as if
+			// signed out would send the user to sign in again, and
+			// answering without permissions would say they lack them.
+			if err != nil {
+				writeServerError(w, err, "read the session")
+				return
+			}
 			perms, err := st.GetUserPermissions(u.ID)
 			if err != nil {
-				perms = make(map[string]bool)
+				writeServerError(w, err, "read the user's permissions")
+				return
 			}
 
 			ctx := r.Context()

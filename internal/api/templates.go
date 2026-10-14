@@ -17,7 +17,7 @@ const maxTemplateBytes = 1 << 20
 func (s *Server) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 	templates, err := s.store.ListTemplates()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list templates")
+		writeServerError(w, err, "list templates")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
@@ -30,7 +30,7 @@ func (s *Server) handleGetTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to query template: %v", err))
+		writeServerError(w, err, "query template")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"template": t})
@@ -79,7 +79,7 @@ func (s *Server) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete template: %v", err))
+		writeStoreError(w, err, "delete the template")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Template deleted successfully"})
@@ -111,6 +111,6 @@ func writeTemplateError(w http.ResponseWriter, err error) bool {
 		writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "Template is invalid", Details: ve.Problems})
 		return true
 	}
-	writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store template: %v", err))
+	writeStoreError(w, err, "save the template")
 	return true
 }
