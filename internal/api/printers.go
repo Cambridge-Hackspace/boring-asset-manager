@@ -22,16 +22,15 @@ type PrinterRequest struct {
 	Name   string `json:"name"`
 	Driver string `json:"driver"`
 	Model  string `json:"model"`
-	Host   string `json:"host"`
-	// Port defaults to 9100.
-	Port  int    `json:"port,omitempty"`
-	Media string `json:"media"`
+	// Connection says how to reach the printer (README §4.4).
+	Connection printers.Connection `json:"connection"`
+	Media      string              `json:"media"`
 	// Options are driver options (see GET /api/v1/printers/drivers).
 	Options json.RawMessage `json:"options,omitempty"`
 }
 
 func (req PrinterRequest) printer(id string) models.Printer {
-	return models.Printer{ID: id, Name: req.Name, Driver: req.Driver, Model: req.Model, Host: req.Host, Port: req.Port, Media: req.Media, Options: req.Options}
+	return models.Printer{ID: id, Name: req.Name, Driver: req.Driver, Model: req.Model, Connection: req.Connection, Media: req.Media, Options: req.Options}
 }
 
 func (s *Server) handlePrinterDrivers(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +60,9 @@ func (s *Server) handleCreatePrinter(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	if writePrinterError(w, s.checkConnection(req.Connection)) {
+		return
+	}
 	p, err := s.store.CreatePrinter(req.printer(""))
 	if writePrinterError(w, err) {
 		return
@@ -72,6 +74,9 @@ func (s *Server) handleUpdatePrinter(w http.ResponseWriter, r *http.Request) {
 	var req PrinterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if writePrinterError(w, s.checkConnection(req.Connection)) {
 		return
 	}
 	p, err := s.store.UpdatePrinter(req.printer(r.PathValue("id")))
@@ -87,6 +92,16 @@ func (s *Server) handleDeletePrinter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Printer deleted successfully"})
+}
+
+// checkConnection refuses connections this server may not use, such as a
+// device outside its allowed paths.
+func (s *Server) checkConnection(c printers.Connection) error {
+	c, err := printers.NormalizeConnection(c)
+	if err != nil {
+		return err
+	}
+	return s.transport.Check(c)
 }
 
 func writePrinterError(w http.ResponseWriter, err error) bool {
@@ -190,7 +205,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.transport.Send(r.Context(), p.Host, p.Port, job); err != nil {
+	if err := s.transport.Send(r.Context(), p.Connection, job); err != nil {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
 		return
 	}

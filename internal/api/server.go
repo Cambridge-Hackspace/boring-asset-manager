@@ -34,7 +34,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		cfg:       cfg,
 		store:     st,
 		images:    filestore.NewImages(cfg.Storage.LocalPath),
-		transport: printers.NewDispatcher(),
+		transport: printers.NewDispatcher(cfg.Printers.Devices),
 	}
 
 	// Unauthenticated public endpoints
