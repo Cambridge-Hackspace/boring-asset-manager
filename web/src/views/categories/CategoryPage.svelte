@@ -31,7 +31,12 @@
   let color = $state('#2563eb');
   let consumable = $state(false);
   let runningLow = $state(false);
+  let threshold = $state<number | null>(null);
   let busy = $state(false);
+
+  // Stock, for consumable categories.
+  let activeCount = $state<number | null>(null);
+  let flagging = $state(false);
 
   // Assigning a field.
   let newFieldId = $state('');
@@ -65,6 +70,8 @@
         color = c.color_hex;
         consumable = c.is_consumable;
         runningLow = c.is_running_low;
+        threshold = c.low_stock_threshold ?? null;
+        activeCount = (await request<{ active_count: number }>('GET', `/categories/${encodeURIComponent(id)}`)).active_count;
         effective = (await request<{ fields: EffectiveField[] }>('GET', `/categories/${encodeURIComponent(id)}/fields`)).fields ?? [];
         if (canManage) allFields = (await request<{ fields: Field[] }>('GET', '/fields')).fields ?? [];
       }
@@ -87,6 +94,7 @@
       color_hex: color,
       is_consumable: consumable,
       is_running_low: consumable && runningLow,
+      low_stock_threshold: consumable && threshold ? threshold : null,
     };
     try {
       if (isNew) {
@@ -101,6 +109,22 @@
       error = messageOf(err);
     } finally {
       busy = false;
+    }
+  }
+
+  // Flags or clears the category by hand, which needs only assets:write.
+  async function setRunningLow(low: boolean) {
+    error = '';
+    saved = '';
+    flagging = true;
+    try {
+      await request('PUT', `/categories/${encodeURIComponent(id)}/running-low`, { running_low: low });
+      saved = low ? 'Marked as running low.' : 'Marked as restocked.';
+      await load();
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      flagging = false;
     }
   }
 
@@ -155,6 +179,27 @@
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else if isNew || category}
+  {#if category?.is_consumable}
+    <section class="card mb-6 max-w-2xl" aria-labelledby="stock-heading">
+      <h2 id="stock-heading" class="mb-1 text-lg font-semibold">Stock</h2>
+      <p class="text-sm">
+        <strong>{category.is_running_low ? 'Running low.' : 'In stock.'}</strong>
+        {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`} here and in its subcategories{category.low_stock_threshold
+          ? `; flagged automatically below ${category.low_stock_threshold}`
+          : ''}.
+      </p>
+      {#if session.can('assets:write')}
+        <div class="mt-3">
+          {#if category.is_running_low}
+            <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(false)}>Mark restocked</button>
+          {:else}
+            <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(true)}>Mark running low</button>
+          {/if}
+        </div>
+      {/if}
+    </section>
+  {/if}
+
   {#if canManage && !isSystem}
     <form class="card mb-6 max-w-2xl space-y-4" onsubmit={save}>
       <div class="grid gap-4 sm:grid-cols-2">
@@ -185,6 +230,23 @@
             <input type="checkbox" bind:checked={runningLow} disabled={!consumable} aria-describedby="low-help" /> Running low
           </label>
           <p id="low-help" class="text-xs text-zinc-600 dark:text-zinc-400">Only consumable categories can run low.</p>
+          <div>
+            <label class="label" for="cat-threshold" class:opacity-50={!consumable}>Low stock threshold (optional)</label>
+            <input
+              id="cat-threshold"
+              class="input w-32"
+              type="number"
+              min="1"
+              step="1"
+              disabled={!consumable}
+              aria-describedby="threshold-help"
+              bind:value={threshold}
+            />
+            <p id="threshold-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              Flag it automatically when fewer active assets than this remain here and in its subcategories, and clear the
+              flag when there are enough again.
+            </p>
+          </div>
         </fieldset>
       </div>
       <div class="flex flex-wrap gap-2">

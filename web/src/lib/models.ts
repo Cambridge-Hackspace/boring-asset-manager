@@ -57,6 +57,8 @@ export interface Category {
   color_hex: string;
   is_consumable: boolean;
   is_running_low: boolean;
+  /** Flags the category when fewer active assets remain; null for none. */
+  low_stock_threshold?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -202,4 +204,55 @@ export interface ImportResult {
   updated: number;
   unchanged: number;
   created_ids: string[];
+}
+
+/** An option of a notifier driver; every option is a string. */
+export interface NotifierOption {
+  name: string;
+  label: string;
+  description: string;
+  required: boolean;
+  /** Secret options can be written but are never returned. */
+  secret: boolean;
+}
+
+export interface NotifierDriver {
+  driver: string;
+  label: string;
+  options: NotifierOption[];
+}
+
+export interface EventKind {
+  kind: string;
+  label: string;
+}
+
+/** A notification channel (README §5.2). */
+export interface Channel {
+  id: string;
+  name: string;
+  driver: string;
+  /** Options without secret values. */
+  options: Record<string, string>;
+  /** Which secret options have a value. */
+  secrets_set: Record<string, boolean>;
+  enabled: boolean;
+  events: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Delivery {
+  id: string;
+  event_id: string;
+  channel_id: string;
+  status: 'pending' | 'sent' | 'failed';
+  attempts: number;
+  next_attempt_at: string;
+  last_error?: string;
+  created_at: string;
+  finished_at?: string | null;
+  channel_name: string;
+  event_kind: string;
+  category_name?: string;
 }
