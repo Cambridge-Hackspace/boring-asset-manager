@@ -12,20 +12,32 @@ import (
 
 // CreateCategoryRequest defines the payload for creating a category.
 type CreateCategoryRequest struct {
-	Name         string  `json:"name"`
-	ParentID     *string `json:"parent_id,omitempty"`
-	ColorHex     string  `json:"color_hex,omitempty"`
-	IsConsumable bool    `json:"is_consumable"`
-	IsRunningLow bool    `json:"is_running_low"`
+	Name              string  `json:"name"`
+	ParentID          *string `json:"parent_id,omitempty"`
+	ColorHex          string  `json:"color_hex,omitempty"`
+	IsConsumable      bool    `json:"is_consumable"`
+	IsRunningLow      bool    `json:"is_running_low"`
+	LowStockThreshold *int    `json:"low_stock_threshold"`
 }
 
-// UpdateCategoryRequest defines the payload for updating a category.
-type UpdateCategoryRequest struct {
-	Name         string  `json:"name"`
-	ParentID     *string `json:"parent_id,omitempty"`
-	ColorHex     string  `json:"color_hex,omitempty"`
-	IsConsumable bool    `json:"is_consumable"`
-	IsRunningLow bool    `json:"is_running_low"`
+// UpdateCategoryRequest defines the payload for updating a category. It
+// replaces every property, so an absent low_stock_threshold removes it.
+type UpdateCategoryRequest CreateCategoryRequest
+
+func (r CreateCategoryRequest) input() store.CategoryInput {
+	return store.CategoryInput{
+		Name:              r.Name,
+		ParentID:          r.ParentID,
+		ColorHex:          r.ColorHex,
+		IsConsumable:      r.IsConsumable,
+		IsRunningLow:      r.IsRunningLow,
+		LowStockThreshold: r.LowStockThreshold,
+	}
+}
+
+// RunningLowRequest flags or clears a category by hand.
+type RunningLowRequest struct {
+	RunningLow *bool `json:"running_low"`
 }
 
 // AssignCategoryFieldRequest defines the payload for mapping a field to a category.
@@ -66,8 +78,15 @@ func (s *Server) handleGetCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	count, err := s.store.ActiveCount(id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to count assets: %v", err))
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"category": cat,
+		"category":     cat,
+		"active_count": count,
 	})
 }
 
@@ -78,7 +97,7 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cat, err := s.store.CreateCategory(req.Name, req.ParentID, req.ColorHex, req.IsConsumable, req.IsRunningLow)
+	cat, err := s.actingStore(r).CreateCategoryFrom(req.input())
 	if errors.Is(err, store.ErrCycleDetected) || errors.Is(err, store.ErrSelfParent) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -106,7 +125,7 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cat, err := s.store.UpdateCategory(id, req.Name, req.ParentID, req.ColorHex, req.IsConsumable, req.IsRunningLow)
+	cat, err := s.actingStore(r).UpdateCategoryFrom(id, CreateCategoryRequest(req).input())
 	if errors.Is(err, store.ErrCategoryNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Category not found")
 		return
@@ -132,7 +151,7 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.store.DeleteCategory(id)
+	err := s.actingStore(r).DeleteCategory(id)
 	if errors.Is(err, store.ErrCategoryNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Category not found")
 		return
@@ -145,6 +164,30 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Category deleted successfully",
 	})
+}
+
+// handleSetRunningLow flags or clears a consumable category by hand:
+// PUT /api/v1/categories/{id}/running-low
+func (s *Server) handleSetRunningLow(w http.ResponseWriter, r *http.Request) {
+	var req RunningLowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RunningLow == nil {
+		writeJSONError(w, http.StatusBadRequest, "running_low (true or false) is required")
+		return
+	}
+	cat, changed, err := s.actingStore(r).SetRunningLow(r.PathValue("id"), *req.RunningLow)
+	if errors.Is(err, store.ErrCategoryNotFound) {
+		writeJSONError(w, http.StatusNotFound, "Category not found")
+		return
+	}
+	if errors.Is(err, store.ErrRunningLowRequiresConsumable) {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update category: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"category": cat, "changed": changed})
 }
 
 func (s *Server) handleGetCategoryEffectiveFields(w http.ResponseWriter, r *http.Request) {

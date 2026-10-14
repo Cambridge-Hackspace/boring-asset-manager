@@ -97,86 +97,124 @@ func (s *Store) DetectCycle(targetID string, proposedParentID *string) error {
 }
 
 // validateCategoryAttributes enforces invariants shared by category creation and updates:
-// the Uncategorized system category stays outside the tree, and the running-low flag is
-// only meaningful for consumable categories.
-func validateCategoryAttributes(id string, parentID *string, isConsumable, isRunningLow bool) error {
-	if parentID != nil && (*parentID == UncategorizedCategoryID || id == UncategorizedCategoryID) {
+// the Uncategorized system category stays outside the tree, and the running-low flag and
+// low stock threshold are only meaningful for consumable categories.
+func validateCategoryAttributes(id string, in CategoryInput) error {
+	if in.ParentID != nil && (*in.ParentID == UncategorizedCategoryID || id == UncategorizedCategoryID) {
 		return ErrSystemCategoryInTree
 	}
-	if isRunningLow && !isConsumable {
+	if in.IsRunningLow && !in.IsConsumable {
 		return ErrRunningLowRequiresConsumable
+	}
+	if in.LowStockThreshold != nil {
+		if !in.IsConsumable {
+			return ErrThresholdRequiresConsumable
+		}
+		if *in.LowStockThreshold < 1 || *in.LowStockThreshold > MaxLowStockThreshold {
+			return ErrThresholdOutOfRange
+		}
 	}
 	return nil
 }
 
+// CategoryInput is everything a caller sets on a category.
+type CategoryInput struct {
+	Name              string
+	ParentID          *string
+	ColorHex          string
+	IsConsumable      bool
+	IsRunningLow      bool
+	LowStockThreshold *int
+}
+
+// categoryColumns lists a category's columns, each prefixed, in scanCategory's order.
+func categoryColumns(prefix string) string {
+	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "is_running_low", "low_stock_threshold", "created_at", "updated_at"}
+	for i, c := range cols {
+		cols[i] = prefix + c
+	}
+	return strings.Join(cols, ", ")
+}
+
+// scanCategory reads a row selected with categoryColumns.
+func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) {
+	var (
+		c         models.Category
+		parentVal sql.NullString
+		threshold sql.NullInt64
+	)
+	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.IsRunningLow, &threshold, &c.CreatedAt, &c.UpdatedAt)
+	if err != nil {
+		return c, err
+	}
+	if parentVal.Valid && parentVal.String != "" {
+		c.ParentID = &parentVal.String
+	}
+	if threshold.Valid {
+		t := int(threshold.Int64)
+		c.LowStockThreshold = &t
+	}
+	return c, nil
+}
+
 // CreateCategory creates a new category record with cycle validation.
 func (s *Store) CreateCategory(name string, parentID *string, colorHex string, isConsumable, isRunningLow bool) (*models.Category, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
+	return s.CreateCategoryFrom(CategoryInput{Name: name, ParentID: parentID, ColorHex: colorHex, IsConsumable: isConsumable, IsRunningLow: isRunningLow})
+}
+
+// CreateCategoryFrom creates a category. A category created running low
+// records a running-low event, and one created with a threshold above its
+// (empty) active count flags itself.
+func (s *Store) CreateCategoryFrom(in CategoryInput) (*models.Category, error) {
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
 		return nil, errors.New("category name cannot be empty")
 	}
 
-	colorHex = ValidateColorHex(colorHex)
+	in.ColorHex = ValidateColorHex(in.ColorHex)
 	categoryID := uuid.NewString()
 
-	if parentID != nil && *parentID != "" {
-		if err := s.DetectCycle(categoryID, parentID); err != nil {
+	if in.ParentID != nil && *in.ParentID != "" {
+		if err := s.DetectCycle(categoryID, in.ParentID); err != nil {
 			return nil, err
 		}
 	} else {
-		parentID = nil
+		in.ParentID = nil
 	}
-	if err := validateCategoryAttributes(categoryID, parentID, isConsumable, isRunningLow); err != nil {
+	if err := validateCategoryAttributes(categoryID, in); err != nil {
 		return nil, err
 	}
 
 	now := time.Now().UTC()
-	query := `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, is_running_low, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := s.Exec(query, categoryID, name, parentID, colorHex, isConsumable, isRunningLow, now, now)
+	err := s.withInventory(func(ic *inventoryChange) error {
+		query := `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, is_running_low, low_stock_threshold, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		if _, err := s.TxExec(ic.tx, query, categoryID, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsRunningLow, in.LowStockThreshold, now, now); err != nil {
+			return fmt.Errorf("inserting category: %w", err)
+		}
+		return s.setFlagByHand(ic, categoryID, false, in.IsRunningLow)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("inserting category: %w", err)
+		return nil, err
 	}
-
-	return &models.Category{
-		ID:           categoryID,
-		Name:         name,
-		ParentID:     parentID,
-		ColorHex:     colorHex,
-		IsConsumable: isConsumable,
-		IsRunningLow: isRunningLow,
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}, nil
+	return s.GetCategoryByID(categoryID)
 }
 
 // GetCategoryByID retrieves a category by UUID.
 func (s *Store) GetCategoryByID(id string) (*models.Category, error) {
-	query := `SELECT id, name, parent_id, color_hex, is_consumable, is_running_low, created_at, updated_at FROM categories WHERE id = ?`
-	var (
-		c         models.Category
-		parentVal sql.NullString
-	)
-
-	err := s.QueryRow(query, id).Scan(
-		&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.IsRunningLow, &c.CreatedAt, &c.UpdatedAt,
-	)
+	query := `SELECT ` + categoryColumns("") + ` FROM categories WHERE id = ?`
+	c, err := scanCategory(s.QueryRow(query, id))
 	if err == sql.ErrNoRows {
 		return nil, ErrCategoryNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying category by id: %w", err)
 	}
-
-	if parentVal.Valid && parentVal.String != "" {
-		c.ParentID = &parentVal.String
-	}
-
 	return &c, nil
 }
 
 // ListCategories returns all categories. The virtual 'uncategorized' category is hidden if it contains 0 assets.
 func (s *Store) ListCategories() ([]models.Category, error) {
-	query := `SELECT id, name, parent_id, color_hex, is_consumable, is_running_low, created_at, updated_at FROM categories ORDER BY name ASC`
+	query := `SELECT ` + categoryColumns("") + ` FROM categories ORDER BY name ASC`
 	rows, err := s.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("querying categories: %w", err)
@@ -185,17 +223,9 @@ func (s *Store) ListCategories() ([]models.Category, error) {
 
 	var all []models.Category
 	for rows.Next() {
-		var (
-			c         models.Category
-			parentVal sql.NullString
-		)
-		if err := rows.Scan(
-			&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.IsRunningLow, &c.CreatedAt, &c.UpdatedAt,
-		); err != nil {
+		c, err := scanCategory(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scanning category: %w", err)
-		}
-		if parentVal.Valid && parentVal.String != "" {
-			c.ParentID = &parentVal.String
 		}
 		all = append(all, c)
 	}
@@ -220,45 +250,58 @@ func (s *Store) ListCategories() ([]models.Category, error) {
 	return result, nil
 }
 
-// UpdateCategory updates category properties with cycle prevention.
+// UpdateCategory updates category properties with cycle prevention. It
+// leaves the category without a threshold; see UpdateCategoryFrom.
 func (s *Store) UpdateCategory(id, name string, parentID *string, colorHex string, isConsumable, isRunningLow bool) (*models.Category, error) {
-	existing, err := s.GetCategoryByID(id)
-	if err != nil {
+	return s.UpdateCategoryFrom(id, CategoryInput{Name: name, ParentID: parentID, ColorHex: colorHex, IsConsumable: isConsumable, IsRunningLow: isRunningLow})
+}
+
+// UpdateCategoryFrom replaces a category's properties with cycle prevention.
+// Changing the flag records an event as a manual change; moving the category
+// or changing its threshold can make it, or its old and new ancestors, cross
+// their thresholds.
+func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Category, error) {
+	if _, err := s.GetCategoryByID(id); err != nil {
 		return nil, err
 	}
 
-	name = strings.TrimSpace(name)
-	if name == "" {
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" {
 		return nil, errors.New("category name cannot be empty")
 	}
-	colorHex = ValidateColorHex(colorHex)
+	in.ColorHex = ValidateColorHex(in.ColorHex)
 
-	if parentID != nil && *parentID != "" {
-		if err := s.DetectCycle(id, parentID); err != nil {
+	if in.ParentID != nil && *in.ParentID != "" {
+		if err := s.DetectCycle(id, in.ParentID); err != nil {
 			return nil, err
 		}
 	} else {
-		parentID = nil
+		in.ParentID = nil
 	}
-	if err := validateCategoryAttributes(id, parentID, isConsumable, isRunningLow); err != nil {
+	if err := validateCategoryAttributes(id, in); err != nil {
 		return nil, err
 	}
 
-	now := time.Now().UTC()
-	query := `UPDATE categories SET name = ?, parent_id = ?, color_hex = ?, is_consumable = ?, is_running_low = ?, updated_at = ? WHERE id = ?`
-	_, err = s.Exec(query, name, parentID, colorHex, isConsumable, isRunningLow, now, id)
+	err := s.withInventory(func(ic *inventoryChange) error {
+		// Read the flag under the lock, so two simultaneous changes record one event.
+		var was bool
+		err := s.TxQueryRow(ic.tx, "SELECT is_running_low FROM categories WHERE id = ?", id).Scan(&was)
+		if err == sql.ErrNoRows {
+			return ErrCategoryNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("reading category: %w", err)
+		}
+		query := `UPDATE categories SET name = ?, parent_id = ?, color_hex = ?, is_consumable = ?, is_running_low = ?, low_stock_threshold = ?, updated_at = ? WHERE id = ?`
+		if _, err := s.TxExec(ic.tx, query, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsRunningLow, in.LowStockThreshold, time.Now().UTC(), id); err != nil {
+			return fmt.Errorf("updating category: %w", err)
+		}
+		return s.setFlagByHand(ic, id, was, in.IsRunningLow)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("updating category: %w", err)
+		return nil, err
 	}
-
-	existing.Name = name
-	existing.ParentID = parentID
-	existing.ColorHex = colorHex
-	existing.IsConsumable = isConsumable
-	existing.IsRunningLow = isRunningLow
-	existing.UpdatedAt = now
-
-	return existing, nil
+	return s.GetCategoryByID(id)
 }
 
 // DeleteCategory deletes a category record, reattaching any assets it leaves without a category to Uncategorized.
@@ -275,30 +318,24 @@ func (s *Store) DeleteCategory(id string) error {
 		return err
 	}
 
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return fmt.Errorf("beginning category deletion: %w", err)
-	}
-	defer tx.Rollback()
+	return s.withInventory(func(ic *inventoryChange) error {
+		// Asset bindings cascade away with the category; child categories become roots.
+		if _, err := s.TxExec(ic.tx, "DELETE FROM categories WHERE id = ?", id); err != nil {
+			return fmt.Errorf("deleting category: %w", err)
+		}
 
-	// Asset bindings cascade away with the category; child categories become roots.
-	_, err = s.TxExec(tx, "DELETE FROM categories WHERE id = ?", id)
-	if err != nil {
-		return fmt.Errorf("deleting category: %w", err)
-	}
-
-	// Assets left without any category fall back to the system Uncategorized category.
-	_, err = s.TxExec(tx, `
-		INSERT INTO asset_categories (asset_id, category_id)
-		SELECT a.id, ?
-		FROM assets a
-		WHERE NOT EXISTS (SELECT 1 FROM asset_categories ac WHERE ac.asset_id = a.id)
-	`, UncategorizedCategoryID)
-	if err != nil {
-		return fmt.Errorf("reattaching orphaned assets to uncategorized: %w", err)
-	}
-
-	return tx.Commit()
+		// Assets left without any category fall back to the system Uncategorized category.
+		_, err := s.TxExec(ic.tx, `
+			INSERT INTO asset_categories (asset_id, category_id)
+			SELECT a.id, ?
+			FROM assets a
+			WHERE NOT EXISTS (SELECT 1 FROM asset_categories ac WHERE ac.asset_id = a.id)
+		`, UncategorizedCategoryID)
+		if err != nil {
+			return fmt.Errorf("reattaching orphaned assets to uncategorized: %w", err)
+		}
+		return nil
+	})
 }
 
 // AssignCategoryField maps a field to a category with a required/optional constraint.

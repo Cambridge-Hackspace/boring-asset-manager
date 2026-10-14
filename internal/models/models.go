@@ -72,14 +72,65 @@ type SelectChoice struct {
 
 // Category represents a node in the single-parent category tree.
 type Category struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	ParentID     *string   `json:"parent_id,omitempty"`
-	ColorHex     string    `json:"color_hex"`
-	IsConsumable bool      `json:"is_consumable"`
-	IsRunningLow bool      `json:"is_running_low"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	ParentID     *string `json:"parent_id,omitempty"`
+	ColorHex     string  `json:"color_hex"`
+	IsConsumable bool    `json:"is_consumable"`
+	IsRunningLow bool    `json:"is_running_low"`
+	// LowStockThreshold flags a consumable category as running low when its
+	// active count drops below it (README §5.1); nil means no threshold.
+	LowStockThreshold *int      `json:"low_stock_threshold"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// Event kinds (README §5.1).
+const (
+	EventRunningLow = "category.running_low"
+	EventRestocked  = "category.restocked"
+)
+
+// Event triggers: what caused an event.
+const (
+	TriggerManual    = "manual"
+	TriggerThreshold = "threshold"
+)
+
+// Event records something notifiers may announce. Its payload is a snapshot
+// taken when it happened.
+type Event struct {
+	ID          string       `json:"id"`
+	Kind        string       `json:"kind"`
+	CategoryID  *string      `json:"category_id,omitempty"`
+	ActorUserID *string      `json:"actor_user_id,omitempty"`
+	Payload     EventPayload `json:"payload"`
+	CreatedAt   time.Time    `json:"created_at"`
+}
+
+// EventPayload describes an event.
+type EventPayload struct {
+	Category *EventCategory `json:"category,omitempty"`
+	// Actor is the user whose action caused the event, if any.
+	Actor *EventActor `json:"actor,omitempty"`
+	// Trigger is TriggerManual or TriggerThreshold.
+	Trigger string `json:"trigger"`
+	// ActiveCount and Threshold are set for threshold events.
+	ActiveCount *int `json:"active_count,omitempty"`
+	Threshold   *int `json:"threshold,omitempty"`
+}
+
+// EventCategory is the category an event is about, as it was then.
+type EventCategory struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ColorHex string `json:"color_hex"`
+}
+
+// EventActor is a user, as they were when the event happened.
+type EventActor struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
 }
 
 // CategoryField defines field assignment and requirement constraint on a category.

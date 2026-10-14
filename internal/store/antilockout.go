@@ -23,12 +23,8 @@ func (s *Store) withAdminGuard(change func(tx *sql.Tx) error) error {
 	}
 	defer tx.Rollback()
 
-	res, err := s.TxExec(tx, "UPDATE app_locks SET counter = counter + 1 WHERE name = ?", adminLock)
-	if err != nil {
-		return fmt.Errorf("taking the admin lock: %w", err)
-	}
-	if n, err := res.RowsAffected(); err != nil || n != 1 {
-		return fmt.Errorf("taking the admin lock: lock row missing (%d rows, %v)", n, err)
+	if err := s.takeLock(tx, adminLock); err != nil {
+		return err
 	}
 
 	before, err := s.countActiveAdmins(tx)

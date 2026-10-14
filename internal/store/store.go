@@ -29,6 +29,11 @@ type Store struct {
 	// beforeAdminCommit, when set by tests, runs inside withAdminGuard just
 	// before a guarded change commits.
 	beforeAdminCommit func()
+	// beforeInventoryCommit, when set by tests, runs inside withInventory just
+	// before the change commits.
+	beforeInventoryCommit func()
+	// actor is the user changes are attributed to; see As.
+	actor string
 }
 
 // Open initializes and connects to the database based on configuration.
