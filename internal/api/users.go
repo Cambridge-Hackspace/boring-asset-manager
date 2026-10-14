@@ -3,9 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -29,12 +27,12 @@ type UpdateUserStatusRequest struct {
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.store.ListUsers()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list users")
+		writeServerError(w, err, "list users")
 		return
 	}
 	roleIDs, err := s.store.UserRoleIDs()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list user roles")
+		writeServerError(w, err, "list user roles")
 		return
 	}
 	list := make([]userWithRoles, 0, len(users))
@@ -74,13 +72,12 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if store.IsUniqueViolation(err) {
+		writeJSONError(w, http.StatusConflict, "A user with this email already exists")
+		return
+	}
 	if err != nil {
-		errMsg := strings.ToLower(err.Error())
-		if strings.Contains(errMsg, "unique") || strings.Contains(errMsg, "duplicate") {
-			writeJSONError(w, http.StatusConflict, "A user with this email already exists")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create user: %v", err))
+		writeStoreError(w, err, "create the user")
 		return
 	}
 
@@ -113,7 +110,7 @@ func (s *Server) handleUpdateUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update user status: %v", err))
+		writeStoreError(w, err, "update the user")
 		return
 	}
 
@@ -140,7 +137,7 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete user: %v", err))
+		writeStoreError(w, err, "delete the user")
 		return
 	}
 
@@ -164,7 +161,7 @@ type SetUserRolesRequest struct {
 func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request) {
 	roles, err := s.store.ListRoles()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list roles")
+		writeServerError(w, err, "list roles")
 		return
 	}
 	if roles == nil {
@@ -188,11 +185,11 @@ func (s *Server) handleSetUserRoles(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrRoleNotFound), errors.Is(err, rbac.ErrAntiLockoutTriggered):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case err != nil:
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to set roles: %v", err))
+		writeStoreError(w, err, "set the roles")
 	default:
 		ids, err := s.store.UserRoleIDs()
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "Failed to read roles")
+			writeServerError(w, err, "read roles")
 			return
 		}
 		roleIDs := ids[r.PathValue("id")]

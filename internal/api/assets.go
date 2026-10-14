@@ -38,7 +38,7 @@ func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 
 	assets, err := s.store.ListAssets(categoryID, search)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list assets: %v", err))
+		writeServerError(w, err, "list assets")
 		return
 	}
 	if assets == nil {
@@ -63,7 +63,7 @@ func (s *Server) handleGetAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to query asset: %v", err))
+		writeServerError(w, err, "query asset")
 		return
 	}
 
@@ -85,7 +85,7 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeStoreError(w, err, "create the asset")
 		return
 	}
 
@@ -117,7 +117,7 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeStoreError(w, err, "update the asset")
 		return
 	}
 
@@ -139,7 +139,7 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete asset: %v", err))
+		writeStoreError(w, err, "archive the asset")
 		return
 	}
 
@@ -153,12 +153,12 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 	assets, err := s.store.ListAssets(r.URL.Query().Get("category_id"), r.URL.Query().Get("search"))
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list assets: %v", err))
+		writeServerError(w, err, "list assets")
 		return
 	}
 	cats, err := s.store.ListAllCategories()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list categories: %v", err))
+		writeServerError(w, err, "list categories")
 		return
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")

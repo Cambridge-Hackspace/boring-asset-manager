@@ -40,7 +40,7 @@ func (s *Server) handlePrinterDrivers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListPrinters(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListPrinters()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to list printers")
+		writeServerError(w, err, "list printers")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"printers": list})
@@ -115,7 +115,7 @@ func writePrinterError(w http.ResponseWriter, err error) bool {
 	case errors.Is(err, printers.ErrInvalidPrinter):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	default:
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store printer: %v", err))
+		writeStoreError(w, err, "save the printer")
 	}
 	return true
 }
@@ -169,7 +169,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	}
 	driver, err := printers.Lookup(p.Driver)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Printer uses an unavailable driver: %v", err))
+		writeServerError(w, err, "find the printer's driver")
 		return
 	}
 	// Check the template against the printer before laying out assets.
@@ -183,7 +183,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to plan the print job: %v", err))
+		writeServerError(w, err, "plan the print job")
 		return
 	}
 
@@ -201,7 +201,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	}
 	job, err := plan.Encode(rendered)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to encode print job: %v", err))
+		writeServerError(w, err, "encode print job")
 		return
 	}
 
@@ -237,7 +237,7 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 	}
 	driver, err := printers.Lookup(p.Driver)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeServerError(w, err, "find the printer's driver")
 		return
 	}
 	_, err = driver.Plan(store.PrinterSettings(p), printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI})
@@ -245,7 +245,7 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, printers.ErrDoesNotFit):
 		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "message": err.Error()})
 	case err != nil:
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Fit check failed: %v", err))
+		writeServerError(w, err, "check the fit")
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"fits": true})
 	}

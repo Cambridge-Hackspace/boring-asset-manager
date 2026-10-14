@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 // A route is an endpoint to fuzz, with a valid request to start from. Paths
@@ -108,6 +109,7 @@ const fuzzTemplate = `{"id":"tag{n}","name":"Tag","units":"mm","width":62,"heigh
 // fuzzer sends requests to a server and checks every response.
 type fuzzer struct {
 	tb      testing.TB
+	st      *store.Store
 	h       http.Handler
 	cookie  *http.Cookie
 	adminID string
@@ -141,7 +143,7 @@ func newFuzzer(tb testing.TB) *fuzzer {
 	if err != nil {
 		tb.Fatal(err)
 	}
-	fz := &fuzzer{tb: tb, h: NewServer(cfg, st).Handler(), cookie: &http.Cookie{Name: SessionCookieName, Value: sess.ID}, adminID: admin.ID, ids: map[string][]string{}, keep: map[string]bool{}, chosen: map[string]string{}}
+	fz := &fuzzer{tb: tb, st: st, h: NewServer(cfg, st).Handler(), cookie: &http.Cookie{Name: SessionCookieName, Value: sess.ID}, adminID: admin.ID, ids: map[string][]string{}, keep: map[string]bool{}, chosen: map[string]string{}}
 	imageBody, imageType := multipartBody(nil, false, map[string][]byte{"file": tinyPNG()}, nil)
 	roles, err := st.ListRoles()
 	if err != nil {
@@ -332,19 +334,7 @@ func (fz *fuzzer) request(r route, rng *rand.Rand, mutate bool) fuzzRequest {
 // errors from the API always a JSON object with a message, and JSON
 // responses always valid. A successful create adds its ID to the pool.
 func (fz *fuzzer) send(req fuzzRequest) {
-	httpReq := httptest.NewRequest(req.method, "/", bytes.NewReader(req.body))
-	u, err := url.Parse(req.target)
-	if err != nil {
-		fz.tb.Fatalf("building %s: %v", req, err)
-	}
-	httpReq.URL = u
-	httpReq.RequestURI = req.target
-	if req.contentType != "" {
-		httpReq.Header.Set("Content-Type", req.contentType)
-	}
-	httpReq.AddCookie(fz.cookie)
-	rec := httptest.NewRecorder()
-	fz.h.ServeHTTP(rec, httpReq)
+	rec, u := fz.serve(req)
 
 	fail := func(format string, args ...any) {
 		fz.fails++
@@ -388,6 +378,24 @@ func (fz *fuzzer) send(req fuzzRequest) {
 			fz.ids[req.create] = append(fz.ids[req.create], id)
 		}
 	}
+}
+
+// serve makes a request and returns the response, unchecked.
+func (fz *fuzzer) serve(req fuzzRequest) (*httptest.ResponseRecorder, *url.URL) {
+	httpReq := httptest.NewRequest(req.method, "/", bytes.NewReader(req.body))
+	u, err := url.Parse(req.target)
+	if err != nil {
+		fz.tb.Fatalf("building %s: %v", req, err)
+	}
+	httpReq.URL = u
+	httpReq.RequestURI = req.target
+	if req.contentType != "" {
+		httpReq.Header.Set("Content-Type", req.contentType)
+	}
+	httpReq.AddCookie(fz.cookie)
+	rec := httptest.NewRecorder()
+	fz.h.ServeHTTP(rec, httpReq)
+	return rec, u
 }
 
 // alive checks the server still answers, and still knows the session.

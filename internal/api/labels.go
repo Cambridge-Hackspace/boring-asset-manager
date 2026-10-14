@@ -144,7 +144,7 @@ func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 	assetID := r.PathValue("id")
 	scene, problem, err := s.layoutAsset(t, assetID, s.newLabelImages())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to render label: %v", err))
+		writeServerError(w, err, "render label")
 		return
 	}
 	if problem != nil {
@@ -158,7 +158,7 @@ func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 
 	var buf bytes.Buffer
 	if err := writeLabel(&buf, scene, format, mono); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to render label: %v", err))
+		writeServerError(w, err, "render label")
 		return
 	}
 	setDownloadHeaders(w, contentType, fmt.Sprintf("%s-%s.%s", assetID, t.ID, format), "inline")
@@ -179,7 +179,7 @@ func (s *Server) loadTemplateFor(w http.ResponseWriter, id string) (*labels.Temp
 		return nil, false
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to query template: %v", err))
+		writeServerError(w, err, "query template")
 		return nil, false
 	}
 	return t, true
@@ -248,13 +248,13 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to render preview: %v", err))
+		writeServerError(w, err, "render preview")
 		return
 	}
 
 	var buf bytes.Buffer
 	if err := render.WriteSVG(&buf, scene); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to render preview: %v", err))
+		writeServerError(w, err, "render preview")
 		return
 	}
 	setDownloadHeaders(w, labelContentTypes["svg"], "preview.svg", "inline")
@@ -312,7 +312,7 @@ func (s *Server) layoutBatch(w http.ResponseWriter, t *labels.Template, assetIDs
 	for _, id := range assetIDs {
 		scene, problem, err := s.layoutAsset(t, id, images)
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to render labels: %v", err))
+			writeServerError(w, err, "render labels")
 			return nil, false
 		}
 		if problem != nil {
@@ -360,7 +360,7 @@ func (s *Server) handleExportLabels(w http.ResponseWriter, r *http.Request) {
 	if req.Format == "pdf" {
 		var buf bytes.Buffer
 		if err := render.WritePDF(&buf, scenes...); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to render labels: %v", err))
+			writeServerError(w, err, "render labels")
 			return
 		}
 		setDownloadHeaders(w, labelContentTypes["pdf"], "labels-"+t.ID+".pdf", "attachment")

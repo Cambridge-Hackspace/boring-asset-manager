@@ -49,7 +49,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	sess, err := s.store.CreateSession(user.ID, DefaultSessionTTL)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "Failed to create session")
+		writeServerError(w, err, "create session")
 		return
 	}
 
@@ -119,7 +119,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrWrongPassword), errors.Is(err, auth.ErrPasswordPolicy):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case err != nil:
-		writeJSONError(w, http.StatusInternalServerError, "Failed to change password")
+		writeServerError(w, err, "change password")
 	default:
 		writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed"})
 	}
