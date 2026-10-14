@@ -173,7 +173,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 * **Tables:** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`.
 * **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, and from Phase 3 `labels:print`). Seeding grants every permission to the `admin` role, including permissions added by later releases.
 * **Union Principle:** When a user is assigned multiple roles, their effective permissions are the strict union of all granted rights across all assigned roles.
-* **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, or role removal that results in zero active users possessing the `users:manage` permission.
+* **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, or role removal that results in zero active users possessing the `users:manage` permission. Each such change runs in one transaction that first takes the `users_manage` row of the `app_locks` table (migration `004`), so concurrent changes are checked one after another and two admins cannot remove each other at the same time.
 
 ### 3.4 Sessions & Authentication
 

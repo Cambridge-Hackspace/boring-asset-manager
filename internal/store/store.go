@@ -25,6 +25,10 @@ import (
 type Store struct {
 	DB      *sql.DB
 	Dialect string
+
+	// beforeAdminCommit, when set by tests, runs inside withAdminGuard just
+	// before a guarded change commits.
+	beforeAdminCommit func()
 }
 
 // Open initializes and connects to the database based on configuration.
@@ -329,16 +333,8 @@ func (s *Store) CreateAdminUser(email, password string) (*models.User, error) {
 
 // CountActiveAdmins returns the number of active users possessing users:manage permission.
 func (s *Store) CountActiveAdmins() (int, error) {
-	query := `
-		SELECT COUNT(DISTINCT u.id)
-		FROM users u
-		JOIN user_roles ur ON u.id = ur.user_id
-		JOIN role_permissions rp ON ur.role_id = rp.role_id
-		JOIN permissions p ON rp.permission_id = p.id
-		WHERE u.is_active = TRUE AND u.archived_at IS NULL AND p.permission_key = ?
-	`
 	var count int
-	err := s.QueryRow(query, rbac.PermUsersManage).Scan(&count)
+	err := s.QueryRow(activeAdminsQuery, rbac.PermUsersManage).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("counting active admins: %w", err)
 	}
