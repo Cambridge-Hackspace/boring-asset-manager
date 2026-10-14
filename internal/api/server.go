@@ -115,6 +115,17 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
 	mux.Handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
 
+	// Notification channels (README §5.2)
+	manage := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermSettingsManage)(h) }
+	mux.Handle("GET /api/v1/notifiers/drivers", manage(s.handleNotifierDrivers))
+	mux.Handle("GET /api/v1/notifiers/deliveries", manage(s.handleListDeliveries))
+	mux.Handle("GET /api/v1/notifiers", manage(s.handleListChannels))
+	mux.Handle("POST /api/v1/notifiers", manage(s.handleCreateChannel))
+	mux.Handle("GET /api/v1/notifiers/{id}", manage(s.handleGetChannel))
+	mux.Handle("PUT /api/v1/notifiers/{id}", manage(s.handleUpdateChannel))
+	mux.Handle("DELETE /api/v1/notifiers/{id}", manage(s.handleDeleteChannel))
+	mux.Handle("POST /api/v1/notifiers/{id}/test", manage(s.handleTestChannel))
+
 	// The web interface: every other GET, including client-side routes
 	mux.Handle("GET /", webui.Handler())
 

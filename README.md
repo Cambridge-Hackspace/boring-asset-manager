@@ -645,9 +645,9 @@ Sub-phases land in order, each with its tests, and leave the tree releasable.
 * [x] Running-low events recorded in the same transaction as the change.
 
 #### Sub-Phase 5.2: Notifier Framework & Discord
-* [ ] The notifier driver registry, channels with secret options, and `/api/v1/notifiers`.
-* [ ] Deliveries fanned out with each event, and the delivery worker: leases, backoff, `429` handling and the 24-hour limit.
-* [ ] The Discord driver, tested against a fake Discord server.
+* [x] The notifier driver registry, channels with secret options, and `/api/v1/notifiers`.
+* [x] Deliveries fanned out with each event, and the delivery worker: leases, backoff, `429` handling and the 24-hour limit.
+* [x] The Discord driver, tested against a fake Discord server.
 
 #### Sub-Phase 5.3: CSV Export
 * [ ] `GET /api/v1/assets/export.csv` with category paths, generator codes, field values and formula-injection defusing.
@@ -699,12 +699,12 @@ The Go suites, and therefore reaper, do not run these; adding them to the reaper
 
 ### 8.3 Running the Suites Against PostgreSQL and MariaDB
 
-By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store and API suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
+By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store, API and notification suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
 
 ```bash
-BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/
+BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/ ./internal/notify/
 
-BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/
+BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/ ./internal/notify/
 ```
 
 Portability rules for schema and queries:

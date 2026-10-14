@@ -206,3 +206,37 @@ type Printer struct {
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
+
+// NotificationChannel sends events to one destination through a notifier
+// driver (README §5.2). Options hold the driver's options, secrets included;
+// the API never returns secret values.
+type NotificationChannel struct {
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Driver    string            `json:"driver"`
+	Options   map[string]string `json:"options"`
+	Enabled   bool              `json:"enabled"`
+	Events    []string          `json:"events"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
+}
+
+// Delivery states.
+const (
+	DeliveryPending = "pending"
+	DeliverySent    = "sent"
+	DeliveryFailed  = "failed"
+)
+
+// Delivery is one event sent, or to be sent, to one channel.
+type Delivery struct {
+	ID            string     `json:"id"`
+	EventID       string     `json:"event_id"`
+	ChannelID     string     `json:"channel_id"`
+	Status        string     `json:"status"`
+	Attempts      int        `json:"attempts"`
+	NextAttemptAt time.Time  `json:"next_attempt_at"`
+	LastError     string     `json:"last_error,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+}
