@@ -254,12 +254,13 @@ func (s *Store) recordEvent(tx *sql.Tx, kind, categoryID string, payload models.
 	if err != nil {
 		return fmt.Errorf("encoding event: %w", err)
 	}
+	id, now := uuid.NewString(), dbTime(time.Now())
 	_, err = s.TxExec(tx, "INSERT INTO events (id, kind, category_id, actor_user_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		uuid.NewString(), kind, categoryID, actorID, string(raw), time.Now().UTC())
+		id, kind, categoryID, actorID, string(raw), now)
 	if err != nil {
 		return fmt.Errorf("recording event: %w", err)
 	}
-	return nil
+	return s.fanOut(tx, id, kind, now)
 }
 
 // setFlagByHand records a manual change of a category's flag within ic,
@@ -343,7 +344,7 @@ func (s *Store) ActiveCount(id string) (int, error) {
 
 // ListEvents returns the most recent events, newest first.
 func (s *Store) ListEvents(limit int) ([]models.Event, error) {
-	rows, err := s.Query(fmt.Sprintf(`SELECT id, kind, category_id, actor_user_id, payload, created_at
+	rows, err := s.Query(fmt.Sprintf(`SELECT `+eventColumns+`
 		FROM events ORDER BY created_at DESC, id DESC LIMIT %d`, limit))
 	if err != nil {
 		return nil, fmt.Errorf("listing events: %w", err)
@@ -351,24 +352,35 @@ func (s *Store) ListEvents(limit int) ([]models.Event, error) {
 	defer rows.Close()
 	events := []models.Event{}
 	for rows.Next() {
-		var (
-			e        models.Event
-			cat, act sql.NullString
-			payload  string
-		)
-		if err := rows.Scan(&e.ID, &e.Kind, &cat, &act, &payload, &e.CreatedAt); err != nil {
+		e, err := scanEvent(rows)
+		if err != nil {
 			return nil, err
-		}
-		if cat.Valid {
-			e.CategoryID = &cat.String
-		}
-		if act.Valid {
-			e.ActorUserID = &act.String
-		}
-		if err := json.Unmarshal([]byte(payload), &e.Payload); err != nil {
-			return nil, fmt.Errorf("decoding event %s: %w", e.ID, err)
 		}
 		events = append(events, e)
 	}
 	return events, rows.Err()
+}
+
+// eventColumns lists an event's columns in scanEvent's order.
+const eventColumns = "id, kind, category_id, actor_user_id, payload, created_at"
+
+func scanEvent(row interface{ Scan(...any) error }) (models.Event, error) {
+	var (
+		e        models.Event
+		cat, act sql.NullString
+		payload  string
+	)
+	if err := row.Scan(&e.ID, &e.Kind, &cat, &act, &payload, &e.CreatedAt); err != nil {
+		return e, err
+	}
+	if cat.Valid {
+		e.CategoryID = &cat.String
+	}
+	if act.Valid {
+		e.ActorUserID = &act.String
+	}
+	if err := json.Unmarshal([]byte(payload), &e.Payload); err != nil {
+		return e, fmt.Errorf("decoding event %s: %w", e.ID, err)
+	}
+	return e, nil
 }

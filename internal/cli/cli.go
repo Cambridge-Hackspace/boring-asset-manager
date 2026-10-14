@@ -13,6 +13,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -119,6 +120,11 @@ func Serve(configPath string) error {
 	}
 
 	server := api.NewServer(cfg, st)
+
+	// Send queued notifications until the server stops.
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	go (&notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL}).Run(workerCtx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)
