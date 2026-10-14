@@ -489,3 +489,21 @@ func (s *Store) GetEffectiveFieldsForCategories(categoryIDs []string) ([]models.
 
 	return result, nil
 }
+
+// ListAllCategories returns every category, including Uncategorized.
+func (s *Store) ListAllCategories() ([]models.Category, error) {
+	rows, err := s.Query(`SELECT ` + categoryColumns("") + ` FROM categories ORDER BY name ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("querying categories: %w", err)
+	}
+	defer rows.Close()
+	all := []models.Category{}
+	for rows.Next() {
+		c, err := scanCategory(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scanning category: %w", err)
+		}
+		all = append(all, c)
+	}
+	return all, rows.Err()
+}
