@@ -22,6 +22,12 @@ import (
 // MaxExportAssets caps one batch export or print job.
 const MaxExportAssets = 500
 
+// maxBatchParts bounds the shapes (path segments, barcode rectangles and
+// images) a batch of labels may hold in all: room for 500 ordinary labels
+// of about a thousand each, or a few very detailed ones, in a few hundred
+// megabytes. A variable so tests can lower it.
+var maxBatchParts = 5_000_000
+
 // exportWriteTimeout replaces the server's write timeout for batch exports,
 // which can take longer than an ordinary request.
 const exportWriteTimeout = 2 * time.Minute
@@ -309,6 +315,7 @@ func (s *Server) layoutBatch(w http.ResponseWriter, t *labels.Template, assetIDs
 	images := s.newLabelImages()
 	scenes := make([]*render.Scene, 0, len(assetIDs))
 	var problems []LabelProblem
+	parts := 0
 	for _, id := range assetIDs {
 		scene, problem, err := s.layoutAsset(t, id, images)
 		if err != nil {
@@ -318,6 +325,13 @@ func (s *Server) layoutBatch(w http.ResponseWriter, t *labels.Template, assetIDs
 		if problem != nil {
 			problems = append(problems, *problem)
 			continue
+		}
+		// Every scene is held until the batch is written, so their size
+		// together is bounded, and the batch stopped as soon as it is over.
+		if parts += scene.Parts(); parts > maxBatchParts {
+			writeJSONError(w, http.StatusUnprocessableEntity, fmt.Sprintf(
+				"These labels are too detailed to produce together (over %d shapes); produce fewer at a time", maxBatchParts))
+			return nil, false
 		}
 		scenes = append(scenes, scene)
 	}

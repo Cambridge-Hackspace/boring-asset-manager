@@ -87,3 +87,13 @@ func (s *Scene) PhysicalSize() (w, h float64) {
 func round(v float64) int {
 	return int(math.Round(v))
 }
+
+// Parts counts what the scene holds: path segments, barcode rectangles and
+// images. Memory and the time to write the scene out grow with it.
+func (s *Scene) Parts() int {
+	n := len(s.Rects) + len(s.Images)
+	for _, p := range s.Paths {
+		n += len(p)
+	}
+	return n
+}

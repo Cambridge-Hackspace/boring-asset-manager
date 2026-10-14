@@ -333,13 +333,13 @@ func TestTextTruncatesWithEllipsisAtMinimumSize(t *testing.T) {
 	}
 	long := "Keep the chuck key on the magnetic strip next to the machine"
 
-	block := &textBlock{face: fc, lines: breakLines(fc, long, 200, false)}
+	block := &textBlock{face: fc, lines: breakLines(fc, long, 200, false, func(int) bool { return false })}
 	truncate(block, 200, 40)
 	if len(block.lines) != 1 || !strings.HasSuffix(block.lines[0], ellipsis) || fc.width(block.lines[0]) > 200 {
 		t.Errorf("single line truncation: %q", block.lines)
 	}
 
-	wrapped := &textBlock{face: fc, lines: breakLines(fc, long, 200, true)}
+	wrapped := &textBlock{face: fc, lines: breakLines(fc, long, 200, true, func(int) bool { return false })}
 	if len(wrapped.lines) < 3 {
 		t.Fatalf("expected wrapping into several lines, got %q", wrapped.lines)
 	}
