@@ -1,0 +1,32 @@
+# BAM! configuration for a systemd install (README §2.1). Install as
+# /etc/bam/config.toml, owned by root, group bam, mode 0640: a database
+# password in the DSN must not be readable by other users.
+
+[server]
+# Behind a reverse proxy that terminates HTTPS (recommended), listen on
+# loopback only. To serve plain HTTP on the network instead, use "0.0.0.0"
+# and an http:// base_url.
+host = "127.0.0.1"
+port = 8080
+# The address people use to reach BAM. An https:// address marks session
+# cookies Secure; links in notifications point here.
+base_url = "https://bam.example.org"
+
+[database]
+# "sqlite", "postgres" or "mariadb" (README §3.5 for PostgreSQL and MariaDB).
+type = "sqlite"
+dsn = "/var/lib/bam/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+# type = "postgres"
+# dsn = "postgres://bam:secret@localhost:5432/bam?sslmode=disable"
+# type = "mariadb"
+# dsn = "bam:secret@tcp(localhost:3306)/bam"
+
+[storage]
+# Uploaded images.
+local_path = "/var/lib/bam/uploads"
+
+[printers]
+# Device files printers may be connected to directly (README §4.4), as
+# path.Match patterns, such as "/dev/usb/lp*". Empty turns device
+# connections off. The service needs SupplementaryGroups=lp to use them.
+devices = []

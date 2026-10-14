@@ -102,6 +102,75 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 ```
 
+### 2.1 Installing as a Service
+
+BAM is one static binary with the web interface built in. `tools/release/build.sh` builds it for Linux (amd64 and arm64) and FreeBSD (amd64) into `bin/`, needing only podman (or docker, with `CONTAINER=docker`); name other targets as arguments, such as `tools/release/build.sh freebsd/arm64`. The service files and example configurations are in `packaging/`. Both set BAM up the same way: a `bam` account that owns only the data directory, a configuration readable by root and that account alone, BAM listening on loopback behind a reverse proxy that terminates HTTPS, and a restart five seconds after any crash. Database migrations run each time the service starts.
+
+#### Linux (systemd: Debian, Arch and the rest)
+
+As root, from a checkout with the binary built:
+
+```bash
+install -m 0755 bin/bam-linux-amd64 /usr/local/bin/bam
+install -D -m 0644 packaging/linux/bam.sysusers /etc/sysusers.d/bam.conf
+systemd-sysusers                                   # creates the bam account
+install -d -m 0750 -o root -g bam /etc/bam
+install -m 0640 -o root -g bam packaging/linux/config.example.toml /etc/bam/config.toml
+editor /etc/bam/config.toml                        # base_url, and the database if not SQLite
+install -m 0644 packaging/linux/bam.service /etc/systemd/system/bam.service
+systemctl daemon-reload
+systemctl enable --now bam
+runuser -u bam -- bam admin create --config /etc/bam/config.toml \
+  --email admin@example.org --password 'change-me-at-first-sign-in'
+```
+
+The data lives in `/var/lib/bam`, which systemd creates for the service; logs go to the journal (`journalctl -u bam`). Environment overrides (§2) go in `/etc/bam/environment`, one `NAME=value` per line. The unit is sandboxed: BAM can reach the network and write to `/var/lib/bam`, and nothing else. To use printers on USB device files (§4.4), uncomment `SupplementaryGroups=lp` in the unit and list the devices under `[printers]`. To upgrade, replace `/usr/local/bin/bam` and run `systemctl restart bam`.
+
+#### FreeBSD
+
+As root, from a checkout with the binary built:
+
+```sh
+install -m 0555 bin/bam-freebsd-amd64 /usr/local/bin/bam
+pw groupadd bam
+pw useradd bam -g bam -d /var/db/bam -s /usr/sbin/nologin -c "BAM! (Boring Asset Manager)"
+install -d -m 0750 -o root -g bam /usr/local/etc/bam
+install -m 0640 -o root -g bam packaging/freebsd/config.example.toml /usr/local/etc/bam/config.toml
+ee /usr/local/etc/bam/config.toml                  # base_url, and the database if not SQLite
+install -m 0555 packaging/freebsd/bam /usr/local/etc/rc.d/bam
+sysrc bam_enable=YES
+service bam start
+su -m bam -c "bam admin create --config /usr/local/etc/bam/config.toml \
+  --email admin@example.org --password 'change-me-at-first-sign-in'"
+```
+
+The data lives in `/var/db/bam`, which the rc script creates. BAM runs under `daemon(8)`, which logs to syslog with the tag `bam` (`/var/log/messages`). The script's settings, all optional, are listed at its top (`bam_config`, `bam_user`, `bam_dbdir`, and `bam_env` for environment overrides); set them with `sysrc`. To use printers on device files, give the `bam` account write access to them (a `devfs.rules` entry) and list them under `[printers]`. To upgrade, replace `/usr/local/bin/bam` and run `service bam restart`.
+
+#### The reverse proxy
+
+The example configurations listen on `127.0.0.1:8080` and expect an HTTPS address in `base_url`, which also marks session cookies `Secure`. Any reverse proxy will do. With Caddy, which obtains a certificate itself:
+
+```
+bam.example.org {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+With nginx, pass `X-Forwarded-Proto` and allow bodies up to 8 MB, for CSV imports (5 MB) and image uploads (2 MB):
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 8m;
+}
+```
+
+To serve plain HTTP on the network without a proxy instead, set `host = "0.0.0.0"` and an `http://` `base_url`.
+
+`tools/service/check-systemd.sh` follows the Linux steps above in a Debian container booted with systemd and checks that the service starts at boot, serves, signs the administrator in, comes back after it is killed and after a reboot, and stops cleanly. The FreeBSD script has no such check, as FreeBSD cannot run in a container; ShellCheck passes it.
+
 ---
 
 ## 3. Data Models & Relationship Schema
@@ -482,7 +551,7 @@ Spreadsheet formula injection is defused: on export a cell beginning with `=`, `
 When implementing this repository from scratch, complete the following milestones in sequential order:
 
 ```
-[Phase 1: Foundation] ──► [Phase 2: Core Domain] ──► [Phase 3: Template & Print] ──► [Phase 4: Frontend UI] ──► [Phase 5: Automation]
+[Phase 1: Foundation] ──► [Phase 2: Core Domain] ──► [Phase 3: Template & Print] ──► [Phase 4: Frontend UI] ──► [Phase 5: Automation] ──► [Phase 6: Operations]
 
 ```
 
@@ -675,6 +744,26 @@ Sub-phases land in order, each with its tests, and leave the tree releasable.
 
 #### Sub-Phase 5.7: Integration Battery
 * [x] HTTP-level suites on SQLite, PostgreSQL and MariaDB covering inheritance conflict resolution, anti-lockout under concurrency, template vector compilation across a database round trip, import atomicity, threshold crossings (including simultaneous archives) and exactly-once delivery to several channels.
+
+### Phase 6: Operations
+
+Running BAM for real, and keeping it honest. In priority order:
+
+#### Sub-Phase 6.1: Service Scripts & Installation
+* [x] A sandboxed systemd unit and a FreeBSD rc.d script, with example configurations and installation steps (§2.1), and release builds for Linux and FreeBSD.
+* [x] A check that installs the systemd unit in a Debian container and boots, kills and reboots it.
+
+#### Sub-Phase 6.2: Releases & Updates
+* [ ] Release builds on GitHub for each tag, and an optional scheduled updater for both service managers.
+
+#### Sub-Phase 6.3: Web Checks in reaper
+* [ ] `svelte-check`, Vitest and Playwright in the reaper battery.
+
+#### Sub-Phase 6.4: Error Mapping
+* [ ] Every handler answers a caller's mistake with `4xx` and only a failure of the server with `5xx`.
+
+#### Sub-Phase 6.5: Expensive Inputs
+* [ ] Requests whose cost is out of proportion to their size are bounded.
 
 ---
 
