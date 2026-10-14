@@ -9,23 +9,31 @@
 set -eu
 
 GO_IMAGE="docker.io/library/golang@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db"
-PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright:v1.64.0-noble@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462"
+# playwright:v1.64.0-noble, by digest alone (reaper refuses a tag beside a digest)
+PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462"
 CONTAINER="${CONTAINER:-podman}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Where node_modules and the npm cache live: named volumes by default, or
+# directories (reaper points them at its caches).
+NODE_MODULES="${BAM_WEB_NODE_MODULES:-bam-web-node-modules}"
+NPM_CACHE="${BAM_NPM_CACHE:-bam-npm-cache}"
+# Go's build and module caches, likewise.
+GO_CACHE="${BAM_GO_CACHE:-bam-gocache}"
+GO_MOD="${BAM_GO_MOD:-bam-gomod}"
 
 "$ROOT/tools/web/build.sh"
 
 mkdir -p "$ROOT/web/.e2e"
 MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
   -v "$ROOT:/src" -w /src \
-  -v bam-gocache:/root/.cache -v bam-gomod:/go/pkg \
+  -v "$GO_CACHE:/root/.cache/go-build" -v "$GO_MOD:/go/pkg/mod" \
   -e CGO_ENABLED=0 \
   "$GO_IMAGE" go build -o web/.e2e/bam ./cmd/bam
 
 MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
   -v "$ROOT:/src" \
-  -v bam-web-node-modules:/src/web/node_modules \
-  -v bam-npm-cache:/root/.npm \
+  -v "$NODE_MODULES:/src/web/node_modules" \
+  -v "$NPM_CACHE:/root/.npm" \
   -w /src/web \
   -e E2E_EMAIL=ada@hackspace.org -e E2E_PASSWORD='Pass1234!' \
   "$PLAYWRIGHT_IMAGE" \

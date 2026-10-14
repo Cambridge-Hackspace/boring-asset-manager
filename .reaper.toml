@@ -21,25 +21,34 @@ cmd = """
 GOCACHE=$REAPER_CACHE_GOCACHE \
 GOPATH=$REAPER_CACHE_GOPATH \
 go build -v -o /dev/null ./cmd/bam"""
-cache = ["gocache", "gopath"]
+# Caches are declared here and mounted for every verb. npm and node-modules
+# hold the web interface's packages, off the guest's small root disk.
+cache = ["gocache", "gopath", "npm", "node-modules"]
 
 [run]
-# Runs tests with test database and file storage directed to $REAPER_STATE.
-# Inherits build.image since exec is container.
-cmd = """
-GOCACHE=$REAPER_CACHE_GOCACHE \
-GOPATH=$REAPER_CACHE_GOPATH \
-BAM_DB_PATH=$REAPER_STATE/bam_test.db \
-BAM_STORAGE_PATH=$REAPER_STATE/uploads \
-go test -v -race ./..."""
+# The Go suites (with -race, the test database and uploads in $REAPER_STATE),
+# then svelte-check, Vitest and Playwright. Each runs in its own pinned
+# container, which a containerized verb cannot start, so this verb runs on the
+# guest and tools/reaper/run.sh starts them with its podman.
+exec = "host"
+cmd = "tools/reaper/run.sh"
+# Every image tools/reaper/run.sh and the scripts it calls use, pulled first.
+images = [
+  "docker.io/library/golang@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db",
+  "docker.io/library/node@sha256:2c752226d477b4a886378baa95b9af252be59301b725fdb0b7e15208131505a8",
+  "mcr.microsoft.com/playwright@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462",
+]
 
 [sync]
 exclude = [
   "/bin/",
   "/data/",
   "/out/",
-  "/frontend/node_modules/",
-  "/frontend/dist/",
+  "/web/node_modules/",
+  "/web/.e2e/",
+  "/web/test-results/",
+  "/web/playwright-report/",
+  "/internal/webui/static/app/",
 ]
 
 [reset]
