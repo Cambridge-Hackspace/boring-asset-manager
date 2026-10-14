@@ -16,10 +16,11 @@ go.work
 go.work.sum
 
 # Frontend dependencies and artifacts
-frontend/node_modules/
-frontend/dist/
-frontend/.svelte-kit/
-frontend/.vite/
+web/node_modules/
+web/.vite/
+web/test-results/
+web/playwright-report/
+internal/webui/static/app/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
