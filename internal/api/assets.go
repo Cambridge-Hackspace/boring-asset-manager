@@ -18,7 +18,10 @@ type CreateAssetRequest struct {
 	FieldValues   map[string]string          `json:"field_values,omitempty"`
 }
 
-// UpdateAssetRequest defines the payload for modifying an asset.
+// UpdateAssetRequest defines the payload for modifying an asset. Omitted parts
+// are left as they are: an absent name, category_ids or generator_keys keeps
+// the current value, while an empty list clears it. field_values only changes
+// the keys it names; an empty value removes one.
 type UpdateAssetRequest struct {
 	Name          string                     `json:"name,omitempty"`
 	CategoryIDs   []string                   `json:"category_ids,omitempty"`

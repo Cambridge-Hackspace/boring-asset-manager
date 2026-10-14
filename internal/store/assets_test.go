@@ -184,3 +184,41 @@ func TestAssetRequiredFieldEnforcement(t *testing.T) {
 		t.Errorf("port_count mismatch: %s", asset.FieldValues["port_count"])
 	}
 }
+
+func TestUpdateAssetKeepsOmittedPartsAndClearsEmptyOnes(t *testing.T) {
+	st := setupTestStore(t)
+	cat, err := st.CreateCategory("Tools", nil, "#336699", false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := []models.AssetGeneratorKey{{GeneratorType: generators.TypeQR, AssignedCode: "DRILL-01"}}
+	asset, err := st.CreateAsset("Drill", []string{cat.ID}, keys, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// nil categories and keys: a rename leaves both alone.
+	renamed, err := st.UpdateAsset(asset.Asset.ID, "Cordless Drill", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(renamed.Categories) != 1 || renamed.Categories[0].ID != cat.ID {
+		t.Errorf("rename moved the asset to %+v", renamed.Categories)
+	}
+	if len(renamed.GeneratorKeys) != 1 || renamed.GeneratorKeys[0].AssignedCode != "DRILL-01" {
+		t.Errorf("rename changed the generator keys to %+v", renamed.GeneratorKeys)
+	}
+
+	// An empty, non-nil slice clears the keys.
+	cleared, err := st.UpdateAsset(asset.Asset.ID, "", nil, []models.AssetGeneratorKey{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cleared.GeneratorKeys) != 0 {
+		t.Errorf("empty generator keys left %+v", cleared.GeneratorKeys)
+	}
+	// The cleared code is free for another asset.
+	if _, err := st.CreateAsset("Other drill", nil, keys, nil); err != nil {
+		t.Errorf("reusing the cleared code: %v", err)
+	}
+}

@@ -356,6 +356,10 @@ func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWith
 
 // UpdateAsset updates an asset, synchronizing category bindings and upserting field values while
 // strictly obeying the Data Retention Rule (orphaned field values are retained).
+//
+// A nil categoryIDs or generatorKeys leaves that part of the asset as it is; an empty, non-nil
+// slice clears it (an asset with no categories falls back to Uncategorized). An empty name
+// keeps the current one, and fieldValues only touches the keys it names.
 func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string) (*models.AssetWithDetails, error) {
 	existing, err := s.GetAssetByID(id)
 	if err != nil {
@@ -370,12 +374,19 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 		name = existing.Asset.Name
 	}
 
+	if categoryIDs == nil {
+		categoryIDs = make([]string, 0, len(existing.Categories))
+		for _, c := range existing.Categories {
+			categoryIDs = append(categoryIDs, c.ID)
+		}
+	}
 	cats, err := s.normalizeCategories(categoryIDs)
 	if err != nil {
 		return nil, err
 	}
 
 	// Validate generator keys
+	replaceKeys := generatorKeys != nil
 	generatorKeys, err = normalizeGeneratorKeys(generatorKeys)
 	if err != nil {
 		return nil, err
@@ -441,8 +452,8 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 		}
 	}
 
-	// Update generator keys (if supplied)
-	if len(generatorKeys) > 0 {
+	// Replace generator keys when supplied, even with none
+	if replaceKeys {
 		_, err = s.TxExec(tx, "DELETE FROM asset_generator_keys WHERE asset_id = ?", id)
 		if err != nil {
 			return nil, err
