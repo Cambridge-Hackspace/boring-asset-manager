@@ -8,7 +8,6 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/google/uuid"
 )
 
@@ -150,80 +149,62 @@ func (s *Store) CreateUser(email, password string, isActive bool) (*models.User,
 	}, nil
 }
 
-// UpdateUserStatus updates an active user's status with Anti-Lockout enforcement.
-// Archived (deleted) users cannot be reactivated and are reported as not found.
-func (s *Store) UpdateUserStatus(userID string, isActive bool) error {
-	u, err := s.GetUserByID(userID)
+// userArchived reports whether a user is archived, within tx, or
+// ErrUserNotFound.
+func (s *Store) userArchived(tx *sql.Tx, userID string) (bool, error) {
+	var archivedAt *time.Time
+	err := s.TxQueryRow(tx, "SELECT archived_at FROM users WHERE id = ?", userID).Scan(&archivedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrUserNotFound
+	}
 	if err != nil {
-		return err
+		return false, fmt.Errorf("querying user: %w", err)
 	}
-	if u.ArchivedAt != nil {
-		return ErrUserNotFound
-	}
-
-	// If deactivating an active user, check anti-lockout invariant
-	if u.IsActive && !isActive {
-		hasManage, err := s.UserHasPermission(userID, rbac.PermUsersManage)
-		if err != nil {
-			return fmt.Errorf("checking user permissions: %w", err)
-		}
-		if hasManage {
-			activeAdmins, err := s.CountActiveAdmins()
-			if err != nil {
-				return err
-			}
-			if err := rbac.ValidateAntiLockout(activeAdmins, true); err != nil {
-				return err
-			}
-		}
-	}
-
-	now := time.Now().UTC()
-	_, err = s.Exec("UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?", isActive, now, userID)
-	if err != nil {
-		return fmt.Errorf("updating user status: %w", err)
-	}
-
-	// If deactivating, also invalidate active sessions
-	if !isActive {
-		_ = s.DeleteUserSessions(userID)
-	}
-
-	return nil
+	return archivedAt != nil, nil
 }
 
-// DeleteUser archives/deletes a user with Anti-Lockout enforcement.
-func (s *Store) DeleteUser(userID string) error {
-	u, err := s.GetUserByID(userID)
-	if err != nil {
-		return err
-	}
-
-	if u.IsActive {
-		hasManage, err := s.UserHasPermission(userID, rbac.PermUsersManage)
+// UpdateUserStatus updates an active user's status with Anti-Lockout enforcement.
+// Archived (deleted) users cannot be reactivated and are reported as not found.
+// Deactivating a user also ends their sessions.
+func (s *Store) UpdateUserStatus(userID string, isActive bool) error {
+	return s.withAdminGuard(func(tx *sql.Tx) error {
+		archived, err := s.userArchived(tx, userID)
 		if err != nil {
-			return fmt.Errorf("checking user permissions: %w", err)
+			return err
 		}
-		if hasManage {
-			activeAdmins, err := s.CountActiveAdmins()
-			if err != nil {
-				return err
-			}
-			if err := rbac.ValidateAntiLockout(activeAdmins, true); err != nil {
-				return err
+		if archived {
+			return ErrUserNotFound
+		}
+		now := time.Now().UTC()
+		if _, err := s.TxExec(tx, "UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?", isActive, now, userID); err != nil {
+			return fmt.Errorf("updating user status: %w", err)
+		}
+		if !isActive {
+			if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+				return fmt.Errorf("deleting user sessions: %w", err)
 			}
 		}
-	}
+		return nil
+	})
+}
 
-	now := time.Now().UTC()
-	// Soft delete: set archived_at and is_active = false
-	_, err = s.Exec("UPDATE users SET archived_at = ?, is_active = ?, updated_at = ? WHERE id = ?", now, false, now, userID)
-	if err != nil {
-		return fmt.Errorf("archiving user: %w", err)
-	}
-
-	_ = s.DeleteUserSessions(userID)
-	return nil
+// DeleteUser archives a user with Anti-Lockout enforcement and ends their
+// sessions.
+func (s *Store) DeleteUser(userID string) error {
+	return s.withAdminGuard(func(tx *sql.Tx) error {
+		if _, err := s.userArchived(tx, userID); err != nil {
+			return err
+		}
+		now := time.Now().UTC()
+		// Soft delete: set archived_at and is_active = false
+		if _, err := s.TxExec(tx, "UPDATE users SET archived_at = ?, is_active = ?, updated_at = ? WHERE id = ?", now, false, now, userID); err != nil {
+			return fmt.Errorf("archiving user: %w", err)
+		}
+		if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+			return fmt.Errorf("deleting user sessions: %w", err)
+		}
+		return nil
+	})
 }
 
 // AssignUserRole assigns a role to a user.
@@ -240,58 +221,18 @@ func (s *Store) AssignUserRole(userID, roleID string) error {
 	return err
 }
 
-// RemoveUserRole revokes a role from a user with Anti-Lockout enforcement. The guard only
-// applies when the revocation actually strips users:manage from an active user, i.e. the
-// user is active, holds this role, the role grants users:manage, and no other role of the
-// user grants it.
+// RemoveUserRole revokes a role from a user with Anti-Lockout enforcement. The
+// guard only refuses a revocation that actually leaves no active user with
+// users:manage; revoking a role the user does not hold, or one whose
+// permission they also get from another role, is always allowed.
 func (s *Store) RemoveUserRole(userID, roleID string) error {
-	u, err := s.GetUserByID(userID)
-	if err != nil {
-		return err
-	}
-
-	var roleHasManage int
-	err = s.QueryRow(`
-		SELECT COUNT(*)
-		FROM role_permissions rp
-		JOIN permissions p ON rp.permission_id = p.id
-		WHERE rp.role_id = ? AND p.permission_key = ?
-	`, roleID, rbac.PermUsersManage).Scan(&roleHasManage)
-	if err != nil {
-		return err
-	}
-
-	var userHasRole int
-	err = s.QueryRow("SELECT COUNT(*) FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID).Scan(&userHasRole)
-	if err != nil {
-		return err
-	}
-
-	var otherManageRoles int
-	err = s.QueryRow(`
-		SELECT COUNT(*)
-		FROM user_roles ur
-		JOIN role_permissions rp ON ur.role_id = rp.role_id
-		JOIN permissions p ON rp.permission_id = p.id
-		WHERE ur.user_id = ? AND ur.role_id <> ? AND p.permission_key = ?
-	`, userID, roleID, rbac.PermUsersManage).Scan(&otherManageRoles)
-	if err != nil {
-		return err
-	}
-
-	isActiveUser := u.IsActive && u.ArchivedAt == nil
-	if isActiveUser && userHasRole > 0 && roleHasManage > 0 && otherManageRoles == 0 {
-		activeAdmins, err := s.CountActiveAdmins()
-		if err != nil {
+	return s.withAdminGuard(func(tx *sql.Tx) error {
+		if _, err := s.userArchived(tx, userID); err != nil {
 			return err
 		}
-		if err := rbac.ValidateAntiLockout(activeAdmins, true); err != nil {
-			return err
-		}
-	}
-
-	_, err = s.Exec("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID)
-	return err
+		_, err := s.TxExec(tx, "DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", userID, roleID)
+		return err
+	})
 }
 
 // GetRoleByName retrieves a role record by name.

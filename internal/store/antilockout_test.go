@@ -2,7 +2,9 @@ package store
 
 import (
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/google/uuid"
@@ -106,5 +108,62 @@ func TestArchivedAdminCannotBeReactivatedToBypassAntiLockout(t *testing.T) {
 
 	if err := st.UpdateUserStatus(admin1.ID, false); !errors.Is(err, rbac.ErrAntiLockoutTriggered) {
 		t.Errorf("expected deactivating the last loginable admin to be blocked, got %v", err)
+	}
+}
+
+// TestConcurrentAdminRemovalsCannotBothSucceed archives two admins at once.
+// Checked one after the other each would leave the other in place, so without
+// serialization both could pass and leave no one able to manage users.
+func TestConcurrentAdminRemovalsCannotBothSucceed(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	admin1, err := st.CreateAdminUser("admin1@hackspace.org", "Pass1234!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin2, err := st.CreateAdminUser("admin2@hackspace.org", "Pass1234!")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Hold the first guarded change just before it commits.
+	reached, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	st.beforeAdminCommit = func() {
+		once.Do(func() {
+			close(reached)
+			<-release
+		})
+	}
+
+	first := make(chan error, 1)
+	go func() { first <- st.DeleteUser(admin1.ID) }()
+	select {
+	case <-reached:
+	case err := <-first:
+		t.Fatalf("first removal finished without reaching the commit hook: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("first removal never reached the commit hook")
+	}
+
+	second := make(chan error, 1)
+	go func() { second <- st.DeleteUser(admin2.ID) }()
+	select {
+	case err := <-second:
+		close(release)
+		<-first
+		t.Fatalf("second removal finished (%v) while the first was uncommitted; it must wait", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	close(release)
+	if err := <-first; err != nil {
+		t.Fatalf("first removal: %v", err)
+	}
+	if err := <-second; !errors.Is(err, rbac.ErrAntiLockoutTriggered) {
+		t.Errorf("second removal: got %v, want ErrAntiLockoutTriggered", err)
+	}
+	if n, err := st.CountActiveAdmins(); err != nil || n != 1 {
+		t.Errorf("%d active admins (%v), want 1", n, err)
 	}
 }
