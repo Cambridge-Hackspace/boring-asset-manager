@@ -1,13 +1,19 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
+	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
 type contextKey string
@@ -191,4 +197,69 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RefuseUnstorableText answers 400 to a request whose path, query or JSON
+// body holds a NUL character or bytes that are not UTF-8. No stored text may
+// contain either (README §3.5), so such a request cannot name anything that
+// exists; handed on, PostgreSQL would answer a lookup with an error rather
+// than "not found". Multipart bodies (uploads and imports) are left to their
+// handlers, which report problems in the file itself.
+func RefuseUnstorableText(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		refuse := func() {
+			writeJSONError(w, http.StatusBadRequest, "The request contains a NUL character or bytes that are not UTF-8")
+		}
+		if unstorable(r.URL.Path) {
+			refuse()
+			return
+		}
+		for k, vs := range r.URL.Query() {
+			if unstorable(k) {
+				refuse()
+				return
+			}
+			for _, v := range vs {
+				if unstorable(v) {
+					refuse()
+					return
+				}
+			}
+		}
+		if r.Body == nil || r.Body == http.NoBody || strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			var tooBig *http.MaxBytesError
+			if errors.As(err, &tooBig) {
+				writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Request bodies are limited to %d bytes", tooBig.Limit))
+				return
+			}
+			writeJSONError(w, http.StatusBadRequest, "Could not read the request body")
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(data))
+		// Every string in the document, keys included. A body that is not
+		// JSON stops the scan, and its handler reports it.
+		dec := json.NewDecoder(bytes.NewReader(data))
+		for {
+			tok, err := dec.Token()
+			if err != nil {
+				break
+			}
+			if s, ok := tok.(string); ok && unstorable(s) {
+				refuse()
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// unstorable reports whether s holds a NUL character or bytes that are not
+// UTF-8.
+func unstorable(s string) bool {
+	return textcheck.Problem(s, math.MaxInt) != ""
 }

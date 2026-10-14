@@ -70,7 +70,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := s.store.CreateUser(req.Email, req.Password, isActive)
-	if errors.Is(err, auth.ErrPasswordPolicy) {
+	if errors.Is(err, auth.ErrPasswordPolicy) || errors.Is(err, store.ErrInvalidUser) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -15,7 +15,7 @@ import (
 
 // openStore opens a migrated store on SQLite, or on the server named by
 // BAM_TEST_DIALECT and BAM_TEST_DSN.
-func openStore(t *testing.T) *store.Store {
+func openStore(t testing.TB) *store.Store {
 	t.Helper()
 	var st *store.Store
 	if dialect := os.Getenv(store.TestDialectEnv); dialect != "" && dialect != "sqlite" {
@@ -49,7 +49,7 @@ type world struct {
 	drill, hammer       *models.AssetWithDetails
 }
 
-func newWorld(t *testing.T) *world {
+func newWorld(t testing.TB) *world {
 	t.Helper()
 	st := openStore(t)
 	w := &world{st: st}

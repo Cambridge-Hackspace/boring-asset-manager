@@ -2,9 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +18,7 @@ import (
 
 // setupTestStore opens a migrated, seeded store: in-memory SQLite by default, or an
 // ephemeral PostgreSQL/MariaDB namespace when BAM_TEST_DIALECT/BAM_TEST_DSN are set.
-func setupTestStore(t *testing.T) *store.Store {
+func setupTestStore(t testing.TB) *store.Store {
 	t.Helper()
 
 	var st *store.Store
@@ -252,5 +255,58 @@ func TestRequirePermissionMiddleware(t *testing.T) {
 	guarded.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+}
+
+// TestRefuseUnstorableText sends NUL characters and bytes that are not
+// UTF-8 in each part of a request, and checks what reaches the handler.
+func TestRefuseUnstorableText(t *testing.T) {
+	var reached []byte
+	h := LimitRequestBodies(RefuseUnstorableText(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	})))
+	send := func(target, contentType, body string) int {
+		t.Helper()
+		reached = nil
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		u, err := url.Parse(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.URL = u
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code >= 400 && !strings.Contains(rec.Body.String(), `"error"`) {
+			t.Errorf("%s: %d without a JSON error: %s", target, rec.Code, rec.Body.String())
+		}
+		return rec.Code
+	}
+	for name, c := range map[string]struct {
+		target, contentType, body string
+		want                      int
+	}{
+		"NUL in the path":            {"/api/v1/assets/a%00b", "", "", 400},
+		"bad bytes in the path":      {"/api/v1/assets/%ff", "", "", 400},
+		"NUL in a query value":       {"/api/v1/assets?search=a%00", "", "", 400},
+		"bad bytes in a query key":   {"/api/v1/assets?%fe=1", "", "", 400},
+		"NUL in a JSON value":        {"/api/v1/assets", "application/json", `{"name":"a\u0000b"}`, 400},
+		"NUL in a JSON key":          {"/api/v1/assets", "application/json", `{"field_values":{"a\u0000":"b"}}`, 400},
+		"NUL in a nested array":      {"/api/v1/assets", "", `{"category_ids":["x",["\u0000"]]}`, 400},
+		"an escaped backslash":       {"/api/v1/assets", "application/json", `{"name":"C:` + strings.Repeat(string(rune(92)), 2) + `u0000"}`, 204},
+		"awkward but storable":       {"/api/v1/assets?search=%F0%9F%94%A7", "application/json", `{"name":"🔧 é"}`, 204},
+		"not JSON":                   {"/api/v1/assets", "application/json", `{"name":`, 204},
+		"multipart, for the handler": {"/api/v1/images", "multipart/form-data; boundary=x", "\x00\xff", 204},
+		"too long":                   {"/api/v1/assets", "", `"` + strings.Repeat("x", MaxRequestBytes) + `"`, 413},
+	} {
+		if got := send(c.target, c.contentType, c.body); got != c.want {
+			t.Errorf("%s: %d, want %d", name, got, c.want)
+		}
+		if c.want == 204 && string(reached) != c.body {
+			t.Errorf("%s: the handler read %q", name, reached)
+		}
 	}
 }
