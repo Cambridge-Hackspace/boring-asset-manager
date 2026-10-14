@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
 )
 
 func TestValidate(t *testing.T) {
@@ -59,15 +61,24 @@ func TestValidate(t *testing.T) {
 	bad("unknown roll", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter Twin Turbo", "30252", `{"roll":"middle"}`))
 	bad("unknown density", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "30252", `{"density":"max"}`))
 	bad("Dymo unknown option", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "30252", `{"cut":true}`))
+	ok("Rollo", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1038", "4x6", ""))
+	ok("Rollo options", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1040", "2x1", `{"density":10,"rotate_180":true}`))
+	bad("TSPL model", "P", DriverTSPL, "rollo.lan", 9100, brother("LabelWriter 450", "4x6", ""))
+	bad("TSPL media", "P", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1038", "30252", ""))
+	bad("TSPL density", "P", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1038", "4x6", `{"density":16}`))
+	bad("TSPL unknown option", "P", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1038", "4x6", `{"speed":4}`))
 }
 
 func TestDriversDescribeEveryRoll(t *testing.T) {
 	d := Drivers()
-	if len(d) != 2 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != 3 || len(d[0].Options) != 1 {
+	if len(d) != 3 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != 3 || len(d[0].Options) != 1 {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if d[1].Driver != DriverDymoLabelWriter || len(d[1].Media) != len(dymolw.MediaIDs()) || len(d[1].Options) != 2 || len(d[1].Options[0].Values) != 4 {
 		t.Fatalf("Dymo driver info = %+v", d[1])
+	}
+	if d[2].Driver != DriverTSPL || len(d[2].Media) != len(tspl.MediaIDs()) || len(d[2].Options) != 2 {
+		t.Fatalf("TSPL driver info = %+v", d[2])
 	}
 }
 
@@ -310,5 +321,35 @@ func TestDymoPlan(t *testing.T) {
 		if job.Density != c.density || job.Roll != c.roll || job.JobID != c.jobID || len(job.Pages) != 2 {
 			t.Errorf("%s: decoded %+v", c.model, job)
 		}
+	}
+}
+
+func TestTSPLPlan(t *testing.T) {
+	d, err := Lookup(DriverTSPL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := Settings{Model: "Rollo X1038", Media: "4x6", Options: json.RawMessage(`{"density":11}`)}
+	if _, err := d.Plan(settings, LabelSpec{WidthMM: 101.6, HeightMM: 152.4, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
+		t.Errorf("300 DPI template on a 203 DPI printer: got %v, want ErrDoesNotFit", err)
+	}
+	plan, err := d.Plan(settings, LabelSpec{WidthMM: 152.4, HeightMM: 101.6, DPI: 203})
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := image.NewGray(image.Rect(0, 0, 1219, 812)) // landscape 6 × 4 in, all black
+	stream, err := plan.Encode([]*image.Gray{label, label, label})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := tspl.DecodeJob(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Labels) != 1 || job.Labels[0].Copies != 3 || job.Labels[0].Image.Rect.Dy() != 1219 {
+		t.Errorf("decoded %+v", job.Labels)
+	}
+	if !strings.Contains(strings.Join(job.Setup, "\n"), "DENSITY 11") {
+		t.Errorf("setup %q lacks the density", job.Setup)
 	}
 }
