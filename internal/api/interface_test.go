@@ -142,3 +142,19 @@ func TestCreateUserEnforcesPasswordLength(t *testing.T) {
 		t.Errorf("short password: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestListGenerators(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	rec := doJSON(t, srv, sessionCookie(t, srv, admin.ID), http.MethodGet, "/api/v1/generators", "")
+	var resp struct {
+		Generators []struct {
+			Type   string   `json:"type"`
+			Levels []string `json:"error_correction_levels"`
+		} `json:"generators"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if rec.Code != http.StatusOK || len(resp.Generators) != 3 || resp.Generators[0].Type != "qr" ||
+		strings.Join(resp.Generators[0].Levels, "") != "MLQH" || resp.Generators[2].Levels == nil {
+		t.Errorf("generators: %d %s", rec.Code, rec.Body.String())
+	}
+}

@@ -1,0 +1,140 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { request } from '../../lib/api';
+  import { messageOf } from '../../lib/errors';
+  import { UNCATEGORIZED, type AssetWithDetails, type Category } from '../../lib/models';
+  import { navigate, router } from '../../lib/router.svelte';
+  import { session } from '../../lib/session.svelte';
+  import { flattenTree } from '../../lib/tree';
+  import CategoryBadge from '../../components/CategoryBadge.svelte';
+  import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import LabelActions from '../../components/LabelActions.svelte';
+
+  let { params: _params }: { params: Record<string, string> } = $props();
+
+  let assets = $state<AssetWithDetails[]>([]);
+  let categories = $state<Category[]>([]);
+  let loading = $state(true);
+  let error = $state('');
+  let search = $state(router.query.get('search') ?? '');
+  let categoryId = $state(router.query.get('category') ?? '');
+  let selected = $state<string[]>([]);
+
+  const categoryChoices = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
+  const uncategorized = $derived(categories.find((c) => c.id === UNCATEGORIZED));
+  const allSelected = $derived(assets.length > 0 && assets.every((a) => selected.includes(a.asset.id)));
+
+  onMount(async () => {
+    try {
+      categories = (await request<{ categories: Category[] }>('GET', '/categories')).categories ?? [];
+    } catch (err) {
+      error = messageOf(err);
+    }
+    await load();
+  });
+
+  async function load() {
+    loading = true;
+    error = '';
+    const q = new URLSearchParams();
+    if (search.trim()) q.set('search', search.trim());
+    if (categoryId) q.set('category_id', categoryId);
+    try {
+      assets = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
+      selected = selected.filter((id) => assets.some((a) => a.asset.id === id));
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  // Keep the filters in the address, so they survive reloads and links.
+  function applyFilters(event?: SubmitEvent) {
+    event?.preventDefault();
+    const q = new URLSearchParams();
+    if (search.trim()) q.set('search', search.trim());
+    if (categoryId) q.set('category', categoryId);
+    const query = q.toString();
+    navigate('/assets' + (query ? `?${query}` : ''), true);
+    void load();
+  }
+
+  function toggleAll() {
+    selected = allSelected ? [] : assets.map((a) => a.asset.id);
+  }
+</script>
+
+<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+  <h1 class="text-2xl font-bold">Assets</h1>
+  {#if session.can('assets:write')}
+    <a class="btn-primary" href="/assets/new">New asset</a>
+  {/if}
+</div>
+
+<form class="mb-4 flex flex-wrap items-end gap-3" role="search" onsubmit={applyFilters}>
+  <div class="min-w-48 flex-1">
+    <label class="label" for="asset-search">Search</label>
+    <input id="asset-search" class="input" type="search" placeholder="Name or code" bind:value={search} />
+  </div>
+  <div>
+    <label class="label" for="asset-category">Category</label>
+    <select id="asset-category" class="input" bind:value={categoryId} onchange={() => applyFilters()}>
+      <option value="">All categories</option>
+      {#each categoryChoices as row (row.category.id)}
+        <option value={row.category.id}>{' '.repeat(row.depth * 3)}{row.category.name}</option>
+      {/each}
+      {#if uncategorized}<option value={UNCATEGORIZED}>{uncategorized.name}</option>{/if}
+    </select>
+  </div>
+  <button type="submit" class="btn-secondary">Search</button>
+</form>
+
+<ErrorMessage {error} />
+
+{#if loading}
+  <p role="status" class="text-sm text-zinc-500">Loading assets…</p>
+{:else if assets.length === 0}
+  <p class="text-sm text-zinc-500">No assets match.</p>
+{:else}
+  <p class="sr-only" role="status">{assets.length} assets, {selected.length} selected.</p>
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="border-b border-zinc-300 dark:border-zinc-700">
+        <tr>
+          <th scope="col" class="w-8 py-2 pr-2">
+            <input type="checkbox" aria-label="Select all assets" checked={allSelected} onchange={toggleAll} />
+          </th>
+          <th scope="col" class="py-2 pr-4">Name</th>
+          <th scope="col" class="py-2 pr-4">Categories</th>
+          <th scope="col" class="py-2">Codes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each assets as a (a.asset.id)}
+          <tr class="border-b border-zinc-200 dark:border-zinc-800">
+            <td class="py-2 pr-2">
+              <input type="checkbox" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} />
+            </td>
+            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a></td>
+            <td class="py-2 pr-4">
+              <span class="flex flex-wrap gap-1">
+                {#each a.categories as c (c.id)}<CategoryBadge category={c} />{/each}
+              </span>
+            </td>
+            <td class="py-2 font-mono text-xs">{a.generator_keys.map((k) => k.assigned_code).join(', ')}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+
+  {#if selected.length}
+    <div class="mt-6">
+      <p class="mb-2 text-sm font-medium">{selected.length} selected</p>
+      {#key selected.join(',')}
+        <LabelActions assetIds={selected} />
+      {/key}
+    </div>
+  {/if}
+{/if}

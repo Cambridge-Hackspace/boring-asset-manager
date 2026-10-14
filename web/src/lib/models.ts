@@ -67,3 +67,60 @@ export interface EffectiveField {
   /** The category the field is assigned to, itself or an ancestor. */
   source_category_id?: string;
 }
+
+export interface Asset {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  archived_at?: string | null;
+}
+
+export interface GeneratorKey {
+  asset_id?: string;
+  generator_type: string;
+  assigned_code: string;
+}
+
+export interface AssetWithDetails {
+  asset: Asset;
+  categories: Category[];
+  generator_keys: GeneratorKey[];
+  /** Values by field key, including ones kept from earlier categories. */
+  field_values: Record<string, string>;
+  effective_fields: EffectiveField[];
+}
+
+export interface GeneratorInfo {
+  type: string;
+  name: string;
+  error_correction_levels: string[];
+  code_rules: string;
+}
+
+/** The parts of a label template lists and pickers need. */
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  units: 'mm' | 'in';
+  width: number;
+  height: number;
+  dpi: number;
+}
+
+export interface PrinterConnection {
+  type: 'tcp' | 'device' | 'ipp' | 'windows';
+  address: string;
+}
+
+export interface Printer {
+  id: string;
+  name: string;
+  driver: string;
+  model: string;
+  connection: PrinterConnection;
+  media: string;
+  options?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
