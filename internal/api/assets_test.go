@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
@@ -43,5 +44,24 @@ func TestUpdateAssetOmittedAndEmptyLists(t *testing.T) {
 	cleared := put(`{"generator_keys":[]}`)
 	if len(cleared.GeneratorKeys) != 0 || len(cleared.Categories) != 1 || cleared.Categories[0].ID != cat.ID {
 		t.Errorf(`"generator_keys":[] gave %+v`, cleared)
+	}
+}
+
+// Empty lists are sent as [], not null: the web interface iterates them.
+func TestAssetListsAreNeverNull(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	asset, err := srv.store.CreateAsset("Plain box", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v1/assets/" + asset.Asset.ID, "/api/v1/assets"} {
+		rec := doJSON(t, srv, cookie, http.MethodGet, path, "")
+		body := rec.Body.String()
+		for _, key := range []string{"categories", "generator_keys", "effective_fields", "field_values"} {
+			if strings.Contains(body, `"`+key+`":null`) {
+				t.Errorf("GET %s: %s is null: %s", path, key, body)
+			}
+		}
 	}
 }

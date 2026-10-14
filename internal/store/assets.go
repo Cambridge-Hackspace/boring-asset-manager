@@ -292,6 +292,17 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 		effectiveFields = []models.EffectiveField{}
 	}
 
+	// Lists are always arrays in the API, never null, even when empty.
+	if categories == nil {
+		categories = []models.Category{}
+	}
+	if generatorKeys == nil {
+		generatorKeys = []models.AssetGeneratorKey{}
+	}
+	if effectiveFields == nil {
+		effectiveFields = []models.EffectiveField{}
+	}
+
 	return &models.AssetWithDetails{
 		Asset:           a,
 		Categories:      categories,
