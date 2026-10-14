@@ -166,8 +166,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// MaxRequestBytes caps request bodies on every endpoint except image uploads,
-// which set their own, larger limit.
+// MaxRequestBytes caps request bodies on every endpoint except image uploads
+// and asset imports, which set their own, larger limits.
 const MaxRequestBytes = 1 << 20
 
 // LimitRequestBodies rejects bodies over the limit with 413 before a handler
@@ -176,8 +176,13 @@ const MaxRequestBytes = 1 << 20
 func LimitRequestBodies(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit := int64(MaxRequestBytes)
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/images" {
-			limit = imageUploadLimit
+		if r.Method == http.MethodPost {
+			switch r.URL.Path {
+			case "/api/v1/images":
+				limit = imageUploadLimit
+			case "/api/v1/assets/import", "/api/v1/assets/import/preview":
+				limit = importBodyLimit
+			}
 		}
 		if r.ContentLength > limit {
 			writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Request bodies are limited to %d bytes", limit))
