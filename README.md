@@ -446,9 +446,9 @@ Notifications go out through pluggable notifier drivers, in the same way printer
 | `code.<type>` | The assigned code for a generator type (`code.qr`, `code.micro_qr`, `code.code128`). |
 | `field.<key>` | A field value, by corpus key. |
 
-Spreadsheet formula injection is defused: on export a cell beginning with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'`, and on import a `'` followed by one of those characters is removed.
+Spreadsheet formula injection is defused: on export a cell beginning with `=`, `+`, `-`, `@`, a tab, a carriage return or `'` is prefixed with `'` (plain numbers such as `-5` are left alone), and on import a `'` followed by one of those characters is removed, so a file reads back exactly as it was written.
 
-**Export.** `GET /api/v1/assets/export.csv` (`assets:read`) takes the asset list's filters and writes every matching asset, with a column for every generator type and every field any of them has a value for.
+**Export.** `GET /api/v1/assets/export.csv` (`assets:read`) takes the asset list's filters (`category_id`, `search`) and writes every matching asset, with a column for every generator type and every field any of them has a value for.
 
 **Import.** `POST /api/v1/assets/import/preview` and `POST /api/v1/assets/import` (`assets:write`) take the file (at most 5 MB and 5,000 rows) and a mapping from each column to `id`, `name`, `categories`, a generator type, a field key, or `ignore`.
 
@@ -650,7 +650,7 @@ Sub-phases land in order, each with its tests, and leave the tree releasable.
 * [x] The Discord driver, tested against a fake Discord server.
 
 #### Sub-Phase 5.3: CSV Export
-* [ ] `GET /api/v1/assets/export.csv` with category paths, generator codes, field values and formula-injection defusing.
+* [x] `GET /api/v1/assets/export.csv` with category paths, generator codes, field values and formula-injection defusing.
 
 #### Sub-Phase 5.4: CSV Import
 * [ ] Header mapping suggestions, preview with per-row and per-column problems, and the strict category pre-flight.

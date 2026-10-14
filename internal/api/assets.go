@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/assetcsv"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -143,4 +146,25 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Asset deleted successfully",
 	})
+}
+
+// handleExportAssets writes the assets the list would show as CSV
+// (README §6.1): GET /api/v1/assets/export.csv?category_id=&search=
+func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
+	assets, err := s.store.ListAssets(r.URL.Query().Get("category_id"), r.URL.Query().Get("search"))
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list assets: %v", err))
+		return
+	}
+	cats, err := s.store.ListAllCategories()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to list categories: %v", err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="assets-%s.csv"`, time.Now().UTC().Format("20060102")))
+	if err := assetcsv.Export(w, assets, assetcsv.NewCategories(cats), generators.AllowedGeneratorTypes()); err != nil {
+		// Headers are gone; all that is left is to stop.
+		return
+	}
 }
