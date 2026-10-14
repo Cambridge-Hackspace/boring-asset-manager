@@ -158,3 +158,45 @@ func TestListGenerators(t *testing.T) {
 		t.Errorf("generators: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestPrinterFitCheck(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	id := createPrinter(t, srv, cookie, 9100, "dk-11201") // 29 × 90 mm die-cut, 300 DPI
+
+	fit := func(body string) (int, string) {
+		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+id+"/fit", body)
+		return rec.Code, rec.Body.String()
+	}
+	if code, body := fit(`{"width_mm":90,"height_mm":29,"dpi":300}`); code != 200 || !strings.Contains(body, `"fits":true`) {
+		t.Errorf("fitting template: %d %s", code, body)
+	}
+	if code, body := fit(`{"width_mm":62,"height_mm":29,"dpi":300}`); code != 200 || !strings.Contains(body, `"fits":false`) || !strings.Contains(body, "29 × 90 mm") {
+		t.Errorf("wrong size: %d %s", code, body)
+	}
+	if code, _ := fit(`{"width_mm":0,"height_mm":29,"dpi":300}`); code != http.StatusBadRequest {
+		t.Errorf("zero width: %d", code)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/nope/fit", `{"width_mm":1,"height_mm":1,"dpi":300}`); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown printer: %d", rec.Code)
+	}
+
+	// Template designers can read printers and check fit, but not print.
+	dc := userWithPermissions(t, srv, "designer@test.org", "templates:manage")
+	if rec := doJSON(t, srv, dc, http.MethodPost, "/api/v1/printers/"+id+"/fit", `{"width_mm":90,"height_mm":29,"dpi":300}`); rec.Code != http.StatusOK {
+		t.Errorf("designer fit check: %d", rec.Code)
+	}
+	if rec := doJSON(t, srv, dc, http.MethodPost, "/api/v1/printers/"+id+"/print", `{}`); rec.Code != http.StatusForbidden {
+		t.Errorf("designer printing: %d", rec.Code)
+	}
+}
+
+func TestDriversListModelDPI(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	rec := doJSON(t, srv, sessionCookie(t, srv, admin.ID), http.MethodGet, "/api/v1/printers/drivers", "")
+	for _, want := range []string{`"QL-810W":300`, `"LabelWriter 450":300`, `"Rollo X1038":203`, `"Generic TSPL 300 DPI":300`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("drivers list lacks %s", want)
+		}
+	}
+}

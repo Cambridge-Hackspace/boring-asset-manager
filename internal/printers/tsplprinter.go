@@ -25,8 +25,9 @@ type tsplOptions struct {
 
 func (tsplDriver) Info() DriverInfo {
 	info := DriverInfo{
-		Driver: DriverTSPL,
-		Models: tspl.Models(),
+		Driver:   DriverTSPL,
+		Models:   tspl.Models(),
+		ModelDPI: tsplDPI(),
 		Options: []OptionInfo{{
 			Name: "density", Type: "int", Default: nil,
 			Description: "Print darkness, 0 (lightest) to 15 (darkest); unset keeps the printer's own setting.",
@@ -111,4 +112,13 @@ func (p tsplPlan) Encode(labels []*image.Gray) ([]byte, error) {
 		pages[i] = prepared[label]
 	}
 	return tspl.EncodeJob(p.model, p.media, pages, p.opts)
+}
+
+func tsplDPI() map[string]int {
+	dpi := map[string]int{}
+	for _, name := range tspl.Models() {
+		m, _ := tspl.LookupModel(name)
+		dpi[name] = m.DPI
+	}
+	return dpi
 }

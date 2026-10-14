@@ -103,10 +103,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/generators", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListGenerators)))
 
 	// Network printers
-	canSeePrinters := RequireAnyPermission(rbac.PermLabelsPrint, rbac.PermSettingsManage)
+	// Template designers read printers too, for their media size and DPI.
+	canSeePrinters := RequireAnyPermission(rbac.PermLabelsPrint, rbac.PermSettingsManage, rbac.PermTemplatesManage)
 	mux.Handle("GET /api/v1/printers/drivers", canSeePrinters(http.HandlerFunc(s.handlePrinterDrivers)))
 	mux.Handle("GET /api/v1/printers", canSeePrinters(http.HandlerFunc(s.handleListPrinters)))
 	mux.Handle("GET /api/v1/printers/{id}", canSeePrinters(http.HandlerFunc(s.handleGetPrinter)))
+	mux.Handle("POST /api/v1/printers/{id}/fit", canSeePrinters(http.HandlerFunc(s.handlePrinterFit)))
 	mux.Handle("POST /api/v1/printers", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleCreatePrinter)))
 	mux.Handle("PUT /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUpdatePrinter)))
 	mux.Handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
