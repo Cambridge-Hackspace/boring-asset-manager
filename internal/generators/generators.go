@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
 const (
@@ -84,6 +86,9 @@ func ValidateGeneratorCode(genType, code string) error {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return ErrEmptyCode
+	}
+	if err := textcheck.Check("code", code, textcheck.MaxName); err != nil {
+		return err
 	}
 	g, err := Lookup(genType)
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 	"github.com/google/uuid"
 )
 
@@ -328,6 +329,19 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 	}
 	before := plan.ProblemCount
 
+	// Text no database can store, in any column that is imported.
+	for i, c := range plan.Columns {
+		if c.Target == TargetIgnore {
+			continue
+		}
+		if p := textcheck.Problem(rec.cells[i], textcheck.MaxValue); p != "" {
+			plan.problem(line, c.Header, "the cell %s", p)
+		}
+	}
+	if plan.ProblemCount > before {
+		return nil
+	}
+
 	// The asset, if the row names one.
 	var existing *models.AssetWithDetails
 	if id, col, ok := cell(ColumnID); ok && id != "" {
@@ -357,6 +371,9 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 	name, nameCol, _ := cell(ColumnName)
 	switch {
 	case name != "":
+		if p := textcheck.Problem(name, textcheck.MaxName); p != "" {
+			plan.problem(line, nameCol, "the name %s", p)
+		}
 		change.Name = name
 	case existing != nil:
 		change.Name = existing.Asset.Name

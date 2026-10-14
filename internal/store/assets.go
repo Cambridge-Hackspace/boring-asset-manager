@@ -10,6 +10,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 	"github.com/google/uuid"
 )
 
@@ -107,6 +108,9 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("asset name cannot be empty")
+	}
+	if err := textcheck.Check("asset name", name, textcheck.MaxName); err != nil {
+		return nil, err
 	}
 
 	// 1. Normalize categories (fallback to Uncategorized if empty)
@@ -321,13 +325,6 @@ func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWith
 		args = append(args, categoryID)
 	}
 
-	if search != "" {
-		// LOWER() on both sides keeps matching case-insensitive on PostgreSQL, whose LIKE is case-sensitive.
-		likeTerm := "%" + strings.ToLower(search) + "%"
-		whereClauses = append(whereClauses, "(LOWER(a.name) LIKE ? OR a.id IN (SELECT asset_id FROM asset_generator_keys WHERE LOWER(assigned_code) LIKE ?))")
-		args = append(args, likeTerm, likeTerm)
-	}
-
 	query := fmt.Sprintf(`
 		SELECT a.id
 		FROM assets a
@@ -350,10 +347,30 @@ func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWith
 		assetIDs = append(assetIDs, id)
 	}
 
+	// The search is matched here rather than with LIKE, which treats % and _
+	// as wildcards and, on some databases, backslash as an escape, and whose
+	// LOWER() folds only ASCII letters on SQLite. Here every letter folds,
+	// the same way whatever the database.
+	term := strings.ToLower(search)
+	matches := func(a *models.AssetWithDetails) bool {
+		if strings.Contains(strings.ToLower(a.Asset.Name), term) {
+			return true
+		}
+		for _, gk := range a.GeneratorKeys {
+			if strings.Contains(strings.ToLower(gk.AssignedCode), term) {
+				return true
+			}
+		}
+		return false
+	}
+
 	var results []models.AssetWithDetails
 	for _, id := range assetIDs {
 		detail, err := s.GetAssetByID(id)
 		if err != nil {
+			continue
+		}
+		if search != "" && !matches(detail) {
 			continue
 		}
 		results = append(results, *detail)
@@ -380,6 +397,9 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = existing.Asset.Name
+	}
+	if err := textcheck.Check("asset name", name, textcheck.MaxName); err != nil {
+		return nil, err
 	}
 
 	if categoryIDs == nil {

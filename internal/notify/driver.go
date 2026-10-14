@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
 // Driver delivers events to one kind of destination.
@@ -168,8 +169,8 @@ func Validate(c models.NotificationChannel) error {
 	if strings.TrimSpace(c.Name) == "" {
 		return invalid("name is required")
 	}
-	if len(c.Name) > 255 {
-		return invalid("name is longer than 255 characters")
+	if p := textcheck.Problem(c.Name, textcheck.MaxName); p != "" {
+		return invalid("name %s", p)
 	}
 	d, ok := Lookup(c.Driver)
 	if !ok {

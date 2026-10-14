@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
 // DefaultPort is the raw printing port.
@@ -38,8 +40,11 @@ var hostnameRegex = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-
 // here, the rest by its driver. Whether this server can use the connection
 // is the Transport's Check.
 func Validate(name, driver string, conn Connection, settings Settings) error {
-	if n := strings.TrimSpace(name); n == "" || len(n) > 255 {
+	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("%w: name must be 1-255 characters", ErrInvalidPrinter)
+	}
+	if p := textcheck.Problem(name, textcheck.MaxName); p != "" {
+		return fmt.Errorf("%w: name %s", ErrInvalidPrinter, p)
 	}
 	if _, err := NormalizeConnection(conn); err != nil {
 		return err

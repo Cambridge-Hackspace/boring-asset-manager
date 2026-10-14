@@ -96,6 +96,17 @@ func (c *clock) advance(d time.Duration) {
 	c.mu.Unlock()
 }
 
+// catchUp moves the clock to a second past the real time, if it is behind:
+// deliveries are queued at the real time, and must be due by this clock
+// however long queueing them took.
+func (c *clock) catchUp() {
+	c.mu.Lock()
+	if real := time.Now().UTC().Add(time.Second); c.now.Before(real) {
+		c.now = real
+	}
+	c.mu.Unlock()
+}
+
 type fixture struct {
 	st     *store.Store
 	driver *fakeDriver
@@ -141,6 +152,7 @@ func (f *fixture) flag(t *testing.T, low bool) {
 	if _, _, err := f.st.SetRunningLow(f.cat, low); err != nil {
 		t.Fatal(err)
 	}
+	f.clock.catchUp()
 }
 
 func (f *fixture) deliveries(t *testing.T) []store.DeliveryView {
