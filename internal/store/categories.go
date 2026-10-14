@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 	"github.com/google/uuid"
 )
 
@@ -170,6 +171,9 @@ func (s *Store) CreateCategoryFrom(in CategoryInput) (*models.Category, error) {
 	if in.Name == "" {
 		return nil, errors.New("category name cannot be empty")
 	}
+	if err := textcheck.Check("category name", in.Name, textcheck.MaxName); err != nil {
+		return nil, err
+	}
 
 	in.ColorHex = ValidateColorHex(in.ColorHex)
 	categoryID := uuid.NewString()
@@ -268,6 +272,9 @@ func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Categor
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		return nil, errors.New("category name cannot be empty")
+	}
+	if err := textcheck.Check("category name", in.Name, textcheck.MaxName); err != nil {
+		return nil, err
 	}
 	in.ColorHex = ValidateColorHex(in.ColorHex)
 

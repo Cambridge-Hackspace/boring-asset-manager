@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -14,12 +15,16 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 
 	_ "github.com/lib/pq"
 	_ "modernc.org/sqlite"
 )
+
+// ErrUnsupportedDatabase is returned by Open for a database BAM cannot use.
+var ErrUnsupportedDatabase = errors.New("unsupported database")
 
 // Store wraps the database connection pool.
 type Store struct {
@@ -95,6 +100,12 @@ func Open(cfg *config.DatabaseConfig) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("pinging database: %w", err)
 	}
+	if cfg.Type == "postgres" {
+		if err := checkPostgresEncoding(db); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
 
 	return &Store{
 		DB:      db,
@@ -155,9 +166,16 @@ func sqliteDSN(dsn string) string {
 	return path + "?" + q.Encode()
 }
 
-// mariaDBDSN forces the driver options the store depends on: parseTime so DATETIME
-// columns scan into time.Time, and UTC as the connection location so timestamps
-// round-trip unchanged.
+// mariaDBSQLMode is the session SQL mode: strict, so text too long for its
+// column is an error rather than cut short, and without the modes that change
+// how SQL parses (ANSI_QUOTES, NO_BACKSLASH_ESCAPES, PIPES_AS_CONCAT).
+const mariaDBSQLMode = "STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+
+// mariaDBDSN forces the driver options and session settings the store depends
+// on, whatever the DSN or the server's defaults say: parseTime so DATETIME
+// columns scan into time.Time; UTC as the connection location and the session
+// time zone, so timestamps round-trip unchanged; a utf8mb4 connection, so text
+// arrives as sent rather than reinterpreted as Latin-1; and mariaDBSQLMode.
 func mariaDBDSN(dsn string) (string, error) {
 	mcfg, err := mysql.ParseDSN(dsn)
 	if err != nil {
@@ -165,7 +183,27 @@ func mariaDBDSN(dsn string) (string, error) {
 	}
 	mcfg.ParseTime = true
 	mcfg.Loc = time.UTC
+	if mcfg.Params == nil {
+		mcfg.Params = map[string]string{}
+	}
+	mcfg.Params["charset"] = "utf8mb4"
+	mcfg.Params["time_zone"] = "'+00:00'"
+	mcfg.Params["sql_mode"] = "'" + mariaDBSQLMode + "'"
 	return mcfg.FormatDSN(), nil
+}
+
+// checkPostgresEncoding refuses a PostgreSQL database that is not UTF8: one
+// in another encoding cannot hold every character, and one in SQL_ASCII
+// checks nothing and counts lengths in bytes.
+func checkPostgresEncoding(db *sql.DB) error {
+	var encoding string
+	if err := db.QueryRow("SHOW server_encoding").Scan(&encoding); err != nil {
+		return fmt.Errorf("reading the database encoding: %w", err)
+	}
+	if !strings.EqualFold(encoding, "UTF8") {
+		return fmt.Errorf("%w: the database encoding is %s; create the database with ENCODING 'UTF8'", ErrUnsupportedDatabase, encoding)
+	}
+	return nil
 }
 
 // Close closes the database connection pool.
@@ -265,6 +303,9 @@ func (s *Store) CreateAdminUser(email, password string) (*models.User, error) {
 	normalized := auth.NormalizeEmail(email)
 	if normalized == "" {
 		return nil, fmt.Errorf("email cannot be empty")
+	}
+	if err := textcheck.Check("email", normalized, textcheck.MaxName); err != nil {
+		return nil, err
 	}
 	if password == "" {
 		return nil, fmt.Errorf("password cannot be empty")

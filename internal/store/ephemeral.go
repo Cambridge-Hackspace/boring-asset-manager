@@ -23,6 +23,14 @@ const (
 // (schema) or MariaDB (database) server reachable through adminDSN and opens a Store
 // confined to it. The returned cleanup function drops the namespace. It exists so
 // test suites can run in isolation against shared database servers.
+//
+// The namespace is deliberately unfriendly, as a server set up without BAM in
+// mind may be: on MariaDB the database defaults to latin1 with a
+// case-insensitive collation, and the session starts with no SQL modes (so
+// overlong text would be cut short silently), a Latin-1 connection and a time
+// zone far from UTC; on PostgreSQL the session time zone is far from UTC and
+// backslashes in string literals are escapes. Everything BAM needs, it must
+// set for itself.
 func OpenEphemeral(dialect, adminDSN string) (*Store, func(), error) {
 	suffix := make([]byte, 8)
 	if _, err := rand.Read(suffix); err != nil {
@@ -54,16 +62,23 @@ func OpenEphemeral(dialect, adminDSN string) (*Store, func(), error) {
 		} else {
 			isolateDSN = adminDSN + " search_path=" + name
 		}
+		isolateDSN = withPostgresParams(isolateDSN, hostilePostgres)
 
 	case "mariadb", "mysql":
 		driver = "mysql"
-		createSQL = "CREATE DATABASE " + name + " CHARACTER SET utf8mb4"
+		createSQL = "CREATE DATABASE " + name + " CHARACTER SET latin1 COLLATE latin1_swedish_ci"
 		dropSQL = "DROP DATABASE IF EXISTS " + name
 		mcfg, err := mysql.ParseDSN(adminDSN)
 		if err != nil {
 			return nil, nil, fmt.Errorf("parsing mariadb dsn: %w", err)
 		}
 		mcfg.DBName = name
+		if mcfg.Params == nil {
+			mcfg.Params = map[string]string{}
+		}
+		for k, v := range hostileMariaDB {
+			mcfg.Params[k] = v
+		}
 		isolateDSN = mcfg.FormatDSN()
 
 	default:
@@ -94,4 +109,37 @@ func OpenEphemeral(dialect, adminDSN string) (*Store, func(), error) {
 		_ = st.Close()
 		cleanup()
 	}, nil
+}
+
+// Session settings that OpenEphemeral starts each connection with.
+var (
+	hostilePostgres = map[string]string{
+		"TimeZone":                    "Pacific/Chatham",
+		"standard_conforming_strings": "off",
+	}
+	hostileMariaDB = map[string]string{
+		"charset":   "latin1",
+		"sql_mode":  "''",
+		"time_zone": "'+05:45'",
+	}
+)
+
+// withPostgresParams adds run-time parameters to a URL or key=value DSN.
+func withPostgresParams(dsn string, params map[string]string) string {
+	if strings.Contains(dsn, "://") {
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return dsn
+		}
+		q := u.Query()
+		for k, v := range params {
+			q.Set(k, v)
+		}
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+	for k, v := range params {
+		dsn += " " + k + "=" + v
+	}
+	return dsn
 }

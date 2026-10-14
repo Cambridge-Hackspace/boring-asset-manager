@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 	"github.com/google/uuid"
 )
 
@@ -48,7 +49,6 @@ const (
 	MaxFontSize       = 200.0 // points
 	DefaultMinFont    = 6.0   // points
 	MaxQuietZone      = 20    // modules
-	maxNameLength     = 255
 	maxBindingLength  = 1024
 	geometryTolerance = 1e-9
 )
@@ -158,8 +158,10 @@ func (t *Template) Validate() error {
 	if !idRegex.MatchString(t.ID) {
 		v.add("id", "must be 1-64 characters of lowercase letters, digits, '_' or '-', starting with a letter or digit")
 	}
-	if name := strings.TrimSpace(t.Name); name == "" || len(name) > maxNameLength {
-		v.add("name", fmt.Sprintf("must be 1-%d characters", maxNameLength))
+	if name := strings.TrimSpace(t.Name); name == "" {
+		v.add("name", fmt.Sprintf("must be 1-%d characters", textcheck.MaxName))
+	} else if p := textcheck.Problem(name, textcheck.MaxName); p != "" {
+		v.add("name", p)
 	}
 
 	unitsOK := t.Units == UnitsMM || t.Units == UnitsIn

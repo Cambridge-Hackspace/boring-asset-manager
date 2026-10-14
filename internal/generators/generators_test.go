@@ -43,11 +43,26 @@ func TestValidateGeneratorCode(t *testing.T) {
 	if err := ValidateGeneratorCode(TypeQR, ""); err == nil {
 		t.Errorf("expected error for empty qr code, got nil")
 	}
-	if err := ValidateGeneratorCode(TypeQR, strings.Repeat("a", 2953)); err != nil {
+	// Assigned codes are stored in 255 characters, whatever the symbology holds.
+	if err := ValidateGeneratorCode(TypeQR, strings.Repeat("€", 255)); err != nil {
+		t.Errorf("255-character qr code rejected: %v", err)
+	}
+	if err := ValidateGeneratorCode(TypeQR, strings.Repeat("a", 256)); err == nil {
+		t.Errorf("expected error for a 256-character qr code, got nil")
+	}
+	if err := ValidateGeneratorCode(TypeQR, "a\x00b"); err == nil {
+		t.Errorf("expected error for a qr code with a NUL, got nil")
+	}
+	// The symbology itself holds more.
+	qr, err := Lookup(TypeQR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := qr.Validate(strings.Repeat("a", 2953)); err != nil {
 		t.Errorf("2953-byte qr payload rejected: %v", err)
 	}
 	// 1000 three-byte runes: under any rune limit, but 3000 bytes exceeds version 40-L.
-	if err := ValidateGeneratorCode(TypeQR, strings.Repeat("€", 1000)); err == nil {
+	if err := qr.Validate(strings.Repeat("€", 1000)); err == nil {
 		t.Errorf("expected error for 3000-byte UTF-8 qr payload, got nil")
 	}
 	if err := ValidateGeneratorCode(TypeQR, "bad\xffutf8"); err == nil {

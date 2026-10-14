@@ -15,9 +15,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 	"github.com/google/uuid"
 )
 
@@ -168,14 +170,21 @@ func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 }
 
 // cleanFilename keeps a display name for an upload, dropping any directory
-// part a client sent.
+// part a client sent, control characters and bytes that are not UTF-8, and
+// anything past 255 characters.
 func cleanFilename(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(name, ""))
 	name = strings.TrimSpace(filepath.Base(strings.ReplaceAll(name, `\`, "/")))
 	if name == "" || name == "." || name == "/" {
 		return "image"
 	}
-	if len(name) > 255 {
-		name = strings.ToValidUTF8(name[:255], "")
+	if r := []rune(name); len(r) > textcheck.MaxName {
+		name = string(r[:textcheck.MaxName])
 	}
 	return name
 }

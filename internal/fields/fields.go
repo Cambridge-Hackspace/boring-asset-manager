@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
 var (
@@ -78,9 +79,15 @@ func ValidateSelectOptions(raw json.RawMessage) (*models.SelectOptions, error) {
 		if strings.TrimSpace(choice.Label) == "" {
 			return nil, errors.New("choice label cannot be empty")
 		}
+		if err := textcheck.Check("choice label", choice.Label, textcheck.MaxName); err != nil {
+			return nil, err
+		}
 		val := strings.TrimSpace(choice.Value)
 		if val == "" {
 			return nil, errors.New("choice value cannot be empty")
+		}
+		if err := textcheck.Check("choice value", val, textcheck.MaxName); err != nil {
+			return nil, err
 		}
 		if seen[val] {
 			return nil, fmt.Errorf("%w: duplicate value %q", ErrDuplicateChoiceValue, val)
@@ -102,8 +109,11 @@ func ValidateFieldDefinition(key, label, validationType string, rawOptions json.
 	if err := ValidateKey(key); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(label) == "" || len(label) > 255 {
+	if strings.TrimSpace(label) == "" {
 		return nil, ErrInvalidLabel
+	}
+	if err := textcheck.Check("field label", label, textcheck.MaxName); err != nil {
+		return nil, err
 	}
 	if !IsValidValidationType(validationType) {
 		return nil, ErrInvalidValidationType
@@ -121,6 +131,9 @@ func ValidateFieldValue(f *models.Field, val string) error {
 	// If the value is empty, validation depends on whether the field is required (checked separately in asset logic).
 	if val == "" {
 		return nil
+	}
+	if p := textcheck.Problem(val, textcheck.MaxValue); p != "" {
+		return fmt.Errorf("%w: the value %s", ErrInvalidFieldValue, p)
 	}
 
 	switch f.ValidationType {

@@ -2,6 +2,8 @@ package fields
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -121,5 +123,41 @@ func TestValidateFieldValue(t *testing.T) {
 	}
 	if err := ValidateFieldValue(selectField, "xl"); err == nil {
 		t.Errorf("invalid select choice accepted")
+	}
+}
+
+// TestStoredTextRules checks the labels, choices and values a field keeps
+// against the rules every database can hold: lengths in characters, no NUL.
+func TestStoredTextRules(t *testing.T) {
+	wrench := strings.Repeat("🔧", 255)
+	if _, err := ValidateFieldDefinition("k", wrench, TypeText, nil); err != nil {
+		t.Errorf("255-character label rejected: %v", err)
+	}
+	if _, err := ValidateFieldDefinition("k", wrench+"🔧", TypeText, nil); err == nil {
+		t.Error("256-character label accepted")
+	}
+	nul := "a" + string(rune(0)) + "b"
+	for name, raw := range map[string]string{
+		"overlong label": `{"choices":[{"label":"` + wrench + `🔧","value":"v"}]}`,
+		"overlong value": `{"choices":[{"label":"l","value":"` + wrench + `🔧"}]}`,
+		"NUL label":      `{"choices":[{"label":"a\u0000b","value":"v"}]}`,
+		"NUL value":      `{"choices":[{"label":"l","value":"a\u0000b"}]}`,
+	} {
+		if _, err := ValidateSelectOptions([]byte(raw)); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+	if _, err := ValidateSelectOptions([]byte(`{"choices":[{"label":"` + wrench + `","value":"` + wrench + `"}]}`)); err != nil {
+		t.Errorf("255-character choice rejected: %v", err)
+	}
+
+	text := &models.Field{ValidationType: TypeText}
+	if err := ValidateFieldValue(text, strings.Repeat("🔧", 10000)); err != nil {
+		t.Errorf("10,000-character value rejected: %v", err)
+	}
+	for name, v := range map[string]string{"overlong": strings.Repeat("x", 10001), "NUL": nul} {
+		if err := ValidateFieldValue(text, v); !errors.Is(err, ErrInvalidFieldValue) {
+			t.Errorf("%s value: %v", name, err)
+		}
 	}
 }

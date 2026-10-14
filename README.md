@@ -208,6 +208,16 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 * **Passwords:** stored as bcrypt hashes (cost 12). Every new password must be 8-72 bytes: 72 is the most bcrypt uses, so longer ones are refused rather than silently cut short.
 * **Session Store:** Stateful sessions stored in the active database (`sessions` table) referenced via an `HttpOnly`, `SameSite=Lax`, `Secure` cookie. The cookie holds a random 256-bit token; the table stores only its SHA-256 hash (migration `005`), so a copy of the database cannot be used to sign in.
 
+### 3.5 Stored Text
+
+Text behaves the same on every database, whatever the server's defaults:
+
+* **Rules:** text must be valid UTF-8 and may not contain a NUL character (PostgreSQL cannot store one). Names, labels, choices, codes and email addresses hold up to 255 characters, and field values up to 10,000; lengths count characters, not bytes. Text outside the rules is refused with `400` (or, in an import, a problem against its row and column), never cut short or altered. Uploaded image names are cleaned instead: control characters and invalid bytes are dropped, and the name is cut to 255 characters.
+* **Comparison is exact:** `Drill` and `drill`, or `é` written as one character and as `e` with a combining accent, are different codes and different channel names on every database.
+* **Search** (`search` on the asset list and export) finds the term anywhere in an asset's name or codes, ignoring case for every letter, not just ASCII. `%`, `_` and `\` have no special meaning.
+* **PostgreSQL** databases must use the `UTF8` encoding; BAM refuses to start on any other, including `SQL_ASCII`.
+* **MariaDB** needs nothing set up: BAM creates its tables in `utf8mb4` with the exact collation `utf8mb4_nopad_bin`, whatever the database's default, and sets each connection's character set, SQL mode (strict) and time zone (UTC) itself. Migration `008` converts tables created by earlier versions, which took the database's default (often `latin1` with a case-insensitive collation).
+
 ---
 
 ## 4. Label Template Engine & Print Subsystem
@@ -683,7 +693,7 @@ reaper down      # Tears down remote VM (cull daemon provides automatic TTL back
 Following the "Portfolio of Oracles" methodology:
 1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, bcrypt password hashing, boundary decoders, and cross-language barcode golden files (module matrices from Python's `segno`, scan checks with `zxing-cpp`) alongside byte-exact SVG, PNG, PDF and printer-stream goldens.
 2. **Tier 4 — Server Contract Tests:** RBAC permission union resolution and anti-lockout invariants tested as in-process pure functions without database dependencies.
-3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB drivers initialized against hostile environments (e.g. non-UTF8 charsets), verifying migration idempotence. The store and API suites run against PostgreSQL and MariaDB by pointing them at a server (see §8.3). The integration battery (`internal/integration`) drives a real server over HTTP on each database: inheritance conflict resolution, administrators removing each other at the same moment, a template rendered before and after a database round trip (byte-identical SVG, and SVG and PDF goldens written on SQLite that every database must reproduce; `go test ./internal/integration/ -update` rewrites them), import atomicity, threshold crossings including simultaneous archives, and exactly-once delivery from several workers to several channels.
+3. **Tier 6 — Full Stack & Migrations:** SQLite, PostgreSQL, and MariaDB, with migration idempotence. The test databases on PostgreSQL and MariaDB are deliberately hostile (§8.3), and `internal/integration` checks that awkward text (four-byte characters, combining marks, right-to-left text, SQL quotes and wildcards, the longest text allowed) survives storage everywhere the API keeps text, that NUL characters and overlong text are refused alike on every database, that text differing only in case or normalization stays distinct, and that search treats its term literally. The store suite upgrades a MariaDB database created before migration `008`, data and all, and resumes a conversion that stopped part way, and checks that PostgreSQL databases in `LATIN1` and `SQL_ASCII` are refused. The store and API suites run against PostgreSQL and MariaDB by pointing them at a server (see §8.3). The integration battery (`internal/integration`) drives a real server over HTTP on each database: inheritance conflict resolution, administrators removing each other at the same moment, a template rendered before and after a database round trip (byte-identical SVG, and SVG and PDF goldens written on SQLite that every database must reproduce; `go test ./internal/integration/ -update` rewrites them), import atomicity, threshold crossings including simultaneous archives, and exactly-once delivery from several workers to several channels.
 4. **Tier 7 — Seeded Fuzzing:** Deterministic input fuzzing asserting no 500 crashes, valid JSON envelopes, and daemon liveness.
 5. **Tier 8 — Concurrency Harnesses:** Simultaneous write simulations for inventory threshold decrements and per-generator ID allocations, asserting stored state consistency.
 6. **State Rollback:** Ephemeral databases and uploads live under `$REAPER_STATE` (`tank/state`), enabling near-instantaneous ZFS rollbacks to `@pristine` between test iterations.
@@ -699,7 +709,9 @@ The Go suites, and therefore reaper, do not run these; adding them to the reaper
 
 ### 8.3 Running the Suites Against PostgreSQL and MariaDB
 
-By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store, API, notification, CSV and integration suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
+By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store, API, notification, CSV and integration suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that; on PostgreSQL it must also be allowed to create databases, for the encoding tests.
+
+These namespaces are deliberately hostile, as a server set up without BAM in mind may be: on MariaDB the database defaults to `latin1` with a case-insensitive collation, and each session starts with a Latin-1 connection, no SQL modes and the time zone `+05:45`; on PostgreSQL each session starts in `Pacific/Chatham` time with `standard_conforming_strings` off. Everything BAM needs, it sets for itself (§3.5).
 
 ```bash
 BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/ ./internal/integration/
@@ -712,4 +724,6 @@ Portability rules for schema and queries:
 * Avoid reserved identifiers (`key` is reserved in MariaDB, which is why the corpus, permission and settings columns are `field_key`, `permission_key` and `setting_key`).
 * Declare foreign keys at table level.
 * Use `TIMESTAMP` in migrations; the runner rewrites it to `DATETIME(6)` on MariaDB, where `TIMESTAMP` columns silently gain `ON UPDATE CURRENT_TIMESTAMP`.
-* The MariaDB driver is always opened with `parseTime=true` and `loc=UTC`.
+* The MariaDB driver is always opened with `parseTime=true` and `loc=UTC`, a `utf8mb4` connection, a strict SQL mode and the session time zone `+00:00`.
+* Use `TEXT` for unbounded text; the runner rewrites it to `LONGTEXT` on MariaDB, where `TEXT` holds only 65,535 bytes, and creates every table in `utf8mb4` with `utf8mb4_nopad_bin`. A change that depends on the dialect or on what is in the database can be a Go migration (`codeMigrations` in `internal/store/migrations`).
+* Check text with `internal/textcheck` before it is stored, and do not match user input with `LIKE`, whose wildcards, escapes and case folding differ between databases.

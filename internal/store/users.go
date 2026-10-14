@@ -8,6 +8,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 	"github.com/google/uuid"
 )
 
@@ -125,6 +126,9 @@ func (s *Store) CreateUser(email, password string, isActive bool) (*models.User,
 	normalized := auth.NormalizeEmail(email)
 	if normalized == "" {
 		return nil, errors.New("email cannot be empty")
+	}
+	if err := textcheck.Check("email", normalized, textcheck.MaxName); err != nil {
+		return nil, err
 	}
 	hash, err := auth.HashPassword(password)
 	if err != nil {
