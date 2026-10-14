@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sort"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 // LoginRequest defines the JSON body for authenticating a session.
@@ -91,4 +93,34 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		"user":        user,
 		"permissions": permsList,
 	})
+}
+
+// ChangePasswordRequest changes the signed-in user's own password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// handleChangePassword changes the signed-in user's password and ends their
+// other sessions: PUT /api/v1/auth/password
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	user, sess := CurrentUser(r.Context()), CurrentSession(r.Context())
+	if user == nil || sess == nil {
+		writeJSONError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	err := s.store.ChangePassword(user.ID, req.CurrentPassword, req.NewPassword, sess.ID)
+	switch {
+	case errors.Is(err, store.ErrWrongPassword), errors.Is(err, auth.ErrPasswordPolicy):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeJSONError(w, http.StatusInternalServerError, "Failed to change password")
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed"})
+	}
 }

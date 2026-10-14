@@ -47,12 +47,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Authenticated session endpoints
 	mux.Handle("POST /api/v1/auth/logout", RequireAuth(http.HandlerFunc(s.handleLogout)))
 	mux.Handle("GET /api/v1/auth/me", RequireAuth(http.HandlerFunc(s.handleAuthMe)))
+	mux.Handle("PUT /api/v1/auth/password", RequireAuth(http.HandlerFunc(s.handleChangePassword)))
 
 	// User administration endpoints (requires users:manage)
 	mux.Handle("GET /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListUsers)))
 	mux.Handle("POST /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateUser)))
 	mux.Handle("PATCH /api/v1/users/{id}/status", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateUserStatus)))
 	mux.Handle("DELETE /api/v1/users/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteUser)))
+	mux.Handle("PUT /api/v1/users/{id}/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserRoles)))
+	mux.Handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 
 	// Field Corpus endpoints
 	mux.Handle("GET /api/v1/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListFields)))
@@ -68,6 +71,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PUT /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateCategory)))
 	mux.Handle("DELETE /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategory)))
 	mux.Handle("GET /api/v1/categories/{id}/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategoryEffectiveFields)))
+	mux.Handle("POST /api/v1/categories/effective-fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleEffectiveFieldsForAsset)))
 	mux.Handle("POST /api/v1/categories/{id}/fields", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleAssignCategoryField)))
 	mux.Handle("DELETE /api/v1/categories/{id}/fields/{field_id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleRemoveCategoryField)))
 
