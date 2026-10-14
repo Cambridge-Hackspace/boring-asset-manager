@@ -411,7 +411,7 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 
 * Categories tagged with `is_consumable = true` support an `is_running_low` flag. Only consumable categories may carry it.
 * **Manual:** `PUT /api/v1/categories/{id}/running-low` with `{"running_low": true|false}` sets or clears it. It needs only `assets:write`, so the people handling stock can flag it without being able to edit categories. Editing the category (`categories:manage`) can set it too.
-* **Inventory thresholds:** a consumable category may have an optional `low_stock_threshold` (a positive integer, or `null` for none). Its *active count* is the number of distinct active (not archived) assets in the category or any of its descendants; an asset in two subcategories counts once.
+* **Inventory thresholds:** a consumable category may have an optional `low_stock_threshold` (a positive integer, or `null` for none). Its *active count* is the number of distinct active (not archived) assets in the category or any of its descendants; an asset in two subcategories counts once. `GET /api/v1/categories/{id}` reports it as `active_count`.
   * When the active count drops below the threshold, the category flags itself as running low. When it climbs back to the threshold or above, it clears itself.
   * The rule reacts to the count *crossing* the threshold, not to its level. A manual change stands until the count next crosses, so the automatic rule never undoes a person's decision.
   * Anything that changes an active count is checked: creating, archiving, deleting or recategorizing assets; moving or deleting categories; imports (checked once, after the whole file); and changing the threshold itself (setting it above the current count flags at once).
@@ -640,9 +640,9 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 Sub-phases land in order, each with its tests, and leave the tree releasable.
 
 #### Sub-Phase 5.1: Running Low & Inventory Thresholds
-* [ ] `PUT /api/v1/categories/{id}/running-low` (`assets:write`), changing the flag only on a real transition.
-* [ ] `low_stock_threshold` on consumable categories, with active counts over the category's subtree, re-checked by every change that can move a count, under an application lock.
-* [ ] Running-low events recorded in the same transaction as the change.
+* [x] `PUT /api/v1/categories/{id}/running-low` (`assets:write`), changing the flag only on a real transition.
+* [x] `low_stock_threshold` on consumable categories, with active counts over the category's subtree, re-checked by every change that can move a count, under an application lock.
+* [x] Running-low events recorded in the same transaction as the change.
 
 #### Sub-Phase 5.2: Notifier Framework & Discord
 * [ ] The notifier driver registry, channels with secret options, and `/api/v1/notifiers`.

@@ -76,7 +76,7 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := s.store.CreateAsset(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues)
+	asset, err := s.actingStore(r).CreateAsset(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues)
 	if errors.Is(err, store.ErrGeneratorCodeExists) {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return
@@ -104,7 +104,7 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := s.store.UpdateAsset(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues)
+	asset, err := s.actingStore(r).UpdateAsset(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 		return
@@ -130,7 +130,7 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := s.store.DeleteAsset(id)
+	err := s.actingStore(r).DeleteAsset(id)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 		return

@@ -154,23 +154,29 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 	assetID := uuid.NewString()
 	now := time.Now().UTC()
 
-	tx, err := s.DB.Begin()
+	err = s.withInventory(func(ic *inventoryChange) error {
+		return s.insertAsset(ic.tx, assetID, name, now, cats, generatorKeys, resolvedValues)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("beginning asset transaction: %w", err)
+		return nil, err
 	}
-	defer tx.Rollback()
 
+	return s.GetAssetByID(assetID)
+}
+
+// insertAsset writes a new, validated asset within tx.
+func (s *Store) insertAsset(tx *sql.Tx, assetID, name string, now time.Time, cats []string, generatorKeys []models.AssetGeneratorKey, resolvedValues map[string]string) error {
 	// Insert asset
-	_, err = s.TxExec(tx, "INSERT INTO assets (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)", assetID, name, now, now)
+	_, err := s.TxExec(tx, "INSERT INTO assets (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)", assetID, name, now, now)
 	if err != nil {
-		return nil, fmt.Errorf("inserting asset: %w", err)
+		return fmt.Errorf("inserting asset: %w", err)
 	}
 
 	// Insert categories
 	for _, cid := range cats {
 		_, err = s.TxExec(tx, "INSERT INTO asset_categories (asset_id, category_id) VALUES (?, ?)", assetID, cid)
 		if err != nil {
-			return nil, fmt.Errorf("attaching category %s: %w", cid, err)
+			return fmt.Errorf("attaching category %s: %w", cid, err)
 		}
 	}
 
@@ -180,9 +186,9 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 		if err != nil {
 			errMsg := strings.ToLower(err.Error())
 			if strings.Contains(errMsg, "unique") || strings.Contains(errMsg, "duplicate") {
-				return nil, fmt.Errorf("%w (%s: %s)", ErrGeneratorCodeExists, gk.GeneratorType, gk.AssignedCode)
+				return fmt.Errorf("%w (%s: %s)", ErrGeneratorCodeExists, gk.GeneratorType, gk.AssignedCode)
 			}
-			return nil, fmt.Errorf("inserting generator key: %w", err)
+			return fmt.Errorf("inserting generator key: %w", err)
 		}
 	}
 
@@ -193,15 +199,10 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 		}
 		_, err = s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", assetID, fieldID, val, now)
 		if err != nil {
-			return nil, fmt.Errorf("inserting field value: %w", err)
+			return fmt.Errorf("inserting field value: %w", err)
 		}
 	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("committing asset: %w", err)
-	}
-
-	return s.GetAssetByID(assetID)
+	return nil
 }
 
 // GetAssetByID retrieves an asset and resolves its assigned categories, generator keys, and field values.
@@ -218,7 +219,7 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 
 	// Categories
 	catQuery := `
-		SELECT c.id, c.name, c.parent_id, c.color_hex, c.is_consumable, c.is_running_low, c.created_at, c.updated_at
+		SELECT ` + categoryColumns("c.") + `
 		FROM asset_categories ac
 		JOIN categories c ON ac.category_id = c.id
 		WHERE ac.asset_id = ?
@@ -233,15 +234,9 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 	var categories []models.Category
 	var catIDs []string
 	for rows.Next() {
-		var (
-			c         models.Category
-			parentVal sql.NullString
-		)
-		if err := rows.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.IsRunningLow, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		c, err := scanCategory(rows)
+		if err != nil {
 			return nil, err
-		}
-		if parentVal.Valid && parentVal.String != "" {
-			c.ParentID = &parentVal.String
 		}
 		categories = append(categories, c)
 		catIDs = append(catIDs, c.ID)
@@ -441,27 +436,33 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 	}
 
 	now := time.Now().UTC()
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("beginning update transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Update asset name & updated_at
-	_, err = s.TxExec(tx, "UPDATE assets SET name = ?, updated_at = ? WHERE id = ?", name, now, id)
+	err = s.withInventory(func(ic *inventoryChange) error {
+		return s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues)
+	})
 	if err != nil {
 		return nil, err
+	}
+
+	return s.GetAssetByID(id)
+}
+
+// updateAssetTx writes a validated asset update within tx.
+func (s *Store) updateAssetTx(tx *sql.Tx, id, name string, now time.Time, cats []string, replaceKeys bool, generatorKeys []models.AssetGeneratorKey, resolvedValues map[string]string) error {
+	// Update asset name & updated_at
+	_, err := s.TxExec(tx, "UPDATE assets SET name = ?, updated_at = ? WHERE id = ?", name, now, id)
+	if err != nil {
+		return err
 	}
 
 	// Update categories
 	_, err = s.TxExec(tx, "DELETE FROM asset_categories WHERE asset_id = ?", id)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, cid := range cats {
 		_, err = s.TxExec(tx, "INSERT INTO asset_categories (asset_id, category_id) VALUES (?, ?)", id, cid)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -469,16 +470,16 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 	if replaceKeys {
 		_, err = s.TxExec(tx, "DELETE FROM asset_generator_keys WHERE asset_id = ?", id)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, gk := range generatorKeys {
 			_, err = s.TxExec(tx, "INSERT INTO asset_generator_keys (asset_id, generator_type, assigned_code) VALUES (?, ?, ?)", id, gk.GeneratorType, gk.AssignedCode)
 			if err != nil {
 				errMsg := strings.ToLower(err.Error())
 				if strings.Contains(errMsg, "unique") || strings.Contains(errMsg, "duplicate") {
-					return nil, fmt.Errorf("%w (%s: %s)", ErrGeneratorCodeExists, gk.GeneratorType, gk.AssignedCode)
+					return fmt.Errorf("%w (%s: %s)", ErrGeneratorCodeExists, gk.GeneratorType, gk.AssignedCode)
 				}
-				return nil, err
+				return err
 			}
 		}
 	}
@@ -488,21 +489,17 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 		// Delete prior value for this specific field and insert new one
 		_, err = s.TxExec(tx, "DELETE FROM asset_field_values WHERE asset_id = ? AND field_id = ?", id, fieldID)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if val != "" {
 			_, err = s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", id, fieldID, val, now)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("committing asset update: %w", err)
-	}
-
-	return s.GetAssetByID(id)
+	return nil
 }
 
 // DeleteAsset soft-deletes an asset by setting its archived_at timestamp and releasing its generator codes.
@@ -512,29 +509,21 @@ func (s *Store) DeleteAsset(id string) error {
 		return err
 	}
 
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return fmt.Errorf("beginning archive transaction: %w", err)
-	}
-	defer tx.Rollback()
+	return s.withInventory(func(ic *inventoryChange) error {
+		now := time.Now().UTC()
+		_, err := s.TxExec(ic.tx, "UPDATE assets SET archived_at = ?, updated_at = ? WHERE id = ?", now, now, id)
+		if err != nil {
+			return fmt.Errorf("archiving asset: %w", err)
+		}
 
-	now := time.Now().UTC()
-	_, err = s.TxExec(tx, "UPDATE assets SET archived_at = ?, updated_at = ? WHERE id = ?", now, now, id)
-	if err != nil {
-		return fmt.Errorf("archiving asset: %w", err)
-	}
-
-	// Generator codes are unique only across active assets, so an archived asset
-	// releases its codes for reassignment.
-	_, err = s.TxExec(tx, "DELETE FROM asset_generator_keys WHERE asset_id = ?", id)
-	if err != nil {
-		return fmt.Errorf("releasing generator keys: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("committing asset archive: %w", err)
-	}
-	return nil
+		// Generator codes are unique only across active assets, so an archived asset
+		// releases its codes for reassignment.
+		_, err = s.TxExec(ic.tx, "DELETE FROM asset_generator_keys WHERE asset_id = ?", id)
+		if err != nil {
+			return fmt.Errorf("releasing generator keys: %w", err)
+		}
+		return nil
+	})
 }
 
 // EffectiveFieldsForAsset resolves the fields an asset in these categories

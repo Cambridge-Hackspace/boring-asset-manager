@@ -70,6 +70,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/categories/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategory)))
 	mux.Handle("PUT /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateCategory)))
 	mux.Handle("DELETE /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategory)))
+	mux.Handle("PUT /api/v1/categories/{id}/running-low", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleSetRunningLow)))
 	mux.Handle("GET /api/v1/categories/{id}/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategoryEffectiveFields)))
 	mux.Handle("POST /api/v1/categories/effective-fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleEffectiveFieldsForAsset)))
 	mux.Handle("POST /api/v1/categories/{id}/fields", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleAssignCategoryField)))
@@ -183,4 +184,13 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"base_url": s.cfg.Server.BaseURL,
 		"dialect":  s.store.Dialect,
 	})
+}
+
+// actingStore is the store with changes attributed to the signed-in user, for
+// the events they cause.
+func (s *Server) actingStore(r *http.Request) *store.Store {
+	if u := CurrentUser(r.Context()); u != nil {
+		return s.store.As(u.ID)
+	}
+	return s.store
 }
