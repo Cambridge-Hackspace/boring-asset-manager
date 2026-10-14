@@ -72,7 +72,7 @@ var (
 )
 
 func init() {
-	for _, d := range []Driver{brotherQL{}, dymoLabelWriter{}} {
+	for _, d := range []Driver{brotherQL{}, dymoLabelWriter{}, tsplDriver{}} {
 		if err := Register(d); err != nil {
 			panic(err)
 		}

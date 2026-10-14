@@ -21,6 +21,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 	"github.com/google/uuid"
@@ -490,6 +491,57 @@ func TestPrintToDymoLabelWriter(t *testing.T) {
 		}
 	}
 	if dark < 10000 {
+		t.Errorf("label has only %d dark dots", dark)
+	}
+}
+
+func TestPrintToRollo(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	rollo := newFakeQL(t)
+
+	body := `{"name":"Rollo","driver":"tspl","model":"Rollo X1038","host":"127.0.0.1","port":` + strconv.Itoa(rollo.port()) +
+		`,"media":"2x1","options":{"density":10}}`
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Printer models.Printer `json:"printer"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	tmpl := `{"id":"rollo2x1","name":"Rollo 2x1","units":"in","width":2,"height":1,"dpi":203,"elements":[
+  {"type":"generator","generator_type":"qr","x":0.1,"y":0.1,"width":0.8,"height":0.8,"content_binding":"{{base_url}}/a/{{asset.id}}"},
+  {"type":"text","x":1,"y":0.2,"width":0.9,"height":0.4,"font_size":10,"font_weight":"bold","content_binding":"{{asset.name}}"}]}`
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", tmpl); rec.Code != http.StatusCreated {
+		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
+	}
+	a, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	b, _ := srv.store.CreateAsset("Saw", nil, nil, nil)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print",
+		`{"template_id":"rollo2x1","asset_ids":["`+a.Asset.ID+`","`+b.Asset.ID+`"],"copies":2}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
+	}
+
+	job, err := tspl.DecodeJob(rollo.waitForJobs(t, 1, 3*time.Second)[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(job.Labels) != 2 || job.Labels[0].Copies != 2 || job.Labels[1].Copies != 2 {
+		t.Fatalf("decoded %d labels: %+v", len(job.Labels), job.Labels)
+	}
+	if setup := strings.Join(job.Setup, "|"); setup != "SIZE 50.8 mm,25.4 mm|GAP 3.2 mm,0 mm|DIRECTION 0,0|REFERENCE 0,0|DENSITY 10" {
+		t.Errorf("setup = %q", setup)
+	}
+	dark := 0
+	for _, v := range job.Labels[0].Image.Pix {
+		if v < 0x80 {
+			dark++
+		}
+	}
+	if dark < 5000 {
 		t.Errorf("label has only %d dark dots", dark)
 	}
 }

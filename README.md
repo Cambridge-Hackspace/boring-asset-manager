@@ -4,7 +4,7 @@
 
 > Excruciatingly simple physical asset label generation and tracker.
 
-BAM! is a single-tenant, API-first web application designed for tracking physical assets, managing hierarchical categories with dynamic field inheritance, and visually designing and batch-printing labels for dedicated thermal label printers (such as the Brother QL-810W and DYMO LabelWriter) as well as standard sheet layouts.
+BAM! is a single-tenant, API-first web application designed for tracking physical assets, managing hierarchical categories with dynamic field inheritance, and visually designing and batch-printing labels for dedicated thermal label printers (such as the Brother QL-810W, DYMO LabelWriter and Rollo) as well as standard sheet layouts.
 
 ---
 
@@ -21,7 +21,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 - **Frontend:** TypeScript + Svelte (or React/Vite) with a lightweight 2D canvas/SVG label layout engine and Tailwind CSS for accessible, high-contrast, colorful category UI components.
 - **Label Generation & Printing:**
   - **Pure-Go Rendering:** One layout engine feeds SVG, PNG and PDF backends (§4). Fonts, glyph outlines and rasterization come from `golang.org/x/image` (the embedded Go fonts, OpenType parsing and its vector rasterizer); the PDF writer is a small in-house one so output stays deterministic.
-  - **Direct Network Printing:** Raw TCP dispatch (port 9100) of each printer's own raster command stream (Brother QL, DYMO LabelWriter) through pluggable print drivers, with no desktop driver or print dialog.
+  - **Direct Network Printing:** Raw TCP dispatch (port 9100) of each printer's own raster command stream (Brother QL, DYMO LabelWriter, TSPL) through pluggable print drivers, with no desktop driver or print dialog.
 - **Barcode & Matrix Engine:** In-house QR Code, Micro QR and Code 128 encoders with per-generator payload and character set validation (§4.2).
 
 ---
@@ -245,7 +245,7 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
 ```
 
 * **ID:** a slug matching `^[a-z0-9][a-z0-9_-]{0,63}$`, chosen by the author.
-* **Canvas:** `units` is `mm` or `in`; `width` and `height` are positive; `dpi` is 150–600 (Brother QL and DYMO LabelWriter printers print at 300). Positions and sizes use the template's units with the origin at the top-left corner, and every element must lie inside the canvas. `font_size` is always in points.
+* **Canvas:** `units` is `mm` or `in`; `width` and `height` are positive; `dpi` is 150–600 (Brother QL and DYMO LabelWriter printers print at 300, Rollo and most TSPL printers at 203). Positions and sizes use the template's units with the origin at the top-left corner, and every element must lie inside the canvas. `font_size` is always in points.
 * **Content bindings:** `content_binding` is literal text with `{{...}}` placeholders:
 
   | Placeholder | Resolves to |
@@ -320,7 +320,7 @@ type Plan interface {
 
 The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` (raw TCP today). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models, media and options.
 
-Two drivers ship today: `brother_ql` and `dymo_labelwriter`. Option values are listed by the drivers endpoint, and unknown options are refused.
+Three drivers ship today: `brother_ql`, `dymo_labelwriter` and `tspl`. Option values are listed by the drivers endpoint, and unknown options are refused.
 
 #### `brother_ql`
 
@@ -343,6 +343,17 @@ Options: `density` (`light`, `medium`, `normal` or `dark`; default `normal`) and
 * **Raster stream, first generation:** one ESC more than the longest raster line (85, or 157 on the 4XL) to resynchronize, text mode, density, the roll on twin models, and the label length (a little over the label on die-cut rolls, `0xFFFF` for continuous). Then each line is trimmed of blank bytes at both ends and sent run-length compressed when that is shorter, with dot tab and bytes per line sent only when they change and runs of blank lines as skips. Labels are separated by short form feeds, and a form feed after the last brings it to the tear bar. Blank lines at the end of a die-cut label are left to the form feed.
 * **Raster stream, second generation:** a job header (random job ID, density, text quality, default media type). Then per label: the label length (0 for die-cut, `0xFFFF` for continuous), a label index, a print data header and uncompressed lines. After a final form feed, an end-of-job command closes the job. The 550 series only prints on genuine DYMO labels it can identify, whatever the driver sends.
 * **Connection:** the LabelWriter 400 and 450 series and the 4XL have only a USB port. Until BAM has a transport for locally attached printers, reach them through a raw print server on port 9100, such as `p910nd` on the machine the printer is plugged into. The 550 Turbo, 5XL and Wireless have network ports.
+
+#### `tspl`
+
+For printers that speak TSPL, the label language of TSC printers that many inexpensive 4-inch direct thermal printers also use. Models: Rollo X1038 and X1040, Munbyn ITPP941, and generic 203 DPI and 300 DPI TSPL printers. The driver follows TSC's *TSPL/TSPL2 Programming Manual*.
+
+Options: `density` (0–15; unset keeps the printer's own setting) and `rotate_180` (default `false`) to print labels the other way up.
+
+* **Media catalog:** these printers take any label size up to their head width, so the catalog lists common sizes rather than part numbers: 4 × 6, 4 × 4, 4 × 3, 4 × 2, 3 × 2, 3 × 1, 2.25 × 1.25, 2 × 1, 1.5 × 1 and 1 × 1 in die-cut labels with a 1/8 in gap, and 4 in and 2 in continuous.
+* **Fit check:** the template's DPI must match the model (203 for the Rollo), one side must be the label width (±0.5 mm) and, on die-cut rolls, the other the label length; continuous labels must be 10–1000 mm. A template whose height is the label width is rotated 90° counterclockwise.
+* **Program:** `SIZE`, `GAP`, `DIRECTION`, `REFERENCE` and optionally `DENSITY`, then for each distinct label `CLS`, one `BITMAP` holding the whole label (a 0 bit prints a dot) centered across the label, and `PRINT 1,n` with `n` the copies. None of the printer's own fonts or barcode commands are used, so output matches the SVG and PDF exports.
+* **Connection:** the X1038 has only a USB port; the X1040 is reached over the network.
 
 #### Delivery
 
@@ -508,6 +519,11 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 * [x] Implement the `dymo_labelwriter` driver for both LabelWriter raster languages (`internal/printers/dymolw`), with models, media catalog, fit check, rotation, and `density` and `roll` options.
 * [x] Test against expectations worked out from DYMO's technical reference manual, golden byte streams per protocol and head width, a stream decoder that rebuilds each label's bitmap, and an end-to-end print through the API to a fake printer.
 * [ ] Check printing on a real LabelWriter 400 or 450 (manual; outside reaper).
+
+#### Sub-Phase 3.7: TSPL Printing
+* [x] Implement the `tspl` driver (`internal/printers/tspl`) for Rollo and other TSPL printers, with models, a media catalog of common sizes, fit check, rotation, copies as `PRINT` counts, and `density` and `rotate_180` options.
+* [x] Test against expectations worked out from TSC's programming manual, golden programs, a decoder that rebuilds each bitmap, and an end-to-end print through the API to a fake printer.
+* [ ] Check printing on a real Rollo X1038 (manual; outside reaper).
 
 ### Phase 4: Frontend Application
 
