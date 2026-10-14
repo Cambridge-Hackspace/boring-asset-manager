@@ -267,3 +267,28 @@ func TestRequestBodiesAreLimited(t *testing.T) {
 		t.Errorf("%d-byte image upload: got %d %s", buf.Len(), rec.Code, rec.Body.String())
 	}
 }
+
+// TestBatchesAreBounded lowers the bound on what a batch may hold and
+// checks a batch over it is refused with 422 rather than built, while one
+// under it is produced.
+func TestBatchesAreBounded(t *testing.T) {
+	srv, cookie, tagged, _ := labelFixture(t)
+	second, err := srv.store.CreateAsset("Lathe", nil, []models.AssetGeneratorKey{{GeneratorType: "micro_qr", AssignedCode: "BAM-0043"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := `["` + tagged + `","` + second.Asset.ID + `"]`
+	body := `{"template_id":"tag","format":"pdf","asset_ids":` + ids + `}`
+
+	saved := maxBatchParts
+	t.Cleanup(func() { maxBatchParts = saved })
+	maxBatchParts = 1
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export", body)
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "too detailed") {
+		t.Fatalf("over the bound: %d %s", rec.Code, rec.Body.String())
+	}
+	maxBatchParts = saved
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export", body); rec.Code != http.StatusOK {
+		t.Fatalf("under the bound: %d %s", rec.Code, rec.Body.String())
+	}
+}

@@ -83,21 +83,39 @@ func (fc *face) glyph(r rune) sfnt.GlyphIndex {
 
 // width returns the advance width of s in dots, including kerning.
 func (fc *face) width(s string) float64 {
-	var total fixed.Int26_6
-	prev := sfnt.GlyphIndex(0)
-	for i, r := range []rune(s) {
-		idx := fc.glyph(r)
-		if i > 0 {
-			if k, err := fc.font.Kern(&fc.buf, prev, idx, fc.ppem, font.HintingNone); err == nil {
-				total += k
-			}
-		}
-		if adv, err := fc.font.GlyphAdvance(&fc.buf, idx, fc.ppem, font.HintingNone); err == nil {
-			total += adv
-		}
-		prev = idx
+	return fixedToFloat(fc.extend(run{}, s).width)
+}
+
+// run is the measured advance of some text, kept so that more can be
+// appended without measuring it again. Advances and kerning are whole
+// 1/64ths of a dot, so a run extended piece by piece has exactly the width
+// of the whole text measured at once.
+type run struct {
+	width    fixed.Int26_6
+	last     sfnt.GlyphIndex
+	nonEmpty bool
+}
+
+// extend returns r with s appended.
+func (fc *face) extend(r run, s string) run {
+	for _, ch := range s {
+		r = fc.extendRune(r, ch)
 	}
-	return fixedToFloat(total)
+	return r
+}
+
+func (fc *face) extendRune(r run, ch rune) run {
+	idx := fc.glyph(ch)
+	if r.nonEmpty {
+		if k, err := fc.font.Kern(&fc.buf, r.last, idx, fc.ppem, font.HintingNone); err == nil {
+			r.width += k
+		}
+	}
+	if adv, err := fc.font.GlyphAdvance(&fc.buf, idx, fc.ppem, font.HintingNone); err == nil {
+		r.width += adv
+	}
+	r.last, r.nonEmpty = idx, true
+	return r
 }
 
 // outline appends the glyph outlines of s with its baseline starting at
@@ -153,10 +171,22 @@ func (b *textBlock) descent() float64    { return fixedToFloat(b.face.metrics.De
 // height is the block's extent from the first line's ascent to the last
 // line's descent.
 func (b *textBlock) height() float64 {
-	if len(b.lines) == 0 {
+	return b.heightOf(len(b.lines))
+}
+
+// enoughFor says when breaking text for a box height can stop: one line
+// after the lines that fit, which is enough to know the text does not fit,
+// and for truncate to know there was more.
+func (b *textBlock) enoughFor(height float64) func(n int) bool {
+	return func(n int) bool { return n > 1 && b.heightOf(n-1) > height }
+}
+
+// heightOf is the height of a block of n lines.
+func (b *textBlock) heightOf(n int) float64 {
+	if n == 0 {
 		return 0
 	}
-	return float64(len(b.lines)-1)*b.lineHeight() + b.ascent() + b.descent()
+	return float64(n-1)*b.lineHeight() + b.ascent() + b.descent()
 }
 
 func (b *textBlock) fits(width, height float64) bool {
@@ -196,13 +226,16 @@ func layoutText(e *labels.Element, text string, box image.Rectangle, dpi int) (P
 	}
 	sizes = append(sizes, e.MinFontSize)
 
+	paras := splitParagraphs(text, e.Wrap)
 	var block *textBlock
 	for _, size := range sizes {
 		fc, err := newFace(f, size, dpi)
 		if err != nil {
 			return nil, err
 		}
-		block = &textBlock{face: fc, lines: breakLines(fc, text, bw, e.Wrap)}
+		block = &textBlock{face: fc}
+		// Lines past the box's height cannot be shown; see enoughFor.
+		block.lines = paras.lines(fc, bw, block.enoughFor(bh))
 		if block.fits(bw, bh) {
 			break
 		}
@@ -229,29 +262,66 @@ func layoutText(e *labels.Element, text string, box image.Rectangle, dpi int) (P
 }
 
 // breakLines splits text at newlines and, when wrapping, between words so no
-// line is wider than width unless a single word is.
-func breakLines(fc *face, text string, width float64, wrap bool) []string {
-	paragraphs := strings.Split(text, "\n")
-	if !wrap {
-		return paragraphs
+// line is wider than width unless a single word is. It stops early once
+// enough(n) says n lines are enough.
+func breakLines(fc *face, text string, width float64, wrap bool, enough func(n int) bool) []string {
+	return splitParagraphs(text, wrap).lines(fc, width, enough)
+}
+
+// paragraphs is text split at newlines and, for wrapping, into words: once,
+// for every font size it is tried at.
+type paragraphs struct {
+	text  []string
+	words [][]string // nil when not wrapping
+}
+
+func splitParagraphs(text string, wrap bool) paragraphs {
+	p := paragraphs{text: strings.Split(text, "\n")}
+	if wrap {
+		p.words = make([][]string, len(p.text))
+		for i, para := range p.text {
+			p.words[i] = strings.Fields(para)
+		}
+	}
+	return p
+}
+
+// lines breaks the paragraphs into lines at fc's size, as breakLines does.
+func (p paragraphs) lines(fc *face, width float64, enough func(n int) bool) []string {
+	if p.words == nil {
+		return p.text
 	}
 	var lines []string
-	for _, para := range paragraphs {
-		words := strings.Fields(para)
+	for _, words := range p.words {
 		if len(words) == 0 {
 			lines = append(lines, "")
+			if enough(len(lines)) {
+				return lines
+			}
 			continue
 		}
-		line := words[0]
+		var line strings.Builder
+		line.WriteString(words[0])
+		measured := fc.extend(run{}, words[0])
 		for _, w := range words[1:] {
-			if candidate := line + " " + w; fc.width(candidate) <= width {
-				line = candidate
-			} else {
-				lines = append(lines, line)
-				line = w
+			if candidate := fc.extend(fc.extendRune(measured, ' '), w); fixedToFloat(candidate.width) <= width {
+				line.WriteByte(' ')
+				line.WriteString(w)
+				measured = candidate
+				continue
 			}
+			lines = append(lines, line.String())
+			if enough(len(lines)) {
+				return lines
+			}
+			line.Reset()
+			line.WriteString(w)
+			measured = fc.extend(run{}, w)
 		}
-		lines = append(lines, line)
+		lines = append(lines, line.String())
+		if enough(len(lines)) {
+			return lines
+		}
 	}
 	return lines
 }
@@ -273,14 +343,24 @@ func truncate(b *textBlock, width, height float64) {
 	}
 }
 
-// ellipsize shortens s until it and a trailing ellipsis fit in width.
+// ellipsize shortens s until it and a trailing ellipsis fit in width,
+// dropping spaces left at the end. Each prefix is measured once.
 func ellipsize(fc *face, s string, width float64) string {
 	runes := []rune(strings.TrimRight(s, " "))
-	for len(runes) > 0 && fc.width(string(runes)+ellipsis) > width {
-		runes = []rune(strings.TrimRight(string(runes[:len(runes)-1]), " "))
+	prefix := make([]run, len(runes)+1)
+	for i, r := range runes {
+		prefix[i+1] = fc.extendRune(prefix[i], r)
 	}
-	if len(runes) == 0 && fc.width(ellipsis) > width {
+	for n := len(runes); n > 0; n-- {
+		if runes[n-1] == ' ' {
+			continue
+		}
+		if fixedToFloat(fc.extend(prefix[n], ellipsis).width) <= width {
+			return string(runes[:n]) + ellipsis
+		}
+	}
+	if fc.width(ellipsis) > width {
 		return ""
 	}
-	return string(runes) + ellipsis
+	return ellipsis
 }

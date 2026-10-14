@@ -798,7 +798,7 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Every handler answers a caller's mistake with `4xx` and only a failure of the server with `5xx`: database failures are told apart by their driver errors (`store.IsDatabaseFailure`), a lost race on a unique value is `409`, and a session or permissions that cannot be read are `500`, not a sign-out. A `500` names what failed and leaves the database's message to the log. `TestDatabaseFailuresAreServerErrors` drops the tables behind every endpoint's working request and checks none answers `4xx` or passes SQL on.
 
 #### Sub-Phase 6.5: Expensive Inputs
-* [ ] Requests whose cost is out of proportion to their size are bounded.
+* [x] Requests whose cost is out of proportion to their size are bounded. Laying out text measures each line once rather than every candidate from scratch, splits it into words once, and stops breaking lines past the box: the worst a template allows (100 wrapped, shrinking elements bound to 10,000-character values) went from 25 seconds and 6 GB to under 0.1 second, with output unchanged (`TestTextLayoutMatchesTheReference` compares it with the old algorithm). Batches stop with `422` once their labels hold more than 5 million shapes.
 
 ---
 
