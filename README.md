@@ -13,16 +13,43 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 ### Core Philosophy
 - **Self-Contained Deployment:** Distributed as a single compiled binary for FreeBSD, Linux, and Windows with effortless `CGO_ENABLED=0` cross-compilation.
 - **Embedded Frontend:** The Go backend serves the compiled Single Page Application (SPA) directly via `embed.FS`.
-- **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, master secrets). All operational settings, network printer definitions, webhooks, and layouts live inside the database.
+- **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, storage paths, the printer device allowlist). All operational settings, network printer definitions, webhooks, and layouts live inside the database.
 
 ### Technology Choices
 - **Backend:** Go 1.23+ (Standard library `net/http` or router such as `chi`).
 - **Database Abstraction:** Dialect-agnostic SQL driver supporting **SQLite3** (via pure-Go `modernc.org/sqlite` with WAL mode for seamless cross-compilation without C toolchains), **PostgreSQL 14+**, and **MariaDB 10.6+**. Migrations managed via embedded SQL scripts (`golang-migrate` or custom embedded schema runner).
-- **Frontend:** TypeScript + Svelte (or React/Vite) with a lightweight 2D canvas/SVG label layout engine and Tailwind CSS for accessible, high-contrast, colorful category UI components.
+- **Frontend:** TypeScript + Svelte 5, built with Vite and styled with Tailwind CSS, embedded in the binary (see Frontend Architecture below). The template editor draws over the server's own SVG preview, so there is one layout engine, not two.
 - **Label Generation & Printing:**
   - **Pure-Go Rendering:** One layout engine feeds SVG, PNG and PDF backends (§4). Fonts, glyph outlines and rasterization come from `golang.org/x/image` (the embedded Go fonts, OpenType parsing and its vector rasterizer); the PDF writer is a small in-house one so output stays deterministic.
   - **Direct Printing:** Each printer's own command stream (Brother QL, DYMO LabelWriter, TSPL) from pluggable print drivers, sent over raw TCP (port 9100), to a USB device on the server, to a raw IPP/CUPS queue, or through the Windows spooler, with no desktop driver or print dialog.
 - **Barcode & Matrix Engine:** In-house QR Code, Micro QR and Code 128 encoders with per-generator payload and character set validation (§4.2).
+
+### Frontend Architecture
+
+The web interface is a Svelte 5 single-page application written in TypeScript, built with Vite and styled with Tailwind CSS. It talks only to the public `/api/v1` API, so anything it can do a script can do too, and the server remains the authority on every rule (validation, permissions, inheritance, layout).
+
+* **Layout:** the app lives in `web/`. `package.json` pins exact versions and `package-lock.json` is committed. Dependencies stay few: Svelte, Vite, TypeScript, Tailwind, and the test tools. There is no SvelteKit; routing is a small in-house history router.
+* **Build:** `tools/web/build.sh` runs `npm ci` and `vite build` in a pinned Node container and writes the output to `internal/webui/static/app/`, which is ignored by git. Release builds run it before `go build`.
+* **Embedding:** package `internal/webui` embeds `static/` with `embed.FS`. If the app has not been built, the binary serves a committed placeholder page saying so, so a plain `go build`, the Go test suites and reaper never need Node.
+* **Serving:** `/api/*`, `/healthz` and `/readyz` are unchanged. Every other `GET` serves a file from the build or, for client-side routes, `index.html`. Hashed assets are cached as immutable; `index.html` is never cached. Every page carries a strict Content Security Policy (`default-src 'self'`, with `data:` and `blob:` images for previews, inline style attributes for the editor's positioning, `frame-ancestors 'none'`), plus `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`.
+* **Sessions:** the app uses the existing `bam_session` cookie (`HttpOnly`, `SameSite=Lax`). On load it asks `GET /api/v1/auth/me` for the user and their permissions. Any `401` returns to the sign-in page and then back to where the user was.
+* **Permissions:** actions the user lacks are hidden or disabled, using the permission list from `/auth/me`. The server still checks every request.
+* **Errors:** validation errors from the API are shown beside the field or template element they name (template errors carry a `path`).
+* **Accessibility:** the target is WCAG 2.1 AA.
+  * Everything works from the keyboard, including the template editor: arrow keys nudge, Shift+arrow moves by a larger step, and Tab moves between elements.
+  * Focus is always visible, and every input has a label.
+  * Category colors are never the only signal; a name always accompanies them. Text on a category color is black or white, whichever contrasts more.
+  * The interface follows `prefers-color-scheme` and `prefers-reduced-motion`.
+* **Language:** American English throughout.
+
+#### Template Editor
+
+The editor never reimplements layout in the browser. The canvas shows the label as the server renders it, an SVG from `POST /api/v1/templates/preview`, requested at most a few times a second while the user works. Over it sits an interactive layer of element outlines. Text measurement, barcode module snapping and quiet zones therefore always match what prints.
+
+* **Editing:** select, drag and resize elements on a grid in the template's units, with keyboard nudging, multi-select, z-order and undo/redo. A side panel edits the selected element's properties by type: binding, font, size, weight and alignment for text; symbology and error correction for barcodes; the image for images. Bindings are offered from the field corpus and asset placeholders.
+* **Canvas:** units, size and DPI can be set directly or taken from a printer. Choosing a printer applies its loaded media's size and its DPI, and the fit check runs as the user edits.
+* **Preview:** placeholder data or a chosen asset. Exports and test prints come straight from the editor.
+* **Saving:** templates save through the existing API. Unsaved changes are kept in the browser in case the tab closes.
 
 ---
 
@@ -548,11 +575,48 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 
 ### Phase 4: Frontend Application
 
-* [ ] Initialize TypeScript + Vite SPA inside `frontend/`.
-* [ ] Embed compiled assets into the Go binary using Go 1.16+ `embed.FS`.
-* [ ] Build category navigation views with accessible color coding.
-* [ ] Implement asset management views with dynamic input forms based on inherited fields and generator ID validation.
-* [ ] Implement visual template editor (canvas-based node positioning and binding configuration) with print preview and direct network print triggers.
+Sub-phases land in order, each with its tests, and leave the tree releasable. Frontend checks (`svelte-check`, Vitest, Playwright) run in pinned Node and Playwright containers. The Go suites stay free of Node, and the frontend checks can be added to reaper once they exist.
+
+#### Sub-Phase 4.1: Scaffolding, Embedding & Shell
+* [ ] Create the Svelte 5 + TypeScript + Vite + Tailwind project in `web/` with exact pinned versions, `svelte-check` and Vitest.
+* [ ] Add `tools/web/build.sh`, building in a pinned Node container into `internal/webui/static/app/`.
+* [ ] Implement `internal/webui`: the embedded file server, history fallback to `index.html`, caching headers, security headers and the not-built placeholder, with Go tests for each.
+* [ ] Implement the typed API client (models mirroring `internal/models`, uniform error handling, `401` to sign-in), the session store, the router, sign-in and sign-out, and the app shell with permission-aware navigation.
+
+#### Sub-Phase 4.2: API Additions for the Interface
+* [ ] `POST /api/v1/categories/effective-fields` resolves the effective fields for a set of categories, for the asset form before the asset exists.
+* [ ] `GET /api/v1/roles` lists roles with their permissions; `PUT /api/v1/users/{id}/roles` sets a user's roles under the anti-lockout guard.
+* [ ] `PUT /api/v1/auth/password` lets a signed-in user change their own password, ending their other sessions.
+* [ ] Each with store and API tests across SQLite, PostgreSQL and MariaDB.
+
+#### Sub-Phase 4.3: Fields & Categories
+* [ ] Field corpus views: list, create, edit and delete, by type with select options.
+* [ ] Category tree with color swatches, consumable and running-low flags, and create, edit, move and delete.
+* [ ] Category field assignment, showing each effective field's source category and inherited constraints.
+
+#### Sub-Phase 4.4: Assets & Labels
+* [ ] Asset list with search, category filter and multi-select.
+* [ ] Asset detail.
+* [ ] Asset form generated from the effective fields of the chosen categories, re-resolved as they change, with generator keys and server errors shown beside the fields they name.
+* [ ] Archive an asset.
+* [ ] Label preview, PNG/PDF download and printing (printer, copies) for one asset; batch export and printing for a selection.
+
+#### Sub-Phase 4.5: Template Editor
+* [ ] Template list and editor shell: canvas settings, printer-derived size and DPI, and the fit check.
+* [ ] Server preview canvas with throttled requests, plus the interactive element layer: select, drag, resize, grid snapping, keyboard nudging, multi-select and z-order.
+* [ ] Property panels per element type, binding suggestions, image picking and upload.
+* [ ] Undo/redo, unsaved-change protection, and saving with server errors mapped to elements.
+* [ ] Preview against an asset, export, and test print from the editor.
+
+#### Sub-Phase 4.6: Administration
+* [ ] Printers: forms generated from `GET /api/v1/printers/drivers` (models, media, options and their values) and the connection types, with a test print.
+* [ ] Users and roles: list, create, activate and deactivate, archive and role assignment, with anti-lockout refusals explained.
+* [ ] Image library: upload, browse, see which templates use an image, delete.
+* [ ] Own password change.
+
+#### Sub-Phase 4.7: End-to-End & Accessibility Battery
+* [ ] Playwright tests in a pinned container against a real `bam serve` on a fresh SQLite database, covering sign-in, fields, categories, assets, the editor (including dragging and keyboard editing), exports, and printing to an in-process fake TCP printer whose received job is decoded and checked.
+* [ ] Automated accessibility checks (`axe-core`) on every view, plus keyboard-only walkthroughs of the main flows.
 
 ### Phase 5: Batch Operations & Webhooks
 
