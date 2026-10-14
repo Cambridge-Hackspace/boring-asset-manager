@@ -3,6 +3,8 @@ package store
 import (
 	"errors"
 	"testing"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
 )
 
 func TestCategoryRunningLowRequiresConsumable(t *testing.T) {
@@ -60,5 +62,40 @@ func TestMissingParentIsNotReportedAsMissingCategory(t *testing.T) {
 	}
 	if errors.Is(err, ErrCategoryNotFound) {
 		t.Errorf("a missing parent must not be reported as the target category being missing")
+	}
+}
+
+// A field assigned at several levels of the tree is attributed to the nearest
+// one. The lookup used to range over a map, so the reported source changed
+// from call to call.
+func TestEffectiveFieldSourceIsTheNearestAssignment(t *testing.T) {
+	st := setupTestStore(t)
+	serial, err := st.CreateField("serial_no", "Serial", fields.TypeText, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools, _ := st.CreateCategory("Tools", nil, "#112233", false, false)
+	power, _ := st.CreateCategory("Power tools", &tools.ID, "#445566", false, false)
+	drills, _ := st.CreateCategory("Drills", &power.ID, "#778899", false, false)
+	if err := st.AssignCategoryField(tools.ID, serial.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AssignCategoryField(power.ID, serial.ID, true); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 30; i++ {
+		for cat, want := range map[string]string{drills.ID: power.ID, power.ID: power.ID, tools.ID: tools.ID} {
+			got, err := st.GetEffectiveCategoryFields(cat)
+			if err != nil || len(got) != 1 {
+				t.Fatalf("effective fields of %s: %+v, %v", cat, got, err)
+			}
+			if got[0].SourceCategoryID != want {
+				t.Fatalf("source of serial in %s = %s, want %s", cat, got[0].SourceCategoryID, want)
+			}
+			if wantRequired := cat != tools.ID; got[0].IsRequired != wantRequired {
+				t.Fatalf("serial required in %s = %v", cat, got[0].IsRequired)
+			}
+		}
 	}
 }

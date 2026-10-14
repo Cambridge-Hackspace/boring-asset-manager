@@ -385,8 +385,12 @@ func (s *Store) GetEffectiveFieldsForCategories(categoryIDs []string) ([]models.
 		return nil, nil
 	}
 
-	// 1. Collect all ancestor category IDs across all assigned categories
+	// 1. Collect all ancestor category IDs across all assigned categories, in
+	// order: each category, then its parent, and so on. The first category
+	// found to assign a field is reported as its source, so a field assigned
+	// at several levels is attributed to the nearest one.
 	allCategoryIDs := make(map[string]bool)
+	var ordered []string
 	for _, catID := range categoryIDs {
 		curr := catID
 		for depth := 0; depth < 100 && curr != ""; depth++ {
@@ -394,6 +398,7 @@ func (s *Store) GetEffectiveFieldsForCategories(categoryIDs []string) ([]models.
 				break
 			}
 			allCategoryIDs[curr] = true
+			ordered = append(ordered, curr)
 
 			var parentVal sql.NullString
 			err := s.QueryRow("SELECT parent_id FROM categories WHERE id = ?", curr).Scan(&parentVal)
@@ -416,7 +421,7 @@ func (s *Store) GetEffectiveFieldsForCategories(categoryIDs []string) ([]models.
 	// We map field ID -> EffectiveField
 	effectiveMap := make(map[string]models.EffectiveField)
 
-	for catID := range allCategoryIDs {
+	for _, catID := range ordered {
 		direct, err := s.GetDirectCategoryFields(catID)
 		if err != nil {
 			return nil, err
