@@ -29,7 +29,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 The web interface is a Svelte 5 single-page application written in TypeScript, built with Vite and styled with Tailwind CSS. It talks only to the public `/api/v1` API, so anything it can do a script can do too, and the server remains the authority on every rule (validation, permissions, inheritance, layout).
 
 * **Layout:** the app lives in `web/`. `package.json` pins exact versions and `package-lock.json` is committed. Dependencies stay few: Svelte, Vite, TypeScript, Tailwind, and the test tools. There is no SvelteKit; routing is a small in-house history router.
-* **Build:** `tools/web/build.sh` runs `npm ci` and `vite build` in a pinned Node container and writes the output to `internal/webui/static/app/`, which is ignored by git. Release builds run it before `go build`.
+* **Build:** `tools/web/build.sh` runs `npm ci` and `vite build` in a pinned Node container and writes the output to `internal/webui/static/app/`, which is ignored by git. Release builds run it before `go build`. `tools/web/build.sh check` type-checks the app and runs its unit tests instead. For development, run `npm run dev` in `web/` next to `bam serve`; Vite forwards `/api` to port 8080.
 * **Embedding:** package `internal/webui` embeds `static/` with `embed.FS`. If the app has not been built, the binary serves a committed placeholder page saying so, so a plain `go build`, the Go test suites and reaper never need Node.
 * **Serving:** `/api/*`, `/healthz` and `/readyz` are unchanged. Every other `GET` serves a file from the build or, for client-side routes, `index.html`. Hashed assets are cached as immutable; `index.html` is never cached. Every page carries a strict Content Security Policy (`default-src 'self'`, with `data:` and `blob:` images for previews, inline style attributes for the editor's positioning, `frame-ancestors 'none'`), plus `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`.
 * **Sessions:** the app uses the existing `bam_session` cookie (`HttpOnly`, `SameSite=Lax`). On load it asks `GET /api/v1/auth/me` for the user and their permissions. Any `401` returns to the sign-in page and then back to where the user was.
@@ -578,10 +578,10 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 Sub-phases land in order, each with its tests, and leave the tree releasable. Frontend checks (`svelte-check`, Vitest, Playwright) run in pinned Node and Playwright containers. The Go suites stay free of Node, and the frontend checks can be added to reaper once they exist.
 
 #### Sub-Phase 4.1: Scaffolding, Embedding & Shell
-* [ ] Create the Svelte 5 + TypeScript + Vite + Tailwind project in `web/` with exact pinned versions, `svelte-check` and Vitest.
-* [ ] Add `tools/web/build.sh`, building in a pinned Node container into `internal/webui/static/app/`.
-* [ ] Implement `internal/webui`: the embedded file server, history fallback to `index.html`, caching headers, security headers and the not-built placeholder, with Go tests for each.
-* [ ] Implement the typed API client (models mirroring `internal/models`, uniform error handling, `401` to sign-in), the session store, the router, sign-in and sign-out, and the app shell with permission-aware navigation.
+* [x] Create the Svelte 5 + TypeScript + Vite + Tailwind project in `web/` with exact pinned versions, `svelte-check` and Vitest.
+* [x] Add `tools/web/build.sh`, building in a pinned Node container into `internal/webui/static/app/`.
+* [x] Implement `internal/webui`: the embedded file server, history fallback to `index.html`, caching headers, security headers and the not-built placeholder, with Go tests for each.
+* [x] Implement the typed API client (models mirroring `internal/models`, uniform error handling, `401` to sign-in), the session store, the router, sign-in and sign-out, and the app shell with permission-aware navigation.
 
 #### Sub-Phase 4.2: API Additions for the Interface
 * [ ] `POST /api/v1/categories/effective-fields` resolves the effective fields for a set of categories, for the asset form before the asset exists.

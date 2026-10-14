@@ -1,0 +1,77 @@
+// The signed-in user and what they may do.
+
+import { ApiError, request, setUnauthorizedHandler } from './api';
+import type { Me, Permission, User } from './models';
+import { navigate, router } from './router.svelte';
+
+class Session {
+  user = $state<User | null>(null);
+  permissions = $state<Permission[]>([]);
+  /** False until the first /auth/me answer, so the app does not flash sign-in. */
+  loaded = $state(false);
+
+  can(permission: Permission): boolean {
+    return this.permissions.includes(permission);
+  }
+
+  canAny(...permissions: Permission[]): boolean {
+    return permissions.some((p) => this.can(p));
+  }
+
+  async load(): Promise<void> {
+    try {
+      this.set(await request<Me>('GET', '/auth/me'));
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 401) throw err;
+      this.clear();
+    } finally {
+      this.loaded = true;
+    }
+  }
+
+  async signIn(email: string, password: string): Promise<void> {
+    await request('POST', '/auth/login', { email, password });
+    await this.load();
+  }
+
+  async signOut(): Promise<void> {
+    try {
+      await request('POST', '/auth/logout');
+    } finally {
+      this.clear();
+      navigate('/sign-in');
+    }
+  }
+
+  private set(me: Me): void {
+    this.user = me.user;
+    this.permissions = me.permissions ?? [];
+  }
+
+  private clear(): void {
+    this.user = null;
+    this.permissions = [];
+  }
+}
+
+export const session = new Session();
+
+// A 401 on any request means the session ended: sign in again and come back.
+setUnauthorizedHandler(() => {
+  const wasSignedIn = session.user !== null;
+  session.user = null;
+  session.permissions = [];
+  if (wasSignedIn && router.path !== '/sign-in') {
+    navigate(signInPath(router.path + router.search), true);
+  }
+});
+
+/** The sign-in page, returning to next afterward. */
+export function signInPath(next: string): string {
+  return next && next !== '/' ? '/sign-in?next=' + encodeURIComponent(next) : '/sign-in';
+}
+
+/** Where to go after signing in: next if it is a local path, else home. */
+export function afterSignIn(next: string | null): string {
+  return next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/sign-in') ? next : '/';
+}
