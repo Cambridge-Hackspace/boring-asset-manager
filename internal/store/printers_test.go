@@ -14,28 +14,28 @@ func TestPrinterLifecycle(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 
-	p, err := st.CreatePrinter(models.Printer{Name: " Front desk ", Driver: "brother_ql", Model: "QL-810W", Host: "192.168.1.40", Media: "dk-11201"})
+	p, err := st.CreatePrinter(models.Printer{Name: " Front desk ", Driver: "brother_ql", Model: "QL-810W", Connection: printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.40"}, Media: "dk-11201"})
 	if err != nil {
 		t.Fatalf("CreatePrinter: %v", err)
 	}
-	if p.Name != "Front desk" || p.Port != printers.DefaultPort {
-		t.Errorf("name/port not normalized: %+v", p)
+	if p.Name != "Front desk" || p.Connection.Address != "192.168.1.40:9100" {
+		t.Errorf("name/connection not normalized: %+v", p)
 	}
 
-	if _, err := st.CreatePrinter(models.Printer{Name: "Front desk", Driver: "brother_ql", Model: "QL-810W", Host: "10.0.0.2", Media: "dk-22210"}); !errors.Is(err, ErrPrinterNameExists) {
+	if _, err := st.CreatePrinter(models.Printer{Name: "Front desk", Driver: "brother_ql", Model: "QL-810W", Connection: printers.Connection{Type: printers.ConnTCP, Address: "10.0.0.2"}, Media: "dk-22210"}); !errors.Is(err, ErrPrinterNameExists) {
 		t.Errorf("duplicate name: got %v, want ErrPrinterNameExists", err)
 	}
-	if _, err := st.CreatePrinter(models.Printer{Name: "Bad", Driver: "brother_ql", Model: "QL-810W", Host: "10.0.0.2", Media: "dk-0"}); !errors.Is(err, printers.ErrInvalidPrinter) {
+	if _, err := st.CreatePrinter(models.Printer{Name: "Bad", Driver: "brother_ql", Model: "QL-810W", Connection: printers.Connection{Type: printers.ConnTCP, Address: "10.0.0.2"}, Media: "dk-0"}); !errors.Is(err, printers.ErrInvalidPrinter) {
 		t.Errorf("bad media: got %v, want ErrInvalidPrinter", err)
 	}
 
 	got, err := st.GetPrinter(p.ID)
-	if err != nil || got.Host != "192.168.1.40" || got.Media != "dk-11201" {
+	if err != nil || got.Connection != (printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.40:9100"}) || got.Media != "dk-11201" {
 		t.Fatalf("GetPrinter() = %+v, %v", got, err)
 	}
 
 	time.Sleep(10 * time.Millisecond)
-	p.Media, p.Port = "dk-22205", 9101
+	p.Media, p.Connection = "dk-22205", printers.Connection{Type: printers.ConnIPP, Address: "ipp://cups.lan/printers/ql"}
 	updated, err := st.UpdatePrinter(*p)
 	if err != nil {
 		t.Fatalf("UpdatePrinter: %v", err)
@@ -43,7 +43,7 @@ func TestPrinterLifecycle(t *testing.T) {
 	if !updated.UpdatedAt.After(got.UpdatedAt) || !updated.CreatedAt.Equal(got.CreatedAt) {
 		t.Errorf("timestamps not maintained: %+v", updated)
 	}
-	if reloaded, _ := st.GetPrinter(p.ID); reloaded.Media != "dk-22205" || reloaded.Port != 9101 {
+	if reloaded, _ := st.GetPrinter(p.ID); reloaded.Media != "dk-22205" || reloaded.Connection.Address != "ipp://cups.lan/printers/ql" {
 		t.Errorf("update not stored: %+v", reloaded)
 	}
 

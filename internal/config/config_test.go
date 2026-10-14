@@ -88,3 +88,30 @@ func TestValidationErrors(t *testing.T) {
 		t.Error("expected validation error for empty session_secret")
 	}
 }
+
+func TestPrinterDevices(t *testing.T) {
+	if cfg := DefaultConfig(); len(cfg.Printers.Devices) != 0 {
+		t.Errorf("device connections allowed by default: %v", cfg.Printers.Devices)
+	}
+
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("[printers]\ndevices = [\"/dev/usb/lp*\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(configPath)
+	if err != nil || len(cfg.Printers.Devices) != 1 || cfg.Printers.Devices[0] != "/dev/usb/lp*" {
+		t.Fatalf("loaded %v, %v", cfg, err)
+	}
+	t.Setenv("BAM_PRINTERS_DEVICES", "/dev/usb/lp0,/dev/ulpt0")
+	if cfg, err := Load(configPath); err != nil || len(cfg.Printers.Devices) != 2 || cfg.Printers.Devices[1] != "/dev/ulpt0" {
+		t.Errorf("environment override gave %v, %v", cfg.Printers.Devices, err)
+	}
+
+	for _, bad := range []string{"dev/usb/lp*", "/dev/usb/lp["} {
+		cfg := DefaultConfig()
+		cfg.Printers.Devices = []string{bad}
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("pattern %q accepted", bad)
+		}
+	}
+}

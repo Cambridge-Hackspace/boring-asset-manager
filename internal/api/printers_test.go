@@ -10,6 +10,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,7 +81,7 @@ func (f *fakeQL) waitForJobs(t *testing.T, n int, timeout time.Duration) [][]byt
 
 func createPrinter(t *testing.T, srv *Server, cookie *http.Cookie, port int, media string) string {
 	t.Helper()
-	body := `{"name":"QL ` + media + `","driver":"brother_ql","model":"QL-810W","host":"127.0.0.1","port":` + strconv.Itoa(port) + `,"media":"` + media + `"}`
+	body := `{"name":"QL ` + media + `","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"127.0.0.1:` + strconv.Itoa(port) + `"},"media":"` + media + `"}`
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
@@ -100,18 +103,18 @@ func TestPrinterAPI(t *testing.T) {
 	}
 
 	id := createPrinter(t, srv, cookie, 9100, "dk-11201")
-	dup := `{"name":"QL dk-11201","driver":"brother_ql","model":"QL-810W","host":"10.0.0.9","media":"dk-22210"}`
+	dup := `{"name":"QL dk-11201","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"10.0.0.9"},"media":"dk-22210"}`
 	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", dup); rec.Code != http.StatusConflict {
 		t.Errorf("duplicate name: got %d", rec.Code)
 	}
-	bad := `{"name":"X","driver":"brother_ql","model":"QL-810W","host":"http://10.0.0.9","media":"dk-22210"}`
+	bad := `{"name":"X","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"http://10.0.0.9"},"media":"dk-22210"}`
 	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", bad); rec.Code != http.StatusBadRequest {
 		t.Errorf("bad host: got %d", rec.Code)
 	}
 
-	update := `{"name":"Front desk","driver":"brother_ql","model":"QL-820NWB","host":"10.0.0.9","media":"dk-22205"}`
+	update := `{"name":"Front desk","driver":"brother_ql","model":"QL-820NWB","connection":{"type":"tcp","address":"10.0.0.9"},"media":"dk-22205"}`
 	rec = doJSON(t, srv, cookie, http.MethodPut, "/api/v1/printers/"+id, update)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"port":9100`) {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"address":"10.0.0.9:9100"`) {
 		t.Errorf("update: got %d %s", rec.Code, rec.Body.String())
 	}
 	rec = doJSON(t, srv, cookie, http.MethodGet, "/api/v1/printers", "")
@@ -361,7 +364,7 @@ func TestPrintThroughAnotherDriver(t *testing.T) {
 		t.Errorf("drivers endpoint does not list both drivers: %s", rec.Body.String())
 	}
 
-	body := `{"name":"Stub","driver":"stub","model":"Stub 1","host":"127.0.0.1","port":` + strconv.Itoa(ql.port()) + `,"media":"any"}`
+	body := `{"name":"Stub","driver":"stub","model":"Stub 1","connection":{"type":"tcp","address":"127.0.0.1:` + strconv.Itoa(ql.port()) + `"},"media":"any"}`
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("creating stub printer: %d %s", rec.Code, rec.Body.String())
@@ -402,8 +405,8 @@ func TestPrinterOptionsReachTheJob(t *testing.T) {
 	cookie := sessionCookie(t, srv, admin.ID)
 	ql := newFakeQL(t)
 
-	body := `{"name":"Uncut","driver":"brother_ql","model":"QL-810W","host":"127.0.0.1","port":` + strconv.Itoa(ql.port()) +
-		`,"media":"dk-11201","options":{"cut":false}}`
+	body := `{"name":"Uncut","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"127.0.0.1:` + strconv.Itoa(ql.port()) +
+		`"},"media":"dk-11201","options":{"cut":false}}`
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
 	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"options":{"cut":false}`) {
 		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
@@ -440,8 +443,8 @@ func TestPrintToDymoLabelWriter(t *testing.T) {
 	cookie := sessionCookie(t, srv, admin.ID)
 	lw := newFakeQL(t)
 
-	body := `{"name":"Dymo","driver":"dymo_labelwriter","model":"LabelWriter 450","host":"127.0.0.1","port":` + strconv.Itoa(lw.port()) +
-		`,"media":"30252","options":{"density":"dark"}}`
+	body := `{"name":"Dymo","driver":"dymo_labelwriter","model":"LabelWriter 450","connection":{"type":"tcp","address":"127.0.0.1:` + strconv.Itoa(lw.port()) +
+		`"},"media":"30252","options":{"density":"dark"}}`
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
@@ -500,8 +503,8 @@ func TestPrintToRollo(t *testing.T) {
 	cookie := sessionCookie(t, srv, admin.ID)
 	rollo := newFakeQL(t)
 
-	body := `{"name":"Rollo","driver":"tspl","model":"Rollo X1038","host":"127.0.0.1","port":` + strconv.Itoa(rollo.port()) +
-		`,"media":"2x1","options":{"density":10}}`
+	body := `{"name":"Rollo","driver":"tspl","model":"Rollo X1038","connection":{"type":"tcp","address":"127.0.0.1:` + strconv.Itoa(rollo.port()) +
+		`"},"media":"2x1","options":{"density":10}}`
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
@@ -543,5 +546,57 @@ func TestPrintToRollo(t *testing.T) {
 	}
 	if dark < 5000 {
 		t.Errorf("label has only %d dark dots", dark)
+	}
+}
+
+func TestPrintToADevice(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("device connections take Unix paths")
+	}
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	dir := filepath.ToSlash(t.TempDir())
+	device := dir + "/lp0"
+	if err := os.WriteFile(device, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"name":"USB Rollo","driver":"tspl","model":"Rollo X1038","connection":{"type":"device","address":"` + device + `"},"media":"2x1"}`
+
+	// The default configuration allows no devices.
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "devices") {
+		t.Fatalf("device printer without allowed devices: %d %s", rec.Code, rec.Body.String())
+	}
+
+	srv.transport = printers.NewDispatcher([]string{dir + "/lp*"})
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Printer models.Printer `json:"printer"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	tmpl := `{"id":"rollo2x1","name":"Rollo 2x1","units":"in","width":2,"height":1,"dpi":203,"elements":[
+  {"type":"text","x":0.1,"y":0.2,"width":1.8,"height":0.4,"font_size":10,"content_binding":"{{asset.name}}"}]}`
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", tmpl); rec.Code != http.StatusCreated {
+		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
+	}
+	a, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"rollo2x1","asset_ids":["`+a.Asset.ID+`"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
+	}
+	written, _ := os.ReadFile(device)
+	if job, err := tspl.DecodeJob(written); err != nil || len(job.Labels) != 1 {
+		t.Errorf("device received %d bytes that decode to %+v, %v", len(written), job, err)
+	}
+
+	// A device later dropped from the configuration is refused at print time.
+	srv.transport = printers.NewDispatcher(nil)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"rollo2x1","asset_ids":["`+a.Asset.ID+`"]}`)
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("print to a no longer allowed device: %d %s", rec.Code, rec.Body.String())
 	}
 }

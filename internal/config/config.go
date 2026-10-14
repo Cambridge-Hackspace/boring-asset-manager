@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -15,6 +17,7 @@ type Config struct {
 	Server   ServerConfig   `toml:"server"`
 	Database DatabaseConfig `toml:"database"`
 	Storage  StorageConfig  `toml:"storage"`
+	Printers PrintersConfig `toml:"printers"`
 }
 
 // ServerConfig holds HTTP server listening and security configuration.
@@ -34,6 +37,14 @@ type DatabaseConfig struct {
 // StorageConfig holds filesystem storage configuration.
 type StorageConfig struct {
 	LocalPath string `toml:"local_path"`
+}
+
+// PrintersConfig holds what printer connections may reach on this server.
+type PrintersConfig struct {
+	// Devices lists the device path patterns (such as "/dev/usb/lp*") that
+	// printers may be connected to directly. Empty means none: anyone who can
+	// manage printers could otherwise make BAM write to any file it can open.
+	Devices []string `toml:"devices"`
 }
 
 // DefaultConfig returns safe default settings.
@@ -119,6 +130,10 @@ func applyEnvOverrides(cfg *Config) {
 	if storagePath := os.Getenv("BAM_STORAGE_PATH"); storagePath != "" {
 		cfg.Storage.LocalPath = storagePath
 	}
+
+	if devices := os.Getenv("BAM_PRINTERS_DEVICES"); devices != "" {
+		cfg.Printers.Devices = strings.Split(devices, ",")
+	}
 }
 
 // Validate checks that required fields are present and valid.
@@ -134,6 +149,14 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.SessionSecret == "" {
 		return fmt.Errorf("session_secret cannot be empty")
+	}
+	for _, pattern := range c.Printers.Devices {
+		if !strings.HasPrefix(pattern, "/") {
+			return fmt.Errorf("printers.devices pattern %q must be an absolute path", pattern)
+		}
+		if _, err := path.Match(pattern, ""); err != nil {
+			return fmt.Errorf("printers.devices pattern %q: %v", pattern, err)
+		}
 	}
 	return nil
 }

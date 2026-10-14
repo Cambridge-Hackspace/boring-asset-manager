@@ -3,6 +3,8 @@ package models
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 )
 
 // User represents a system user account.
@@ -133,15 +135,15 @@ type Image struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// Printer is a network label printer.
+// Printer is a label printer.
 type Printer struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Driver string `json:"driver"`
 	Model  string `json:"model"`
-	Host   string `json:"host"`
-	Port   int    `json:"port"`
-	Media  string `json:"media"`
+	// Connection says how BAM reaches the printer.
+	Connection printers.Connection `json:"connection"`
+	Media      string              `json:"media"`
 	// Options are driver options as a JSON object; absent means defaults.
 	Options   json.RawMessage `json:"options,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`

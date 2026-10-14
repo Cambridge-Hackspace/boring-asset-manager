@@ -21,7 +21,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 - **Frontend:** TypeScript + Svelte (or React/Vite) with a lightweight 2D canvas/SVG label layout engine and Tailwind CSS for accessible, high-contrast, colorful category UI components.
 - **Label Generation & Printing:**
   - **Pure-Go Rendering:** One layout engine feeds SVG, PNG and PDF backends (§4). Fonts, glyph outlines and rasterization come from `golang.org/x/image` (the embedded Go fonts, OpenType parsing and its vector rasterizer); the PDF writer is a small in-house one so output stays deterministic.
-  - **Direct Network Printing:** Raw TCP dispatch (port 9100) of each printer's own raster command stream (Brother QL, DYMO LabelWriter, TSPL) through pluggable print drivers, with no desktop driver or print dialog.
+  - **Direct Printing:** Each printer's own command stream (Brother QL, DYMO LabelWriter, TSPL) from pluggable print drivers, sent over raw TCP (port 9100), to a USB device on the server, to a raw IPP/CUPS queue, or through the Windows spooler, with no desktop driver or print dialog.
 - **Barcode & Matrix Engine:** In-house QR Code, Micro QR and Code 128 encoders with per-generator payload and character set validation (§4.2).
 
 ---
@@ -45,6 +45,12 @@ dsn = "data/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 
 [storage]
 local_path = "./data/uploads"
+
+[printers]
+# Device paths printers may be connected to directly (README §4.4), as
+# path.Match patterns. Empty (the default) turns device connections off.
+# Environment: BAM_PRINTERS_DEVICES, comma-separated.
+devices = []
 
 ```
 
@@ -302,7 +308,7 @@ Batch exports produce a multi-page PDF or a ZIP of PNGs named by asset ID (§6.2
 
 ### 4.4 Printers & Direct Network Dispatch
 
-Any number of printers can be configured through `/api/v1/printers` (`settings:manage`; anyone with `labels:print` can list them). Each is stored in the `printers` table with a name, driver, model, host, port (default 9100), the media currently loaded, and driver `options` as a JSON object.
+Any number of printers can be configured through `/api/v1/printers` (`settings:manage`; anyone with `labels:print` can list them). Each is stored in the `printers` table with a name, driver, model, connection, the media currently loaded, and driver `options` as a JSON object.
 
 Printer families are supported by **drivers** (`internal/printers`), registered by name and chosen per printer:
 
@@ -318,7 +324,7 @@ type Plan interface {
 }
 ```
 
-The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` (raw TCP today). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models, media and options.
+The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` for the printer's connection (see Delivery below). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models, media and options.
 
 Three drivers ship today: `brother_ql`, `dymo_labelwriter` and `tspl`. Option values are listed by the drivers endpoint, and unknown options are refused.
 
@@ -342,7 +348,7 @@ Options: `density` (`light`, `medium`, `normal` or `dark`; default `normal`) and
 * **Printable area:** labels sit against the roll guide at the head's first dot. The render is centered on the label. On first-generation models it is then cut to the most the head takes in one line, 56 mm (672 dots) or 104 mm (1248 dots), so the far edge of a 59 mm shipping label does not print. Second-generation models receive the whole label.
 * **Raster stream, first generation:** one ESC more than the longest raster line (85, or 157 on the 4XL) to resynchronize, text mode, density, the roll on twin models, and the label length (a little over the label on die-cut rolls, `0xFFFF` for continuous). Then each line is trimmed of blank bytes at both ends and sent run-length compressed when that is shorter, with dot tab and bytes per line sent only when they change and runs of blank lines as skips. Labels are separated by short form feeds, and a form feed after the last brings it to the tear bar. Blank lines at the end of a die-cut label are left to the form feed.
 * **Raster stream, second generation:** a job header (random job ID, density, text quality, default media type). Then per label: the label length (0 for die-cut, `0xFFFF` for continuous), a label index, a print data header and uncompressed lines. After a final form feed, an end-of-job command closes the job. The 550 series only prints on genuine DYMO labels it can identify, whatever the driver sends.
-* **Connection:** the LabelWriter 400 and 450 series and the 4XL have only a USB port. Until BAM has a transport for locally attached printers, reach them through a raw print server on port 9100, such as `p910nd` on the machine the printer is plugged into. The 550 Turbo, 5XL and Wireless have network ports.
+* **Connection:** the LabelWriter 400 and 450 series and the 4XL have only a USB port, so they use a `device`, `ipp`, `windows` or print-server `tcp` connection (see Delivery). The 550 Turbo, 5XL and Wireless have network ports.
 
 #### `tspl`
 
@@ -353,11 +359,22 @@ Options: `density` (0–15; unset keeps the printer's own setting) and `rotate_1
 * **Media catalog:** these printers take any label size up to their head width, so the catalog lists common sizes rather than part numbers: 4 × 6, 4 × 4, 4 × 3, 4 × 2, 3 × 2, 3 × 1, 2.25 × 1.25, 2 × 1, 1.5 × 1 and 1 × 1 in die-cut labels with a 1/8 in gap, and 4 in and 2 in continuous.
 * **Fit check:** the template's DPI must match the model (203 for the Rollo), one side must be the label width (±0.5 mm) and, on die-cut rolls, the other the label length; continuous labels must be 10–1000 mm. A template whose height is the label width is rotated 90° counterclockwise.
 * **Program:** `SIZE`, `GAP`, `DIRECTION`, `REFERENCE` and optionally `DENSITY`, then for each distinct label `CLS`, one `BITMAP` holding the whole label (a 0 bit prints a dot) centered across the label, and `PRINT 1,n` with `n` the copies. None of the printer's own fonts or barcode commands are used, so output matches the SVG and PDF exports.
-* **Connection:** the X1038 has only a USB port; the X1040 is reached over the network.
+* **Connection:** the X1038 has only a USB port (see Delivery); the X1040 is reached over the network.
 
 #### Delivery
 
-* **Transport:** raw TCP to port 9100 with dial and write timeouts. Jobs are serialized per printer address so concurrent requests never interleave their streams; an unreachable printer returns `502`. A job counts as printed once the printer has accepted the whole stream; reading back printer status is a later improvement.
+Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM reaches it:
+
+| Type | Address | Use |
+|---|---|---|
+| `tcp` | `host` or `host:port` (default 9100) | Network printers, and USB printers shared by a raw print server such as `p910nd`. |
+| `device` | A device path on the BAM server, such as `/dev/usb/lp0` (Linux) or `/dev/ulpt0` (FreeBSD) | A USB printer plugged into the BAM server. The path must match a pattern in the server's `[printers] devices` setting, which is empty by default: otherwise anyone who can manage printers could make BAM write to any file it can open. BAM never creates the file, and needs permission to write the device (on Linux, usually membership of the `lp` group). |
+| `ipp` | `ipp://host[:port]/path`, or `ipps`, `http`, `https` | A queue on CUPS or another IPP server, such as a USB printer shared from another machine. The job is sent as `application/octet-stream`, so the queue must be raw (CUPS: `lpadmin -m raw`; CUPS 2.x still supports raw queues though it marks them deprecated). CUPS can also forward a raw queue to a Windows shared printer through its `smb://` backend. |
+| `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
+
+* **Serialization:** jobs are sent one at a time per destination, so concurrent requests never interleave their streams.
+* **Failures:** TCP has dial and write timeouts and IPP a 90-second limit. A connection the server may not use (a device outside the allowed patterns, or `windows` on another OS) is refused with `400` when the printer is saved and with `502` at print time. An unreachable printer also returns `502`.
+* **Delivery:** a job counts as printed once the destination has accepted the whole stream. Reading back printer status is a later improvement.
 
 ---
 
@@ -420,7 +437,7 @@ When implementing this repository from scratch, complete the following milestone
 
 #### Completed Skeleton & Base Tooling
 * [x] Establish Go module structure (`cmd/bam`, `internal/api`, `internal/models`, `internal/store`, `internal/config`, `internal/auth`, `internal/rbac`, `internal/cli`).
-* [x] Implement TOML configuration loader with environment variable overrides (`BAM_SERVER_*`, `BAM_DATABASE_*`, `BAM_DB_PATH`, `BAM_STORAGE_*`).
+* [x] Implement TOML configuration loader with environment variable overrides (`BAM_SERVER_*`, `BAM_DATABASE_*`, `BAM_DB_PATH`, `BAM_STORAGE_*`, `BAM_PRINTERS_DEVICES`).
 * [x] Set up database abstraction layer with pure-Go SQLite (`modernc.org/sqlite` WAL mode) and embedded migration runner with 16 core schema tables.
 * [x] Implement CLI commands (`init`, `migrate`, `admin create`, `serve`, `version`).
 * [x] Onboard to `reaper` ([`.reaper.toml`](.reaper.toml)) with remote execution proven on Proxmox VM.
@@ -524,6 +541,11 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 * [x] Implement the `tspl` driver (`internal/printers/tspl`) for Rollo and other TSPL printers, with models, a media catalog of common sizes, fit check, rotation, copies as `PRINT` counts, and `density` and `rotate_180` options.
 * [x] Test against expectations worked out from TSC's programming manual, golden programs, a decoder that rebuilds each bitmap, and an end-to-end print through the API to a fake printer.
 * [ ] Check printing on a real Rollo X1038 (manual; outside reaper).
+
+#### Sub-Phase 3.8: Printer Connections
+* [x] Replace a printer's host and port with a `connection`: `tcp`, `device` (allow-listed by the server's `[printers] devices` setting), `ipp` (raw queues on CUPS and other IPP servers) and `windows` (the Windows spooler, RAW).
+* [x] Test each transport: device writes and the allowlist, an in-process IPP server that decodes the Print-Job request, refusal of `windows` off Windows, and an end-to-end print to a device through the API.
+* [ ] Check the Windows spooler path on Windows (manual: it compiles and vets for Windows, but the suites run on Linux).
 
 ### Phase 4: Frontend Application
 

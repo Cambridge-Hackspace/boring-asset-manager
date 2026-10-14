@@ -26,13 +26,13 @@ func TestValidate(t *testing.T) {
 	}
 	ok := func(name, driver, host string, port int, s Settings) {
 		t.Helper()
-		if err := Validate(name, driver, host, port, s); err != nil {
+		if err := Validate(name, driver, tcp(host, port), s); err != nil {
 			t.Errorf("rejected valid printer: %v", err)
 		}
 	}
 	bad := func(why, name, driver, host string, port int, s Settings) {
 		t.Helper()
-		if err := Validate(name, driver, host, port, s); !errors.Is(err, ErrInvalidPrinter) {
+		if err := Validate(name, driver, tcp(host, port), s); !errors.Is(err, ErrInvalidPrinter) {
 			t.Errorf("%s: got %v, want ErrInvalidPrinter", why, err)
 		}
 	}
@@ -168,7 +168,7 @@ func (fp *fakePrinter) port() int { return fp.ln.Addr().(*net.TCPAddr).Port }
 func TestSendDeliversWholeJob(t *testing.T) {
 	fp := newFakePrinter(t)
 	job := bytes.Repeat([]byte("raster"), 50000)
-	if err := NewDispatcher().Send(context.Background(), "127.0.0.1", fp.port(), job); err != nil {
+	if err := NewDispatcher(nil).Send(context.Background(), local(fp.port()), job); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(2 * time.Second)
@@ -216,7 +216,7 @@ func TestSendSerializesJobsPerPrinter(t *testing.T) {
 	peak := map[string]int32{}
 	dials := 0
 
-	d := NewDispatcher()
+	d := NewDispatcher(nil)
 	d.dial = func(ctx context.Context, addr string) (net.Conn, error) {
 		conn, err := net.Dial("tcp", addr)
 		if err != nil {
@@ -240,7 +240,7 @@ func TestSendSerializesJobsPerPrinter(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if err := d.Send(context.Background(), "127.0.0.1", p.port(), []byte{byte(i)}); err != nil {
+				if err := d.Send(context.Background(), local(p.port()), []byte{byte(i)}); err != nil {
 					t.Error(err)
 				}
 			}()
@@ -266,19 +266,19 @@ func TestSendReportsUnreachablePrinters(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close() // nothing listens any more
 
-	err = NewDispatcher().Send(context.Background(), "127.0.0.1", port, []byte("job"))
+	err = NewDispatcher(nil).Send(context.Background(), local(port), []byte("job"))
 	if !errors.Is(err, ErrUnreachable) {
 		t.Errorf("got %v, want ErrUnreachable", err)
 	}
 }
 
 func TestSendGivesUpWhileWaitingWhenCanceled(t *testing.T) {
-	d := NewDispatcher()
-	slot := d.slot("127.0.0.1:1")
+	d := NewDispatcher(nil)
+	slot := d.slot(local(1))
 	slot <- struct{}{} // another job holds the printer
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if err := d.Send(ctx, "127.0.0.1", 1, []byte("job")); !errors.Is(err, ErrUnreachable) {
+	if err := d.Send(ctx, local(1), []byte("job")); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("got %v, want ErrUnreachable after cancellation", err)
 	}
 }
@@ -353,3 +353,15 @@ func TestTSPLPlan(t *testing.T) {
 		t.Errorf("setup %q lacks the density", job.Setup)
 	}
 }
+
+// tcp builds a TCP connection the way the old host and port fields did; a
+// zero port leaves it to the default.
+func tcp(host string, port int) Connection {
+	if port == 0 {
+		return Connection{Type: ConnTCP, Address: host}
+	}
+	return Connection{Type: ConnTCP, Address: net.JoinHostPort(host, strconv.Itoa(port))}
+}
+
+// local is a normalized TCP connection to this machine.
+func local(port int) Connection { return tcp("127.0.0.1", port) }
