@@ -159,6 +159,18 @@ func TestTextSurvivesTheDatabase(t *testing.T) {
 	}
 }
 
+// TestOverlongEmailIsRefused checks that an email address longer than its
+// column is refused as the caller's mistake, on every database.
+func TestOverlongEmailIsRefused(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin("ada@hackspace.org")
+	long := strings.Repeat("a", 250) + "@x.org"
+	r := c.send(http.MethodPost, "/users", map[string]any{"email": long, "password": "Secret123!"})
+	if r.status != http.StatusBadRequest || !strings.Contains(string(r.body), "longer than 255 characters") {
+		t.Errorf("got %s, want 400", r)
+	}
+}
+
 // TestDistinctTextStaysDistinct stores pairs that some database collations
 // treat as equal. On every database each of a pair is a different code, so
 // both may be assigned, and each finds only its own asset.
@@ -222,12 +234,10 @@ func TestSearchTreatsTextLiterally(t *testing.T) {
 			t.Errorf("searching %q found %+v, want only %q", q, out.Assets, want)
 		}
 	}
-	// Nothing stored can hold a NUL, so a search for one finds nothing.
-	var out struct{ Assets []any }
-	c.mustJSON(http.MethodGet, "/assets?search="+url.QueryEscape(nul), nil, &out, http.StatusOK)
-	if len(out.Assets) != 0 {
-		t.Errorf("searching for a NUL found %v", out.Assets)
-	}
+	// Nothing stored can hold a NUL, so a search for one, like any request
+	// holding one, is refused before it reaches the database.
+	c.mustJSON(http.MethodGet, "/assets?search="+url.QueryEscape(nul), nil, nil, http.StatusBadRequest)
+	c.mustJSON(http.MethodGet, "/assets/"+url.PathEscape(nul), nil, nil, http.StatusBadRequest)
 }
 
 // TestImportRefusesUnstorableText imports files with bytes that are not

@@ -133,7 +133,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /", webui.Handler())
 
 	// Wrap root handler with session extraction middleware
-	rootHandler := LimitRequestBodies(Authenticate(st)(mux))
+	rootHandler := LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(mux)))
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),

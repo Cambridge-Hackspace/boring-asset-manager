@@ -14,6 +14,8 @@ import (
 
 var (
 	ErrUserNotFound = errors.New("user not found")
+	// ErrInvalidUser wraps the reason a user cannot be created as given.
+	ErrInvalidUser = errors.New("invalid user")
 )
 
 // GetUserByID retrieves a user by their UUID.
@@ -125,10 +127,10 @@ func (s *Store) UserHasPermission(userID string, permKey string) (bool, error) {
 func (s *Store) CreateUser(email, password string, isActive bool) (*models.User, error) {
 	normalized := auth.NormalizeEmail(email)
 	if normalized == "" {
-		return nil, errors.New("email cannot be empty")
+		return nil, fmt.Errorf("%w: email cannot be empty", ErrInvalidUser)
 	}
 	if err := textcheck.Check("email", normalized, textcheck.MaxName); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrInvalidUser, err)
 	}
 	hash, err := auth.HashPassword(password)
 	if err != nil {
