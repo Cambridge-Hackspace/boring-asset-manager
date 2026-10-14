@@ -25,8 +25,9 @@ type brotherOptions struct {
 
 func (brotherQL) Info() DriverInfo {
 	info := DriverInfo{
-		Driver: DriverBrotherQL,
-		Models: brotherql.Models(),
+		Driver:   DriverBrotherQL,
+		Models:   brotherql.Models(),
+		ModelDPI: sameDPI(brotherql.Models(), brotherql.DPI),
 		Options: []OptionInfo{{
 			Name: "cut", Type: "bool", Default: true,
 			Description: "Cut each label off as it finishes; otherwise the tape feeds on uncut.",

@@ -8,7 +8,7 @@
 
   // Export or print labels for one or more assets. With a single asset it
   // also previews the label and offers direct downloads.
-  let { assetIds }: { assetIds: string[] } = $props();
+  let { assetIds, templateId: fixedTemplate }: { assetIds: string[]; templateId?: string } = $props();
 
   let templates = $state<TemplateSummary[]>([]);
   let printers = $state<Printer[]>([]);
@@ -28,6 +28,7 @@
   onMount(async () => {
     try {
       templates = (await request<{ templates: TemplateSummary[] }>('GET', '/templates')).templates ?? [];
+      if (fixedTemplate) templates = templates.filter((t) => t.id === fixedTemplate);
       templateId = templates[0]?.id ?? '';
       if (canPrint) {
         printers = (await request<{ printers: Printer[] }>('GET', '/printers')).printers ?? [];
@@ -87,7 +88,7 @@
   {#if templates.length === 0}
     <p class="text-sm text-zinc-500">No label templates yet.</p>
   {:else}
-    <div class="max-w-sm">
+    <div class="max-w-sm" hidden={Boolean(fixedTemplate)}>
       <label class="label" for="label-template">Template</label>
       <select id="label-template" class="input" bind:value={templateId}>
         {#each templates as t (t.id)}

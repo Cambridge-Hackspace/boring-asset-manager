@@ -335,7 +335,7 @@ Batch exports produce a multi-page PDF or a ZIP of PNGs named by asset ID (§6.2
 
 ### 4.4 Printers & Direct Network Dispatch
 
-Any number of printers can be configured through `/api/v1/printers` (`settings:manage`; anyone with `labels:print` can list them). Each is stored in the `printers` table with a name, driver, model, connection, the media currently loaded, and driver `options` as a JSON object.
+Any number of printers can be configured through `/api/v1/printers` (`settings:manage`; anyone with `labels:print` or `templates:manage` can list them, and template designers can run a printer's fit check without printing through `POST /api/v1/printers/{id}/fit`). Each is stored in the `printers` table with a name, driver, model, connection, the media currently loaded, and driver `options` as a JSON object.
 
 Printer families are supported by **drivers** (`internal/printers`), registered by name and chosen per printer:
 
@@ -351,7 +351,7 @@ type Plan interface {
 }
 ```
 
-The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` for the printer's connection (see Delivery below). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models, media and options.
+The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` for the printer's connection (see Delivery below). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models (and each model's DPI), media and options.
 
 Three drivers ship today: `brother_ql`, `dymo_labelwriter` and `tspl`. Option values are listed by the drivers endpoint, and unknown options are refused.
 
@@ -603,11 +603,11 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 * [x] Label preview, PNG/PDF download and printing (printer, copies) for one asset; batch export and printing for a selection.
 
 #### Sub-Phase 4.5: Template Editor
-* [ ] Template list and editor shell: canvas settings, printer-derived size and DPI, and the fit check.
-* [ ] Server preview canvas with throttled requests, plus the interactive element layer: select, drag, resize, grid snapping, keyboard nudging, multi-select and z-order.
-* [ ] Property panels per element type, binding suggestions, image picking and upload.
-* [ ] Undo/redo, unsaved-change protection, and saving with server errors mapped to elements.
-* [ ] Preview against an asset, export, and test print from the editor.
+* [x] Template list and editor shell: canvas settings, printer-derived size and DPI, and the fit check.
+* [x] Server preview canvas with throttled requests, plus the interactive element layer: select, drag, resize, grid snapping, keyboard nudging, multi-select and z-order.
+* [x] Property panels per element type, binding suggestions, image picking and upload.
+* [x] Undo/redo, unsaved-change protection, and saving with server errors mapped to elements.
+* [x] Preview against an asset, export, and test print from the editor.
 
 #### Sub-Phase 4.6: Administration
 * [ ] Printers: forms generated from `GET /api/v1/printers/drivers` (models, media, options and their values) and the connection types, with a test print.

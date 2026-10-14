@@ -41,10 +41,12 @@ var ErrDoesNotFit = errors.New("template does not fit the printer's media")
 
 // DriverInfo lists what a driver supports.
 type DriverInfo struct {
-	Driver  string       `json:"driver"`
-	Models  []string     `json:"models"`
-	Media   []MediaInfo  `json:"media"`
-	Options []OptionInfo `json:"options,omitempty"`
+	Driver string   `json:"driver"`
+	Models []string `json:"models"`
+	// ModelDPI is each model's print resolution, which templates must use.
+	ModelDPI map[string]int `json:"model_dpi"`
+	Media    []MediaInfo    `json:"media"`
+	Options  []OptionInfo   `json:"options,omitempty"`
 }
 
 // MediaInfo describes a roll for clients choosing what is loaded.
@@ -120,4 +122,13 @@ func Drivers() []DriverInfo {
 	}
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Driver < infos[j].Driver })
 	return infos
+}
+
+// sameDPI maps every model to one resolution.
+func sameDPI(models []string, dpi int) map[string]int {
+	out := make(map[string]int, len(models))
+	for _, m := range models {
+		out[m] = dpi
+	}
+	return out
 }

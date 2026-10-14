@@ -215,3 +215,38 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		"bytes":      len(job),
 	})
 }
+
+// FitRequest asks whether labels of a physical size suit a printer.
+type FitRequest struct {
+	WidthMM  float64 `json:"width_mm"`
+	HeightMM float64 `json:"height_mm"`
+	DPI      int     `json:"dpi"`
+}
+
+// handlePrinterFit runs a printer's fit check without printing, for the
+// template editor: POST /api/v1/printers/{id}/fit
+func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.loadPrinter(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	var req FitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.WidthMM <= 0 || req.HeightMM <= 0 || req.DPI <= 0 {
+		writeJSONError(w, http.StatusBadRequest, "width_mm, height_mm and dpi must be positive")
+		return
+	}
+	driver, err := printers.Lookup(p.Driver)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_, err = driver.Plan(store.PrinterSettings(p), printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI})
+	switch {
+	case errors.Is(err, printers.ErrDoesNotFit):
+		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "message": err.Error()})
+	case err != nil:
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Fit check failed: %v", err))
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"fits": true})
+	}
+}

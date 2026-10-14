@@ -10,6 +10,8 @@ import AssetForm from './views/assets/AssetForm.svelte';
 import CategoriesPage from './views/categories/CategoriesPage.svelte';
 import CategoryPage from './views/categories/CategoryPage.svelte';
 import FieldsPage from './views/fields/FieldsPage.svelte';
+import TemplatesPage from './views/templates/TemplatesPage.svelte';
+import TemplateEditor from './views/templates/TemplateEditor.svelte';
 
 export interface Route {
   pattern: string;
@@ -31,4 +33,7 @@ export const routes: Route[] = [
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories:manage'] },
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets:read'] },
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories:manage'], nav: 'Fields' },
+  { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates:manage'], nav: 'Templates' },
+  { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates:manage'] },
+  { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates:manage'] },
 ];

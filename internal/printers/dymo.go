@@ -27,8 +27,9 @@ type dymoOptions struct {
 
 func (dymoLabelWriter) Info() DriverInfo {
 	info := DriverInfo{
-		Driver: DriverDymoLabelWriter,
-		Models: dymolw.Models(),
+		Driver:   DriverDymoLabelWriter,
+		Models:   dymolw.Models(),
+		ModelDPI: sameDPI(dymolw.Models(), dymolw.DPI),
 		Options: []OptionInfo{{
 			Name: "density", Type: "string", Default: string(dymolw.DensityNormal),
 			Values:      stringsOf(dymolw.Densities()),
