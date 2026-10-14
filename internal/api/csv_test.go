@@ -1,14 +1,19 @@
 package api
 
 import (
+	"bytes"
 	"encoding/csv"
+	"encoding/json"
+	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/assetcsv"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 // readCSV parses an exported file, checking it starts with a byte order mark.
@@ -83,5 +88,126 @@ func TestExportAssetsCSV(t *testing.T) {
 	nobody := userWithPermissions(t, srv, "nobody@hackspace.org", rbac.PermLabelsPrint)
 	if rec := doJSON(t, srv, nobody, http.MethodGet, "/api/v1/assets/export.csv", ""); rec.Code != http.StatusForbidden {
 		t.Errorf("without assets:read: %d", rec.Code)
+	}
+}
+
+// postImport sends a CSV, and a mapping if one is given, as multipart form data.
+func postImport(t *testing.T, srv *Server, cookie *http.Cookie, path, file string, mapping []string) *httptest.ResponseRecorder {
+	t.Helper()
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	fw, err := mw.CreateFormFile("file", "assets.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = fw.Write([]byte(file))
+	if mapping != nil {
+		raw, _ := json.Marshal(mapping)
+		_ = mw.WriteField("mapping", string(raw))
+	}
+	_ = mw.Close()
+	return do(t, srv, cookie, http.MethodPost, path, mw.FormDataContentType(), &body)
+}
+
+func TestImportAssetsAPI(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	tools, _ := srv.store.CreateCategory("Tools", nil, "", false, false)
+	file := "Name,Categories,Colour\nSaw,Tools,red\nPliers,Tools > Hand,blue\n"
+
+	// The preview suggests a mapping and reports problems without writing.
+	rec := postImport(t, srv, cookie, "/api/v1/assets/import/preview", file, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+	var plan assetcsv.Plan
+	_ = json.Unmarshal(rec.Body.Bytes(), &plan)
+	if len(plan.Columns) != 3 || plan.Columns[0].Suggested != "name" || plan.Columns[2].Suggested != "" || plan.Rows != 2 {
+		t.Fatalf("columns %+v", plan)
+	}
+	if plan.ProblemCount != 1 || plan.Problems[0].Column != "Colour" {
+		t.Errorf("problems %+v", plan.Problems)
+	}
+
+	// Importing needs a confirmed mapping.
+	if rec := postImport(t, srv, cookie, "/api/v1/assets/import", file, nil); rec.Code != http.StatusBadRequest {
+		t.Errorf("without a mapping: %d", rec.Code)
+	}
+	mapping := []string{"name", "categories", "ignore"}
+	rec = postImport(t, srv, cookie, "/api/v1/assets/import", file, mapping)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown category: %d %s", rec.Code, rec.Body)
+	}
+	var failed struct {
+		Error   string
+		Details assetcsv.Plan
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &failed)
+	if !strings.Contains(failed.Error, "nothing was imported") || len(failed.Details.UnknownCategories) != 1 || failed.Details.UnknownCategories[0] != "Tools > Hand" {
+		t.Errorf("422 body %s", rec.Body)
+	}
+	if list, _ := srv.store.ListAssets("", ""); len(list) != 0 {
+		t.Fatalf("%d assets after a refused import", len(list))
+	}
+
+	if _, err := srv.store.CreateCategory("Hand", &tools.ID, "", false, false); err != nil {
+		t.Fatal(err)
+	}
+	rec = postImport(t, srv, cookie, "/api/v1/assets/import", file, mapping)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("import: %d %s", rec.Code, rec.Body)
+	}
+	var done struct {
+		Created, Updated, Unchanged int
+		CreatedIDs                  []string `json:"created_ids"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &done)
+	if done.Created != 2 || len(done.CreatedIDs) != 2 {
+		t.Errorf("result %s", rec.Body)
+	}
+	pliers, err := srv.store.GetAssetByID(done.CreatedIDs[1])
+	if err != nil || pliers.Asset.Name != "Pliers" || pliers.Categories[0].Name != "Hand" {
+		t.Errorf("pliers %+v %v", pliers, err)
+	}
+
+	// Bad requests.
+	for name, rec := range map[string]*httptest.ResponseRecorder{
+		"bad mapping":   postImport(t, srv, cookie, "/api/v1/assets/import/preview", file, []string{"name"}),
+		"not multipart": doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/import/preview", `{}`),
+		"empty file":    postImport(t, srv, cookie, "/api/v1/assets/import/preview", "", nil),
+	} {
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d %s", name, rec.Code, rec.Body)
+		}
+	}
+	big := "name\n" + strings.Repeat("x", assetcsv.MaxBytes)
+	if rec := postImport(t, srv, cookie, "/api/v1/assets/import/preview", big, nil); rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("big file: %d", rec.Code)
+	}
+
+	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
+	for _, path := range []string{"/api/v1/assets/import/preview", "/api/v1/assets/import"} {
+		if rec := postImport(t, srv, reader, path, file, mapping); rec.Code != http.StatusForbidden {
+			t.Errorf("%s without assets:write: %d", path, rec.Code)
+		}
+	}
+}
+
+// TestImportIsAttributedToTheUser checks threshold events from an import
+// name the importer.
+func TestImportIsAttributedToTheUser(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	one := 1
+	if _, err := srv.store.CreateCategoryFrom(store.CategoryInput{Name: "Tape", IsConsumable: true, LowStockThreshold: &one}); err != nil {
+		t.Fatal(err)
+	}
+	rec := postImport(t, srv, cookie, "/api/v1/assets/import", "name,categories\nRoll,Tape\n", []string{"name", "categories"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	events, _ := srv.store.ListEvents(1)
+	if len(events) != 1 || events[0].Kind != models.EventRestocked || events[0].Payload.Actor == nil || events[0].Payload.Actor.ID != admin.ID {
+		t.Errorf("events %+v", events)
 	}
 }

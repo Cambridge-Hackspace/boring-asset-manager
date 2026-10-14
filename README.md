@@ -653,8 +653,8 @@ Sub-phases land in order, each with its tests, and leave the tree releasable.
 * [x] `GET /api/v1/assets/export.csv` with category paths, generator codes, field values and formula-injection defusing.
 
 #### Sub-Phase 5.4: CSV Import
-* [ ] Header mapping suggestions, preview with per-row and per-column problems, and the strict category pre-flight.
-* [ ] Create-or-update by ID in one transaction, with thresholds checked once afterwards.
+* [x] Header mapping suggestions, preview with per-row and per-column problems, and the strict category pre-flight.
+* [x] Create-or-update by ID in one transaction, with thresholds checked once afterwards.
 
 #### Sub-Phase 5.5: Import & Export Screens
 * [ ] Export from the asset list; upload, mapping, preview and confirmation for imports.
@@ -699,12 +699,12 @@ The Go suites, and therefore reaper, do not run these; adding them to the reaper
 
 ### 8.3 Running the Suites Against PostgreSQL and MariaDB
 
-By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store, API and notification suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
+By default every test uses SQLite. Setting `BAM_TEST_DIALECT` and `BAM_TEST_DSN` reruns the store, API, notification and CSV suites against a live server. Each test creates and drops its own schema (PostgreSQL) or database (MariaDB), so the DSN must belong to a role allowed to do that:
 
 ```bash
-BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/ ./internal/notify/
+BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/
 
-BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/ ./internal/notify/
+BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/
 ```
 
 Portability rules for schema and queries:

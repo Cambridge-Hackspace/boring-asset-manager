@@ -2,6 +2,7 @@
 package assetcsv
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,6 +15,12 @@ import (
 const (
 	RefSeparator  = ";"
 	PathSeparator = " > "
+)
+
+// Errors resolving a category reference.
+var (
+	ErrUnknownCategory   = errors.New("unknown category")
+	ErrAmbiguousCategory = errors.New("ambiguous category")
 )
 
 // uncategorized is the system category's ID; it is implied by having no
@@ -116,9 +123,9 @@ func (c *Categories) Resolve(ref string) (string, error) {
 	case 1:
 		return ids[0], nil
 	case 0:
-		return "", fmt.Errorf("unknown category %q", ref)
+		return "", fmt.Errorf("%w %q", ErrUnknownCategory, ref)
 	default:
-		return "", fmt.Errorf("category %q is ambiguous: %d categories have that path; use an ID", ref, len(ids))
+		return "", fmt.Errorf("%w %q: %d categories have that path; use an ID", ErrAmbiguousCategory, ref, len(ids))
 	}
 }
 
