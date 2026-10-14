@@ -591,9 +591,9 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 * [x] Each with store and API tests across SQLite, PostgreSQL and MariaDB. New passwords (users, the CLI admin, password changes) must be 8-72 bytes, the most bcrypt can use.
 
 #### Sub-Phase 4.3: Fields & Categories
-* [ ] Field corpus views: list, create, edit and delete, by type with select options.
-* [ ] Category tree with color swatches, consumable and running-low flags, and create, edit, move and delete.
-* [ ] Category field assignment, showing each effective field's source category and inherited constraints.
+* [x] Field corpus views: list, create, edit and delete, by type with select options.
+* [x] Category tree with color swatches, consumable and running-low flags, and create, edit, move and delete.
+* [x] Category field assignment, showing each effective field's source category and inherited constraints.
 
 #### Sub-Phase 4.4: Assets & Labels
 * [ ] Asset list with search, category filter and multi-select.
