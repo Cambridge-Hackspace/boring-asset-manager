@@ -792,7 +792,7 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Release builds on GitHub for each tag, and an optional scheduled updater for both service managers (§2.2), with a check of the updater against fake releases.
 
 #### Sub-Phase 6.3: Web Checks in reaper
-* [ ] `svelte-check`, Vitest and Playwright in the reaper battery.
+* [x] `svelte-check`, Vitest and Playwright in the reaper battery (§8.1).
 
 #### Sub-Phase 6.4: Error Mapping
 * [ ] Every handler answers a caller's mistake with `4xx` and only a failure of the server with `5xx`.
@@ -813,6 +813,8 @@ reaper test      # Syncs uncommitted working tree -> builds -> ZFS state rollbac
 reaper down      # Tears down remote VM (cull daemon provides automatic TTL backstop)
 ```
 
+`reaper test` builds the binary in the pinned Go image, then runs `tools/reaper/run.sh` on the guest: the Go suites with `-race` (the SQLite database and uploads in `$REAPER_STATE`), then `svelte-check` and Vitest, then the Playwright and `axe` battery (§8.4). Each runs in its own pinned container, so the run verb executes on the guest (`exec = "host"`) and starts them with its podman; a containerized verb cannot start containers. The images are listed under `run.images` so reaper pulls them first, and `node_modules`, the npm cache and Go's caches live in reaper's caches rather than on the guest's small root disk. A test (`tools/reaper`) checks that every image the scripts run is in `run.images`, in the digest-only form reaper accepts. The script runs the same way by hand, with `REAPER_STATE` and the `REAPER_CACHE_*` variables pointing at directories of your own.
+
 ### 8.2 Testing Portfolio
 Following the "Portfolio of Oracles" methodology:
 1. **Tier 1 — Pure Unit & Golden Vectors:** Vector math, Micro QR bitpacking, bcrypt password hashing, boundary decoders, and cross-language barcode golden files (module matrices from Python's `segno`, scan checks with `zxing-cpp`) alongside byte-exact SVG, PNG, PDF and printer-stream goldens.
@@ -829,7 +831,7 @@ The web interface has its own checks, which run in pinned containers and need no
 * `tools/web/build.sh check`: `svelte-check` (types and Svelte's accessibility warnings, which fail the run) and the Vitest unit and component tests, which run against a fake API.
 * `tools/web/e2e.sh`: the Playwright battery in `web/e2e`. It builds the interface and a Linux binary, starts `bam serve` on a fresh SQLite database inside the Playwright container, and drives Chromium through sign-in, fields and categories, assets and labels, CSV export and import, thresholds and notification channels, the template editor (mouse and keyboard), and administration. Printing goes to in-process fake TCP printers whose jobs are checked byte by byte, and the server's outgoing HTTPS is pointed at a closed port, so notifications never leave the container. Every view is audited with `axe-core` for WCAG 2.1 A and AA in both light and dark mode, and keyboard-only walks cover the main flows. Arguments filter the specs: `tools/web/e2e.sh editor a11y`.
 
-The Go suites, and therefore reaper, do not run these; adding them to the reaper battery is a matter of calling both scripts.
+reaper runs both (§8.1). The scripts keep `node_modules`, the npm cache and Go's caches in named volumes; `BAM_WEB_NODE_MODULES`, `BAM_NPM_CACHE`, `BAM_GO_CACHE` and `BAM_GO_MOD` put them in directories instead.
 
 ### 8.3 Running the Suites Against PostgreSQL and MariaDB
 
