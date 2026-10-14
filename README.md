@@ -34,7 +34,6 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 host = "0.0.0.0"
 port = 8080
 base_url = "http://localhost:8080"
-session_secret = "replace-with-a-secure-random-64-char-string"
 
 [database]
 # Drivers: "sqlite", "postgres", "mariadb"

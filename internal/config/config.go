@@ -1,8 +1,6 @@
 package config
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -20,12 +18,11 @@ type Config struct {
 	Printers PrintersConfig `toml:"printers"`
 }
 
-// ServerConfig holds HTTP server listening and security configuration.
+// ServerConfig holds HTTP server listening configuration.
 type ServerConfig struct {
-	Host          string `toml:"host"`
-	Port          int    `toml:"port"`
-	BaseURL       string `toml:"base_url"`
-	SessionSecret string `toml:"session_secret"`
+	Host    string `toml:"host"`
+	Port    int    `toml:"port"`
+	BaseURL string `toml:"base_url"`
 }
 
 // DatabaseConfig holds database connection configuration.
@@ -49,15 +46,11 @@ type PrintersConfig struct {
 
 // DefaultConfig returns safe default settings.
 func DefaultConfig() *Config {
-	randomSecret := make([]byte, 32)
-	_, _ = rand.Read(randomSecret)
-
 	return &Config{
 		Server: ServerConfig{
-			Host:          "0.0.0.0",
-			Port:          8080,
-			BaseURL:       "http://localhost:8080",
-			SessionSecret: hex.EncodeToString(randomSecret),
+			Host:    "0.0.0.0",
+			Port:    8080,
+			BaseURL: "http://localhost:8080",
 		},
 		Database: DatabaseConfig{
 			Type: "sqlite",
@@ -108,9 +101,6 @@ func applyEnvOverrides(cfg *Config) {
 	if baseURL := os.Getenv("BAM_SERVER_BASE_URL"); baseURL != "" {
 		cfg.Server.BaseURL = baseURL
 	}
-	if secret := os.Getenv("BAM_SERVER_SESSION_SECRET"); secret != "" {
-		cfg.Server.SessionSecret = secret
-	}
 
 	if dbType := os.Getenv("BAM_DATABASE_TYPE"); dbType != "" {
 		cfg.Database.Type = dbType
@@ -146,9 +136,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Database.DSN == "" {
 		return fmt.Errorf("database dsn cannot be empty")
-	}
-	if c.Server.SessionSecret == "" {
-		return fmt.Errorf("session_secret cannot be empty")
 	}
 	for _, pattern := range c.Printers.Devices {
 		if !strings.HasPrefix(pattern, "/") {
