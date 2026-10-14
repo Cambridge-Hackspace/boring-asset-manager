@@ -13,7 +13,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 ### Core Philosophy
 - **Self-Contained Deployment:** Distributed as a single compiled binary for FreeBSD, Linux, and Windows with effortless `CGO_ENABLED=0` cross-compilation.
 - **Embedded Frontend:** The Go backend serves the compiled Single Page Application (SPA) directly via `embed.FS`.
-- **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, storage paths, the printer device allowlist). All operational settings, network printer definitions, webhooks, and layouts live inside the database.
+- **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, storage paths, the printer device allowlist). All operational settings, network printer definitions, notification channels, and layouts live inside the database.
 
 ### Technology Choices
 - **Backend:** Go 1.23+ (Standard library `net/http` or router such as `chi`).
@@ -153,7 +153,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 * **Category Hierarchy (`categories`):**
 * Represents a single-parent tree: `parent_id` points to another category or `NULL` (root).
-* Flags: `is_consumable (bool)`, `is_running_low (bool)`, `color_hex (string)`.
+* Flags: `is_consumable (bool)`, `is_running_low (bool)`, `color_hex (string)`, and for consumables an optional `low_stock_threshold (int)` (§5.1).
 * Associative table `category_fields`: `(category_id, field_id, is_required)`.
 
 
@@ -405,41 +405,57 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 
 ---
 
-## 5. Webhooks & Consumables Tracking
+## 5. Notifications & Consumables Tracking
 
-* **Consumable & Bin Management:**
-* Categories tagged with `is_consumable = true` support an active `is_running_low` flag.
-* Users can toggle this state manually via dashboard actions or inventory thresholds.
+### 5.1 Running Low
 
+* Categories tagged with `is_consumable = true` support an `is_running_low` flag. Only consumable categories may carry it.
+* **Manual:** `PUT /api/v1/categories/{id}/running-low` with `{"running_low": true|false}` sets or clears it. It needs only `assets:write`, so the people handling stock can flag it without being able to edit categories. Editing the category (`categories:manage`) can set it too.
+* **Inventory thresholds:** a consumable category may have an optional `low_stock_threshold` (a positive integer, or `null` for none). Its *active count* is the number of distinct active (not archived) assets in the category or any of its descendants; an asset in two subcategories counts once.
+  * When the active count drops below the threshold, the category flags itself as running low. When it climbs back to the threshold or above, it clears itself.
+  * The rule reacts to the count *crossing* the threshold, not to its level. A manual change stands until the count next crosses, so the automatic rule never undoes a person's decision.
+  * Anything that changes an active count is checked: creating, archiving, deleting or recategorizing assets; moving or deleting categories; imports (checked once, after the whole file); and changing the threshold itself (setting it above the current count flags at once).
+  * Changes that can move a count serialize on an application lock, so two simultaneous archives cannot both miss a crossing.
+* **Events:** every change of the flag, manual or automatic, records an event (`category.running_low` or `category.restocked`) in the same transaction as the change: the category, the user whose action caused it, whether it was manual or automatic, and for automatic changes the count and threshold. A change that rolls back records nothing, and two people flagging at once produce one event.
 
-* **Discord Notification Engine:**
-* Configurable webhook URL stored in the DB settings table.
-* When a category transitions from `is_running_low = false` to `is_running_low = true`, a background job dispatches a formatted Discord Embed:
-* Category name and visual color bar (`color_hex`).
-* Timestamp and triggering user.
-* Quick link to the category asset view.
+### 5.2 Notifiers
 
+Notifications go out through pluggable notifier drivers, in the same way printers use print drivers. Discord is the first.
 
-
-
+* **Drivers** (`internal/notify`) declare their options, which options are secret, how to validate them and how to deliver an event. Events themselves are neutral; each driver decides how to present them. `GET /api/v1/notifiers/drivers` lists them.
+* **Channels** (`notification_channels`) are configured through `/api/v1/notifiers` (`settings:manage`): a name, a driver, its options, an enabled switch and the event kinds the channel subscribes to. There can be any number. Secret options can be written but are never returned; reads show only whether they are set. `POST /api/v1/notifiers/{id}/test` sends a test message.
+* **Delivery:** each event fans out to one delivery per enabled, subscribed channel, created in the same transaction as the event. A worker in `bam serve` sends them:
+  * A delivery is claimed with a lease, so several servers sharing a database send it once.
+  * Network errors and `5xx` responses are retried with exponential backoff; a `429` waits as long as the service asks. Other `4xx` responses fail at once, and anything still unsent after 24 hours is given up.
+  * The outcome of recent deliveries is visible in `GET /api/v1/notifiers/deliveries`.
+* **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed.
 
 ---
 
 ## 6. Batch Processing Subsystems
 
-### 6.1 CSV Import Pipeline
+### 6.1 CSV Import & Export
 
-1. **Schema Pre-flight Validation:**
-* Headers are parsed against the global field corpus and category lists.
-* **Strict Validation Constraint:** All referenced categories in the CSV **must already exist** in the system. The importer aborts if unmapped or non-existent categories are detected.
+**Format.** One row per asset, UTF-8 (a leading byte order mark is written on export and accepted on import), with these columns:
 
+| Column | Meaning |
+| :--- | :--- |
+| `id` | The asset's UUID. Blank on import creates a new asset. |
+| `name` | The asset's name. |
+| `categories` | Category references separated by `;`. A reference is a path of names from the root joined by ` > ` (`Tools > Drills`) or a category ID. Export writes the path unless it is ambiguous or contains a separator, and then the ID. |
+| `code.<type>` | The assigned code for a generator type (`code.qr`, `code.micro_qr`, `code.code128`). |
+| `field.<key>` | A field value, by corpus key. |
 
-2. **Field Mapping Interface:**
-* Users confirm column-to-corpus mappings before finalizing execution.
+Spreadsheet formula injection is defused: on export a cell beginning with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'`, and on import a `'` followed by one of those characters is removed.
 
+**Export.** `GET /api/v1/assets/export.csv` (`assets:read`) takes the asset list's filters and writes every matching asset, with a column for every generator type and every field any of them has a value for.
 
-3. **Atomic Processing:**
-* Ingestion runs inside a database transaction to prevent partial state corruption on failure.
+**Import.** `POST /api/v1/assets/import/preview` and `POST /api/v1/assets/import` (`assets:write`) take the file (at most 5 MB and 5,000 rows) and a mapping from each column to `id`, `name`, `categories`, a generator type, a field key, or `ignore`.
+
+1. **Mapping:** the preview suggests a mapping from the headers (the names above, and field labels as well as keys). Every column must be mapped or explicitly ignored, and the user confirms the mapping before importing.
+2. **Pre-flight validation:** every referenced category must already exist; otherwise the import is refused with the list of unknown references. Each row is then checked as the API would check it: required fields from the asset's effective fields, field types and select choices, and generator codes (format, and uniqueness both within the file and against other assets). Duplicate IDs within the file, unknown IDs and archived assets are errors.
+3. **Rows:** a row without an `id` creates an asset. A row whose `id` matches an asset updates it, and a blank cell leaves that value unchanged. The preview reports each problem with its row and column, and how many assets would be created, updated and left unchanged.
+4. **Atomic processing:** the import validates everything again, without trusting the preview, and applies every row in one transaction. Any error means nothing is written. Inventory thresholds (§5.1) are checked once afterwards, so each category records at most one event.
 
 
 
@@ -619,11 +635,36 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 * [x] Playwright tests in a pinned container against a real `bam serve` on a fresh SQLite database, covering sign-in, fields, categories, assets, the editor (including dragging and keyboard editing), exports, and printing to an in-process fake TCP printer whose received job is decoded and checked.
 * [x] Automated accessibility checks (`axe-core`) on every view, plus keyboard-only walkthroughs of the main flows.
 
-### Phase 5: Batch Operations & Webhooks
+### Phase 5: Batch Operations & Notifications
 
-* [ ] Implement CSV parser with strict category pre-flight checks and column mapper.
-* [ ] Implement Discord webhook dispatcher for consumables marked running low.
-* [ ] Write integration test suites covering inheritance conflict resolution, anti-lockout logic, and template vector compilation.
+Sub-phases land in order, each with its tests, and leave the tree releasable.
+
+#### Sub-Phase 5.1: Running Low & Inventory Thresholds
+* [ ] `PUT /api/v1/categories/{id}/running-low` (`assets:write`), changing the flag only on a real transition.
+* [ ] `low_stock_threshold` on consumable categories, with active counts over the category's subtree, re-checked by every change that can move a count, under an application lock.
+* [ ] Running-low events recorded in the same transaction as the change.
+
+#### Sub-Phase 5.2: Notifier Framework & Discord
+* [ ] The notifier driver registry, channels with secret options, and `/api/v1/notifiers`.
+* [ ] Deliveries fanned out with each event, and the delivery worker: leases, backoff, `429` handling and the 24-hour limit.
+* [ ] The Discord driver, tested against a fake Discord server.
+
+#### Sub-Phase 5.3: CSV Export
+* [ ] `GET /api/v1/assets/export.csv` with category paths, generator codes, field values and formula-injection defusing.
+
+#### Sub-Phase 5.4: CSV Import
+* [ ] Header mapping suggestions, preview with per-row and per-column problems, and the strict category pre-flight.
+* [ ] Create-or-update by ID in one transaction, with thresholds checked once afterwards.
+
+#### Sub-Phase 5.5: Import & Export Screens
+* [ ] Export from the asset list; upload, mapping, preview and confirmation for imports.
+
+#### Sub-Phase 5.6: Notification & Threshold Screens
+* [ ] Administration of notification channels from the driver descriptions, with a test message and the delivery log.
+* [ ] The threshold and active count on the category form; running low and restocked actions; running-low categories on the home page.
+
+#### Sub-Phase 5.7: Integration Battery
+* [ ] HTTP-level suites on SQLite, PostgreSQL and MariaDB covering inheritance conflict resolution, anti-lockout under concurrency, template vector compilation across a database round trip, import atomicity, threshold crossings (including simultaneous archives) and exactly-once delivery to several channels.
 
 ---
 
