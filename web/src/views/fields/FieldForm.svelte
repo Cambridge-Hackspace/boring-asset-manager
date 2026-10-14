@@ -75,7 +75,7 @@
         bind:value={key}
         oninput={() => (keyEdited = true)}
       />
-      <p id="{idPrefix}-key-help" class="mt-1 text-xs text-zinc-500">
+      <p id="{idPrefix}-key-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
         {initial ? 'Keys cannot change once created.' : 'Lowercase letters, digits and underscores. Used in label bindings.'}
       </p>
     </div>

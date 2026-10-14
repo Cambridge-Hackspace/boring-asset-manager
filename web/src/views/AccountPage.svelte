@@ -47,7 +47,7 @@
   <div>
     <label class="label" for="new-password">New password</label>
     <input id="new-password" class="input" type="password" required minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="new-password-help" bind:value={next} />
-    <p id="new-password-help" class="mt-1 text-xs text-zinc-500">8-72 characters.</p>
+    <p id="new-password-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">8-72 characters.</p>
   </div>
   <div>
     <label class="label" for="confirm-password">Repeat new password</label>

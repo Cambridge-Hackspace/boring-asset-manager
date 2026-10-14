@@ -616,8 +616,8 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 * [x] Own password change.
 
 #### Sub-Phase 4.7: End-to-End & Accessibility Battery
-* [ ] Playwright tests in a pinned container against a real `bam serve` on a fresh SQLite database, covering sign-in, fields, categories, assets, the editor (including dragging and keyboard editing), exports, and printing to an in-process fake TCP printer whose received job is decoded and checked.
-* [ ] Automated accessibility checks (`axe-core`) on every view, plus keyboard-only walkthroughs of the main flows.
+* [x] Playwright tests in a pinned container against a real `bam serve` on a fresh SQLite database, covering sign-in, fields, categories, assets, the editor (including dragging and keyboard editing), exports, and printing to an in-process fake TCP printer whose received job is decoded and checked.
+* [x] Automated accessibility checks (`axe-core`) on every view, plus keyboard-only walkthroughs of the main flows.
 
 ### Phase 5: Batch Operations & Webhooks
 
@@ -646,6 +646,15 @@ Following the "Portfolio of Oracles" methodology:
 4. **Tier 7 — Seeded Fuzzing:** Deterministic input fuzzing asserting no 500 crashes, valid JSON envelopes, and daemon liveness.
 5. **Tier 8 — Concurrency Harnesses:** Simultaneous write simulations for inventory threshold decrements and per-generator ID allocations, asserting stored state consistency.
 6. **State Rollback:** Ephemeral databases and uploads live under `$REAPER_STATE` (`tank/state`), enabling near-instantaneous ZFS rollbacks to `@pristine` between test iterations.
+
+### 8.4 Web Interface Tests
+
+The web interface has its own checks, which run in pinned containers and need no Node on the host:
+
+* `tools/web/build.sh check`: `svelte-check` (types and Svelte's accessibility warnings, which fail the run) and the Vitest unit and component tests, which run against a fake API.
+* `tools/web/e2e.sh`: the Playwright battery in `web/e2e`. It builds the interface and a Linux binary, starts `bam serve` on a fresh SQLite database inside the Playwright container, and drives Chromium through sign-in, fields and categories, assets and labels, the template editor (mouse and keyboard), and administration. Printing goes to in-process fake TCP printers whose jobs are checked byte by byte. Every view is audited with `axe-core` for WCAG 2.1 A and AA in both light and dark mode, and keyboard-only walks cover the main flows. Arguments filter the specs: `tools/web/e2e.sh editor a11y`.
+
+The Go suites, and therefore reaper, do not run these; adding them to the reaper battery is a matter of calling both scripts.
 
 ### 8.3 Running the Suites Against PostgreSQL and MariaDB
 

@@ -44,7 +44,7 @@
     <p class="error-text mt-2" role="alert">{loadError}</p>
   </main>
 {:else if !session.loaded}
-  <p class="p-8 text-sm text-zinc-500" role="status">Loading…</p>
+  <p class="p-8 text-sm text-zinc-600 dark:text-zinc-400" role="status">Loading…</p>
 {:else if router.path === '/sign-in'}
   <SignIn />
 {:else if session.user}

@@ -120,7 +120,7 @@
     <div>
       <label class="text-xs" for="{pid}-address">Address</label>
       <input id="{pid}-address" class="input font-mono" required aria-describedby="{pid}-address-help" bind:value={address} />
-      <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-500">{connectionHelp[connType]}</p>
+      <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{connectionHelp[connType]}</p>
     </div>
   </fieldset>
 
@@ -158,7 +158,7 @@
               />
             {/if}
           {/if}
-          <p id="{oid}-help" class="mt-1 text-xs text-zinc-500">{opt.description}</p>
+          <p id="{oid}-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{opt.description}</p>
         </div>
       {/each}
     </fieldset>

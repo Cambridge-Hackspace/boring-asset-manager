@@ -4,7 +4,7 @@
   import ImagePicker from './ImagePicker.svelte';
 
   // Edits one element. Each change goes through onupdate with the new
-  // element; onbegin marks the start of an undoable edit.
+  // element, and is one undoable step.
   let {
     doc,
     index,
@@ -12,7 +12,6 @@
     placeholderList,
     problems,
     onupdate,
-    onbegin,
     onremove,
     onorder,
   }: {
@@ -22,7 +21,6 @@
     placeholderList: string[];
     problems: string[];
     onupdate: (e: TemplateElement) => void;
-    onbegin: () => void;
     onremove: () => void;
     onorder: (delta: number) => void;
   } = $props();
@@ -69,7 +67,7 @@
     </ul>
   {/if}
 
-  <fieldset class="grid grid-cols-2 gap-3 sm:grid-cols-4" onfocusin={onbegin}>
+  <fieldset class="grid grid-cols-2 gap-3 sm:grid-cols-4">
     <legend class="label">Position and size ({doc.units})</legend>
     {#each [['x', 'Left'], ['y', 'Top'], ['width', 'Width'], ['height', 'Height']] as const as [key, label] (key)}
       <div>
@@ -80,7 +78,7 @@
   </fieldset>
 
   {#if e.type === 'text' || e.type === 'generator'}
-    <div onfocusin={onbegin}>
+    <div>
       <label class="label" for={id('binding')}>Content</label>
       <input
         id={id('binding')}
@@ -94,14 +92,14 @@
       <datalist id={id('placeholders')}>
         {#each placeholderList as p (p)}<option value={p}></option>{/each}
       </datalist>
-      <p id={id('binding-help')} class="mt-1 text-xs text-zinc-500">
+      <p id={id('binding-help')} class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
         Text with placeholders such as {'{{asset.name}}'} or {'{{field.serial}}'}.{#if e.type === 'generator'}{' '}Empty encodes the asset’s {e.generator_type} code.{/if}
       </p>
     </div>
   {/if}
 
   {#if e.type === 'text'}
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3" onfocusin={onbegin}>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       <div>
         <label class="label" for={id('size')}>Size (pt)</label>
         <input id={id('size')} class="input" type="number" min="1" step="0.5" value={e.font_size} onchange={(ev) => setNumber('font_size', ev.currentTarget.value)} />
@@ -137,7 +135,7 @@
       </label>
     </div>
   {:else if e.type === 'generator'}
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3" onfocusin={onbegin}>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       <div>
         <label class="label" for={id('gen')}>Symbology</label>
         <select id={id('gen')} class="input" value={e.generator_type} onchange={(ev) => setGeneratorType(ev.currentTarget.value)}>
@@ -159,6 +157,6 @@
       </div>
     </div>
   {:else}
-    <ImagePicker value={e.image_id ?? ''} onpick={(imageId) => { onbegin(); set('image_id', imageId); }} />
+    <ImagePicker value={e.image_id ?? ''} onpick={(imageId) => set('image_id', imageId)} />
   {/if}
 </section>

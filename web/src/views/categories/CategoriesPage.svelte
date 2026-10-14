@@ -41,7 +41,7 @@
 <ErrorMessage {error} />
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading categories…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading categories…</p>
 {:else}
   <ul class="space-y-1" aria-label="Category tree">
     {#each tree as row (row.category.id)}
@@ -51,12 +51,12 @@
         {#if row.category.is_running_low}
           <span class="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Running low</span>
         {:else if row.category.is_consumable}
-          <span class="text-xs text-zinc-500">Consumable</span>
+          <span class="text-xs text-zinc-600 dark:text-zinc-400">Consumable</span>
         {/if}
         {#if row.depth > 0}<span class="sr-only">(level {row.depth + 1})</span>{/if}
       </li>
     {:else}
-      <li class="text-sm text-zinc-500">No categories yet.</li>
+      <li class="text-sm text-zinc-600 dark:text-zinc-400">No categories yet.</li>
     {/each}
   </ul>
   {#if uncategorized}

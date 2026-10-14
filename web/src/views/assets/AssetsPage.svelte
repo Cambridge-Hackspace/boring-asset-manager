@@ -93,9 +93,9 @@
 <ErrorMessage {error} />
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading assets…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading assets…</p>
 {:else if assets.length === 0}
-  <p class="text-sm text-zinc-500">No assets match.</p>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">No assets match.</p>
 {:else}
   <p class="sr-only" role="status">{assets.length} assets, {selected.length} selected.</p>
   <div class="overflow-x-auto">

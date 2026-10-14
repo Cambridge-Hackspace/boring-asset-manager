@@ -76,9 +76,9 @@
 <ErrorMessage {error} />
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading images…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading images…</p>
 {:else if images.length === 0}
-  <p class="text-sm text-zinc-500">No images yet.</p>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">No images yet.</p>
 {:else}
   <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
     {#each images as img (img.id)}
@@ -86,7 +86,7 @@
       <li class="card space-y-2">
         <img src="/api/v1/images/{encodeURIComponent(img.id)}/content" alt={img.filename} class="mx-auto h-24 object-contain" />
         <p class="truncate font-medium" title={img.filename}>{img.filename}</p>
-        <p class="text-xs text-zinc-500">{img.width_px} × {img.height_px} px, {kb(img.byte_size)}</p>
+        <p class="text-xs text-zinc-600 dark:text-zinc-400">{img.width_px} × {img.height_px} px, {kb(img.byte_size)}</p>
         <p class="text-xs">
           {#if users.length}
             Used by {#each users as t, i (t.id)}{i ? ', ' : ''}<a class="underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a>{/each}

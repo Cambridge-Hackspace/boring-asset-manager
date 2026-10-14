@@ -41,9 +41,9 @@
 <ErrorMessage {error} />
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading templates…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading templates…</p>
 {:else if templates.length === 0}
-  <p class="text-sm text-zinc-500">No templates yet.</p>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">No templates yet.</p>
 {:else}
   <table class="w-full text-left text-sm">
     <thead class="border-b border-zinc-300 dark:border-zinc-700">

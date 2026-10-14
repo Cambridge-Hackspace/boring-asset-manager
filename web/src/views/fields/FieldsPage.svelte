@@ -68,9 +68,9 @@
 {/if}
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading fields…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading fields…</p>
 {:else if fields.length === 0}
-  <p class="text-sm text-zinc-500">No fields yet.</p>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">No fields yet.</p>
 {:else}
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm">
@@ -90,7 +90,7 @@
             <tr class="border-b border-zinc-200 dark:border-zinc-800">
               <td class="py-2 pr-4 font-medium">{f.label}</td>
               <td class="py-2 pr-4 font-mono">{f.key}</td>
-              <td class="py-2 pr-4">{f.validation_type} <span class="text-zinc-500">{describe(f)}</span></td>
+              <td class="py-2 pr-4">{f.validation_type} <span class="text-zinc-600 dark:text-zinc-400">{describe(f)}</span></td>
               <td class="py-2 text-right">
                 {#if canManage}
                   <span class="inline-flex flex-wrap justify-end gap-2">
