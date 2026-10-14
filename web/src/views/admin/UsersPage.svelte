@@ -94,7 +94,7 @@
       <div>
         <label class="label" for="new-password">Initial password</label>
         <input id="new-password" class="input" type="password" required minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="new-password-help" bind:value={newPassword} />
-        <p id="new-password-help" class="mt-1 text-xs text-zinc-500">8-72 characters. They can change it after signing in.</p>
+        <p id="new-password-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">8-72 characters. They can change it after signing in.</p>
       </div>
     </div>
     <fieldset>
@@ -111,7 +111,7 @@
 {/if}
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading users…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading users…</p>
 {:else}
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm">
@@ -126,7 +126,7 @@
       <tbody>
         {#each users as u (u.id)}
           <tr class="border-b border-zinc-200 align-top dark:border-zinc-800">
-            <td class="py-2 pr-4 font-medium">{u.email}{#if u.id === session.user?.id}{' '}<span class="text-xs text-zinc-500">(you)</span>{/if}</td>
+            <td class="py-2 pr-4 font-medium">{u.email}{#if u.id === session.user?.id}{' '}<span class="text-xs text-zinc-600 dark:text-zinc-400">(you)</span>{/if}</td>
             <td class="py-2 pr-4">{u.is_active ? 'Active' : 'Disabled'}</td>
             <td class="py-2 pr-4">
               {#if editingRoles === u.id}

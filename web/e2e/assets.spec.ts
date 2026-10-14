@@ -1,0 +1,80 @@
+import fs from 'node:fs';
+import { expect, goTo, test, unique } from './fixtures';
+
+test('create an asset, preview and print its label, export a batch', async ({ signedIn: page, api, printer }) => {
+  const field = await api.call('POST', '/fields', { key: unique('serial').replace(/-/g, '_'), label: 'Serial', validation_type: 'text' });
+  const category = unique('Bench');
+  const cat = await api.call('POST', '/categories', { name: category, color_hex: '#fbbf24', is_consumable: false, is_running_low: false });
+  await api.call('POST', `/categories/${cat.category.id}/fields`, { field_id: field.field.id, is_required: true });
+  const templateId = unique('ql90');
+  await api.call('POST', '/templates', {
+    id: templateId,
+    name: `QL ${templateId}`,
+    units: 'mm',
+    width: 90,
+    height: 29,
+    dpi: 300,
+    elements: [
+      { type: 'generator', generator_type: 'qr', x: 3, y: 3, width: 23, height: 23, content_binding: '{{asset.code.qr}}' },
+      { type: 'text', x: 28, y: 4, width: 58, height: 10, font_size: 16, font_weight: 'bold', content_binding: '{{asset.name}}' },
+    ],
+  });
+  const printerName = unique('QL');
+  await api.call('POST', '/printers', {
+    name: printerName,
+    driver: 'brother_ql',
+    model: 'QL-810W',
+    connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` },
+    media: 'dk-11201',
+  });
+
+  const name = unique('Drill');
+  const code = unique('D').toUpperCase();
+  await goTo(page, 'Assets');
+  await page.getByRole('link', { name: 'New asset' }).click();
+  await page.getByLabel('Name').fill(name);
+  await page.getByRole('checkbox', { name: category }).check();
+  // A required field the server enforces: leave it empty first.
+  await page.getByLabel('QR Code', { exact: true }).fill(code);
+  await page.getByRole('button', { name: 'Create asset' }).click();
+  await expect(page.getByRole('alert')).toContainText('required field');
+  await expect(page.getByLabel(/Serial/)).toHaveAttribute('aria-invalid', 'true');
+  await page.getByLabel(/Serial/).fill('SN-0042');
+  await page.getByRole('button', { name: 'Create asset' }).click();
+  await expect(page).toHaveURL(/\/assets\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+
+  // The label panel: preview, then print two copies.
+  await page.getByLabel('Template').selectOption(templateId);
+  const preview = page.getByRole('img', { name: 'Preview of the label for this asset' });
+  await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBeGreaterThan(0);
+  await page.getByLabel('Printer').selectOption({ label: printerName });
+  await page.getByLabel('Copies').fill('2');
+  await page.getByRole('button', { name: 'Print' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Sent' })).toHaveText(`Sent 2 labels to ${printerName}.`);
+  const job = await printer.job();
+  // A Brother QL raster job: 200 invalidate bytes, then ESC @.
+  expect(job.subarray(0, 200).every((b) => b === 0)).toBe(true);
+  expect(job.subarray(200, 202)).toEqual(Buffer.from([0x1b, 0x40]));
+
+  // The list: search by code, then export a second asset with it.
+  await api.call('POST', '/assets', {
+    name: unique('Grinder'),
+    category_ids: [cat.category.id],
+    generator_keys: [{ generator_type: 'qr', assigned_code: unique('G').toUpperCase() }],
+    field_values: { [field.field.key]: 'SN-7' },
+  });
+  await goTo(page, 'Assets');
+  await page.getByLabel('Category').selectOption(cat.category.id);
+  await expect(page).toHaveURL(/category=/);
+  await expect(page.getByRole('row')).toHaveCount(3);
+  await page.getByRole('checkbox', { name: 'Select all assets' }).check();
+  await page.getByLabel('Template').selectOption(templateId);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export 2 labels' }).click()]);
+  expect(fs.readFileSync((await download.path())!).subarray(0, 5).toString()).toBe('%PDF-');
+
+  await page.getByLabel('Search').fill(code);
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
+  await expect(page.getByRole('row')).toHaveCount(2);
+});

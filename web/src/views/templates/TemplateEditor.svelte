@@ -269,10 +269,10 @@
 <nav aria-label="Breadcrumb" class="mb-2 text-sm"><a class="underline" href="/templates">Templates</a></nav>
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else}
   <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-    <h1 class="text-2xl font-bold">{isNew ? 'New template' : doc.name || routeId}{#if dirty}<span class="ml-2 text-sm font-normal text-zinc-500">Unsaved changes</span>{/if}</h1>
+    <h1 class="text-2xl font-bold">{isNew ? 'New template' : doc.name || routeId}{#if dirty}<span class="ml-2 text-sm font-normal text-zinc-600 dark:text-zinc-400">Unsaved changes</span>{/if}</h1>
     <div class="flex flex-wrap gap-2">
       <button type="button" class="btn-secondary" onclick={undo} disabled={!canUndo}>Undo</button>
       <button type="button" class="btn-secondary" onclick={redo} disabled={!canRedo}>Redo</button>
@@ -338,8 +338,10 @@
           {generators}
           {placeholderList}
           problems={problemsFor(selected[0]!)}
-          onupdate={(e: TemplateElement) => (doc.elements[selected[0]!] = e)}
-          onbegin={begin}
+          onupdate={(e: TemplateElement) => {
+            begin();
+            doc.elements[selected[0]!] = e;
+          }}
           onremove={removeSelected}
           onorder={reorder}
         />
@@ -350,7 +352,15 @@
         </section>
       {/if}
 
-      <CanvasPanel {doc} {isNew} problems={canvasProblems} onchange={(d) => (doc = d)} onbegin={begin} />
+      <CanvasPanel
+        {doc}
+        {isNew}
+        problems={canvasProblems}
+        onchange={(d, record = true) => {
+          if (record) begin();
+          doc = d;
+        }}
+      />
 
       <section class="card space-y-3" aria-labelledby="preview-heading">
         <h2 id="preview-heading" class="text-lg font-semibold">Preview data</h2>
@@ -385,7 +395,7 @@
           <LabelActions assetIds={[previewAsset.id]} templateId={doc.id} />
         {/key}
       {:else if previewAsset}
-        <p class="text-sm text-zinc-500">Save the template to export or print this asset’s label.</p>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">Save the template to export or print this asset’s label.</p>
       {/if}
     </div>
   </div>

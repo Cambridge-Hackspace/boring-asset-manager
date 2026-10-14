@@ -57,6 +57,21 @@ describe('TemplateEditor', () => {
     expect((screen.getByLabelText('Top') as HTMLInputElement).value).toBe('5');
   });
 
+  it('undoes a field edit even after focus moves on', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    const height = (await screen.findByLabelText('Height', { selector: '#tpl-height' })) as HTMLInputElement;
+    await fireEvent.focus(height);
+    await fireEvent.change(height, { target: { value: '40' } });
+    // Moving to the next field must not record the edited state as a step.
+    await fireEvent.focus(screen.getByLabelText('DPI'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(height.value).toBe('29');
+    // Renaming is not an undo step at all.
+    await fireEvent.input(screen.getByLabelText('Name', { selector: '#tpl-name' }), { target: { value: 'Renamed' } });
+    expect((screen.getByRole('button', { name: 'Undo' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('saves, and shows save errors on the element they name', async () => {
     const { sent } = api({
       'PUT /templates/ql90': () => ({

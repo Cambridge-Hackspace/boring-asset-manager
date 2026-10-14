@@ -48,7 +48,7 @@
 <ErrorMessage {error} />
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else if asset}
   <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
     <h1 class="text-2xl font-bold">{asset.asset.name}</h1>
@@ -81,7 +81,7 @@
                 {value}
               {/if}
             {:else}
-              <span class="text-zinc-500">{e.is_required ? 'Missing' : '—'}</span>
+              <span class="text-zinc-600 dark:text-zinc-400">{e.is_required ? 'Missing' : '—'}</span>
             {/if}
           </dd>
         {/each}

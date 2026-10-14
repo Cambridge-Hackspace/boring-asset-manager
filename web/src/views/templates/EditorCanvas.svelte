@@ -177,7 +177,7 @@
       </div>
     {/each}
   </div>
-  <p class="text-xs text-zinc-500">
+  <p class="text-xs text-zinc-600 dark:text-zinc-400">
     Drag to move, drag a corner to resize, Shift+click to select several. With an element focused: arrow keys move it by {gridStep(doc.units)}
     {doc.units} (Shift for ten times that), Delete removes it, Escape deselects. Hold Alt while dragging to leave the grid.
   </p>

@@ -109,7 +109,7 @@
 <h1 class="mb-4 text-2xl font-bold">{isNew ? 'New asset' : 'Edit asset'}</h1>
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else}
   <form class="max-w-3xl space-y-6" onsubmit={save} novalidate>
     {#if error && !errorFor}<ErrorMessage {error} />{/if}
@@ -122,7 +122,7 @@
       <fieldset>
         <legend class="label">Categories</legend>
         {#if tree.length === 0}
-          <p class="text-sm text-zinc-500">No categories yet; the asset will be Uncategorized.</p>
+          <p class="text-sm text-zinc-600 dark:text-zinc-400">No categories yet; the asset will be Uncategorized.</p>
         {:else}
           <ul class="max-h-64 space-y-1 overflow-y-auto">
             {#each tree as row (row.category.id)}
@@ -145,7 +145,7 @@
     <fieldset class="card space-y-4">
       <legend class="text-lg font-semibold">Fields</legend>
       {#if effective.length === 0}
-        <p class="text-sm text-zinc-500">The chosen categories record no fields.</p>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">The chosen categories record no fields.</p>
       {/if}
       {#each effective as e (e.field.id)}
         {@const target = `field:${e.field.key}`}
@@ -175,16 +175,16 @@
         </div>
       {/each}
       {#if kept.length}
-        <p class="text-sm text-zinc-500">
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">
           Kept from former categories, unchanged: {kept.map(([k]) => k).join(', ')}.
         </p>
       {/if}
-      <p class="text-xs text-zinc-500"><span aria-hidden="true">*</span> Required</p>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400"><span aria-hidden="true">*</span> Required</p>
     </fieldset>
 
     <fieldset class="card space-y-4">
       <legend class="text-lg font-semibold">Codes</legend>
-      <p class="text-sm text-zinc-500">Short codes printed as barcodes. Leave blank for none; each code belongs to one asset at a time.</p>
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">Short codes printed as barcodes. Leave blank for none; each code belongs to one asset at a time.</p>
       {#each generators as g (g.type)}
         {@const target = `code:${g.type}`}
         <div>
@@ -196,7 +196,7 @@
             aria-describedby={describedBy(target, `${target}-help`)}
             bind:value={codes[g.type]}
           />
-          <p id="{target}-help" class="mt-1 text-xs text-zinc-500">{g.code_rules}</p>
+          <p id="{target}-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{g.code_rules}</p>
           {#if errorFor === target}<p id="{target}-error" class="error-text mt-1" role="alert">{error}</p>{/if}
         </div>
       {/each}

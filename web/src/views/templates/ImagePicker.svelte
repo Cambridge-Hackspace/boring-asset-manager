@@ -59,7 +59,7 @@
       {/each}
     </div>
   {:else}
-    <p class="text-sm text-zinc-500">No images uploaded yet.</p>
+    <p class="text-sm text-zinc-600 dark:text-zinc-400">No images uploaded yet.</p>
   {/if}
   <label class="btn-secondary cursor-pointer">
     {uploading ? 'Uploading…' : 'Upload PNG or JPEG'}

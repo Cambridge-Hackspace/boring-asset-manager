@@ -105,9 +105,9 @@
 {/if}
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading printers…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading printers…</p>
 {:else if printers.length === 0}
-  <p class="text-sm text-zinc-500">No printers yet.</p>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">No printers yet.</p>
 {:else}
   <ul class="space-y-3">
     {#each printers as p (p.id)}
@@ -120,7 +120,7 @@
               <div>
                 <h2 id="printer-{p.id}" class="font-semibold">{p.name}</h2>
                 <p class="text-sm text-zinc-600 dark:text-zinc-400">{p.model} ({p.driver}), {p.media}</p>
-                <p class="font-mono text-xs text-zinc-500">{connLabel(p)}</p>
+                <p class="font-mono text-xs text-zinc-600 dark:text-zinc-400">{connLabel(p)}</p>
               </div>
               <div class="flex flex-wrap gap-2">
                 {#if canPrint}<button type="button" class="btn-secondary" onclick={() => startTest(p)}>Test print</button>{/if}

@@ -76,17 +76,18 @@ export function convertUnits(doc: TemplateDoc, to: Units): TemplateDoc {
   };
 }
 
-/** A new element of a type, sized to suit the canvas, near its top-left. */
+/** A new element of a type, sized to suit the canvas, near its top-left, on the grid. */
 export function newElement(type: ElementType, doc: TemplateDoc, generatorType = 'qr'): TemplateElement {
-  const side = tidy(Math.min(doc.width, doc.height) * 0.6, doc.units);
-  const at = tidy(Math.min(doc.width, doc.height) * 0.1, doc.units);
+  const step = gridStep(doc.units);
+  const side = Math.max(step, snap(Math.min(doc.width, doc.height) * 0.6, step, doc.units));
+  const at = snap(Math.min(doc.width, doc.height) * 0.1, step, doc.units);
   switch (type) {
     case 'generator':
       return {
         type,
         x: at,
         y: at,
-        width: generatorType === 'code128' ? tidy(doc.width * 0.6, doc.units) : side,
+        width: generatorType === 'code128' ? snap(doc.width * 0.6, step, doc.units) : side,
         height: side,
         generator_type: generatorType,
       };
@@ -97,8 +98,8 @@ export function newElement(type: ElementType, doc: TemplateDoc, generatorType = 
         type: 'text',
         x: at,
         y: at,
-        width: tidy(doc.width * 0.5, doc.units),
-        height: tidy(doc.height * 0.25, doc.units),
+        width: snap(doc.width * 0.5, step, doc.units),
+        height: snap(doc.height * 0.25, step, doc.units),
         content_binding: '{{asset.name}}',
         font_size: 12,
         font_weight: 'normal',

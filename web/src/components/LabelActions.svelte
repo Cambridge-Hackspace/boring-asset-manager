@@ -86,7 +86,7 @@
 <section class="card space-y-4" aria-labelledby="labels-heading">
   <h2 id="labels-heading" class="text-lg font-semibold">Labels</h2>
   {#if templates.length === 0}
-    <p class="text-sm text-zinc-500">No label templates yet.</p>
+    <p class="text-sm text-zinc-600 dark:text-zinc-400">No label templates yet.</p>
   {:else}
     <div class="max-w-sm" hidden={Boolean(fixedTemplate)}>
       <label class="label" for="label-template">Template</label>
@@ -126,7 +126,7 @@
 
     {#if canPrint}
       {#if printers.length === 0}
-        <p class="text-sm text-zinc-500">No printers are set up.</p>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">No printers are set up.</p>
       {:else}
         <form class="flex flex-wrap items-end gap-3" onsubmit={(e) => { e.preventDefault(); void print(); }}>
           <div>

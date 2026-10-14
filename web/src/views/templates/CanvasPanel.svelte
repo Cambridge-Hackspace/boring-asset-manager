@@ -13,13 +13,12 @@
     isNew,
     problems,
     onchange,
-    onbegin,
   }: {
     doc: TemplateDoc;
     isNew: boolean;
     problems: Record<string, string>;
-    onchange: (doc: TemplateDoc) => void;
-    onbegin: () => void;
+    // record is false for edits that are not undo steps (name and ID).
+    onchange: (doc: TemplateDoc, record?: boolean) => void;
   } = $props();
 
   let printers = $state<Printer[]>([]);
@@ -37,8 +36,8 @@
     }
   });
 
-  function update(patch: Partial<TemplateDoc>) {
-    onchange({ ...doc, ...patch });
+  function update(patch: Partial<TemplateDoc>, record = true) {
+    onchange({ ...doc, ...patch }, record);
   }
 
   function setNumber(key: 'width' | 'height' | 'dpi', raw: string) {
@@ -60,7 +59,6 @@
   function sizeFromPrinter() {
     if (!printerMedia) return;
     const { media, dpi } = printerMedia;
-    onbegin();
     const across = fromMM(media.width_mm, doc.units);
     const along = media.die_cut && media.length_mm ? fromMM(media.length_mm, doc.units) : Math.max(doc.width, across);
     update({ width: Math.max(across, along), height: Math.min(across, along), ...(dpi ? { dpi } : {}) });
@@ -88,10 +86,10 @@
 
 <section class="card space-y-4" aria-labelledby="canvas-heading">
   <h2 id="canvas-heading" class="text-lg font-semibold">Label</h2>
-  <div class="grid gap-3 sm:grid-cols-2" onfocusin={onbegin}>
+  <div class="grid gap-3 sm:grid-cols-2">
     <div>
       <label class="label" for="tpl-name">Name</label>
-      <input id="tpl-name" class="input" required value={doc.name} oninput={(e) => update({ name: e.currentTarget.value })} aria-invalid={Boolean(fieldError('name'))} />
+      <input id="tpl-name" class="input" required value={doc.name} oninput={(e) => update({ name: e.currentTarget.value }, false)} aria-invalid={Boolean(fieldError('name'))} />
       {#if fieldError('name')}<p class="error-text mt-1">{fieldError('name')}</p>{/if}
     </div>
     <div>
@@ -104,16 +102,16 @@
         value={doc.id}
         aria-invalid={(isNew && doc.id !== '' && !isTemplateID(doc.id)) || Boolean(fieldError('id'))}
         aria-describedby="tpl-id-help"
-        oninput={(e) => update({ id: e.currentTarget.value })}
+        oninput={(e) => update({ id: e.currentTarget.value }, false)}
       />
-      <p id="tpl-id-help" class="mt-1 text-xs text-zinc-500">
+      <p id="tpl-id-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
         {isNew ? 'Lowercase letters, digits, - and _; fixed once saved.' : 'Fixed once saved.'}
       </p>
       {#if fieldError('id')}<p class="error-text mt-1">{fieldError('id')}</p>{/if}
     </div>
   </div>
 
-  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4" onfocusin={onbegin}>
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
     <div>
       <label class="label" for="tpl-units">Units</label>
       <select id="tpl-units" class="input" value={doc.units} onchange={(e) => onchange(convertUnits(doc, e.currentTarget.value as Units))}>

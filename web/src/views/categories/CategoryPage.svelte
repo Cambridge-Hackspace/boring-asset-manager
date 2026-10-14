@@ -153,7 +153,7 @@
 {#if saved}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{saved}</p>{/if}
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-500">Loading…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else if isNew || category}
   {#if canManage && !isSystem}
     <form class="card mb-6 max-w-2xl space-y-4" onsubmit={save}>
@@ -184,7 +184,7 @@
           <label class="flex items-center gap-2 text-sm" class:opacity-50={!consumable}>
             <input type="checkbox" bind:checked={runningLow} disabled={!consumable} aria-describedby="low-help" /> Running low
           </label>
-          <p id="low-help" class="text-xs text-zinc-500">Only consumable categories can run low.</p>
+          <p id="low-help" class="text-xs text-zinc-600 dark:text-zinc-400">Only consumable categories can run low.</p>
         </fieldset>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -203,7 +203,7 @@
     <section aria-labelledby="fields-heading">
       <h2 id="fields-heading" class="mb-2 text-lg font-semibold">Fields</h2>
       {#if effective.length === 0}
-        <p class="text-sm text-zinc-500">Assets in this category record no fields yet.</p>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">Assets in this category record no fields yet.</p>
       {:else}
         <table class="mb-4 w-full max-w-3xl text-left text-sm">
           <thead class="border-b border-zinc-300 dark:border-zinc-700">
@@ -218,7 +218,7 @@
             {#each effective as e (e.field.id)}
               {@const source = e.source_category_id ? byId.get(e.source_category_id) : undefined}
               <tr class="border-b border-zinc-200 dark:border-zinc-800">
-                <td class="py-2 pr-4">{e.field.label} <span class="font-mono text-zinc-500">{e.field.key}</span></td>
+                <td class="py-2 pr-4">{e.field.label} <span class="font-mono text-zinc-600 dark:text-zinc-400">{e.field.key}</span></td>
                 <td class="py-2 pr-4">{e.is_required ? 'Required' : 'Optional'}</td>
                 <td class="py-2 pr-4">
                   {#if e.source_category_id === id}This category{:else if source}Inherited from <CategoryBadge category={source} />{/if}
@@ -248,7 +248,7 @@
           <label class="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" bind:checked={newRequired} /> Required</label>
           <button type="submit" class="btn-secondary" disabled={!newFieldId}>Add field</button>
         </form>
-        <p class="mt-2 text-xs text-zinc-500">Adding a field another category already gives this one makes it this category’s own; required anywhere means required.</p>
+        <p class="mt-2 text-xs text-zinc-600 dark:text-zinc-400">Adding a field another category already gives this one makes it this category’s own; required anywhere means required.</p>
       {/if}
     </section>
   {/if}

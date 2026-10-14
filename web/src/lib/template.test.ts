@@ -90,6 +90,8 @@ describe('other helpers', () => {
       expect(e.y + e.height).toBeLessThanOrEqual(d.height);
     }
     expect(newElement('generator', d, 'code128').width).toBeGreaterThan(newElement('generator', d).width);
+    // On the grid, so nudging moves by exact steps.
+    for (const v of Object.values(newElement('text', d)).filter((v) => typeof v === 'number')) expect((v * 2) % 1).toBe(0);
   });
 
   it('lists placeholders and checks IDs', () => {
