@@ -229,3 +229,29 @@ func (s *Server) handleRemoveCategoryField(w http.ResponseWriter, r *http.Reques
 		"message": "Field removed from category successfully",
 	})
 }
+
+// EffectiveFieldsRequest names the categories an asset would belong to.
+type EffectiveFieldsRequest struct {
+	CategoryIDs []string `json:"category_ids"`
+}
+
+// handleEffectiveFieldsForAsset resolves the effective fields for a set of
+// categories, for the asset form before the asset exists:
+// POST /api/v1/categories/effective-fields
+func (s *Server) handleEffectiveFieldsForAsset(w http.ResponseWriter, r *http.Request) {
+	var req EffectiveFieldsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	fields, err := s.store.EffectiveFieldsForAsset(req.CategoryIDs)
+	if errors.Is(err, store.ErrCategoryNotFound) {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to compute inherited fields: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"fields": fields})
+}

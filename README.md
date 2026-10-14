@@ -205,6 +205,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 * **Local Credentials:** Email (case-insensitive, unique) + password hashed via bcrypt (cost 12).
 * **TOTP (RFC 6238):** Optional two-factor authentication flag per user.
+* **Passwords:** stored as bcrypt hashes (cost 12). Every new password must be 8-72 bytes: 72 is the most bcrypt uses, so longer ones are refused rather than silently cut short.
 * **Session Store:** Stateful sessions stored in the active database (`sessions` table) referenced via an `HttpOnly`, `SameSite=Lax`, `Secure` cookie. The cookie holds a random 256-bit token; the table stores only its SHA-256 hash (migration `005`), so a copy of the database cannot be used to sign in.
 
 ---
@@ -584,10 +585,10 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 * [x] Implement the typed API client (models mirroring `internal/models`, uniform error handling, `401` to sign-in), the session store, the router, sign-in and sign-out, and the app shell with permission-aware navigation.
 
 #### Sub-Phase 4.2: API Additions for the Interface
-* [ ] `POST /api/v1/categories/effective-fields` resolves the effective fields for a set of categories, for the asset form before the asset exists.
-* [ ] `GET /api/v1/roles` lists roles with their permissions; `PUT /api/v1/users/{id}/roles` sets a user's roles under the anti-lockout guard.
-* [ ] `PUT /api/v1/auth/password` lets a signed-in user change their own password, ending their other sessions.
-* [ ] Each with store and API tests across SQLite, PostgreSQL and MariaDB.
+* [x] `POST /api/v1/categories/effective-fields` resolves the effective fields for a set of categories, for the asset form before the asset exists.
+* [x] `GET /api/v1/roles` lists roles with their permissions; `PUT /api/v1/users/{id}/roles` sets a user's roles under the anti-lockout guard.
+* [x] `PUT /api/v1/auth/password` lets a signed-in user change their own password, ending their other sessions.
+* [x] Each with store and API tests across SQLite, PostgreSQL and MariaDB. New passwords (users, the CLI admin, password changes) must be 8-72 bytes, the most bcrypt can use.
 
 #### Sub-Phase 4.3: Fields & Categories
 * [ ] Field corpus views: list, create, edit and delete, by type with select options.

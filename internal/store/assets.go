@@ -523,3 +523,18 @@ func (s *Store) DeleteAsset(id string) error {
 	}
 	return nil
 }
+
+// EffectiveFieldsForAsset resolves the fields an asset in these categories
+// would have, before the asset exists: the same categories and inheritance
+// CreateAsset uses, so no categories means Uncategorized.
+func (s *Store) EffectiveFieldsForAsset(categoryIDs []string) ([]models.EffectiveField, error) {
+	cats, err := s.normalizeCategories(categoryIDs)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := s.GetEffectiveFieldsForCategories(cats)
+	if fields == nil {
+		fields = []models.EffectiveField{}
+	}
+	return fields, err
+}

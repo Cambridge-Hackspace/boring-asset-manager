@@ -19,10 +19,28 @@ const (
 	BcryptCost = 12
 )
 
-// HashPassword hashes a raw password using bcrypt with standard secure cost.
+// Password length limits, in bytes. bcrypt cannot use more than 72.
+const (
+	MinPasswordLength = 8
+	MaxPasswordLength = 72
+)
+
+// ErrPasswordPolicy is wrapped when a new password breaks the rules.
+var ErrPasswordPolicy = errors.New("password does not meet the requirements")
+
+// ValidatePassword checks a new password against the length limits.
+func ValidatePassword(password string) error {
+	if len(password) < MinPasswordLength || len(password) > MaxPasswordLength {
+		return fmt.Errorf("%w: it must be %d-%d bytes long", ErrPasswordPolicy, MinPasswordLength, MaxPasswordLength)
+	}
+	return nil
+}
+
+// HashPassword hashes a new password using bcrypt with standard secure cost,
+// after checking it with ValidatePassword.
 func HashPassword(password string) (string, error) {
-	if len(password) == 0 {
-		return "", errors.New("password cannot be empty")
+	if err := ValidatePassword(password); err != nil {
+		return "", err
 	}
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	if err != nil {

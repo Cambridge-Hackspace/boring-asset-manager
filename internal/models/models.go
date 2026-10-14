@@ -26,6 +26,12 @@ type Role struct {
 	Description string `json:"description"`
 }
 
+// RoleWithPermissions is a role and the permission keys it grants.
+type RoleWithPermissions struct {
+	Role
+	Permissions []string `json:"permissions"`
+}
+
 // Permission represents a granular permission key.
 type Permission struct {
 	ID          string `json:"id"`

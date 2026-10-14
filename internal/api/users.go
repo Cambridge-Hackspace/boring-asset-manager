@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -31,12 +32,22 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusInternalServerError, "Failed to list users")
 		return
 	}
-	if users == nil {
-		users = []models.User{}
+	roleIDs, err := s.store.UserRoleIDs()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to list user roles")
+		return
+	}
+	list := make([]userWithRoles, 0, len(users))
+	for _, u := range users {
+		ids := roleIDs[u.ID]
+		if ids == nil {
+			ids = []string{}
+		}
+		list = append(list, userWithRoles{User: u, RoleIDs: ids})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"users": users,
+		"users": list,
 	})
 }
 
@@ -59,6 +70,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := s.store.CreateUser(req.Email, req.Password, isActive)
+	if errors.Is(err, auth.ErrPasswordPolicy) {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		errMsg := strings.ToLower(err.Error())
 		if strings.Contains(errMsg, "unique") || strings.Contains(errMsg, "duplicate") {
@@ -132,4 +147,58 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "User deleted successfully",
 	})
+}
+
+// userWithRoles is a user as the user list returns it.
+type userWithRoles struct {
+	models.User
+	RoleIDs []string `json:"role_ids"`
+}
+
+// SetUserRolesRequest replaces a user's roles.
+type SetUserRolesRequest struct {
+	RoleIDs []string `json:"role_ids"`
+}
+
+// handleListRoles lists roles with their permissions: GET /api/v1/roles
+func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request) {
+	roles, err := s.store.ListRoles()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "Failed to list roles")
+		return
+	}
+	if roles == nil {
+		roles = []models.RoleWithPermissions{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"roles": roles})
+}
+
+// handleSetUserRoles replaces a user's roles under the anti-lockout guard:
+// PUT /api/v1/users/{id}/roles
+func (s *Server) handleSetUserRoles(w http.ResponseWriter, r *http.Request) {
+	var req SetUserRolesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RoleIDs == nil {
+		writeJSONError(w, http.StatusBadRequest, "role_ids is required")
+		return
+	}
+	err := s.store.SetUserRoles(r.PathValue("id"), req.RoleIDs)
+	switch {
+	case errors.Is(err, store.ErrUserNotFound):
+		writeJSONError(w, http.StatusNotFound, "User not found")
+	case errors.Is(err, store.ErrRoleNotFound), errors.Is(err, rbac.ErrAntiLockoutTriggered):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to set roles: %v", err))
+	default:
+		ids, err := s.store.UserRoleIDs()
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "Failed to read roles")
+			return
+		}
+		roleIDs := ids[r.PathValue("id")]
+		if roleIDs == nil {
+			roleIDs = []string{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"role_ids": roleIDs})
+	}
 }

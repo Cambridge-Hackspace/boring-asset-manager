@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"errors"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +59,19 @@ func TestNormalizeEmail(t *testing.T) {
 		out := NormalizeEmail(c.input)
 		if out != c.expected {
 			t.Errorf("NormalizeEmail(%q) = %q, expected %q", c.input, out, c.expected)
+		}
+	}
+}
+
+func TestPasswordLengthLimits(t *testing.T) {
+	for _, pw := range []string{"", "short12", strings.Repeat("x", 73)} {
+		if _, err := HashPassword(pw); !errors.Is(err, ErrPasswordPolicy) {
+			t.Errorf("%d-byte password: got %v, want ErrPasswordPolicy", len(pw), err)
+		}
+	}
+	for _, pw := range []string{"eight888", strings.Repeat("x", 72)} {
+		if _, err := HashPassword(pw); err != nil {
+			t.Errorf("%d-byte password refused: %v", len(pw), err)
 		}
 	}
 }
