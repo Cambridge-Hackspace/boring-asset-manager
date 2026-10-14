@@ -1,0 +1,183 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { ApiError, request } from '../../lib/api';
+  import { messageOf } from '../../lib/errors';
+  import { IGNORE, describeProblem, duplicateTargets, importForm, summarize, targetOptions } from '../../lib/importing';
+  import type { Field, GeneratorInfo, ImportPlan, ImportResult } from '../../lib/models';
+  import ErrorMessage from '../../components/ErrorMessage.svelte';
+
+  let { params: _params }: { params: Record<string, string> } = $props();
+
+  let fields = $state<Field[]>([]);
+  let generators = $state<GeneratorInfo[]>([]);
+  let file = $state<File | null>(null);
+  let plan = $state<ImportPlan | null>(null);
+  let mapping = $state<string[]>([]);
+  // The mapping the plan was checked with.
+  let checkedWith = $state('');
+  let busy = $state(false);
+  let error = $state('');
+  let result = $state<ImportResult | null>(null);
+
+  const options = $derived(targetOptions(fields, generators));
+  const groups = $derived(['Asset', 'Codes', 'Fields'].map((g) => ({ name: g, options: options.filter((o) => o.group === g) })));
+  const duplicates = $derived(duplicateTargets(mapping));
+  const checked = $derived(plan !== null && JSON.stringify(mapping) === checkedWith);
+  const ready = $derived(checked && plan !== null && plan.problem_count === 0 && plan.create + plan.update > 0);
+
+  onMount(async () => {
+    try {
+      const [f, g] = await Promise.all([
+        request<{ fields: Field[] }>('GET', '/fields'),
+        request<{ generators: GeneratorInfo[] }>('GET', '/generators'),
+      ]);
+      fields = f.fields ?? [];
+      generators = g.generators ?? [];
+    } catch (err) {
+      error = messageOf(err);
+    }
+  });
+
+  async function preview(withMapping: boolean) {
+    if (!file) return;
+    busy = true;
+    error = '';
+    try {
+      const next = await request<ImportPlan>('POST', '/assets/import/preview', importForm(file, withMapping ? mapping : undefined));
+      plan = next;
+      mapping = next.columns.map((c) => c.target);
+      checkedWith = JSON.stringify(mapping);
+    } catch (err) {
+      plan = null;
+      error = messageOf(err);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function choose(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    file = input.files?.[0] ?? null;
+    plan = null;
+    result = null;
+    mapping = [];
+    await preview(false);
+  }
+
+  async function runImport() {
+    if (!file || !ready) return;
+    busy = true;
+    error = '';
+    try {
+      result = await request<ImportResult>('POST', '/assets/import', importForm(file, mapping));
+      plan = null;
+      file = null;
+    } catch (err) {
+      // The server checks again; if something changed, show its findings.
+      if (err instanceof ApiError && err.status === 422) {
+        const details = (err.body as { details?: ImportPlan } | undefined)?.details;
+        if (details) plan = details;
+      }
+      error = messageOf(err);
+    } finally {
+      busy = false;
+    }
+  }
+</script>
+
+<h1 class="mb-2 text-2xl font-bold">Import assets</h1>
+<p class="mb-4 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
+  A CSV file with one asset per row. Rows with an ID update that asset, and blank cells leave its values alone; rows
+  without one create new assets. Categories are paths such as <span class="font-mono">Tools &gt; Drills</span>,
+  separated by semicolons, and must already exist. Exporting from the asset list gives a file in this format. Nothing
+  is written until you import, and then either every row is imported or none is.
+</p>
+
+<div class="mb-4">
+  <label class="label" for="import-file">CSV file</label>
+  <input id="import-file" type="file" accept=".csv,text/csv" class="block text-sm" onchange={choose} disabled={busy} />
+</div>
+
+<ErrorMessage {error} />
+
+{#if result}
+  <div class="card mb-4" role="status">
+    <p class="font-medium">
+      Imported: {result.created} new, {result.updated} updated, {result.unchanged} unchanged.
+    </p>
+    <p class="mt-1 text-sm"><a class="underline" href="/assets">Back to the assets</a></p>
+  </div>
+{/if}
+
+{#if plan}
+  <h2 class="mb-2 text-lg font-semibold">Columns</h2>
+  <div class="mb-4 overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="border-b border-zinc-300 dark:border-zinc-700">
+        <tr>
+          <th scope="col" class="py-2 pr-4">Column</th>
+          <th scope="col" class="py-2 pr-4">First value</th>
+          <th scope="col" class="py-2">Goes to</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each plan.columns as column, i (i)}
+          <tr class="border-b border-zinc-200 dark:border-zinc-800">
+            <th scope="row" class="py-2 pr-4 font-medium">{column.header || `Column ${i + 1}`}</th>
+            <td class="max-w-48 truncate py-2 pr-4 text-zinc-600 dark:text-zinc-400" title={column.sample}>{column.sample}</td>
+            <td class="py-2">
+              <select
+                class="input"
+                aria-label="Where {column.header || `column ${i + 1}`} goes"
+                aria-invalid={!mapping[i] || duplicates.has(mapping[i]!)}
+                bind:value={mapping[i]}
+              >
+                <option value="">Choose…</option>
+                <option value={IGNORE}>Ignore this column</option>
+                {#each groups as group (group.name)}
+                  {#if group.options.length}
+                    <optgroup label={group.name}>
+                      {#each group.options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+                    </optgroup>
+                  {/if}
+                {/each}
+              </select>
+              {#if mapping[i] && duplicates.has(mapping[i]!)}
+                <p class="error-text">Another column goes here too.</p>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+
+  <h2 class="mb-2 text-lg font-semibold">Check</h2>
+  {#if !checked}
+    <p class="mb-2 text-sm">The mapping has changed since the last check.</p>
+    <button type="button" class="btn-secondary mb-4" onclick={() => preview(true)} disabled={busy}>
+      {busy ? 'Checking…' : 'Check again'}
+    </button>
+  {:else}
+    <p class="mb-2 text-sm" role="status">{summarize(plan)}</p>
+    {#if plan.unknown_categories.length}
+      <p class="error-text mb-2">
+        These categories do not exist yet; create them first, or fix the file: {plan.unknown_categories.join(', ')}.
+      </p>
+    {/if}
+    {#if plan.problem_count}
+      <p class="mb-1 text-sm font-medium" id="import-problems">
+        {plan.problem_count === 1 ? '1 problem' : `${plan.problem_count} problems`} to fix before importing:
+      </p>
+      <ul class="mb-4 list-disc space-y-1 pl-5 text-sm" aria-labelledby="import-problems">
+        {#each plan.problems as p, i (i)}<li>{describeProblem(p)}</li>{/each}
+        {#if plan.problem_count > plan.problems.length}
+          <li>and {plan.problem_count - plan.problems.length} more.</li>
+        {/if}
+      </ul>
+    {/if}
+    <button type="button" class="btn-primary" onclick={runImport} disabled={!ready || busy}>
+      {busy ? 'Importing…' : `Import ${plan.create + plan.update} ${plan.create + plan.update === 1 ? 'asset' : 'assets'}`}
+    </button>
+  {/if}
+{/if}

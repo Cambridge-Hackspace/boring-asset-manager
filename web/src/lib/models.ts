@@ -169,3 +169,37 @@ export interface ImageInfo {
   byte_size: number;
   created_at: string;
 }
+
+/** A column of an import file, with where it goes. */
+export interface ImportColumn {
+  header: string;
+  suggested: string;
+  target: string;
+  sample: string;
+}
+
+/** Something wrong with an import, at a line (the header is line 1). */
+export interface ImportProblem {
+  row: number;
+  column?: string;
+  message: string;
+}
+
+/** What an import would do (README §6.1). */
+export interface ImportPlan {
+  columns: ImportColumn[];
+  rows: number;
+  create: number;
+  update: number;
+  unchanged: number;
+  problems: ImportProblem[];
+  problem_count: number;
+  unknown_categories: string[];
+}
+
+export interface ImportResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  created_ids: string[];
+}

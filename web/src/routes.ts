@@ -7,6 +7,7 @@ import Home from './views/Home.svelte';
 import AssetsPage from './views/assets/AssetsPage.svelte';
 import AssetPage from './views/assets/AssetPage.svelte';
 import AssetForm from './views/assets/AssetForm.svelte';
+import ImportPage from './views/assets/ImportPage.svelte';
 import CategoriesPage from './views/categories/CategoriesPage.svelte';
 import CategoryPage from './views/categories/CategoryPage.svelte';
 import FieldsPage from './views/fields/FieldsPage.svelte';
@@ -31,6 +32,7 @@ export const routes: Route[] = [
   { pattern: '/', component: Home, title: 'Home' },
   { pattern: '/assets', component: AssetsPage, title: 'Assets', permissions: ['assets:read'], nav: 'Assets' },
   { pattern: '/assets/new', component: AssetForm, title: 'New asset', permissions: ['assets:write'] },
+  { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets:write'] },
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets:read'] },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets:write'] },
   { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets:read'], nav: 'Categories' },

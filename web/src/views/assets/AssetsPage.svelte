@@ -5,6 +5,7 @@
   import { UNCATEGORIZED, type AssetWithDetails, type Category } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
+  import { exportUrl } from '../../lib/importing';
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -19,6 +20,8 @@
   let search = $state(router.query.get('search') ?? '');
   let categoryId = $state(router.query.get('category') ?? '');
   let selected = $state<string[]>([]);
+  // The filters the list shows, which the export follows.
+  let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
 
   const categoryChoices = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const uncategorized = $derived(categories.find((c) => c.id === UNCATEGORIZED));
@@ -39,6 +42,7 @@
     const q = new URLSearchParams();
     if (search.trim()) q.set('search', search.trim());
     if (categoryId) q.set('category_id', categoryId);
+    applied = { search, categoryId };
     try {
       assets = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
       selected = selected.filter((id) => assets.some((a) => a.asset.id === id));
@@ -67,9 +71,13 @@
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
   <h1 class="text-2xl font-bold">Assets</h1>
-  {#if session.can('assets:write')}
-    <a class="btn-primary" href="/assets/new">New asset</a>
-  {/if}
+  <div class="flex flex-wrap gap-2">
+    <a class="btn-secondary" href={exportUrl(applied.search, applied.categoryId)} download>Export CSV</a>
+    {#if session.can('assets:write')}
+      <a class="btn-secondary" href="/assets/import">Import CSV</a>
+      <a class="btn-primary" href="/assets/new">New asset</a>
+    {/if}
+  </div>
 </div>
 
 <form class="mb-4 flex flex-wrap items-end gap-3" role="search" onsubmit={applyFilters}>

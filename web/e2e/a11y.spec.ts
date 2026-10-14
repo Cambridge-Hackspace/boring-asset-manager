@@ -28,6 +28,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/', 'Welcome'],
       ['/assets', 'Assets'],
       ['/assets/new', 'New asset'],
+      ['/assets/import', 'Import assets'],
       [`/assets/${asset.asset.asset.id}`, ''],
       [`/assets/${asset.asset.asset.id}/edit`, 'Edit asset'],
       ['/categories', 'Categories'],

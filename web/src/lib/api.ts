@@ -12,6 +12,8 @@ export class ApiError extends Error {
     readonly status: number,
     message: string,
     readonly details: ProblemDetail[] = [],
+    /** The decoded error response, for errors that carry more than a list. */
+    readonly body: unknown = undefined,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -46,8 +48,10 @@ async function send(method: Method, path: string, body?: unknown): Promise<Respo
 async function errorFrom(res: Response, path: string): Promise<ApiError> {
   let message = `${res.status} ${res.statusText}`.trim();
   let details: ProblemDetail[] = [];
+  let body: unknown;
   try {
     const data = await res.json();
+    body = data;
     if (typeof data?.error === 'string') message = data.error;
     if (Array.isArray(data?.details)) details = data.details;
   } catch {
@@ -55,7 +59,7 @@ async function errorFrom(res: Response, path: string): Promise<ApiError> {
   }
   // A failed sign-in is not a lost session.
   if (res.status === 401 && path !== '/auth/login') onUnauthorized();
-  return new ApiError(res.status, message, details);
+  return new ApiError(res.status, message, details, body);
 }
 
 /** Sends a JSON request and returns the decoded JSON response. */
