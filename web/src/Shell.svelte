@@ -45,7 +45,7 @@
       {/each}
     </nav>
     <div class="flex items-center gap-3 text-sm">
-      <span class="text-zinc-600 dark:text-zinc-400">{session.user?.email}</span>
+      <a href="/account" class="text-zinc-600 hover:underline dark:text-zinc-400">{session.user?.email}</a>
       <button type="button" class="btn-secondary" onclick={() => session.signOut()}>Sign out</button>
     </div>
   </div>

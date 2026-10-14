@@ -2,14 +2,8 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
+  import type { ImageInfo } from '../../lib/models';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
-
-  interface ImageInfo {
-    id: string;
-    filename: string;
-    width_px: number;
-    height_px: number;
-  }
 
   let { value, onpick }: { value: string; onpick: (id: string) => void } = $props();
 

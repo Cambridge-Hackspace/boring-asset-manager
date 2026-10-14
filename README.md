@@ -610,10 +610,10 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 * [x] Preview against an asset, export, and test print from the editor.
 
 #### Sub-Phase 4.6: Administration
-* [ ] Printers: forms generated from `GET /api/v1/printers/drivers` (models, media, options and their values) and the connection types, with a test print.
-* [ ] Users and roles: list, create, activate and deactivate, archive and role assignment, with anti-lockout refusals explained.
-* [ ] Image library: upload, browse, see which templates use an image, delete.
-* [ ] Own password change.
+* [x] Printers: forms generated from `GET /api/v1/printers/drivers` (models, media, options and their values) and the connection types, with a test print.
+* [x] Users and roles: list, create, activate and deactivate, archive and role assignment, with anti-lockout refusals explained.
+* [x] Image library: upload, browse, see which templates use an image, delete.
+* [x] Own password change.
 
 #### Sub-Phase 4.7: End-to-End & Accessibility Battery
 * [ ] Playwright tests in a pinned container against a real `bam serve` on a fresh SQLite database, covering sign-in, fields, categories, assets, the editor (including dragging and keyboard editing), exports, and printing to an in-process fake TCP printer whose received job is decoded and checked.
