@@ -342,3 +342,12 @@ func TestImportChecksThresholdsOnce(t *testing.T) {
 		t.Errorf("events %+v", after[:len(after)-len(before)])
 	}
 }
+
+func TestColumnsCarrySamples(t *testing.T) {
+	w := newWorld(t)
+	plan := w.prepare(t, "name,notes,empty\nSaw,,\nGlue,sticky,\n", []string{"name", "ignore", "ignore"})
+	got := []string{plan.Columns[0].Sample, plan.Columns[1].Sample, plan.Columns[2].Sample}
+	if strings.Join(got, "|") != "Saw|sticky|" {
+		t.Errorf("samples %q", got)
+	}
+}

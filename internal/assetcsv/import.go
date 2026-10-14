@@ -47,11 +47,13 @@ type Problem struct {
 	Message string `json:"message"`
 }
 
-// Column is a header with its suggested and chosen targets.
+// Column is a header with its suggested and chosen targets, and the first
+// value in it, to help people map it.
 type Column struct {
 	Header    string `json:"header"`
 	Suggested string `json:"suggested"`
 	Target    string `json:"target"`
+	Sample    string `json:"sample"`
 }
 
 // Plan is what an import would do.
@@ -176,7 +178,14 @@ func Prepare(src Source, data []byte, mapping []string) (*Plan, error) {
 	}
 	plan := &Plan{Rows: len(rows), Problems: []Problem{}, UnknownCategories: []string{}}
 	for i, h := range header {
-		plan.Columns = append(plan.Columns, Column{Header: h, Suggested: suggested[i], Target: strings.TrimSpace(mapping[i])})
+		col := Column{Header: h, Suggested: suggested[i], Target: strings.TrimSpace(mapping[i])}
+		for _, rec := range rows {
+			if i < len(rec.cells) && rec.cells[i] != "" {
+				col.Sample = rec.cells[i]
+				break
+			}
+		}
+		plan.Columns = append(plan.Columns, col)
 	}
 	fieldsByKey := map[string]models.Field{}
 	for _, f := range corpus {
