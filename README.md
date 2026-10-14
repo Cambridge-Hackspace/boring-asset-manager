@@ -104,7 +104,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 ### 2.1 Installing as a Service
 
-BAM is one static binary with the web interface built in. `tools/release/build.sh` builds it for Linux (amd64 and arm64) and FreeBSD (amd64) into `bin/`, needing only podman (or docker, with `CONTAINER=docker`); name other targets as arguments, such as `tools/release/build.sh freebsd/arm64`. The service files and example configurations are in `packaging/`. Both set BAM up the same way: a `bam` account that owns only the data directory, a configuration readable by root and that account alone, BAM listening on loopback behind a reverse proxy that terminates HTTPS, and a restart five seconds after any crash. Database migrations run each time the service starts.
+BAM is one static binary with the web interface built in. Each release on GitHub has binaries for Linux (amd64 and arm64) and FreeBSD (amd64) (§2.2); `tools/release/build.sh` builds the same from a checkout into `bin/`, needing only podman (or docker, with `CONTAINER=docker`); name other targets as arguments, such as `tools/release/build.sh freebsd/arm64`. The service files and example configurations are in `packaging/`. Both set BAM up the same way: a `bam` account that owns only the data directory, a configuration readable by root and that account alone, BAM listening on loopback behind a reverse proxy that terminates HTTPS, and a restart five seconds after any crash. Database migrations run each time the service starts.
 
 #### Linux (systemd: Debian, Arch and the rest)
 
@@ -170,6 +170,41 @@ location / {
 To serve plain HTTP on the network without a proxy instead, set `host = "0.0.0.0"` and an `http://` `base_url`.
 
 `tools/service/check-systemd.sh` follows the Linux steps above in a Debian container booted with systemd and checks that the service starts at boot, serves, signs the administrator in, comes back after it is killed and after a reboot, and stops cleanly. The FreeBSD script has no such check, as FreeBSD cannot run in a container; ShellCheck passes it.
+
+### 2.2 Releases & Updates
+
+Each version tag pushed to GitHub, such as `v1.2.0`, is built by `.github/workflows/release.yml`: the Go suites run, then `tools/release/build.sh` builds the binaries with the tag as their version (`bam version`), and they are published as the release's files with `SHA256SUMS`. A tag with a suffix, such as `v1.2.0-rc.1`, is published as a pre-release. Instead of building, an installation can start from a release (§2.1, using the downloaded file in place of `bin/bam-<os>-<arch>`):
+
+```sh
+curl -fLO https://github.com/Cambridge-Hackspace/boring-asset-manager/releases/latest/download/bam-linux-amd64
+curl -fLO https://github.com/Cambridge-Hackspace/boring-asset-manager/releases/latest/download/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+# On FreeBSD, with bam-freebsd-amd64 downloaded (fetch works as well as curl):
+# sha256 -c "$(awk '$2 == "bam-freebsd-amd64" { print $1 }' SHA256SUMS)" bam-freebsd-amd64
+```
+
+#### Updating automatically (optional)
+
+`packaging/bam-update` installs the latest release when it is newer than the installed one, on both systems. It verifies the download against the release's `SHA256SUMS` and checks that the new binary reports the release's version, and then it swaps the binary, keeping the old one as `bam.previous`. Finally it restarts the service and waits up to 30 seconds for it to answer its health check. If it does not, the old binary goes back and the service is restarted again. It leaves alone an installation that is up to date, newer than the latest release, or not a release at all (a build from source reports `git describe` or `dev`; `bam-update --force` replaces it). `bam-update --check` only reports. Each run logs to syslog with the tag `bam-update`, and cron mails what it prints when something goes wrong. Pre-releases are never installed. Database migrations run when the new version starts and a rollback does not undo them, so keep backups.
+
+On Linux (cron must be installed; on Arch, `cronie`):
+
+```bash
+install -m 0755 packaging/bam-update /usr/local/sbin/bam-update
+install -m 0644 packaging/linux/bam-update.cron /etc/cron.d/bam-update
+```
+
+On FreeBSD:
+
+```sh
+install -m 0555 packaging/bam-update /usr/local/sbin/bam-update
+install -d /usr/local/etc/cron.d
+install -m 0644 packaging/freebsd/bam-update.cron /usr/local/etc/cron.d/bam-update
+```
+
+Both run it nightly at 04:17; change the minute in the cron file, so that every installation does not ask GitHub at once. Settings (the repository, the binary, the health check URL) are listed at the top of the script; put any in `/etc/bam/update.conf` (`/usr/local/etc/bam/update.conf` on FreeBSD) as `NAME=value` lines. If BAM listens on another port, set `BAM_UPDATE_HEALTH_URL` there.
+
+`tools/service/check-update.sh` checks the updater in a Debian container booted with systemd, against fake releases served from files. It must update to a newer release, leave an up-to-date installation running, and ignore an older release. It must refuse a download that does not match its checksum, and roll back a release that does not come up. It must leave a build that is not a release alone until forced.
 
 ---
 
@@ -754,7 +789,7 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] A check that installs the systemd unit in a Debian container and boots, kills and reboots it.
 
 #### Sub-Phase 6.2: Releases & Updates
-* [ ] Release builds on GitHub for each tag, and an optional scheduled updater for both service managers.
+* [x] Release builds on GitHub for each tag, and an optional scheduled updater for both service managers (§2.2), with a check of the updater against fake releases.
 
 #### Sub-Phase 6.3: Web Checks in reaper
 * [ ] `svelte-check`, Vitest and Playwright in the reaper battery.

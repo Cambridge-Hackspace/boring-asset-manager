@@ -1,0 +1,40 @@
+# Builds and publishes a release for each version tag, such as v1.2.0 (README
+# §2.2): the Go suites run first, then tools/release/build.sh builds the
+# binaries and their SHA256SUMS, which become the release's files. A tag with
+# a suffix, such as v1.2.0-rc.1, is published as a pre-release, which
+# bam-update does not install.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test
+        run: |
+          image=$(sed -n 's/^GO_IMAGE="\(.*\)"$/\1/p' tools/release/build.sh)
+          docker run --rm -v "$PWD:/src" -w /src "$image" sh -c "go vet ./... && go test ./..."
+
+      - name: Build
+        env:
+          CONTAINER: docker
+          VERSION: ${{ github.ref_name }}
+        run: tools/release/build.sh
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=
+          case "$TAG" in *-*) prerelease=--prerelease ;; esac
+          gh release create "$TAG" bin/bam-* bin/SHA256SUMS \
+            --verify-tag --title "$TAG" --generate-notes $prerelease

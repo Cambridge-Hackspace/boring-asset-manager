@@ -1,0 +1,4 @@
+# Optional: install the latest BAM release nightly (README §2.2). Install as
+# /etc/cron.d/bam-update, owned by root, mode 0644, after bam-update itself.
+# Pick your own minute, so that every installation does not ask GitHub at once.
+17 4 * * * root /usr/local/sbin/bam-update

@@ -15,8 +15,10 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/webui"
 )
 
-// Version is the current application version.
-const Version = "0.1.0-alpha"
+// Version is the version of this build: a release's tag, such as v1.2.0, or
+// what git describe says of the commit it was built from. Release builds set
+// it with -ldflags "-X" (tools/release/build.sh); other builds say "dev".
+var Version = "dev"
 
 // Server wraps the HTTP server and dependencies.
 type Server struct {

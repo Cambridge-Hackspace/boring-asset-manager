@@ -1,0 +1,171 @@
+#!/bin/sh
+# bam-update installs the latest BAM release from GitHub when it is newer
+# than the installed one, on Linux (systemd) and FreeBSD (rc.d), and puts the
+# old binary back if the new one does not come up (README §2.2).
+#
+#   bam-update            update if there is a newer release
+#   bam-update --check    only say whether there is one
+#   bam-update --force    also replace a build that is not a release
+#
+# Run it from cron as root. It verifies each download against the release's
+# SHA256SUMS, checks the new binary reports the release's version, restarts
+# the service, and waits for it to answer its health check; if it does not,
+# the previous binary is restored and the service restarted again. Database
+# migrations run when the new version starts and are not undone by a
+# rollback, so keep backups.
+#
+# Settings, from the environment or from /etc/bam/update.conf
+# (/usr/local/etc/bam/update.conf on FreeBSD), as NAME=value lines:
+#   BAM_UPDATE_REPO          GitHub repository [Cambridge-Hackspace/boring-asset-manager]
+#   BAM_UPDATE_BIN           Installed binary [/usr/local/bin/bam]
+#   BAM_UPDATE_HEALTH_URL    Health check [http://127.0.0.1:8080/healthz]
+#   BAM_UPDATE_API_URL       Latest release [https://api.github.com/repos/<repo>/releases/latest]
+#   BAM_UPDATE_DOWNLOAD_URL  Release files [https://github.com/<repo>/releases/download]
+set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$os" in
+  linux) conf=/etc/bam/update.conf ;;
+  freebsd) conf=/usr/local/etc/bam/update.conf ;;
+  *) echo "bam-update: unsupported system $os" >&2; exit 2 ;;
+esac
+# shellcheck disable=SC1090
+if [ -r "$conf" ]; then . "$conf"; fi
+
+REPO="${BAM_UPDATE_REPO:-Cambridge-Hackspace/boring-asset-manager}"
+BIN="${BAM_UPDATE_BIN:-/usr/local/bin/bam}"
+HEALTH_URL="${BAM_UPDATE_HEALTH_URL:-http://127.0.0.1:8080/healthz}"
+API_URL="${BAM_UPDATE_API_URL:-https://api.github.com/repos/$REPO/releases/latest}"
+DOWNLOAD_URL="${BAM_UPDATE_DOWNLOAD_URL:-https://github.com/$REPO/releases/download}"
+
+mode=update
+case "${1:-}" in
+  "") ;;
+  --check) mode=check ;;
+  --force) mode=force ;;
+  *) echo "usage: bam-update [--check | --force]" >&2; exit 2 ;;
+esac
+
+case "$(uname -m)" in
+  x86_64 | amd64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "bam-update: unsupported machine $(uname -m)" >&2; exit 2 ;;
+esac
+asset="bam-$os-$arch"
+
+say() {
+  echo "bam-update: $*"
+  logger -t bam-update -- "$*" 2>/dev/null || true
+}
+fail() {
+  say "$*" >&2
+  exit 1
+}
+
+# download URL FILE
+download() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 3 -o "$2" "$1"
+  else
+    fetch -q -o "$2" "$1"
+  fi
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  else
+    sha256 -q "$1"
+  fi
+}
+
+# is_release VERSION: a tag such as v1.2.3 or v1.2.3-rc.1.
+is_release() {
+  echo "$1" | grep -Eq '^v[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z.-]+)?$'
+}
+
+# newer A B: whether release A is newer than release B, by major, minor and
+# patch, and then a release without a suffix being newer than one with.
+newer() {
+  awk -v a="$1" -v b="$2" 'BEGIN {
+    sub(/^v/, "", a); sub(/^v/, "", b)
+    pa = ""; i = index(a, "-"); if (i) { pa = substr(a, i); a = substr(a, 1, i - 1) }
+    pb = ""; i = index(b, "-"); if (i) { pb = substr(b, i); b = substr(b, 1, i - 1) }
+    split(a, x, "."); split(b, y, ".")
+    for (i = 1; i <= 3; i++) if (x[i] + 0 != y[i] + 0) exit !(x[i] + 0 > y[i] + 0)
+    if (pa == pb) exit 1
+    exit !(pa == "" || (pb != "" && pa > pb))
+  }'
+}
+
+restart() {
+  if [ "$os" = linux ]; then systemctl restart bam; else service bam restart; fi
+}
+
+healthy() {
+  n=0
+  while [ "$n" -lt 30 ]; do
+    if download "$HEALTH_URL" /dev/null 2>/dev/null; then return 0; fi
+    sleep 1
+    n=$((n + 1))
+  done
+  return 1
+}
+
+# One run at a time.
+lock="${TMPDIR:-/tmp}/bam-update.lock"
+mkdir "$lock" 2>/dev/null || fail "another update is running (remove $lock if not)"
+work=$(mktemp -d "${TMPDIR:-/tmp}/bam-update.XXXXXX")
+trap 'rm -rf "$work"; rmdir "$lock"' EXIT
+
+download "$API_URL" "$work/release.json" || fail "cannot read the latest release from $API_URL"
+latest=$(grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' "$work/release.json" | head -n 1 | sed 's/.*"\([^"]*\)"$/\1/')
+is_release "$latest" || fail "the latest release has no usable tag (got \"$latest\")"
+current=$("$BIN" version 2>/dev/null | sed -n 's/^BAM! version //p')
+
+if [ "$current" = "$latest" ]; then
+  if [ "$mode" = check ]; then say "$current is the latest release"; fi
+  exit 0
+fi
+if is_release "$current" && ! newer "$latest" "$current"; then
+  if [ "$mode" = check ]; then say "$current is newer than the latest release, $latest"; fi
+  exit 0
+fi
+if ! is_release "$current" && [ "$mode" = update ]; then
+  fail "${current:-the installed build} is not a release, so it is left alone; run bam-update --force to replace it with $latest"
+fi
+if [ "$mode" = check ]; then
+  say "$latest is available (installed: ${current:-unknown})"
+  exit 0
+fi
+
+say "updating from ${current:-an unknown build} to $latest"
+download "$DOWNLOAD_URL/$latest/$asset" "$work/bam" || fail "cannot download $asset for $latest"
+download "$DOWNLOAD_URL/$latest/SHA256SUMS" "$work/SHA256SUMS" || fail "cannot download SHA256SUMS for $latest"
+want=$(awk -v f="$asset" '$2 == f || $2 == "*" f { print $1 }' "$work/SHA256SUMS")
+[ -n "$want" ] || fail "SHA256SUMS for $latest does not list $asset; nothing was changed"
+[ "$(sha256_of "$work/bam")" = "$want" ] || fail "$asset for $latest does not match its checksum; nothing was changed"
+chmod 0755 "$work/bam"
+got=$("$work/bam" version 2>/dev/null | sed -n 's/^BAM! version //p')
+[ "$got" = "$latest" ] || fail "the downloaded binary says it is ${got:-nothing}, not $latest; nothing was changed"
+
+# Replace the binary in one rename, keeping the old one beside it.
+cp -p "$BIN" "$BIN.previous"
+cp "$work/bam" "$BIN.new"
+chmod 0755 "$BIN.new"
+mv -f "$BIN.new" "$BIN"
+restart || true
+if healthy; then
+  say "now running $latest"
+  exit 0
+fi
+
+say "$latest did not come up; putting ${current:-the previous build} back"
+mv -f "$BIN.previous" "$BIN"
+restart || true
+if healthy; then
+  fail "$latest failed its health check, and ${current:-the previous build} is running again"
+fi
+fail "$latest failed its health check, and ${current:-the previous build} did not come back either; see the service log"
