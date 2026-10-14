@@ -58,10 +58,12 @@ type MediaInfo struct {
 
 // OptionInfo describes one driver option.
 type OptionInfo struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Default     any    `json:"default"`
-	Description string `json:"description"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Default any    `json:"default"`
+	// Values lists the allowed values of a string option.
+	Values      []string `json:"values,omitempty"`
+	Description string   `json:"description"`
 }
 
 var (
@@ -70,8 +72,10 @@ var (
 )
 
 func init() {
-	if err := Register(brotherQL{}); err != nil {
-		panic(err)
+	for _, d := range []Driver{brotherQL{}, dymoLabelWriter{}} {
+		if err := Register(d); err != nil {
+			panic(err)
+		}
 	}
 }
 

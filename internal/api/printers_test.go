@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 	"github.com/google/uuid"
@@ -429,5 +431,65 @@ func TestPrinterOptionsReachTheJob(t *testing.T) {
 	}
 	if pages[0].AutoCut {
 		t.Error("printer configured not to cut, but the job switches the cutter on")
+	}
+}
+
+func TestPrintToDymoLabelWriter(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	lw := newFakeQL(t)
+
+	body := `{"name":"Dymo","driver":"dymo_labelwriter","model":"LabelWriter 450","host":"127.0.0.1","port":` + strconv.Itoa(lw.port()) +
+		`,"media":"30252","options":{"density":"dark"}}`
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("creating printer: %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Printer models.Printer `json:"printer"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+
+	twin := strings.NewReplacer(`"Dymo"`, `"Dymo 2"`, `"density":"dark"`, `"roll":"left"`).Replace(body)
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers", twin); rec.Code != http.StatusBadRequest {
+		t.Errorf("roll on a single-roll model: got %d", rec.Code)
+	}
+
+	tmpl := `{"id":"dymo89","name":"Dymo 89x28","units":"mm","width":89,"height":28,"dpi":300,"elements":[
+  {"type":"generator","generator_type":"qr","x":3,"y":3,"width":22,"height":22,"content_binding":"{{base_url}}/a/{{asset.id}}"},
+  {"type":"text","x":28,"y":4,"width":58,"height":10,"font_size":16,"font_weight":"bold","content_binding":"{{asset.name}}"}]}`
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", tmpl); rec.Code != http.StatusCreated {
+		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", landscapeTemplate); rec.Code != http.StatusCreated {
+		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
+	}
+	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	print := func(template string) *httptest.ResponseRecorder {
+		return doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print",
+			`{"template_id":"`+template+`","asset_ids":["`+asset.Asset.ID+`"],"copies":2}`)
+	}
+	if rec := print("ql90"); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("Brother-sized template on a Dymo address roll: got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := print("dymo89"); rec.Code != http.StatusOK {
+		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
+	}
+
+	job, err := dymolw.DecodeJob(dymolw.ProtocolV1, lw.waitForJobs(t, 1, 3*time.Second)[0], 331)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Density != 'g' || len(job.Pages) != 2 || job.Pages[0].Length != 1051+36 {
+		t.Fatalf("decoded density %q, %d pages, length %d", job.Density, len(job.Pages), job.Pages[0].Length)
+	}
+	dark := 0
+	for _, v := range job.Pages[0].Image.Pix {
+		if v < 0x80 {
+			dark++
+		}
+	}
+	if dark < 10000 {
+		t.Errorf("label has only %d dark dots", dark)
 	}
 }

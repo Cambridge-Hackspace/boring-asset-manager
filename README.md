@@ -4,7 +4,7 @@
 
 > Excruciatingly simple physical asset label generation and tracker.
 
-BAM! is a single-tenant, API-first web application designed for tracking physical assets, managing hierarchical categories with dynamic field inheritance, and visually designing and batch-printing labels for dedicated thermal label printers (such as the Brother QL-810W) as well as standard sheet layouts.
+BAM! is a single-tenant, API-first web application designed for tracking physical assets, managing hierarchical categories with dynamic field inheritance, and visually designing and batch-printing labels for dedicated thermal label printers (such as the Brother QL-810W and DYMO LabelWriter) as well as standard sheet layouts.
 
 ---
 
@@ -21,7 +21,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 - **Frontend:** TypeScript + Svelte (or React/Vite) with a lightweight 2D canvas/SVG label layout engine and Tailwind CSS for accessible, high-contrast, colorful category UI components.
 - **Label Generation & Printing:**
   - **Pure-Go Rendering:** One layout engine feeds SVG, PNG and PDF backends (§4). Fonts, glyph outlines and rasterization come from `golang.org/x/image` (the embedded Go fonts, OpenType parsing and its vector rasterizer); the PDF writer is a small in-house one so output stays deterministic.
-  - **Direct Network Printing:** Raw TCP dispatch (port 9100) of Brother QL raster command streams to network thermal printers such as the Brother QL-810W, with no desktop driver or print dialog.
+  - **Direct Network Printing:** Raw TCP dispatch (port 9100) of each printer's own raster command stream (Brother QL, DYMO LabelWriter) through pluggable print drivers, with no desktop driver or print dialog.
 - **Barcode & Matrix Engine:** In-house QR Code, Micro QR and Code 128 encoders with per-generator payload and character set validation (§4.2).
 
 ---
@@ -182,7 +182,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 Every label passes through the same three stages, whichever format it ends up in:
 
 ```
-template + asset ──► bind ──► layout (whole printer dots) ──► SVG │ PNG │ PDF │ Brother QL raster
+template + asset ──► bind ──► layout (whole printer dots) ──► SVG │ PNG │ PDF │ printer raster
 ```
 
 1. **Bind** resolves each element's `content_binding` against the asset, its field values and its generator keys.
@@ -245,7 +245,7 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
 ```
 
 * **ID:** a slug matching `^[a-z0-9][a-z0-9_-]{0,63}$`, chosen by the author.
-* **Canvas:** `units` is `mm` or `in`; `width` and `height` are positive; `dpi` is 150–600 (Brother QL printers print at 300). Positions and sizes use the template's units with the origin at the top-left corner, and every element must lie inside the canvas. `font_size` is always in points.
+* **Canvas:** `units` is `mm` or `in`; `width` and `height` are positive; `dpi` is 150–600 (Brother QL and DYMO LabelWriter printers print at 300). Positions and sizes use the template's units with the origin at the top-left corner, and every element must lie inside the canvas. `font_size` is always in points.
 * **Content bindings:** `content_binding` is literal text with `{{...}}` placeholders:
 
   | Placeholder | Resolves to |
@@ -320,12 +320,32 @@ type Plan interface {
 
 The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` (raw TCP today). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models, media and options.
 
-Phase 3 ships one driver, `brother_ql`, for the QL-810W and QL-820NWB. Its only option is `cut` (default `true`): cut each label off as it finishes, or let the tape feed on uncut.
+Two drivers ship today: `brother_ql` and `dymo_labelwriter`. Option values are listed by the drivers endpoint, and unknown options are refused.
+
+#### `brother_ql`
+
+For the QL-810W and QL-820NWB. Its only option is `cut` (default `true`): cut each label off as it finishes, or let the tape feed on uncut.
 
 * **Media catalog:** each supported roll records its width, whether it is die-cut (and if so its label length), its printable width in head dots and how many pins sit beside the tape. Phase 3 covers DK-22210 (29 mm continuous), DK-22205 (62 mm continuous) and DK-11201 (29 × 90 mm die-cut). Two-color black/red media (DK-22251) is out of scope.
 * **Fit check:** before any asset is laid out, the template must suit the loaded media, or the request fails with `422`. Its DPI must be 300 and one side must be the tape width (±0.5 mm). A template whose height is the tape width is rotated 90° counterclockwise. On die-cut media the other side must be the label length; continuous labels must be 25–1000 mm long.
 * **Printable area:** the printer cannot reach the tape edges, so the rendered label is cropped to the printable area around its center: 306 of the 343 dots across 29 mm tape (about 1.5 mm lost on each side), 696 across 62 mm, and on DK-11201 991 of 1063 dots along the label (about 3 mm at each end). Keep elements clear of those margins.
 * **Raster stream:** each label is rendered 1-bit at 300 DPI and encoded as described in Brother's QL-800 series raster command reference: invalidate, initialize, then per label raster mode, print information, auto-cut, margins and TIFF compression, PackBits-compressed raster lines (90 bytes for each line of the 720-pin head, mirrored because the first pin sits at the right of the tape) and a print command. With `cut` on, every label is cut off as it finishes.
+
+#### `dymo_labelwriter`
+
+For DYMO LabelWriter printers, which speak one of two raster languages. The 400, 400 Turbo, Twin Turbo, 450, 450 Turbo, 450 Twin Turbo, 450 Duo (label side) and 4XL speak the first. The 550, 550 Turbo, 5XL and LabelWriter Wireless speak the second. The first language is implemented from DYMO's *LabelWriter 450 Series Technical Reference Manual*, and its tests are worked out from that manual. DYMO has published no reference for the second; its command format was learned by reading DYMO's open-source (GPL) Linux drivers. No code or test data is taken from those drivers, so BAM stays MIT-licensed.
+
+Options: `density` (`light`, `medium`, `normal` or `dark`; default `normal`) and, on twin-roll models only, `roll` (`auto`, `left` or `right`; default `auto`).
+
+* **Media catalog:** the common die-cut rolls (30252/99010 address 28 × 89 mm, 30321/99012 large address 36 × 89 mm, 30256 shipping 59 × 102 mm, 30323/99014 shipping 54 × 101 mm, 30334/11354 57 × 32 mm, 30336/11352 25 × 54 mm, 30332/11353 25 × 25 mm, 30347 25 × 38 mm, 30330/11355 19 × 51 mm, 30345 19 × 64 mm), 30270 continuous 57 mm, and 1744907 4 × 6 in shipping labels, which need the 4XL or 5XL. Label sizes in dots follow from the nominal sizes at 300 DPI.
+* **Fit check:** as for `brother_ql`: 300 DPI, one side the label width (±0.5 mm), the other the label length on die-cut rolls or 10–2700 mm on continuous; a template whose height is the label width is rotated 90° counterclockwise.
+* **Printable area:** labels sit against the roll guide at the head's first dot. The render is centered on the label. On first-generation models it is then cut to the most the head takes in one line, 56 mm (672 dots) or 104 mm (1248 dots), so the far edge of a 59 mm shipping label does not print. Second-generation models receive the whole label.
+* **Raster stream, first generation:** one ESC more than the longest raster line (85, or 157 on the 4XL) to resynchronize, text mode, density, the roll on twin models, and the label length (a little over the label on die-cut rolls, `0xFFFF` for continuous). Then each line is trimmed of blank bytes at both ends and sent run-length compressed when that is shorter, with dot tab and bytes per line sent only when they change and runs of blank lines as skips. Labels are separated by short form feeds, and a form feed after the last brings it to the tear bar. Blank lines at the end of a die-cut label are left to the form feed.
+* **Raster stream, second generation:** a job header (random job ID, density, text quality, default media type). Then per label: the label length (0 for die-cut, `0xFFFF` for continuous), a label index, a print data header and uncompressed lines. After a final form feed, an end-of-job command closes the job. The 550 series only prints on genuine DYMO labels it can identify, whatever the driver sends.
+* **Connection:** the LabelWriter 400 and 450 series and the 4XL have only a USB port. Until BAM has a transport for locally attached printers, reach them through a raw print server on port 9100, such as `p910nd` on the machine the printer is plugged into. The 550 Turbo, 5XL and Wireless have network ports.
+
+#### Delivery
+
 * **Transport:** raw TCP to port 9100 with dial and write timeouts. Jobs are serialized per printer address so concurrent requests never interleave their streams; an unreachable printer returns `502`. A job counts as printed once the printer has accepted the whole stream; reading back printer status is a later improvement.
 
 ---
@@ -483,6 +503,11 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Th
 * [x] Implement the printer REST API (`/api/v1/printers`, managed with `settings:manage`) and `POST /api/v1/printers/{id}/print` (`labels:print`).
 * [x] Test against an in-process fake printer that decodes the command stream and rebuilds each label's bitmap for comparison with the 1-bit render, plus a golden byte stream per media.
 * [ ] Check printing on a real QL-810W (manual; outside reaper).
+
+#### Sub-Phase 3.6: DYMO LabelWriter Printing
+* [x] Implement the `dymo_labelwriter` driver for both LabelWriter raster languages (`internal/printers/dymolw`), with models, media catalog, fit check, rotation, and `density` and `roll` options.
+* [x] Test against expectations worked out from DYMO's technical reference manual, golden byte streams per protocol and head width, a stream decoder that rebuilds each label's bitmap, and an end-to-end print through the API to a fake printer.
+* [ ] Check printing on a real LabelWriter 400 or 450 (manual; outside reaper).
 
 ### Phase 4: Frontend Application
 

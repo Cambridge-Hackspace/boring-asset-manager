@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
 )
 
 func TestValidate(t *testing.T) {
@@ -46,12 +47,27 @@ func TestValidate(t *testing.T) {
 	bad("host with port", "P", DriverBrotherQL, "printer:9100", 9100, brother("QL-810W", "dk-11201", ""))
 	bad("empty host", "P", DriverBrotherQL, "", 9100, brother("QL-810W", "dk-11201", ""))
 	bad("port", "P", DriverBrotherQL, "10.0.0.1", 70000, brother("QL-810W", "dk-11201", ""))
+
+	ok("Dymo", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "30252", ""))
+	ok("Dymo dark", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 550", "30334", `{"density":"dark"}`))
+	ok("Dymo twin", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450 Twin Turbo", "30252", `{"roll":"right"}`))
+	ok("Dymo XL", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 4XL", "1744907", ""))
+	bad("Dymo model", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("QL-810W", "30252", ""))
+	bad("Dymo media", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "dk-11201", ""))
+	bad("4-inch roll on a 56 mm head", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "1744907", ""))
+	bad("roll on a single-roll model", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "30252", `{"roll":"left"}`))
+	bad("unknown roll", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter Twin Turbo", "30252", `{"roll":"middle"}`))
+	bad("unknown density", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "30252", `{"density":"max"}`))
+	bad("Dymo unknown option", "P", DriverDymoLabelWriter, "lw.lan", 9100, brother("LabelWriter 450", "30252", `{"cut":true}`))
 }
 
 func TestDriversDescribeEveryRoll(t *testing.T) {
 	d := Drivers()
-	if len(d) != 1 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != 3 || len(d[0].Options) != 1 {
+	if len(d) != 2 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != 3 || len(d[0].Options) != 1 {
 		t.Fatalf("Drivers() = %+v", d)
+	}
+	if d[1].Driver != DriverDymoLabelWriter || len(d[1].Media) != len(dymolw.MediaIDs()) || len(d[1].Options) != 2 || len(d[1].Options[0].Values) != 4 {
+		t.Fatalf("Dymo driver info = %+v", d[1])
 	}
 }
 
@@ -253,5 +269,46 @@ func TestSendGivesUpWhileWaitingWhenCanceled(t *testing.T) {
 	defer cancel()
 	if err := d.Send(ctx, "127.0.0.1", 1, []byte("job")); !errors.Is(err, ErrUnreachable) {
 		t.Errorf("got %v, want ErrUnreachable after cancellation", err)
+	}
+}
+
+func TestDymoPlan(t *testing.T) {
+	d, err := Lookup(DriverDymoLabelWriter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Plan(Settings{Model: "LabelWriter 450", Media: "30252"}, LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
+		t.Errorf("Brother-sized label: got %v, want ErrDoesNotFit", err)
+	}
+
+	defer func(orig func() uint32) { newJobID = orig }(newJobID)
+	newJobID = func() uint32 { return 42 }
+
+	label := image.NewGray(image.Rect(0, 0, 1051, 331)) // 89 × 28 mm, all black
+	for _, c := range []struct {
+		model, options string
+		protocol       dymolw.Protocol
+		density, roll  byte
+		jobID          uint32
+	}{
+		{"LabelWriter 450", "", dymolw.ProtocolV1, 'e', 0, 0},
+		{"LabelWriter 450 Twin Turbo", `{"roll":"right","density":"light"}`, dymolw.ProtocolV1, 'c', '2', 0},
+		{"LabelWriter 550", `{"density":"medium"}`, dymolw.ProtocolV2, 'd', 0, 42},
+	} {
+		plan, err := d.Plan(Settings{Model: c.model, Media: "30252", Options: json.RawMessage(c.options)}, LabelSpec{WidthMM: 89, HeightMM: 28, DPI: 300})
+		if err != nil {
+			t.Fatal(err)
+		}
+		stream, err := plan.Encode([]*image.Gray{label, label})
+		if err != nil {
+			t.Fatal(err)
+		}
+		job, err := dymolw.DecodeJob(c.protocol, stream, 331)
+		if err != nil {
+			t.Fatalf("%s: %v", c.model, err)
+		}
+		if job.Density != c.density || job.Roll != c.roll || job.JobID != c.jobID || len(job.Pages) != 2 {
+			t.Errorf("%s: decoded %+v", c.model, job)
+		}
 	}
 }
