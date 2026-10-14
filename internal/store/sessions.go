@@ -1,7 +1,9 @@
 package store
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -14,7 +16,16 @@ var (
 	ErrSessionNotFound = errors.New("session not found or expired")
 )
 
-// CreateSession generates a new secure session token for an active user and persists it.
+// sessionKey is how a session token is stored: its SHA-256 hash, so the
+// sessions table never holds a usable token. Tokens are 256 random bits, so
+// an unkeyed hash is as hard to reverse as the token is to guess.
+func sessionKey(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+// CreateSession generates a new secure session token for an active user and persists it. The
+// returned session's ID is the token, for the cookie; only its hash is stored.
 func (s *Store) CreateSession(userID string, ttl time.Duration) (*models.Session, error) {
 	token, err := auth.GenerateSessionToken()
 	if err != nil {
@@ -25,7 +36,7 @@ func (s *Store) CreateSession(userID string, ttl time.Duration) (*models.Session
 	expiresAt := now.Add(ttl)
 
 	query := `INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)`
-	_, err = s.Exec(query, token, userID, expiresAt, now)
+	_, err = s.Exec(query, sessionKey(token), userID, expiresAt, now)
 	if err != nil {
 		return nil, fmt.Errorf("inserting session: %w", err)
 	}
@@ -59,7 +70,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 		u    models.User
 	)
 
-	err := s.QueryRow(query, token, now).Scan(
+	err := s.QueryRow(query, sessionKey(token), now).Scan(
 		&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt,
 		&u.ID, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt,
 	)
@@ -70,13 +81,14 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 		return nil, nil, fmt.Errorf("querying session: %w", err)
 	}
 
+	sess.ID = token
 	return &sess, &u, nil
 }
 
 // DeleteSession revokes a session by its token.
 func (s *Store) DeleteSession(token string) error {
 	query := `DELETE FROM sessions WHERE id = ?`
-	_, err := s.Exec(query, token)
+	_, err := s.Exec(query, sessionKey(token))
 	if err != nil {
 		return fmt.Errorf("deleting session: %w", err)
 	}

@@ -178,7 +178,7 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 
 * **Local Credentials:** Email (case-insensitive, unique) + password hashed via bcrypt (cost 12).
 * **TOTP (RFC 6238):** Optional two-factor authentication flag per user.
-* **Session Store:** Stateful sessions stored in the active database (`sessions` table) referenced via an `HttpOnly`, `SameSite=Lax`, `Secure` cookie.
+* **Session Store:** Stateful sessions stored in the active database (`sessions` table) referenced via an `HttpOnly`, `SameSite=Lax`, `Secure` cookie. The cookie holds a random 256-bit token; the table stores only its SHA-256 hash (migration `005`), so a copy of the database cannot be used to sign in.
 
 ---
 

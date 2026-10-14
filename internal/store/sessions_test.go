@@ -153,3 +153,42 @@ func TestDeleteUserSessions(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionTokensAreNotStored(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	u, err := st.CreateUser("hash@hackspace.org", "Pass1234!", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, err := st.CreateSession(u.ID, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var stored string
+	if err := st.QueryRow("SELECT id FROM sessions WHERE user_id = ?", u.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored == sess.ID {
+		t.Fatal("the sessions table holds the token itself")
+	}
+	if stored != sessionKey(sess.ID) {
+		t.Errorf("stored %q, want the token's SHA-256 %q", stored, sessionKey(sess.ID))
+	}
+
+	// The cookie token still works; what the table holds does not.
+	if got, _, err := st.GetSession(sess.ID); err != nil || got.ID != sess.ID {
+		t.Errorf("GetSession(token) = %+v, %v", got, err)
+	}
+	if _, _, err := st.GetSession(stored); !errors.Is(err, ErrSessionNotFound) {
+		t.Errorf("a value copied from the sessions table signed in: %v", err)
+	}
+
+	if err := st.DeleteSession(sess.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.GetSession(sess.ID); !errors.Is(err, ErrSessionNotFound) {
+		t.Errorf("deleted session still valid: %v", err)
+	}
+}
