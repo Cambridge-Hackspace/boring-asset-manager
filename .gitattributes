@@ -1,3 +1,8 @@
 # Golden files are compared byte for byte, so their line endings must never be
 # converted on checkout.
 **/testdata/** -text
+
+# Files installed on servers or run by sh keep LF line endings, whatever the
+# platform they are checked out on.
+packaging/** text eol=lf
+*.sh text eol=lf

@@ -1,0 +1,63 @@
+# systemd unit for BAM! (README §2.1). Install as
+# /etc/systemd/system/bam.service; the configuration lives in
+# /etc/bam/config.toml and the data in /var/lib/bam.
+[Unit]
+Description=BAM! (Boring Asset Manager)
+Documentation=https://github.com/Cambridge-Hackspace/boring-asset-manager
+Wants=network-online.target
+# Ordering only: a database on this host starts first, if there is one.
+After=network-online.target postgresql.service mariadb.service
+
+[Service]
+Type=simple
+User=bam
+Group=bam
+ExecStart=/usr/local/bin/bam serve --config /etc/bam/config.toml
+# Environment overrides (BAM_SERVER_PORT and the rest, README §2), one
+# NAME=value per line; the file is optional.
+EnvironmentFile=-/etc/bam/environment
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# /var/lib/bam, created and owned by the service.
+StateDirectory=bam
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/bam
+UMask=0027
+
+# Printers on USB device files (README §4.4) usually belong to group lp:
+# uncomment to let BAM write to them, and list them under [printers].
+#SupplementaryGroups=lp
+
+# Sandboxing: BAM needs the network, its data directory and nothing else.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+# The Go runtime raises its open-file limit at startup, so @resources (in
+# @system-service) must stay allowed. A refused call fails, not kills.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# No capabilities. To listen on a port below 1024 directly, rather than
+# behind a reverse proxy, set both of these to CAP_NET_BIND_SERVICE.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

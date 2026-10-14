@@ -1,0 +1,51 @@
+#!/bin/sh
+#
+# rc.d script for BAM! (README §2.1). Install as /usr/local/etc/rc.d/bam,
+# mode 0555, and enable with: sysrc bam_enable=YES
+#
+# PROVIDE: bam
+# REQUIRE: LOGIN NETWORKING
+# BEFORE: nginx
+# KEYWORD: shutdown
+#
+# Settings in /etc/rc.conf (defaults in brackets):
+#   bam_enable   Start BAM at boot [NO]
+#   bam_config   Configuration file [/usr/local/etc/bam/config.toml]
+#   bam_user     Account BAM runs as; rc.subr starts it with su(1) [bam]
+#   bam_group    Its group [bam]
+#   bam_dbdir    Data directory, created if missing [/var/db/bam]
+#   bam_env      Environment overrides, such as "BAM_SERVER_PORT=8081" []
+#
+# BAM runs under daemon(8), which logs its output to syslog with the tag
+# "bam" and restarts it five seconds after it stops unexpectedly.
+
+. /etc/rc.subr
+
+name="bam"
+rcvar="bam_enable"
+
+load_rc_config $name
+
+: "${bam_enable:=NO}"
+: "${bam_config:=/usr/local/etc/bam/config.toml}"
+: "${bam_user:=bam}"
+: "${bam_group:=bam}"
+: "${bam_dbdir:=/var/db/bam}"
+
+pidfile="/var/run/${name}/${name}.pid"
+procname="/usr/sbin/daemon"
+command="/usr/sbin/daemon"
+command_args="-f -S -T ${name} -R 5 -P ${pidfile} /usr/local/bin/bam serve --config ${bam_config}"
+required_files="${bam_config}"
+
+start_precmd="${name}_prestart"
+
+bam_prestart()
+{
+	# rc.subr starts daemon(8) as bam_user, so the pidfile goes in a
+	# directory of its own.
+	install -d -o "${bam_user}" -g "${bam_group}" -m 0755 "/var/run/${name}"
+	install -d -o "${bam_user}" -g "${bam_group}" -m 0750 "${bam_dbdir}"
+}
+
+run_rc_command "$1"
