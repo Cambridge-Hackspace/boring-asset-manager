@@ -40,7 +40,9 @@ MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
     sed -i "s#data/bam.db#$state/bam.db#; s#./data/uploads#$state/uploads#" c.toml
     "$bin" migrate --config c.toml >/dev/null
     "$bin" admin create --config c.toml --email "$E2E_EMAIL" --password "$E2E_PASSWORD" >/dev/null
-    "$bin" serve --config c.toml >"$state/server.log" 2>&1 &
+    # Notifications must never leave the container: point outgoing HTTPS at
+    # a closed port, so deliveries fail as unreachable and are retried.
+    HTTPS_PROXY=http://127.0.0.1:9 "$bin" serve --config c.toml >"$state/server.log" 2>&1 &
     for i in $(seq 1 50); do
       wget -q -O /dev/null http://127.0.0.1:8080/healthz && break
       sleep 0.2

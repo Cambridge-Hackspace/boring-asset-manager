@@ -40,6 +40,7 @@ for (const scheme of ['light', 'dark'] as const) {
       [`/templates/${id}/edit`, ''],
       ['/images', 'Images'],
       ['/printers', 'Printers'],
+      ['/notifications', 'Notifications'],
       ['/users', 'Users'],
       ['/account', 'Your account'],
       ['/no-such-page', 'Page not found'],

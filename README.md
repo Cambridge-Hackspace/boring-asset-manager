@@ -660,8 +660,8 @@ Sub-phases land in order, each with its tests, and leave the tree releasable.
 * [x] Export from the asset list; upload, mapping, preview and confirmation for imports.
 
 #### Sub-Phase 5.6: Notification & Threshold Screens
-* [ ] Administration of notification channels from the driver descriptions, with a test message and the delivery log.
-* [ ] The threshold and active count on the category form; running low and restocked actions; running-low categories on the home page.
+* [x] Administration of notification channels from the driver descriptions, with a test message and the delivery log.
+* [x] The threshold and active count on the category form; running low and restocked actions; running-low categories on the home page.
 
 #### Sub-Phase 5.7: Integration Battery
 * [ ] HTTP-level suites on SQLite, PostgreSQL and MariaDB covering inheritance conflict resolution, anti-lockout under concurrency, template vector compilation across a database round trip, import atomicity, threshold crossings (including simultaneous archives) and exactly-once delivery to several channels.
@@ -693,7 +693,7 @@ Following the "Portfolio of Oracles" methodology:
 The web interface has its own checks, which run in pinned containers and need no Node on the host:
 
 * `tools/web/build.sh check`: `svelte-check` (types and Svelte's accessibility warnings, which fail the run) and the Vitest unit and component tests, which run against a fake API.
-* `tools/web/e2e.sh`: the Playwright battery in `web/e2e`. It builds the interface and a Linux binary, starts `bam serve` on a fresh SQLite database inside the Playwright container, and drives Chromium through sign-in, fields and categories, assets and labels, CSV export and import, the template editor (mouse and keyboard), and administration. Printing goes to in-process fake TCP printers whose jobs are checked byte by byte. Every view is audited with `axe-core` for WCAG 2.1 A and AA in both light and dark mode, and keyboard-only walks cover the main flows. Arguments filter the specs: `tools/web/e2e.sh editor a11y`.
+* `tools/web/e2e.sh`: the Playwright battery in `web/e2e`. It builds the interface and a Linux binary, starts `bam serve` on a fresh SQLite database inside the Playwright container, and drives Chromium through sign-in, fields and categories, assets and labels, CSV export and import, thresholds and notification channels, the template editor (mouse and keyboard), and administration. Printing goes to in-process fake TCP printers whose jobs are checked byte by byte, and the server's outgoing HTTPS is pointed at a closed port, so notifications never leave the container. Every view is audited with `axe-core` for WCAG 2.1 A and AA in both light and dark mode, and keyboard-only walks cover the main flows. Arguments filter the specs: `tools/web/e2e.sh editor a11y`.
 
 The Go suites, and therefore reaper, do not run these; adding them to the reaper battery is a matter of calling both scripts.
 

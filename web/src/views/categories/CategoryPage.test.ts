@@ -8,7 +8,13 @@ import type { Category, EffectiveField } from '../../lib/models';
 const cat = (id: string, name: string, parent: string | null = null, over: Partial<Category> = {}): Category => ({
   id, name, parent_id: parent, color_hex: '#1d4ed8', is_consumable: false, is_running_low: false, created_at: '', updated_at: '', ...over,
 });
-const categories = [cat('tools', 'Tools'), cat('power', 'Power tools', 'tools'), cat('drills', 'Drills', 'power'), cat('paint', 'Paint'), cat('uncategorized', 'Uncategorized')];
+const categories = [
+  cat('tools', 'Tools'),
+  cat('power', 'Power tools', 'tools'),
+  cat('drills', 'Drills', 'power'),
+  cat('paint', 'Paint', null, { is_consumable: true, is_running_low: true, low_stock_threshold: 3 }),
+  cat('uncategorized', 'Uncategorized'),
+];
 const fieldOf = (id: string, label: string) => ({ id, key: id, label, validation_type: 'text' as const, created_at: '', updated_at: '' });
 const effective: EffectiveField[] = [
   { field: fieldOf('serial', 'Serial'), is_required: true, source_category_id: 'tools' },
@@ -27,6 +33,9 @@ function api(extra: Record<string, (b: unknown) => unknown> = {}) {
   return fakeApi({
     'GET /categories': () => ({ categories }),
     'GET /categories/power/fields': () => ({ fields: effective }),
+    'GET /categories/paint/fields': () => ({ fields: [] }),
+    'GET /categories/power': () => ({ category: categories[1], active_count: 4 }),
+    'GET /categories/paint': () => ({ category: categories[3], active_count: 2 }),
     'GET /fields': () => ({ fields: [fieldOf('serial', 'Serial'), fieldOf('voltage', 'Voltage'), fieldOf('notes', 'Notes')] }),
     ...extra,
   });
@@ -59,7 +68,7 @@ describe('CategoryPage', () => {
     await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({
-      name: 'Power tools', parent_id: null, color_hex: '#1d4ed8', is_consumable: false, is_running_low: false,
+      name: 'Power tools', parent_id: null, color_hex: '#1d4ed8', is_consumable: false, is_running_low: false, low_stock_threshold: null,
     });
   });
 
@@ -70,6 +79,49 @@ describe('CategoryPage', () => {
     expect(low.disabled).toBe(true);
     await fireEvent.click(screen.getByLabelText('Consumable'));
     expect(low.disabled).toBe(false);
+  });
+
+  it('edits the low stock threshold, and drops it for non-consumables', async () => {
+    const { sent } = api({ 'PUT /categories/paint': () => ({ category: categories[3] }) });
+    render(CategoryPage, { params: { id: 'paint' } });
+    const input = (await screen.findByLabelText('Low stock threshold (optional)')) as HTMLInputElement;
+    expect(input.value).toBe('3');
+    await fireEvent.input(input, { target: { value: '5' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT')).toHaveLength(1));
+    expect(sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ is_consumable: true, low_stock_threshold: 5 });
+
+    await fireEvent.click(screen.getByLabelText('Consumable'));
+    expect(input.disabled).toBe(true);
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT')).toHaveLength(2));
+    expect(sent.filter((r) => r.method === 'PUT')[1]!.body).toMatchObject({ is_consumable: false, is_running_low: false, low_stock_threshold: null });
+  });
+
+  it('shows stock and lets people with assets:write flag it by hand', async () => {
+    session.permissions = ['assets:read', 'assets:write'];
+    const { sent } = api({ 'PUT /categories/paint/running-low': () => ({ category: categories[3], changed: true }) });
+    render(CategoryPage, { params: { id: 'paint' } });
+    const stock = await screen.findByRole('region', { name: 'Stock' });
+    expect(stock.textContent).toContain('Running low.');
+    expect(stock.textContent).toContain('2 active assets here and in its subcategories; flagged automatically below 3.');
+    expect(screen.queryByLabelText('Name')).toBeNull();
+    await fireEvent.click(within(stock).getByRole('button', { name: 'Mark restocked' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.path === '/categories/paint/running-low')).toBe(true));
+    expect(sent.find((r) => r.path === '/categories/paint/running-low')!.body).toEqual({ running_low: false });
+    expect(await screen.findByText('Marked as restocked.')).toBeTruthy();
+  });
+
+  it('offers no stock actions without assets:write, and none for non-consumables', async () => {
+    session.permissions = ['assets:read'];
+    api();
+    render(CategoryPage, { params: { id: 'paint' } });
+    const stock = await screen.findByRole('region', { name: 'Stock' });
+    expect(within(stock).queryByRole('button')).toBeNull();
+    cleanup();
+    render(CategoryPage, { params: { id: 'power' } });
+    await screen.findByRole('table');
+    expect(screen.queryByRole('region', { name: 'Stock' })).toBeNull();
   });
 
   it('is read-only without categories:manage', async () => {

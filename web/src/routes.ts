@@ -16,6 +16,7 @@ import TemplateEditor from './views/templates/TemplateEditor.svelte';
 import ImagesPage from './views/admin/ImagesPage.svelte';
 import PrintersPage from './views/admin/PrintersPage.svelte';
 import UsersPage from './views/admin/UsersPage.svelte';
+import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 
 export interface Route {
@@ -44,6 +45,7 @@ export const routes: Route[] = [
   { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates:manage'] },
   { pattern: '/images', component: ImagesPage, title: 'Images', permissions: ['templates:manage'], nav: 'Images' },
   { pattern: '/printers', component: PrintersPage, title: 'Printers', permissions: ['settings:manage', 'labels:print'], nav: 'Printers' },
+  { pattern: '/notifications', component: NotificationsPage, title: 'Notifications', permissions: ['settings:manage'], nav: 'Notifications' },
   { pattern: '/users', component: UsersPage, title: 'Users', permissions: ['users:manage'], nav: 'Users' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },
 ];
