@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
@@ -220,5 +221,16 @@ func TestUpdateAssetKeepsOmittedPartsAndClearsEmptyOnes(t *testing.T) {
 	// The cleared code is free for another asset.
 	if _, err := st.CreateAsset("Other drill", nil, keys, nil); err != nil {
 		t.Errorf("reusing the cleared code: %v", err)
+	}
+}
+
+func TestFieldValueErrorsNameTheField(t *testing.T) {
+	st := setupTestStore(t)
+	if _, err := st.CreateField("weight_kg", "Weight", fields.TypeNumber, nil); err != nil {
+		t.Fatal(err)
+	}
+	_, err := st.CreateAsset("Anvil", nil, nil, map[string]string{"weight_kg": "heavy"})
+	if !errors.Is(err, fields.ErrInvalidFieldValue) || !strings.Contains(err.Error(), `"Weight" (weight_kg)`) {
+		t.Errorf("got %v, want an invalid value error naming Weight (weight_kg)", err)
 	}
 }

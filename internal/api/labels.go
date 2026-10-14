@@ -394,3 +394,8 @@ func sanitizeForHeader(s string) string {
 		return r
 	}, s)
 }
+
+// handleListGenerators describes the barcode generators: GET /api/v1/generators
+func (s *Server) handleListGenerators(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"generators": generators.Describe()})
+}

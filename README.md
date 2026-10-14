@@ -596,11 +596,11 @@ Sub-phases land in order, each with its tests, and leave the tree releasable. Fr
 * [x] Category field assignment, showing each effective field's source category and inherited constraints.
 
 #### Sub-Phase 4.4: Assets & Labels
-* [ ] Asset list with search, category filter and multi-select.
-* [ ] Asset detail.
-* [ ] Asset form generated from the effective fields of the chosen categories, re-resolved as they change, with generator keys and server errors shown beside the fields they name.
-* [ ] Archive an asset.
-* [ ] Label preview, PNG/PDF download and printing (printer, copies) for one asset; batch export and printing for a selection.
+* [x] Asset list with search, category filter and multi-select.
+* [x] Asset detail.
+* [x] Asset form generated from the effective fields of the chosen categories, re-resolved as they change, with generator keys and server errors shown beside the fields they name.
+* [x] Archive an asset.
+* [x] Label preview, PNG/PDF download and printing (printer, copies) for one asset; batch export and printing for a selection.
 
 #### Sub-Phase 4.5: Template Editor
 * [ ] Template list and editor shell: canvas settings, printer-derived size and DPI, and the fit check.

@@ -93,7 +93,9 @@ func (s *Store) resolveFieldValues(fieldMap map[string]models.EffectiveField, va
 		}
 
 		if err := fields.ValidateFieldValue(f, val); err != nil {
-			return nil, err
+			// Name the field, as the required-field error does, so clients can
+			// show the message beside it.
+			return nil, fmt.Errorf("field %q (%s): %w", f.Label, f.Key, err)
 		}
 		resolved[f.ID] = val
 	}
