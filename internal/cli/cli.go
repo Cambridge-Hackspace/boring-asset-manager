@@ -152,3 +152,37 @@ func Serve(configPath string) error {
 
 	return nil
 }
+
+// Backup copies the configured SQLite database to dest (README §2.2). Other
+// databases return store.ErrBackupUnsupported.
+func Backup(configPath, dest string) error {
+	if dest == "" {
+		return errors.New("--to is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	if err := store.BackupSQLite(&cfg.Database, dest); err != nil {
+		return err
+	}
+	fmt.Printf("Backed up the database to %s\n", dest)
+	return nil
+}
+
+// Restore puts a backup made by Backup in place of the configured SQLite
+// database. BAM must be stopped first.
+func Restore(configPath, from string) error {
+	if from == "" {
+		return errors.New("--from is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	if err := store.RestoreSQLite(&cfg.Database, from); err != nil {
+		return err
+	}
+	fmt.Printf("Restored the database from %s\n", from)
+	return nil
+}

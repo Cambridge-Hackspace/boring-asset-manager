@@ -2,8 +2,11 @@
 # Checks bam-update (README §2.2) in a Debian container booted with systemd,
 # against fake releases served from files: it updates to a newer release,
 # leaves an up-to-date or newer installation alone, refuses a download that
-# does not match its checksum, rolls back a release that does not come up,
-# and replaces a build that is not a release only when forced. Needs podman.
+# does not match its checksum, rolls back a release that does not come up
+# along with the changes it made to the database, refuses to update a
+# database it cannot back up, runs backup hooks, keeps only the newest
+# backups, and replaces a build that is not a release only when forced.
+# Needs podman.
 set -eu
 
 DEBIAN_IMAGE="docker.io/library/debian:bookworm-slim@sha256:a4672c0cb26fbdde88e38fa2dfb6c681942306680e41e4378b28770b6e79ee91"
@@ -46,7 +49,9 @@ systemctl daemon-reload
 systemctl enable --now bam 2>/dev/null
 install -m 0755 packaging/bam-update /usr/local/sbin/bam-update
 install -m 0644 packaging/linux/bam-update.cron /etc/cron.d/bam-update
-printf "%s\n" BAM_UPDATE_API_URL=file:///srv/release/latest.json BAM_UPDATE_DOWNLOAD_URL=file:///srv/release/download > /etc/bam/update.conf
+printf "%s\n" BAM_UPDATE_API_URL=file:///srv/release/latest.json BAM_UPDATE_DOWNLOAD_URL=file:///srv/release/download BAM_UPDATE_KEEP_BACKUPS=2 > /etc/bam/update.conf
+# A real binary for the broken release below to hand all but serving to.
+install -D -m 0755 bin/check/bam-v0.0.2 /usr/local/libexec/bam-real
 '
 
 # publish TAG BINARY [BAD]: makes TAG the latest release, with BINARY as its
@@ -69,7 +74,7 @@ expect() {
   echo "ok: $3"
 }
 healthy() {
-  for i in $(seq 1 30); do
+  for _ in $(seq 1 30); do
     run "curl -fsS http://127.0.0.1:8080/healthz" >/dev/null 2>&1 && return 0
     sleep 1
   done
@@ -103,12 +108,50 @@ expect "$(version)" "BAM! version v0.0.2" "the bad download was refused"
 expect "$(pid)" "$before" "and the service left running"
 
 echo "== a release that does not come up"
-run "printf '#!/bin/sh\n[ \"\$1\" = version ] && echo \"BAM! version v0.0.4\" && exit 0\nexit 1\n' > /tmp/broken && chmod +x /tmp/broken"
+# It changes the database (adding a user) before failing to serve, as a
+# release whose migrations ran and which then broke would.
+run "cat > /tmp/broken <<'EOF'
+#!/bin/sh
+case \"\$1\" in
+  version) echo 'BAM! version v0.0.4' ;;
+  serve)
+    /usr/local/libexec/bam-real admin create --config /etc/bam/config.toml --email upgraded@check.test --password 'Marker123!' >/dev/null
+    exit 1 ;;
+  *) exec /usr/local/libexec/bam-real \"\$@\" ;;
+esac
+EOF
+chmod +x /tmp/broken"
 publish v0.0.4 /tmp/broken
 if run "bam-update" 2>&1; then echo "FAIL: kept a release that does not start" >&2; exit 1; fi
 expect "$(version)" "BAM! version v0.0.2" "rolled back to v0.0.2"
 healthy
 echo "ok: v0.0.2 is serving again"
+# The user the broken release added went with the restore, so it cannot
+# sign in.
+signin=$(run "curl -s -o /dev/null -w %{http_code} -H 'Content-Type: application/json' -d '{\"email\":\"upgraded@check.test\",\"password\":\"Marker123!\"}' http://127.0.0.1:8080/api/v1/auth/login")
+if [ "$signin" != 401 ]; then
+  echo "FAIL: signing in as the user the broken release added: $signin" >&2
+  exit 1
+fi
+echo "ok: the database is as it was before the update"
+expect "$(run "stat -c %a /var/backups/bam")" "700" "backups are readable by root only"
+expect "$(run "stat -c %U /var/lib/bam/bam.db")" "bam" "the restored database still belongs to bam"
+
+echo "== a database that cannot be backed up, and backup hooks"
+run "sed 's/^type = .*/type = \"postgres\"/' /etc/bam/config.toml > /tmp/pg.toml"
+if out=$(run "BAM_UPDATE_CONFIG=/tmp/pg.toml bam-update" 2>&1); then echo "FAIL: updated without a backup" >&2; exit 1; fi
+if ! echo "$out" | grep -q "BAM_UPDATE_BACKUP_COMMAND"; then echo "FAIL: no word on how to back it up: $out" >&2; exit 1; fi
+echo "ok: says how to back it up"
+expect "$(version)" "BAM! version v0.0.2" "and changed nothing"
+healthy
+hooks="BAM_UPDATE_CONFIG=/tmp/pg.toml BAM_UPDATE_BACKUP_COMMAND='echo dumped > \"\$BAM_BACKUP_FILE\"'"
+if run "$hooks bam-update" 2>&1; then echo "FAIL: a backup command without a restore command" >&2; exit 1; fi
+if run "$hooks BAM_UPDATE_RESTORE_COMMAND='cp \"\$BAM_BACKUP_FILE\" /tmp/restored' bam-update" 2>&1; then
+  echo "FAIL: kept a release that does not start" >&2
+  exit 1
+fi
+expect "$(run "cat /tmp/restored")" "dumped" "the hooks backed up and restored"
+healthy
 
 echo "== a build that is not a release"
 run "install -m 0755 /src/bin/check/bam-dev /usr/local/bin/bam && systemctl restart bam"
@@ -118,4 +161,5 @@ expect "$(version)" "BAM! version dev" "a dev build is left alone"
 run "bam-update --force"
 expect "$(version)" "BAM! version v0.0.2" "and replaced when forced"
 healthy
+expect "$(run "ls /var/backups/bam | wc -l")" "2" "only the newest two backups are kept"
 echo "PASS"
