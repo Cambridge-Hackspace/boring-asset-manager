@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { router } from './lib/router.svelte';
+  import { displayName } from './lib/people';
   import { session } from './lib/session.svelte';
   import { routes } from './routes';
 
@@ -45,7 +46,7 @@
       {/each}
     </nav>
     <div class="flex items-center gap-3 text-sm">
-      <a href="/account" class="text-zinc-600 hover:underline dark:text-zinc-400">{session.user?.email}</a>
+      <a href="/account" class="text-zinc-600 hover:underline dark:text-zinc-400">{session.user ? displayName(session.user) : ''}</a>
       <button type="button" class="btn-secondary" onclick={() => session.signOut()}>Sign out</button>
     </div>
   </div>

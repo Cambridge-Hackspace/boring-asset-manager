@@ -14,6 +14,7 @@ import (
 // CreateUserRequest defines the request body for creating a user account.
 type CreateUserRequest struct {
 	Email    string `json:"email"`
+	Name     string `json:"name"`
 	Password string `json:"password"`
 	IsActive *bool  `json:"is_active,omitempty"`
 }
@@ -67,7 +68,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		isActive = *req.IsActive
 	}
 
-	user, err := s.store.CreateUser(req.Email, req.Password, isActive)
+	user, err := s.store.CreateNamedUser(req.Email, req.Name, req.Password, isActive)
 	if errors.Is(err, auth.ErrPasswordPolicy) || errors.Is(err, store.ErrInvalidUser) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -197,5 +198,39 @@ func (s *Server) handleSetUserRoles(w http.ResponseWriter, r *http.Request) {
 			roleIDs = []string{}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"role_ids": roleIDs})
+	}
+}
+
+// SetNameRequest sets a user's display name; empty shows their email.
+type SetNameRequest struct {
+	Name *string `json:"name"`
+}
+
+// handleSetUserName renames a user: PUT /api/v1/users/{id}/name
+func (s *Server) handleSetUserName(w http.ResponseWriter, r *http.Request) {
+	s.setUserName(w, r, r.PathValue("id"))
+}
+
+// handleSetOwnName renames the signed-in user: PUT /api/v1/auth/name
+func (s *Server) handleSetOwnName(w http.ResponseWriter, r *http.Request) {
+	s.setUserName(w, r, CurrentUser(r.Context()).ID)
+}
+
+func (s *Server) setUserName(w http.ResponseWriter, r *http.Request, userID string) {
+	var req SetNameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == nil {
+		writeJSONError(w, http.StatusBadRequest, "name is required (empty to show the email instead)")
+		return
+	}
+	user, err := s.store.SetUserName(userID, *req.Name)
+	switch {
+	case errors.Is(err, store.ErrUserNotFound):
+		writeJSONError(w, http.StatusNotFound, "User not found")
+	case errors.Is(err, store.ErrInvalidUser):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeStoreError(w, err, "rename the user")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"user": user})
 	}
 }

@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
@@ -128,5 +129,56 @@ func TestStoreAntiLockoutEnforcement(t *testing.T) {
 	err = st.DeleteUser(admin2.ID)
 	if !errors.Is(err, rbac.ErrAntiLockoutTriggered) {
 		t.Errorf("expected ErrAntiLockoutTriggered on deleting admin2, got %v", err)
+	}
+}
+
+func TestUserNames(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	u, err := st.CreateNamedUser("ada@hackspace.org", "  Ada Lovelace ", "a long enough password", true)
+	if err != nil || u.Name != "Ada Lovelace" {
+		t.Fatalf("created %+v, %v", u, err)
+	}
+	if _, err := st.CreateNamedUser("long@hackspace.org", strings.Repeat("x", 256), "a long enough password", true); !errors.Is(err, ErrInvalidUser) {
+		t.Errorf("an overlong name: %v", err)
+	}
+	if got, _ := st.GetUserByEmail("ADA@hackspace.org"); got == nil || got.Name != "Ada Lovelace" {
+		t.Errorf("read back %+v", got)
+	}
+
+	// History keeps the name as it read when the change was made.
+	id := asset(t, st.As(u.ID), "Drill")
+	renamed, err := st.SetUserName(u.ID, "Ada King")
+	if err != nil || renamed.Name != "Ada King" {
+		t.Fatalf("renamed %+v, %v", renamed, err)
+	}
+	archive(t, st.As(u.ID), id)
+	list := history(t, st, id)
+	if a := list[0].Payload.Actor; a == nil || a.Name != "Ada King" {
+		t.Errorf("the archiving's actor: %+v", a)
+	}
+	if a := list[1].Payload.Actor; a == nil || a.Name != "Ada Lovelace" || a.Email != "ada@hackspace.org" {
+		t.Errorf("the creation's actor: %+v", a)
+	}
+	if list, _ := st.ListUsers(); len(list) != 1 || list[0].Name != "Ada King" {
+		t.Errorf("listed %+v", list)
+	}
+
+	// Clearing it shows the email again; archived and missing users are not renamed.
+	if cleared, err := st.SetUserName(u.ID, ""); err != nil || cleared.Name != "" {
+		t.Errorf("cleared %+v, %v", cleared, err)
+	}
+	if _, err := st.SetUserName("no-such-user", "Nobody"); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("a missing user: %v", err)
+	}
+	other, err := st.CreateUser("grace@hackspace.org", "a long enough password", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteUser(other.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetUserName(other.ID, "Grace"); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("an archived user: %v", err)
 	}
 }

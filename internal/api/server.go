@@ -49,6 +49,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Authenticated session endpoints
 	mux.Handle("POST /api/v1/auth/logout", RequireAuth(http.HandlerFunc(s.handleLogout)))
 	mux.Handle("GET /api/v1/auth/me", RequireAuth(http.HandlerFunc(s.handleAuthMe)))
+	mux.Handle("PUT /api/v1/auth/name", RequireAuth(http.HandlerFunc(s.handleSetOwnName)))
 	mux.Handle("PUT /api/v1/auth/password", RequireAuth(http.HandlerFunc(s.handleChangePassword)))
 
 	// User administration endpoints (requires users:manage)
@@ -56,6 +57,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateUser)))
 	mux.Handle("PATCH /api/v1/users/{id}/status", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateUserStatus)))
 	mux.Handle("DELETE /api/v1/users/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteUser)))
+	mux.Handle("PUT /api/v1/users/{id}/name", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserName)))
 	mux.Handle("PUT /api/v1/users/{id}/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserRoles)))
 	mux.Handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 

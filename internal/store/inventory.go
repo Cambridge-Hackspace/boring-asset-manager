@@ -286,7 +286,7 @@ func (s *Store) insertEvent(tx *sql.Tx, kind string, categoryID, assetID *string
 	var actorID *string
 	if s.actor != "" {
 		actor := models.EventActor{ID: s.actor}
-		err := s.TxQueryRow(tx, "SELECT email FROM users WHERE id = ?", s.actor).Scan(&actor.Email)
+		err := s.TxQueryRow(tx, "SELECT email, name FROM users WHERE id = ?", s.actor).Scan(&actor.Email, &actor.Name)
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("reading user for event: %w", err)
 		}

@@ -24,7 +24,7 @@ describe('SignIn', () => {
 
   it('signs in and returns to the page asked for', async () => {
     navigate('/sign-in?next=%2Fassets');
-    const me = { user: { id: 'u1', email: 'ada@hackspace.org', is_active: true, created_at: '', updated_at: '' }, permissions: [] };
+    const me = { user: { id: 'u1', email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' }, permissions: [] };
     const fetchMock = vi.fn().mockResolvedValueOnce(json(200, { user: me.user })).mockResolvedValueOnce(json(200, me));
     vi.stubGlobal('fetch', fetchMock);
     render(SignIn);

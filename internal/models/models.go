@@ -7,10 +7,12 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 )
 
-// User represents a system user account.
+// User represents a system user account. Name is for display only; when it
+// is empty, the email is shown instead.
 type User struct {
 	ID           string     `json:"id"`
 	Email        string     `json:"email"`
+	Name         string     `json:"name"`
 	PasswordHash string     `json:"-"`
 	TOTPSecret   *string    `json:"-"`
 	IsActive     bool       `json:"is_active"`
@@ -193,6 +195,15 @@ type EventCategory struct {
 type EventActor struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
+	Name  string `json:"name,omitempty"`
+}
+
+// Display is the actor's name, or their email when they have none.
+func (a *EventActor) Display() string {
+	if a.Name != "" {
+		return a.Name
+	}
+	return a.Email
 }
 
 // CategoryField defines field assignment and requirement constraint on a category.

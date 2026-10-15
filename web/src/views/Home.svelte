@@ -3,6 +3,7 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import type { AssetWithDetails, Category } from '../lib/models';
+  import { displayName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
   import CategoryBadge from '../components/CategoryBadge.svelte';
@@ -32,7 +33,7 @@
 </script>
 
 <h1 class="text-2xl font-bold">Welcome</h1>
-<p class="mt-1 text-zinc-600 dark:text-zinc-400">Signed in as {session.user?.email}.</p>
+<p class="mt-1 text-zinc-600 dark:text-zinc-400">Signed in as {session.user ? displayName(session.user) : ''}.</p>
 
 <ErrorMessage {error} />
 {#if low}

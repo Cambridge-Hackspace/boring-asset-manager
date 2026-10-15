@@ -8,7 +8,7 @@ function json(status: number, body: unknown) {
 }
 
 const me = {
-  user: { id: 'u1', email: 'ada@hackspace.org', is_active: true, created_at: '', updated_at: '' },
+  user: { id: 'u1', email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' },
   permissions: ['assets:read', 'labels:print'],
 };
 
