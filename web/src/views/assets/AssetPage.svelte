@@ -166,7 +166,7 @@
             ? `; flagged automatically below ${amount(stock.low_stock_threshold, stock.unit)}`
             : ''}.
         </p>
-        {#if session.can('assets:write') && !archived}
+        {#if session.can('stock:record') && !archived}
           <div class="mt-3 flex flex-wrap items-end gap-2">
             <div>
               <label class="label" for="stock-amount">How many{stock.unit ? ` (${stock.unit})` : ''}</label>

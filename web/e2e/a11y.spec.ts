@@ -50,6 +50,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/printers', 'Printers'],
       ['/notifications', 'Notifications'],
       ['/users', 'Users'],
+      ['/roles', 'Roles'],
       ['/account', 'Your account'],
       ['/no-such-page', 'Page not found'],
     ];

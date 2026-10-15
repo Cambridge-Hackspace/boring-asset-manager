@@ -16,6 +16,7 @@ import TemplateEditor from './views/templates/TemplateEditor.svelte';
 import ImagesPage from './views/admin/ImagesPage.svelte';
 import PrintersPage from './views/admin/PrintersPage.svelte';
 import UsersPage from './views/admin/UsersPage.svelte';
+import RolesPage from './views/admin/RolesPage.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 
@@ -47,5 +48,6 @@ export const routes: Route[] = [
   { pattern: '/printers', component: PrintersPage, title: 'Printers', permissions: ['settings:manage', 'labels:print'], nav: 'Printers' },
   { pattern: '/notifications', component: NotificationsPage, title: 'Notifications', permissions: ['settings:manage'], nav: 'Notifications' },
   { pattern: '/users', component: UsersPage, title: 'Users', permissions: ['users:manage'], nav: 'Users' },
+  { pattern: '/roles', component: RolesPage, title: 'Roles', permissions: ['users:manage'], nav: 'Roles' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },
 ];

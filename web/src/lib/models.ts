@@ -8,7 +8,8 @@ export type Permission =
   | 'categories:manage'
   | 'settings:manage'
   | 'users:manage'
-  | 'labels:print';
+  | 'labels:print'
+  | 'stock:record';
 
 export interface User {
   id: string;
@@ -195,6 +196,10 @@ export interface Role {
   name: string;
   description: string;
   permissions: Permission[];
+  /** How many users who are not archived hold it. */
+  user_count: number;
+  /** Set for the admin role, which always has every permission. */
+  protected: boolean;
 }
 
 export interface UserWithRoles extends User {

@@ -32,6 +32,10 @@ type Role struct {
 type RoleWithPermissions struct {
 	Role
 	Permissions []string `json:"permissions"`
+	// UserCount is how many users who are not archived hold the role.
+	UserCount int `json:"user_count"`
+	// Protected is set for the admin role, which cannot be changed.
+	Protected bool `json:"protected"`
 }
 
 // Permission represents a granular permission key.

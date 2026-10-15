@@ -15,6 +15,8 @@ const (
 	PermSettingsManage   = "settings:manage"
 	PermUsersManage      = "users:manage"
 	PermLabelsPrint      = "labels:print"
+	// PermStockRecord uses, restocks and flags stock without editing assets.
+	PermStockRecord = "stock:record"
 )
 
 var (
@@ -33,6 +35,7 @@ func AllPermissions() []string {
 		PermSettingsManage,
 		PermUsersManage,
 		PermLabelsPrint,
+		PermStockRecord,
 	}
 }
 

@@ -49,6 +49,9 @@ var fuzzRoutes = []route{
 	{method: "PUT", path: "/api/v1/users/{user}/name", body: `{"name":"Grace {n}"}`},
 	{method: "PUT", path: "/api/v1/users/{user}/roles", body: `{"role_ids":["{role}"]}`},
 	{method: "GET", path: "/api/v1/roles"},
+	{method: "POST", path: "/api/v1/roles", body: `{"name":"Stores {n}","description":"Records stock","permissions":["assets:read","stock:record"]}`},
+	{method: "PUT", path: "/api/v1/roles/{role}", body: `{"name":"Readers {n}","description":"","permissions":["assets:read"]}`},
+	{method: "DELETE", path: "/api/v1/roles/{role}"},
 	{method: "GET", path: "/api/v1/fields"},
 	{method: "POST", path: "/api/v1/fields", body: `{"key":"k{n}","label":"Size","validation_type":"select","options":{"choices":[{"label":"Small","value":"s"},{"label":"Large","value":"l"}],"default":"s"}}`},
 	{method: "GET", path: "/api/v1/fields/{field}"},
@@ -200,6 +203,8 @@ func kindOf(path string) string {
 		return "printer"
 	case "/api/v1/notifiers":
 		return "channel"
+	case "/api/v1/roles":
+		return "role"
 	case "/api/v1/users":
 		return "user"
 	}
