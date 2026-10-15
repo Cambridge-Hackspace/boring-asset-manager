@@ -144,7 +144,7 @@
             <tr class="border-b border-zinc-200 align-top dark:border-zinc-800">
               <td class="py-2 pr-4 whitespace-nowrap">{when(d.created_at)}</td>
               <td class="py-2 pr-4">{d.channel_name}</td>
-              <td class="py-2 pr-4">{eventLabel(d.event_kind)}{d.category_name ? `: ${d.category_name}` : ''}</td>
+              <td class="py-2 pr-4">{eventLabel(d.event_kind)}{d.category_name || d.asset_name ? `: ${d.category_name || d.asset_name}` : ''}</td>
               <td class="py-2">
                 {outcome(d)}
                 {#if d.last_error}<span class="block text-xs text-zinc-600 dark:text-zinc-400">{d.last_error}</span>{/if}

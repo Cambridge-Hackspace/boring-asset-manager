@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
@@ -144,7 +145,7 @@ func Suggest(header []string, corpus []models.Field) []string {
 		byName[t] = CodePrefix + t
 		byName[CodePrefix+t] = CodePrefix + t
 	}
-	for _, c := range []string{ColumnID, ColumnName, ColumnCategories} {
+	for _, c := range []string{ColumnID, ColumnName, ColumnCategories, ColumnQuantity, ColumnUnit, ColumnThreshold} {
 		byName[c] = c
 	}
 	out := make([]string, len(header))
@@ -246,7 +247,7 @@ func checkMapping(plan *Plan, fieldsByKey map[string]models.Field) bool {
 			hasID = true
 		case t == ColumnName:
 			hasName = true
-		case t == ColumnCategories:
+		case t == ColumnCategories, t == ColumnQuantity, t == ColumnUnit, t == ColumnThreshold:
 		case strings.HasPrefix(t, CodePrefix) && generators.IsValidGeneratorType(strings.TrimPrefix(t, CodePrefix)):
 		case strings.HasPrefix(t, FieldPrefix):
 			if _, ok := fieldsByKey[strings.TrimPrefix(t, FieldPrefix)]; !ok {
@@ -424,6 +425,9 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 		change.Codes[t] = code
 	}
 
+	// Stock: a blank cell keeps what the asset has.
+	change.Stock = p.stock(line, existing, cell)
+
 	// Field values, merged over the asset's own.
 	values := map[string]string{}
 	if existing != nil {
@@ -492,6 +496,53 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 		plan.Changes = append(plan.Changes, change)
 	}
 	return nil
+}
+
+// stock plans a row's stock cells: nil when they are all blank, and
+// otherwise the asset's stock with the cells given applied over it. A unit
+// or threshold for an asset whose stock is not counted needs a quantity.
+func (p *planner) stock(line int, existing *models.AssetWithDetails, cell func(string) (string, string, bool)) *store.StockInput {
+	quantity, quantityCol, _ := cell(ColumnQuantity)
+	unit, unitCol, _ := cell(ColumnUnit)
+	threshold, thresholdCol, _ := cell(ColumnThreshold)
+	if quantity == "" && unit == "" && threshold == "" {
+		return nil
+	}
+	in := &store.StockInput{}
+	var current *models.AssetStock
+	if existing != nil {
+		current = existing.Asset.Stock
+	}
+	if current != nil {
+		in.Unit, in.LowStockThreshold = current.Unit, current.LowStockThreshold
+	}
+	number := func(v, col string, min int, what string) *int {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < min || n > store.MaxQuantity {
+			p.plan.problem(line, col, "%s must be a whole number from %d to %d", what, min, store.MaxQuantity)
+			return nil
+		}
+		return &n
+	}
+	if quantity != "" {
+		in.Quantity = number(quantity, quantityCol, 0, "the quantity")
+	} else if current == nil {
+		col := unitCol
+		if unit == "" {
+			col = thresholdCol
+		}
+		p.plan.problem(line, col, "give a quantity to count this asset's stock")
+	}
+	if unit != "" {
+		if prob := textcheck.Problem(unit, store.MaxStockUnit); prob != "" {
+			p.plan.problem(line, unitCol, "the unit %s", prob)
+		}
+		in.Unit = unit
+	}
+	if threshold != "" {
+		in.LowStockThreshold = number(threshold, thresholdCol, 1, "the low stock threshold")
+	}
+	return in
 }
 
 // effectiveFields resolves, and remembers, the fields of a set of categories.
@@ -570,6 +621,12 @@ func unchanged(a *models.AssetWithDetails, c store.ImportRow, corpus map[string]
 			}
 		}
 	}
+	if s := c.Stock; s != nil {
+		have := a.Asset.Stock
+		if have == nil || (s.Quantity != nil && *s.Quantity != have.Quantity) || s.Unit != have.Unit || !sameInt(s.LowStockThreshold, have.LowStockThreshold) {
+			return false
+		}
+	}
 	codes := map[string]string{}
 	for _, gk := range a.GeneratorKeys {
 		codes[gk.GeneratorType] = gk.AssignedCode
@@ -589,4 +646,8 @@ func unchanged(a *models.AssetWithDetails, c store.ImportRow, corpus map[string]
 		}
 	}
 	return true
+}
+
+func sameInt(a, b *int) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }

@@ -1,6 +1,6 @@
 // Helpers for the asset form.
 
-import type { EffectiveField, FieldType, GeneratorKey } from './models';
+import type { AssetEvent, AssetStock, EffectiveField, FieldType, GeneratorKey } from './models';
 
 /** The HTML input type for a field type (select fields use <select>). */
 export function inputType(type: FieldType): string {
@@ -23,21 +23,28 @@ export interface AssetDraft {
   codes: Record<string, string>;
   /** Values by field key. */
   values: Record<string, string>;
+  stock?: StockDraft;
 }
 
 /**
  * The request body for creating or updating an asset. Every effective field
  * is sent, so clearing an input removes its value; values kept from earlier
  * categories are not sent, so they stay. Category and code lists are always
- * sent in full: an empty list clears them.
+ * sent in full: an empty list clears them. Stock is sent as stockPayload
+ * says, given the asset's stock before the edit.
  */
-export function assetPayload(draft: AssetDraft, effective: EffectiveField[]) {
+export function assetPayload(draft: AssetDraft, effective: EffectiveField[], originalStock?: AssetStock | null) {
   const generator_keys: GeneratorKey[] = Object.entries(draft.codes)
     .map(([generator_type, code]) => ({ generator_type, assigned_code: code.trim() }))
     .filter((k) => k.assigned_code !== '');
   const field_values: Record<string, string> = {};
   for (const e of effective) field_values[e.field.key] = (draft.values[e.field.key] ?? '').trim();
-  return { name: draft.name.trim(), category_ids: [...draft.categoryIds], generator_keys, field_values };
+  const body: Record<string, unknown> = { name: draft.name.trim(), category_ids: [...draft.categoryIds], generator_keys, field_values };
+  if (draft.stock) {
+    const stock = stockPayload(draft.stock, originalStock);
+    if (stock !== undefined) body.stock = stock;
+  }
+  return body;
 }
 
 /** Values the asset keeps from categories it no longer belongs to. */
@@ -67,5 +74,62 @@ export function isWebURL(value: string): boolean {
     return url.protocol === 'http:' || url.protocol === 'https:';
   } catch {
     return false;
+  }
+}
+
+/** The stock part of the asset form. Number inputs give null when blank. */
+export interface StockDraft {
+  counted: boolean;
+  quantity: number | null;
+  unit: string;
+  threshold: number | null;
+}
+
+/** The form's stock for an asset's stock, or for none. */
+export function stockDraft(stock: AssetStock | null | undefined): StockDraft {
+  return stock
+    ? { counted: true, quantity: stock.quantity, unit: stock.unit, threshold: stock.low_stock_threshold }
+    : { counted: false, quantity: 0, unit: '', threshold: null };
+}
+
+export interface StockPayload {
+  quantity?: number;
+  unit: string;
+  low_stock_threshold: number | null;
+}
+
+/**
+ * The stock to send (README §5.1): undefined leaves it as it is, null stops
+ * counting it. An edit sends the quantity only when it was changed, so saving
+ * cannot undo a use someone made while the form was open.
+ */
+export function stockPayload(draft: StockDraft, original?: AssetStock | null): StockPayload | null | undefined {
+  if (!draft.counted) return original ? null : undefined;
+  const payload: StockPayload = { unit: draft.unit.trim(), low_stock_threshold: draft.threshold ? draft.threshold : null };
+  if (!original) payload.quantity = draft.quantity ?? 0;
+  else if (draft.quantity !== null && draft.quantity !== original.quantity) payload.quantity = draft.quantity;
+  return payload;
+}
+
+/** A quantity with its unit, if it has one. */
+export function amount(quantity: number, unit: string | undefined): string {
+  return unit ? `${quantity} ${unit}` : String(quantity);
+}
+
+/** What an event in an asset's history says, without who did it. */
+export function describeEvent(e: AssetEvent): string {
+  const p = e.payload;
+  const of = (n: number | undefined) => amount(n ?? 0, p.unit);
+  switch (e.kind) {
+    case 'asset.quantity_changed':
+      if (p.change === undefined) return `Started counting at ${of(p.quantity)}`;
+      if (p.change < 0) return `Used ${of(-p.change)}; ${of(p.quantity)} left`;
+      return `Added ${of(p.change)}; ${of(p.quantity)} now`;
+    case 'asset.running_low':
+      return p.trigger === 'threshold' ? `Running low: below the threshold of ${of(p.threshold)}` : 'Marked running low';
+    case 'asset.restocked':
+      return p.trigger === 'threshold' ? `Restocked: back to the threshold of ${of(p.threshold)} or more` : 'Marked restocked';
+    default:
+      return e.kind;
   }
 }

@@ -148,3 +148,25 @@ func TestExport(t *testing.T) {
 		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
 	}
 }
+
+// TestExportingStock adds the stock columns only when some asset has stock.
+func TestExportingStock(t *testing.T) {
+	five := 5
+	assets := []models.AssetWithDetails{
+		{Asset: models.Asset{ID: "a1", Name: "Solder", Stock: &models.AssetStock{Quantity: 3, Unit: "=m", LowStockThreshold: &five}}},
+		{Asset: models.Asset{ID: "a2", Name: "Washers", Stock: &models.AssetStock{Quantity: 0}}},
+		{Asset: models.Asset{ID: "a3", Name: "Drill"}},
+	}
+	var b strings.Builder
+	if err := Export(&b, assets, NewCategories(tree), []string{"qr"}); err != nil {
+		t.Fatal(err)
+	}
+	want := BOM +
+		"id,name,categories,code.qr,quantity,unit,low_stock_threshold\r\n" +
+		"a1,Solder,,,3,'=m,5\r\n" +
+		"a2,Washers,,,0,,\r\n" +
+		"a3,Drill,,,,,\r\n"
+	if b.String() != want {
+		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
+	}
+}

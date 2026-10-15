@@ -19,18 +19,60 @@ type CreateAssetRequest struct {
 	CategoryIDs   []string                   `json:"category_ids,omitempty"`
 	GeneratorKeys []models.AssetGeneratorKey `json:"generator_keys,omitempty"`
 	FieldValues   map[string]string          `json:"field_values,omitempty"`
+	// Stock counts the asset's stock by quantity; absent or null does not.
+	Stock *StockRequest `json:"stock,omitempty"`
 }
 
 // UpdateAssetRequest defines the payload for modifying an asset. Omitted parts
 // are left as they are: an absent name, category_ids or generator_keys keeps
 // the current value, while an empty list clears it. field_values only changes
-// the keys it names; an empty value removes one.
+// the keys it names; an empty value removes one. An absent stock keeps the
+// asset's, null stops counting it by quantity, and an object replaces it.
 type UpdateAssetRequest struct {
 	Name          string                     `json:"name,omitempty"`
 	CategoryIDs   []string                   `json:"category_ids,omitempty"`
 	GeneratorKeys []models.AssetGeneratorKey `json:"generator_keys,omitempty"`
 	FieldValues   map[string]string          `json:"field_values,omitempty"`
+	Stock         json.RawMessage            `json:"stock,omitempty"`
 }
+
+// StockRequest is an asset's stock (README §5.1). An absent quantity keeps
+// the asset's current one, so an edit cannot undo a use made meanwhile; an
+// asset whose stock was not counted starts at 0.
+type StockRequest struct {
+	Quantity          *int   `json:"quantity"`
+	Unit              string `json:"unit"`
+	LowStockThreshold *int   `json:"low_stock_threshold"`
+}
+
+func (r *StockRequest) input() *store.StockInput {
+	if r == nil {
+		return nil
+	}
+	return &store.StockInput{Quantity: r.Quantity, Unit: r.Unit, LowStockThreshold: r.LowStockThreshold}
+}
+
+// stockUpdate reads an update's stock: nil when absent.
+func (r UpdateAssetRequest) stockUpdate() (*store.StockUpdate, error) {
+	if len(r.Stock) == 0 {
+		return nil, nil
+	}
+	var req *StockRequest
+	if err := json.Unmarshal(r.Stock, &req); err != nil {
+		return nil, err
+	}
+	return &store.StockUpdate{Stock: req.input()}, nil
+}
+
+// QuantityRequest changes an asset's quantity: by adjust (negative to use
+// some, positive to restock) or to set. Exactly one is given.
+type QuantityRequest struct {
+	Adjust *int `json:"adjust"`
+	Set    *int `json:"set"`
+}
+
+// maxHistory bounds the events GET /api/v1/assets/{id}/history returns.
+const maxHistory = 200
 
 func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	categoryID := r.URL.Query().Get("category_id")
@@ -79,7 +121,7 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := s.actingStore(r).CreateAsset(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues)
+	asset, err := s.actingStore(r).CreateAssetWithStock(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input())
 	if errors.Is(err, store.ErrGeneratorCodeExists) {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return
@@ -106,8 +148,13 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	stock, err := req.stockUpdate()
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid stock")
+		return
+	}
 
-	asset, err := s.actingStore(r).UpdateAsset(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues)
+	asset, err := s.actingStore(r).UpdateAssetWithStock(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, stock)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 		return
@@ -167,4 +214,67 @@ func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 		// Headers are gone; all that is left is to stop.
 		return
 	}
+}
+
+// handleAdjustQuantity uses up or restocks an asset counted by quantity:
+// POST /api/v1/assets/{id}/quantity
+func (s *Server) handleAdjustQuantity(w http.ResponseWriter, r *http.Request) {
+	var req QuantityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Adjust == nil) == (req.Set == nil) {
+		writeJSONError(w, http.StatusBadRequest, "Give either adjust or set, as a whole number")
+		return
+	}
+	delta := 0
+	if req.Adjust != nil {
+		delta = *req.Adjust
+	}
+	asset, err := s.actingStore(r).AdjustQuantity(r.PathValue("id"), delta, req.Set)
+	switch {
+	case errors.Is(err, store.ErrAssetNotFound):
+		writeJSONError(w, http.StatusNotFound, "Asset not found")
+	case errors.Is(err, store.ErrNotEnoughStock):
+		writeJSONError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		writeStoreError(w, err, "change the quantity")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"asset": asset})
+	}
+}
+
+// handleSetAssetRunningLow flags or clears an asset counted by quantity by
+// hand: PUT /api/v1/assets/{id}/running-low
+func (s *Server) handleSetAssetRunningLow(w http.ResponseWriter, r *http.Request) {
+	var req RunningLowRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RunningLow == nil {
+		writeJSONError(w, http.StatusBadRequest, "running_low (true or false) is required")
+		return
+	}
+	asset, changed, err := s.actingStore(r).SetAssetRunningLow(r.PathValue("id"), *req.RunningLow)
+	switch {
+	case errors.Is(err, store.ErrAssetNotFound):
+		writeJSONError(w, http.StatusNotFound, "Asset not found")
+	case err != nil:
+		writeStoreError(w, err, "update the asset")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"asset": asset, "changed": changed})
+	}
+}
+
+// handleAssetHistory lists an asset's recent events, newest first:
+// GET /api/v1/assets/{id}/history
+func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, err := s.store.GetAssetByID(id); errors.Is(err, store.ErrAssetNotFound) {
+		writeJSONError(w, http.StatusNotFound, "Asset not found")
+		return
+	} else if err != nil {
+		writeServerError(w, err, "query asset")
+		return
+	}
+	events, err := s.store.ListAssetEvents(id, maxHistory)
+	if err != nil {
+		writeServerError(w, err, "list the asset's history")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
 }

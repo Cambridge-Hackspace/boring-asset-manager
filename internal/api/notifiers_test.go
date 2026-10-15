@@ -78,7 +78,7 @@ func TestNotifierAPI(t *testing.T) {
 	for _, d := range drivers.Drivers {
 		names[d.Driver] = true
 	}
-	if !names["discord"] || !names["test-notifier"] || len(drivers.Events) != 2 {
+	if !names["discord"] || !names["test-notifier"] || len(drivers.Events) != 4 {
 		t.Fatalf("drivers: %s", rec.Body)
 	}
 

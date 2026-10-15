@@ -334,6 +334,7 @@ type DeliveryView struct {
 	ChannelName  string `json:"channel_name"`
 	EventKind    string `json:"event_kind"`
 	CategoryName string `json:"category_name,omitempty"`
+	AssetName    string `json:"asset_name,omitempty"`
 }
 
 // ListDeliveries returns the most recent deliveries, newest first.
@@ -366,8 +367,13 @@ func (s *Store) ListDeliveries(limit int) ([]DeliveryView, error) {
 			d.FinishedAt = &finished.Time
 		}
 		var p models.EventPayload
-		if json.Unmarshal([]byte(payload), &p) == nil && p.Category != nil {
-			v.CategoryName = p.Category.Name
+		if json.Unmarshal([]byte(payload), &p) == nil {
+			if p.Category != nil {
+				v.CategoryName = p.Category.Name
+			}
+			if p.Asset != nil {
+				v.AssetName = p.Asset.Name
+			}
 		}
 		list = append(list, v)
 	}

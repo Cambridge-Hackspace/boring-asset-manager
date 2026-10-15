@@ -21,6 +21,9 @@ type ImportRow struct {
 	Codes map[string]string
 	// FieldValues sets the value of each field it names, by field ID.
 	FieldValues map[string]string
+	// Stock replaces the asset's stock, keeping its quantity when Stock has
+	// none; nil leaves the stock as it is.
+	Stock *StockInput
 }
 
 // ImportAssets applies validated rows in one transaction under the
@@ -78,7 +81,7 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 	return created, nil
 }
 
-// importRow writes one row's name, categories and field values.
+// importRow writes one row's name, categories, stock and field values.
 func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) error {
 	if row.ID == "" {
 		if _, err := s.TxExec(tx, "INSERT INTO assets (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)", id, row.Name, now, now); err != nil {
@@ -109,6 +112,19 @@ func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) e
 			if _, err := s.TxExec(tx, "INSERT INTO asset_categories (asset_id, category_id) VALUES (?, ?)", id, cid); err != nil {
 				return fmt.Errorf("attaching category %s: %w", cid, err)
 			}
+		}
+	}
+
+	if row.Stock != nil {
+		if err := row.Stock.normalize(); err != nil {
+			return err
+		}
+		was, err := s.readStockTx(tx, id)
+		if err != nil {
+			return err
+		}
+		if err := s.writeStockTx(tx, id, was, row.Stock); err != nil {
+			return err
 		}
 	}
 

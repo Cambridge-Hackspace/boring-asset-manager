@@ -66,12 +66,12 @@ func checkImport(t testing.TB, w *world, data []byte, mapping []string) (importe
 }
 
 // importTargets are the columns a generated file maps to.
-var importTargets = []string{"id", "name", "categories", "code.qr", "code.code128", "code.micro_qr", "field.serial", "field.condition", "field.weight", "ignore"}
+var importTargets = []string{"id", "name", "categories", "code.qr", "code.code128", "code.micro_qr", "field.serial", "field.condition", "field.weight", "quantity", "unit", "low_stock_threshold", "ignore"}
 
 // importValues are cell values to draw from, besides IDs and codes.
 var importValues = []string{
 	"", " ", "Drill", "drill", "Tools", "Tools > Drills", "Tape", "Tools; Tape", "Nope", "Tools > Nope", ";",
-	"SN1", "good", "broken", "bad", "-5", "1e3", "0.5", "x", "D1", "H1", "ABC123", "12345", "abc",
+	"SN1", "good", "broken", "bad", "-5", "1e3", "0.5", "x", "D1", "H1", "ABC123", "12345", "abc", "0", "1", "40", "1000000000", "1000000001", "g", "pcs",
 	"=1+1", "'=1+1", "+1", "@x", "Quote \"me\"", "line\nbreak", "tab\there", "Ångström", "🔧", "工具",
 	"a" + string(rune(0)) + "b", string([]byte{0xff}), strings.Repeat("x", 256), strings.Repeat("9", 40),
 }

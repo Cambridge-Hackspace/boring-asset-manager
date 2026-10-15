@@ -17,6 +17,9 @@ for (const scheme of ['light', 'dark'] as const) {
     const post = async (path: string, body: unknown) => (await (await request.post('/api/v1' + path, { data: body })).json()) as any;
     const cat = await post('/categories', { name: unique('A11y'), color_hex: '#7c3aed', is_consumable: true, is_running_low: true });
     const asset = await post('/assets', { name: unique('Ladder'), category_ids: [cat.category.id] });
+    // Counted by quantity and running low, with some history.
+    const screws = await post('/assets', { name: unique('Screws'), stock: { quantity: 30, unit: 'pcs', low_stock_threshold: 20 } });
+    await post(`/assets/${screws.asset.asset.id}/quantity`, { adjust: -15 });
     const id = unique('a11y');
     await post('/templates', {
       id, name: `A11y ${id}`, units: 'mm', width: 62, height: 29, dpi: 300,
@@ -31,6 +34,8 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/assets/import', 'Import assets'],
       [`/assets/${asset.asset.asset.id}`, ''],
       [`/assets/${asset.asset.asset.id}/edit`, 'Edit asset'],
+      [`/assets/${screws.asset.asset.id}`, ''],
+      [`/assets/${screws.asset.asset.id}/edit`, 'Edit asset'],
       ['/categories', 'Categories'],
       [`/categories/${cat.category.id}`, ''],
       ['/categories/new', 'New category'],

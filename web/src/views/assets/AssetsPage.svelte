@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
+  import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type AssetWithDetails, type Category } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
@@ -115,6 +116,7 @@
           </th>
           <th scope="col" class="py-2 pr-4">Name</th>
           <th scope="col" class="py-2 pr-4">Categories</th>
+          <th scope="col" class="py-2 pr-4">Stock</th>
           <th scope="col" class="py-2">Codes</th>
         </tr>
       </thead>
@@ -129,6 +131,12 @@
               <span class="flex flex-wrap gap-1">
                 {#each a.categories as c (c.id)}<CategoryBadge category={c} />{/each}
               </span>
+            </td>
+            <td class="py-2 pr-4 whitespace-nowrap">
+              {#if a.asset.stock}
+                {amount(a.asset.stock.quantity, a.asset.stock.unit)}
+                {#if a.asset.stock.is_running_low}<span class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Running low</span>{/if}
+              {/if}
             </td>
             <td class="py-2 font-mono text-xs">{a.generator_keys.map((k) => k.assigned_code).join(', ')}</td>
           </tr>

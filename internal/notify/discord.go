@@ -96,6 +96,7 @@ type discordFooter struct {
 const (
 	discordNeutral = 0x6b7280
 	discordTest    = 0x3b82f6
+	discordWarning = 0xf59e0b
 )
 
 func (d Discord) Send(ctx context.Context, options map[string]string, n Notification) error {
@@ -146,10 +147,17 @@ func discordPayload(n Notification) discordMessage {
 		embed.Timestamp = e.CreatedAt.UTC().Format(time.RFC3339)
 	}
 	name := "a category"
-	if p.Category != nil {
+	base := strings.TrimRight(n.BaseURL, "/")
+	switch {
+	case p.Category != nil:
 		name = escapeMarkdown(truncate(p.Category.Name, 200))
-		if base := strings.TrimRight(n.BaseURL, "/"); base != "" {
+		if base != "" {
 			embed.URL = base + "/categories/" + url.PathEscape(p.Category.ID)
+		}
+	case p.Asset != nil:
+		name = escapeMarkdown(truncate(p.Asset.Name, 200))
+		if base != "" {
+			embed.URL = base + "/assets/" + url.PathEscape(p.Asset.ID)
 		}
 	}
 	by := ""
@@ -189,6 +197,14 @@ func discordPayload(n Notification) discordMessage {
 		} else {
 			embed.Description = "Marked as restocked."
 		}
+	case e.Kind == models.EventAssetRunningLow:
+		embed.Title = "Running low: " + name
+		embed.Color = discordWarning
+		embed.Description = assetDescription(p, by, "Down to %s, below the threshold of %s.", "Flagged as running low")
+	case e.Kind == models.EventAssetRestocked:
+		embed.Title = "Restocked: " + name
+		embed.Color = discordNeutral
+		embed.Description = assetDescription(p, by, "Back to %s, at or above the threshold of %s.", "Marked as restocked")
 	default:
 		embed.Title = truncate(e.Kind, 200)
 		embed.Color = discordNeutral
@@ -206,6 +222,35 @@ func items(n int) string {
 		return "1 active item"
 	}
 	return strconv.Itoa(n) + " active items"
+}
+
+// assetDescription describes an asset's threshold event with crossed, given
+// the quantity and threshold, or its manual one with manual, given who.
+func assetDescription(p models.EventPayload, by, crossed, manual string) string {
+	if p.Trigger == models.TriggerThreshold && p.Quantity != nil && p.Threshold != nil {
+		d := fmt.Sprintf(crossed, amount(*p.Quantity, p.Unit), amount(*p.Threshold, p.Unit))
+		if by != "" {
+			d += " Last change by " + by + "."
+		}
+		return d
+	}
+	d := manual
+	if by != "" {
+		d += " by " + by
+	}
+	d += "."
+	if p.Quantity != nil {
+		d += " " + amount(*p.Quantity, p.Unit) + " left."
+	}
+	return d
+}
+
+// amount is a quantity with its unit, if it has one.
+func amount(n int, unit string) string {
+	if unit == "" {
+		return strconv.Itoa(n)
+	}
+	return strconv.Itoa(n) + " " + escapeMarkdown(truncate(unit, 32))
 }
 
 // categoryColor is a category's color as Discord wants it.

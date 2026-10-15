@@ -7,7 +7,7 @@ export const IGNORE = 'ignore';
 export interface TargetOption {
   value: string;
   label: string;
-  group: 'Asset' | 'Codes' | 'Fields';
+  group: 'Asset' | 'Stock' | 'Codes' | 'Fields';
 }
 
 /** Everywhere a column can go, grouped for a select. */
@@ -16,6 +16,9 @@ export function targetOptions(fields: Field[], generators: GeneratorInfo[]): Tar
     { value: 'id', label: 'ID (updates that asset)', group: 'Asset' },
     { value: 'name', label: 'Name', group: 'Asset' },
     { value: 'categories', label: 'Categories', group: 'Asset' },
+    { value: 'quantity', label: 'Quantity', group: 'Stock' },
+    { value: 'unit', label: 'Unit', group: 'Stock' },
+    { value: 'low_stock_threshold', label: 'Low stock threshold', group: 'Stock' },
     ...generators.map((g) => ({ value: `code.${g.type}`, label: g.name, group: 'Codes' as const })),
     ...[...fields]
       .sort((a, b) => a.label.localeCompare(b.label))

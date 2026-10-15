@@ -87,8 +87,13 @@ type Category struct {
 
 // Event kinds (README §5.1).
 const (
-	EventRunningLow = "category.running_low"
-	EventRestocked  = "category.restocked"
+	EventRunningLow      = "category.running_low"
+	EventRestocked       = "category.restocked"
+	EventAssetRunningLow = "asset.running_low"
+	EventAssetRestocked  = "asset.restocked"
+	// EventQuantityChanged records a change of an asset's quantity, for its
+	// history. Channels cannot subscribe to it.
+	EventQuantityChanged = "asset.quantity_changed"
 )
 
 // Event triggers: what caused an event.
@@ -103,6 +108,7 @@ type Event struct {
 	ID          string       `json:"id"`
 	Kind        string       `json:"kind"`
 	CategoryID  *string      `json:"category_id,omitempty"`
+	AssetID     *string      `json:"asset_id,omitempty"`
 	ActorUserID *string      `json:"actor_user_id,omitempty"`
 	Payload     EventPayload `json:"payload"`
 	CreatedAt   time.Time    `json:"created_at"`
@@ -110,14 +116,28 @@ type Event struct {
 
 // EventPayload describes an event.
 type EventPayload struct {
+	// Category or Asset is what the event is about.
 	Category *EventCategory `json:"category,omitempty"`
+	Asset    *EventAsset    `json:"asset,omitempty"`
 	// Actor is the user whose action caused the event, if any.
 	Actor *EventActor `json:"actor,omitempty"`
 	// Trigger is TriggerManual or TriggerThreshold.
 	Trigger string `json:"trigger"`
-	// ActiveCount and Threshold are set for threshold events.
+	// ActiveCount and Threshold are set for a category's threshold events.
+	// An asset's threshold events set Quantity and Threshold instead.
 	ActiveCount *int `json:"active_count,omitempty"`
 	Threshold   *int `json:"threshold,omitempty"`
+	// Quantity is an asset's quantity after the event, and Change how much a
+	// quantity change moved it. Unit is the asset's unit, if it has one.
+	Quantity *int   `json:"quantity,omitempty"`
+	Change   *int   `json:"change,omitempty"`
+	Unit     string `json:"unit,omitempty"`
+}
+
+// EventAsset is the asset an event is about, as it was then.
+type EventAsset struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // EventCategory is the category an event is about, as it was then.
@@ -154,6 +174,19 @@ type Asset struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	// Stock is the asset's stock when it is counted by quantity (README
+	// §5.1), and nil when it is not.
+	Stock *AssetStock `json:"stock"`
+}
+
+// AssetStock is an asset's stock, counted by quantity.
+type AssetStock struct {
+	Quantity int    `json:"quantity"`
+	Unit     string `json:"unit"`
+	// LowStockThreshold flags the asset as running low when its quantity
+	// drops below it; nil means no threshold.
+	LowStockThreshold *int `json:"low_stock_threshold"`
+	IsRunningLow      bool `json:"is_running_low"`
 }
 
 // AssetFieldValue stores an asset's field value as text.

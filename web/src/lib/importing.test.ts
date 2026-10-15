@@ -9,7 +9,7 @@ describe('importing helpers', () => {
     const opts = targetOptions([field('serial', 'Serial'), field('color', 'Color')], [
       { type: 'qr', name: 'QR Code', error_correction_levels: [], code_rules: '' },
     ]);
-    expect(opts.map((o) => o.value)).toEqual(['id', 'name', 'categories', 'code.qr', 'field.color', 'field.serial']);
+    expect(opts.map((o) => o.value)).toEqual(['id', 'name', 'categories', 'quantity', 'unit', 'low_stock_threshold', 'code.qr', 'field.color', 'field.serial']);
     expect(opts.find((o) => o.value === 'field.serial')).toMatchObject({ label: 'Serial (serial)', group: 'Fields' });
   });
 

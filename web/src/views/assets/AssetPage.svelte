@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
-  import { isWebURL, keptValues } from '../../lib/assets';
+  import { amount, describeEvent, isWebURL, keptValues } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import type { AssetWithDetails, GeneratorInfo } from '../../lib/models';
+  import type { AssetEvent, AssetWithDetails, GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
@@ -16,14 +16,21 @@
 
   let asset = $state<AssetWithDetails | null>(null);
   let generators = $state<GeneratorInfo[]>([]);
+  let history = $state<AssetEvent[]>([]);
   let error = $state('');
+  let saved = $state('');
   let loading = $state(true);
+  let busy = $state(false);
+  let howMany = $state<number | null>(1);
+
+  const path = `/assets/${encodeURIComponent(id)}`;
 
   onMount(async () => {
     try {
-      [asset, generators] = await Promise.all([
-        request<{ asset: AssetWithDetails }>('GET', `/assets/${encodeURIComponent(id)}`).then((r) => r.asset),
+      [asset, generators, history] = await Promise.all([
+        request<{ asset: AssetWithDetails }>('GET', path).then((r) => r.asset),
         request<{ generators: GeneratorInfo[] }>('GET', '/generators').then((r) => r.generators ?? []),
+        loadHistory(),
       ]);
     } catch (err) {
       error = messageOf(err);
@@ -32,7 +39,49 @@
     }
   });
 
+  async function loadHistory(): Promise<AssetEvent[]> {
+    return (await request<{ events: AssetEvent[] }>('GET', `${path}/history`)).events ?? [];
+  }
+
   const generatorName = (type: string) => generators.find((g) => g.type === type)?.name ?? type;
+
+  // Runs a stock action, then shows the asset and history as they are now.
+  async function stockAction(action: () => Promise<{ asset: AssetWithDetails }>, done: string) {
+    error = '';
+    saved = '';
+    busy = true;
+    try {
+      asset = (await action()).asset;
+      saved = done;
+      history = await loadHistory();
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function adjust(sign: 1 | -1) {
+    const n = howMany ?? 0;
+    if (!Number.isInteger(n) || n < 1) {
+      error = 'Enter a whole number of at least 1.';
+      return;
+    }
+    const unit = asset?.asset.stock?.unit;
+    void stockAction(
+      () => request('POST', `${path}/quantity`, { adjust: sign * n }),
+      sign < 0 ? `Used ${amount(n, unit)}.` : `Added ${amount(n, unit)}.`,
+    );
+  }
+
+  function setRunningLow(low: boolean) {
+    void stockAction(
+      () => request('PUT', `${path}/running-low`, { running_low: low }),
+      low ? 'Marked as running low.' : 'Marked as restocked.',
+    );
+  }
+
+  const when = (iso: string) => new Date(iso).toLocaleString();
 
   async function archive() {
     try {
@@ -46,6 +95,7 @@
 
 <nav aria-label="Breadcrumb" class="mb-2 text-sm"><a class="underline" href="/assets">Assets</a></nav>
 <ErrorMessage {error} />
+{#if saved}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{saved}</p>{/if}
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
@@ -61,6 +111,34 @@
   </div>
 
   <div class="grid gap-6 lg:grid-cols-2">
+    {#if asset.asset.stock}
+      {@const stock = asset.asset.stock}
+      <section class="card" aria-labelledby="stock-heading">
+        <h2 id="stock-heading" class="mb-1 text-lg font-semibold">Stock</h2>
+        <p class="text-sm">
+          <strong>{stock.is_running_low ? 'Running low.' : 'In stock.'}</strong>
+          {amount(stock.quantity, stock.unit)} left{stock.low_stock_threshold
+            ? `; flagged automatically below ${amount(stock.low_stock_threshold, stock.unit)}`
+            : ''}.
+        </p>
+        {#if session.can('assets:write')}
+          <div class="mt-3 flex flex-wrap items-end gap-2">
+            <div>
+              <label class="label" for="stock-amount">How many{stock.unit ? ` (${stock.unit})` : ''}</label>
+              <input id="stock-amount" class="input w-28" type="number" min="1" step="1" bind:value={howMany} />
+            </div>
+            <button type="button" class="btn-secondary" disabled={busy} onclick={() => adjust(-1)}>Use</button>
+            <button type="button" class="btn-secondary" disabled={busy} onclick={() => adjust(1)}>Add</button>
+            {#if stock.is_running_low}
+              <button type="button" class="btn-secondary" disabled={busy} onclick={() => setRunningLow(false)}>Mark restocked</button>
+            {:else}
+              <button type="button" class="btn-secondary" disabled={busy} onclick={() => setRunningLow(true)}>Mark running low</button>
+            {/if}
+          </div>
+        {/if}
+      </section>
+    {/if}
+
     <section class="card" aria-labelledby="details-heading">
       <h2 id="details-heading" class="mb-3 text-lg font-semibold">Details</h2>
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
@@ -104,5 +182,21 @@
     </section>
 
     <LabelActions assetIds={[id]} />
+
+    {#if history.length}
+      <section class="card" aria-labelledby="history-heading">
+        <h2 id="history-heading" class="mb-3 text-lg font-semibold">History</h2>
+        <ul class="space-y-2 text-sm">
+          {#each history as e (e.id)}
+            <li>
+              <span class="font-medium">{describeEvent(e)}</span>
+              <span class="block text-xs text-zinc-600 dark:text-zinc-400">
+                {when(e.created_at)}{e.payload.actor ? ` · ${e.payload.actor.email}` : ''}
+              </span>
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
   </div>
 {/if}
