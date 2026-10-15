@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount, describeChange, describeEvent, isWebURL, keptValues } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import type { AssetEvent, AssetWithDetails, GeneratorInfo } from '../../lib/models';
+  import type { AssetEvent, AssetWithDetails, GeneratorInfo, GeneratorKey } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
@@ -57,6 +57,8 @@
     }
   }
 
+  const archived = $derived(!!asset?.asset.archived_at);
+
   const generatorName = (type: string) => generators.find((g) => g.type === type)?.name ?? type;
 
   // Runs a stock action, then shows the asset and history as they are now.
@@ -97,6 +99,23 @@
 
   const when = (iso: string) => new Date(iso).toLocaleString();
 
+  async function restore() {
+    error = '';
+    saved = '';
+    busy = true;
+    try {
+      const r = await request<{ asset: AssetWithDetails; skipped_codes: GeneratorKey[] }>('POST', `${path}/restore`);
+      asset = r.asset;
+      const skipped = (r.skipped_codes ?? []).map((k) => `${generatorName(k.generator_type)} ${k.assigned_code}`);
+      saved = skipped.length ? `Restored. Other assets have taken ${skipped.join(', ')}, so it did not get them back.` : 'Restored.';
+      await loadHistory();
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      busy = false;
+    }
+  }
+
   async function archive() {
     try {
       await request('DELETE', `/assets/${encodeURIComponent(id)}`);
@@ -117,12 +136,23 @@
   <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
     <h1 class="text-2xl font-bold">{asset.asset.name}</h1>
     <div class="flex flex-wrap gap-2">
-      {#if session.can('assets:write')}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>{/if}
-      {#if session.can('assets:delete')}
-        <ConfirmButton label="Archive" question="Archive this asset? Its codes become free for reuse." onconfirm={archive} />
+      {#if archived}
+        {#if session.can('assets:delete')}
+          <button type="button" class="btn-primary" disabled={busy} onclick={restore}>Restore</button>
+        {/if}
+      {:else}
+        {#if session.can('assets:write')}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>{/if}
+        {#if session.can('assets:delete')}
+          <ConfirmButton label="Archive" question="Archive this asset? Its codes become free for reuse." onconfirm={archive} />
+        {/if}
       {/if}
     </div>
   </div>
+  {#if asset.asset.archived_at}
+    <p class="mb-4 rounded border border-zinc-300 bg-zinc-100 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800">
+      Archived {when(asset.asset.archived_at)}. Its codes were released for other assets; restoring it gives back those no other asset has taken.
+    </p>
+  {/if}
 
   <div class="grid gap-6 lg:grid-cols-2">
     {#if asset.asset.stock}
@@ -135,7 +165,7 @@
             ? `; flagged automatically below ${amount(stock.low_stock_threshold, stock.unit)}`
             : ''}.
         </p>
-        {#if session.can('assets:write')}
+        {#if session.can('assets:write') && !archived}
           <div class="mt-3 flex flex-wrap items-end gap-2">
             <div>
               <label class="label" for="stock-amount">How many{stock.unit ? ` (${stock.unit})` : ''}</label>
@@ -195,7 +225,7 @@
       {/if}
     </section>
 
-    <LabelActions assetIds={[id]} />
+    {#if !archived}<LabelActions assetIds={[id]} />{/if}
 
     {#if history.length}
       <section class="card" aria-labelledby="history-heading">

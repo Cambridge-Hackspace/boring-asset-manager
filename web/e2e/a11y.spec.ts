@@ -20,6 +20,8 @@ for (const scheme of ['light', 'dark'] as const) {
     // Counted by quantity and running low, with some history.
     const screws = await post('/assets', { name: unique('Screws'), stock: { quantity: 30, unit: 'pcs', low_stock_threshold: 20 } });
     await post(`/assets/${screws.asset.asset.id}/quantity`, { adjust: -15 });
+    const archived = await post('/assets', { name: unique('Old saw'), generator_keys: [{ generator_type: 'qr', assigned_code: unique('OLD').toUpperCase() }] });
+    await request.delete(`/api/v1/assets/${archived.asset.asset.id}`);
     const { template } = await post('/templates', {
       name: unique('A11y'), units: 'mm', width: 62, height: 29, dpi: 300,
       elements: [{ type: 'text', x: 2, y: 2, width: 50, height: 10, font_size: 12, content_binding: '{{asset.name}}' }],
@@ -35,6 +37,8 @@ for (const scheme of ['light', 'dark'] as const) {
       [`/assets/${asset.asset.asset.id}/edit`, 'Edit asset'],
       [`/assets/${screws.asset.asset.id}`, ''],
       [`/assets/${screws.asset.asset.id}/edit`, 'Edit asset'],
+      ['/assets?archived=true', 'Assets'],
+      [`/assets/${archived.asset.asset.id}`, ''],
       ['/categories', 'Categories'],
       [`/categories/${cat.category.id}`, ''],
       ['/categories/new', 'New category'],
