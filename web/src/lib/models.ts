@@ -98,7 +98,7 @@ export interface AssetEvent {
   created_at: string;
   payload: {
     /** Who caused it, with their name as it was then. */
-    actor?: { id: string; email: string; name?: string };
+    actor?: { id: string; email: string; name?: string; token?: boolean };
     trigger: 'manual' | 'threshold' | 'import';
     quantity?: number;
     change?: number;
@@ -300,4 +300,16 @@ export interface Delivery {
   event_kind: string;
   category_name?: string;
   asset_name?: string;
+}
+
+/** An API token for scripts and dashboards; its secret is shown only once. */
+export interface APIToken {
+  id: string;
+  name: string;
+  role_ids: string[];
+  created_by?: string;
+  created_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
 }

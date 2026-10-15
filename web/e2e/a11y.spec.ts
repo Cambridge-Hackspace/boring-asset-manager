@@ -51,6 +51,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/notifications', 'Notifications'],
       ['/users', 'Users'],
       ['/roles', 'Roles'],
+      ['/tokens', 'API tokens'],
       ['/account', 'Your account'],
       ['/no-such-page', 'Page not found'],
     ];

@@ -200,6 +200,21 @@ type EventActor struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	Name  string `json:"name,omitempty"`
+	// Token is set when an API token acted; ID and Name are then the token's.
+	Token bool `json:"token,omitempty"`
+}
+
+// APIToken is a token for scripts and dashboards. Its secret is shown once,
+// when it is created, and never stored.
+type APIToken struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	RoleIDs    []string   `json:"role_ids"`
+	CreatedBy  string     `json:"created_by,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	LastUsedAt *time.Time `json:"last_used_at"`
+	RevokedAt  *time.Time `json:"revoked_at"`
 }
 
 // Display is the actor's name, or their email when they have none.

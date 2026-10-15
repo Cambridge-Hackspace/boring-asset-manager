@@ -39,6 +39,9 @@ type Store struct {
 	beforeInventoryCommit func()
 	// actor is the user changes are attributed to; see As.
 	actor string
+	// actorToken is the API token changes are attributed to instead; see
+	// AsToken.
+	actorToken string
 }
 
 // Open initializes and connects to the database based on configuration.
