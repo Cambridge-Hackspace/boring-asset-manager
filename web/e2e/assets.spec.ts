@@ -6,10 +6,8 @@ test('create an asset, preview and print its label, export a batch', async ({ si
   const category = unique('Bench');
   const cat = await api.call('POST', '/categories', { name: category, color_hex: '#fbbf24', is_consumable: false, is_running_low: false });
   await api.call('POST', `/categories/${cat.category.id}/fields`, { field_id: field.field.id, is_required: true });
-  const templateId = unique('ql90');
-  await api.call('POST', '/templates', {
-    id: templateId,
-    name: `QL ${templateId}`,
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('QL 90'),
     units: 'mm',
     width: 90,
     height: 29,
@@ -19,6 +17,7 @@ test('create an asset, preview and print its label, export a batch', async ({ si
       { type: 'text', x: 28, y: 4, width: 58, height: 10, font_size: 16, font_weight: 'bold', content_binding: '{{asset.name}}' },
     ],
   });
+  const templateId: string = template.id;
   const printerName = unique('QL');
   await api.call('POST', '/printers', {
     name: printerName,

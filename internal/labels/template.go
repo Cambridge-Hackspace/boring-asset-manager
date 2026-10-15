@@ -55,7 +55,8 @@ const (
 
 var idRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
-// Template is a label layout. The ID is chosen by the author.
+// Template is a label layout. The ID is a UUID assigned when it is first
+// saved. Templates from earlier versions keep the slugs their authors chose.
 type Template struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -155,7 +156,8 @@ func (t *Template) InchesPerUnit() float64 {
 func (t *Template) Validate() error {
 	var v validator
 
-	if !idRegex.MatchString(t.ID) {
+	// A new template has no ID until it is saved.
+	if t.ID != "" && !idRegex.MatchString(t.ID) {
 		v.add("id", "must be 1-64 characters of lowercase letters, digits, '_' or '-', starting with a letter or digit")
 	}
 	if name := strings.TrimSpace(t.Name); name == "" {

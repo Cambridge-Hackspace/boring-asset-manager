@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
+	"github.com/google/uuid"
 )
 
 // sessionCookie logs a user in directly through the store.
@@ -83,40 +84,72 @@ func TestTemplateAPIWorkflow(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.Template.ID != "shelf" || created.Template.Elements[1].FontWeight != "normal" {
+	// The server names it; the id in the document is ignored.
+	shelf := created.Template.ID
+	if _, err := uuid.Parse(shelf); err != nil || created.Template.Elements[1].FontWeight != "normal" {
 		t.Errorf("unexpected created template: %s", rec.Body.String())
 	}
-
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", shelfTemplate); rec.Code != http.StatusConflict {
-		t.Errorf("duplicate: got %d, want 409", rec.Code)
+	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates/shelf", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("stored under the id in the document: got %d", rec.Code)
 	}
+	// Creating the same document again makes a second template, and an id
+	// that would not be a valid one is ignored too.
+	again := createTemplate(t, srv, cookie, strings.Replace(shelfTemplate, `"id": "shelf"`, `"id": "Not An ID!"`, 1))
+	if again == shelf {
+		t.Errorf("two templates share the id %s", shelf)
+	}
+	createTemplate(t, srv, cookie, strings.Replace(shelfTemplate, `"id": "shelf",`, "", 1))
 
-	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates/shelf", ""); rec.Code != http.StatusOK {
+	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates/"+shelf, ""); rec.Code != http.StatusOK {
 		t.Errorf("get: got %d", rec.Code)
 	}
 	rec = doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates", "")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"id":"shelf"`) {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"id":"`+shelf+`"`) {
 		t.Errorf("list: got %d %s", rec.Code, rec.Body.String())
 	}
 
-	renamed := strings.Replace(shelfTemplate, `"name": "Shelf"`, `"name": "Shelf v2"`, 1)
-	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/templates/shelf", renamed); rec.Code != http.StatusOK {
+	// An update may leave the id out, but cannot change it.
+	unnamed := strings.Replace(shelfTemplate, `"id": "shelf",`, "", 1)
+	renamed := strings.Replace(unnamed, `"name": "Shelf"`, `"name": "Shelf v2"`, 1)
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/templates/"+shelf, renamed); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"name":"Shelf v2"`) {
 		t.Errorf("update: got %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/templates/other", renamed); rec.Code != http.StatusBadRequest {
+	withID := strings.Replace(shelfTemplate, `"id": "shelf"`, `"id": "`+shelf+`"`, 1)
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/templates/"+shelf, withID); rec.Code != http.StatusOK {
+		t.Errorf("update giving the id: got %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/templates/"+again, withID); rec.Code != http.StatusBadRequest {
 		t.Errorf("update with mismatched id: got %d, want 400", rec.Code)
 	}
-	missing := strings.Replace(shelfTemplate, `"id": "shelf"`, `"id": "nope"`, 1)
-	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/templates/nope", missing); rec.Code != http.StatusNotFound {
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/templates/nope", unnamed); rec.Code != http.StatusNotFound {
 		t.Errorf("update missing: got %d, want 404", rec.Code)
 	}
 
-	if rec := doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/templates/shelf", ""); rec.Code != http.StatusOK {
+	if rec := doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/templates/"+shelf, ""); rec.Code != http.StatusOK {
 		t.Errorf("delete: got %d", rec.Code)
 	}
-	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates/shelf", ""); rec.Code != http.StatusNotFound {
+	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates/"+shelf, ""); rec.Code != http.StatusNotFound {
 		t.Errorf("get after delete: got %d, want 404", rec.Code)
 	}
+}
+
+// createTemplate creates a template through the API and returns the ID the
+// server gave it.
+func createTemplate(t *testing.T, srv *Server, cookie *http.Cookie, doc string) string {
+	t.Helper()
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", doc)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("creating template: %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Template struct {
+			ID string `json:"id"`
+		} `json:"template"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil || created.Template.ID == "" {
+		t.Fatalf("creating template: %v %s", err, rec.Body.String())
+	}
+	return created.Template.ID
 }
 
 func TestTemplateValidationDetails(t *testing.T) {
@@ -227,17 +260,14 @@ func TestImageAPIWorkflow(t *testing.T) {
 		t.Errorf("content: got %d, %d bytes, type %q", rec.Code, rec.Body.Len(), rec.Header().Get("Content-Type"))
 	}
 
-	tpl := `{"id":"logo","name":"Logo","units":"mm","width":20,"height":10,"dpi":300,
-	  "elements":[{"type":"static_image","x":0,"y":0,"width":20,"height":10,"image_id":"` + img.ID + `"}]}`
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", tpl); rec.Code != http.StatusCreated {
-		t.Fatalf("template using image: got %d %s", rec.Code, rec.Body.String())
-	}
+	logo := createTemplate(t, srv, cookie, `{"name":"Logo","units":"mm","width":20,"height":10,"dpi":300,
+	  "elements":[{"type":"static_image","x":0,"y":0,"width":20,"height":10,"image_id":"`+img.ID+`"}]}`)
 	rec = doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/images/"+img.ID, "")
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"template_ids":["logo"]`) {
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"template_ids":["`+logo+`"]`) {
 		t.Errorf("deleting a used image: got %d %s", rec.Code, rec.Body.String())
 	}
 
-	doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/templates/logo", "")
+	doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/templates/"+logo, "")
 	if rec := doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/images/"+img.ID, ""); rec.Code != http.StatusOK {
 		t.Errorf("delete: got %d %s", rec.Code, rec.Body.String())
 	}

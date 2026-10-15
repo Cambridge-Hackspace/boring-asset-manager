@@ -3,7 +3,6 @@ import { ADMIN_EMAIL, expect, goTo, signIn, test, unique } from './fixtures';
 
 test('printers: add one through the generated form and test-print', async ({ signedIn: page, api, printer }) => {
   await api.call('POST', '/templates', {
-    id: unique('rollo'),
     name: unique('Rollo 2x1'),
     units: 'in',
     width: 2,
@@ -103,16 +102,16 @@ test('images: upload, see where they are used, and only delete unused ones', asy
   await expect(card).toContainText('Not used by any template.');
 
   const image = (await api.call('GET', '/images')).images.find((i: { filename: string }) => i.filename === filename);
-  const id = unique('logo-tpl');
-  await api.call('POST', '/templates', {
-    id, name: `Logo ${id}`, units: 'mm', width: 50, height: 25, dpi: 300,
+  const name = unique('Logo');
+  const { template } = await api.call('POST', '/templates', {
+    name, units: 'mm', width: 50, height: 25, dpi: 300,
     elements: [{ type: 'static_image', x: 1, y: 1, width: 10, height: 10, image_id: image.id }],
   });
   await page.reload();
-  await expect(card).toContainText(`Used by Logo ${id}`);
+  await expect(card).toContainText(`Used by ${name}`);
   await expect(card.getByRole('button', { name: 'Delete' })).toBeDisabled();
 
-  await api.call('DELETE', `/templates/${id}`);
+  await api.call('DELETE', `/templates/${template.id}`);
   await page.reload();
   await card.getByRole('button', { name: 'Delete' }).click();
   await card.getByRole('button', { name: 'Delete' }).click();

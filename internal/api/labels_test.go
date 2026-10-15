@@ -22,17 +22,15 @@ const labelTemplate = `{"id":"tag","name":"Tag","units":"mm","width":40,"height"
   {"type":"text","x":20,"y":11,"width":19,"height":7,"font_size":8,"content_binding":"{{field.location}}"}]}`
 
 // labelFixture creates the template above and two assets, one with a Micro
-// QR code and one without.
-func labelFixture(t *testing.T) (srv *Server, cookie *http.Cookie, tagged, untagged string) {
+// QR code and one without, and returns the template's ID as tag.
+func labelFixture(t *testing.T) (srv *Server, cookie *http.Cookie, tagged, untagged, tag string) {
 	t.Helper()
 	srv, admin, _ := setupTestServer(t)
 	cookie = sessionCookie(t, srv, admin.ID)
 	if _, err := srv.store.CreateField("location", "Location", fields.TypeText, nil); err != nil {
 		t.Fatal(err)
 	}
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", labelTemplate); rec.Code != http.StatusCreated {
-		t.Fatalf("creating template: %d %s", rec.Code, rec.Body.String())
-	}
+	tag = createTemplate(t, srv, cookie, labelTemplate)
 	a, err := srv.store.CreateAsset("Drill", nil,
 		[]models.AssetGeneratorKey{{GeneratorType: "micro_qr", AssignedCode: "BAM-0042"}},
 		map[string]string{"location": "Shelf B3"})
@@ -43,12 +41,12 @@ func labelFixture(t *testing.T) (srv *Server, cookie *http.Cookie, tagged, untag
 	if err != nil {
 		t.Fatal(err)
 	}
-	return srv, cookie, a.Asset.ID, b.Asset.ID
+	return srv, cookie, a.Asset.ID, b.Asset.ID, tag
 }
 
 func TestAssetLabelFormats(t *testing.T) {
-	srv, cookie, tagged, _ := labelFixture(t)
-	base := "/api/v1/assets/" + tagged + "/label?template_id=tag"
+	srv, cookie, tagged, _, tag := labelFixture(t)
+	base := "/api/v1/assets/" + tagged + "/label?template_id=" + tag
 
 	rec := doJSON(t, srv, cookie, http.MethodGet, base, "")
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/svg+xml" || !strings.Contains(rec.Body.String(), "<svg") {
@@ -79,13 +77,13 @@ func TestAssetLabelFormats(t *testing.T) {
 	if rec.Code != http.StatusOK || !bytes.HasPrefix(rec.Body.Bytes(), []byte("%PDF-1.4")) {
 		t.Errorf("PDF: got %d", rec.Code)
 	}
-	if got := rec.Header().Get("Content-Disposition"); got != `inline; filename="`+tagged+`-tag.pdf"` {
+	if got := rec.Header().Get("Content-Disposition"); got != `inline; filename="`+tagged+"-"+tag+`.pdf"` {
 		t.Errorf("Content-Disposition = %q", got)
 	}
 }
 
 func TestAssetLabelErrors(t *testing.T) {
-	srv, cookie, tagged, untagged := labelFixture(t)
+	srv, cookie, tagged, untagged, tag := labelFixture(t)
 
 	archived, err := srv.store.CreateAsset("Old", nil, []models.AssetGeneratorKey{{GeneratorType: "micro_qr", AssignedCode: "OLD-1"}}, nil)
 	if err != nil {
@@ -100,12 +98,12 @@ func TestAssetLabelErrors(t *testing.T) {
 		status     int
 		body       string
 	}{
-		{"no code", "/api/v1/assets/" + untagged + "/label?template_id=tag", http.StatusUnprocessableEntity, "asset has no micro_qr code"},
-		{"archived", "/api/v1/assets/" + archived.Asset.ID + "/label?template_id=tag", http.StatusUnprocessableEntity, "asset is archived"},
-		{"unknown asset", "/api/v1/assets/00000000-0000-0000-0000-000000000000/label?template_id=tag", http.StatusNotFound, "asset not found"},
+		{"no code", "/api/v1/assets/" + untagged + "/label?template_id=" + tag, http.StatusUnprocessableEntity, "asset has no micro_qr code"},
+		{"archived", "/api/v1/assets/" + archived.Asset.ID + "/label?template_id=" + tag, http.StatusUnprocessableEntity, "asset is archived"},
+		{"unknown asset", "/api/v1/assets/00000000-0000-0000-0000-000000000000/label?template_id=" + tag, http.StatusNotFound, "asset not found"},
 		{"no template", "/api/v1/assets/" + tagged + "/label", http.StatusBadRequest, "template_id is required"},
 		{"unknown template", "/api/v1/assets/" + tagged + "/label?template_id=nope", http.StatusNotFound, "Template not found"},
-		{"bad format", "/api/v1/assets/" + tagged + "/label?template_id=tag&format=gif", http.StatusBadRequest, "format must be"},
+		{"bad format", "/api/v1/assets/" + tagged + "/label?template_id=" + tag + "&format=gif", http.StatusBadRequest, "format must be"},
 	}
 	for _, c := range cases {
 		rec := doJSON(t, srv, cookie, http.MethodGet, c.path, "")
@@ -116,7 +114,7 @@ func TestAssetLabelErrors(t *testing.T) {
 }
 
 func TestPreviewTemplate(t *testing.T) {
-	srv, cookie, tagged, _ := labelFixture(t)
+	srv, cookie, tagged, _, _ := labelFixture(t)
 
 	// An unsaved template renders with placeholder data before its author
 	// has given it an id or a name, as the editor previews from the start.
@@ -166,14 +164,14 @@ func TestPreviewTemplate(t *testing.T) {
 }
 
 func TestExportLabels(t *testing.T) {
-	srv, cookie, tagged, untagged := labelFixture(t)
+	srv, cookie, tagged, untagged, tag := labelFixture(t)
 	second, err := srv.store.CreateAsset("Lathe", nil, []models.AssetGeneratorKey{{GeneratorType: "micro_qr", AssignedCode: "BAM-0043"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids := `["` + tagged + `","` + second.Asset.ID + `"]`
 
-	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export", `{"template_id":"tag","format":"pdf","asset_ids":`+ids+`}`)
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export", `{"template_id":"`+tag+`","format":"pdf","asset_ids":`+ids+`}`)
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" {
 		t.Fatalf("PDF export: got %d %s", rec.Code, rec.Body.String())
 	}
@@ -181,7 +179,7 @@ func TestExportLabels(t *testing.T) {
 		t.Errorf("PDF has %d pages, want 2", pages)
 	}
 
-	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export", `{"template_id":"tag","format":"zip","mono":true,"asset_ids":`+ids+`}`)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export", `{"template_id":"`+tag+`","format":"zip","mono":true,"asset_ids":`+ids+`}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("ZIP export: got %d %s", rec.Code, rec.Body.String())
 	}
@@ -201,7 +199,7 @@ func TestExportLabels(t *testing.T) {
 
 	// One bad asset fails the whole batch and names it.
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export",
-		`{"template_id":"tag","format":"pdf","asset_ids":["`+tagged+`","`+untagged+`","missing"]}`)
+		`{"template_id":"`+tag+`","format":"pdf","asset_ids":["`+tagged+`","`+untagged+`","missing"]}`)
 	body := rec.Body.String()
 	if rec.Code != http.StatusUnprocessableEntity || strings.Contains(body, "%PDF") ||
 		!strings.Contains(body, `"asset_id":"`+untagged+`"`) || !strings.Contains(body, `"asset_id":"missing"`) ||
@@ -214,10 +212,10 @@ func TestExportLabels(t *testing.T) {
 		tooMany[i] = strconv.Quote("asset-" + strconv.Itoa(i))
 	}
 	for name, req := range map[string]string{
-		"duplicates":  `{"template_id":"tag","format":"pdf","asset_ids":["` + tagged + `","` + tagged + `"]}`,
-		"empty":       `{"template_id":"tag","format":"pdf","asset_ids":[]}`,
-		"too many":    `{"template_id":"tag","format":"pdf","asset_ids":[` + strings.Join(tooMany, ",") + `]}`,
-		"bad format":  `{"template_id":"tag","format":"tiff","asset_ids":["` + tagged + `"]}`,
+		"duplicates":  `{"template_id":"` + tag + `","format":"pdf","asset_ids":["` + tagged + `","` + tagged + `"]}`,
+		"empty":       `{"template_id":"` + tag + `","format":"pdf","asset_ids":[]}`,
+		"too many":    `{"template_id":"` + tag + `","format":"pdf","asset_ids":[` + strings.Join(tooMany, ",") + `]}`,
+		"bad format":  `{"template_id":"` + tag + `","format":"tiff","asset_ids":["` + tagged + `"]}`,
 		"no template": `{"format":"pdf","asset_ids":["` + tagged + `"]}`,
 		"not json":    `{`,
 	} {
@@ -229,14 +227,14 @@ func TestExportLabels(t *testing.T) {
 }
 
 func TestExportPermissions(t *testing.T) {
-	srv, _, tagged, _ := labelFixture(t)
+	srv, _, tagged, _, tag := labelFixture(t)
 	user, err := srv.store.CreateUser("nobody@test.org", "NobodySecret123!", true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cookie := sessionCookie(t, srv, user.ID)
 	for _, c := range []struct{ method, path, body string }{
-		{http.MethodGet, "/api/v1/assets/" + tagged + "/label?template_id=tag", ""},
+		{http.MethodGet, "/api/v1/assets/" + tagged + "/label?template_id=" + tag, ""},
 		{http.MethodPost, "/api/v1/labels/export", `{}`},
 		{http.MethodPost, "/api/v1/templates/preview", `{}`},
 	} {
@@ -289,13 +287,13 @@ func TestRequestBodiesAreLimited(t *testing.T) {
 // checks a batch over it is refused with 422 rather than built, while one
 // under it is produced.
 func TestBatchesAreBounded(t *testing.T) {
-	srv, cookie, tagged, _ := labelFixture(t)
+	srv, cookie, tagged, _, tag := labelFixture(t)
 	second, err := srv.store.CreateAsset("Lathe", nil, []models.AssetGeneratorKey{{GeneratorType: "micro_qr", AssignedCode: "BAM-0043"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids := `["` + tagged + `","` + second.Asset.ID + `"]`
-	body := `{"template_id":"tag","format":"pdf","asset_ids":` + ids + `}`
+	body := `{"template_id":"` + tag + `","format":"pdf","asset_ids":` + ids + `}`
 
 	saved := maxBatchParts
 	t.Cleanup(func() { maxBatchParts = saved })

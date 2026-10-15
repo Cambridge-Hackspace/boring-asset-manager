@@ -268,9 +268,8 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// withPreviewDefaults gives an unsaved template a placeholder ID and name
-// when the author has not chosen them yet, so it passes validation; previews
-// need neither.
+// withPreviewDefaults fills a blank ID or name with a placeholder: previews
+// need neither, and the editor previews a template before it is named.
 func withPreviewDefaults(doc json.RawMessage) ([]byte, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(doc, &obj); err != nil || obj == nil {
