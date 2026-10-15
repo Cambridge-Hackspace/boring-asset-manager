@@ -1,0 +1,23 @@
+# Builds a release binary on every push and pull request, the way the release
+# workflow does (README §2.2), so a change that breaks the build shows up
+# before a tag does. The suites themselves run in reaper (README §8.1).
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build
+        env:
+          CONTAINER: docker
+        run: tools/release/build.sh linux/amd64

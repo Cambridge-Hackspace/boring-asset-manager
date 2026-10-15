@@ -23,13 +23,17 @@ GO_MOD="${BAM_GO_MOD:-bam-gomod}"
 
 "$ROOT/tools/web/build.sh"
 
+# go build asks git which commit it is building, and git refuses a checkout
+# owned by another user (as on a CI runner or reaper guest): trust the mount.
 mkdir -p "$ROOT/web/.e2e"
 MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
   -v "$ROOT:/src" -w /src \
   -v "$GO_CACHE:/root/.cache/go-build" -v "$GO_MOD:/go/pkg/mod" \
   -e CGO_ENABLED=0 \
-  "$GO_IMAGE" go build -o web/.e2e/bam ./cmd/bam
+  "$GO_IMAGE" sh -c "git config --global --add safe.directory /src && go build -o web/.e2e/bam ./cmd/bam"
 
+# The script below expands its variables inside the container.
+# shellcheck disable=SC2016
 MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
   -v "$ROOT:/src" \
   -v "$NODE_MODULES:/src/web/node_modules" \
