@@ -333,6 +333,22 @@ func TestImportIsAllOrNothing(t *testing.T) {
 	}
 }
 
+// notices lists the events channels can be told of, newest first.
+func notices(t *testing.T, st *store.Store) []models.Event {
+	t.Helper()
+	all, err := st.ListEvents(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list []models.Event
+	for _, e := range all {
+		if !models.HistoryOnly(e.Kind) {
+			list = append(list, e)
+		}
+	}
+	return list
+}
+
 // TestImportChecksThresholdsOnce imports many assets into a category that is
 // running low; it restocks once.
 func TestImportChecksThresholdsOnce(t *testing.T) {
@@ -341,9 +357,9 @@ func TestImportChecksThresholdsOnce(t *testing.T) {
 	if _, err := w.st.UpdateCategoryFrom(w.tape, store.CategoryInput{Name: "Tape", IsConsumable: true, LowStockThreshold: &two}); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := w.st.ListEvents(100)
+	before := notices(t, w.st)
 	w.apply(t, "name,categories\nRoll 1,Tape\nRoll 2,Tape\nRoll 3,Tape\n")
-	after, _ := w.st.ListEvents(100)
+	after := notices(t, w.st)
 	if len(after) != len(before)+1 || after[0].Kind != models.EventRestocked || *after[0].Payload.ActiveCount != 3 {
 		t.Errorf("events %+v", after[:len(after)-len(before)])
 	}
@@ -389,8 +405,9 @@ func TestImportingStock(t *testing.T) {
 	if got["Drill"] != nil {
 		t.Error("blank stock cells started counting the drill")
 	}
-	events, _ := w.st.ListAssetEvents(screws.Asset.ID, 10)
-	if len(events) != 3 || events[0].Kind != models.EventAssetRunningLow || *events[1].Payload.Change != -95 {
+	events, _, _ := w.st.ListAssetEvents(screws.Asset.ID, "", 10)
+	// Only the quantity changed, so the import recorded no edit.
+	if len(events) != 4 || events[0].Kind != models.EventAssetRunningLow || *events[1].Payload.Change != -95 || events[3].Kind != models.EventAssetCreated {
 		t.Errorf("screws' history %+v", events)
 	}
 

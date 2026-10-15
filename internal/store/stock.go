@@ -151,16 +151,18 @@ func (s *Store) readStockTx(tx *sql.Tx, id string) (*models.AssetStock, error) {
 	return sc.stock(), nil
 }
 
-// writeStockTx replaces an asset's stock within tx, given what it was; a nil
+// setStockTx replaces an asset's stock within tx, given what it was; a nil
 // in stops counting it. A quantity that changes, or starts being counted,
-// is recorded in the asset's history.
-func (s *Store) writeStockTx(tx *sql.Tx, id string, was *models.AssetStock, in *StockInput) error {
+// belongs in the asset's history: setStockTx returns the function that
+// records it, or nil, for the caller to run once it has recorded the edit
+// that changed it.
+func (s *Store) setStockTx(tx *sql.Tx, id string, was *models.AssetStock, in *StockInput) (func() error, error) {
 	if in == nil {
 		_, err := s.TxExec(tx, `UPDATE assets SET stock_quantity = NULL, stock_unit = '', low_stock_threshold = NULL, is_running_low = ? WHERE id = ?`, false, id)
 		if err != nil {
-			return fmt.Errorf("clearing stock: %w", err)
+			return nil, fmt.Errorf("clearing stock: %w", err)
 		}
-		return nil
+		return nil, nil
 	}
 	quantity := 0
 	if was != nil {
@@ -172,12 +174,12 @@ func (s *Store) writeStockTx(tx *sql.Tx, id string, was *models.AssetStock, in *
 	_, err := s.TxExec(tx, `UPDATE assets SET stock_quantity = ?, stock_unit = ?, low_stock_threshold = ? WHERE id = ?`,
 		quantity, in.Unit, in.LowStockThreshold, id)
 	if err != nil {
-		return fmt.Errorf("setting stock: %w", err)
+		return nil, fmt.Errorf("setting stock: %w", err)
 	}
 	if was != nil && was.Quantity == quantity {
-		return nil
+		return nil, nil
 	}
-	return s.recordQuantityTx(tx, id, was, quantity)
+	return func() error { return s.recordQuantityTx(tx, id, was, quantity) }, nil
 }
 
 // recordQuantityTx records a change of an asset's quantity in its history.
@@ -260,23 +262,4 @@ func (s *Store) SetAssetRunningLow(id string, low bool) (*models.AssetWithDetail
 	}
 	a, err := s.GetAssetByID(id)
 	return a, changed, err
-}
-
-// ListAssetEvents returns an asset's most recent events, newest first.
-func (s *Store) ListAssetEvents(id string, limit int) ([]models.Event, error) {
-	rows, err := s.Query(fmt.Sprintf(`SELECT `+eventColumns+`
-		FROM events WHERE asset_id = ? ORDER BY created_at DESC, id DESC LIMIT %d`, limit), id)
-	if err != nil {
-		return nil, fmt.Errorf("listing asset events: %w", err)
-	}
-	defer rows.Close()
-	events := []models.Event{}
-	for rows.Next() {
-		e, err := scanEvent(rows)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, e)
-	}
-	return events, rows.Err()
 }

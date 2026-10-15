@@ -304,7 +304,7 @@ func (s *Store) insertEvent(tx *sql.Tx, kind string, categoryID, assetID *string
 	if err != nil {
 		return fmt.Errorf("recording event: %w", err)
 	}
-	if kind == models.EventQuantityChanged {
+	if models.HistoryOnly(kind) {
 		// History only: no channel can subscribe to it.
 		return nil
 	}

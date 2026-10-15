@@ -71,8 +71,9 @@ type QuantityRequest struct {
 	Set    *int `json:"set"`
 }
 
-// maxHistory bounds the events GET /api/v1/assets/{id}/history returns.
-const maxHistory = 200
+// historyPage is how many events one page of
+// GET /api/v1/assets/{id}/history holds.
+const historyPage = 50
 
 func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	categoryID := r.URL.Query().Get("category_id")
@@ -260,8 +261,8 @@ func (s *Server) handleSetAssetRunningLow(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// handleAssetHistory lists an asset's recent events, newest first:
-// GET /api/v1/assets/{id}/history
+// handleAssetHistory lists an asset's events a page at a time, newest first:
+// GET /api/v1/assets/{id}/history[?before=<event id>]
 func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if _, err := s.store.GetAssetByID(id); errors.Is(err, store.ErrAssetNotFound) {
@@ -271,10 +272,14 @@ func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "query asset")
 		return
 	}
-	events, err := s.store.ListAssetEvents(id, maxHistory)
+	events, more, err := s.store.ListAssetEvents(id, r.URL.Query().Get("before"), historyPage)
+	if errors.Is(err, store.ErrEventNotFound) {
+		writeJSONError(w, http.StatusBadRequest, "before must name one of this asset's events")
+		return
+	}
 	if err != nil {
 		writeServerError(w, err, "list the asset's history")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	writeJSON(w, http.StatusOK, map[string]any{"events": events, "more": more})
 }

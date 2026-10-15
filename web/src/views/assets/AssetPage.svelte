@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
-  import { amount, describeEvent, isWebURL, keptValues } from '../../lib/assets';
+  import { amount, describeChange, describeEvent, isWebURL, keptValues } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import type { AssetEvent, AssetWithDetails, GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
@@ -17,6 +17,7 @@
   let asset = $state<AssetWithDetails | null>(null);
   let generators = $state<GeneratorInfo[]>([]);
   let history = $state<AssetEvent[]>([]);
+  let olderHistory = $state(false);
   let error = $state('');
   let saved = $state('');
   let loading = $state(true);
@@ -27,7 +28,7 @@
 
   onMount(async () => {
     try {
-      [asset, generators, history] = await Promise.all([
+      [asset, generators] = await Promise.all([
         request<{ asset: AssetWithDetails }>('GET', path).then((r) => r.asset),
         request<{ generators: GeneratorInfo[] }>('GET', '/generators').then((r) => r.generators ?? []),
         loadHistory(),
@@ -39,8 +40,21 @@
     }
   });
 
-  async function loadHistory(): Promise<AssetEvent[]> {
-    return (await request<{ events: AssetEvent[] }>('GET', `${path}/history`)).events ?? [];
+  // Loads the newest page of history, or with before, the page older than it.
+  async function loadHistory(before?: string) {
+    const query = before ? `?before=${encodeURIComponent(before)}` : '';
+    const page = await request<{ events: AssetEvent[]; more: boolean }>('GET', `${path}/history${query}`);
+    history = before ? [...history, ...(page.events ?? [])] : (page.events ?? []);
+    olderHistory = page.more;
+  }
+
+  async function showOlder() {
+    error = '';
+    try {
+      await loadHistory(history[history.length - 1]?.id);
+    } catch (err) {
+      error = messageOf(err);
+    }
   }
 
   const generatorName = (type: string) => generators.find((g) => g.type === type)?.name ?? type;
@@ -53,7 +67,7 @@
     try {
       asset = (await action()).asset;
       saved = done;
-      history = await loadHistory();
+      await loadHistory();
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -190,12 +204,20 @@
           {#each history as e (e.id)}
             <li>
               <span class="font-medium">{describeEvent(e)}</span>
+              {#if e.payload.changes?.length}
+                <ul class="list-disc pl-5">
+                  {#each e.payload.changes as c, i (i)}<li>{describeChange(c, e.kind)}</li>{/each}
+                </ul>
+              {/if}
               <span class="block text-xs text-zinc-600 dark:text-zinc-400">
                 {when(e.created_at)}{e.payload.actor ? ` · ${e.payload.actor.email}` : ''}
               </span>
             </li>
           {/each}
         </ul>
+        {#if olderHistory}
+          <button type="button" class="btn-secondary mt-3" onclick={showOlder}>Show older</button>
+        {/if}
       </section>
     {/if}
   </div>

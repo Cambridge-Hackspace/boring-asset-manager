@@ -47,12 +47,19 @@ func flag(t *testing.T, st *Store, id string) bool {
 	return c.IsRunningLow
 }
 
-// events lists every event, oldest first.
+// events lists every event, oldest first, leaving out the records of
+// creating, editing and archiving assets, which history_test.go covers.
 func events(t *testing.T, st *Store) []models.Event {
 	t.Helper()
-	list, err := st.ListEvents(1000)
+	all, err := st.ListEvents(1000)
 	if err != nil {
 		t.Fatal(err)
+	}
+	list := all[:0]
+	for _, e := range all {
+		if !isEditRecord(e.Kind) {
+			list = append(list, e)
+		}
 	}
 	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
 		list[i], list[j] = list[j], list[i]
@@ -388,4 +395,10 @@ func TestSimultaneousArchivesCannotBothMissACrossing(t *testing.T) {
 	if list := events(t, st); len(list) != 1 || *list[0].Payload.ActiveCount != 2 {
 		t.Errorf("events %+v", list)
 	}
+}
+
+// isEditRecord reports whether an event records creating, editing or
+// archiving an asset.
+func isEditRecord(kind string) bool {
+	return kind == models.EventAssetCreated || kind == models.EventAssetEdited || kind == models.EventAssetArchived
 }

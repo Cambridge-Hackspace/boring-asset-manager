@@ -1,4 +1,4 @@
-import { expect, goTo, test, unique } from './fixtures';
+import { ADMIN_EMAIL, expect, goTo, test, unique } from './fixtures';
 
 test('count stock by quantity: use it up, see it run low, restock', async ({ signedIn: page }) => {
   const name = unique('M3 screws');
@@ -46,6 +46,11 @@ test('count stock by quantity: use it up, see it run low, restock', async ({ sig
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(assetUrl);
   await expect(stock).toContainText('35 screws left');
+  // The edit is in the history with what it changed, and so is the creation.
+  const edit = history.getByRole('listitem').filter({ hasText: /^Edited/ });
+  await expect(edit).toContainText('Unit: pcs → screws');
+  await expect(edit).toContainText(ADMIN_EMAIL);
+  await expect(history.getByRole('listitem').filter({ hasText: /^Created/ })).toContainText(`Name: ${name}`);
 
   await stock.getByLabel('How many (screws)').fill('100');
   await stock.getByRole('button', { name: 'Add' }).click();
