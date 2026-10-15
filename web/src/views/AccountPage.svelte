@@ -1,10 +1,27 @@
 <script lang="ts">
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
+  import type { User } from '../lib/models';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
+
+  let name = $state(session.user?.name ?? '');
+  let nameError = $state('');
+  let nameStatus = $state('');
+
+  async function rename(event: SubmitEvent) {
+    event.preventDefault();
+    nameError = nameStatus = '';
+    try {
+      session.user = (await request<{ user: User }>('PUT', '/auth/name', { name })).user;
+      name = session.user.name;
+      nameStatus = name ? 'Name saved.' : 'Name cleared; your email is shown instead.';
+    } catch (err) {
+      nameError = messageOf(err);
+    }
+  }
 
   let current = $state('');
   let next = $state('');
@@ -37,6 +54,18 @@
 
 <h1 class="mb-4 text-2xl font-bold">Your account</h1>
 <p class="mb-6 text-sm">Signed in as <strong>{session.user?.email}</strong>. Permissions: {session.permissions.join(', ') || 'none'}.</p>
+
+<form class="card mb-6 max-w-md space-y-4" onsubmit={rename}>
+  <h2 class="text-lg font-semibold">Name</h2>
+  <div>
+    <label class="label" for="own-name">Your name</label>
+    <input id="own-name" class="input" maxlength="255" autocomplete="name" aria-describedby="own-name-help" bind:value={name} />
+    <p id="own-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Shown to others instead of your email, such as in asset history. You still sign in with your email.</p>
+  </div>
+  <ErrorMessage error={nameError} />
+  {#if nameStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{nameStatus}</p>{/if}
+  <button type="submit" class="btn-primary">Save name</button>
+</form>
 
 <form class="card max-w-md space-y-4" onsubmit={change}>
   <h2 class="text-lg font-semibold">Change password</h2>

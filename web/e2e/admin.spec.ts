@@ -47,9 +47,15 @@ test('users: roles, disabling, and the anti-lockout refusal', async ({ signedIn:
   await goTo(page, 'Users');
   await page.getByRole('button', { name: 'New user' }).click();
   await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Name (optional)').fill('Bo Brown');
   await page.getByLabel('Initial password').fill('BoPass123!');
   await page.getByRole('button', { name: 'Create user' }).click();
   await expect(page.getByRole('status')).toHaveText('User created.');
+  await expect(page.getByRole('row').filter({ hasText: email })).toContainText('Bo Brown');
+  await page.getByRole('button', { name: `Rename ${email}` }).click();
+  await page.getByLabel(`Name for ${email}`).fill('Bo Green');
+  await page.getByRole('button', { name: 'Save name' }).click();
+  await expect(page.getByRole('status')).toHaveText(`${email} is now shown as Bo Green.`);
 
   await page.getByRole('button', { name: `Roles for ${email}` }).click();
   await page.getByRole('checkbox', { name: 'admin' }).check();

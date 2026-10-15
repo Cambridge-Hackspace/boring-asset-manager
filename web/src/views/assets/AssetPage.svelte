@@ -3,6 +3,7 @@
   import { request } from '../../lib/api';
   import { amount, describeChange, describeEvent, isWebURL, keptValues } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
+  import { displayName } from '../../lib/people';
   import type { AssetEvent, AssetWithDetails, GeneratorInfo, GeneratorKey } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
@@ -240,7 +241,7 @@
                 </ul>
               {/if}
               <span class="block text-xs text-zinc-600 dark:text-zinc-400">
-                {when(e.created_at)}{e.payload.actor ? ` · ${e.payload.actor.email}` : ''}
+                {when(e.created_at)}{e.payload.actor ? ` · ${displayName(e.payload.actor)}` : ''}
               </span>
             </li>
           {/each}

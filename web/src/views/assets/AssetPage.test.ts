@@ -85,7 +85,11 @@ describe('AssetPage history', () => {
       id: 'e2',
       kind: 'asset.edited',
       created_at: '2026-10-15T10:00:00Z',
-      payload: { trigger: 'manual', changes: [{ what: 'name', from: 'Screws', to: 'M3 screws' }, { what: 'category', key: 'c1', to: 'Fixings' }] },
+      payload: {
+        trigger: 'manual',
+        actor: { id: 'u', email: 'ada@hackspace.org', name: 'Ada Lovelace' },
+        changes: [{ what: 'name', from: 'Screws', to: 'M3 screws' }, { what: 'category', key: 'c1', to: 'Fixings' }],
+      },
     };
     const created: AssetEvent = { id: 'e0', kind: 'asset.created', created_at: '2026-10-13T10:00:00Z', payload: { trigger: 'import' } };
     const { fetchMock } = fakeApi({
@@ -101,6 +105,9 @@ describe('AssetPage history', () => {
     expect(await screen.findByText('Edited')).toBeTruthy();
     expect(screen.getByText('Name: Screws → M3 screws')).toBeTruthy();
     expect(screen.getByText('Added to Fixings')).toBeTruthy();
+    // By name when the person has one, by email otherwise.
+    expect(screen.getByText(/· Ada Lovelace$/)).toBeTruthy();
+    expect(screen.getByText(/· ada@hackspace.org$/)).toBeTruthy();
     expect(screen.queryByText('Created by an import')).toBeNull();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Show older' }));

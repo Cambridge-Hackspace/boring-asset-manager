@@ -29,7 +29,7 @@ const drivers: DriverInfo[] = [
 
 beforeEach(() => {
   session.permissions = ['settings:manage', 'users:manage'];
-  session.user = { id: 'me', email: 'me@hackspace.org', is_active: true, created_at: '', updated_at: '' };
+  session.user = { id: 'me', email: 'me@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' };
 });
 afterEach(() => {
   cleanup();
@@ -72,8 +72,8 @@ describe('UsersPage', () => {
     return fakeApi({
       'GET /users': () => ({
         users: [
-          { id: 'me', email: 'me@hackspace.org', is_active: true, created_at: '', updated_at: '', role_ids: ['admin'] },
-          { id: 'u2', email: 'bo@hackspace.org', is_active: true, created_at: '', updated_at: '', role_ids: [] },
+          { id: 'me', email: 'me@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '', role_ids: ['admin'] },
+          { id: 'u2', email: 'bo@hackspace.org', name: 'Bo', is_active: true, created_at: '', updated_at: '', role_ids: [] },
         ],
       }),
       'GET /roles': () => ({
@@ -84,6 +84,7 @@ describe('UsersPage', () => {
       }),
       'PUT /users/me/roles': rolesPut,
       'PUT /users/u2/roles': () => ({ role_ids: ['viewer'] }),
+      'PUT /users/u2/name': (body) => ({ user: { id: 'u2', email: 'bo@hackspace.org', ...(body as object) } }),
     });
   }
 
@@ -105,6 +106,21 @@ describe('UsersPage', () => {
     await fireEvent.click(within(me).getByRole('button', { name: 'Save roles' }));
     expect((await screen.findByRole('alert')).textContent).toContain('would remove the last one');
   });
+
+  it('shows names, and renames someone in place', async () => {
+    const { sent } = api(() => ({}));
+    render(UsersPage, { params: {} });
+
+    const bo = (await screen.findByRole('cell', { name: 'bo@hackspace.org' })).closest('tr')!;
+    expect(within(bo).getByRole('cell', { name: 'Bo' })).toBeTruthy();
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Rename bo@hackspace.org' }));
+    const input = within(bo).getByLabelText('Name for bo@hackspace.org') as HTMLInputElement;
+    expect(input.value).toBe('Bo');
+    await fireEvent.input(input, { target: { value: 'Bo Diddley' } });
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Save name' }));
+    await screen.findByText('bo@hackspace.org is now shown as Bo Diddley.');
+    expect(sent.find((r) => r.path === '/users/u2/name')!.body).toEqual({ name: 'Bo Diddley' });
+  });
 });
 
 describe('AccountPage', () => {
@@ -117,5 +133,17 @@ describe('AccountPage', () => {
     await fireEvent.submit(screen.getByRole('button', { name: 'Change password' }));
     expect(screen.getByRole('alert').textContent).toContain('do not match');
     expect(sent).toHaveLength(0);
+  });
+
+  it('sets your own name, and shows it where you are named', async () => {
+    const { sent } = fakeApi({
+      'PUT /auth/name': (body) => ({ user: { ...session.user, ...(body as object) } }),
+    });
+    render(AccountPage, { params: {} });
+    await fireEvent.input(screen.getByLabelText('Your name'), { target: { value: 'Ada Lovelace' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+    await screen.findByText('Name saved.');
+    expect(sent[0]!.body).toEqual({ name: 'Ada Lovelace' });
+    expect(session.user!.name).toBe('Ada Lovelace');
   });
 });

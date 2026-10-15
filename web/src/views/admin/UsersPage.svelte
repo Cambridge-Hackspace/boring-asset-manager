@@ -15,11 +15,14 @@
   let error = $state('');
   let status = $state('');
   let editingRoles = $state<string | null>(null);
+  let renaming = $state<string | null>(null);
+  let nameDraft = $state('');
   let roleDraft = $state<string[]>([]);
 
   // Creating a user.
   let creating = $state(false);
   let newEmail = $state('');
+  let newName = $state('');
   let newPassword = $state('');
   let newRoles = $state<string[]>([]);
 
@@ -62,12 +65,25 @@
   async function create(event: SubmitEvent) {
     event.preventDefault();
     await act(async () => {
-      const res = await request<{ user: { id: string } }>('POST', '/users', { email: newEmail, password: newPassword });
+      const res = await request<{ user: { id: string } }>('POST', '/users', { email: newEmail, name: newName, password: newPassword });
       if (newRoles.length) await request('PUT', `/users/${encodeURIComponent(res.user.id)}/roles`, { role_ids: newRoles });
       creating = false;
-      newEmail = newPassword = '';
+      newEmail = newName = newPassword = '';
       newRoles = [];
     }, 'User created.');
+  }
+
+  function startRename(u: UserWithRoles) {
+    renaming = u.id;
+    nameDraft = u.name;
+  }
+
+  function saveName(event: SubmitEvent, u: UserWithRoles) {
+    event.preventDefault();
+    void act(async () => {
+      await request('PUT', `/users/${encodeURIComponent(u.id)}/name`, { name: nameDraft });
+      if (renaming === u.id) renaming = null;
+    }, nameDraft.trim() ? `${u.email} is now shown as ${nameDraft.trim()}.` : `${u.email} is shown by email.`);
   }
 
   function startRoles(u: UserWithRoles) {
@@ -90,6 +106,11 @@
       <div>
         <label class="label" for="new-email">Email</label>
         <input id="new-email" class="input" type="email" required autocomplete="off" bind:value={newEmail} />
+      </div>
+      <div>
+        <label class="label" for="new-name">Name (optional)</label>
+        <input id="new-name" class="input" maxlength="255" autocomplete="off" aria-describedby="new-name-help" bind:value={newName} />
+        <p id="new-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Shown instead of the email. Sign-in uses the email.</p>
       </div>
       <div>
         <label class="label" for="new-password">Initial password</label>
@@ -117,6 +138,7 @@
     <table class="w-full text-left text-sm">
       <thead class="border-b border-zinc-300 dark:border-zinc-700">
         <tr>
+          <th scope="col" class="py-2 pr-4">Name</th>
           <th scope="col" class="py-2 pr-4">Email</th>
           <th scope="col" class="py-2 pr-4">Status</th>
           <th scope="col" class="py-2 pr-4">Roles</th>
@@ -126,6 +148,18 @@
       <tbody>
         {#each users as u (u.id)}
           <tr class="border-b border-zinc-200 align-top dark:border-zinc-800">
+            <td class="py-2 pr-4">
+              {#if renaming === u.id}
+                <form class="flex flex-wrap gap-2" onsubmit={(event) => saveName(event, u)}>
+                  <label class="sr-only" for="name-{u.id}">Name for {u.email}</label>
+                  <input id="name-{u.id}" class="input w-48" maxlength="255" bind:value={nameDraft} />
+                  <button type="submit" class="btn-primary">Save name</button>
+                  <button type="button" class="btn-secondary" onclick={() => (renaming = null)}>Cancel</button>
+                </form>
+              {:else}
+                {u.name || '—'}
+              {/if}
+            </td>
             <td class="py-2 pr-4 font-medium">{u.email}{#if u.id === session.user?.id}{' '}<span class="text-xs text-zinc-600 dark:text-zinc-400">(you)</span>{/if}</td>
             <td class="py-2 pr-4">{u.is_active ? 'Active' : 'Disabled'}</td>
             <td class="py-2 pr-4">
@@ -146,6 +180,9 @@
             </td>
             <td class="py-2 text-right">
               <span class="inline-flex flex-wrap justify-end gap-2">
+                {#if renaming !== u.id}
+                  <button type="button" class="btn-secondary" aria-label="Rename {u.email}" onclick={() => startRename(u)}>Rename</button>
+                {/if}
                 {#if editingRoles !== u.id}
                   <button type="button" class="btn-secondary" aria-label="Roles for {u.email}" onclick={() => startRoles(u)}>Roles</button>
                 {/if}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
@@ -18,17 +19,23 @@ var (
 	ErrInvalidUser = errors.New("invalid user")
 )
 
+// userColumns are the columns scanUser reads, in order.
+const userColumns = "id, email, name, password_hash, totp_secret, is_active, created_at, updated_at, archived_at"
+
+func scanUser(row interface{ Scan(...any) error }) (models.User, error) {
+	var u models.User
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt)
+	return u, err
+}
+
 // GetUserByID retrieves a user by their UUID.
 func (s *Store) GetUserByID(id string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, totp_secret, is_active, created_at, updated_at, archived_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE id = ?
 	`
-	var u models.User
-	err := s.QueryRow(query, id).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt,
-	)
+	u, err := scanUser(s.QueryRow(query, id))
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
 	}
@@ -42,14 +49,11 @@ func (s *Store) GetUserByID(id string) (*models.User, error) {
 func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 	normalized := auth.NormalizeEmail(email)
 	query := `
-		SELECT id, email, password_hash, totp_secret, is_active, created_at, updated_at, archived_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE email = ? AND archived_at IS NULL
 	`
-	var u models.User
-	err := s.QueryRow(query, normalized).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt,
-	)
+	u, err := scanUser(s.QueryRow(query, normalized))
 	if err == sql.ErrNoRows {
 		return nil, ErrUserNotFound
 	}
@@ -62,7 +66,7 @@ func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 // ListUsers returns all non-archived users.
 func (s *Store) ListUsers() ([]models.User, error) {
 	query := `
-		SELECT id, email, password_hash, totp_secret, is_active, created_at, updated_at, archived_at
+		SELECT ` + userColumns + `
 		FROM users
 		WHERE archived_at IS NULL
 		ORDER BY created_at ASC
@@ -75,10 +79,8 @@ func (s *Store) ListUsers() ([]models.User, error) {
 
 	var users []models.User
 	for rows.Next() {
-		var u models.User
-		if err := rows.Scan(
-			&u.ID, &u.Email, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt,
-		); err != nil {
+		u, err := scanUser(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scanning user row: %w", err)
 		}
 		users = append(users, u)
@@ -125,6 +127,15 @@ func (s *Store) UserHasPermission(userID string, permKey string) (bool, error) {
 
 // CreateUser creates a new user account with a hashed password.
 func (s *Store) CreateUser(email, password string, isActive bool) (*models.User, error) {
+	return s.CreateNamedUser(email, "", password, isActive)
+}
+
+// CreateNamedUser creates a user as CreateUser does, with a display name.
+func (s *Store) CreateNamedUser(email, name, password string, isActive bool) (*models.User, error) {
+	name, err := normalizeUserName(name)
+	if err != nil {
+		return nil, err
+	}
 	normalized := auth.NormalizeEmail(email)
 	if normalized == "" {
 		return nil, fmt.Errorf("%w: email cannot be empty", ErrInvalidUser)
@@ -140,8 +151,8 @@ func (s *Store) CreateUser(email, password string, isActive bool) (*models.User,
 	now := time.Now().UTC()
 	userID := uuid.NewString()
 
-	query := `INSERT INTO users (id, email, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
-	_, err = s.Exec(query, userID, normalized, hash, isActive, now, now)
+	query := `INSERT INTO users (id, email, name, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	_, err = s.Exec(query, userID, normalized, name, hash, isActive, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("inserting user: %w", err)
 	}
@@ -149,10 +160,39 @@ func (s *Store) CreateUser(email, password string, isActive bool) (*models.User,
 	return &models.User{
 		ID:        userID,
 		Email:     normalized,
+		Name:      name,
 		IsActive:  isActive,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}, nil
+}
+
+// normalizeUserName trims a display name and checks it as stored text.
+func normalizeUserName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if err := textcheck.Check("name", name, textcheck.MaxName); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrInvalidUser, err)
+	}
+	return name, nil
+}
+
+// SetUserName changes a user's display name; an empty name shows their
+// email instead. Archived users cannot be renamed.
+func (s *Store) SetUserName(userID, name string) (*models.User, error) {
+	name, err := normalizeUserName(name)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.Exec("UPDATE users SET name = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL", name, time.Now().UTC(), userID)
+	if err != nil {
+		return nil, fmt.Errorf("renaming user: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return nil, fmt.Errorf("renaming user: %w", err)
+	} else if n == 0 {
+		return nil, ErrUserNotFound
+	}
+	return s.GetUserByID(userID)
 }
 
 // userArchived reports whether a user is archived, within tx, or

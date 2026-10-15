@@ -161,8 +161,8 @@ func discordPayload(n Notification) discordMessage {
 		}
 	}
 	by := ""
-	if p.Actor != nil && p.Actor.Email != "" {
-		by = escapeMarkdown(p.Actor.Email)
+	if p.Actor != nil && p.Actor.Display() != "" {
+		by = escapeMarkdown(p.Actor.Display())
 	}
 
 	switch {

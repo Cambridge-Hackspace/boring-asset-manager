@@ -324,6 +324,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 ### 3.4 Sessions & Authentication
 
 * **Local Credentials:** Email (case-insensitive, unique) + password hashed via bcrypt (cost 12).
+* **Names:** each user may have a display name (up to 255 characters, migration `010`), shown instead of their email wherever people appear: the header, the user list and asset history. It is for display only; signing in is always by email, and an empty name shows the email. Admins set it when creating a user (`name` in `POST /api/v1/users`) or later (`PUT /api/v1/users/{id}/name`, `users:manage`), and anyone signed in sets their own (`PUT /api/v1/auth/name`), each with `{"name": "..."}`. History keeps the name as it was when the change was made, and Discord messages name the person by it.
 * **TOTP (RFC 6238):** Optional two-factor authentication flag per user.
 * **Passwords:** stored as bcrypt hashes (cost 12). Every new password must be 8-72 bytes: 72 is the most bcrypt uses, so longer ones are refused rather than silently cut short.
 * **Session Store:** Stateful sessions stored in the active database (`sessions` table) referenced via an `HttpOnly`, `SameSite=Lax`, `Secure` cookie. The cookie holds a random 256-bit token; the table stores only its SHA-256 hash (migration `005`), so a copy of the database cannot be used to sign in.
@@ -570,7 +571,7 @@ The two are never added together, since they count different things (3 spools an
 * **Thresholds and the flag:** the same rule as categories. Dropping below the threshold flags the asset and climbing back clears it, reacting to crossings only, so a flag set by hand (`PUT /api/v1/assets/{id}/running-low`, `assets:write`) stands until the next crossing. Archived assets are not checked.
 * **Events and history:** crossings and manual changes record `asset.running_low` and `asset.restocked`, with the asset, its quantity, threshold and unit, and who caused it; channels can subscribe to them. Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the asset's history. Channels cannot subscribe to it.
 * **Asset history:** creating, editing, archiving and restoring an asset record `asset.created`, `asset.edited`, `asset.archived` and `asset.restored`, in the same transaction as the change, through the web app, the API and CSV imports alike (an import sets the trigger to `import`). Each lists its `changes`: the name, categories joined and left, field values, codes, and whether stock is counted, its unit and threshold, each with the value before and after and the field's label or the generator's name as they read then. A save that changes nothing records nothing. Archiving lists the codes it released, and restoring the codes it got back and those another asset had taken. Changes made elsewhere that affect an asset, such as deleting a field or a category, are not recorded on it, and assets created before this release have no record of earlier edits. Channels cannot subscribe to these either.
-* **Reading the history:** `GET /api/v1/assets/{id}/history` (`assets:read`) returns `events`, newest first, 50 at a time, with the email of whoever made each change, and `more` when older events remain; `?before=<event id>` returns the page older than that event, and an event that is not the asset's is a 400.
+* **Reading the history:** `GET /api/v1/assets/{id}/history` (`assets:read`) returns `events`, newest first, 50 at a time, with the email and name of whoever made each change, and `more` when older events remain; `?before=<event id>` returns the page older than that event, and an event that is not the asset's is a 400.
 
 ### 5.2 Notifiers
 
@@ -851,6 +852,9 @@ Running BAM for real, and keeping it honest. In priority order:
 
 #### Sub-Phase 7.3: Restoring Archived Assets
 * [x] Archived assets listed apart and restored (§3.2), with the codes no other asset has taken since, recorded in their history.
+
+#### Sub-Phase 7.4: User Names
+* [x] Display names for users, set by admins and by each user for themselves, shown in place of emails (§3.4).
 
 ### Upcoming Features
 

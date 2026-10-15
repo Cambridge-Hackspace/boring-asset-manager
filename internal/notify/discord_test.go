@@ -87,6 +87,10 @@ func TestDiscordEmbeds(t *testing.T) {
 		color int
 	}{
 		{"manual low", func(n *Notification) { n.Event.Payload.Trigger = models.TriggerManual }, "Running low: Tape \\*and\\* glue", "Flagged as running low by stores\\_team@hackspace.org.", 0xff8800},
+		{"manual low, by name", func(n *Notification) {
+			n.Event.Payload.Trigger = models.TriggerManual
+			n.Event.Payload.Actor.Name = "Ada *the* stores lead"
+		}, "Running low: Tape \\*and\\* glue", "Flagged as running low by Ada \\*the\\* stores lead.", 0xff8800},
 		{"manual low, nobody", func(n *Notification) { n.Event.Payload.Trigger = models.TriggerManual; n.Event.Payload.Actor = nil }, "Running low: Tape \\*and\\* glue", "Flagged as running low.", 0xff8800},
 		{"restocked", func(n *Notification) {
 			n.Event.Kind = models.EventRestocked

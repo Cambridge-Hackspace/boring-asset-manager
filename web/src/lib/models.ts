@@ -13,6 +13,8 @@ export type Permission =
 export interface User {
   id: string;
   email: string;
+  /** For display only; empty shows the email instead. */
+  name: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -94,7 +96,8 @@ export interface AssetEvent {
   kind: string;
   created_at: string;
   payload: {
-    actor?: { id: string; email: string };
+    /** Who caused it, with their name as it was then. */
+    actor?: { id: string; email: string; name?: string };
     trigger: 'manual' | 'threshold' | 'import';
     quantity?: number;
     change?: number;

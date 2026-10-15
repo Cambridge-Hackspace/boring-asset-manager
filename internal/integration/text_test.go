@@ -91,6 +91,14 @@ func textSlots(t *testing.T, c *client) []textSlot {
 				"id": fmt.Sprintf("t%d", n), "name": v, "units": "mm", "width": 62, "height": 29, "dpi": 300, "elements": []any{},
 			}, under("template"))
 		}},
+		{"user name", 255, func(c *client, n int, v string) (response, string) {
+			r := c.send(http.MethodPost, "/users", map[string]any{"email": fmt.Sprintf("named%d@hackspace.org", n), "name": v, "password": "Secret123!"})
+			if r.status != http.StatusCreated {
+				return r, ""
+			}
+			// There is no single-user read; the list holds every user.
+			return r, "/users"
+		}},
 		{"notification channel name", 255, func(c *client, _ int, v string) (response, string) {
 			return post(c, "/notifiers", map[string]any{
 				"name": v, "driver": "integration-recorder", "options": map[string]string{"name": "x"}, "enabled": true, "events": []string{models.EventRunningLow},
