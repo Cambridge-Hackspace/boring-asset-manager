@@ -191,11 +191,6 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
   ];
 }
 
-/** Whether a string is a valid template ID. */
-export function isTemplateID(id: string): boolean {
-  return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id);
-}
-
 /** A starting template. */
 export function blankTemplate(): TemplateDoc {
   return { id: '', name: '', units: 'mm', width: 62, height: 29, dpi: 300, elements: [] };

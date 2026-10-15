@@ -71,8 +71,9 @@ func TestTemplateVectorsSurviveTheDatabase(t *testing.T) {
 	})
 
 	before := c.mustJSON(http.MethodPost, "/templates/preview", map[string]any{"template": json.RawMessage(doc), "asset_id": asset}, nil, http.StatusOK).body
-	c.mustJSON(http.MethodPost, "/templates", json.RawMessage(doc), nil, http.StatusCreated)
-	label := "/assets/" + asset + "/label?template_id=roundtrip&format="
+	var saved struct{ Template idOnly }
+	c.mustJSON(http.MethodPost, "/templates", json.RawMessage(doc), &saved, http.StatusCreated)
+	label := "/assets/" + asset + "/label?template_id=" + saved.Template.ID + "&format="
 	after := c.mustJSON(http.MethodGet, label+"svg", nil, nil, http.StatusOK).body
 	pdf := c.mustJSON(http.MethodGet, label+"pdf", nil, nil, http.StatusOK).body
 

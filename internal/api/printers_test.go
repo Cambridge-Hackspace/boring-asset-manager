@@ -188,13 +188,11 @@ func TestPrintSendsRotatedLabelsToThePrinter(t *testing.T) {
 	cookie := sessionCookie(t, srv, admin.ID)
 	ql := newFakeQL(t)
 	printerID := createPrinter(t, srv, cookie, ql.port(), "dk-11201")
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", landscapeTemplate); rec.Code != http.StatusCreated {
-		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
-	}
+	ql90 := createTemplate(t, srv, cookie, landscapeTemplate)
 	a, _ := srv.store.CreateAsset("Bench Drill Press", nil, nil, nil)
 	b, _ := srv.store.CreateAsset("Lathe", nil, nil, nil)
 
-	body := `{"template_id":"ql90","copies":2,"asset_ids":["` + a.Asset.ID + `","` + b.Asset.ID + `"]}`
+	body := `{"template_id":"` + ql90 + `","copies":2,"asset_ids":["` + a.Asset.ID + `","` + b.Asset.ID + `"]}`
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", body)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"labels":4`) {
 		t.Fatalf("print: got %d %s", rec.Code, rec.Body.String())
@@ -239,14 +237,10 @@ func TestPrintRefusesBeforeSendingAnything(t *testing.T) {
 	ql := newFakeQL(t)
 	dieCut := createPrinter(t, srv, cookie, ql.port(), "dk-11201")
 
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", landscapeTemplate); rec.Code != http.StatusCreated {
-		t.Fatal(rec.Body.String())
-	}
+	ql90 := createTemplate(t, srv, cookie, landscapeTemplate)
 	small := `{"id":"small","name":"Small","units":"mm","width":40,"height":20,"dpi":300,"elements":[
 	  {"type":"generator","generator_type":"micro_qr","x":1,"y":1,"width":18,"height":18}]}`
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", small); rec.Code != http.StatusCreated {
-		t.Fatal(rec.Body.String())
-	}
+	smallID := createTemplate(t, srv, cookie, small)
 	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
 	id := `"` + asset.Asset.ID + `"`
 
@@ -255,10 +249,10 @@ func TestPrintRefusesBeforeSendingAnything(t *testing.T) {
 		want       int
 		contains   string
 	}{
-		{"wrong size for the roll", `{"template_id":"small","asset_ids":[` + id + `]}`, http.StatusUnprocessableEntity, "needs a 29 × 90 mm template"},
-		{"too many copies", `{"template_id":"ql90","copies":21,"asset_ids":[` + id + `]}`, http.StatusBadRequest, "copies must be"},
+		{"wrong size for the roll", `{"template_id":"` + smallID + `","asset_ids":[` + id + `]}`, http.StatusUnprocessableEntity, "needs a 29 × 90 mm template"},
+		{"too many copies", `{"template_id":"` + ql90 + `","copies":21,"asset_ids":[` + id + `]}`, http.StatusBadRequest, "copies must be"},
 		{"unknown template", `{"template_id":"nope","asset_ids":[` + id + `]}`, http.StatusNotFound, "Template not found"},
-		{"no assets", `{"template_id":"ql90","asset_ids":[]}`, http.StatusBadRequest, "asset_ids must list"},
+		{"no assets", `{"template_id":"` + ql90 + `","asset_ids":[]}`, http.StatusBadRequest, "asset_ids must list"},
 	}
 	for _, c := range cases {
 		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+dieCut+"/print", c.body)
@@ -270,10 +264,8 @@ func TestPrintRefusesBeforeSendingAnything(t *testing.T) {
 	// An asset whose code is missing fails layout; nothing reaches the printer.
 	microTemplate := `{"id":"micro90","name":"Micro","units":"mm","width":29,"height":90,"dpi":300,"elements":[
 	  {"type":"generator","generator_type":"micro_qr","x":2,"y":2,"width":20,"height":20}]}`
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", microTemplate); rec.Code != http.StatusCreated {
-		t.Fatal(rec.Body.String())
-	}
-	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+dieCut+"/print", `{"template_id":"micro90","asset_ids":[`+id+`]}`)
+	micro90 := createTemplate(t, srv, cookie, microTemplate)
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+dieCut+"/print", `{"template_id":"`+micro90+`","asset_ids":[`+id+`]}`)
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "asset has no micro_qr code") {
 		t.Errorf("layout failure: got %d %s", rec.Code, rec.Body.String())
 	}
@@ -284,7 +276,7 @@ func TestPrintRefusesBeforeSendingAnything(t *testing.T) {
 		many[i] = strconv.Quote(uuid.NewString())
 	}
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+dieCut+"/print",
-		`{"template_id":"ql90","copies":20,"asset_ids":[`+strings.Join(many, ",")+`]}`)
+		`{"template_id":"`+ql90+`","copies":20,"asset_ids":[`+strings.Join(many, ",")+`]}`)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "limited to 500 labels") {
 		t.Errorf("job limit: got %d %s", rec.Code, rec.Body.String())
 	}
@@ -302,11 +294,9 @@ func TestPrintToAnUnreachablePrinter(t *testing.T) {
 	ln.Close()
 
 	printerID := createPrinter(t, srv, cookie, port, "dk-11201")
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", landscapeTemplate); rec.Code != http.StatusCreated {
-		t.Fatal(rec.Body.String())
-	}
+	ql90 := createTemplate(t, srv, cookie, landscapeTemplate)
 	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
-	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"ql90","asset_ids":["`+asset.Asset.ID+`"]}`)
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+ql90+`","asset_ids":["`+asset.Asset.ID+`"]}`)
 	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "printer unreachable") {
 		t.Errorf("got %d %s, want 502", rec.Code, rec.Body.String())
 	}
@@ -380,12 +370,10 @@ func TestPrintThroughAnotherDriver(t *testing.T) {
 	// Any template size suits the stub, including one no Brother roll takes.
 	small := `{"id":"small","name":"Small","units":"mm","width":40,"height":20,"dpi":300,"elements":[
 	  {"type":"text","x":1,"y":1,"width":38,"height":18,"font_size":20,"content_binding":"{{asset.name}}"}]}`
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", small); rec.Code != http.StatusCreated {
-		t.Fatal(rec.Body.String())
-	}
+	smallID := createTemplate(t, srv, cookie, small)
 	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print",
-		`{"template_id":"small","copies":3,"asset_ids":["`+asset.Asset.ID+`"]}`)
+		`{"template_id":"`+smallID+`","copies":3,"asset_ids":["`+asset.Asset.ID+`"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("print: got %d %s", rec.Code, rec.Body.String())
 	}
@@ -421,11 +409,9 @@ func TestPrinterOptionsReachTheJob(t *testing.T) {
 		t.Errorf("unknown option: got %d", rec.Code)
 	}
 
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", landscapeTemplate); rec.Code != http.StatusCreated {
-		t.Fatal(rec.Body.String())
-	}
+	ql90 := createTemplate(t, srv, cookie, landscapeTemplate)
 	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
-	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"ql90","asset_ids":["`+asset.Asset.ID+`"]}`)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"`+ql90+`","asset_ids":["`+asset.Asset.ID+`"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
 	}
@@ -462,21 +448,17 @@ func TestPrintToDymoLabelWriter(t *testing.T) {
 	tmpl := `{"id":"dymo89","name":"Dymo 89x28","units":"mm","width":89,"height":28,"dpi":300,"elements":[
   {"type":"generator","generator_type":"qr","x":3,"y":3,"width":22,"height":22,"content_binding":"{{base_url}}/a/{{asset.id}}"},
   {"type":"text","x":28,"y":4,"width":58,"height":10,"font_size":16,"font_weight":"bold","content_binding":"{{asset.name}}"}]}`
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", tmpl); rec.Code != http.StatusCreated {
-		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
-	}
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", landscapeTemplate); rec.Code != http.StatusCreated {
-		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
-	}
+	dymo89 := createTemplate(t, srv, cookie, tmpl)
+	ql90 := createTemplate(t, srv, cookie, landscapeTemplate)
 	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
 	print := func(template string) *httptest.ResponseRecorder {
 		return doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print",
 			`{"template_id":"`+template+`","asset_ids":["`+asset.Asset.ID+`"],"copies":2}`)
 	}
-	if rec := print("ql90"); rec.Code != http.StatusUnprocessableEntity {
+	if rec := print(ql90); rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("Brother-sized template on a Dymo address roll: got %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := print("dymo89"); rec.Code != http.StatusOK {
+	if rec := print(dymo89); rec.Code != http.StatusOK {
 		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
 	}
 
@@ -517,13 +499,11 @@ func TestPrintToRollo(t *testing.T) {
 	tmpl := `{"id":"rollo2x1","name":"Rollo 2x1","units":"in","width":2,"height":1,"dpi":203,"elements":[
   {"type":"generator","generator_type":"qr","x":0.1,"y":0.1,"width":0.8,"height":0.8,"content_binding":"{{base_url}}/a/{{asset.id}}"},
   {"type":"text","x":1,"y":0.2,"width":0.9,"height":0.4,"font_size":10,"font_weight":"bold","content_binding":"{{asset.name}}"}]}`
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", tmpl); rec.Code != http.StatusCreated {
-		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
-	}
+	rollo2x1 := createTemplate(t, srv, cookie, tmpl)
 	a, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
 	b, _ := srv.store.CreateAsset("Saw", nil, nil, nil)
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print",
-		`{"template_id":"rollo2x1","asset_ids":["`+a.Asset.ID+`","`+b.Asset.ID+`"],"copies":2}`)
+		`{"template_id":"`+rollo2x1+`","asset_ids":["`+a.Asset.ID+`","`+b.Asset.ID+`"],"copies":2}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
 	}
@@ -580,11 +560,9 @@ func TestPrintToADevice(t *testing.T) {
 
 	tmpl := `{"id":"rollo2x1","name":"Rollo 2x1","units":"in","width":2,"height":1,"dpi":203,"elements":[
   {"type":"text","x":0.1,"y":0.2,"width":1.8,"height":0.4,"font_size":10,"content_binding":"{{asset.name}}"}]}`
-	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates", tmpl); rec.Code != http.StatusCreated {
-		t.Fatalf("template: %d %s", rec.Code, rec.Body.String())
-	}
+	rollo2x1 := createTemplate(t, srv, cookie, tmpl)
 	a, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
-	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"rollo2x1","asset_ids":["`+a.Asset.ID+`"]}`)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"`+rollo2x1+`","asset_ids":["`+a.Asset.ID+`"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("print: %d %s", rec.Code, rec.Body.String())
 	}
@@ -595,7 +573,7 @@ func TestPrintToADevice(t *testing.T) {
 
 	// A device later dropped from the configuration is refused at print time.
 	srv.transport = printers.NewDispatcher(nil)
-	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"rollo2x1","asset_ids":["`+a.Asset.ID+`"]}`)
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"`+rollo2x1+`","asset_ids":["`+a.Asset.ID+`"]}`)
 	if rec.Code != http.StatusBadGateway {
 		t.Errorf("print to a no longer allowed device: %d %s", rec.Code, rec.Body.String())
 	}

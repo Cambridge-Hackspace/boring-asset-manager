@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -36,24 +37,24 @@ func (s *Server) handleGetTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"template": t})
 }
 
+// handleCreateTemplate stores a new template under an ID the server assigns;
+// an id in the body is ignored.
 func (s *Server) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
-	t, ok := readTemplate(w, r)
+	t, ok := readTemplate(w, r, "")
 	if !ok {
 		return
 	}
 	created, err := s.store.CreateTemplate(t)
-	if errors.Is(err, store.ErrTemplateExists) {
-		writeJSONError(w, http.StatusConflict, err.Error())
-		return
-	}
 	if writeTemplateError(w, err) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"template": created})
 }
 
+// handleUpdateTemplate replaces a template. The id in the body may be left
+// out, but cannot differ from the URL's.
 func (s *Server) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
-	t, ok := readTemplate(w, r)
+	t, ok := readTemplate(w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
@@ -86,14 +87,15 @@ func (s *Server) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 }
 
 // readTemplate parses and validates a template document from the request
-// body, writing the error response itself when that fails.
-func readTemplate(w http.ResponseWriter, r *http.Request) (*labels.Template, bool) {
+// body, writing the error response itself when that fails. id is the ID of
+// the template being replaced, or empty for a new one (see withTemplateID).
+func readTemplate(w http.ResponseWriter, r *http.Request, id string) (*labels.Template, bool) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxTemplateBytes))
 	if err != nil {
 		writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Template documents are limited to %d bytes", maxTemplateBytes))
 		return nil, false
 	}
-	t, err := labels.Parse(body)
+	t, err := labels.Parse(withTemplateID(body, id))
 	if writeTemplateError(w, err) {
 		return nil, false
 	}
@@ -113,4 +115,24 @@ func writeTemplateError(w http.ResponseWriter, err error) bool {
 	}
 	writeStoreError(w, err, "save the template")
 	return true
+}
+
+// withTemplateID gives a template document the id the request is about: id
+// when the document has none, and none at all when id is empty. A document
+// that is not a JSON object is returned as it is, for Parse to describe.
+func withTemplateID(doc []byte, id string) []byte {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(doc, &obj); err != nil || obj == nil {
+		return doc
+	}
+	if id == "" {
+		delete(obj, "id")
+	} else if raw, ok := obj["id"]; !ok || string(raw) == `""` || string(raw) == "null" {
+		obj["id"], _ = json.Marshal(id)
+	}
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return doc
+	}
+	return out
 }

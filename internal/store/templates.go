@@ -5,16 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
+	"github.com/google/uuid"
 )
 
-var (
-	ErrTemplateNotFound = errors.New("template not found")
-	ErrTemplateExists   = errors.New("a template with this id already exists")
-)
+var ErrTemplateNotFound = errors.New("template not found")
 
 const templateColumns = `id, name, units, width, height, dpi, layout_json, created_at, updated_at`
 
@@ -23,33 +20,27 @@ type templateLayout struct {
 	Elements []labels.Element `json:"elements"`
 }
 
-// CreateTemplate validates and stores a new template. Bindings must name
-// existing fields and images must exist.
+// CreateTemplate validates and stores a new template under a new ID; any ID
+// t already has is ignored. Bindings must name existing fields and images
+// must exist.
 func (s *Store) CreateTemplate(t *labels.Template) (*labels.Template, error) {
-	if err := s.validateTemplate(t); err != nil {
-		return nil, err
-	}
-	if _, err := s.GetTemplate(t.ID); err == nil {
-		return nil, ErrTemplateExists
-	} else if !errors.Is(err, ErrTemplateNotFound) {
+	created := *t
+	created.ID = uuid.NewString()
+	if err := s.validateTemplate(&created); err != nil {
 		return nil, err
 	}
 
-	layout, err := json.Marshal(templateLayout{Elements: t.Elements})
+	layout, err := json.Marshal(templateLayout{Elements: created.Elements})
 	if err != nil {
 		return nil, fmt.Errorf("encoding template layout: %w", err)
 	}
 	now := time.Now().UTC()
 	_, err = s.Exec(`INSERT INTO templates (`+templateColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.Name, t.Units, t.Width, t.Height, t.DPI, string(layout), now, now)
+		created.ID, created.Name, created.Units, created.Width, created.Height, created.DPI, string(layout), now, now)
 	if err != nil {
-		if msg := strings.ToLower(err.Error()); strings.Contains(msg, "unique") || strings.Contains(msg, "duplicate") {
-			return nil, ErrTemplateExists
-		}
 		return nil, fmt.Errorf("inserting template: %w", err)
 	}
 
-	created := *t
 	created.CreatedAt, created.UpdatedAt = now, now
 	return &created, nil
 }

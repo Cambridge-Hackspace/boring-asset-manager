@@ -3,9 +3,9 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, Printer } from '../../lib/models';
-  import { convertUnits, fromMM, isTemplateID, toMM, type TemplateDoc, type Units } from '../../lib/template';
+  import { convertUnits, fromMM, toMM, type TemplateDoc, type Units } from '../../lib/template';
 
-  // The template's own settings: name, ID, units, size and DPI, which can
+  // The template's own settings: name, units, size and DPI, which can
   // be taken from a printer's loaded media; the printer's fit check runs as
   // they change.
   let {
@@ -17,7 +17,7 @@
     doc: TemplateDoc;
     isNew: boolean;
     problems: Record<string, string>;
-    // record is false for edits that are not undo steps (name and ID).
+    // record is false for edits that are not undo steps (the name).
     onchange: (doc: TemplateDoc, record?: boolean) => void;
   } = $props();
 
@@ -92,23 +92,13 @@
       <input id="tpl-name" class="input" required value={doc.name} oninput={(e) => update({ name: e.currentTarget.value }, false)} aria-invalid={Boolean(fieldError('name'))} />
       {#if fieldError('name')}<p class="error-text mt-1">{fieldError('name')}</p>{/if}
     </div>
-    <div>
-      <label class="label" for="tpl-id">ID</label>
-      <input
-        id="tpl-id"
-        class="input font-mono"
-        required
-        disabled={!isNew}
-        value={doc.id}
-        aria-invalid={(isNew && doc.id !== '' && !isTemplateID(doc.id)) || Boolean(fieldError('id'))}
-        aria-describedby="tpl-id-help"
-        oninput={(e) => update({ id: e.currentTarget.value }, false)}
-      />
-      <p id="tpl-id-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-        {isNew ? 'Lowercase letters, digits, - and _; fixed once saved.' : 'Fixed once saved.'}
-      </p>
-      {#if fieldError('id')}<p class="error-text mt-1">{fieldError('id')}</p>{/if}
-    </div>
+    {#if !isNew}
+      <div>
+        <p class="label">ID</p>
+        <p class="break-all font-mono text-sm">{doc.id}</p>
+        <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Assigned when first saved; the API names the template by it.</p>
+      </div>
+    {/if}
   </div>
 
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -4,7 +4,6 @@ import {
   blankTemplate,
   convertUnits,
   elementIndex,
-  isTemplateID,
   moveElements,
   newElement,
   placeholders,
@@ -94,12 +93,9 @@ describe('other helpers', () => {
     for (const v of Object.values(newElement('text', d)).filter((v) => typeof v === 'number')) expect((v * 2) % 1).toBe(0);
   });
 
-  it('lists placeholders and checks IDs', () => {
+  it('lists placeholders', () => {
     expect(placeholders(['serial'], ['qr'])).toContain('{{field.serial}}');
     expect(placeholders([], ['micro_qr'])).toContain('{{asset.code.micro_qr}}');
-    expect(isTemplateID('ql-29x90')).toBe(true);
-    expect(isTemplateID('QL 29')).toBe(false);
-    expect(isTemplateID('')).toBe(false);
   });
 });
 

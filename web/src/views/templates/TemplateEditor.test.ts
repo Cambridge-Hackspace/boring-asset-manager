@@ -72,6 +72,25 @@ describe('TemplateEditor', () => {
     expect((screen.getByRole('button', { name: 'Undo' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('saves a new template and moves to the ID the server gave it', async () => {
+    const id = '3f6c2a9e-8b1d-4e57-a0c4-91d2b7e5f803';
+    const { sent } = api({ 'POST /templates': (b) => ({ status: 201, body: { template: { ...(b as TemplateDoc), id } } }) });
+    render(TemplateEditor, { params: {} });
+    const name = await screen.findByLabelText('Name', { selector: '#tpl-name' });
+    // There is no ID to choose.
+    expect(screen.queryByText('ID')).toBeNull();
+    await fireEvent.input(name, { target: { value: 'Shelf tag' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe(`/templates/${id}/edit`));
+    expect((sent.find((r) => r.method === 'POST' && r.path === '/templates')!.body as TemplateDoc).name).toBe('Shelf tag');
+  });
+
+  it('shows a saved template its ID', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    expect(await screen.findByText('ql90')).toBeTruthy();
+  });
+
   it('saves, and shows save errors on the element they name', async () => {
     const { sent } = api({
       'PUT /templates/ql90': () => ({

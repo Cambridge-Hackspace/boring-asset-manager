@@ -357,7 +357,7 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
 
 ```json
 {
-  "id": "brother_ql_29x90",
+  "id": "3f6c2a9e-8b1d-4e57-a0c4-91d2b7e5f803",
   "name": "Standard Die-Cut 29mm x 90mm",
   "units": "mm",
   "width": 90.0,
@@ -406,7 +406,7 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
 }
 ```
 
-* **ID:** a slug matching `^[a-z0-9][a-z0-9_-]{0,63}$`, chosen by the author.
+* **ID:** a UUID the server assigns when the template is created; an `id` sent with `POST /api/v1/templates` is ignored, and the response carries the new one. A `PUT` may leave `id` out, but cannot change it. Templates created by earlier versions keep the slugs their authors chose.
 * **Canvas:** `units` is `mm` or `in`; `width` and `height` are positive; `dpi` is 150–600 (Brother QL and DYMO LabelWriter printers print at 300, Rollo and most TSPL printers at 203). Positions and sizes use the template's units with the origin at the top-left corner, and every element must lie inside the canvas. `font_size` is always in points.
 * **Content bindings:** `content_binding` is literal text with `{{...}}` placeholders:
 

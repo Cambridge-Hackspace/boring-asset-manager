@@ -12,11 +12,10 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
   const assetName = unique('Drill');
   await api.call('POST', '/assets', { name: assetName, generator_keys: [{ generator_type: 'qr', assigned_code: unique('E').toUpperCase() }] });
 
-  const id = unique('tag');
+  const name = unique('Tag');
   await goTo(page, 'Templates');
   await page.getByRole('link', { name: 'New template' }).click();
-  await page.getByLabel('Name', { exact: true }).fill(`Tag ${id}`);
-  await page.getByLabel('ID', { exact: true }).fill(id);
+  await page.getByLabel('Name', { exact: true }).fill(name);
 
   // Size and DPI from the printer's loaded media, then its fit check.
   await page.getByLabel('Printer').selectOption({ label: printerName });
@@ -68,7 +67,10 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
 
   await expect(page.getByRole('img', { name: 'Label preview' })).toBeVisible();
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page).toHaveURL(new RegExp(`/templates/${id}/edit$`));
+  // The server names the template; the editor moves to it.
+  await expect(page).toHaveURL(/\/templates\/[0-9a-f-]{36}\/edit$/);
+  const id = new URL(page.url()).pathname.split('/')[2]!;
+  await expect(page.getByText(id, { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('list', { name: 'Elements' }).getByRole('listitem')).toHaveCount(2);
   const saved = await api.call('GET', `/templates/${id}`);

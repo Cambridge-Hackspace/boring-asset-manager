@@ -20,9 +20,8 @@ for (const scheme of ['light', 'dark'] as const) {
     // Counted by quantity and running low, with some history.
     const screws = await post('/assets', { name: unique('Screws'), stock: { quantity: 30, unit: 'pcs', low_stock_threshold: 20 } });
     await post(`/assets/${screws.asset.asset.id}/quantity`, { adjust: -15 });
-    const id = unique('a11y');
-    await post('/templates', {
-      id, name: `A11y ${id}`, units: 'mm', width: 62, height: 29, dpi: 300,
+    const { template } = await post('/templates', {
+      name: unique('A11y'), units: 'mm', width: 62, height: 29, dpi: 300,
       elements: [{ type: 'text', x: 2, y: 2, width: 50, height: 10, font_size: 12, content_binding: '{{asset.name}}' }],
     });
 
@@ -42,7 +41,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/fields', 'Fields'],
       ['/templates', 'Label templates'],
       ['/templates/new', 'New template'],
-      [`/templates/${id}/edit`, ''],
+      [`/templates/${template.id}/edit`, ''],
       ['/images', 'Images'],
       ['/printers', 'Printers'],
       ['/notifications', 'Notifications'],

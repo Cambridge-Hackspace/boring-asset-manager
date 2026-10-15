@@ -228,8 +228,10 @@
     saving = true;
     const body = $state.snapshot(doc);
     try {
+      // A new template is given its ID by the server.
+      let id = routeId;
       if (isNew) {
-        await request('POST', '/templates', body);
+        id = (await request<{ template: TemplateDoc }>('POST', '/templates', body)).template.id;
       } else {
         await request('PUT', `/templates/${encodeURIComponent(routeId)}`, body);
       }
@@ -239,7 +241,7 @@
       } catch {
         // ignore
       }
-      if (isNew) navigate(`/templates/${encodeURIComponent(body.id)}/edit`, true);
+      if (isNew) navigate(`/templates/${encodeURIComponent(id)}/edit`, true);
       else status = 'Saved.';
     } catch (err) {
       error = messageOf(err);

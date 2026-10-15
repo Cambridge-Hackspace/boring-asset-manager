@@ -40,15 +40,20 @@ func TestTemplateLifecycle(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 
+	// Any ID the caller gives is replaced by a new UUID.
 	created, err := st.CreateTemplate(sampleTemplate("shelf"))
 	if err != nil {
 		t.Fatalf("CreateTemplate: %v", err)
 	}
+	if _, err := uuid.Parse(created.ID); err != nil {
+		t.Errorf("created ID %q is not a UUID", created.ID)
+	}
+	shelf := created.ID
 	if created.Elements[1].FontWeight != labels.WeightNormal {
 		t.Errorf("defaults not applied before storing: %+v", created.Elements[1])
 	}
 
-	got, err := st.GetTemplate("shelf")
+	got, err := st.GetTemplate(shelf)
 	if err != nil {
 		t.Fatalf("GetTemplate: %v", err)
 	}
@@ -56,12 +61,12 @@ func TestTemplateLifecycle(t *testing.T) {
 		t.Errorf("round trip changed the template:\n got  %+v\n want %+v", got, created)
 	}
 
-	if _, err := st.CreateTemplate(sampleTemplate("shelf")); !errors.Is(err, ErrTemplateExists) {
-		t.Errorf("duplicate id: got %v, want ErrTemplateExists", err)
+	if _, err := st.GetTemplate("shelf"); !errors.Is(err, ErrTemplateNotFound) {
+		t.Errorf("stored under the ID the caller gave: %v", err)
 	}
 
 	time.Sleep(10 * time.Millisecond)
-	changed := sampleTemplate("shelf")
+	changed := sampleTemplate(shelf)
 	changed.Name = "Renamed"
 	changed.Elements = changed.Elements[:1]
 	updated, err := st.UpdateTemplate(changed)
@@ -72,8 +77,13 @@ func TestTemplateLifecycle(t *testing.T) {
 		t.Errorf("timestamps: created %v -> %v, updated %v -> %v", got.CreatedAt, updated.CreatedAt, got.UpdatedAt, updated.UpdatedAt)
 	}
 
-	if _, err := st.CreateTemplate(sampleTemplate("another")); err != nil {
+	// The same template again is a second one, under another ID.
+	another, err := st.CreateTemplate(sampleTemplate(""))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if another.ID == shelf {
+		t.Errorf("two templates share the ID %s", shelf)
 	}
 	list, err := st.ListTemplates()
 	if err != nil {
@@ -83,13 +93,13 @@ func TestTemplateLifecycle(t *testing.T) {
 		t.Errorf("ListTemplates() = %+v", list)
 	}
 
-	if err := st.DeleteTemplate("shelf"); err != nil {
+	if err := st.DeleteTemplate(shelf); err != nil {
 		t.Fatalf("DeleteTemplate: %v", err)
 	}
-	if _, err := st.GetTemplate("shelf"); !errors.Is(err, ErrTemplateNotFound) {
+	if _, err := st.GetTemplate(shelf); !errors.Is(err, ErrTemplateNotFound) {
 		t.Errorf("after delete: got %v, want ErrTemplateNotFound", err)
 	}
-	if err := st.DeleteTemplate("shelf"); !errors.Is(err, ErrTemplateNotFound) {
+	if err := st.DeleteTemplate(shelf); !errors.Is(err, ErrTemplateNotFound) {
 		t.Errorf("second delete: got %v, want ErrTemplateNotFound", err)
 	}
 	if _, err := st.UpdateTemplate(sampleTemplate("missing")); !errors.Is(err, ErrTemplateNotFound) {
@@ -144,8 +154,8 @@ func TestInvalidTemplatesAreNotStored(t *testing.T) {
 	if _, err := st.CreateTemplate(tpl); !errors.As(err, &ve) {
 		t.Fatalf("expected a validation error, got %v", err)
 	}
-	if _, err := st.GetTemplate("bad"); !errors.Is(err, ErrTemplateNotFound) {
-		t.Errorf("invalid template was stored")
+	if list, err := st.ListTemplates(); err != nil || len(list) != 0 {
+		t.Errorf("invalid template was stored: %v %v", list, err)
 	}
 }
 
@@ -164,16 +174,17 @@ func TestImageLifecycleAndInUseGuard(t *testing.T) {
 
 	tpl := sampleTemplate("logo")
 	tpl.Elements = append(tpl.Elements, labels.Element{Type: labels.ElementStaticImage, X: 50, Y: 20, Width: 10, Height: 8, ImageID: img.ID})
-	if _, err := st.CreateTemplate(tpl); err != nil {
+	logo, err := st.CreateTemplate(tpl)
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	var inUse *ImageInUseError
-	if err := st.DeleteImage(img.ID); !errors.As(err, &inUse) || !reflect.DeepEqual(inUse.TemplateIDs, []string{"logo"}) {
+	if err := st.DeleteImage(img.ID); !errors.As(err, &inUse) || !reflect.DeepEqual(inUse.TemplateIDs, []string{logo.ID}) {
 		t.Fatalf("deleting a used image: got %v, want ImageInUseError naming logo", err)
 	}
 
-	if err := st.DeleteTemplate("logo"); err != nil {
+	if err := st.DeleteTemplate(logo.ID); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.DeleteImage(img.ID); err != nil {
@@ -189,5 +200,31 @@ func TestImageLifecycleAndInUseGuard(t *testing.T) {
 	list, err := st.ListImages()
 	if err != nil || len(list) != 0 {
 		t.Errorf("ListImages() = %v, %v", list, err)
+	}
+}
+
+// TestTemplatesWithChosenIDs covers templates from versions where authors
+// chose the ID: they keep it, and are read, changed and deleted by it.
+func TestTemplatesWithChosenIDs(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+
+	now := time.Now().UTC()
+	if _, err := st.Exec(`INSERT INTO templates (`+templateColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"shelf-tag", "Shelf tag", "mm", 62, 29, 300, `{"elements":[]}`, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.GetTemplate("shelf-tag"); err != nil || got.Name != "Shelf tag" {
+		t.Fatalf("GetTemplate: %+v %v", got, err)
+	}
+	changed := sampleTemplate("shelf-tag")
+	if _, err := st.UpdateTemplate(changed); err != nil {
+		t.Fatalf("UpdateTemplate: %v", err)
+	}
+	if got, err := st.GetTemplate("shelf-tag"); err != nil || len(got.Elements) != 2 {
+		t.Errorf("after update: %+v %v", got, err)
+	}
+	if err := st.DeleteTemplate("shelf-tag"); err != nil {
+		t.Errorf("DeleteTemplate: %v", err)
 	}
 }
