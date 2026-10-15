@@ -829,6 +829,43 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.1: Quantities on Assets
 * [x] Stock counted by quantity on an asset, beside the category counts (§5.1): use and restock actions, a threshold and running-low flag per asset, asset events for notifications, a per-asset history, CSV columns, and the screens for all of it.
 
+### Upcoming Features
+
+Agreed, not yet scheduled or designed in detail.
+
+#### Asset Associations
+* [ ] **Relation types**, defined once in a shared list like the field corpus: a name for each direction (`contains` / `contained in`, `has part` / `part of`), whether an asset may have one or many of them (a thing is in one place, so linking it to a new bin moves it), and whether the relation reads the same both ways (`used with`). A link is stored once and reads correctly from both assets. Categories can suggest which relation types apply to their assets, as they assign fields.
+* [ ] **Containers as assets:** bins and shelves are ordinary assets with labels, so "where is it?" is a chain such as Shelf 2 > Bin A3 > M3 screws. Containment and `part of` refuse cycles, using the category tree's cycle check.
+* [ ] Moves recorded in the asset's history; a container that still holds anything cannot be archived.
+* [ ] Later: the container's name on labels, a CSV column per relation type, and scanning a bin's code to list what is in it.
+
+#### Check-In / Check-Out
+* [ ] **Turned on per category:** assets in a lendable category can be checked out to a person and checked back in. Assets in other categories have no such actions.
+* [ ] Who has an asset and since when, shown on the asset and the list, with an optional due date. Check-outs and check-ins recorded in the asset's history.
+* [ ] Notifications for overdue loans, through the existing channels.
+
+#### Weights for Counted Items
+* [ ] **Optional, per category:** a consumable category counted by items can give its assets a weight in the category's unit, so a 1 kg spool and a 2 kg spool of blue PLA sum to 3 kg, and the category's threshold is in that unit ("notify me below 1 kg"). Categories without a unit count each asset as 1, as they do now, for things that are truly atomic.
+* [ ] The weight can be lowered as a spool is used, through the same use action as quantities, and the totals cascade to parent categories as counts do now, but only where the units match.
+
+#### Photos on Assets
+* [ ] A few photos per asset, shown on its page and as a thumbnail in the list, stored like label images.
+
+#### Reports
+* [ ] Report pages built on the asset list's filters, starting with everything running low (categories and assets), exportable as CSV for a shopping list.
+
+#### Full Change History
+* [ ] Every change to an asset recorded in its history, not only stock: who renamed, recategorized, edited fields or codes, archived or restored it, and when.
+
+#### API Tokens
+* [ ] Tokens for scripts and dashboards, assigned roles like users, so a token can be read-only or limited to stock changes. Shown once when created, stored hashed, and revocable.
+
+#### Restoring Archived Assets
+* [ ] Archived assets can be listed and restored. A restored asset gets its codes back only if no other asset has taken them meanwhile.
+
+#### Deferred
+* **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.
+
 ---
 
 ## 8. Ephemeral Test Harness (`reaper`) & Testing Methodology
