@@ -119,11 +119,38 @@ func TestAssetStockAPI(t *testing.T) {
 	rec = doJSON(t, srv, reader, http.MethodGet, assetPath+"/history", "")
 	var history struct{ Events []models.Event }
 	_ = json.Unmarshal(rec.Body.Bytes(), &history)
-	if rec.Code != http.StatusOK || len(history.Events) < 4 || history.Events[0].Kind != models.EventAssetRunningLow {
+	if rec.Code != http.StatusOK || len(history.Events) < 4 || history.Events[0].Kind != models.EventAssetEdited || history.Events[2].Kind != models.EventAssetRunningLow {
 		t.Fatalf("history: %d %s", rec.Code, rec.Body)
 	}
-	if e := history.Events[len(history.Events)-1]; e.Kind != models.EventQuantityChanged || e.Payload.Actor == nil || e.Payload.Actor.ID != admin.ID {
+	if c := history.Events[0].Payload.Changes; len(c) != 2 || c[0].What != "unit" || c[1] != (models.EventChange{What: "threshold", From: "50", To: "600"}) {
+		t.Errorf("the stock edit: %+v", c)
+	}
+	if e := history.Events[len(history.Events)-1]; e.Kind != models.EventAssetCreated || e.Payload.Actor == nil || e.Payload.Actor.ID != admin.ID {
 		t.Errorf("the first event: %+v", e)
+	}
+	// Older events a page at a time.
+	for i := 0; i < historyPage; i++ {
+		if rec := doJSON(t, srv, stores, http.MethodPost, assetPath+"/quantity", `{"adjust":1}`); rec.Code != http.StatusOK {
+			t.Fatalf("restocking: %d %s", rec.Code, rec.Body)
+		}
+	}
+	var page struct {
+		Events []models.Event
+		More   bool
+	}
+	rec = doJSON(t, srv, reader, http.MethodGet, assetPath+"/history", "")
+	_ = json.Unmarshal(rec.Body.Bytes(), &page)
+	if len(page.Events) != historyPage || !page.More {
+		t.Fatalf("the first page: %d events, more %v", len(page.Events), page.More)
+	}
+	rec = doJSON(t, srv, reader, http.MethodGet, assetPath+"/history?before="+page.Events[historyPage-1].ID, "")
+	page.More = true
+	_ = json.Unmarshal(rec.Body.Bytes(), &page)
+	if rec.Code != http.StatusOK || len(page.Events) != len(history.Events) || page.More || page.Events[0].ID != history.Events[0].ID {
+		t.Errorf("the second page: %d, %d events, more %v", rec.Code, len(page.Events), page.More)
+	}
+	if rec := doJSON(t, srv, reader, http.MethodGet, assetPath+"/history?before=nope", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("a page after an unknown event: %d", rec.Code)
 	}
 	if rec := doJSON(t, srv, reader, http.MethodGet, "/api/v1/assets/missing/history", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("a missing asset's history: %d", rec.Code)

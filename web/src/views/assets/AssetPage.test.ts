@@ -78,3 +78,34 @@ describe('AssetPage stock', () => {
     expect(screen.queryByRole('button', { name: 'Mark restocked' })).toBeNull();
   });
 });
+
+describe('AssetPage history', () => {
+  it('lists what each edit changed, and pages back through older events', async () => {
+    const edited: AssetEvent = {
+      id: 'e2',
+      kind: 'asset.edited',
+      created_at: '2026-10-15T10:00:00Z',
+      payload: { trigger: 'manual', changes: [{ what: 'name', from: 'Screws', to: 'M3 screws' }, { what: 'category', key: 'c1', to: 'Fixings' }] },
+    };
+    const created: AssetEvent = { id: 'e0', kind: 'asset.created', created_at: '2026-10-13T10:00:00Z', payload: { trigger: 'import' } };
+    const { fetchMock } = fakeApi({
+      'GET /assets/a1': () => ({ asset: withStock(40, true) }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => {
+        const older = String(fetchMock.mock.calls.at(-1)![0]).endsWith('?before=e1');
+        return older ? { events: [created], more: false } : { events: [edited, used], more: true };
+      },
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+
+    expect(await screen.findByText('Edited')).toBeTruthy();
+    expect(screen.getByText('Name: Screws → M3 screws')).toBeTruthy();
+    expect(screen.getByText('Added to Fixings')).toBeTruthy();
+    expect(screen.queryByText('Created by an import')).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Show older' }));
+    expect(await screen.findByText('Created by an import')).toBeTruthy();
+    expect(screen.getByText('Used 60 pcs; 40 pcs left')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Show older' })).toBeNull();
+  });
+});

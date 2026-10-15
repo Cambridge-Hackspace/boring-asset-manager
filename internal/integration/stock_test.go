@@ -77,7 +77,14 @@ func TestThresholdCrossingsOverHTTP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return list
+		// Only the threshold events; creating assets records history too.
+		var notices []models.Event
+		for _, ev := range list {
+			if !models.HistoryOnly(ev.Kind) {
+				notices = append(notices, ev)
+			}
+		}
+		return notices
 	}
 	expect := func(step string, low bool, count, nEvents int) {
 		t.Helper()

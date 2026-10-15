@@ -206,7 +206,7 @@ func TestImportIsAttributedToTheUser(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
-	events, _ := srv.store.ListEvents(1)
+	events := notices(t, srv, 1)
 	if len(events) != 1 || events[0].Kind != models.EventRestocked || events[0].Payload.Actor == nil || events[0].Payload.Actor.ID != admin.ID {
 		t.Errorf("events %+v", events)
 	}

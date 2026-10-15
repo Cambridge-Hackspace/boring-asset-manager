@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { amount, assetPayload, describeEvent, errorTarget, inputType, isWebURL, keptValues, stockDraft, stockPayload } from './assets';
-import type { AssetEvent, AssetStock, EffectiveField } from './models';
+import { amount, assetPayload, describeChange, describeEvent, errorTarget, inputType, isWebURL, keptValues, stockDraft, stockPayload } from './assets';
+import type { AssetChange, AssetEvent, AssetStock, EffectiveField } from './models';
 
 const ef = (key: string, required = false): EffectiveField => ({
   field: { id: key, key, label: key, validation_type: 'text', created_at: '', updated_at: '' },
@@ -100,5 +100,36 @@ describe('stock', () => {
       'Running low: below the threshold of 50 g',
     );
     expect(describeEvent(event('asset.restocked', {}))).toBe('Marked restocked');
+    expect(describeEvent(event('asset.created', { trigger: 'import' }))).toBe('Created by an import');
+    expect(describeEvent(event('asset.edited', {}))).toBe('Edited');
+  });
+
+  it('describes the changes an edit made', () => {
+    const lines = (kind: string, ...changes: AssetChange[]) => changes.map((c) => describeChange(c, kind));
+    expect(
+      lines(
+        'asset.edited',
+        { what: 'name', from: 'Drill', to: 'Cordless drill' },
+        { what: 'category', key: 'c1', to: 'Power tools' },
+        { what: 'category', key: 'c2', from: 'Bench' },
+        { what: 'field', key: 'serial', label: 'Serial', to: 'SN-1' },
+        { what: 'field', key: 'serial', label: 'Serial', from: 'SN-1' },
+        { what: 'code', key: 'qr', label: 'QR Code', from: 'D-1', to: 'D-2' },
+        { what: 'stock', to: 'counted' },
+        { what: 'unit', from: 'pcs', to: 'g' },
+        { what: 'threshold', to: '5' },
+      ),
+    ).toEqual([
+      'Name: Drill → Cordless drill',
+      'Added to Power tools',
+      'Removed from Bench',
+      'Serial: SN-1',
+      'Serial: SN-1 removed',
+      'QR Code: D-1 → D-2',
+      'Started counting stock',
+      'Unit: pcs → g',
+      'Low-stock threshold: 5',
+    ]);
+    expect(lines('asset.archived', { what: 'code', key: 'qr', label: 'QR Code', from: 'S-1' })).toEqual(['Released QR Code S-1']);
   });
 });

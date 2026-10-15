@@ -567,7 +567,9 @@ The two are never added together, since they count different things (3 spools an
 * **Setting it:** creating an asset (`POST /api/v1/assets`) with a `stock` object starts counting; updating it (`PUT /api/v1/assets/{id}`) with an object replaces the unit and threshold, and with `null` stops counting and clears all four. An update without `stock` leaves it alone. An object without `quantity` keeps the current quantity (or starts at 0), so an edit cannot undo a use someone made while the form was open; the web form sends the quantity only when it was changed.
 * **Using and restocking:** `POST /api/v1/assets/{id}/quantity` (`assets:write`) with `{"adjust": n}`, negative to use some and positive to restock, or `{"set": n}`. Using more than there is answers `409` (`not enough stock: 40 left`) and changes nothing. Changes run under the inventory lock, so people using stock at once each take their share.
 * **Thresholds and the flag:** the same rule as categories. Dropping below the threshold flags the asset and climbing back clears it, reacting to crossings only, so a flag set by hand (`PUT /api/v1/assets/{id}/running-low`, `assets:write`) stands until the next crossing. Archived assets are not checked.
-* **Events and history:** crossings and manual changes record `asset.running_low` and `asset.restocked`, with the asset, its quantity, threshold and unit, and who caused it; channels can subscribe to them. Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the asset's history (`GET /api/v1/assets/{id}/history`, `assets:read`, newest 200 first, which shows the email of whoever made each change). Channels cannot subscribe to it.
+* **Events and history:** crossings and manual changes record `asset.running_low` and `asset.restocked`, with the asset, its quantity, threshold and unit, and who caused it; channels can subscribe to them. Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the asset's history. Channels cannot subscribe to it.
+* **Asset history:** creating, editing and archiving an asset record `asset.created`, `asset.edited` and `asset.archived`, in the same transaction as the change, through the web app, the API and CSV imports alike (an import sets the trigger to `import`). Each lists its `changes`: the name, categories joined and left, field values, codes, and whether stock is counted, its unit and threshold, each with the value before and after and the field's label or the generator's name as they read then. A save that changes nothing records nothing. Archiving lists the codes it released. Changes made elsewhere that affect an asset, such as deleting a field or a category, are not recorded on it, and assets created before this release have no record of earlier edits. Channels cannot subscribe to these either.
+* **Reading the history:** `GET /api/v1/assets/{id}/history` (`assets:read`) returns `events`, newest first, 50 at a time, with the email of whoever made each change, and `more` when older events remain; `?before=<event id>` returns the page older than that event, and an event that is not the asset's is a 400.
 
 ### 5.2 Notifiers
 
@@ -843,6 +845,9 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.1: Quantities on Assets
 * [x] Stock counted by quantity on an asset, beside the category counts (§5.1): use and restock actions, a threshold and running-low flag per asset, asset events for notifications, a per-asset history, CSV columns, and the screens for all of it.
 
+#### Sub-Phase 7.2: Change History
+* [x] Every change to an asset recorded in its history, not only stock (§5.1): who created, renamed, recategorized, edited fields, codes or stock settings, or archived it, and when, paged on the asset's page.
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -868,9 +873,6 @@ Agreed, not yet scheduled or designed in detail.
 #### Reports
 * [ ] Report pages built on the asset list's filters, starting with everything running low (categories and assets), exportable as CSV for a shopping list.
 
-#### Full Change History
-* [ ] Every change to an asset recorded in its history, not only stock: who renamed, recategorized, edited fields or codes, archived or restored it, and when.
-
 #### Role Management
 * [ ] Roles created, renamed and deleted from the web app and the API, each with the permissions chosen from the existing list, so access can go beyond the seeded `admin` role: a role that can only read, or only record stock. Editing or deleting a role follows the anti-lockout rule (§3.3), so some active user always keeps `users:manage`.
 
@@ -878,7 +880,7 @@ Agreed, not yet scheduled or designed in detail.
 * [ ] Tokens for scripts and dashboards, assigned roles like users, so a token can be read-only or limited to stock changes. Shown once when created, stored hashed, and revocable.
 
 #### Restoring Archived Assets
-* [ ] Archived assets can be listed and restored. A restored asset gets its codes back only if no other asset has taken them meanwhile.
+* [ ] Archived assets can be listed and restored. A restored asset gets its codes back only if no other asset has taken them meanwhile. Restoring is recorded in its history, which lists the codes archiving released.
 
 #### Deferred
 * **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.

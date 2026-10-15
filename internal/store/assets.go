@@ -173,10 +173,13 @@ func (s *Store) CreateAssetWithStock(name string, categoryIDs []string, generato
 		if err := s.insertAsset(ic.tx, assetID, name, now, cats, generatorKeys, resolvedValues); err != nil {
 			return err
 		}
-		if stock == nil {
-			return nil
+		var recordQuantity func() error
+		if stock != nil {
+			if recordQuantity, err = s.setStockTx(ic.tx, assetID, nil, stock); err != nil {
+				return err
+			}
 		}
-		return s.writeStockTx(ic.tx, assetID, nil, stock)
+		return s.recordAfter(ic.tx, assetID, nil, models.TriggerManual, recordQuantity)
 	})
 	if err != nil {
 		return nil, err
@@ -495,18 +498,25 @@ func (s *Store) UpdateAssetWithStock(id, name string, categoryIDs []string, gene
 
 	now := time.Now().UTC()
 	err = s.withInventory(func(ic *inventoryChange) error {
-		if err := s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues); err != nil {
-			return err
-		}
-		if stock == nil {
-			return nil
-		}
-		// Read again under the lock: the quantity may have moved since.
-		was, err := s.readStockTx(ic.tx, id)
+		before, err := s.snapshotAssetTx(ic.tx, id)
 		if err != nil {
 			return err
 		}
-		return s.writeStockTx(ic.tx, id, was, stock.Stock)
+		if err := s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues); err != nil {
+			return err
+		}
+		var recordQuantity func() error
+		if stock != nil {
+			// Read again under the lock: the quantity may have moved since.
+			was, err := s.readStockTx(ic.tx, id)
+			if err != nil {
+				return err
+			}
+			if recordQuantity, err = s.setStockTx(ic.tx, id, was, stock.Stock); err != nil {
+				return err
+			}
+		}
+		return s.recordAfter(ic.tx, id, before, models.TriggerManual, recordQuantity)
 	})
 	if err != nil {
 		return nil, err
@@ -579,8 +589,12 @@ func (s *Store) DeleteAsset(id string) error {
 	}
 
 	return s.withInventory(func(ic *inventoryChange) error {
+		before, err := s.snapshotAssetTx(ic.tx, id)
+		if err != nil {
+			return err
+		}
 		now := time.Now().UTC()
-		_, err := s.TxExec(ic.tx, "UPDATE assets SET archived_at = ?, updated_at = ? WHERE id = ?", now, now, id)
+		_, err = s.TxExec(ic.tx, "UPDATE assets SET archived_at = ?, updated_at = ? WHERE id = ?", now, now, id)
 		if err != nil {
 			return fmt.Errorf("archiving asset: %w", err)
 		}
@@ -591,7 +605,14 @@ func (s *Store) DeleteAsset(id string) error {
 		if err != nil {
 			return fmt.Errorf("releasing generator keys: %w", err)
 		}
-		return nil
+		if before.archived {
+			return nil
+		}
+		// The history keeps the codes it released, which a restore needs.
+		return s.recordAssetEvent(ic.tx, models.EventAssetArchived, id, models.EventPayload{
+			Trigger: models.TriggerManual,
+			Changes: diffCodes(before.codes, nil),
+		})
 	})
 }
 

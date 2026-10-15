@@ -1,6 +1,6 @@
 // Helpers for the asset form.
 
-import type { AssetEvent, AssetStock, EffectiveField, FieldType, GeneratorKey } from './models';
+import type { AssetChange, AssetEvent, AssetStock, EffectiveField, FieldType, GeneratorKey } from './models';
 
 /** The HTML input type for a field type (select fields use <select>). */
 export function inputType(type: FieldType): string {
@@ -129,7 +129,40 @@ export function describeEvent(e: AssetEvent): string {
       return p.trigger === 'threshold' ? `Running low: below the threshold of ${of(p.threshold)}` : 'Marked running low';
     case 'asset.restocked':
       return p.trigger === 'threshold' ? `Restocked: back to the threshold of ${of(p.threshold)} or more` : 'Marked restocked';
+    case 'asset.created':
+      return p.trigger === 'import' ? 'Created by an import' : 'Created';
+    case 'asset.edited':
+      return p.trigger === 'import' ? 'Edited by an import' : 'Edited';
+    case 'asset.archived':
+      return 'Archived';
     default:
       return e.kind;
   }
+}
+
+/** One line of what a created, edited or archived event changed. */
+export function describeChange(c: AssetChange, kind: string): string {
+  switch (c.what) {
+    case 'category':
+      return c.to ? `Added to ${c.to}` : `Removed from ${c.from}`;
+    case 'stock':
+      return c.to ? 'Started counting stock' : 'Stopped counting stock';
+    case 'code':
+      if (kind === 'asset.archived') return `Released ${c.label ?? c.key} ${c.from}`;
+      return fromTo(c.label ?? c.key ?? 'Code', c);
+    case 'field':
+      return fromTo(c.label ?? c.key ?? 'Field', c);
+    case 'unit':
+      return fromTo('Unit', c);
+    case 'threshold':
+      return fromTo('Low-stock threshold', c);
+    default:
+      return fromTo('Name', c);
+  }
+}
+
+function fromTo(label: string, c: AssetChange): string {
+  if (!c.from) return `${label}: ${c.to}`;
+  if (!c.to) return `${label}: ${c.from} removed`;
+  return `${label}: ${c.from} → ${c.to}`;
 }

@@ -136,14 +136,14 @@ func TestUsingAndRestocking(t *testing.T) {
 		t.Errorf("restocked: %+v", p)
 	}
 
-	history, err := st.ListAssetEvents(id, 3)
+	history, _, err := st.ListAssetEvents(id, "", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(history) != 3 || history[0].Kind != models.EventAssetRunningLow || *history[1].Payload.Quantity != 5 {
 		t.Errorf("history, newest first: %s", kinds(history))
 	}
-	if other, _ := st.ListAssetEvents(asset(t, st, "Drill"), 10); len(other) != 0 {
+	if other, _, _ := st.ListAssetEvents(asset(t, st, "Drill"), "", 10); len(other) != 1 {
 		t.Errorf("another asset's history: %s", kinds(other))
 	}
 }

@@ -83,10 +83,7 @@ func TestRunningLowAndThresholdsAPI(t *testing.T) {
 
 	// Events name the signed-in user who caused them, whether by hand or by
 	// archiving an asset.
-	list, err := srv.store.ListEvents(10)
-	if err != nil {
-		t.Fatal(err)
-	}
+	list := notices(t, srv, 10)
 	if len(list) != 3 {
 		t.Fatalf("%d events, want 3 (created low, restocked, flagged)", len(list))
 	}
@@ -126,9 +123,9 @@ func TestArchivingThroughTheAPICrossesThresholds(t *testing.T) {
 	if rec := doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/assets/"+a.Asset.Asset.ID, ""); rec.Code != http.StatusOK {
 		t.Fatalf("archive: %d %s", rec.Code, rec.Body)
 	}
-	list, err := srv.store.ListEvents(10)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("events %+v, %v", list, err)
+	list := notices(t, srv, 10)
+	if len(list) != 1 {
+		t.Fatalf("events %+v", list)
 	}
 	if e := list[0]; e.Kind != models.EventRunningLow || e.Payload.Trigger != models.TriggerThreshold || e.Payload.Actor == nil || e.Payload.Actor.ID != admin.ID {
 		t.Errorf("event %+v", e.Payload)
@@ -141,4 +138,21 @@ func TestArchivingThroughTheAPICrossesThresholds(t *testing.T) {
 	if updated.Category.LowStockThreshold != nil {
 		t.Errorf("threshold kept: %s", rec.Body)
 	}
+}
+
+// notices lists the newest events channels can be told of, leaving out the
+// ones kept only for an asset's history.
+func notices(t *testing.T, srv *Server, limit int) []models.Event {
+	t.Helper()
+	all, err := srv.store.ListEvents(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list []models.Event
+	for _, e := range all {
+		if !models.HistoryOnly(e.Kind) && len(list) < limit {
+			list = append(list, e)
+		}
+	}
+	return list
 }

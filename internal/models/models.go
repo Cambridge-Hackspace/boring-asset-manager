@@ -94,12 +94,30 @@ const (
 	// EventQuantityChanged records a change of an asset's quantity, for its
 	// history. Channels cannot subscribe to it.
 	EventQuantityChanged = "asset.quantity_changed"
+	// EventAssetCreated, EventAssetEdited and EventAssetArchived record
+	// changes to an asset, listed in the payload's Changes, for its history.
+	// Channels cannot subscribe to them either.
+	EventAssetCreated  = "asset.created"
+	EventAssetEdited   = "asset.edited"
+	EventAssetArchived = "asset.archived"
 )
+
+// HistoryOnly reports whether events of this kind are kept only for an
+// asset's history, with no channel able to subscribe to them.
+func HistoryOnly(kind string) bool {
+	switch kind {
+	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived:
+		return true
+	}
+	return false
+}
 
 // Event triggers: what caused an event.
 const (
 	TriggerManual    = "manual"
 	TriggerThreshold = "threshold"
+	// TriggerImport marks a change made by a CSV import.
+	TriggerImport = "import"
 )
 
 // Event records something notifiers may announce. Its payload is a snapshot
@@ -132,6 +150,29 @@ type EventPayload struct {
 	Quantity *int   `json:"quantity,omitempty"`
 	Change   *int   `json:"change,omitempty"`
 	Unit     string `json:"unit,omitempty"`
+	// Changes lists what an asset's created, edited or archived event changed.
+	Changes []EventChange `json:"changes,omitempty"`
+}
+
+// EventChange is one change to an asset, as it read when it was made. What
+// says which part changed:
+//
+//   - "name": From and To are the old and new names.
+//   - "category": the asset joined the category named To, or left the one
+//     named From; Key is the category's ID.
+//   - "field": Key is the field's key and Label its label then.
+//   - "code": Key is the generator type and Label its name.
+//   - "stock": To is "counted" when counting by quantity starts, and From
+//     is "counted" when it stops. The quantity has its own events.
+//   - "unit" and "threshold": the stock's unit and low-stock threshold.
+//
+// An empty From or To means there was none.
+type EventChange struct {
+	What  string `json:"what"`
+	Key   string `json:"key,omitempty"`
+	Label string `json:"label,omitempty"`
+	From  string `json:"from,omitempty"`
+	To    string `json:"to,omitempty"`
 }
 
 // EventAsset is the asset an event is about, as it was then.

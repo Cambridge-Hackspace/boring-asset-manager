@@ -95,12 +95,23 @@ export interface AssetEvent {
   created_at: string;
   payload: {
     actor?: { id: string; email: string };
-    trigger: 'manual' | 'threshold';
+    trigger: 'manual' | 'threshold' | 'import';
     quantity?: number;
     change?: number;
     threshold?: number;
     unit?: string;
+    /** What a created, edited or archived event changed. */
+    changes?: AssetChange[];
   };
+}
+
+/** One change to an asset, as it read then; an absent from or to means none. */
+export interface AssetChange {
+  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold';
+  key?: string;
+  label?: string;
+  from?: string;
+  to?: string;
 }
 
 export interface GeneratorKey {

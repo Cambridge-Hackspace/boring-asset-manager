@@ -2,10 +2,12 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/google/uuid"
 )
 
@@ -39,6 +41,8 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 		created = created[:0]
 		tx, now := ic.tx, time.Now().UTC()
 		ids := make([]string, len(rows))
+		before := make([]*assetSnapshot, len(rows))
+		recordQuantity := make([]func() error, len(rows))
 
 		// Release every code being replaced before assigning any, so codes
 		// can move between assets in one import.
@@ -49,6 +53,12 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 				created = append(created, ids[i])
 				continue
 			}
+			// importRow names a missing asset by its row.
+			snap, err := s.snapshotAssetTx(tx, row.ID)
+			if err != nil && !errors.Is(err, ErrAssetNotFound) {
+				return err
+			}
+			before[i] = snap
 			for _, t := range sortedKeys(row.Codes) {
 				if _, err := s.TxExec(tx, "DELETE FROM asset_generator_keys WHERE asset_id = ? AND generator_type = ?", row.ID, t); err != nil {
 					return fmt.Errorf("releasing code: %w", err)
@@ -57,7 +67,8 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 		}
 
 		for i, row := range rows {
-			if err := s.importRow(tx, ids[i], row, now); err != nil {
+			var err error
+			if recordQuantity[i], err = s.importRow(tx, ids[i], row, now); err != nil {
 				return fmt.Errorf("row %d: %w", i+1, err)
 			}
 		}
@@ -73,6 +84,12 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 				}
 			}
 		}
+
+		for i := range rows {
+			if err := s.recordAfter(tx, ids[i], before[i], models.TriggerImport, recordQuantity[i]); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -81,11 +98,13 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 	return created, nil
 }
 
-// importRow writes one row's name, categories, stock and field values.
-func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) error {
+// importRow writes one row's name, categories, stock and field values. It
+// returns the function that records a change of the asset's quantity, if
+// there was one, as setStockTx does.
+func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) (recordQuantity func() error, err error) {
 	if row.ID == "" {
 		if _, err := s.TxExec(tx, "INSERT INTO assets (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)", id, row.Name, now, now); err != nil {
-			return fmt.Errorf("inserting asset: %w", err)
+			return nil, fmt.Errorf("inserting asset: %w", err)
 		}
 		if row.CategoryIDs == nil {
 			row.CategoryIDs = []string{}
@@ -93,16 +112,16 @@ func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) e
 	} else {
 		res, err := s.TxExec(tx, "UPDATE assets SET name = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL", row.Name, now, id)
 		if err != nil {
-			return fmt.Errorf("updating asset: %w", err)
+			return nil, fmt.Errorf("updating asset: %w", err)
 		}
 		if n, _ := res.RowsAffected(); n != 1 {
-			return fmt.Errorf("asset %s: %w or archived", id, ErrAssetNotFound)
+			return nil, fmt.Errorf("asset %s: %w or archived", id, ErrAssetNotFound)
 		}
 	}
 
 	if row.CategoryIDs != nil {
 		if _, err := s.TxExec(tx, "DELETE FROM asset_categories WHERE asset_id = ?", id); err != nil {
-			return err
+			return nil, err
 		}
 		cats := row.CategoryIDs
 		if len(cats) == 0 {
@@ -110,35 +129,35 @@ func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) e
 		}
 		for _, cid := range cats {
 			if _, err := s.TxExec(tx, "INSERT INTO asset_categories (asset_id, category_id) VALUES (?, ?)", id, cid); err != nil {
-				return fmt.Errorf("attaching category %s: %w", cid, err)
+				return nil, fmt.Errorf("attaching category %s: %w", cid, err)
 			}
 		}
 	}
 
 	if row.Stock != nil {
 		if err := row.Stock.normalize(); err != nil {
-			return err
+			return nil, err
 		}
 		was, err := s.readStockTx(tx, id)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := s.writeStockTx(tx, id, was, row.Stock); err != nil {
-			return err
+		if recordQuantity, err = s.setStockTx(tx, id, was, row.Stock); err != nil {
+			return nil, err
 		}
 	}
 
 	for _, fieldID := range sortedKeys(row.FieldValues) {
 		if _, err := s.TxExec(tx, "DELETE FROM asset_field_values WHERE asset_id = ? AND field_id = ?", id, fieldID); err != nil {
-			return err
+			return nil, err
 		}
 		if v := row.FieldValues[fieldID]; v != "" {
 			if _, err := s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", id, fieldID, v, now); err != nil {
-				return fmt.Errorf("setting field: %w", err)
+				return nil, fmt.Errorf("setting field: %w", err)
 			}
 		}
 	}
-	return nil
+	return recordQuantity, nil
 }
 
 func sortedKeys(m map[string]string) []string {
