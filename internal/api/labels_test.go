@@ -118,10 +118,27 @@ func TestAssetLabelErrors(t *testing.T) {
 func TestPreviewTemplate(t *testing.T) {
 	srv, cookie, tagged, _ := labelFixture(t)
 
-	// An unsaved template without an id renders with placeholder data.
-	unsaved := strings.Replace(labelTemplate, `"id":"tag",`, "", 1)
-	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+unsaved+`}`)
-	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Body.String(), "<?xml") {
+	// An unsaved template renders with placeholder data before its author
+	// has given it an id or a name, as the editor previews from the start.
+	for name, unsaved := range map[string]string{
+		"no id":         strings.Replace(labelTemplate, `"id":"tag",`, "", 1),
+		"blank id":      strings.Replace(labelTemplate, `"id":"tag"`, `"id":""`, 1),
+		"no name":       strings.Replace(labelTemplate, `"name":"Tag",`, "", 1),
+		"blank name":    strings.Replace(labelTemplate, `"name":"Tag"`, `"name":"  "`, 1),
+		"null id, name": strings.Replace(labelTemplate, `"id":"tag","name":"Tag"`, `"id":null,"name":null`, 1),
+	} {
+		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+unsaved+`}`)
+		if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Body.String(), "<?xml") {
+			t.Errorf("placeholder preview, %s: got %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
+	// A template that is wrong in another way still says so.
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":{"id":7}}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("an id of the wrong type: got %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+labelTemplate+`}`)
+	if rec.Code != http.StatusOK {
 		t.Fatalf("placeholder preview: got %d %s", rec.Code, rec.Body.String())
 	}
 
