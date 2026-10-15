@@ -173,7 +173,7 @@ To serve plain HTTP on the network without a proxy instead, set `host = "0.0.0.0
 
 ### 2.2 Releases & Updates
 
-Each version tag pushed to GitHub, such as `v1.2.0`, is built by `.github/workflows/release.yml`: the Go suites run, then `tools/release/build.sh` builds the binaries with the tag as their version (`bam version`), and they are published as the release's files with `SHA256SUMS`. A tag with a suffix, such as `v1.2.0-rc.1`, is published as a pre-release. Instead of building, an installation can start from a release (§2.1, using the downloaded file in place of `bin/bam-<os>-<arch>`):
+Each version tag pushed to GitHub, such as `v1.2.0`, is built by `.github/workflows/release.yml`: the Go suites run, then `tools/release/build.sh` builds the binaries with the tag as their version (`bam version`), and they are published as the release's files with `SHA256SUMS`. A tag with a suffix, such as `v1.2.0-rc.1`, is published as a pre-release. `.github/workflows/build.yml` runs the same build on every push and pull request, so a change that breaks it shows up before a tag does. Instead of building, an installation can start from a release (§2.1, using the downloaded file in place of `bin/bam-<os>-<arch>`):
 
 ```sh
 curl -fLO https://github.com/Cambridge-Hackspace/boring-asset-manager/releases/latest/download/bam-linux-amd64
