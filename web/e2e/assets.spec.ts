@@ -6,8 +6,9 @@ test('create an asset, preview and print its label, export a batch', async ({ si
   const category = unique('Bench');
   const cat = await api.call('POST', '/categories', { name: category, color_hex: '#fbbf24', is_consumable: false, is_running_low: false });
   await api.call('POST', `/categories/${cat.category.id}/fields`, { field_id: field.field.id, is_required: true });
+  const templateName = unique('QL 90');
   const { template } = await api.call('POST', '/templates', {
-    name: unique('QL 90'),
+    name: templateName,
     units: 'mm',
     width: 90,
     height: 29,
@@ -71,6 +72,8 @@ test('create an asset, preview and print its label, export a batch', async ({ si
   await page.getByLabel('Template').selectOption(templateId);
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export 2 labels' }).click()]);
   expect(fs.readFileSync((await download.path())!).subarray(0, 5).toString()).toBe('%PDF-');
+  // Named after the template, not its ID.
+  expect(download.suggestedFilename()).toBe(`labels-${templateName.replace(' ', '-')}.pdf`);
 
   await page.getByLabel('Search').fill(code);
   await page.getByRole('button', { name: 'Search' }).click();

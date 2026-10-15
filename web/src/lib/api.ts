@@ -75,6 +75,16 @@ export async function requestBlob(method: Method, path: string, body?: unknown):
   return res.blob();
 }
 
+/**
+ * Sends a request whose response is a file to save, and returns it with the
+ * filename the server gave it, or fallback when it gave none.
+ */
+export async function requestDownload(method: Method, path: string, body: unknown, fallback: string): Promise<{ blob: Blob; filename: string }> {
+  const res = await send(method, path, body);
+  const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
+  return { blob: await res.blob(), filename: named?.[1] ?? fallback };
+}
+
 /** Encodes a value for use in a URL path segment. */
 export function seg(value: string): string {
   return encodeURIComponent(value);

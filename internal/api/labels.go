@@ -9,6 +9,7 @@ import (
 	"image"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -167,7 +168,7 @@ func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "render label")
 		return
 	}
-	setDownloadHeaders(w, contentType, fmt.Sprintf("%s-%s.%s", assetID, t.ID, format), "inline")
+	setDownloadHeaders(w, contentType, fmt.Sprintf("%s-%s.%s", assetID, fileStem(t), format), "inline")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf.Bytes())
 }
@@ -381,14 +382,14 @@ func (s *Server) handleExportLabels(w http.ResponseWriter, r *http.Request) {
 			writeServerError(w, err, "render labels")
 			return
 		}
-		setDownloadHeaders(w, labelContentTypes["pdf"], "labels-"+t.ID+".pdf", "attachment")
+		setDownloadHeaders(w, labelContentTypes["pdf"], "labels-"+fileStem(t)+".pdf", "attachment")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(buf.Bytes())
 		return
 	}
 
 	// Every label is already laid out, so only I/O can fail from here on.
-	setDownloadHeaders(w, "application/zip", "labels-"+t.ID+".zip", "attachment")
+	setDownloadHeaders(w, "application/zip", "labels-"+fileStem(t)+".zip", "attachment")
 	w.WriteHeader(http.StatusOK)
 	zw := zip.NewWriter(w)
 	for i, scene := range scenes {
@@ -402,6 +403,19 @@ func (s *Server) handleExportLabels(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = zw.Close()
 }
+
+// fileStem names a template in a download's filename: its name, with each run
+// of spaces or of anything a filesystem or header might object to turned into
+// one hyphen. A name with nothing usable left falls back to the ID.
+func fileStem(t *labels.Template) string {
+	stem := strings.Trim(unsafeFileChars.ReplaceAllString(t.Name, "-"), "-.")
+	if stem == "" {
+		return t.ID
+	}
+	return stem
+}
+
+var unsafeFileChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // sanitizeForHeader keeps a filename safe inside a quoted header value.
 func sanitizeForHeader(s string) string {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, request, setUnauthorizedHandler } from './api';
+import { ApiError, request, requestDownload, setUnauthorizedHandler } from './api';
 
 function respond(status: number, body: unknown, contentType = 'application/json') {
   const text = typeof body === 'string' ? body : JSON.stringify(body);
@@ -48,5 +48,19 @@ describe('request', () => {
     expect(lost).toHaveBeenCalledTimes(1);
     await request('POST', '/auth/login', {}).catch(() => {});
     expect(lost).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('requestDownload', () => {
+  it('names the file as the server does, or falls back', async () => {
+    const pdf = (disposition?: string) =>
+      vi.fn().mockResolvedValue(new Response('%PDF-', { status: 200, headers: disposition ? { 'Content-Disposition': disposition } : {} }));
+    vi.stubGlobal('fetch', pdf('attachment; filename="labels-Shelf-tag.pdf"'));
+    const named = await requestDownload('POST', '/labels/export', {}, 'labels.pdf');
+    expect(named.filename).toBe('labels-Shelf-tag.pdf');
+    expect(await named.blob.text()).toBe('%PDF-');
+
+    vi.stubGlobal('fetch', pdf());
+    expect((await requestDownload('POST', '/labels/export', {}, 'labels.pdf')).filename).toBe('labels.pdf');
   });
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { request, requestBlob } from '../lib/api';
+  import { request, requestDownload } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import type { Printer, TemplateSummary } from '../lib/models';
   import { session } from '../lib/session.svelte';
@@ -54,8 +54,8 @@
     error = status = '';
     busy = true;
     try {
-      const blob = await requestBlob('POST', '/labels/export', { template_id: templateId, asset_ids: assetIds, format });
-      saveBlob(blob, `labels-${templateId}.${format}`);
+      const { blob, filename } = await requestDownload('POST', '/labels/export', { template_id: templateId, asset_ids: assetIds, format }, `labels.${format}`);
+      saveBlob(blob, filename);
       status = `Exported ${assetIds.length} label${assetIds.length === 1 ? '' : 's'}.`;
     } catch (err) {
       error = messageOf(err);

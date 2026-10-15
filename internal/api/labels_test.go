@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
@@ -77,8 +78,24 @@ func TestAssetLabelFormats(t *testing.T) {
 	if rec.Code != http.StatusOK || !bytes.HasPrefix(rec.Body.Bytes(), []byte("%PDF-1.4")) {
 		t.Errorf("PDF: got %d", rec.Code)
 	}
-	if got := rec.Header().Get("Content-Disposition"); got != `inline; filename="`+tagged+"-"+tag+`.pdf"` {
+	if got := rec.Header().Get("Content-Disposition"); got != `inline; filename="`+tagged+`-Tag.pdf"` {
 		t.Errorf("Content-Disposition = %q", got)
+	}
+}
+
+func TestFileStem(t *testing.T) {
+	for name, want := range map[string]string{
+		"QL 90x29":           "QL-90x29",
+		"Shelf tag  (small)": "Shelf-tag-small",
+		"Café label":         "Caf-label",
+		`../a "quoted"\name`: "a-quoted-name",
+		"v1.2_final":         "v1.2_final",
+		"日本":                 "3f6c2a9e",
+		" ":                  "3f6c2a9e",
+	} {
+		if got := fileStem(&labels.Template{ID: "3f6c2a9e", Name: name}); got != want {
+			t.Errorf("fileStem(%q) = %q, want %q", name, got, want)
+		}
 	}
 }
 
@@ -178,10 +195,16 @@ func TestExportLabels(t *testing.T) {
 	if pages := strings.Count(rec.Body.String(), "/Type /Page "); pages != 2 {
 		t.Errorf("PDF has %d pages, want 2", pages)
 	}
+	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="labels-Tag.pdf"` {
+		t.Errorf("PDF Content-Disposition = %q", got)
+	}
 
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/labels/export", `{"template_id":"`+tag+`","format":"zip","mono":true,"asset_ids":`+ids+`}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("ZIP export: got %d %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Disposition"); got != `attachment; filename="labels-Tag.zip"` {
+		t.Errorf("ZIP Content-Disposition = %q", got)
 	}
 	zr, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
 	if err != nil {
