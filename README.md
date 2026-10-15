@@ -871,6 +871,9 @@ Agreed, not yet scheduled or designed in detail.
 #### Full Change History
 * [ ] Every change to an asset recorded in its history, not only stock: who renamed, recategorized, edited fields or codes, archived or restored it, and when.
 
+#### Role Management
+* [ ] Roles created, renamed and deleted from the web app and the API, each with the permissions chosen from the existing list, so access can go beyond the seeded `admin` role: a role that can only read, or only record stock. Editing or deleting a role follows the anti-lockout rule (§3.3), so some active user always keeps `users:manage`.
+
 #### API Tokens
 * [ ] Tokens for scripts and dashboards, assigned roles like users, so a token can be read-only or limited to stock changes. Shown once when created, stored hashed, and revocable.
 
