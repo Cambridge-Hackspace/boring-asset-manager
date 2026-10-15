@@ -188,7 +188,7 @@
           ? `; flagged automatically below ${category.low_stock_threshold}`
           : ''}.
       </p>
-      {#if session.can('assets:write')}
+      {#if session.can('stock:record')}
         <div class="mt-3">
           {#if category.is_running_low}
             <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(false)}>Mark restocked</button>

@@ -21,7 +21,7 @@ const used: AssetEvent = {
 };
 
 beforeEach(() => {
-  session.permissions = ['assets:read', 'assets:write'];
+  session.permissions = ['assets:read', 'stock:record'];
 });
 afterEach(() => {
   cleanup();
@@ -65,8 +65,8 @@ describe('AssetPage stock', () => {
     expect(sent.filter((r) => r.method === 'POST')).toHaveLength(2);
   });
 
-  it('hides the stock actions from people who cannot change assets', async () => {
-    session.permissions = ['assets:read'];
+  it('hides the stock actions from people who cannot record stock, even if they edit assets', async () => {
+    session.permissions = ['assets:read', 'assets:write'];
     fakeApi({
       'GET /assets/a1': () => ({ asset: withStock(5, true) }),
       'GET /generators': () => ({ generators: [] }),
@@ -76,6 +76,7 @@ describe('AssetPage stock', () => {
     expect(await screen.findByText('Running low.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Use' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Mark restocked' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Edit' })).toBeTruthy();
   });
 });
 
@@ -119,7 +120,7 @@ describe('AssetPage history', () => {
 
 describe('AssetPage archived', () => {
   it('offers only a restore, and says which codes another asset took', async () => {
-    session.permissions = ['assets:read', 'assets:write', 'assets:delete', 'labels:print'];
+    session.permissions = ['assets:read', 'assets:write', 'stock:record', 'assets:delete', 'labels:print'];
     const archived: AssetWithDetails = { ...withStock(40, false), asset: { ...withStock(40, false).asset, archived_at: '2026-10-15T10:00:00Z' } };
     const restored: AssetEvent = {
       id: 'e3',

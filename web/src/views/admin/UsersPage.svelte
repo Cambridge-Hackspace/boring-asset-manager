@@ -207,13 +207,5 @@
     </table>
   </div>
 
-  <section class="mt-8" aria-labelledby="roles-heading">
-    <h2 id="roles-heading" class="mb-2 text-lg font-semibold">Roles</h2>
-    <dl class="grid gap-2 text-sm sm:grid-cols-[auto_1fr]">
-      {#each roles as r (r.id)}
-        <dt class="font-medium">{r.name}</dt>
-        <dd class="text-zinc-600 dark:text-zinc-400">{r.permissions.join(', ') || 'No permissions'}</dd>
-      {/each}
-    </dl>
-  </section>
+  <p class="mt-6 text-sm">What each role allows is set on the <a class="underline" href="/roles">Roles</a> page.</p>
 {/if}

@@ -234,3 +234,72 @@ func (s *Server) setUserName(w http.ResponseWriter, r *http.Request, userID stri
 		writeJSON(w, http.StatusOK, map[string]any{"user": user})
 	}
 }
+
+// RoleRequest creates or edits a role.
+type RoleRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+}
+
+func (req RoleRequest) input() store.RoleInput {
+	return store.RoleInput{Name: req.Name, Description: req.Description, Permissions: req.Permissions}
+}
+
+// handleCreateRole creates a role: POST /api/v1/roles
+func (s *Server) handleCreateRole(w http.ResponseWriter, r *http.Request) {
+	var req RoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	role, err := s.store.CreateRole(req.input())
+	if err != nil {
+		writeRoleError(w, err, "create the role")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"role": role})
+}
+
+// handleUpdateRole renames a role and replaces its permissions:
+// PUT /api/v1/roles/{id}
+func (s *Server) handleUpdateRole(w http.ResponseWriter, r *http.Request) {
+	var req RoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	role, err := s.store.UpdateRole(r.PathValue("id"), req.input())
+	if err != nil {
+		writeRoleError(w, err, "update the role")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"role": role})
+}
+
+// handleDeleteRole deletes a role, taking it from everyone who holds it:
+// DELETE /api/v1/roles/{id}
+func (s *Server) handleDeleteRole(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.DeleteRole(r.PathValue("id")); err != nil {
+		writeRoleError(w, err, "delete the role")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Role deleted"})
+}
+
+func writeRoleError(w http.ResponseWriter, err error, action string) {
+	switch {
+	case errors.Is(err, store.ErrRoleNotFound):
+		writeJSONError(w, http.StatusNotFound, "Role not found")
+	case errors.Is(err, store.ErrRoleProtected):
+		writeJSONError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, rbac.ErrAntiLockoutTriggered):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case store.IsUniqueViolation(err):
+		writeJSONError(w, http.StatusConflict, "Another role already has this name")
+	case errors.Is(err, store.ErrInvalidRole):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	default:
+		writeStoreError(w, err, action)
+	}
+}

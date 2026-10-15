@@ -12,7 +12,10 @@ import (
 func TestRunningLowAndThresholdsAPI(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
 	adminCookie := sessionCookie(t, srv, admin.ID)
-	stores := userWithPermissions(t, srv, "stores@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite)
+	// Stores record stock without being able to edit anything; writers edit
+	// assets without recording stock.
+	stores := userWithPermissions(t, srv, "stores@hackspace.org", rbac.PermAssetsRead, rbac.PermStockRecord)
+	writer := userWithPermissions(t, srv, "writer@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite)
 	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
 
 	// Thresholds go through the category form.
@@ -45,10 +48,12 @@ func TestRunningLowAndThresholdsAPI(t *testing.T) {
 		t.Fatalf("after one asset: %s", rec.Body)
 	}
 
-	// The running-low action needs assets:write only.
+	// The running-low action needs stock:record, not assets:write.
 	path := "/api/v1/categories/" + cat.ID + "/running-low"
-	if rec := doJSON(t, srv, reader, http.MethodPut, path, `{"running_low":true}`); rec.Code != http.StatusForbidden {
-		t.Errorf("reader: %d", rec.Code)
+	for _, who := range []*http.Cookie{reader, writer} {
+		if rec := doJSON(t, srv, who, http.MethodPut, path, `{"running_low":true}`); rec.Code != http.StatusForbidden {
+			t.Errorf("without stock:record: %d", rec.Code)
+		}
 	}
 	for _, bad := range []string{`{}`, `{"running_low":"yes"}`, `nope`} {
 		if rec := doJSON(t, srv, stores, http.MethodPut, path, bad); rec.Code != http.StatusBadRequest {

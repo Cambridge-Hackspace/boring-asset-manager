@@ -98,8 +98,8 @@ describe('CategoryPage', () => {
     expect(sent.filter((r) => r.method === 'PUT')[1]!.body).toMatchObject({ is_consumable: false, is_running_low: false, low_stock_threshold: null });
   });
 
-  it('shows stock and lets people with assets:write flag it by hand', async () => {
-    session.permissions = ['assets:read', 'assets:write'];
+  it('shows stock and lets people with stock:record flag it by hand', async () => {
+    session.permissions = ['assets:read', 'stock:record'];
     const { sent } = api({ 'PUT /categories/paint/running-low': () => ({ category: categories[3], changed: true }) });
     render(CategoryPage, { params: { id: 'paint' } });
     const stock = await screen.findByRole('region', { name: 'Stock' });
@@ -112,8 +112,9 @@ describe('CategoryPage', () => {
     expect(await screen.findByText('Marked as restocked.')).toBeTruthy();
   });
 
-  it('offers no stock actions without assets:write, and none for non-consumables', async () => {
-    session.permissions = ['assets:read'];
+  it('offers no stock actions without stock:record, and none for non-consumables', async () => {
+    // Editing assets is not enough.
+    session.permissions = ['assets:read', 'assets:write'];
     api();
     render(CategoryPage, { params: { id: 'paint' } });
     const stock = await screen.findByRole('region', { name: 'Stock' });

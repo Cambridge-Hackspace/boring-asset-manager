@@ -317,9 +317,10 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 ### 3.3 RBAC Security Matrix
 
 * **Tables:** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`.
-* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, and from Phase 3 `labels:print`). Seeding grants every permission to the `admin` role, including permissions added by later releases.
+* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, from Phase 3 `labels:print`, and from Phase 7 `stock:record`, which uses, restocks and flags stock without being able to edit assets). Seeding grants every permission to the `admin` role, including permissions added by later releases. Migration `011` grants `stock:record` to every role that had `assets:write`, which those actions needed before.
+* **Roles:** `GET /api/v1/roles` lists roles with their permissions, how many users who are not archived hold each (`user_count`), and which is `protected`; `POST /api/v1/roles` creates one and `PUT`/`DELETE /api/v1/roles/{id}` change or delete it, all with `users:manage` and a body of `{"name", "description", "permissions"}`. Names are unique and up to 64 characters; permissions must be known keys. Deleting a role takes it from everyone who holds it. The `admin` role is protected: it cannot be renamed, edited or deleted (`409`), since seeding recreates it by name and grants it every permission at each start. Editing and deleting roles follow the anti-lockout rule below.
 * **Union Principle:** When a user is assigned multiple roles, their effective permissions are the strict union of all granted rights across all assigned roles.
-* **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, or role removal that results in zero active users possessing the `users:manage` permission. Each such change runs in one transaction that first takes the `users_manage` row of the `app_locks` table (migration `004`), so concurrent changes are checked one after another and two admins cannot remove each other at the same time.
+* **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, role removal, or role edit that results in zero active users possessing the `users:manage` permission. Each such change runs in one transaction that first takes the `users_manage` row of the `app_locks` table (migration `004`), so concurrent changes are checked one after another and two admins cannot remove each other at the same time.
 
 ### 3.4 Sessions & Authentication
 
@@ -555,7 +556,7 @@ The two are never added together, since they count different things (3 spools an
 #### Counted by items
 
 * Categories tagged with `is_consumable = true` support an `is_running_low` flag. Only consumable categories may carry it.
-* **Manual:** `PUT /api/v1/categories/{id}/running-low` with `{"running_low": true|false}` sets or clears it. It needs only `assets:write`, so the people handling stock can flag it without being able to edit categories. Editing the category (`categories:manage`) can set it too.
+* **Manual:** `PUT /api/v1/categories/{id}/running-low` with `{"running_low": true|false}` sets or clears it. It needs only `stock:record`, so the people handling stock can flag it without being able to edit categories or assets. Editing the category (`categories:manage`) can set it too.
 * **Inventory thresholds:** a consumable category may have an optional `low_stock_threshold` (a positive integer, or `null` for none). Its *active count* is the number of distinct active (not archived) assets in the category or any of its descendants; an asset in two subcategories counts once. `GET /api/v1/categories/{id}` reports it as `active_count`.
   * When the active count drops below the threshold, the category flags itself as running low. When it climbs back to the threshold or above, it clears itself.
   * The rule reacts to the count *crossing* the threshold, not to its level. A manual change stands until the count next crosses, so the automatic rule never undoes a person's decision.
@@ -567,8 +568,8 @@ The two are never added together, since they count different things (3 spools an
 
 * **Stock:** an asset may have `stock`, `{"quantity", "unit", "low_stock_threshold", "is_running_low"}`, or `null` when its stock is not counted this way. The quantity is a whole number from 0 to 1,000,000,000; for things measured in length or weight, pick a unit small enough (`mm`, `g`). The unit is optional text of up to 32 characters, and the threshold is optional, from 1 to 1,000,000,000.
 * **Setting it:** creating an asset (`POST /api/v1/assets`) with a `stock` object starts counting; updating it (`PUT /api/v1/assets/{id}`) with an object replaces the unit and threshold, and with `null` stops counting and clears all four. An update without `stock` leaves it alone. An object without `quantity` keeps the current quantity (or starts at 0), so an edit cannot undo a use someone made while the form was open; the web form sends the quantity only when it was changed.
-* **Using and restocking:** `POST /api/v1/assets/{id}/quantity` (`assets:write`) with `{"adjust": n}`, negative to use some and positive to restock, or `{"set": n}`. Using more than there is answers `409` (`not enough stock: 40 left`) and changes nothing. Changes run under the inventory lock, so people using stock at once each take their share.
-* **Thresholds and the flag:** the same rule as categories. Dropping below the threshold flags the asset and climbing back clears it, reacting to crossings only, so a flag set by hand (`PUT /api/v1/assets/{id}/running-low`, `assets:write`) stands until the next crossing. Archived assets are not checked.
+* **Using and restocking:** `POST /api/v1/assets/{id}/quantity` (`stock:record`) with `{"adjust": n}`, negative to use some and positive to restock, or `{"set": n}`. Using more than there is answers `409` (`not enough stock: 40 left`) and changes nothing. Changes run under the inventory lock, so people using stock at once each take their share.
+* **Thresholds and the flag:** the same rule as categories. Dropping below the threshold flags the asset and climbing back clears it, reacting to crossings only, so a flag set by hand (`PUT /api/v1/assets/{id}/running-low`, `stock:record`) stands until the next crossing. Archived assets are not checked.
 * **Events and history:** crossings and manual changes record `asset.running_low` and `asset.restocked`, with the asset, its quantity, threshold and unit, and who caused it; channels can subscribe to them. Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the asset's history. Channels cannot subscribe to it.
 * **Asset history:** creating, editing, archiving and restoring an asset record `asset.created`, `asset.edited`, `asset.archived` and `asset.restored`, in the same transaction as the change, through the web app, the API and CSV imports alike (an import sets the trigger to `import`). Each lists its `changes`: the name, categories joined and left, field values, codes, and whether stock is counted, its unit and threshold, each with the value before and after and the field's label or the generator's name as they read then. A save that changes nothing records nothing. Archiving lists the codes it released, and restoring the codes it got back and those another asset had taken. Changes made elsewhere that affect an asset, such as deleting a field or a category, are not recorded on it, and assets created before this release have no record of earlier edits. Channels cannot subscribe to these either.
 * **Reading the history:** `GET /api/v1/assets/{id}/history` (`assets:read`) returns `events`, newest first, 50 at a time, with the email and name of whoever made each change, and `more` when older events remain; `?before=<event id>` returns the page older than that event, and an event that is not the asset's is a 400.
@@ -856,6 +857,9 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.4: User Names
 * [x] Display names for users, set by admins and by each user for themselves, shown in place of emails (§3.4).
 
+#### Sub-Phase 7.5: Role Management
+* [x] Roles created, edited and deleted from the web app and the API under the anti-lockout rule, with `admin` protected, and `stock:record` so a role can record stock without editing assets (§3.3).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -880,9 +884,6 @@ Agreed, not yet scheduled or designed in detail.
 
 #### Reports
 * [ ] Report pages built on the asset list's filters, starting with everything running low (categories and assets), exportable as CSV for a shopping list.
-
-#### Role Management
-* [ ] Roles created, renamed and deleted from the web app and the API, each with the permissions chosen from the existing list, so access can go beyond the seeded `admin` role: a role that can only read, or only record stock. Editing or deleting a role follows the anti-lockout rule (§3.3), so some active user always keeps `users:manage`.
 
 #### API Tokens
 * [ ] Tokens for scripts and dashboards, assigned roles like users, so a token can be read-only or limited to stock changes. Shown once when created, stored hashed, and revocable.

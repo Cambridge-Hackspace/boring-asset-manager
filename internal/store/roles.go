@@ -5,10 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
+	"github.com/google/uuid"
 )
 
 var (
@@ -47,7 +51,31 @@ func (s *Store) ListRoles() ([]models.RoleWithPermissions, error) {
 			last.Permissions = append(last.Permissions, key.String)
 		}
 	}
-	return roles, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+
+	counts := map[string]int{}
+	countRows, err := s.Query(`SELECT ur.role_id, COUNT(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id
+		WHERE u.archived_at IS NULL GROUP BY ur.role_id`)
+	if err != nil {
+		return nil, fmt.Errorf("counting role holders: %w", err)
+	}
+	defer countRows.Close()
+	for countRows.Next() {
+		var id string
+		var n int
+		if err := countRows.Scan(&id, &n); err != nil {
+			return nil, fmt.Errorf("scanning role holders: %w", err)
+		}
+		counts[id] = n
+	}
+	for i := range roles {
+		roles[i].UserCount = counts[roles[i].ID]
+		roles[i].Protected = roles[i].Name == AdminRoleName
+	}
+	return roles, countRows.Err()
 }
 
 // UserRoleIDs maps each user with roles to their role IDs, sorted.
@@ -135,4 +163,169 @@ func (s *Store) ChangePassword(userID, current, next, keepToken string) error {
 		return fmt.Errorf("ending other sessions: %w", err)
 	}
 	return tx.Commit()
+}
+
+// AdminRoleName is the seeded role holding every permission. Seeding
+// recreates it and grants it every permission at each start, so it cannot be
+// renamed, edited or deleted.
+const AdminRoleName = "admin"
+
+var (
+	// ErrRoleProtected is returned when changing or deleting the admin role.
+	ErrRoleProtected = errors.New("the admin role always has every permission and cannot be changed or deleted")
+	// ErrInvalidRole wraps the reason a role cannot be saved as given.
+	ErrInvalidRole = errors.New("invalid role")
+)
+
+// MaxRoleName is the longest role name, in characters.
+const MaxRoleName = 64
+
+// RoleInput is a role as created or edited.
+type RoleInput struct {
+	Name        string
+	Description string
+	Permissions []string
+}
+
+// normalize trims the role and checks its name, description and
+// permissions, removing repeated permissions.
+func (in *RoleInput) normalize() error {
+	in.Name = strings.TrimSpace(in.Name)
+	in.Description = strings.TrimSpace(in.Description)
+	if in.Name == "" {
+		return fmt.Errorf("%w: a name is required", ErrInvalidRole)
+	}
+	if err := textcheck.Check("role name", in.Name, MaxRoleName); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidRole, err)
+	}
+	if err := textcheck.Check("description", in.Description, textcheck.MaxName); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidRole, err)
+	}
+	known := map[string]bool{}
+	for _, p := range rbac.AllPermissions() {
+		known[p] = true
+	}
+	seen := map[string]bool{}
+	perms := make([]string, 0, len(in.Permissions))
+	for _, p := range in.Permissions {
+		if !known[p] {
+			return fmt.Errorf("%w: unknown permission %q", ErrInvalidRole, p)
+		}
+		if !seen[p] {
+			seen[p] = true
+			perms = append(perms, p)
+		}
+	}
+	sort.Strings(perms)
+	in.Permissions = perms
+	return nil
+}
+
+// GetRole returns a role with its permissions, or ErrRoleNotFound.
+func (s *Store) GetRole(id string) (*models.RoleWithPermissions, error) {
+	roles, err := s.ListRoles()
+	if err != nil {
+		return nil, err
+	}
+	for i := range roles {
+		if roles[i].ID == id {
+			return &roles[i], nil
+		}
+	}
+	return nil, ErrRoleNotFound
+}
+
+// CreateRole creates a role granting the permissions given. A name already
+// in use fails as a unique violation.
+func (s *Store) CreateRole(in RoleInput) (*models.RoleWithPermissions, error) {
+	if err := in.normalize(); err != nil {
+		return nil, err
+	}
+	id := uuid.NewString()
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := s.TxExec(tx, "INSERT INTO roles (id, name, description) VALUES (?, ?, ?)", id, in.Name, in.Description); err != nil {
+		return nil, fmt.Errorf("inserting role: %w", err)
+	}
+	if err := s.setRolePermissionsTx(tx, id, in.Permissions); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing: %w", err)
+	}
+	return s.GetRole(id)
+}
+
+// UpdateRole renames a role and replaces its permissions, under the
+// anti-lockout guard: taking users:manage from the role of the last active
+// user who has it is refused.
+func (s *Store) UpdateRole(id string, in RoleInput) (*models.RoleWithPermissions, error) {
+	if err := in.normalize(); err != nil {
+		return nil, err
+	}
+	err := s.withAdminGuard(func(tx *sql.Tx) error {
+		if err := s.editableRoleTx(tx, id); err != nil {
+			return err
+		}
+		if _, err := s.TxExec(tx, "UPDATE roles SET name = ?, description = ? WHERE id = ?", in.Name, in.Description, id); err != nil {
+			return fmt.Errorf("updating role: %w", err)
+		}
+		return s.setRolePermissionsTx(tx, id, in.Permissions)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetRole(id)
+}
+
+// DeleteRole deletes a role, taking it from everyone who holds it, under the
+// anti-lockout guard.
+func (s *Store) DeleteRole(id string) error {
+	return s.withAdminGuard(func(tx *sql.Tx) error {
+		if err := s.editableRoleTx(tx, id); err != nil {
+			return err
+		}
+		// Its grants and assignments go with it (ON DELETE CASCADE).
+		if _, err := s.TxExec(tx, "DELETE FROM roles WHERE id = ?", id); err != nil {
+			return fmt.Errorf("deleting role: %w", err)
+		}
+		return nil
+	})
+}
+
+// editableRoleTx checks that a role exists and is not the admin role.
+func (s *Store) editableRoleTx(tx *sql.Tx, id string) error {
+	var name string
+	err := s.TxQueryRow(tx, "SELECT name FROM roles WHERE id = ?", id).Scan(&name)
+	if err == sql.ErrNoRows {
+		return ErrRoleNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("reading role: %w", err)
+	}
+	if name == AdminRoleName {
+		return ErrRoleProtected
+	}
+	return nil
+}
+
+// setRolePermissionsTx replaces a role's permissions with keys, which must
+// be known.
+func (s *Store) setRolePermissionsTx(tx *sql.Tx, roleID string, keys []string) error {
+	if _, err := s.TxExec(tx, "DELETE FROM role_permissions WHERE role_id = ?", roleID); err != nil {
+		return fmt.Errorf("clearing permissions: %w", err)
+	}
+	for _, key := range keys {
+		var permID string
+		if err := s.TxQueryRow(tx, "SELECT id FROM permissions WHERE permission_key = ?", key).Scan(&permID); err != nil {
+			return fmt.Errorf("finding permission %s: %w", key, err)
+		}
+		if _, err := s.TxExec(tx, "INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)", roleID, permID); err != nil {
+			return fmt.Errorf("granting %s: %w", key, err)
+		}
+	}
+	return nil
 }

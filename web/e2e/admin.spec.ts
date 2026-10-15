@@ -143,3 +143,56 @@ test('a user changes their own password', async ({ signedIn: admin, api, browser
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome');
   await page.close();
 });
+
+test('roles: create one that only records stock, edit it, and delete it', async ({ signedIn: page }) => {
+  const name = unique('Stores');
+  await goTo(page, 'Roles');
+  // admin cannot be changed.
+  const admin = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'admin', exact: true }) });
+  await expect(admin).toContainText('always has every permission');
+  await expect(admin.getByRole('button')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'New role' }).click();
+  await page.getByLabel('Name').fill(name);
+  await page.getByRole('checkbox', { name: /Record stock/ }).check();
+  await page.getByRole('button', { name: 'Create role' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Created ${name}.`);
+  const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name, exact: true }) });
+  await expect(card).toContainText('Read assets, Record stock');
+
+  // Users can be given it.
+  await goTo(page, 'Users');
+  await page.getByRole('button', { name: `Roles for ${ADMIN_EMAIL}` }).click();
+  await expect(page.getByRole('checkbox', { name })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+
+  await goTo(page, 'Roles');
+  await card.getByRole('button', { name: `Edit ${name}` }).click();
+  await page.getByLabel('Description (optional)').fill('Counts and restocks');
+  await page.getByRole('button', { name: 'Save role' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Saved ${name}.`);
+  await expect(card).toContainText('Counts and restocks');
+
+  await card.getByRole('button', { name: 'Delete' }).click();
+  await card.getByRole('group').getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Deleted ${name}.`);
+  await expect(page.getByRole('heading', { name, exact: true })).toHaveCount(0);
+});
+
+test('a role that only records stock can use stock but not edit assets', async ({ signedIn: page, api }) => {
+  const { role } = await api.call('POST', '/roles', { name: unique('Counters'), description: '', permissions: ['assets:read', 'stock:record'] });
+  const email = `${unique('counter')}@hackspace.org`;
+  const { user } = await api.call('POST', '/users', { email, password: 'CountPass123!' });
+  await api.call('PUT', `/users/${user.id}/roles`, { role_ids: [role.id] });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Washers'), stock: { quantity: 10, unit: 'pcs' } });
+
+  await page.context().clearCookies();
+  await signIn(page, email, 'CountPass123!');
+  await page.goto(`/assets/${asset.asset.id}`);
+  const stock = page.getByRole('region', { name: 'Stock' });
+  await stock.getByLabel('How many (pcs)').fill('3');
+  await stock.getByRole('button', { name: 'Use' }).click();
+  await expect(stock).toContainText('7 pcs left');
+  await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Archive' })).toHaveCount(0);
+});

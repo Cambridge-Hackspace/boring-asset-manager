@@ -12,7 +12,9 @@ import (
 func TestAssetStockAPI(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
 	adminCookie := sessionCookie(t, srv, admin.ID)
-	stores := userWithPermissions(t, srv, "stores@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite)
+	stores := userWithPermissions(t, srv, "stores@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite, rbac.PermStockRecord)
+	counter := userWithPermissions(t, srv, "counter@hackspace.org", rbac.PermAssetsRead, rbac.PermStockRecord)
+	writer := userWithPermissions(t, srv, "writer@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite)
 	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
 
 	assetOf := func(rec interface{ Bytes() []byte }) models.Asset {
@@ -48,10 +50,18 @@ func TestAssetStockAPI(t *testing.T) {
 		t.Fatalf("an asset without stock: %s", raw)
 	}
 
-	// Using and restocking need assets:write only.
+	// Using and restocking need stock:record, not assets:write.
 	path := "/api/v1/assets/" + a.ID + "/quantity"
-	if rec := doJSON(t, srv, reader, http.MethodPost, path, `{"adjust":-1}`); rec.Code != http.StatusForbidden {
-		t.Errorf("a reader used stock: %d", rec.Code)
+	for _, who := range []*http.Cookie{reader, writer} {
+		if rec := doJSON(t, srv, who, http.MethodPost, path, `{"adjust":-1}`); rec.Code != http.StatusForbidden {
+			t.Errorf("used stock without stock:record: %d", rec.Code)
+		}
+	}
+	if rec := doJSON(t, srv, counter, http.MethodPost, path, `{"adjust":0}`); rec.Code != http.StatusOK {
+		t.Errorf("stock:record alone: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, counter, http.MethodPut, "/api/v1/assets/"+a.ID, `{"name":"Renamed"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("stock:record edited an asset: %d", rec.Code)
 	}
 	for _, bad := range []string{`{}`, `{"adjust":-1,"set":3}`, `{"adjust":"-1"}`, `nope`, `{"set":-1}`} {
 		if rec := doJSON(t, srv, stores, http.MethodPost, path, bad); rec.Code != http.StatusBadRequest {
