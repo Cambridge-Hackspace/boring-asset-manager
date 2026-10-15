@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { assetPayload, errorTarget, inputType, isWebURL, keptValues } from './assets';
-import type { EffectiveField } from './models';
+import { amount, assetPayload, describeEvent, errorTarget, inputType, isWebURL, keptValues, stockDraft, stockPayload } from './assets';
+import type { AssetEvent, AssetStock, EffectiveField } from './models';
 
 const ef = (key: string, required = false): EffectiveField => ({
   field: { id: key, key, label: key, validation_type: 'text', created_at: '', updated_at: '' },
@@ -51,5 +51,54 @@ describe('isWebURL', () => {
     expect(isWebURL('javascript:alert(1)')).toBe(false);
     expect(isWebURL('data:text/html,hi')).toBe(false);
     expect(isWebURL('not a url')).toBe(false);
+  });
+});
+
+describe('stock', () => {
+  const stock: AssetStock = { quantity: 40, unit: 'g', low_stock_threshold: 50, is_running_low: true };
+
+  it('starts counting with the quantity given, or 0', () => {
+    expect(stockPayload({ counted: true, quantity: 200, unit: ' pcs ', threshold: 50 })).toEqual({
+      quantity: 200,
+      unit: 'pcs',
+      low_stock_threshold: 50,
+    });
+    expect(stockPayload({ counted: true, quantity: null, unit: '', threshold: null })).toEqual({
+      quantity: 0,
+      unit: '',
+      low_stock_threshold: null,
+    });
+  });
+
+  it('sends a quantity on edit only when it was changed', () => {
+    expect(stockPayload({ ...stockDraft(stock), unit: 'kg' }, stock)).toEqual({ unit: 'kg', low_stock_threshold: 50 });
+    expect(stockPayload({ ...stockDraft(stock), quantity: null }, stock)).toEqual({ unit: 'g', low_stock_threshold: 50 });
+    expect(stockPayload({ ...stockDraft(stock), quantity: 7 }, stock)).toEqual({ quantity: 7, unit: 'g', low_stock_threshold: 50 });
+  });
+
+  it('stops counting only an asset that was counted', () => {
+    expect(stockPayload({ ...stockDraft(stock), counted: false }, stock)).toBeNull();
+    expect(stockPayload(stockDraft(null), null)).toBeUndefined();
+    const body = assetPayload({ name: 'Drill', categoryIds: [], codes: {}, values: {}, stock: stockDraft(null) }, []);
+    expect('stock' in body).toBe(false);
+  });
+
+  it('treats a blank or zero threshold as none', () => {
+    expect(stockPayload({ counted: true, quantity: 1, unit: '', threshold: 0 })!.low_stock_threshold).toBeNull();
+  });
+
+  it('describes quantities and history', () => {
+    expect(amount(3, '')).toBe('3');
+    expect(amount(3, 'pcs')).toBe('3 pcs');
+    const event = (kind: string, payload: Partial<AssetEvent['payload']>): AssetEvent => ({
+      id: 'e', kind, created_at: '', payload: { trigger: 'manual', ...payload },
+    });
+    expect(describeEvent(event('asset.quantity_changed', { quantity: 200, unit: 'pcs' }))).toBe('Started counting at 200 pcs');
+    expect(describeEvent(event('asset.quantity_changed', { quantity: 40, change: -60, unit: 'g' }))).toBe('Used 60 g; 40 g left');
+    expect(describeEvent(event('asset.quantity_changed', { quantity: 70, change: 30 }))).toBe('Added 30; 70 now');
+    expect(describeEvent(event('asset.running_low', { trigger: 'threshold', quantity: 40, threshold: 50, unit: 'g' }))).toBe(
+      'Running low: below the threshold of 50 g',
+    );
+    expect(describeEvent(event('asset.restocked', {}))).toBe('Marked restocked');
   });
 });

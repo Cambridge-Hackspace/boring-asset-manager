@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { ApiError, request } from '../../lib/api';
-  import { assetPayload, errorTarget, inputType, keptValues } from '../../lib/assets';
+  import { assetPayload, errorTarget, inputType, keptValues, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
@@ -27,6 +27,7 @@
   let categoryIds = $state<string[]>([]);
   let codes = $state<Record<string, string>>({});
   let values = $state<Record<string, string>>({});
+  let stock = $state<StockDraft>(stockDraft(null));
 
   const tree = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const kept = $derived(original ? keptValues(original.field_values, effective) : []);
@@ -46,6 +47,7 @@
         categoryIds = a.categories.map((c) => c.id).filter((c) => c !== UNCATEGORIZED);
         codes = Object.fromEntries(a.generator_keys.map((k) => [k.generator_type, k.assigned_code]));
         values = { ...a.field_values };
+        stock = stockDraft(a.asset.stock);
       }
       await resolveFields();
     } catch (err) {
@@ -78,7 +80,7 @@
     error = '';
     errorFor = null;
     busy = true;
-    const body = assetPayload({ name, categoryIds, codes, values }, effective);
+    const body = assetPayload({ name, categoryIds, codes, values, stock }, effective, original?.asset.stock);
     try {
       if (isNew) {
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
@@ -141,6 +143,46 @@
         {/if}
       </fieldset>
     </div>
+
+    <fieldset class="card space-y-4">
+      <legend class="text-lg font-semibold">Stock</legend>
+      <div>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" bind:checked={stock.counted} aria-describedby="stock-help" /> Count stock by quantity
+        </label>
+        <p id="stock-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+          For things kept in bulk, such as screws or solder, where this one asset stands for many. Leave it off for things
+          labeled one by one, such as filament spools: a consumable category counts those.
+        </p>
+      </div>
+      {#if stock.counted}
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label class="label" for="stock-quantity">Quantity</label>
+            <input id="stock-quantity" class="input" type="number" min="0" step="1" bind:value={stock.quantity} />
+          </div>
+          <div>
+            <label class="label" for="stock-unit">Unit (optional)</label>
+            <input id="stock-unit" class="input" placeholder="pcs, g, m" bind:value={stock.unit} />
+          </div>
+          <div>
+            <label class="label" for="stock-threshold">Low stock threshold (optional)</label>
+            <input
+              id="stock-threshold"
+              class="input"
+              type="number"
+              min="1"
+              step="1"
+              aria-describedby="stock-threshold-help"
+              bind:value={stock.threshold}
+            />
+          </div>
+        </div>
+        <p id="stock-threshold-help" class="text-xs text-zinc-600 dark:text-zinc-400">
+          Flag it automatically when the quantity drops below the threshold, and clear the flag when there is enough again.
+        </p>
+      {/if}
+    </fieldset>
 
     <fieldset class="card space-y-4">
       <legend class="text-lg font-semibold">Fields</legend>

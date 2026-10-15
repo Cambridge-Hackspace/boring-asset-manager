@@ -113,8 +113,8 @@ func hasProblem(p *Plan, row int, column, text string) bool {
 
 func TestSuggestMapping(t *testing.T) {
 	corpus := []models.Field{{Key: "serial", Label: "Serial number"}, {Key: "notes", Label: "Notes"}}
-	got := Suggest([]string{"ID", " Name ", "categories", "QR", "code.code128", "Serial Number", "field.notes", "serial", "Colour"}, corpus)
-	want := []string{"id", "name", "categories", "code.qr", "code.code128", "field.serial", "field.notes", "", ""}
+	got := Suggest([]string{"ID", " Name ", "categories", "QR", "code.code128", "Serial Number", "field.notes", "serial", "Colour", "Quantity", "unit", "low_stock_threshold"}, corpus)
+	want := []string{"id", "name", "categories", "code.qr", "code.code128", "field.serial", "field.notes", "", "", "quantity", "unit", "low_stock_threshold"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}
@@ -293,6 +293,12 @@ func TestExportThenImportChangesNothing(t *testing.T) {
 	if _, err := w.st.CreateAsset("Quote \"me\", please", nil, nil, map[string]string{"condition": "good"}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := w.st.CreateAssetWithStock("Solder", nil, nil, nil, &store.StockInput{Quantity: intp(0), Unit: "=m", LowStockThreshold: intp(5)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.st.CreateAssetWithStock("Washers", nil, nil, nil, &store.StockInput{Quantity: intp(12)}); err != nil {
+		t.Fatal(err)
+	}
 	before := mustList(t, w.st)
 	cats, _ := w.st.ListAllCategories()
 	var b strings.Builder
@@ -349,5 +355,80 @@ func TestColumnsCarrySamples(t *testing.T) {
 	got := []string{plan.Columns[0].Sample, plan.Columns[1].Sample, plan.Columns[2].Sample}
 	if strings.Join(got, "|") != "Saw|sticky|" {
 		t.Errorf("samples %q", got)
+	}
+}
+
+func intp(n int) *int { return &n }
+
+// TestImportingStock creates and updates assets counted by quantity. Blank
+// cells keep what an asset has.
+func TestImportingStock(t *testing.T) {
+	w := newWorld(t)
+	screws, err := w.st.CreateAssetWithStock("Screws", nil, nil, nil, &store.StockInput{Quantity: intp(100), Unit: "pcs", LowStockThreshold: intp(20)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := "id,name,quantity,unit,low_stock_threshold\n" +
+		",Filament,1000,g,250\n" +
+		screws.Asset.ID + ",,5,,\n" +
+		w.drill.Asset.ID + ",,,,\n"
+	plan := w.apply(t, file)
+	if plan.Create != 1 || plan.Update != 1 || plan.Unchanged != 1 {
+		t.Fatalf("plan %+v", plan)
+	}
+	got := map[string]*models.AssetStock{}
+	for _, a := range mustList(t, w.st) {
+		got[a.Asset.Name] = a.Asset.Stock
+	}
+	if s := got["Filament"]; s == nil || s.Quantity != 1000 || s.Unit != "g" || *s.LowStockThreshold != 250 {
+		t.Errorf("created %+v", s)
+	}
+	if s := got["Screws"]; s.Quantity != 5 || s.Unit != "pcs" || *s.LowStockThreshold != 20 || !s.IsRunningLow {
+		t.Errorf("updated %+v", s)
+	}
+	if got["Drill"] != nil {
+		t.Error("blank stock cells started counting the drill")
+	}
+	events, _ := w.st.ListAssetEvents(screws.Asset.ID, 10)
+	if len(events) != 3 || events[0].Kind != models.EventAssetRunningLow || *events[1].Payload.Change != -95 {
+		t.Errorf("screws' history %+v", events)
+	}
+
+	// The same file again changes nothing but the new row.
+	if plan := w.prepare(t, file, nil); plan.Update != 0 || plan.Unchanged != 2 || plan.Create != 1 {
+		t.Errorf("again: %+v", plan)
+	}
+}
+
+func TestStockProblems(t *testing.T) {
+	w := newWorld(t)
+	plan := w.prepare(t, "id,name,quantity,unit,low_stock_threshold\n"+
+		",A,-1,,\n"+
+		",B,lots,,\n"+
+		",C,1,,0\n"+
+		",D,,g,\n"+
+		",E,,,4\n"+
+		w.hammer.Asset.ID+",,,box,\n"+
+		",F,1,"+strings.Repeat("g", store.MaxStockUnit+1)+",\n"+
+		",G,1000000001,,\n", nil)
+	for _, want := range []struct {
+		row          int
+		column, text string
+	}{
+		{2, "quantity", "whole number from 0"},
+		{3, "quantity", "whole number from 0"},
+		{4, "low_stock_threshold", "whole number from 1"},
+		{5, "unit", "give a quantity"},
+		{6, "low_stock_threshold", "give a quantity"},
+		{7, "unit", "give a quantity"},
+		{8, "unit", "the unit"},
+		{9, "quantity", "whole number from 0"},
+	} {
+		if !hasProblem(plan, want.row, want.column, want.text) {
+			t.Errorf("line %d: no problem in %s mentioning %q; problems %+v", want.row, want.column, want.text, plan.Problems)
+		}
+	}
+	if plan.ProblemCount != 8 {
+		t.Errorf("%d problems, want 8: %+v", plan.ProblemCount, plan.Problems)
 	}
 }

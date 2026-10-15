@@ -116,6 +116,53 @@ func TestDiscordEmbeds(t *testing.T) {
 	}
 }
 
+func TestDiscordAssetEmbeds(t *testing.T) {
+	quantity, threshold := 40, 50
+	event := func() models.Event {
+		return models.Event{
+			Kind: models.EventAssetRunningLow,
+			Payload: models.EventPayload{
+				Asset:     &models.EventAsset{ID: "a/1", Name: "M3_screws"},
+				Actor:     &models.EventActor{Email: "ada@hackspace.org"},
+				Trigger:   models.TriggerThreshold,
+				Quantity:  &quantity,
+				Threshold: &threshold,
+				Unit:      "pcs",
+			},
+		}
+	}
+	e := discordPayload(Notification{Event: event(), BaseURL: "https://bam.example"}).Embeds[0]
+	if e.Title != `Running low: M3\_screws` || e.URL != "https://bam.example/assets/a%2F1" || e.Color != discordWarning ||
+		e.Description != "Down to 40 pcs, below the threshold of 50 pcs. Last change by ada@hackspace.org." {
+		t.Errorf("running low: %+v", e)
+	}
+
+	cases := []struct {
+		name, title, desc string
+		edit              func(*models.Event)
+	}{
+		{"manual", `Running low: M3\_screws`, "Flagged as running low by ada@hackspace.org. 40 pcs left.", func(e *models.Event) { e.Payload.Trigger = models.TriggerManual; e.Payload.Threshold = nil }},
+		{"restocked, no unit", `Restocked: M3\_screws`, "Back to 40, at or above the threshold of 50.", func(e *models.Event) {
+			e.Kind = models.EventAssetRestocked
+			e.Payload.Unit = ""
+			e.Payload.Actor = nil
+		}},
+		{"manual restock, nobody", `Restocked: M3\_screws`, "Marked as restocked. 40 pcs left.", func(e *models.Event) {
+			e.Kind = models.EventAssetRestocked
+			e.Payload.Trigger = models.TriggerManual
+			e.Payload.Actor = nil
+		}},
+	}
+	for _, c := range cases {
+		ev := event()
+		c.edit(&ev)
+		e := discordPayload(Notification{Event: ev}).Embeds[0]
+		if e.Title != c.title || e.Description != c.desc || e.URL != "" {
+			t.Errorf("%s: %+v", c.name, e)
+		}
+	}
+}
+
 func TestDiscordSend(t *testing.T) {
 	var (
 		status  = http.StatusNoContent

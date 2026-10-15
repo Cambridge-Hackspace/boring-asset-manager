@@ -280,6 +280,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 * **Assets (`assets`):**
 * Primary identifier: `id` (random UUIDv4).
 * Audit timestamps: `created_at`, `updated_at`, `archived_at`.
+* Optional stock counted by quantity: `stock_quantity`, `stock_unit`, `low_stock_threshold`, `is_running_low` (§5.1).
 
 
 * **Generator ID Mapping (`asset_generator_keys`):**
@@ -523,6 +524,20 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 
 ### 5.1 Running Low
 
+Stock is counted in one of two ways, for two kinds of things:
+
+| | Counted by items | Counted by quantity |
+| :--- | :--- | :--- |
+| For | Things labeled one by one: filament spools, saw blades, batteries | Things kept in bulk: screws, zip ties, solder |
+| Each unit is | An asset of its own | Not tracked; one asset stands for all of them |
+| What is counted | Active assets in a consumable category and its subcategories | A quantity on the asset |
+| The threshold is on | The category | The asset |
+| Using some up | Archive the asset | Use or restock it (`POST /api/v1/assets/{id}/quantity`) |
+
+The two are never added together, since they count different things (3 spools and 500 g of solder make no total).
+
+#### Counted by items
+
 * Categories tagged with `is_consumable = true` support an `is_running_low` flag. Only consumable categories may carry it.
 * **Manual:** `PUT /api/v1/categories/{id}/running-low` with `{"running_low": true|false}` sets or clears it. It needs only `assets:write`, so the people handling stock can flag it without being able to edit categories. Editing the category (`categories:manage`) can set it too.
 * **Inventory thresholds:** a consumable category may have an optional `low_stock_threshold` (a positive integer, or `null` for none). Its *active count* is the number of distinct active (not archived) assets in the category or any of its descendants; an asset in two subcategories counts once. `GET /api/v1/categories/{id}` reports it as `active_count`.
@@ -531,6 +546,14 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
   * Anything that changes an active count is checked: creating, archiving, deleting or recategorizing assets; moving or deleting categories; imports (checked once, after the whole file); and changing the threshold itself (setting it above the current count flags at once).
   * Changes that can move a count serialize on an application lock, so two simultaneous archives cannot both miss a crossing.
 * **Events:** every change of the flag, manual or automatic, records an event (`category.running_low` or `category.restocked`) in the same transaction as the change: the category, the user whose action caused it, whether it was manual or automatic, and for automatic changes the count and threshold. A change that rolls back records nothing, and two people flagging at once produce one event.
+
+#### Counted by quantity
+
+* **Stock:** an asset may have `stock`, `{"quantity", "unit", "low_stock_threshold", "is_running_low"}`, or `null` when its stock is not counted this way. The quantity is a whole number from 0 to 1,000,000,000; for things measured in length or weight, pick a unit small enough (`mm`, `g`). The unit is optional text of up to 32 characters, and the threshold is optional, from 1 to 1,000,000,000.
+* **Setting it:** creating an asset (`POST /api/v1/assets`) with a `stock` object starts counting; updating it (`PUT /api/v1/assets/{id}`) with an object replaces the unit and threshold, and with `null` stops counting and clears all four. An update without `stock` leaves it alone. An object without `quantity` keeps the current quantity (or starts at 0), so an edit cannot undo a use someone made while the form was open; the web form sends the quantity only when it was changed.
+* **Using and restocking:** `POST /api/v1/assets/{id}/quantity` (`assets:write`) with `{"adjust": n}`, negative to use some and positive to restock, or `{"set": n}`. Using more than there is answers `409` (`not enough stock: 40 left`) and changes nothing. Changes run under the inventory lock, so people using stock at once each take their share.
+* **Thresholds and the flag:** the same rule as categories. Dropping below the threshold flags the asset and climbing back clears it, reacting to crossings only, so a flag set by hand (`PUT /api/v1/assets/{id}/running-low`, `assets:write`) stands until the next crossing. Archived assets are not checked.
+* **Events and history:** crossings and manual changes record `asset.running_low` and `asset.restocked`, with the asset, its quantity, threshold and unit, and who caused it; channels can subscribe to them. Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the asset's history (`GET /api/v1/assets/{id}/history`, `assets:read`, newest 200 first, which shows the email of whoever made each change). Channels cannot subscribe to it.
 
 ### 5.2 Notifiers
 
@@ -542,7 +565,7 @@ Notifications go out through pluggable notifier drivers, in the same way printer
   * A delivery is claimed with a lease, so several servers sharing a database send it once.
   * Network errors and `5xx` responses are retried with exponential backoff; a `429` waits as long as the service asks. Other `4xx` responses fail at once, and anything still unsent after 24 hours is given up.
   * The outcome of recent deliveries is visible in `GET /api/v1/notifiers/deliveries`.
-* **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed.
+* **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed. An asset's messages link to `{base_url}/assets/{id}`, give its quantity and threshold with their unit, and are amber, since an asset has no color of its own.
 
 ---
 
@@ -558,13 +581,14 @@ Notifications go out through pluggable notifier drivers, in the same way printer
 | `name` | The asset's name. |
 | `categories` | Category references separated by `;`. A reference is a path of names from the root joined by ` > ` (`Tools > Drills`) or a category ID. Export writes the path unless it is ambiguous or contains a separator, and then the ID. |
 | `code.<type>` | The assigned code for a generator type (`code.qr`, `code.micro_qr`, `code.code128`). |
+| `quantity`, `unit`, `low_stock_threshold` | Stock counted by quantity (§5.1). Export writes them only when some asset's stock is counted that way. On import a blank cell keeps what the asset has; a unit or threshold for an asset whose stock is not counted needs a quantity too. An import cannot stop counting, or remove a threshold. |
 | `field.<key>` | A field value, by corpus key. |
 
 Spreadsheet formula injection is defused: on export a cell beginning with `=`, `+`, `-`, `@`, a tab, a carriage return or `'` is prefixed with `'` (plain numbers such as `-5` are left alone), and on import a `'` followed by one of those characters is removed, so a file reads back exactly as it was written.
 
 **Export.** `GET /api/v1/assets/export.csv` (`assets:read`) takes the asset list's filters (`category_id`, `search`) and writes every matching asset, with a column for every generator type and every field any of them has a value for.
 
-**Import.** `POST /api/v1/assets/import/preview` and `POST /api/v1/assets/import` (`assets:write`) take the file (at most 5 MB and 5,000 rows) and a mapping from each column to `id`, `name`, `categories`, a generator type, a field key, or `ignore`.
+**Import.** `POST /api/v1/assets/import/preview` and `POST /api/v1/assets/import` (`assets:write`) take the file (at most 5 MB and 5,000 rows) and a mapping from each column to `id`, `name`, `categories`, `quantity`, `unit`, `low_stock_threshold`, a generator type, a field key, or `ignore`.
 
 1. **Mapping:** the preview suggests a mapping from the headers (the names above, and field labels as well as keys). Every column must be mapped or explicitly ignored, and the user confirms the mapping before importing.
 2. **Pre-flight validation:** every referenced category must already exist; otherwise the import is refused with the list of unknown references. Each row is then checked as the API would check it: required fields from the asset's effective fields, field types and select choices, and generator codes (format, and uniqueness both within the file and against other assets). Duplicate IDs within the file, unknown IDs and archived assets are errors.
@@ -799,6 +823,11 @@ Running BAM for real, and keeping it honest. In priority order:
 
 #### Sub-Phase 6.5: Expensive Inputs
 * [x] Requests whose cost is out of proportion to their size are bounded. Laying out text measures each line once rather than every candidate from scratch, splits it into words once, and stops breaking lines past the box: the worst a template allows (100 wrapped, shrinking elements bound to 10,000-character values) went from 25 seconds and 6 GB to under 0.1 second, with output unchanged (`TestTextLayoutMatchesTheReference` compares it with the old algorithm). Batches stop with `422` once their labels hold more than 5 million shapes.
+
+### Phase 7: Inventory
+
+#### Sub-Phase 7.1: Quantities on Assets
+* [x] Stock counted by quantity on an asset, beside the category counts (§5.1): use and restock actions, a threshold and running-low flag per asset, asset events for notifications, a per-asset history, CSV columns, and the screens for all of it.
 
 ---
 

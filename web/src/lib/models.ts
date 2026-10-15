@@ -76,6 +76,31 @@ export interface Asset {
   created_at: string;
   updated_at: string;
   archived_at?: string | null;
+  /** Set when the asset's stock is counted by quantity (README §5.1). */
+  stock?: AssetStock | null;
+}
+
+export interface AssetStock {
+  quantity: number;
+  unit: string;
+  /** Flags the asset when its quantity drops below it; null for none. */
+  low_stock_threshold: number | null;
+  is_running_low: boolean;
+}
+
+/** Something that happened to an asset, as its history lists it. */
+export interface AssetEvent {
+  id: string;
+  kind: string;
+  created_at: string;
+  payload: {
+    actor?: { id: string; email: string };
+    trigger: 'manual' | 'threshold';
+    quantity?: number;
+    change?: number;
+    threshold?: number;
+    unit?: string;
+  };
 }
 
 export interface GeneratorKey {
@@ -255,4 +280,5 @@ export interface Delivery {
   channel_name: string;
   event_kind: string;
   category_name?: string;
+  asset_name?: string;
 }

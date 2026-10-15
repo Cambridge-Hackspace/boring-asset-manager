@@ -47,14 +47,17 @@ func (s *Store) takeLock(tx *sql.Tx, name string) error {
 // inventoryChange is a change running under the inventory lock.
 type inventoryChange struct {
 	tx *sql.Tx
-	// manual holds categories whose flag the change set by hand; the
-	// threshold rule leaves them alone for this change.
-	manual map[string]bool
+	// manual and manualAssets hold the categories and assets whose flag the
+	// change set by hand; the threshold rule leaves them alone for this
+	// change.
+	manual       map[string]bool
+	manualAssets map[string]bool
 }
 
 // withInventory runs change in a transaction holding the inventory lock,
-// then applies the threshold rule to every category whose active count
-// crossed its threshold, recording events in the same transaction.
+// then applies the threshold rule to every category whose active count, and
+// every asset whose quantity, crossed its threshold, recording events in the
+// same transaction.
 func (s *Store) withInventory(change func(ic *inventoryChange) error) error {
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -69,7 +72,11 @@ func (s *Store) withInventory(change func(ic *inventoryChange) error) error {
 	if err != nil {
 		return err
 	}
-	ic := &inventoryChange{tx: tx, manual: map[string]bool{}}
+	assetsBefore, err := s.assetLevels(tx)
+	if err != nil {
+		return err
+	}
+	ic := &inventoryChange{tx: tx, manual: map[string]bool{}, manualAssets: map[string]bool{}}
 	if err := change(ic); err != nil {
 		return err
 	}
@@ -78,6 +85,13 @@ func (s *Store) withInventory(change func(ic *inventoryChange) error) error {
 		return err
 	}
 	if err := s.applyThresholds(ic, before, after); err != nil {
+		return err
+	}
+	assetsAfter, err := s.assetLevels(tx)
+	if err != nil {
+		return err
+	}
+	if err := s.applyAssetThresholds(ic, assetsBefore, assetsAfter); err != nil {
 		return err
 	}
 	if s.beforeInventoryCommit != nil {
@@ -187,20 +201,8 @@ func (s *Store) countActive(tx *sql.Tx, parents map[string]string, targets map[s
 // applyThresholds flags or clears each category whose active count crossed
 // its threshold during the change, unless the change set its flag by hand.
 func (s *Store) applyThresholds(ic *inventoryChange, before, after map[string]stock) error {
-	ids := make([]string, 0, len(after))
-	for id := range after {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	for _, id := range ids {
+	for _, id := range crossings(before, after, ic.manual) {
 		now := after[id]
-		prev, existed := before[id]
-		if ic.manual[id] || (existed && prev.below() == now.below()) || (!existed && !now.below()) {
-			continue
-		}
-		if now.below() == now.runningLow {
-			continue
-		}
 		if err := s.setRunningLowTx(ic.tx, id, now.below()); err != nil {
 			return err
 		}
@@ -218,6 +220,31 @@ func (s *Store) applyThresholds(ic *inventoryChange, before, after map[string]st
 		}
 	}
 	return nil
+}
+
+// crossings lists, in order, what must have its flag changed after a change:
+// each thing whose level crossed its threshold, or that gained a threshold
+// it is already below, whose flag disagrees, and that the change did not
+// flag by hand.
+func crossings(before, after map[string]stock, manual map[string]bool) []string {
+	ids := make([]string, 0, len(after))
+	for id := range after {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	var out []string
+	for _, id := range ids {
+		now := after[id]
+		prev, existed := before[id]
+		if manual[id] || (existed && prev.below() == now.below()) || (!existed && !now.below()) {
+			continue
+		}
+		if now.below() == now.runningLow {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
 }
 
 // setRunningLowTx stores a category's flag.
@@ -238,7 +265,24 @@ func (s *Store) recordEvent(tx *sql.Tx, kind, categoryID string, payload models.
 		return fmt.Errorf("reading category for event: %w", err)
 	}
 	payload.Category = &cat
+	return s.insertEvent(tx, kind, &categoryID, nil, payload)
+}
 
+// recordAssetEvent stores an event about an asset, filling in the asset, its
+// unit and the acting user as they are now.
+func (s *Store) recordAssetEvent(tx *sql.Tx, kind, assetID string, payload models.EventPayload) error {
+	a := models.EventAsset{ID: assetID}
+	err := s.TxQueryRow(tx, "SELECT name, stock_unit FROM assets WHERE id = ?", assetID).Scan(&a.Name, &payload.Unit)
+	if err != nil {
+		return fmt.Errorf("reading asset for event: %w", err)
+	}
+	payload.Asset = &a
+	return s.insertEvent(tx, kind, nil, &assetID, payload)
+}
+
+// insertEvent stores an event about a category or an asset, filling in the
+// acting user, and queues its deliveries.
+func (s *Store) insertEvent(tx *sql.Tx, kind string, categoryID, assetID *string, payload models.EventPayload) error {
 	var actorID *string
 	if s.actor != "" {
 		actor := models.EventActor{ID: s.actor}
@@ -255,10 +299,14 @@ func (s *Store) recordEvent(tx *sql.Tx, kind, categoryID string, payload models.
 		return fmt.Errorf("encoding event: %w", err)
 	}
 	id, now := uuid.NewString(), dbTime(time.Now())
-	_, err = s.TxExec(tx, "INSERT INTO events (id, kind, category_id, actor_user_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, kind, categoryID, actorID, string(raw), now)
+	_, err = s.TxExec(tx, "INSERT INTO events (id, kind, category_id, asset_id, actor_user_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		id, kind, categoryID, assetID, actorID, string(raw), now)
 	if err != nil {
 		return fmt.Errorf("recording event: %w", err)
+	}
+	if kind == models.EventQuantityChanged {
+		// History only: no channel can subscribe to it.
+		return nil
 	}
 	return s.fanOut(tx, id, kind, now)
 }
@@ -362,19 +410,22 @@ func (s *Store) ListEvents(limit int) ([]models.Event, error) {
 }
 
 // eventColumns lists an event's columns in scanEvent's order.
-const eventColumns = "id, kind, category_id, actor_user_id, payload, created_at"
+const eventColumns = "id, kind, category_id, asset_id, actor_user_id, payload, created_at"
 
 func scanEvent(row interface{ Scan(...any) error }) (models.Event, error) {
 	var (
-		e        models.Event
-		cat, act sql.NullString
-		payload  string
+		e             models.Event
+		cat, ast, act sql.NullString
+		payload       string
 	)
-	if err := row.Scan(&e.ID, &e.Kind, &cat, &act, &payload, &e.CreatedAt); err != nil {
+	if err := row.Scan(&e.ID, &e.Kind, &cat, &ast, &act, &payload, &e.CreatedAt); err != nil {
 		return e, err
 	}
 	if cat.Valid {
 		e.CategoryID = &cat.String
+	}
+	if ast.Valid {
+		e.AssetID = &ast.String
 	}
 	if act.Valid {
 		e.ActorUserID = &act.String

@@ -105,6 +105,17 @@ func (s *Store) resolveFieldValues(fieldMap map[string]models.EffectiveField, va
 
 // CreateAsset creates an asset with multi-category bindings, validated generator keys, and dynamic field values.
 func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string) (*models.AssetWithDetails, error) {
+	return s.CreateAssetWithStock(name, categoryIDs, generatorKeys, fieldValues, nil)
+}
+
+// CreateAssetWithStock creates an asset as CreateAsset does, counting its
+// stock by quantity when stock is not nil.
+func (s *Store) CreateAssetWithStock(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockInput) (*models.AssetWithDetails, error) {
+	if stock != nil {
+		if err := stock.normalize(); err != nil {
+			return nil, err
+		}
+	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("asset name cannot be empty")
@@ -159,7 +170,13 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 	now := time.Now().UTC()
 
 	err = s.withInventory(func(ic *inventoryChange) error {
-		return s.insertAsset(ic.tx, assetID, name, now, cats, generatorKeys, resolvedValues)
+		if err := s.insertAsset(ic.tx, assetID, name, now, cats, generatorKeys, resolvedValues); err != nil {
+			return err
+		}
+		if stock == nil {
+			return nil
+		}
+		return s.writeStockTx(ic.tx, assetID, nil, stock)
 	})
 	if err != nil {
 		return nil, err
@@ -211,15 +228,19 @@ func (s *Store) insertAsset(tx *sql.Tx, assetID, name string, now time.Time, cat
 
 // GetAssetByID retrieves an asset and resolves its assigned categories, generator keys, and field values.
 func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
-	query := `SELECT id, name, created_at, updated_at, archived_at FROM assets WHERE id = ?`
-	var a models.Asset
-	err := s.QueryRow(query, id).Scan(&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt)
+	query := `SELECT id, name, created_at, updated_at, archived_at, ` + stockColumns + ` FROM assets WHERE id = ?`
+	var (
+		a  models.Asset
+		sc stockScan
+	)
+	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt}, sc.dest()...)...)
 	if err == sql.ErrNoRows {
 		return nil, ErrAssetNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("querying asset: %w", err)
 	}
+	a.Stock = sc.stock()
 
 	// Categories
 	catQuery := `
@@ -386,12 +407,29 @@ func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWith
 // slice clears it (an asset with no categories falls back to Uncategorized). An empty name
 // keeps the current one, and fieldValues only touches the keys it names.
 func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string) (*models.AssetWithDetails, error) {
+	return s.UpdateAssetWithStock(id, name, categoryIDs, generatorKeys, fieldValues, nil)
+}
+
+// StockUpdate replaces an asset's stock with Stock; a nil Stock stops
+// counting it by quantity.
+type StockUpdate struct {
+	Stock *StockInput
+}
+
+// UpdateAssetWithStock updates an asset as UpdateAsset does, and replaces its
+// stock when stock is not nil.
+func (s *Store) UpdateAssetWithStock(id, name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockUpdate) (*models.AssetWithDetails, error) {
+	if stock != nil && stock.Stock != nil {
+		if err := stock.Stock.normalize(); err != nil {
+			return nil, err
+		}
+	}
 	existing, err := s.GetAssetByID(id)
 	if err != nil {
 		return nil, err
 	}
 	if existing.Asset.ArchivedAt != nil {
-		return nil, errors.New("cannot update an archived asset")
+		return nil, ErrAssetArchived
 	}
 
 	name = strings.TrimSpace(name)
@@ -457,7 +495,18 @@ func (s *Store) UpdateAsset(id, name string, categoryIDs []string, generatorKeys
 
 	now := time.Now().UTC()
 	err = s.withInventory(func(ic *inventoryChange) error {
-		return s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues)
+		if err := s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues); err != nil {
+			return err
+		}
+		if stock == nil {
+			return nil
+		}
+		// Read again under the lock: the quantity may have moved since.
+		was, err := s.readStockTx(ic.tx, id)
+		if err != nil {
+			return err
+		}
+		return s.writeStockTx(ic.tx, id, was, stock.Stock)
 	})
 	if err != nil {
 		return nil, err

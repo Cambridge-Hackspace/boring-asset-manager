@@ -248,3 +248,55 @@ func TestDeliveriesAreExactlyOnce(t *testing.T) {
 		t.Errorf("%d events, %d sends, want 20 and %d", len(events), total, want)
 	}
 }
+
+// TestQuantitiesOverHTTP has several people use and restock an asset counted
+// by quantity at once, through the API, on whichever database the suite
+// runs against: no use is lost, nothing goes below zero, and the crossing is
+// recorded once.
+func TestQuantitiesOverHTTP(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin("ada@hackspace.org")
+	id := c.newAsset(map[string]any{"name": "Nitrile gloves", "stock": map[string]any{"quantity": 30, "unit": "pairs", "low_stock_threshold": 10}})
+	path := "/assets/" + id + "/quantity"
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		statuses = map[int]int{}
+	)
+	start := make(chan struct{})
+	for i := 0; i < 40; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			r := c.send(http.MethodPost, path, map[string]int{"adjust": -1})
+			mu.Lock()
+			statuses[r.status]++
+			mu.Unlock()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if statuses[http.StatusOK] != 30 || statuses[http.StatusConflict] != 10 {
+		t.Fatalf("statuses %v, want 30 used and 10 refused", statuses)
+	}
+
+	var out struct{ Asset models.AssetWithDetails }
+	c.mustJSON(http.MethodPost, path, map[string]int{"adjust": 12}, &out, http.StatusOK)
+	if s := out.Asset.Asset.Stock; s == nil || s.Quantity != 12 || s.IsRunningLow {
+		t.Fatalf("after restocking: %+v", s)
+	}
+	var history struct{ Events []models.Event }
+	c.mustJSON(http.MethodGet, "/assets/"+id+"/history", nil, &history, http.StatusOK)
+	counts := map[string]int{}
+	for _, ev := range history.Events {
+		counts[ev.Kind]++
+	}
+	if counts[models.EventQuantityChanged] != 32 || counts[models.EventAssetRunningLow] != 1 || counts[models.EventAssetRestocked] != 1 {
+		t.Errorf("history %v", counts)
+	}
+	if latest := history.Events[0]; latest.Kind != models.EventAssetRestocked || *latest.Payload.Quantity != 12 || latest.Payload.Unit != "pairs" {
+		t.Errorf("latest %+v", latest)
+	}
+}

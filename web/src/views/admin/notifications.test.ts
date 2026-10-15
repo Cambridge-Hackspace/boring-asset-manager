@@ -16,6 +16,7 @@ const drivers: NotifierDriver[] = [
 const events = [
   { kind: 'category.running_low', label: 'A category is running low' },
   { kind: 'category.restocked', label: 'A category is restocked' },
+  { kind: 'asset.running_low', label: 'An asset counted by quantity is running low' },
 ];
 const channel: Channel = {
   id: 'c1', name: 'Stores', driver: 'discord', options: {}, secrets_set: { webhook_url: true }, enabled: true,
@@ -39,7 +40,11 @@ function api(channels: Channel[], extra: Record<string, (b: unknown) => unknown>
     'GET /notifiers/drivers': () => ({ drivers, events }),
     'GET /notifiers': () => ({ channels }),
     'GET /notifiers/deliveries': () => ({
-      deliveries: [delivery({}), delivery({ id: 'd2', status: 'pending', attempts: 2, last_error: 'temporary failure: HTTP 502' })],
+      deliveries: [
+        delivery({}),
+        delivery({ id: 'd2', status: 'pending', attempts: 2, last_error: 'temporary failure: HTTP 502' }),
+        delivery({ id: 'd3', event_kind: 'asset.running_low', category_name: undefined, asset_name: 'M3 screws' }),
+      ],
     }),
     ...extra,
   });
@@ -62,7 +67,7 @@ describe('NotificationsPage', () => {
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
     expect(sent.find((r) => r.method === 'POST')!.body).toEqual({
       name: 'Stores', driver: 'discord', options: { webhook_url: 'https://discord.com/api/webhooks/1/x' }, enabled: true,
-      events: ['category.running_low'],
+      events: ['category.running_low', 'asset.running_low'],
     });
     expect(await screen.findByText('Channel saved.')).toBeTruthy();
   });
@@ -99,6 +104,7 @@ describe('NotificationsPage', () => {
     expect(rows[0]!.textContent).toContain('Sent');
     expect(rows[1]!.textContent).toContain('Waiting to retry (2 attempts so far)');
     expect(rows[1]!.textContent).toContain('temporary failure: HTTP 502');
+    expect(rows[2]!.textContent).toContain('An asset counted by quantity is running low: M3 screws');
   });
 });
 

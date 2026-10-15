@@ -78,4 +78,49 @@ describe('AssetForm', () => {
     // Kept values are not sent, so they stay as they are.
     expect(sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ field_values: { weight: '' }, generator_keys: [] });
   });
+
+  it('counts stock when asked, and an edit leaves the quantity alone unless it is changed', async () => {
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories: [] }),
+      'GET /generators': () => ({ generators }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' } } } }),
+    });
+    render(AssetForm, { params: {} });
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'M3 screws' } });
+    expect(screen.queryByLabelText('Quantity')).toBeNull();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Count stock by quantity' }));
+    await fireEvent.input(screen.getByLabelText('Quantity'), { target: { value: '200' } });
+    await fireEvent.input(screen.getByLabelText('Unit (optional)'), { target: { value: 'pcs' } });
+    await fireEvent.input(screen.getByLabelText('Low stock threshold (optional)'), { target: { value: '50' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+    expect(sent.find((r) => r.method === 'POST' && r.path === '/assets')!.body).toMatchObject({
+      stock: { quantity: 200, unit: 'pcs', low_stock_threshold: 50 },
+    });
+
+    cleanup();
+    const existing: AssetWithDetails = {
+      asset: { id: 'a1', name: 'M3 screws', created_at: '', updated_at: '', stock: { quantity: 40, unit: 'pcs', low_stock_threshold: 50, is_running_low: true } },
+      categories: [],
+      generator_keys: [],
+      field_values: {},
+      effective_fields: [],
+    };
+    const edit = fakeApi({
+      'GET /categories': () => ({ categories: [] }),
+      'GET /generators': () => ({ generators }),
+      'GET /assets/a1': () => ({ asset: existing }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'PUT /assets/a1': () => ({ asset: existing }),
+    });
+    render(AssetForm, { params: { id: 'a1' } });
+    const unit = await screen.findByLabelText('Unit (optional)');
+    expect((screen.getByLabelText('Quantity') as HTMLInputElement).value).toBe('40');
+    await fireEvent.input(unit, { target: { value: 'screws' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(edit.sent.some((r) => r.method === 'PUT')).toBe(true));
+    expect(edit.sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ stock: { unit: 'screws', low_stock_threshold: 50 } });
+    expect((edit.sent.find((r) => r.method === 'PUT')!.body as { stock: object }).stock).not.toHaveProperty('quantity');
+  });
 });

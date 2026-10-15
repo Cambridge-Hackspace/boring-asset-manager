@@ -20,7 +20,7 @@
   let result = $state<ImportResult | null>(null);
 
   const options = $derived(targetOptions(fields, generators));
-  const groups = $derived(['Asset', 'Codes', 'Fields'].map((g) => ({ name: g, options: options.filter((o) => o.group === g) })));
+  const groups = $derived(['Asset', 'Stock', 'Codes', 'Fields'].map((g) => ({ name: g, options: options.filter((o) => o.group === g) })));
   const duplicates = $derived(duplicateTargets(mapping));
   const checked = $derived(plan !== null && JSON.stringify(mapping) === checkedWith);
   const ready = $derived(checked && plan !== null && plan.problem_count === 0 && plan.create + plan.update > 0);

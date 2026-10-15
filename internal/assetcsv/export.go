@@ -5,6 +5,7 @@ import (
 	"io"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -15,6 +16,9 @@ const (
 	ColumnID         = "id"
 	ColumnName       = "name"
 	ColumnCategories = "categories"
+	ColumnQuantity   = "quantity"
+	ColumnUnit       = "unit"
+	ColumnThreshold  = "low_stock_threshold"
 	CodePrefix       = "code."
 	FieldPrefix      = "field."
 )
@@ -48,11 +52,14 @@ func Undefuse(s string) string {
 }
 
 // Export writes assets as CSV: id, name, categories, a code column for each
-// generator type, and a field column for every field any asset has a value
-// for, by key.
+// generator type, the stock columns when any asset's stock is counted
+// by quantity, and a field column for every field any asset has a value for,
+// by key.
 func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, generatorTypes []string) error {
+	stocked := false
 	keys := map[string]bool{}
 	for _, a := range assets {
+		stocked = stocked || a.Asset.Stock != nil
 		for k, v := range a.FieldValues {
 			if v != "" {
 				keys[k] = true
@@ -68,6 +75,9 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 	header := []string{ColumnID, ColumnName, ColumnCategories}
 	for _, t := range generatorTypes {
 		header = append(header, CodePrefix+t)
+	}
+	if stocked {
+		header = append(header, ColumnQuantity, ColumnUnit, ColumnThreshold)
 	}
 	for _, k := range fieldKeys {
 		header = append(header, FieldPrefix+k)
@@ -90,6 +100,9 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 		for _, t := range generatorTypes {
 			row = append(row, Defuse(codes[t]))
 		}
+		if stocked {
+			row = append(row, stockCells(a.Asset.Stock)...)
+		}
 		for _, k := range fieldKeys {
 			row = append(row, Defuse(a.FieldValues[k]))
 		}
@@ -99,4 +112,17 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+// stockCells are an asset's quantity, unit and threshold cells; blank when
+// its stock is not counted by quantity.
+func stockCells(s *models.AssetStock) []string {
+	if s == nil {
+		return []string{"", "", ""}
+	}
+	threshold := ""
+	if s.LowStockThreshold != nil {
+		threshold = strconv.Itoa(*s.LowStockThreshold)
+	}
+	return []string{strconv.Itoa(s.Quantity), Defuse(s.Unit), threshold}
 }

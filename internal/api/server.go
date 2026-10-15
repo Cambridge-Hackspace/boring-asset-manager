@@ -87,6 +87,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetAsset)))
 	mux.Handle("PUT /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUpdateAsset)))
 	mux.Handle("DELETE /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsDelete)(http.HandlerFunc(s.handleDeleteAsset)))
+	mux.Handle("POST /api/v1/assets/{id}/quantity", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleAdjustQuantity)))
+	mux.Handle("PUT /api/v1/assets/{id}/running-low", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleSetAssetRunningLow)))
+	mux.Handle("GET /api/v1/assets/{id}/history", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetHistory)))
 
 	// Label templates
 	mux.Handle("GET /api/v1/templates", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListTemplates)))

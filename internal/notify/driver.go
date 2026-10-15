@@ -61,6 +61,8 @@ type Notification struct {
 var EventKinds = []EventKind{
 	{Kind: models.EventRunningLow, Label: "A category is running low"},
 	{Kind: models.EventRestocked, Label: "A category is restocked"},
+	{Kind: models.EventAssetRunningLow, Label: "An asset counted by quantity is running low"},
+	{Kind: models.EventAssetRestocked, Label: "An asset counted by quantity is restocked"},
 }
 
 // EventKind is an event channels can subscribe to.
