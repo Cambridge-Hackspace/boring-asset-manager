@@ -94,19 +94,20 @@ const (
 	// EventQuantityChanged records a change of an asset's quantity, for its
 	// history. Channels cannot subscribe to it.
 	EventQuantityChanged = "asset.quantity_changed"
-	// EventAssetCreated, EventAssetEdited and EventAssetArchived record
-	// changes to an asset, listed in the payload's Changes, for its history.
-	// Channels cannot subscribe to them either.
+	// EventAssetCreated, EventAssetEdited, EventAssetArchived and
+	// EventAssetRestored record changes to an asset, listed in the payload's
+	// Changes, for its history. Channels cannot subscribe to them either.
 	EventAssetCreated  = "asset.created"
 	EventAssetEdited   = "asset.edited"
 	EventAssetArchived = "asset.archived"
+	EventAssetRestored = "asset.restored"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
 // asset's history, with no channel able to subscribe to them.
 func HistoryOnly(kind string) bool {
 	switch kind {
-	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived:
+	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored:
 		return true
 	}
 	return false

@@ -294,6 +294,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 * **Assets (`assets`):**
 * Primary identifier: `id` (random UUIDv4).
 * Audit timestamps: `created_at`, `updated_at`, `archived_at`.
+* **Archiving and restoring:** `DELETE /api/v1/assets/{id}` (`assets:delete`) archives an asset and releases its codes for other assets. Archived assets cannot be edited, used or restocked, and are listed apart: `GET /api/v1/assets?archived=true`, most recently archived first, with the same category and search filters (search finds them by name, since their codes are released). `POST /api/v1/assets/{id}/restore` (`assets:delete`) brings one back with the codes archiving released, except any another asset has taken since; the response lists those as `skipped_codes`. Assets archived before archiving recorded their codes (§5.1) come back without codes. Restoring counts toward thresholds as creating does.
 * Optional stock counted by quantity: `stock_quantity`, `stock_unit`, `low_stock_threshold`, `is_running_low` (§5.1).
 
 
@@ -568,7 +569,7 @@ The two are never added together, since they count different things (3 spools an
 * **Using and restocking:** `POST /api/v1/assets/{id}/quantity` (`assets:write`) with `{"adjust": n}`, negative to use some and positive to restock, or `{"set": n}`. Using more than there is answers `409` (`not enough stock: 40 left`) and changes nothing. Changes run under the inventory lock, so people using stock at once each take their share.
 * **Thresholds and the flag:** the same rule as categories. Dropping below the threshold flags the asset and climbing back clears it, reacting to crossings only, so a flag set by hand (`PUT /api/v1/assets/{id}/running-low`, `assets:write`) stands until the next crossing. Archived assets are not checked.
 * **Events and history:** crossings and manual changes record `asset.running_low` and `asset.restocked`, with the asset, its quantity, threshold and unit, and who caused it; channels can subscribe to them. Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the asset's history. Channels cannot subscribe to it.
-* **Asset history:** creating, editing and archiving an asset record `asset.created`, `asset.edited` and `asset.archived`, in the same transaction as the change, through the web app, the API and CSV imports alike (an import sets the trigger to `import`). Each lists its `changes`: the name, categories joined and left, field values, codes, and whether stock is counted, its unit and threshold, each with the value before and after and the field's label or the generator's name as they read then. A save that changes nothing records nothing. Archiving lists the codes it released. Changes made elsewhere that affect an asset, such as deleting a field or a category, are not recorded on it, and assets created before this release have no record of earlier edits. Channels cannot subscribe to these either.
+* **Asset history:** creating, editing, archiving and restoring an asset record `asset.created`, `asset.edited`, `asset.archived` and `asset.restored`, in the same transaction as the change, through the web app, the API and CSV imports alike (an import sets the trigger to `import`). Each lists its `changes`: the name, categories joined and left, field values, codes, and whether stock is counted, its unit and threshold, each with the value before and after and the field's label or the generator's name as they read then. A save that changes nothing records nothing. Archiving lists the codes it released, and restoring the codes it got back and those another asset had taken. Changes made elsewhere that affect an asset, such as deleting a field or a category, are not recorded on it, and assets created before this release have no record of earlier edits. Channels cannot subscribe to these either.
 * **Reading the history:** `GET /api/v1/assets/{id}/history` (`assets:read`) returns `events`, newest first, 50 at a time, with the email of whoever made each change, and `more` when older events remain; `?before=<event id>` returns the page older than that event, and an event that is not the asset's is a 400.
 
 ### 5.2 Notifiers
@@ -848,6 +849,9 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.2: Change History
 * [x] Every change to an asset recorded in its history, not only stock (§5.1): who created, renamed, recategorized, edited fields, codes or stock settings, or archived it, and when, paged on the asset's page.
 
+#### Sub-Phase 7.3: Restoring Archived Assets
+* [x] Archived assets listed apart and restored (§3.2), with the codes no other asset has taken since, recorded in their history.
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -878,9 +882,6 @@ Agreed, not yet scheduled or designed in detail.
 
 #### API Tokens
 * [ ] Tokens for scripts and dashboards, assigned roles like users, so a token can be read-only or limited to stock changes. Shown once when created, stored hashed, and revocable.
-
-#### Restoring Archived Assets
-* [ ] Archived assets can be listed and restored. A restored asset gets its codes back only if no other asset has taken them meanwhile. Restoring is recorded in its history, which lists the codes archiving released.
 
 #### Deferred
 * **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.

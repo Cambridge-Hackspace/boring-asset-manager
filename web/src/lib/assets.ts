@@ -135,12 +135,14 @@ export function describeEvent(e: AssetEvent): string {
       return p.trigger === 'import' ? 'Edited by an import' : 'Edited';
     case 'asset.archived':
       return 'Archived';
+    case 'asset.restored':
+      return 'Restored';
     default:
       return e.kind;
   }
 }
 
-/** One line of what a created, edited or archived event changed. */
+/** One line of what a created, edited, archived or restored event changed. */
 export function describeChange(c: AssetChange, kind: string): string {
   switch (c.what) {
     case 'category':
@@ -149,6 +151,9 @@ export function describeChange(c: AssetChange, kind: string): string {
       return c.to ? 'Started counting stock' : 'Stopped counting stock';
     case 'code':
       if (kind === 'asset.archived') return `Released ${c.label ?? c.key} ${c.from}`;
+      if (kind === 'asset.restored') {
+        return c.to ? `Got back ${c.label ?? c.key} ${c.to}` : `Not given back ${c.label ?? c.key} ${c.from}: another asset has it`;
+      }
       return fromTo(c.label ?? c.key ?? 'Code', c);
     case 'field':
       return fromTo(c.label ?? c.key ?? 'Field', c);

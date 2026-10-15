@@ -109,3 +109,43 @@ describe('AssetPage history', () => {
     expect(screen.queryByRole('button', { name: 'Show older' })).toBeNull();
   });
 });
+
+describe('AssetPage archived', () => {
+  it('offers only a restore, and says which codes another asset took', async () => {
+    session.permissions = ['assets:read', 'assets:write', 'assets:delete', 'labels:print'];
+    const archived: AssetWithDetails = { ...withStock(40, false), asset: { ...withStock(40, false).asset, archived_at: '2026-10-15T10:00:00Z' } };
+    const restored: AssetEvent = {
+      id: 'e3',
+      kind: 'asset.restored',
+      created_at: '2026-10-15T11:00:00Z',
+      payload: { trigger: 'manual', changes: [{ what: 'code', key: 'qr', label: 'QR Code', from: 'S-1' }] },
+    };
+    let restoredYet = false;
+    const { sent } = fakeApi({
+      'GET /assets/a1': () => ({ asset: archived }),
+      'GET /generators': () => ({ generators: [{ type: 'qr', name: 'QR Code', error_correction_levels: [], code_rules: '' }] }),
+      'GET /assets/a1/history': () => ({ events: restoredYet ? [restored] : [] }),
+      'GET /templates': () => ({ templates: [] }),
+      'GET /printers': () => ({ printers: [] }),
+      'POST /assets/a1/restore': () => {
+        restoredYet = true;
+        return { asset: withStock(40, false), skipped_codes: [{ asset_id: 'a1', generator_type: 'qr', assigned_code: 'S-1' }] };
+      },
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+
+    expect(await screen.findByText(/^Archived .*Its codes were released/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Labels' })).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(await screen.findByText('Restored. Other assets have taken QR Code S-1, so it did not get them back.')).toBeTruthy();
+    expect(await screen.findByText('Not given back QR Code S-1: another asset has it')).toBeTruthy();
+    expect(screen.queryByText(/Its codes were released/)).toBeNull();
+    expect(screen.getByRole('link', { name: 'Edit' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Use' })).toBeTruthy();
+    expect(sent.filter((r) => r.method === 'POST').map((r) => r.path)).toEqual(['/assets/a1/restore']);
+  });
+});

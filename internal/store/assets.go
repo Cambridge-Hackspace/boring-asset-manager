@@ -337,12 +337,28 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 
 // ListAssets returns active assets, optionally filtered by category or search term.
 func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWithDetails, error) {
+	return s.listAssets(categoryID, search, false)
+}
+
+// ListArchivedAssets returns archived assets, most recently archived first,
+// filtered as ListAssets filters active ones.
+func (s *Store) ListArchivedAssets(categoryID string, search string) ([]models.AssetWithDetails, error) {
+	return s.listAssets(categoryID, search, true)
+}
+
+func (s *Store) listAssets(categoryID string, search string, archived bool) ([]models.AssetWithDetails, error) {
 	var (
 		whereClauses []string
 		args         []any
+		order        = "a.created_at DESC"
 	)
 
-	whereClauses = append(whereClauses, "a.archived_at IS NULL")
+	if archived {
+		whereClauses = append(whereClauses, "a.archived_at IS NOT NULL")
+		order = "a.archived_at DESC, a.created_at DESC"
+	} else {
+		whereClauses = append(whereClauses, "a.archived_at IS NULL")
+	}
 
 	if categoryID != "" {
 		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_categories WHERE category_id = ?)")
@@ -353,8 +369,8 @@ func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWith
 		SELECT a.id
 		FROM assets a
 		WHERE %s
-		ORDER BY a.created_at DESC
-	`, strings.Join(whereClauses, " AND "))
+		ORDER BY %s
+	`, strings.Join(whereClauses, " AND "), order)
 
 	rows, err := s.Query(query, args...)
 	if err != nil {
@@ -614,6 +630,81 @@ func (s *Store) DeleteAsset(id string) error {
 			Changes: diffCodes(before.codes, nil),
 		})
 	})
+}
+
+// ErrAssetNotArchived is returned when restoring an asset that is active.
+var ErrAssetNotArchived = errors.New("the asset is not archived")
+
+// RestoreAsset brings an archived asset back with the codes archiving
+// released, except any another asset has taken since, which it returns.
+// An asset archived before archiving recorded its codes comes back without
+// any.
+func (s *Store) RestoreAsset(id string) (*models.AssetWithDetails, []models.AssetGeneratorKey, error) {
+	skipped := []models.AssetGeneratorKey{}
+	err := s.withInventory(func(ic *inventoryChange) error {
+		before, err := s.snapshotAssetTx(ic.tx, id)
+		if err != nil {
+			return err
+		}
+		if !before.archived {
+			return ErrAssetNotArchived
+		}
+		released, err := s.releasedCodesTx(ic.tx, id)
+		if err != nil {
+			return err
+		}
+		if _, err := s.TxExec(ic.tx, "UPDATE assets SET archived_at = NULL, updated_at = ? WHERE id = ?", time.Now().UTC(), id); err != nil {
+			return fmt.Errorf("restoring asset: %w", err)
+		}
+		// Each change names a code it got back (to) or one taken meanwhile
+		// (from).
+		changes := []models.EventChange{}
+		for _, c := range released {
+			var taken int
+			err := s.TxQueryRow(ic.tx, "SELECT COUNT(*) FROM asset_generator_keys WHERE generator_type = ? AND assigned_code = ?", c.Key, c.From).Scan(&taken)
+			if err != nil {
+				return fmt.Errorf("checking code: %w", err)
+			}
+			if taken > 0 {
+				skipped = append(skipped, models.AssetGeneratorKey{AssetID: id, GeneratorType: c.Key, AssignedCode: c.From})
+				changes = append(changes, models.EventChange{What: "code", Key: c.Key, Label: c.Label, From: c.From})
+				continue
+			}
+			if _, err := s.TxExec(ic.tx, "INSERT INTO asset_generator_keys (asset_id, generator_type, assigned_code) VALUES (?, ?, ?)", id, c.Key, c.From); err != nil {
+				if IsUniqueViolation(err) {
+					return fmt.Errorf("%w: %s", ErrGeneratorCodeExists, c.From)
+				}
+				return fmt.Errorf("restoring code: %w", err)
+			}
+			changes = append(changes, models.EventChange{What: "code", Key: c.Key, Label: c.Label, To: c.From})
+		}
+		return s.recordAssetEvent(ic.tx, models.EventAssetRestored, id, models.EventPayload{Trigger: models.TriggerManual, Changes: changes})
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	a, err := s.GetAssetByID(id)
+	return a, skipped, err
+}
+
+// releasedCodesTx returns the codes an asset's last archiving released, as
+// its history recorded them.
+func (s *Store) releasedCodesTx(tx *sql.Tx, id string) ([]models.EventChange, error) {
+	row := s.TxQueryRow(tx, "SELECT "+eventColumns+" FROM events WHERE asset_id = ? AND kind = ? ORDER BY created_at DESC, id DESC LIMIT 1", id, models.EventAssetArchived)
+	e, err := scanEvent(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading the asset's archiving: %w", err)
+	}
+	var codes []models.EventChange
+	for _, c := range e.Payload.Changes {
+		if c.What == "code" && c.From != "" {
+			codes = append(codes, c)
+		}
+	}
+	return codes, nil
 }
 
 // EffectiveFieldsForAsset resolves the fields an asset in these categories

@@ -80,3 +80,33 @@ test('create an asset, preview and print its label, export a batch', async ({ si
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
   await expect(page.getByRole('row')).toHaveCount(2);
 });
+
+test('archive an asset, find it among the archived, and restore it', async ({ signedIn: page, api }) => {
+  const name = unique('Saw');
+  const code = unique('S').toUpperCase();
+  const { asset } = await api.call('POST', '/assets', { name, generator_keys: [{ generator_type: 'qr', assigned_code: code }] });
+  await page.goto(`/assets/${asset.asset.id}`);
+  await page.getByRole('button', { name: 'Archive' }).click();
+  await page.getByRole('group', { name: /^Archive this asset/ }).getByRole('button', { name: 'Archive' }).click();
+  await expect(page).toHaveURL(/\/assets$/);
+
+  // Another asset takes its code meanwhile.
+  await api.call('POST', '/assets', { name: unique('Other saw'), generator_keys: [{ generator_type: 'qr', assigned_code: code }] });
+
+  await page.getByLabel('Show').selectOption({ label: 'Archived assets' });
+  await expect(page).toHaveURL(/archived=true/);
+  await page.getByLabel('Search').fill(name);
+  await page.getByRole('button', { name: 'Search' }).click();
+  await page.getByRole('link', { name }).click();
+  await expect(page.getByText(/^Archived .*Its codes were released/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Restored' })).toHaveText(
+    `Restored. Other assets have taken QR Code ${code}, so it did not get them back.`,
+  );
+  await expect(page.getByRole('link', { name: 'Edit' })).toBeVisible();
+  const history = page.getByRole('region', { name: 'History' });
+  await expect(history.getByRole('listitem').first()).toContainText(`Not given back QR Code ${code}: another asset has it`);
+  await expect(history.getByRole('listitem').filter({ hasText: /^Archived/ })).toContainText(`Released QR Code ${code}`);
+});

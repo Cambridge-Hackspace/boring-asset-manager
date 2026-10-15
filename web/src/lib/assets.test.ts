@@ -102,6 +102,7 @@ describe('stock', () => {
     expect(describeEvent(event('asset.restocked', {}))).toBe('Marked restocked');
     expect(describeEvent(event('asset.created', { trigger: 'import' }))).toBe('Created by an import');
     expect(describeEvent(event('asset.edited', {}))).toBe('Edited');
+    expect(describeEvent(event('asset.restored', {}))).toBe('Restored');
   });
 
   it('describes the changes an edit made', () => {
@@ -131,5 +132,12 @@ describe('stock', () => {
       'Low-stock threshold: 5',
     ]);
     expect(lines('asset.archived', { what: 'code', key: 'qr', label: 'QR Code', from: 'S-1' })).toEqual(['Released QR Code S-1']);
+    expect(
+      lines(
+        'asset.restored',
+        { what: 'code', key: 'code128', label: 'Code 128', to: 'C-1' },
+        { what: 'code', key: 'qr', label: 'QR Code', from: 'S-1' },
+      ),
+    ).toEqual(['Got back Code 128 C-1', 'Not given back QR Code S-1: another asset has it']);
   });
 });

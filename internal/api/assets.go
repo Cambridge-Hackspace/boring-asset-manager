@@ -79,7 +79,16 @@ func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	categoryID := r.URL.Query().Get("category_id")
 	search := r.URL.Query().Get("search")
 
-	assets, err := s.store.ListAssets(categoryID, search)
+	list := s.store.ListAssets
+	switch r.URL.Query().Get("archived") {
+	case "", "false":
+	case "true":
+		list = s.store.ListArchivedAssets
+	default:
+		writeJSONError(w, http.StatusBadRequest, "archived must be true or false")
+		return
+	}
+	assets, err := list(categoryID, search)
 	if err != nil {
 		writeServerError(w, err, "list assets")
 		return
@@ -282,4 +291,23 @@ func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": events, "more": more})
+}
+
+// handleRestoreAsset brings an archived asset back, with the codes archiving
+// released that no other asset has taken since:
+// POST /api/v1/assets/{id}/restore
+func (s *Server) handleRestoreAsset(w http.ResponseWriter, r *http.Request) {
+	asset, skipped, err := s.actingStore(r).RestoreAsset(r.PathValue("id"))
+	switch {
+	case errors.Is(err, store.ErrAssetNotFound):
+		writeJSONError(w, http.StatusNotFound, "Asset not found")
+	case errors.Is(err, store.ErrAssetNotArchived):
+		writeJSONError(w, http.StatusConflict, "The asset is not archived")
+	case errors.Is(err, store.ErrGeneratorCodeExists):
+		writeJSONError(w, http.StatusConflict, "Another asset took one of its codes at the same moment; try again")
+	case err != nil:
+		writeStoreError(w, err, "restore the asset")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"asset": asset, "skipped_codes": skipped})
+	}
 }
