@@ -225,7 +225,7 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, `Expected {"template": {...}, "asset_id": "optional"}`)
 		return
 	}
-	doc, err := withPreviewID(req.Template)
+	doc, err := withPreviewDefaults(req.Template)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "template must be a JSON object")
 		return
@@ -268,15 +268,20 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// withPreviewID gives an unsaved template a placeholder ID so it passes
-// validation; previews do not need a real one.
-func withPreviewID(doc json.RawMessage) ([]byte, error) {
+// withPreviewDefaults gives an unsaved template a placeholder ID and name
+// when the author has not chosen them yet, so it passes validation; previews
+// need neither.
+func withPreviewDefaults(doc json.RawMessage) ([]byte, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(doc, &obj); err != nil || obj == nil {
 		return nil, errors.New("not an object")
 	}
-	if id, ok := obj["id"]; !ok || string(id) == `""` || string(id) == "null" {
-		obj["id"] = json.RawMessage(`"preview"`)
+	for key, placeholder := range map[string]string{"id": `"preview"`, "name": `"Preview"`} {
+		raw, ok := obj[key]
+		var s *string
+		if !ok || json.Unmarshal(raw, &s) == nil && (s == nil || strings.TrimSpace(*s) == "") {
+			obj[key] = json.RawMessage(placeholder)
+		}
 	}
 	return json.Marshal(obj)
 }
