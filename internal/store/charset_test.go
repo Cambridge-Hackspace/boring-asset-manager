@@ -224,8 +224,10 @@ func TestMariaDBUpgradeResumes(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 	onlyMariaDB(t, st)
+	// Later migrations add keys of their own, so the old schema has fewer.
 	keys := foreignKeyCount(t, st)
 	oldMariaDBSchema(t, st)
+	oldKeys := foreignKeyCount(t, st)
 
 	// As a run that saved one key, dropped it, and stopped.
 	var table, name string
@@ -249,8 +251,8 @@ func TestMariaDBUpgradeResumes(t *testing.T) {
 	if _, err := st.DB.Exec("INSERT INTO schema_pending_foreign_keys (name, stmt) VALUES (?, ?)", name, "ALTER TABLE `"+table+"` ADD "+clause); err != nil {
 		t.Fatal(err)
 	}
-	if n := foreignKeyCount(t, st); n != keys-1 {
-		t.Fatalf("%d foreign keys before resuming, want %d", n, keys-1)
+	if n := foreignKeyCount(t, st); n != oldKeys-1 {
+		t.Fatalf("%d foreign keys before resuming, want %d", n, oldKeys-1)
 	}
 
 	if err := st.Migrate(); err != nil {

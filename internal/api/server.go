@@ -64,6 +64,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PUT /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateRole)))
 	mux.Handle("DELETE /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteRole)))
 
+	// API tokens: managed only from a signed-in session, never by a token.
+	manageTokens := func(h http.HandlerFunc) http.Handler { return RequireAuth(RequirePermission(rbac.PermUsersManage)(h)) }
+	mux.Handle("GET /api/v1/tokens", manageTokens(s.handleListTokens))
+	mux.Handle("POST /api/v1/tokens", manageTokens(s.handleCreateToken))
+	mux.Handle("DELETE /api/v1/tokens/{id}", manageTokens(s.handleRevokeToken))
+
 	// Field Corpus endpoints
 	mux.Handle("GET /api/v1/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListFields)))
 	mux.Handle("POST /api/v1/fields", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCreateField)))
@@ -211,9 +217,12 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// actingStore is the store with changes attributed to the signed-in user, for
-// the events they cause.
+// actingStore is the store with changes attributed to the signed-in user, or
+// the API token, for the events they cause.
 func (s *Server) actingStore(r *http.Request) *store.Store {
+	if t := CurrentToken(r.Context()); t != nil {
+		return s.store.AsToken(t.ID)
+	}
 	if u := CurrentUser(r.Context()); u != nil {
 		return s.store.As(u.ID)
 	}

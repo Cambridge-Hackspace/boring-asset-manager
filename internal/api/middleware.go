@@ -22,7 +22,36 @@ const (
 	userContextKey        contextKey = "bam_user"
 	sessionContextKey     contextKey = "bam_session"
 	permissionsContextKey contextKey = "bam_permissions"
+	tokenContextKey       contextKey = "bam_token"
 )
+
+// WithToken associates the API token a request authenticated with.
+func WithToken(ctx context.Context, t *models.APIToken) context.Context {
+	return context.WithValue(ctx, tokenContextKey, t)
+}
+
+// CurrentToken extracts the API token from the context, or nil when the
+// request did not use one.
+func CurrentToken(ctx context.Context) *models.APIToken {
+	if t, ok := ctx.Value(tokenContextKey).(*models.APIToken); ok {
+		return t
+	}
+	return nil
+}
+
+// authenticated reports whether a user or an API token made the request.
+func authenticated(ctx context.Context) bool {
+	return CurrentUser(ctx) != nil || CurrentToken(ctx) != nil
+}
+
+// bearerToken returns the token of an "Authorization: Bearer" header.
+func bearerToken(r *http.Request) (string, bool) {
+	scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") {
+		return "", false
+	}
+	return strings.TrimSpace(token), true
+}
 
 // WithUser associates a user model with the context.
 func WithUser(ctx context.Context, u *models.User) context.Context {
@@ -72,11 +101,28 @@ func HasPermission(ctx context.Context, permKey string) bool {
 	return perms[permKey]
 }
 
-// Authenticate is an HTTP middleware that extracts and validates the session cookie,
-// populating the request context with the user, session, and permissions.
+// Authenticate is an HTTP middleware that extracts and validates an API token
+// (Authorization: Bearer) or else the session cookie, populating the request
+// context with the token, or the user and session, and their permissions.
 func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if secret, ok := bearerToken(r); ok {
+				t, perms, err := st.AuthenticateToken(secret)
+				if errors.Is(err, store.ErrTokenNotFound) {
+					// Answered at once rather than as signed out, so a
+					// script learns its token no longer works.
+					writeJSONError(w, http.StatusUnauthorized, "Invalid, expired or revoked API token")
+					return
+				}
+				if err != nil {
+					writeServerError(w, err, "read the API token")
+					return
+				}
+				next.ServeHTTP(w, r.WithContext(WithPermissions(WithToken(r.Context(), t), perms)))
+				return
+			}
+
 			token := GetSessionCookie(r)
 			if token == "" {
 				next.ServeHTTP(w, r)
@@ -112,9 +158,15 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireAuth is an HTTP middleware requiring an authenticated user in context.
+// RequireAuth is an HTTP middleware requiring a signed-in user. API tokens
+// are refused: what it guards belongs to a person's session, such as their
+// password, or must not be reachable from a script, such as minting tokens.
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if CurrentToken(r.Context()) != nil {
+			writeJSONError(w, http.StatusForbidden, "This needs a signed-in session; API tokens cannot use it")
+			return
+		}
 		if CurrentUser(r.Context()) == nil {
 			writeJSONError(w, http.StatusUnauthorized, "Authentication required")
 			return
@@ -127,7 +179,7 @@ func RequireAuth(next http.Handler) http.Handler {
 func RequirePermission(permKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if CurrentUser(r.Context()) == nil {
+			if !authenticated(r.Context()) {
 				writeJSONError(w, http.StatusUnauthorized, "Authentication required")
 				return
 			}
@@ -145,7 +197,7 @@ func RequirePermission(permKey string) func(http.Handler) http.Handler {
 func RequireAnyPermission(permKeys ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if CurrentUser(r.Context()) == nil {
+			if !authenticated(r.Context()) {
 				writeJSONError(w, http.StatusUnauthorized, "Authentication required")
 				return
 			}

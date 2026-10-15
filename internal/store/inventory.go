@@ -28,7 +28,7 @@ var (
 // given, for the events they cause. The view shares the connection pool.
 func (s *Store) As(userID string) *Store {
 	c := *s
-	c.actor = userID
+	c.actor, c.actorToken = userID, ""
 	return &c
 }
 
@@ -292,6 +292,14 @@ func (s *Store) insertEvent(tx *sql.Tx, kind string, categoryID, assetID *string
 		}
 		payload.Actor = &actor
 		actorID = &actor.ID
+	} else if s.actorToken != "" {
+		// A token is not a user, so actor_user_id stays empty.
+		actor := models.EventActor{ID: s.actorToken, Token: true}
+		err := s.TxQueryRow(tx, "SELECT name FROM api_tokens WHERE id = ?", s.actorToken).Scan(&actor.Name)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("reading token for event: %w", err)
+		}
+		payload.Actor = &actor
 	}
 
 	raw, err := json.Marshal(payload)

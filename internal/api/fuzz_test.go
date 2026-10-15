@@ -52,6 +52,9 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/roles", body: `{"name":"Stores {n}","description":"Records stock","permissions":["assets:read","stock:record"]}`},
 	{method: "PUT", path: "/api/v1/roles/{role}", body: `{"name":"Readers {n}","description":"","permissions":["assets:read"]}`},
 	{method: "DELETE", path: "/api/v1/roles/{role}"},
+	{method: "GET", path: "/api/v1/tokens"},
+	{method: "POST", path: "/api/v1/tokens", body: `{"name":"Script {n}","role_ids":["{role}"],"expires_at":"2099-01-01T00:00:00Z"}`},
+	{method: "DELETE", path: "/api/v1/tokens/{token}"},
 	{method: "GET", path: "/api/v1/fields"},
 	{method: "POST", path: "/api/v1/fields", body: `{"key":"k{n}","label":"Size","validation_type":"select","options":{"choices":[{"label":"Small","value":"s"},{"label":"Large","value":"l"}],"default":"s"}}`},
 	{method: "GET", path: "/api/v1/fields/{field}"},
@@ -171,14 +174,14 @@ func newFuzzer(tb testing.TB) *fuzzer {
 	fz.send(fuzzRequest{method: "POST", target: "/api/v1/fields", contentType: "application/json", body: []byte(`{"key":"size","label":"Size","validation_type":"select","options":{"choices":[{"label":"Small","value":"s"},{"label":"Large","value":"l"}]}}`), create: "field"})
 	fz.send(fuzzRequest{method: "POST", target: "/api/v1/images", contentType: imageType, body: imageBody, create: "image"})
 	fz.keep[fz.ids["field"][0]], fz.keep[fz.ids["image"][0]] = true, true
-	for _, path := range []string{"/api/v1/fields", "/api/v1/categories", "/api/v1/images", "/api/v1/assets", "/api/v1/templates", "/api/v1/printers", "/api/v1/notifiers", "/api/v1/users"} {
+	for _, path := range []string{"/api/v1/fields", "/api/v1/categories", "/api/v1/images", "/api/v1/assets", "/api/v1/templates", "/api/v1/printers", "/api/v1/notifiers", "/api/v1/users", "/api/v1/tokens"} {
 		for _, r := range fuzzRoutes {
 			if r.method == "POST" && r.path == path {
 				fz.send(fz.request(r, rand.New(rand.NewSource(0)), false))
 			}
 		}
 	}
-	for _, kind := range []string{"field", "category", "image", "asset", "template", "printer", "channel", "user"} {
+	for _, kind := range []string{"field", "category", "image", "asset", "template", "printer", "channel", "user", "token"} {
 		if len(fz.ids[kind]) == 0 {
 			tb.Fatalf("setting up: no %s was created", kind)
 		}
@@ -205,6 +208,8 @@ func kindOf(path string) string {
 		return "channel"
 	case "/api/v1/roles":
 		return "role"
+	case "/api/v1/tokens":
+		return "token"
 	case "/api/v1/users":
 		return "user"
 	}
@@ -252,7 +257,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "field", "category", "asset", "template", "image", "printer", "channel"} {
+	for _, kind := range []string{"user", "role", "token", "field", "category", "asset", "template", "image", "printer", "channel"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {

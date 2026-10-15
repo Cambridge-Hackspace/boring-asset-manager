@@ -1,4 +1,5 @@
 import zlib from 'node:zlib';
+import { request as playwrightRequest } from '@playwright/test';
 import { ADMIN_EMAIL, expect, goTo, signIn, test, unique } from './fixtures';
 
 test('printers: add one through the generated form and test-print', async ({ signedIn: page, api, printer }) => {
@@ -195,4 +196,33 @@ test('a role that only records stock can use stock but not edit assets', async (
   await expect(stock).toContainText('7 pcs left');
   await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Archive' })).toHaveCount(0);
+});
+
+test('API tokens: make one, use it from a script, and revoke it', async ({ signedIn: page, api }) => {
+  const { role } = await api.call('POST', '/roles', { name: unique('Readers'), description: '', permissions: ['assets:read'] });
+  const name = unique('Dashboard');
+  await goTo(page, 'API tokens');
+  await page.getByRole('button', { name: 'New token' }).click();
+  await page.getByLabel('Name').fill(name);
+  await page.getByRole('checkbox', { name: role.name }).check();
+  await page.getByRole('button', { name: 'Create token' }).click();
+  const secret = await page.getByLabel('The new token').inputValue();
+  expect(secret).toMatch(/^bam_[0-9a-f]{64}$/);
+
+  // A script, with no session: it may read, and only read.
+  const script = await playwrightRequest.newContext({ baseURL: new URL(page.url()).origin, extraHTTPHeaders: { Authorization: `Bearer ${secret}` } });
+  expect((await script.get('/api/v1/assets')).status()).toBe(200);
+  expect((await script.post('/api/v1/assets', { data: { name: 'Nope' } })).status()).toBe(403);
+  expect((await script.get('/api/v1/tokens')).status()).toBe(403);
+
+  await page.getByRole('button', { name: 'Done' }).click();
+  await page.reload();
+  const row = page.getByRole('row').filter({ hasText: name });
+  // Last used: just now, by the script.
+  await expect(row.getByRole('cell').nth(3)).not.toHaveText('Never');
+  await row.getByRole('button', { name: 'Revoke' }).click();
+  await row.getByRole('group').getByRole('button', { name: 'Revoke' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Revoked ${name}.`);
+  expect((await script.get('/api/v1/assets')).status()).toBe(401);
+  await script.dispose();
 });

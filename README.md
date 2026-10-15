@@ -329,6 +329,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 * **TOTP (RFC 6238):** Optional two-factor authentication flag per user.
 * **Passwords:** stored as bcrypt hashes (cost 12). Every new password must be 8-72 bytes: 72 is the most bcrypt uses, so longer ones are refused rather than silently cut short.
 * **Session Store:** Stateful sessions stored in the active database (`sessions` table) referenced via an `HttpOnly`, `SameSite=Lax`, `Secure` cookie. The cookie holds a random 256-bit token; the table stores only its SHA-256 hash (migration `005`), so a copy of the database cannot be used to sign in.
+* **API tokens:** scripts and dashboards authenticate with `Authorization: Bearer <token>` instead of a session (migration `012`). A token has a name, roles whose permissions it holds (as a user holds theirs), an optional expiry and the time it was last used (written at most once a minute). Its secret, `bam_` and 64 hex digits (256 random bits), is returned once when the token is made; like a session token, only its SHA-256 hash is stored. `GET`, `POST /api/v1/tokens` and `DELETE /api/v1/tokens/{id}` list, make (`{"name", "role_ids", "expires_at"}`, an RFC 3339 time or `null` for never) and revoke tokens, with `users:manage` and a signed-in session: a token can never manage tokens, nor use the account endpoints (`/api/v1/auth/me`, `name`, `password` and `logout`), which answer it `403`. A revoked, expired or unknown token is answered `401` at once, even with a session cookie alongside. Revoked tokens stay listed, and changes a token makes are recorded in history under its name (`"actor": {"token": true, ...}`). Tokens do not count toward the anti-lockout rule. Deleting a role takes it from tokens too.
 
 ### 3.5 Stored Text
 
@@ -860,6 +861,9 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.5: Role Management
 * [x] Roles created, edited and deleted from the web app and the API under the anti-lockout rule, with `admin` protected, and `stock:record` so a role can record stock without editing assets (§3.3).
 
+#### Sub-Phase 7.6: API Tokens
+* [x] Hashed, revocable, optionally expiring tokens holding roles, made once from the web app and shown once, with their changes recorded under their name (§3.4).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -884,9 +888,6 @@ Agreed, not yet scheduled or designed in detail.
 
 #### Reports
 * [ ] Report pages built on the asset list's filters, starting with everything running low (categories and assets), exportable as CSV for a shopping list.
-
-#### API Tokens
-* [ ] Tokens for scripts and dashboards, assigned roles like users, so a token can be read-only or limited to stock changes. Shown once when created, stored hashed, and revocable.
 
 #### Deferred
 * **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.
