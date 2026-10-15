@@ -1,12 +1,14 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/cli"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 func printUsage() {
@@ -20,6 +22,8 @@ Available Commands:
   migrate       Execute pending database migrations and seed system roles
   admin create  Provision an initial superuser account (requires --email and --password)
   serve         Start the HTTP daemon
+  backup        Copy a SQLite database (requires --to); exits 3 for other databases
+  restore       Replace a SQLite database with a backup (requires --from; stop BAM first)
   version       Print version information
 
 Global Flags:
@@ -80,6 +84,29 @@ func main() {
 
 		if err := cli.Serve(*configPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "backup", "restore":
+		cmd := flag.NewFlagSet(command, flag.ExitOnError)
+		configPath := cmd.String("config", "config.toml", "Path to configuration file")
+		to := cmd.String("to", "", "File to write the backup to (backup)")
+		from := cmd.String("from", "", "Backup to restore (restore)")
+		_ = cmd.Parse(os.Args[2:])
+
+		var err error
+		if command == "backup" {
+			err = cli.Backup(*configPath, *to)
+		} else {
+			err = cli.Restore(*configPath, *from)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			// The updater tells "back this database up yourself" apart from
+			// a failure by this code.
+			if errors.Is(err, store.ErrBackupUnsupported) {
+				os.Exit(3)
+			}
 			os.Exit(1)
 		}
 

@@ -8,34 +8,50 @@
 #   bam-update --force    also replace a build that is not a release
 #
 # Run it from cron as root. It verifies each download against the release's
-# SHA256SUMS, checks the new binary reports the release's version, restarts
-# the service, and waits for it to answer its health check; if it does not,
-# the previous binary is restored and the service restarted again. Database
-# migrations run when the new version starts and are not undone by a
-# rollback, so keep backups.
+# SHA256SUMS and checks the new binary reports the release's version. Then
+# it stops the service, backs up the database, swaps the binary, starts the
+# service and waits for it to answer its health check. If it does not, the
+# database is restored from the backup, the previous binary put back and the
+# service started again. A SQLite database is backed up with `bam backup`;
+# PostgreSQL and MariaDB need BAM_UPDATE_BACKUP_COMMAND and
+# BAM_UPDATE_RESTORE_COMMAND, or the update is refused.
 #
 # Settings, from the environment or from /etc/bam/update.conf
 # (/usr/local/etc/bam/update.conf on FreeBSD), as NAME=value lines:
-#   BAM_UPDATE_REPO          GitHub repository [Cambridge-Hackspace/boring-asset-manager]
-#   BAM_UPDATE_BIN           Installed binary [/usr/local/bin/bam]
-#   BAM_UPDATE_HEALTH_URL    Health check [http://127.0.0.1:8080/healthz]
-#   BAM_UPDATE_API_URL       Latest release [https://api.github.com/repos/<repo>/releases/latest]
-#   BAM_UPDATE_DOWNLOAD_URL  Release files [https://github.com/<repo>/releases/download]
+#   BAM_UPDATE_REPO             GitHub repository [Cambridge-Hackspace/boring-asset-manager]
+#   BAM_UPDATE_BIN              Installed binary [/usr/local/bin/bam]
+#   BAM_UPDATE_CONFIG           BAM's configuration [/etc/bam/config.toml, /usr/local/etc/bam/config.toml on FreeBSD]
+#   BAM_UPDATE_HEALTH_URL       Health check [http://127.0.0.1:8080/healthz]
+#   BAM_UPDATE_API_URL          Latest release [https://api.github.com/repos/<repo>/releases/latest]
+#   BAM_UPDATE_DOWNLOAD_URL     Release files [https://github.com/<repo>/releases/download]
+#   BAM_UPDATE_BACKUP_DIR       Database backups, readable by root only [/var/backups/bam]
+#   BAM_UPDATE_KEEP_BACKUPS     How many backups to keep [5]
+#   BAM_UPDATE_BACKUP_COMMAND   Backs up the database to the path in $BAM_BACKUP_FILE,
+#                               in place of `bam backup` (for PostgreSQL and MariaDB)
+#   BAM_UPDATE_RESTORE_COMMAND  Restores the backup at $BAM_BACKUP_FILE
+#   BAM_UPDATE_BACKUP           "off" updates without a backup, which is not recommended
 set -eu
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$os" in
-  linux) conf=/etc/bam/update.conf ;;
-  freebsd) conf=/usr/local/etc/bam/update.conf ;;
+  linux) etc=/etc/bam ;;
+  freebsd) etc=/usr/local/etc/bam ;;
   *) echo "bam-update: unsupported system $os" >&2; exit 2 ;;
 esac
+conf="$etc/update.conf"
 # shellcheck disable=SC1090
 if [ -r "$conf" ]; then . "$conf"; fi
 
 REPO="${BAM_UPDATE_REPO:-Cambridge-Hackspace/boring-asset-manager}"
 BIN="${BAM_UPDATE_BIN:-/usr/local/bin/bam}"
+CONFIG="${BAM_UPDATE_CONFIG:-$etc/config.toml}"
+BACKUP_DIR="${BAM_UPDATE_BACKUP_DIR:-/var/backups/bam}"
+KEEP_BACKUPS="${BAM_UPDATE_KEEP_BACKUPS:-5}"
+BACKUP_COMMAND="${BAM_UPDATE_BACKUP_COMMAND:-}"
+RESTORE_COMMAND="${BAM_UPDATE_RESTORE_COMMAND:-}"
+BACKUP="${BAM_UPDATE_BACKUP:-on}"
 HEALTH_URL="${BAM_UPDATE_HEALTH_URL:-http://127.0.0.1:8080/healthz}"
 API_URL="${BAM_UPDATE_API_URL:-https://api.github.com/repos/$REPO/releases/latest}"
 DOWNLOAD_URL="${BAM_UPDATE_DOWNLOAD_URL:-https://github.com/$REPO/releases/download}"
@@ -100,8 +116,64 @@ newer() {
   }'
 }
 
-restart() {
-  if [ "$os" = linux ]; then systemctl restart bam; else service bam restart; fi
+service_do() {
+  if [ "$os" = linux ]; then systemctl "$1" bam; else service bam "$1" >/dev/null; fi
+}
+
+# back_up: stores the database before the update, setting backup_file and
+# backup_kind (sqlite, hook or none). The service must be stopped, so
+# nothing changes between the backup and the update.
+backup_file=""
+backup_kind=none
+back_up() {
+  if [ "$BACKUP" = off ]; then
+    say "BAM_UPDATE_BACKUP is off, so the database is not backed up"
+    return 0
+  fi
+  if [ -n "$BACKUP_COMMAND" ] && [ -z "$RESTORE_COMMAND" ]; then
+    say "BAM_UPDATE_BACKUP_COMMAND is set without BAM_UPDATE_RESTORE_COMMAND, so a failed update could not be undone"
+    return 1
+  fi
+  (umask 077 && mkdir -p "$BACKUP_DIR") || return 1
+  chmod 0700 "$BACKUP_DIR"
+  backup_file="$BACKUP_DIR/bam-${current:-unknown}-$(date -u +%Y%m%dT%H%M%SZ)"
+  if [ -n "$BACKUP_COMMAND" ]; then
+    if ! (umask 077 && BAM_BACKUP_FILE="$backup_file" sh -c "$BACKUP_COMMAND"); then
+      say "BAM_UPDATE_BACKUP_COMMAND failed"
+      return 1
+    fi
+    backup_kind=hook
+  else
+    backup_file="$backup_file.db"
+    rc=0
+    "$work/bam" backup --config "$CONFIG" --to "$backup_file" >/dev/null 2>"$work/backup.err" || rc=$?
+    case "$rc" in
+      0) backup_kind=sqlite ;;
+      3)
+        say "the database is not SQLite: set BAM_UPDATE_BACKUP_COMMAND and BAM_UPDATE_RESTORE_COMMAND in $conf to back it up (or BAM_UPDATE_BACKUP=off)"
+        return 1
+        ;;
+      *)
+        say "the backup failed: $(cat "$work/backup.err")"
+        return 1
+        ;;
+    esac
+  fi
+  say "backed up the database to $backup_file"
+  # Keep the newest backups.
+  # shellcheck disable=SC2012
+  ls -1td "$BACKUP_DIR"/bam-* 2>/dev/null | tail -n "+$((KEEP_BACKUPS + 1))" | while read -r old; do
+    rm -rf "$old"
+  done
+}
+
+# restore: puts the database back from the backup, with the service stopped.
+restore() {
+  case "$backup_kind" in
+    sqlite) "$work/bam" restore --config "$CONFIG" --from "$backup_file" >/dev/null ;;
+    hook) BAM_BACKUP_FILE="$backup_file" sh -c "$RESTORE_COMMAND" ;;
+    *) return 0 ;;
+  esac
 }
 
 healthy() {
@@ -151,21 +223,36 @@ chmod 0755 "$work/bam"
 got=$("$work/bam" version 2>/dev/null | sed -n 's/^BAM! version //p')
 [ "$got" = "$latest" ] || fail "the downloaded binary says it is ${got:-nothing}, not $latest; nothing was changed"
 
+service_do stop || true
+if ! back_up; then
+  service_do start || true
+  fail "the database could not be backed up, so nothing was changed"
+fi
+
 # Replace the binary in one rename, keeping the old one beside it.
 cp -p "$BIN" "$BIN.previous"
 cp "$work/bam" "$BIN.new"
 chmod 0755 "$BIN.new"
 mv -f "$BIN.new" "$BIN"
-restart || true
+service_do start || true
 if healthy; then
   say "now running $latest"
   exit 0
 fi
 
-say "$latest did not come up; putting ${current:-the previous build} back"
-mv -f "$BIN.previous" "$BIN"
-restart || true
-if healthy; then
-  fail "$latest failed its health check, and ${current:-the previous build} is running again"
+say "$latest did not come up; putting ${current:-the previous build} and the database back"
+service_do stop || true
+restored=yes
+if ! restore; then
+  restored=no
+  say "the database could not be restored from $backup_file; restore it by hand before relying on ${current:-the previous build}"
 fi
-fail "$latest failed its health check, and ${current:-the previous build} did not come back either; see the service log"
+mv -f "$BIN.previous" "$BIN"
+service_do start || true
+if healthy && [ "$restored" = yes ]; then
+  if [ "$backup_kind" = none ]; then
+    fail "$latest failed its health check, and ${current:-the previous build} is running again; the database was not backed up, so any changes $latest made to it remain"
+  fi
+  fail "$latest failed its health check, and ${current:-the previous build} is running again on the database as it was"
+fi
+fail "$latest failed its health check, and ${current:-the previous build} is not fully back; see the messages above and the service log"

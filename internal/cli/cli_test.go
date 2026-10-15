@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -118,5 +119,39 @@ func TestAdminCreateValidation(t *testing.T) {
 	}
 	if err := AdminCreate(configPath, "user@test.org", ""); err == nil {
 		t.Error("expected error for empty password")
+	}
+}
+
+func TestBackupAndRestoreCommands(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.toml")
+	cfg := config.DefaultConfig()
+	cfg.Database.DSN = filepath.Join(dir, "bam.db")
+	if err := cfg.SaveTOML(configPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(configPath); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(dir, "backup.db")
+	if err := Backup(configPath, ""); err == nil {
+		t.Error("backed up without --to")
+	}
+	if err := Backup(configPath, backup); err != nil {
+		t.Fatal(err)
+	}
+	if err := Restore(configPath, ""); err == nil {
+		t.Error("restored without --from")
+	}
+	if err := Restore(configPath, backup); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.Database = config.DatabaseConfig{Type: "postgres", DSN: "postgres://bam@localhost/bam"}
+	if err := cfg.SaveTOML(configPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := Backup(configPath, filepath.Join(dir, "pg.db")); !errors.Is(err, store.ErrBackupUnsupported) {
+		t.Errorf("a PostgreSQL backup: %v", err)
 	}
 }

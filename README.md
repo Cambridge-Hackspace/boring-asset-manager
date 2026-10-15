@@ -100,6 +100,11 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 # Start the daemon
 ./bam serve --config ./config.toml
 
+# Back up a SQLite database (safe while running), and put a backup back
+# (with BAM stopped); see §2.2
+./bam backup --config ./config.toml --to ./bam-backup.db
+./bam restore --config ./config.toml --from ./bam-backup.db
+
 ```
 
 ### 2.1 Installing as a Service
@@ -185,7 +190,16 @@ sha256sum -c --ignore-missing SHA256SUMS
 
 #### Updating automatically (optional)
 
-`packaging/bam-update` installs the latest release when it is newer than the installed one, on both systems. It verifies the download against the release's `SHA256SUMS` and checks that the new binary reports the release's version, and then it swaps the binary, keeping the old one as `bam.previous`. Finally it restarts the service and waits up to 30 seconds for it to answer its health check. If it does not, the old binary goes back and the service is restarted again. It leaves alone an installation that is up to date, newer than the latest release, or not a release at all (a build from source reports `git describe` or `dev`; `bam-update --force` replaces it). `bam-update --check` only reports. Each run logs to syslog with the tag `bam-update`, and cron mails what it prints when something goes wrong. Pre-releases are never installed. Database migrations run when the new version starts and a rollback does not undo them, so keep backups.
+`packaging/bam-update` installs the latest release when it is newer than the installed one, on both systems. It verifies the download against the release's `SHA256SUMS` and checks that the new binary reports the release's version. Then it stops the service, backs up the database, swaps the binary (keeping the old one as `bam.previous`), starts the service, and waits up to 30 seconds for it to answer its health check. If it does not, the service is stopped, the database restored from the backup, so that changes the new version made (such as its migrations) are undone, and the old binary started again. It leaves alone an installation that is up to date, newer than the latest release, or not a release at all (a build from source reports `git describe` or `dev`; `bam-update --force` replaces it). `bam-update --check` only reports. Each run logs to syslog with the tag `bam-update`, and cron mails what it prints when something goes wrong. Pre-releases are never installed.
+
+**Backups before updating.** A SQLite database is copied with `bam backup` into `/var/backups/bam` (readable by root only), and the newest 5 backups are kept (`BAM_UPDATE_KEEP_BACKUPS`). BAM does not back up PostgreSQL or MariaDB itself, so for those the updater refuses to update until you give it commands for both directions in `update.conf`. Each command is run by `sh` with the backup's path in `$BAM_BACKUP_FILE`, for example:
+
+```sh
+BAM_UPDATE_BACKUP_COMMAND='pg_dump -Fc -f "$BAM_BACKUP_FILE" bam'
+BAM_UPDATE_RESTORE_COMMAND='pg_restore --clean --if-exists -d bam "$BAM_BACKUP_FILE"'
+```
+
+`BAM_UPDATE_BACKUP=off` updates without a backup, which leaves a failed update's changes to the database in place. If the backup fails, nothing is changed and the old version is started again. Outside the updater, `bam backup --config <file> --to <file>` copies a SQLite database at any time, even while BAM runs, and `bam restore --config <file> --from <file>` puts one back while BAM is stopped.
 
 On Linux (cron must be installed; on Arch, `cronie`):
 
@@ -204,7 +218,7 @@ install -m 0644 packaging/freebsd/bam-update.cron /usr/local/etc/cron.d/bam-upda
 
 Both run it nightly at 04:17; change the minute in the cron file, so that every installation does not ask GitHub at once. Settings (the repository, the binary, the health check URL) are listed at the top of the script; put any in `/etc/bam/update.conf` (`/usr/local/etc/bam/update.conf` on FreeBSD) as `NAME=value` lines. If BAM listens on another port, set `BAM_UPDATE_HEALTH_URL` there.
 
-`tools/service/check-update.sh` checks the updater in a Debian container booted with systemd, against fake releases served from files. It must update to a newer release, leave an up-to-date installation running, and ignore an older release. It must refuse a download that does not match its checksum, and roll back a release that does not come up. It must leave a build that is not a release alone until forced.
+`tools/service/check-update.sh` checks the updater in a Debian container booted with systemd, against fake releases served from files. It must update to a newer release, leave an up-to-date installation running, and ignore an older release. It must refuse a download that does not match its checksum, and roll back a release that does not come up, together with the change that release made to the database. It must refuse to update a database it cannot back up, run backup and restore commands when given them, and keep only the newest backups. It must leave a build that is not a release alone until forced.
 
 ---
 
