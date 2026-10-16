@@ -87,6 +87,7 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/reports/preview", body: `{"kind":"scan","asset_id":"{asset}","spec":{"sections":[{"type":"actions","actions":["open"]}]}}`},
 	{method: "PUT", path: "/api/v1/categories/{category}/scan-template", body: `{"scan_template_id":"{report}"}`},
 	{method: "GET", path: "/api/v1/categories/scan-conflicts"},
+	{method: "GET", path: "/api/v1/scan/{asset}"},
 	{method: "GET", path: "/api/v1/reports/{report}/sections/1/csv"},
 	{method: "DELETE", path: "/api/v1/reports/{report}"},
 	{method: "GET", path: "/api/v1/relation-types"},

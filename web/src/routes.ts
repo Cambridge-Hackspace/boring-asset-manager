@@ -25,6 +25,7 @@ import ScanTemplateEditor from './views/reports/ScanTemplateEditor.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
+import ScanPage from './views/ScanPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
 
 export interface Route {
@@ -45,6 +46,7 @@ export const routes: Route[] = [
   { pattern: '/assets/new', component: AssetForm, title: 'New asset', permissions: ['assets.write'] },
   { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets.write'] },
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'], public: true },
+  { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
   { pattern: '/reports', component: ReportsPage, title: 'Reports', permissions: ['assets.read'], nav: 'Reports' },
   { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports.manage'] },

@@ -247,3 +247,25 @@ func (s *Store) ScanConflicts(categoryID string, templateID *string) (map[string
 	}
 	return involved, nil
 }
+
+// AssetsByCode lists the active assets one of whose assigned codes is
+// code, of any generator type: one, normally, but codes are unique only
+// within a type.
+func (s *Store) AssetsByCode(code string) ([]string, error) {
+	rows, err := s.Query(`SELECT DISTINCT k.asset_id FROM asset_generator_keys k
+		JOIN assets a ON a.id = k.asset_id
+		WHERE k.assigned_code = ? AND a.archived_at IS NULL ORDER BY k.asset_id`, code)
+	if err != nil {
+		return nil, fmt.Errorf("finding the code: %w", err)
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}

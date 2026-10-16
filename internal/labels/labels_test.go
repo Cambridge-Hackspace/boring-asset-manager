@@ -279,3 +279,13 @@ func TestAssetDetailPlaceholders(t *testing.T) {
 		}
 	}
 }
+
+func TestScanURL(t *testing.T) {
+	b, err := ParseBinding("{{scan_url}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := b.Resolve(Data{AssetID: "1234", BaseURL: "https://bam.example/"}); got != "https://bam.example/scan/1234" {
+		t.Errorf("scan_url = %q", got)
+	}
+}

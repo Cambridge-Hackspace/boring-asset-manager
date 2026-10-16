@@ -8,6 +8,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 const binTemplate = `{"name":"Bins","kind":"scan","spec":{"sections":[
@@ -92,3 +93,68 @@ func TestScanTemplatesThroughTheAPI(t *testing.T) {
 
 // defaultScanTemplate is the scan template migration 022 seeds.
 const defaultScanTemplate = "bc4e2a6d-8f0b-4d5c-9e9a-d15c7d9f1a22"
+
+func TestScanningACode(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	adminCookie := sessionCookie(t, srv, admin.ID)
+	st := srv.store
+	expect := func(what string, cookie *http.Cookie, path string, want int) string {
+		t.Helper()
+		rec := doJSON(t, srv, cookie, http.MethodGet, path, "")
+		if rec.Code != want {
+			t.Errorf("%s: %d, want %d: %s", what, rec.Code, want, rec.Body)
+		}
+		return rec.Body.String()
+	}
+	scopes, _ := st.ListScopes()
+	var public string
+	for _, sc := range scopes {
+		if sc.Name == rbac.PublicScope {
+			public = sc.ID
+		}
+	}
+	lobby, _ := st.CreateCategory("Lobby", nil, "", false, false)
+	if _, err := st.SetCategoryScopes(lobby.ID, []string{public}); err != nil {
+		t.Fatal(err)
+	}
+	bin, _ := st.CreateAsset("Bin A3", []string{lobby.ID}, []models.AssetGeneratorKey{{GeneratorType: "code128", AssignedCode: "BIN-A3"}}, nil)
+	screws, _ := st.CreateAssetWithStock("Screws", []string{lobby.ID}, nil, nil, &store.StockInput{Unit: "pcs"})
+	if _, err := st.AddLink(bin.Asset.ID, containsType, screws.Asset.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	safe, _ := st.CreateAsset("Safe", nil, []models.AssetGeneratorKey{{GeneratorType: "code128", AssignedCode: "SAFE"}}, nil)
+
+	// By code, or by ID; the default template shows what the bin holds.
+	body := expect("by code", adminCookie, "/api/v1/scan/BIN-A3", http.StatusOK)
+	if !strings.Contains(body, `"name":"Bin A3"`) || !strings.Contains(body, `"cells":["Screws",`) || !strings.Contains(body, `"template":{"id":"`+defaultScanTemplate+`","name":"Scanned"}`) {
+		t.Errorf("by code: %s", body)
+	}
+	expect("by ID", adminCookie, "/api/v1/scan/"+bin.Asset.ID, http.StatusOK)
+	expect("an unknown code", adminCookie, "/api/v1/scan/NOPE", http.StatusNotFound)
+	// The admin may take every action that applies.
+	if body := expect("the screws", adminCookie, "/api/v1/scan/"+screws.Asset.ID, http.StatusOK); !strings.Contains(body, `"actions":["open","use","report"]`) || !strings.Contains(body, `"counted":true,"unit":"pcs"`) {
+		t.Errorf("the screws, as the admin: %s", body)
+	}
+
+	// Signed out, the public role scans what is public, and may only look.
+	if body := expect("signed out", nil, "/api/v1/scan/BIN-A3", http.StatusOK); !strings.Contains(body, `"actions":["open"]`) {
+		t.Errorf("signed out: %s", body)
+	}
+	expect("the safe, signed out", nil, "/api/v1/scan/SAFE", http.StatusNotFound)
+	expect("the safe, as the admin", adminCookie, "/api/v1/scan/SAFE", http.StatusOK)
+
+	// Without assets.scan at all, it is refused.
+	nothingPublic(t, srv)
+	expect("signed out, nothing public", nil, "/api/v1/scan/BIN-A3", http.StatusUnauthorized)
+
+	// Archived, it is gone; two assets with the code, as codes of
+	// different kinds, are named apart.
+	if err := st.DeleteAsset(safe.Asset.ID); err != nil {
+		t.Fatal(err)
+	}
+	expect("archived", adminCookie, "/api/v1/scan/SAFE", http.StatusNotFound)
+	if _, err := st.CreateAsset("Box", nil, []models.AssetGeneratorKey{{GeneratorType: "qr", AssignedCode: "BIN-A3"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	expect("a code two assets have", adminCookie, "/api/v1/scan/BIN-A3", http.StatusConflict)
+}

@@ -277,11 +277,14 @@
           <dt class="font-medium">Scopes</dt>
           <dd>{asset.scopes.join(', ')}</dd>
         {/if}
-        {#if asset.scan_template?.conflict}
+        {#if session.canOn(asset.scopes, 'assets.scan')}
           <dt class="font-medium">Scan page</dt>
           <dd>
-            <ConflictMark /> Chosen by a tie between categories as close to it as each other.
-            <a class="underline" href="/categories">Name a template on one of them</a> to settle it.
+            <a class="underline" href="/scan/{encodeURIComponent(asset.asset.id)}">What scanning it shows</a>
+            {#if asset.scan_template?.conflict}
+              <span class="block"><ConflictMark /> Its template was chosen by a tie between categories as close to it as each other.
+              <a class="underline" href="/categories">Name a template on one of them</a> to settle it.</span>
+            {/if}
           </dd>
         {/if}
         {#each asset.effective_fields as e (e.field.id)}
