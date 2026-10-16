@@ -7,6 +7,7 @@
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { exportUrl } from '../../lib/importing';
+  import { displayName } from '../../lib/people';
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConditionBadge from '../../components/ConditionBadge.svelte';
@@ -25,6 +26,8 @@
   let archived = $state(router.query.get('archived') === 'true');
   // '' for any condition, 'problem' for anything not working, or one condition.
   let condition = $state(router.query.get('condition') ?? '');
+  // '' for any, 'open' for assets lent out, 'overdue' for those past due.
+  let loan = $state(router.query.get('loan') ?? '');
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
@@ -42,7 +45,12 @@
     await load();
   });
 
+  // Each load is numbered, so a slow answer to an older one cannot replace
+  // the list a newer one asked for.
+  let loads = 0;
+
   async function load() {
+    const mine = ++loads;
     loading = true;
     error = '';
     const q = new URLSearchParams();
@@ -50,14 +58,17 @@
     if (categoryId) q.set('category_id', categoryId);
     if (archived) q.set('archived', 'true');
     if (condition) q.set('condition', condition);
+    if (loan) q.set('loan', loan);
     applied = { search, categoryId };
     try {
-      assets = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
+      const found = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
+      if (mine !== loads) return;
+      assets = found;
       selected = selected.filter((id) => assets.some((a) => a.asset.id === id));
     } catch (err) {
-      error = messageOf(err);
+      if (mine === loads) error = messageOf(err);
     } finally {
-      loading = false;
+      if (mine === loads) loading = false;
     }
   }
 
@@ -69,6 +80,7 @@
     if (categoryId) q.set('category', categoryId);
     if (archived) q.set('archived', 'true');
     if (condition) q.set('condition', condition);
+    if (loan) q.set('loan', loan);
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
     void load();
@@ -128,6 +140,14 @@
       <option value="ok">Working</option>
     </select>
   </div>
+  <div>
+    <label class="label" for="asset-loan">Loans</label>
+    <select id="asset-loan" class="input" bind:value={loan} onchange={() => applyFilters()}>
+      <option value="">Any</option>
+      <option value="open">Lent out</option>
+      <option value="overdue">Overdue</option>
+    </select>
+  </div>
   <button type="submit" class="btn-secondary">Search</button>
 </form>
 
@@ -162,7 +182,9 @@
                 <input type="checkbox" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} />
               </td>
             {/if}
-            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} /></td>
+            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />
+              {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">Lent to {displayName(a.loan.borrower)}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
+            </td>
             <td class="py-2 pr-4">
               <span class="flex flex-wrap gap-1">
                 {#each a.categories as c (c.id)}<CategoryBadge category={c} />{/each}

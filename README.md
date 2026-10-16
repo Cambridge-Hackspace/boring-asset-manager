@@ -318,7 +318,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 ### 3.3 RBAC Security Matrix
 
 * **Tables:** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`.
-* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, from Phase 3 `labels:print`, and from Phase 7 `stock:record`, which uses, restocks and flags stock without being able to edit assets, and `assets:report`, which reports an asset needing maintenance or out of service). Seeding grants every permission to the `admin` role, including permissions added by later releases. Migrations `011` and `013` grant `stock:record` and `assets:report` to every role that had `assets:write`, so nobody loses what they could do.
+* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, from Phase 3 `labels:print`, and from Phase 7 `stock:record`, which uses, restocks and flags stock without being able to edit assets, `assets:report`, which reports an asset needing maintenance or out of service, and `assets:borrow` and `assets:lend` (§5.3)). Seeding grants every permission to the `admin` role, including permissions added by later releases. Migrations `011`, `013` and `014` grant `stock:record`, `assets:report`, `assets:borrow` and `assets:lend` to every role that had `assets:write`, so nobody loses what they could do.
 * **Roles:** `GET /api/v1/roles` lists roles with their permissions, how many users who are not archived hold each (`user_count`), and which is `protected`; `POST /api/v1/roles` creates one and `PUT`/`DELETE /api/v1/roles/{id}` change or delete it, all with `users:manage` and a body of `{"name", "description", "permissions"}`. Names are unique and up to 64 characters; permissions must be known keys. Deleting a role takes it from everyone who holds it. The `admin` role is protected: it cannot be renamed, edited or deleted (`409`), since seeding recreates it by name and grants it every permission at each start. Editing and deleting roles follow the anti-lockout rule below.
 * **Union Principle:** When a user is assigned multiple roles, their effective permissions are the strict union of all granted rights across all assigned roles.
 * **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, role removal, or role edit that results in zero active users possessing the `users:manage` permission. Each such change runs in one transaction that first takes the `users_manage` row of the `app_locks` table (migration `004`), so concurrent changes are checked one after another and two admins cannot remove each other at the same time.
@@ -586,7 +586,18 @@ Notifications go out through pluggable notifier drivers, in the same way printer
   * A delivery is claimed with a lease, so several servers sharing a database send it once.
   * Network errors and `5xx` responses are retried with exponential backoff; a `429` waits as long as the service asks. Other `4xx` responses fail at once, and anything still unsent after 24 hours is given up.
   * The outcome of recent deliveries is visible in `GET /api/v1/notifiers/deliveries`.
-* **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed. An asset's messages link to `{base_url}/assets/{id}`, give its quantity and threshold with their unit, and are amber, since an asset has no color of its own. A change of condition is titled "Out of service" (red), "Needs maintenance" (amber) or "Working again" (neutral), with the note and who reported it.
+* **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed. An asset's messages link to `{base_url}/assets/{id}`, give its quantity and threshold with their unit, and are amber, since an asset has no color of its own. A change of condition is titled "Out of service" (red), "Needs maintenance" (amber) or "Working again" (neutral), with the note and who reported it. An overdue loan is "Overdue" (amber), naming the borrower and the day it was due (UTC).
+
+### 5.3 Lending
+
+Some equipment is lent out: drills, multimeters, a ladder. Lending is turned on per category and tracked per asset (migration `014`).
+
+* **Lendable categories:** `is_lendable` on a category lets its assets, and those of every category below it, be checked out. `GET /api/v1/assets/{id}` says whether an asset is `lendable`, and gives its open `loan`, if any: the borrower (`id`, `email`, `name`, and `archived` if they have left), when it went out, when it is due back, and whether it is `overdue`.
+* **Who may lend:** `assets:borrow` checks an asset out to oneself and checks one's own loans back in; `assets:lend` checks an asset out to any active user and checks any loan back in. Migration `014` grants both to every role that had `assets:write`. Borrowers are always user accounts; `GET /api/v1/people` (`assets:lend` or `users:manage`) lists the active users a loan can name. An API token can lend with `assets:lend`, naming the borrower, but cannot borrow.
+* **Checking out:** `POST /api/v1/assets/{id}/checkout` with `{"borrower_id", "due_at"}`, both optional: no borrower means whoever is signed in, and `due_at` is an RFC 3339 time (the web app sends the end of the chosen day in the browser's time zone, since the server has no local time zone of its own). It is refused (`409`) for an asset that is archived, in no lendable category, counted by quantity, out of service, or already lent: one borrower at a time. Lending part of a pooled quantity is not supported; label each item to lend it.
+* **Checking in:** `POST /api/v1/assets/{id}/checkin` ends the open loan. A lent asset cannot be archived until it is checked in (`409`). A borrower who is archived keeps their loans, so it stays clear who had the drill.
+* **Loans and the list:** `GET /api/v1/loans` (`assets:read`) lists loans newest first, returned ones too, with `?borrower_id=` and `?state=open` or `overdue`. The asset list filters with `?loan=open` or `overdue` and shows who has each asset. The Loans page shows lenders every open loan and borrowers their own, past and present.
+* **History and notices:** checking out and in record `asset.checked_out` and `asset.checked_in` in the asset's history, with the borrower as they were named then and the due date. The notification worker in `bam serve` sweeps for open loans past due each time it polls and records `asset.overdue` once per loan, with the trigger `schedule`; channels can subscribe to it, and several servers sharing a database still record it once.
 
 ---
 
@@ -868,6 +879,9 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.7: Asset Condition
 * [x] Assets reported as needing maintenance or out of service, with a note, by members holding `assets:report`, cleared by those who edit assets, recorded in history, filtered in the list and announced to channels (§3.2).
 
+#### Sub-Phase 7.8: Lending
+* [x] Lendable categories; assets checked out to user accounts, by themselves (`assets:borrow`) or by lenders (`assets:lend`), with optional due dates; loans shown on assets, in the list and on a Loans page, recorded in history, and announced once when overdue (§5.3).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -878,14 +892,10 @@ Agreed, not yet scheduled or designed in detail.
 * [ ] Moves recorded in the asset's history; a container that still holds anything cannot be archived.
 * [ ] Later: the container's name on labels, a CSV column per relation type, and scanning a bin's code to list what is in it.
 
-#### Check-In / Check-Out
-* [ ] **Turned on per category:** assets in a lendable category can be checked out to a person and checked back in. Assets in other categories have no such actions.
-* [ ] Who has an asset and since when, shown on the asset and the list, with an optional due date. Check-outs and check-ins recorded in the asset's history.
-* [ ] Notifications for overdue loans, through the existing channels.
-
 #### Weights for Counted Items
 * [ ] **Optional, per category:** a consumable category counted by items can give its assets a weight in the category's unit, so a 1 kg spool and a 2 kg spool of blue PLA sum to 3 kg, and the category's threshold is in that unit ("notify me below 1 kg"). Categories without a unit count each asset as 1, as they do now, for things that are truly atomic.
 * [ ] The weight can be lowered as a spool is used, through the same use action as quantities, and the totals cascade to parent categories as counts do now, but only where the units match.
+* [ ] A lent spool checked back in asks how much is left, and records the difference as use.
 
 #### Photos on Assets
 * [ ] A few photos per asset, shown on its page and as a thumbnail in the list, stored like label images.

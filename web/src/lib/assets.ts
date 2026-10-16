@@ -1,6 +1,7 @@
 // Helpers for the asset form.
 
 import type { AssetChange, AssetEvent, AssetStock, Condition, EffectiveField, FieldType, GeneratorKey } from './models';
+import { displayName } from './people';
 
 /** The HTML input type for a field type (select fields use <select>). */
 export function inputType(type: FieldType): string {
@@ -144,6 +145,14 @@ export function describeEvent(e: AssetEvent): string {
       if (to === 'needs_maintenance') return `Reported as needing maintenance${said}`;
       return 'Marked as working';
     }
+    case 'asset.checked_out': {
+      const due = p.due_at ? `, due back ${dueDate(p.due_at)}` : '';
+      return `Lent to ${p.borrower ? displayName(p.borrower) : 'someone'}${due}`;
+    }
+    case 'asset.checked_in':
+      return `Checked in from ${p.borrower ? displayName(p.borrower) : 'someone'}`;
+    case 'asset.overdue':
+      return `Overdue: ${p.borrower ? displayName(p.borrower) : 'the borrower'} was due to bring it back ${p.due_at ? dueDate(p.due_at) : ''}`.trim();
     default:
       return e.kind;
   }
@@ -191,4 +200,18 @@ export function conditionLabel(c: Condition): string {
     default:
       return 'Working';
   }
+}
+
+/** A loan's due date, as the person reading it would write it. */
+export function dueDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/**
+ * The end of a day picked in a date input, in the browser's time zone, as
+ * the API takes it: a loan due on a day is due by the end of it.
+ */
+export function endOfDay(day: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y!, m! - 1, d!, 23, 59, 59).toISOString();
 }

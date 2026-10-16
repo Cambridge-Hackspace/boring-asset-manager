@@ -12,6 +12,7 @@
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import ConditionBadge from '../../components/ConditionBadge.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
+  import LoanPanel from '../../components/LoanPanel.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
@@ -119,6 +120,13 @@
       reporting = false;
       return r;
     }, `Reported: ${conditionLabel(reportCondition).toLowerCase()}.`);
+  }
+
+  function loanChanged(a: AssetWithDetails, done: string) {
+    asset = a;
+    saved = done;
+    error = '';
+    void loadHistory();
   }
 
   function markWorking() {
@@ -241,6 +249,10 @@
           </div>
         {/if}
       </section>
+    {/if}
+
+    {#if (asset.lendable || asset.loan) && !archived}
+      <LoanPanel {asset} onchange={loanChanged} />
     {/if}
 
     <section class="card" aria-labelledby="details-heading">

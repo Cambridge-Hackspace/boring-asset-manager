@@ -64,6 +64,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventAssetRunningLow, Label: "An asset counted by quantity is running low"},
 	{Kind: models.EventAssetRestocked, Label: "An asset counted by quantity is restocked"},
 	{Kind: models.EventAssetConditionChanged, Label: "An asset needs maintenance, is out of service, or is working again"},
+	{Kind: models.EventAssetOverdue, Label: "A loan is overdue"},
 }
 
 // EventKind is an event channels can subscribe to.

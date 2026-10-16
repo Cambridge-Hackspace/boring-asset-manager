@@ -9,7 +9,8 @@ export interface SentRequest {
   body: unknown;
 }
 
-type Handler = (body: unknown, path: string) => { status?: number; body?: unknown } | unknown;
+// A handler answers at once, or later by returning a promise.
+type Handler = (body: unknown, path: string) => { status?: number; body?: unknown } | unknown | Promise<unknown>;
 
 export function fakeApi(routes: Record<string, Handler>) {
   const sent: SentRequest[] = [];
@@ -22,7 +23,7 @@ export function fakeApi(routes: Record<string, Handler>) {
     if (!handler) {
       return new Response(JSON.stringify({ error: `no fake for ${method} ${path}` }), { status: 404 });
     }
-    const result = handler(body, path) as { status?: number; body?: unknown } | undefined;
+    const result = (await handler(body, path)) as { status?: number; body?: unknown } | undefined;
     const isEnvelope = result !== null && typeof result === 'object' && ('status' in result || 'body' in result);
     const status = isEnvelope ? (result.status ?? 200) : 200;
     const payload = isEnvelope ? result.body : result;

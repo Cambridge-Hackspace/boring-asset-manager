@@ -326,13 +326,17 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 		effectiveFields = []models.EffectiveField{}
 	}
 
-	return &models.AssetWithDetails{
+	details := &models.AssetWithDetails{
 		Asset:           a,
 		Categories:      categories,
 		GeneratorKeys:   generatorKeys,
 		FieldValues:     fieldValues,
 		EffectiveFields: effectiveFields,
-	}, nil
+	}
+	if err := s.loanDetails(details); err != nil {
+		return nil, err
+	}
+	return details, nil
 }
 
 // ListAssets returns active assets, optionally filtered by category or search term.
@@ -363,6 +367,9 @@ type AssetFilter struct {
 	Archived   bool
 	// Condition is a condition, or ConditionProblem.
 	Condition string
+	// Loan is LoansOpen for assets lent out, LoansOverdue for those past
+	// due, or LoansAll.
+	Loan string
 }
 
 // FilterAssets lists the assets a filter matches: active ones newest first,
@@ -397,6 +404,17 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 		args = append(args, f.Condition)
 	default:
 		return nil, ErrInvalidCondition
+	}
+
+	switch f.Loan {
+	case LoansAll:
+	case LoansOpen:
+		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_loans WHERE checked_in_at IS NULL)")
+	case LoansOverdue:
+		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_loans WHERE checked_in_at IS NULL AND due_at < ?)")
+		args = append(args, time.Now().UTC())
+	default:
+		return nil, ErrInvalidLoanFilter
 	}
 
 	query := fmt.Sprintf(`
@@ -639,6 +657,13 @@ func (s *Store) DeleteAsset(id string) error {
 	}
 
 	return s.withInventory(func(ic *inventoryChange) error {
+		var lent int
+		if err := s.TxQueryRow(ic.tx, "SELECT COUNT(*) FROM asset_loans WHERE asset_id = ? AND checked_in_at IS NULL", id).Scan(&lent); err != nil {
+			return fmt.Errorf("checking loans: %w", err)
+		}
+		if lent > 0 {
+			return ErrAssetOnLoan
+		}
 		before, err := s.snapshotAssetTx(ic.tx, id)
 		if err != nil {
 			return err

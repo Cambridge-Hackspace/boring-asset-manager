@@ -20,6 +20,7 @@ import RolesPage from './views/admin/RolesPage.svelte';
 import TokensPage from './views/admin/TokensPage.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
+import LoansPage from './views/LoansPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -38,6 +39,7 @@ export const routes: Route[] = [
   { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets:write'] },
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets:read'] },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets:write'] },
+  { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets:borrow', 'assets:lend'], nav: 'Loans' },
   { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets:read'], nav: 'Categories' },
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories:manage'] },
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets:read'] },

@@ -6,7 +6,7 @@ import { session } from '../../lib/session.svelte';
 import type { Category, EffectiveField } from '../../lib/models';
 
 const cat = (id: string, name: string, parent: string | null = null, over: Partial<Category> = {}): Category => ({
-  id, name, parent_id: parent, color_hex: '#1d4ed8', is_consumable: false, is_running_low: false, created_at: '', updated_at: '', ...over,
+  id, name, parent_id: parent, color_hex: '#1d4ed8', is_consumable: false, is_lendable: false, is_running_low: false, created_at: '', updated_at: '', ...over,
 });
 const categories = [
   cat('tools', 'Tools'),
@@ -68,7 +68,7 @@ describe('CategoryPage', () => {
     await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({
-      name: 'Power tools', parent_id: null, color_hex: '#1d4ed8', is_consumable: false, is_running_low: false, low_stock_threshold: null,
+      name: 'Power tools', parent_id: null, color_hex: '#1d4ed8', is_consumable: false, is_lendable: false, is_running_low: false, low_stock_threshold: null,
     });
   });
 

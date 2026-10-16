@@ -325,3 +325,20 @@ func TestDiscordConditionEmbeds(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscordOverdueEmbed(t *testing.T) {
+	due := time.Date(2026, 10, 14, 22, 59, 0, 0, time.UTC)
+	n := Notification{BaseURL: "https://bam.example", Event: models.Event{
+		Kind: models.EventAssetOverdue,
+		Payload: models.EventPayload{
+			Asset:    &models.EventAsset{ID: "a1", Name: "Drill"},
+			Trigger:  models.TriggerSchedule,
+			Borrower: &models.EventActor{ID: "u1", Email: "bo@hackspace.org", Name: "Bo_Brown"},
+			DueAt:    &due,
+		},
+	}}
+	e := discordPayload(n).Embeds[0]
+	if e.Title != "Overdue: Drill" || e.Description != `Lent to Bo\_Brown, due back 14 October 2026 (UTC).` || e.Color != discordWarning || e.URL != "https://bam.example/assets/a1" {
+		t.Errorf("overdue: %+v", e)
+	}
+}
