@@ -1,6 +1,6 @@
 // Helpers for the asset form.
 
-import type { AssetChange, AssetEvent, AssetStock, EffectiveField, FieldType, GeneratorKey } from './models';
+import type { AssetChange, AssetEvent, AssetStock, Condition, EffectiveField, FieldType, GeneratorKey } from './models';
 
 /** The HTML input type for a field type (select fields use <select>). */
 export function inputType(type: FieldType): string {
@@ -137,6 +137,13 @@ export function describeEvent(e: AssetEvent): string {
       return 'Archived';
     case 'asset.restored':
       return 'Restored';
+    case 'asset.condition_changed': {
+      const to = p.changes?.[0]?.to;
+      const said = p.note ? `: “${p.note}”` : '';
+      if (to === 'out_of_service') return `Reported out of service${said}`;
+      if (to === 'needs_maintenance') return `Reported as needing maintenance${said}`;
+      return 'Marked as working';
+    }
     default:
       return e.kind;
   }
@@ -161,6 +168,8 @@ export function describeChange(c: AssetChange, kind: string): string {
       return fromTo('Unit', c);
     case 'threshold':
       return fromTo('Low-stock threshold', c);
+    case 'condition':
+      return `Was ${conditionLabel((c.from ?? 'ok') as Condition).toLowerCase()}`;
     default:
       return fromTo('Name', c);
   }
@@ -170,4 +179,16 @@ function fromTo(label: string, c: AssetChange): string {
   if (!c.from) return `${label}: ${c.to}`;
   if (!c.to) return `${label}: ${c.from} removed`;
   return `${label}: ${c.from} → ${c.to}`;
+}
+
+/** How a condition reads. */
+export function conditionLabel(c: Condition): string {
+  switch (c) {
+    case 'needs_maintenance':
+      return 'Needs maintenance';
+    case 'out_of_service':
+      return 'Out of service';
+    default:
+      return 'Working';
+  }
 }

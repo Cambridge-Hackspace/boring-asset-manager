@@ -57,3 +57,30 @@ test('count stock by quantity: use it up, see it run low, restock', async ({ sig
   await expect(stock).toContainText('In stock. 135 screws left');
   await expect(history.getByRole('listitem').first()).toContainText('Restocked: back to the threshold of 50 screws or more');
 });
+
+test('report a broken tool, find it needing attention, and mark it working', async ({ signedIn: page, api }) => {
+  const name = unique('Pillar drill');
+  const { asset } = await api.call('POST', '/assets', { name });
+  await page.goto(`/assets/${asset.asset.id}`);
+  await page.getByRole('button', { name: 'Report a problem' }).click();
+  await page.getByRole('radio', { name: /Out of service/ }).check();
+  await page.getByLabel('What is wrong?').fill('Chuck slips');
+  await page.getByRole('button', { name: 'Report', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Reported: out of service.');
+  const history = page.getByRole('region', { name: 'History' });
+  await expect(history.getByRole('listitem').first()).toContainText('Reported out of service: “Chuck slips”');
+
+  // It is on the home page and in the list's filter.
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Needs attention' })).toContainText(`${name} Out of service Chuck slips`);
+  await goTo(page, 'Assets');
+  await page.getByLabel('Condition').selectOption({ label: 'Needs attention' });
+  await expect(page).toHaveURL(/condition=problem/);
+  await expect(page.getByRole('row', { name: new RegExp(name) })).toContainText('Out of service');
+
+  await page.getByRole('link', { name }).click();
+  await page.getByRole('button', { name: 'Mark as working' }).click();
+  await expect(page.getByRole('status')).toHaveText('Marked as working.');
+  await expect(history.getByRole('listitem').first()).toContainText('Marked as working');
+  await expect(page.getByText('Out of service', { exact: true })).toHaveCount(0);
+});

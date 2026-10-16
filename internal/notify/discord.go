@@ -97,6 +97,7 @@ const (
 	discordNeutral = 0x6b7280
 	discordTest    = 0x3b82f6
 	discordWarning = 0xf59e0b
+	discordDanger  = 0xdc2626
 )
 
 func (d Discord) Send(ctx context.Context, options map[string]string, n Notification) error {
@@ -205,6 +206,28 @@ func discordPayload(n Notification) discordMessage {
 		embed.Title = "Restocked: " + name
 		embed.Color = discordNeutral
 		embed.Description = assetDescription(p, by, "Back to %s, at or above the threshold of %s.", "Marked as restocked")
+	case e.Kind == models.EventAssetConditionChanged:
+		to := ""
+		if len(p.Changes) > 0 {
+			to = p.Changes[0].To
+		}
+		switch to {
+		case models.ConditionOutOfService:
+			embed.Title, embed.Color = "Out of service: "+name, discordDanger
+		case models.ConditionNeedsMaintenance:
+			embed.Title, embed.Color = "Needs maintenance: "+name, discordWarning
+		default:
+			embed.Title, embed.Color = "Working again: "+name, discordNeutral
+		}
+		if p.Note != "" {
+			embed.Description = escapeMarkdown(truncate(p.Note, 1000))
+		}
+		if by != "" {
+			if embed.Description != "" {
+				embed.Description += "\n"
+			}
+			embed.Description += "Reported by " + by + "."
+		}
 	default:
 		embed.Title = truncate(e.Kind, 200)
 		embed.Color = discordNeutral

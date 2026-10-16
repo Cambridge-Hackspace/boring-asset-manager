@@ -17,6 +17,9 @@ const (
 	PermLabelsPrint      = "labels:print"
 	// PermStockRecord uses, restocks and flags stock without editing assets.
 	PermStockRecord = "stock:record"
+	// PermAssetsReport reports an asset needing maintenance or out of
+	// service, without editing it.
+	PermAssetsReport = "assets:report"
 )
 
 var (
@@ -36,6 +39,7 @@ func AllPermissions() []string {
 		PermUsersManage,
 		PermLabelsPrint,
 		PermStockRecord,
+		PermAssetsReport,
 	}
 }
 

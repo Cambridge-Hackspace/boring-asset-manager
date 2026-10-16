@@ -9,7 +9,8 @@ export type Permission =
   | 'settings:manage'
   | 'users:manage'
   | 'labels:print'
-  | 'stock:record';
+  | 'stock:record'
+  | 'assets:report';
 
 export interface User {
   id: string;
@@ -81,7 +82,12 @@ export interface Asset {
   archived_at?: string | null;
   /** Set when the asset's stock is counted by quantity (README §5.1). */
   stock?: AssetStock | null;
+  /** How it is: working, needing maintenance or out of service, with a note saying what is wrong. */
+  condition: Condition;
+  condition_note: string;
 }
+
+export type Condition = 'ok' | 'needs_maintenance' | 'out_of_service';
 
 export interface AssetStock {
   quantity: number;
@@ -106,12 +112,14 @@ export interface AssetEvent {
     unit?: string;
     /** What a created, edited or archived event changed. */
     changes?: AssetChange[];
+    /** What someone said about a change of condition. */
+    note?: string;
   };
 }
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold';
+  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition';
   key?: string;
   label?: string;
   from?: string;

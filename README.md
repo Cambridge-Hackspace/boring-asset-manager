@@ -296,6 +296,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 * Audit timestamps: `created_at`, `updated_at`, `archived_at`.
 * **Archiving and restoring:** `DELETE /api/v1/assets/{id}` (`assets:delete`) archives an asset and releases its codes for other assets. Archived assets cannot be edited, used or restocked, and are listed apart: `GET /api/v1/assets?archived=true`, most recently archived first, with the same category and search filters (search finds them by name, since their codes are released). `POST /api/v1/assets/{id}/restore` (`assets:delete`) brings one back with the codes archiving released, except any another asset has taken since; the response lists those as `skipped_codes`. Assets archived before archiving recorded their codes (§5.1) come back without codes. Restoring counts toward thresholds as creating does.
 * Optional stock counted by quantity: `stock_quantity`, `stock_unit`, `low_stock_threshold`, `is_running_low` (§5.1).
+* **Condition** (migration `013`): `ok`, `needs_maintenance` or `out_of_service`, returned as `condition` with a `condition_note` of up to 255 characters saying what is wrong. `PUT /api/v1/assets/{id}/condition` with `{"condition", "note"}` changes it: reporting a problem needs `assets:report` or `assets:write`, and marking an asset `ok` again needs `assets:write`; an ok asset keeps no note. Each change records `asset.condition_changed` with the condition before and after and the note, which channels can subscribe to (§5.2); the same condition and note again records nothing. Archived assets cannot be changed. The list filters on it with `?condition=`, one of the three or `problem` for any asset that is not ok, and the home page lists assets needing attention.
 
 
 * **Generator ID Mapping (`asset_generator_keys`):**
@@ -317,7 +318,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 ### 3.3 RBAC Security Matrix
 
 * **Tables:** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`.
-* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, from Phase 3 `labels:print`, and from Phase 7 `stock:record`, which uses, restocks and flags stock without being able to edit assets). Seeding grants every permission to the `admin` role, including permissions added by later releases. Migration `011` grants `stock:record` to every role that had `assets:write`, which those actions needed before.
+* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, from Phase 3 `labels:print`, and from Phase 7 `stock:record`, which uses, restocks and flags stock without being able to edit assets, and `assets:report`, which reports an asset needing maintenance or out of service). Seeding grants every permission to the `admin` role, including permissions added by later releases. Migrations `011` and `013` grant `stock:record` and `assets:report` to every role that had `assets:write`, so nobody loses what they could do.
 * **Roles:** `GET /api/v1/roles` lists roles with their permissions, how many users who are not archived hold each (`user_count`), and which is `protected`; `POST /api/v1/roles` creates one and `PUT`/`DELETE /api/v1/roles/{id}` change or delete it, all with `users:manage` and a body of `{"name", "description", "permissions"}`. Names are unique and up to 64 characters; permissions must be known keys. Deleting a role takes it from everyone who holds it. The `admin` role is protected: it cannot be renamed, edited or deleted (`409`), since seeding recreates it by name and grants it every permission at each start. Editing and deleting roles follow the anti-lockout rule below.
 * **Union Principle:** When a user is assigned multiple roles, their effective permissions are the strict union of all granted rights across all assigned roles.
 * **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, role removal, or role edit that results in zero active users possessing the `users:manage` permission. Each such change runs in one transaction that first takes the `users_manage` row of the `app_locks` table (migration `004`), so concurrent changes are checked one after another and two admins cannot remove each other at the same time.
@@ -585,7 +586,7 @@ Notifications go out through pluggable notifier drivers, in the same way printer
   * A delivery is claimed with a lease, so several servers sharing a database send it once.
   * Network errors and `5xx` responses are retried with exponential backoff; a `429` waits as long as the service asks. Other `4xx` responses fail at once, and anything still unsent after 24 hours is given up.
   * The outcome of recent deliveries is visible in `GET /api/v1/notifiers/deliveries`.
-* **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed. An asset's messages link to `{base_url}/assets/{id}`, give its quantity and threshold with their unit, and are amber, since an asset has no color of its own.
+* **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed. An asset's messages link to `{base_url}/assets/{id}`, give its quantity and threshold with their unit, and are amber, since an asset has no color of its own. A change of condition is titled "Out of service" (red), "Needs maintenance" (amber) or "Working again" (neutral), with the note and who reported it.
 
 ---
 
@@ -863,6 +864,9 @@ Running BAM for real, and keeping it honest. In priority order:
 
 #### Sub-Phase 7.6: API Tokens
 * [x] Hashed, revocable, optionally expiring tokens holding roles, made once from the web app and shown once, with their changes recorded under their name (§3.4).
+
+#### Sub-Phase 7.7: Asset Condition
+* [x] Assets reported as needing maintenance or out of service, with a note, by members holding `assets:report`, cleared by those who edit assets, recorded in history, filtered in the list and announced to channels (§3.2).
 
 ### Upcoming Features
 

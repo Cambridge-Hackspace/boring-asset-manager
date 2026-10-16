@@ -297,3 +297,31 @@ func TestBackoff(t *testing.T) {
 		t.Error("backoff overflows")
 	}
 }
+
+func TestDiscordConditionEmbeds(t *testing.T) {
+	event := func(to, note string) Notification {
+		return Notification{BaseURL: "https://bam.example", Event: models.Event{
+			Kind: models.EventAssetConditionChanged,
+			Payload: models.EventPayload{
+				Asset:   &models.EventAsset{ID: "a1", Name: "Pillar_drill"},
+				Actor:   &models.EventActor{Email: "bo@hackspace.org", Name: "Bo"},
+				Trigger: models.TriggerManual,
+				Changes: []models.EventChange{{What: "condition", From: "ok", To: to}},
+				Note:    note,
+			},
+		}}
+	}
+	for _, c := range []struct {
+		to, note, title, desc string
+		color                 int
+	}{
+		{"out_of_service", "Chuck *slips*", `Out of service: Pillar\_drill`, `Chuck \*slips\*` + "\nReported by Bo.", discordDanger},
+		{"needs_maintenance", "", `Needs maintenance: Pillar\_drill`, "Reported by Bo.", discordWarning},
+		{"ok", "", `Working again: Pillar\_drill`, "Reported by Bo.", discordNeutral},
+	} {
+		e := discordPayload(event(c.to, c.note)).Embeds[0]
+		if e.Title != c.title || e.Description != c.desc || e.Color != c.color || e.URL != "https://bam.example/assets/a1" {
+			t.Errorf("%s: %+v", c.to, e)
+		}
+	}
+}

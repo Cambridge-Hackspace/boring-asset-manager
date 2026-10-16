@@ -3,10 +3,18 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import AssetPage from './AssetPage.svelte';
 import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
-import type { AssetEvent, AssetWithDetails } from '../../lib/models';
+import type { AssetEvent, AssetWithDetails, Condition } from '../../lib/models';
 
 const withStock = (quantity: number, low: boolean): AssetWithDetails => ({
-  asset: { id: 'a1', name: 'M3 screws', created_at: '', updated_at: '', stock: { quantity, unit: 'pcs', low_stock_threshold: 50, is_running_low: low } },
+  asset: {
+    id: 'a1',
+    name: 'M3 screws',
+    created_at: '',
+    updated_at: '',
+    condition: 'ok',
+    condition_note: '',
+    stock: { quantity, unit: 'pcs', low_stock_threshold: 50, is_running_low: low },
+  },
   categories: [],
   generator_keys: [],
   field_values: {},
@@ -155,5 +163,58 @@ describe('AssetPage archived', () => {
     expect(screen.getByRole('link', { name: 'Edit' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Use' })).toBeTruthy();
     expect(sent.filter((r) => r.method === 'POST').map((r) => r.path)).toEqual(['/assets/a1/restore']);
+  });
+});
+
+describe('AssetPage condition', () => {
+  const broken = (asset: AssetWithDetails, condition: Condition, note: string): AssetWithDetails => ({
+    ...asset,
+    asset: { ...asset.asset, condition, condition_note: note },
+  });
+
+  it('lets a member report a problem but not clear it', async () => {
+    session.permissions = ['assets:read', 'assets:report'];
+    let current = withStock(5, false);
+    const { sent } = fakeApi({
+      'GET /assets/a1': () => ({ asset: current }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+      'PUT /assets/a1/condition': (body) => {
+        const b = body as { condition: Condition; note: string };
+        current = broken(current, b.condition, b.note);
+        return { asset: current, changed: true };
+      },
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Report a problem' }));
+    await fireEvent.click(screen.getByRole('radio', { name: /Out of service/ }));
+    await fireEvent.input(screen.getByLabelText('What is wrong?'), { target: { value: 'Chuck slips' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Report' }));
+
+    expect(await screen.findByText('Reported: out of service.')).toBeTruthy();
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ condition: 'out_of_service', note: 'Chuck slips' });
+    expect(screen.getByText('Out of service')).toBeTruthy();
+    expect(screen.getByText('Chuck slips')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mark as working' })).toBeNull();
+  });
+
+  it('lets someone who edits assets mark it working again', async () => {
+    session.permissions = ['assets:read', 'assets:write'];
+    let current = broken(withStock(5, false), 'needs_maintenance', 'Blunt');
+    const { sent } = fakeApi({
+      'GET /assets/a1': () => ({ asset: current }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+      'PUT /assets/a1/condition': () => {
+        current = broken(current, 'ok', '');
+        return { asset: current, changed: true };
+      },
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    expect(await screen.findByText('Needs maintenance')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Mark as working' }));
+    expect(await screen.findByText('Marked as working.')).toBeTruthy();
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ condition: 'ok' });
+    expect(screen.queryByText('Needs maintenance')).toBeNull();
   });
 });

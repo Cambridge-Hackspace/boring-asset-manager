@@ -107,6 +107,9 @@ const (
 	EventAssetEdited   = "asset.edited"
 	EventAssetArchived = "asset.archived"
 	EventAssetRestored = "asset.restored"
+	// EventAssetConditionChanged records a change of an asset's condition, in
+	// the payload's Changes, with its Note. Channels can subscribe to it.
+	EventAssetConditionChanged = "asset.condition_changed"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -159,6 +162,8 @@ type EventPayload struct {
 	Unit     string `json:"unit,omitempty"`
 	// Changes lists what an asset's created, edited or archived event changed.
 	Changes []EventChange `json:"changes,omitempty"`
+	// Note is what a person said about a change of condition.
+	Note string `json:"note,omitempty"`
 }
 
 // EventChange is one change to an asset, as it read when it was made. What
@@ -249,6 +254,10 @@ type Asset struct {
 	// Stock is the asset's stock when it is counted by quantity (README
 	// §5.1), and nil when it is not.
 	Stock *AssetStock `json:"stock"`
+	// Condition is ConditionOK, ConditionNeedsMaintenance or
+	// ConditionOutOfService, with a note saying what is wrong.
+	Condition     string `json:"condition"`
+	ConditionNote string `json:"condition_note"`
 }
 
 // AssetStock is an asset's stock, counted by quantity.
@@ -344,4 +353,16 @@ type Delivery struct {
 	LastError     string     `json:"last_error,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+}
+
+// An asset's condition (README §3.2).
+const (
+	ConditionOK               = "ok"
+	ConditionNeedsMaintenance = "needs_maintenance"
+	ConditionOutOfService     = "out_of_service"
+)
+
+// ValidCondition reports whether c is one of the conditions above.
+func ValidCondition(c string) bool {
+	return c == ConditionOK || c == ConditionNeedsMaintenance || c == ConditionOutOfService
 }
