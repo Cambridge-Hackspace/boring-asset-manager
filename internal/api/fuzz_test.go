@@ -69,6 +69,14 @@ var fuzzRoutes = []route{
 	{method: "GET", path: "/api/v1/categories/{category}/fields"},
 	{method: "GET", path: "/api/v1/categories/{category}/relation-types"},
 	{method: "PUT", path: "/api/v1/categories/{category}/relation-types", body: `{"relation_type_ids":["{relation}"]}`},
+	{method: "GET", path: "/api/v1/reports"},
+	{method: "POST", path: "/api/v1/reports", body: `{"name":"Report {n}","spec":{"filter":{"running_low":true,"category_ids":["{category}"]},"sections":[{"type":"table","title":"Low","columns":[{"heading":"Asset","binding":"{{asset.name}} {{stock.quantity}}"}],"group_by":"category"}]}}`},
+	{method: "POST", path: "/api/v1/reports/preview", body: `{"spec":{"filter":{"loan":"open"},"sections":[{"type":"table","columns":[{"heading":"Borrower","binding":"{{loan.borrower}}"}]}]}}`},
+	{method: "GET", path: "/api/v1/reports/{report}"},
+	{method: "PUT", path: "/api/v1/reports/{report}", body: `{"name":"Renamed {n}","spec":{"sections":[{"type":"table","columns":[{"heading":"Where","binding":"{{asset.location}}"}]}]}}`},
+	{method: "GET", path: "/api/v1/reports/{report}/run"},
+	{method: "GET", path: "/api/v1/reports/{report}/sections/1/csv"},
+	{method: "DELETE", path: "/api/v1/reports/{report}"},
 	{method: "GET", path: "/api/v1/relation-types"},
 	{method: "POST", path: "/api/v1/relation-types", body: `{"name":"powers {n}","inverse_name":"powered by {n}","is_single":true}`},
 	{method: "PUT", path: "/api/v1/relation-types/{relation}", body: `{"name":"feeds {n}","inverse_name":"fed by {n}"}`},
@@ -188,6 +196,13 @@ func newFuzzer(tb testing.TB) *fuzzer {
 	for _, r := range relations {
 		fz.ids["relation"] = append(fz.ids["relation"], r.ID)
 	}
+	reports, err := st.ListReports()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	for _, r := range reports {
+		fz.ids["report"] = append(fz.ids["report"], r.ID)
+	}
 	// A category to be the parent of others, then each create once, as it
 	// is written, so every kind of ID exists.
 	fz.send(fuzzRequest{method: "POST", target: "/api/v1/categories", contentType: "application/json", body: []byte(`{"name":"Tools"}`), create: "category"})
@@ -232,6 +247,8 @@ func kindOf(path string) string {
 		return "token"
 	case "/api/v1/relation-types":
 		return "relation"
+	case "/api/v1/reports":
+		return "report"
 	case "/api/v1/users":
 		return "user"
 	}
@@ -279,7 +296,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "field", "category", "asset", "template", "image", "printer", "channel"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "field", "category", "asset", "template", "image", "printer", "channel"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {

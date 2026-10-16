@@ -12,7 +12,8 @@ export type Permission =
   | 'stock:record'
   | 'assets:report'
   | 'assets:borrow'
-  | 'assets:lend';
+  | 'assets:lend'
+  | 'reports:manage';
 
 export interface User {
   id: string;
@@ -392,4 +393,47 @@ export interface AssetLink {
   label: string;
   asset: LinkedAsset;
   outgoing: boolean;
+}
+
+/** A saved report: a filter over assets and sections showing them. */
+export interface Report {
+  id: string;
+  name: string;
+  spec: ReportSpec;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportSpec {
+  filter: ReportFilter;
+  sections: ReportSection[];
+}
+
+export interface ReportFilter {
+  category_ids?: string[];
+  search?: string;
+  archived?: boolean;
+  running_low?: boolean;
+  loan?: '' | 'open' | 'overdue';
+  condition?: '' | 'problem' | Condition;
+}
+
+export interface ReportSection {
+  type: 'table';
+  title?: string;
+  columns: { heading: string; binding: string }[];
+  sort_by?: number;
+  descending?: boolean;
+  group_by?: '' | 'category';
+}
+
+/** A report run against the assets its filter found. */
+export interface ReportResult {
+  assets: number;
+  sections: {
+    type: 'table';
+    title: string;
+    columns: string[];
+    groups: { title: string; running_low?: boolean; rows: { asset_id: string; cells: string[] }[] }[];
+  }[];
 }

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,17 +76,58 @@ func (li *labelImages) LoadImage(id string) (image.Image, error) {
 
 // labelData gathers what bindings resolve against for one asset.
 func (s *Server) labelData(a *models.AssetWithDetails) labels.Data {
+	return bindingData(a, s.cfg.Server.BaseURL)
+}
+
+// bindingData gathers what bindings resolve against for one asset, on a
+// label or in a report.
+func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 	codes := make(map[string]string, len(a.GeneratorKeys))
 	for _, gk := range a.GeneratorKeys {
 		codes[gk.GeneratorType] = gk.AssignedCode
 	}
-	return labels.Data{
+	d := labels.Data{
 		AssetID:   a.Asset.ID,
 		AssetName: a.Asset.Name,
-		BaseURL:   s.cfg.Server.BaseURL,
+		BaseURL:   baseURL,
 		Codes:     codes,
 		Fields:    a.FieldValues,
+		Condition: conditionText(a.Asset.Condition),
 	}
+	names := make([]string, 0, len(a.Categories))
+	for _, c := range a.Categories {
+		names = append(names, c.Name)
+	}
+	d.Categories = strings.Join(names, ", ")
+	places := make([]string, 0, len(a.Location))
+	for _, p := range a.Location {
+		places = append(places, p.Name)
+	}
+	d.Location = strings.Join(places, " › ")
+	if st := a.Asset.Stock; st != nil {
+		d.Quantity, d.Unit = strconv.Itoa(st.Quantity), st.Unit
+	}
+	if l := a.Loan; l != nil {
+		d.Borrower = l.Borrower.Name
+		if d.Borrower == "" {
+			d.Borrower = l.Borrower.Email
+		}
+		if l.DueAt != nil {
+			d.Due = l.DueAt.UTC().Format("2006-01-02")
+		}
+	}
+	return d
+}
+
+// conditionText is how a condition reads on a label or in a report.
+func conditionText(c string) string {
+	switch c {
+	case models.ConditionNeedsMaintenance:
+		return "Needs maintenance"
+	case models.ConditionOutOfService:
+		return "Out of service"
+	}
+	return "Working"
 }
 
 // layoutAsset loads an asset and lays out its label. A non-nil problem means
@@ -203,11 +245,18 @@ type PreviewRequest struct {
 // generator gets a code that each symbology accepts.
 func previewData(t *labels.Template, baseURL string) labels.Data {
 	d := labels.Data{
-		AssetID:   "00000000-0000-4000-8000-000000000000",
-		AssetName: "Sample asset",
-		BaseURL:   baseURL,
-		Codes:     map[string]string{},
-		Fields:    map[string]string{},
+		AssetID:    "00000000-0000-4000-8000-000000000000",
+		AssetName:  "Sample asset",
+		BaseURL:    baseURL,
+		Codes:      map[string]string{},
+		Fields:     map[string]string{},
+		Categories: "Tools, Power tools",
+		Location:   "Shelf 2 › Bin A3",
+		Condition:  "Working",
+		Quantity:   "40",
+		Unit:       "pcs",
+		Borrower:   "Ada Lovelace",
+		Due:        "2026-01-31",
 	}
 	for _, genType := range generators.AllowedGeneratorTypes() {
 		d.Codes[genType] = "BAM-0001"
@@ -408,9 +457,15 @@ func (s *Server) handleExportLabels(w http.ResponseWriter, r *http.Request) {
 // of spaces or of anything a filesystem or header might object to turned into
 // one hyphen. A name with nothing usable left falls back to the ID.
 func fileStem(t *labels.Template) string {
-	stem := strings.Trim(unsafeFileChars.ReplaceAllString(t.Name, "-"), "-.")
+	return nameStem(t.Name, t.ID)
+}
+
+// nameStem makes a name safe in a file name, or gives fallback when nothing
+// of it is.
+func nameStem(name, fallback string) string {
+	stem := strings.Trim(unsafeFileChars.ReplaceAllString(name, "-"), "-.")
 	if stem == "" {
-		return t.ID
+		return fallback
 	}
 	return stem
 }

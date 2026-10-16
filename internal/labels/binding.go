@@ -13,12 +13,33 @@ import (
 type RefKind int
 
 const (
-	RefAssetID   RefKind = iota // {{asset.id}}
-	RefAssetName                // {{asset.name}}
-	RefAssetCode                // {{asset.code.<generator_type>}}
-	RefField                    // {{field.<key>}}
-	RefBaseURL                  // {{base_url}}
+	RefAssetID         RefKind = iota // {{asset.id}}
+	RefAssetName                      // {{asset.name}}
+	RefAssetCode                      // {{asset.code.<generator_type>}}
+	RefField                          // {{field.<key>}}
+	RefBaseURL                        // {{base_url}}
+	RefAssetCategories                // {{asset.categories}}
+	RefAssetLocation                  // {{asset.location}}
+	RefAssetCondition                 // {{asset.condition}}
+	RefStockQuantity                  // {{stock.quantity}}
+	RefStockUnit                      // {{stock.unit}}
+	RefLoanBorrower                   // {{loan.borrower}}
+	RefLoanDue                        // {{loan.due}}
 )
+
+// simpleRefs are the placeholders that take no argument.
+var simpleRefs = map[string]RefKind{
+	"asset.id":         RefAssetID,
+	"asset.name":       RefAssetName,
+	"base_url":         RefBaseURL,
+	"asset.categories": RefAssetCategories,
+	"asset.location":   RefAssetLocation,
+	"asset.condition":  RefAssetCondition,
+	"stock.quantity":   RefStockQuantity,
+	"stock.unit":       RefStockUnit,
+	"loan.borrower":    RefLoanBorrower,
+	"loan.due":         RefLoanDue,
+}
 
 // Ref is one placeholder. Arg holds the generator type or field key.
 type Ref struct {
@@ -69,13 +90,10 @@ func ParseBinding(s string) (Binding, error) {
 }
 
 func parseRef(name string) (Ref, error) {
+	if kind, ok := simpleRefs[name]; ok {
+		return Ref{Kind: kind}, nil
+	}
 	switch {
-	case name == "asset.id":
-		return Ref{Kind: RefAssetID}, nil
-	case name == "asset.name":
-		return Ref{Kind: RefAssetName}, nil
-	case name == "base_url":
-		return Ref{Kind: RefBaseURL}, nil
 	case strings.HasPrefix(name, "asset.code."):
 		genType := strings.TrimPrefix(name, "asset.code.")
 		if !generators.IsValidGeneratorType(genType) {
@@ -118,6 +136,12 @@ type Data struct {
 	Codes map[string]string
 	// Fields maps field key to the asset's value.
 	Fields map[string]string
+	// Categories, Location, Condition, Quantity, Unit, Borrower and Due are
+	// the asset's categories, where it is, its condition, its stock and who
+	// has it until when, as text; empty when it has none.
+	Categories, Location, Condition string
+	Quantity, Unit                  string
+	Borrower, Due                   string
 }
 
 // Resolve substitutes every placeholder. Missing codes and field values
@@ -141,6 +165,20 @@ func (b Binding) Resolve(d Data) string {
 			sb.WriteString(d.Codes[p.ref.Arg])
 		case RefField:
 			sb.WriteString(d.Fields[p.ref.Arg])
+		case RefAssetCategories:
+			sb.WriteString(d.Categories)
+		case RefAssetLocation:
+			sb.WriteString(d.Location)
+		case RefAssetCondition:
+			sb.WriteString(d.Condition)
+		case RefStockQuantity:
+			sb.WriteString(d.Quantity)
+		case RefStockUnit:
+			sb.WriteString(d.Unit)
+		case RefLoanBorrower:
+			sb.WriteString(d.Borrower)
+		case RefLoanDue:
+			sb.WriteString(d.Due)
 		}
 	}
 	return sb.String()

@@ -18,6 +18,9 @@ import PrintersPage from './views/admin/PrintersPage.svelte';
 import UsersPage from './views/admin/UsersPage.svelte';
 import RolesPage from './views/admin/RolesPage.svelte';
 import TokensPage from './views/admin/TokensPage.svelte';
+import ReportsPage from './views/reports/ReportsPage.svelte';
+import ReportView from './views/reports/ReportView.svelte';
+import ReportEditor from './views/reports/ReportEditor.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
@@ -40,6 +43,10 @@ export const routes: Route[] = [
   { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets:write'] },
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets:read'] },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets:write'] },
+  { pattern: '/reports', component: ReportsPage, title: 'Reports', permissions: ['assets:read'], nav: 'Reports' },
+  { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports:manage'] },
+  { pattern: '/reports/:id', component: ReportView, title: 'Report', permissions: ['assets:read'] },
+  { pattern: '/reports/:id/edit', component: ReportEditor, title: 'Edit report', permissions: ['reports:manage'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets:borrow', 'assets:lend'], nav: 'Loans' },
   { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets:read'], nav: 'Categories' },
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories:manage'] },

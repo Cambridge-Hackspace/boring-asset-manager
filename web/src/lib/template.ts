@@ -186,6 +186,13 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
     '{{asset.id}}',
     '{{base_url}}',
     '{{base_url}}/a/{{asset.id}}',
+    '{{asset.categories}}',
+    '{{asset.location}}',
+    '{{asset.condition}}',
+    '{{stock.quantity}}',
+    '{{stock.unit}}',
+    '{{loan.borrower}}',
+    '{{loan.due}}',
     ...generatorTypes.map((t) => `{{asset.code.${t}}}`),
     ...fieldKeys.map((k) => `{{field.${k}}}`),
   ];

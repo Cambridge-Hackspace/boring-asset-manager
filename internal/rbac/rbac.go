@@ -24,6 +24,8 @@ const (
 	PermAssetsBorrow = "assets:borrow"
 	// PermAssetsLend checks an asset out to anyone, and any loan back in.
 	PermAssetsLend = "assets:lend"
+	// PermReportsManage creates, edits and deletes saved reports.
+	PermReportsManage = "reports:manage"
 )
 
 var (
@@ -46,6 +48,7 @@ func AllPermissions() []string {
 		PermAssetsReport,
 		PermAssetsBorrow,
 		PermAssetsLend,
+		PermReportsManage,
 	}
 }
 

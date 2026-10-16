@@ -256,3 +256,26 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+func TestAssetDetailPlaceholders(t *testing.T) {
+	b, err := ParseBinding("{{asset.categories}}|{{ asset.location }}|{{asset.condition}}|{{stock.quantity}} {{stock.unit}}|{{loan.borrower}} until {{loan.due}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(b.Refs()); n != 7 {
+		t.Errorf("%d placeholders", n)
+	}
+	d := Data{Categories: "Tools, Drills", Location: "Shelf 2 › Bin A3", Condition: "Working", Quantity: "40", Unit: "pcs", Borrower: "Ada", Due: "2026-10-20"}
+	if got := b.Resolve(d); got != "Tools, Drills|Shelf 2 › Bin A3|Working|40 pcs|Ada until 2026-10-20" {
+		t.Errorf("resolved %q", got)
+	}
+	// An asset with none of them leaves them empty.
+	if got := b.Resolve(Data{}); got != "||| | until " {
+		t.Errorf("resolved %q", got)
+	}
+	for _, bad := range []string{"{{stock}}", "{{loan.lender}}", "{{asset.locations}}"} {
+		if _, err := ParseBinding(bad); err == nil {
+			t.Errorf("%s was accepted", bad)
+		}
+	}
+}

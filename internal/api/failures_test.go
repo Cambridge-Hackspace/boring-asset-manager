@@ -12,7 +12,7 @@ import (
 var domainTables = []string{
 	"notification_deliveries", "events", "notification_channels",
 	"asset_loans", "asset_links", "category_relation_types", "asset_field_values", "asset_generator_keys", "asset_categories", "category_fields",
-	"assets", "categories", "relation_types", "fields", "templates", "images", "printers",
+	"assets", "categories", "relation_types", "reports", "fields", "templates", "images", "printers",
 }
 
 // sqlLeaks are fragments of database error messages, which a response

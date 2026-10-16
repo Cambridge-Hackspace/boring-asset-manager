@@ -458,3 +458,13 @@ type AssetLink struct {
 	// Outgoing is set when this asset is the link's from end.
 	Outgoing bool `json:"outgoing"`
 }
+
+// Report is a saved report (README §6.3): a name and its spec, JSON that
+// the reports package reads.
+type Report struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Spec      json.RawMessage `json:"spec"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+}

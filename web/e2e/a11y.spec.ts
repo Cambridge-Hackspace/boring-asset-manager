@@ -13,6 +13,8 @@ async function audit(page: Page, label: string): Promise<void> {
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`every view passes axe in ${scheme} mode`, async ({ signedIn: page }) => {
+    // It audits every view in turn, so it takes longer than most tests.
+    test.setTimeout(120_000);
     const request = page.context().request;
     const post = async (path: string, body: unknown) => (await (await request.post('/api/v1' + path, { data: body })).json()) as any;
     const cat = await post('/categories', { name: unique('A11y'), color_hex: '#7c3aed', is_consumable: true, is_lendable: true, is_running_low: true });
@@ -35,6 +37,7 @@ for (const scheme of ['light', 'dark'] as const) {
     });
 
     await page.emulateMedia({ colorScheme: scheme });
+    const { reports } = await (await request.get('/api/v1/reports')).json();
     const views: [string, string][] = [
       ['/', 'Welcome'],
       ['/assets', 'Assets'],
@@ -62,6 +65,9 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/tokens', 'API tokens'],
       ['/loans', 'Loans'],
       ['/relations', 'Relations'],
+      ['/reports', 'Reports'],
+      ['/reports/new', 'New report'],
+      [`/reports/${reports[0].id}`, ''],
       ['/account', 'Your account'],
       ['/no-such-page', 'Page not found'],
     ];
