@@ -297,7 +297,7 @@ func writeRoleError(w http.ResponseWriter, err error, action string) {
 	switch {
 	case errors.Is(err, store.ErrRoleNotFound):
 		writeJSONError(w, http.StatusNotFound, "Role not found")
-	case errors.Is(err, store.ErrRoleProtected):
+	case errors.Is(err, store.ErrRoleProtected), errors.Is(err, store.ErrPublicRole):
 		writeJSONError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, rbac.ErrAntiLockoutTriggered):
 		writeJSONError(w, http.StatusBadRequest, err.Error())

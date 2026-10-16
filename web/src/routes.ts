@@ -34,6 +34,8 @@ export interface Route {
   permissions?: Permission[];
   /** The label in the main navigation, if the page is listed there. */
   nav?: string;
+  /** Signed-out visitors may open it too, when the public role allows (README §3.3). */
+  public?: boolean;
 }
 
 export const routes: Route[] = [
@@ -41,7 +43,7 @@ export const routes: Route[] = [
   { pattern: '/assets', component: AssetsPage, title: 'Assets', permissions: ['assets.read'], nav: 'Assets' },
   { pattern: '/assets/new', component: AssetForm, title: 'New asset', permissions: ['assets.write'] },
   { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets.write'] },
-  { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'] },
+  { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
   { pattern: '/reports', component: ReportsPage, title: 'Reports', permissions: ['assets.read'], nav: 'Reports' },
   { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports.manage'] },

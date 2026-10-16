@@ -32,7 +32,7 @@
     try {
       [users, roles] = await Promise.all([
         request<{ users: UserWithRoles[] }>('GET', '/users').then((r) => r.users ?? []),
-        request<{ roles: Role[] }>('GET', '/roles').then((r) => r.roles ?? []),
+        request<{ roles: Role[] }>('GET', '/roles').then((r) => (r.roles ?? []).filter((role) => !role.public)), // everyone holds the public role
       ]);
     } catch (err) {
       error = messageOf(err);

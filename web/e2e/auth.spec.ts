@@ -1,4 +1,4 @@
-import { ADMIN_EMAIL, ADMIN_PASSWORD, expect, signIn, test } from './fixtures';
+import { ADMIN_EMAIL, ADMIN_PASSWORD, expect, signIn, test, unique } from './fixtures';
 
 test('signed-out visitors sign in and return to the page they asked for', async ({ page }) => {
   await page.goto('/categories?x=1');
@@ -21,7 +21,7 @@ test('signing out ends the session', async ({ signedIn: page }) => {
   await page.goto('/assets');
   await expect(page).toHaveURL(/\/sign-in\?next=%2Fassets$/);
   const me = await page.request.get('/api/v1/auth/me');
-  expect(me.status()).toBe(401);
+  expect((await me.json()).user).toBeNull();
 });
 
 test('the app is served for client routes and refuses unknown API paths', async ({ page }) => {
@@ -39,4 +39,26 @@ test('every page says which build is running, signed in or not', async ({ page }
   await expect(page.getByRole('contentinfo')).toContainText('BAM! development build');
   await signIn(page);
   await expect(page.getByRole('contentinfo')).toContainText('BAM! development build');
+});
+
+test('signed-out visitors see public assets, and nothing else', async ({ signedIn: page, api }) => {
+  const { scopes } = await api.call('GET', '/scopes');
+  const publicScope = (scopes as { id: string; name: string }[]).find((s) => s.name === 'public')!;
+  const { category } = await api.call('POST', '/categories', { name: unique('Lobby'), color_hex: '#1d4ed8' });
+  await api.call('PUT', `/categories/${category.id}/scopes`, { scope_ids: [publicScope.id] });
+  const { asset: shown } = await api.call('POST', '/assets', { name: unique('Kiosk'), category_ids: [category.id] });
+  const { asset: hidden } = await api.call('POST', '/assets', { name: unique('Safe') });
+
+  await page.context().clearCookies();
+  await page.goto(`/assets/${shown.asset.id}`);
+  await expect(page.getByRole('heading', { name: shown.asset.name })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveCount(0);
+
+  // Not found, as if it did not exist; and the catalog asks to sign in.
+  await page.goto(`/assets/${hidden.asset.id}`);
+  await expect(page.getByRole('alert')).toContainText('not found');
+  await page.goto('/assets');
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fassets$/);
 });

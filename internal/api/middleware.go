@@ -112,6 +112,14 @@ func Allows(ctx context.Context, permKey string, scopes []string) bool {
 func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Everyone holds the public role, signed in or not; signed out,
+			// only where OpenToPublic lets it count.
+			public, err := st.PublicPermissions()
+			if err != nil {
+				writeServerError(w, err, "read the public role")
+				return
+			}
+			signedOut := r.WithContext(context.WithValue(WithPermissions(r.Context(), map[string]bool{}), publicContextKey, public))
 			if secret, ok := bearerToken(r); ok {
 				t, perms, err := st.AuthenticateToken(secret)
 				if errors.Is(err, store.ErrTokenNotFound) {
@@ -124,20 +132,20 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 					writeServerError(w, err, "read the API token")
 					return
 				}
-				next.ServeHTTP(w, r.WithContext(WithPermissions(WithToken(r.Context(), t), perms)))
+				next.ServeHTTP(w, r.WithContext(WithPermissions(WithToken(r.Context(), t), union(perms, public))))
 				return
 			}
 
 			token := GetSessionCookie(r)
 			if token == "" {
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(w, signedOut)
 				return
 			}
 
 			sess, u, err := st.GetSession(token)
 			if errors.Is(err, store.ErrSessionNotFound) {
 				// An unknown or expired session: continue as unauthenticated.
-				next.ServeHTTP(w, r)
+				next.ServeHTTP(w, signedOut)
 				return
 			}
 			// Otherwise the session could not be read. Answering as if
@@ -156,7 +164,7 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 			ctx := r.Context()
 			ctx = WithUser(ctx, u)
 			ctx = WithSession(ctx, sess)
-			ctx = WithPermissions(ctx, perms)
+			ctx = WithPermissions(ctx, union(perms, public))
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -184,12 +192,8 @@ func RequireAuth(next http.Handler) http.Handler {
 func RequirePermission(permKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !authenticated(r.Context()) {
-				writeJSONError(w, http.StatusUnauthorized, "Authentication required")
-				return
-			}
 			if !HasPermission(r.Context(), permKey) {
-				writeJSONError(w, http.StatusForbidden, "Forbidden: insufficient permissions")
+				refuse(w, r)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -202,17 +206,13 @@ func RequirePermission(permKey string) func(http.Handler) http.Handler {
 func RequireAnyPermission(permKeys ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !authenticated(r.Context()) {
-				writeJSONError(w, http.StatusUnauthorized, "Authentication required")
-				return
-			}
 			for _, p := range permKeys {
 				if HasPermission(r.Context(), p) {
 					next.ServeHTTP(w, r)
 					return
 				}
 			}
-			writeJSONError(w, http.StatusForbidden, "Forbidden: insufficient permissions")
+			refuse(w, r)
 		})
 	}
 }
@@ -330,4 +330,49 @@ func RefuseUnstorableText(next http.Handler) http.Handler {
 // UTF-8.
 func unstorable(s string) bool {
 	return textcheck.Problem(s, math.MaxInt) != ""
+}
+
+// refuse answers a request without the permission it needs: signed out,
+// it may be allowed once signed in (401); signed in, it is not (403).
+func refuse(w http.ResponseWriter, r *http.Request) {
+	if !authenticated(r.Context()) {
+		writeJSONError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	writeJSONError(w, http.StatusForbidden, "Forbidden: insufficient permissions")
+}
+
+// union is the permissions of either set.
+func union(a, b map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(a)+len(b))
+	for k := range a {
+		out[k] = true
+	}
+	for k := range b {
+		out[k] = true
+	}
+	return out
+}
+
+// publicContextKey holds the public role's permissions for a signed-out
+// request, which count only where OpenToPublic says.
+const publicContextKey contextKey = "public_permissions"
+
+// PublicPermissions are the public role's permissions, for a signed-out
+// request.
+func PublicPermissions(ctx context.Context) map[string]bool {
+	perms, _ := ctx.Value(publicContextKey).(map[string]bool)
+	return perms
+}
+
+// OpenToPublic lets signed-out visitors use what the public role allows on
+// a route: looking at one asset, not the catalog of categories, fields,
+// templates and reports, which only those signed in see (README §3.3).
+func OpenToPublic(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !authenticated(r.Context()) {
+			r = r.WithContext(WithPermissions(r.Context(), PublicPermissions(r.Context())))
+		}
+		next.ServeHTTP(w, r)
+	})
 }

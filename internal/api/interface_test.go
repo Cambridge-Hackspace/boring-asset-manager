@@ -14,6 +14,7 @@ import (
 
 func TestEffectiveFieldsForANewAsset(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
+	nothingPublic(t, srv)
 	cookie := sessionCookie(t, srv, admin.ID)
 	serial, _ := srv.store.CreateField("serial", "Serial", fields.TypeText, nil)
 	tools, _ := srv.store.CreateCategory("Tools", nil, "#112233", false, false)
@@ -120,11 +121,12 @@ func TestChangeOwnPassword(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("changing password: %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := doJSON(t, srv, current, http.MethodGet, "/api/v1/auth/me", ""); rec.Code != http.StatusOK {
-		t.Errorf("the session that changed the password ended: %d", rec.Code)
+	// Signed out, /auth/me answers with no user.
+	if rec := doJSON(t, srv, current, http.MethodGet, "/api/v1/auth/me", ""); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), `"user":null`) {
+		t.Errorf("the session that changed the password ended: %d %s", rec.Code, rec.Body)
 	}
-	if rec := doJSON(t, srv, other, http.MethodGet, "/api/v1/auth/me", ""); rec.Code != http.StatusUnauthorized {
-		t.Errorf("another session survived: %d", rec.Code)
+	if rec := doJSON(t, srv, other, http.MethodGet, "/api/v1/auth/me", ""); !strings.Contains(rec.Body.String(), `"user":null`) {
+		t.Errorf("another session survived: %d %s", rec.Code, rec.Body)
 	}
 	login := `{"email":"` + admin.Email + `","password":"NewSecret123!"}`
 	if rec := doJSON(t, srv, nil, http.MethodPost, "/api/v1/auth/login", login); rec.Code != http.StatusOK {

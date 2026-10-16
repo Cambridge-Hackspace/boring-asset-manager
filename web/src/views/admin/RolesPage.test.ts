@@ -5,8 +5,8 @@ import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
 import type { Role, Scope } from '../../lib/models';
 
-const admin: Role = { id: 'admin', name: 'admin', description: 'Everything', permissions: ['assets.read', 'users.manage'], user_count: 1, protected: true };
-const stores: Role = { id: 'stores', name: 'Stores', description: '', permissions: ['assets.read', 'stock.record'], user_count: 2, protected: false };
+const admin: Role = { id: 'admin', name: 'admin', description: 'Everything', permissions: ['assets.read', 'users.manage'], user_count: 1, protected: true, public: false };
+const stores: Role = { id: 'stores', name: 'Stores', description: '', permissions: ['assets.read', 'stock.record'], user_count: 2, protected: false, public: false };
 const defaultScope: Scope = { id: 'd', name: 'default', created_at: '', reserved: true, category_count: 0, role_count: 0 };
 const tools: Scope = { id: 't', name: 'tools', created_at: '', reserved: false, category_count: 1, role_count: 1 };
 
@@ -79,7 +79,7 @@ describe('RolesPage', () => {
   });
 
   it('gives permissions in some scopes only, and manages scopes', async () => {
-    const keepers: Role = { id: 'keepers', name: 'Keepers', description: '', permissions: ['assets.read', 'tools:assets.write'], user_count: 0, protected: false };
+    const keepers: Role = { id: 'keepers', name: 'Keepers', description: '', permissions: ['assets.read', 'tools:assets.write'], user_count: 0, protected: false, public: false };
     let scopes = [defaultScope, tools];
     const { sent } = fakeApi({
       'GET /roles': () => ({ roles: [keepers] }),
@@ -141,5 +141,30 @@ describe('RolesPage', () => {
     await fireEvent.click(within(kitchen).getByRole('button', { name: 'Delete scope' }));
     await fireEvent.click(within(within(kitchen).getByRole('group')).getByRole('button', { name: 'Delete scope' }));
     await screen.findByText('Deleted the scope kitchen.');
+  });
+
+  it('lets the public role only look, under its own name', async () => {
+    const publicRole: Role = { id: 'p', name: 'public', description: 'Everyone, signed in or not', permissions: ['public:assets.read'], user_count: 0, protected: false, public: true };
+    const publicScope: Scope = { ...tools, id: 'ps', name: 'public', reserved: true, category_count: 2, role_count: 1 };
+    fakeApi({
+      'GET /roles': () => ({ roles: [publicRole] }),
+      'GET /scopes': () => ({ scopes: [defaultScope, publicScope] }),
+    });
+    render(RolesPage, { params: {} });
+    // The role, then the scope of the same name.
+    const card = (await screen.findAllByRole('heading', { name: 'public' }))[0]!.closest('li')!;
+    expect(card.textContent).toContain('Held by everyone, signed in or not.');
+    expect(card.textContent).toContain('Read assets in public');
+    expect(within(card).queryByRole('button', { name: 'Delete' })).toBeNull();
+
+    await fireEvent.click(within(card).getByRole('button', { name: 'Edit public' }));
+    expect((screen.getByLabelText('Name') as HTMLInputElement).readOnly).toBe(true);
+    const offered = screen.getAllByRole('checkbox', { name: / — / });
+    expect(offered).toHaveLength(1);
+    expect(offered[0]!.parentElement!.textContent!.trim()).toMatch(/^Read assets — /);
+
+    const scopeCard = screen.getAllByRole('heading', { name: 'public' })[1]!.closest('li')!;
+    expect(scopeCard.textContent).toContain('make their assets public. On 2 categories.');
+    expect(within(scopeCard).queryByRole('button')).toBeNull();
   });
 });

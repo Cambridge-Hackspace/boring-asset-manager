@@ -5,6 +5,7 @@
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Scope } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
+  import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
   import { ancestry, flattenTree, subtree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
@@ -96,7 +97,7 @@
           suggested = (await request<{ relation_type_ids: string[] }>('GET', `/categories/${encodeURIComponent(id)}/relation-types`)).relation_type_ids ?? [];
         }
         if (canSeeScopes) {
-          scopes = ((await request<{ scopes: Scope[] }>('GET', '/scopes')).scopes ?? []).filter((s) => !s.reserved);
+          scopes = ((await request<{ scopes: Scope[] }>('GET', '/scopes')).scopes ?? []).filter((s) => s.name !== DEFAULT_SCOPE); // public goes on categories; default cannot
           scopeIds = (await request<{ scope_ids: string[] }>('GET', `/categories/${encodeURIComponent(id)}/scopes`)).scope_ids ?? [];
         }
       }

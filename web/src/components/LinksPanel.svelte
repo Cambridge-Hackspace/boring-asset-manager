@@ -23,6 +23,8 @@
   const path = $derived(`/assets/${encodeURIComponent(asset.asset.id)}/links`);
 
   onMount(async () => {
+    // The types are for adding links; those who cannot have no need of them.
+    if (!canEdit) return;
     try {
       types = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
       choice = choices[0]?.key ?? '';

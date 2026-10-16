@@ -251,6 +251,7 @@ func TestExportLabels(t *testing.T) {
 
 func TestExportPermissions(t *testing.T) {
 	srv, _, tagged, _, tag := labelFixture(t)
+	nothingPublic(t, srv)
 	user, err := srv.store.CreateUser("nobody@test.org", "NobodySecret123!", true)
 	if err != nil {
 		t.Fatal(err)

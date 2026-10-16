@@ -48,3 +48,6 @@ export function describeKey(key: string): string {
   const at = key.indexOf(':');
   return at < 0 ? permissionLabel(key) : `${permissionLabel(key.slice(at + 1))} in ${key.slice(0, at)}`;
 }
+
+/** What the public role, which everyone holds, may hold: looking, never changing. */
+export const publicAllowed: Permission[] = ['assets.read'];

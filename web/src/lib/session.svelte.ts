@@ -50,6 +50,8 @@ class Session {
     } finally {
       this.clear();
       navigate('/sign-in');
+      // Signed out, the public role still holds: public pages stay open.
+      void this.load().catch(() => {});
     }
   }
 

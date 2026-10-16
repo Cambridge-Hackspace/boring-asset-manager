@@ -14,10 +14,10 @@ import (
 
 var (
 	ErrScopeNotFound = errors.New("scope not found")
-	// ErrScopeReserved is returned for renaming or deleting the default
-	// scope, or labeling a category with it: assets are in it when they are
-	// in no other.
-	ErrScopeReserved = errors.New("the default scope is where assets in no other scope are; it cannot be changed or put on categories")
+	// ErrScopeReserved is returned for renaming or deleting the default or
+	// public scope, or labeling a category with the default one: assets are
+	// in it when they are in no other.
+	ErrScopeReserved = errors.New("the default and public scopes are built in and cannot be renamed or deleted; default, where assets in no other scope are, cannot be put on categories")
 	// ErrScopeInUse is returned for deleting a scope that labels categories
 	// or that roles hold permissions in.
 	ErrScopeInUse = errors.New("scope in use")
@@ -39,7 +39,7 @@ func (s *Store) ListScopes() ([]models.Scope, error) {
 		if err := rows.Scan(&sc.ID, &sc.Name, &sc.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scanning scope: %w", err)
 		}
-		sc.Reserved = sc.Name == rbac.DefaultScope
+		sc.Reserved = reservedScope(sc.Name)
 		scopes = append(scopes, sc)
 	}
 	if err := rows.Err(); err != nil {
@@ -139,7 +139,7 @@ func (s *Store) DeleteScope(id string) error {
 	return nil
 }
 
-// editableScope checks that a scope exists and is not the default one.
+// editableScope checks that a scope exists and is not built in.
 func (s *Store) editableScope(id string) error {
 	var name string
 	err := s.QueryRow("SELECT name FROM scopes WHERE id = ?", id).Scan(&name)
@@ -149,10 +149,15 @@ func (s *Store) editableScope(id string) error {
 	if err != nil {
 		return fmt.Errorf("reading scope: %w", err)
 	}
-	if name == rbac.DefaultScope {
+	if reservedScope(name) {
 		return ErrScopeReserved
 	}
 	return nil
+}
+
+// reservedScope reports whether a scope is built in.
+func reservedScope(name string) bool {
+	return name == rbac.DefaultScope || name == rbac.PublicScope
 }
 
 // CategoryScopes lists the IDs of the scopes on a category itself, not

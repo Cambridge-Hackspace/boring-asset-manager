@@ -69,10 +69,25 @@ func TestManagingScopes(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 	scopes, err := st.ListScopes()
-	if err != nil || len(scopes) != 1 || scopes[0].Name != rbac.DefaultScope || !scopes[0].Reserved {
+	// Built in: default, and public, which the public role reads in.
+	if err != nil || len(scopes) != 2 || scopes[0].Name != rbac.DefaultScope || scopes[1].Name != rbac.PublicScope ||
+		!scopes[0].Reserved || !scopes[1].Reserved || scopes[1].RoleCount != 1 || scopes[1].CategoryCount != 0 {
 		t.Fatalf("seeded: %+v, %v", scopes, err)
 	}
-	def := scopes[0]
+	def, public := scopes[0], scopes[1]
+	for what, err := range map[string]error{
+		"renaming public": func() error { _, err := st.RenameScope(public.ID, "other"); return err }(),
+		"deleting public": st.DeleteScope(public.ID),
+	} {
+		if !errors.Is(err, ErrScopeReserved) {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+	// Unlike default, public goes on categories: that is how things become public.
+	shelf, _ := st.CreateCategory("Shelf", nil, "", false, false)
+	if _, err := st.SetCategoryScopes(shelf.ID, []string{public.ID}); err != nil {
+		t.Errorf("public on a category: %v", err)
+	}
 	for _, name := range []string{"", "Tools", "a b", "a:b", strings.Repeat("a", 65)} {
 		if _, err := st.CreateScope(name); !errors.Is(err, ErrInvalidScope) {
 			t.Errorf("%q: %v", name, err)
@@ -247,5 +262,43 @@ func TestAssetsTrackIsGrantedToRolesThatRead(t *testing.T) {
 		if r, _ := st.GetRole(c.id); !reflect.DeepEqual(r.Permissions, c.want) {
 			t.Errorf("%s: %v", r.Name, r.Permissions)
 		}
+	}
+}
+
+// TestAPublicRoleFromBeforeStaysTheirs runs migration 021 on a database
+// where someone had named a role and a scope public: theirs are renamed,
+// so what they allowed never passes to everyone.
+func TestAPublicRoleFromBeforeStaysTheirs(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	for _, stmt := range []string{
+		"DELETE FROM roles WHERE name = 'public'",
+		"DELETE FROM scopes WHERE name = 'public'",
+		"DELETE FROM schema_migrations WHERE version = 21",
+	} {
+		if _, err := st.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	theirScope, err := st.CreateScope("public")
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := st.CreateRole(RoleInput{Name: "public", Permissions: []string{rbac.PermAssetsWrite, "public:" + rbac.PermAssetsDelete}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := st.GetRole(theirs.ID); r.Name != "public (renamed)" || !reflect.DeepEqual(r.Permissions, []string{rbac.PermAssetsWrite, "public-renamed:" + rbac.PermAssetsDelete}) {
+		t.Errorf("theirs: %+v", r)
+	}
+	if sc, _ := st.GetScope(theirScope.ID); sc.Name != "public-renamed" {
+		t.Errorf("their scope: %+v", sc)
+	}
+	public, err := st.PublicPermissions()
+	if err != nil || !reflect.DeepEqual(public, map[string]bool{"public:" + rbac.PermAssetsRead: true}) {
+		t.Errorf("the public role: %v, %v", public, err)
 	}
 }

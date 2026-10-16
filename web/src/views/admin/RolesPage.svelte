@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { Permission, PermissionKey, Role, Scope } from '../../lib/models';
-  import { describeKey, heldIn, permissions, scopable, setHeld } from '../../lib/permissions';
+  import { describeKey, heldIn, permissions, publicAllowed, scopable, setHeld } from '../../lib/permissions';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
@@ -44,9 +44,14 @@
       : msg;
   }
 
+  // The public role, being edited: it keeps its name and may only read.
+  let editingPublic = $state(false);
+  const offered = $derived(editingPublic ? permissions.filter((p) => publicAllowed.includes(p.key)) : permissions);
+
   function start(role?: Role) {
     error = status = '';
     editing = role?.id ?? '';
+    editingPublic = !!role?.public;
     onlySome = [];
     draft = role
       ? { name: role.name, description: role.description, permissions: [...role.permissions] }
@@ -155,7 +160,7 @@
     <div class="grid gap-4 sm:grid-cols-2">
       <div>
         <label class="label" for="role-name">Name</label>
-        <input id="role-name" class="input" required maxlength="64" bind:value={draft.name} />
+        <input id="role-name" class="input" required maxlength="64" readonly={editingPublic} bind:value={draft.name} />
       </div>
       <div>
         <label class="label" for="role-description">Description (optional)</label>
@@ -164,7 +169,10 @@
     </div>
     <fieldset class="space-y-2">
       <legend class="label">Permissions</legend>
-      {#each permissions as p (p.key)}
+      {#if editingPublic}
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">Everyone holds this role, signed in or not, so it may only look.</p>
+      {/if}
+      {#each offered as p (p.key)}
         {@const held = heldIn(draft.permissions, p.key)}
         <div>
           <label class="flex items-start gap-2 text-sm">
@@ -222,20 +230,22 @@
           <div>
             <h2 class="font-semibold">{r.name}</h2>
             {#if r.description}<p class="text-sm text-zinc-600 dark:text-zinc-400">{r.description}</p>{/if}
-            <p class="text-sm">Held by {holders(r.user_count)}.</p>
+            <p class="text-sm">{r.public ? 'Held by everyone, signed in or not.' : `Held by ${holders(r.user_count)}.`}</p>
           </div>
           {#if r.protected}
             <p class="text-sm text-zinc-600 dark:text-zinc-400">Built in: always has every permission.</p>
           {:else}
             <span class="inline-flex flex-wrap gap-2">
               <button type="button" class="btn-secondary" aria-label="Edit {r.name}" onclick={() => start(r)}>Edit</button>
-              <ConfirmButton
-                label="Delete"
-                question={r.user_count
-                  ? `Delete ${r.name}? ${holders(r.user_count)} will lose what it allows.`
-                  : `Delete ${r.name}?`}
-                onconfirm={() => remove(r)}
-              />
+              {#if !r.public}
+                <ConfirmButton
+                  label="Delete"
+                  question={r.user_count
+                    ? `Delete ${r.name}? ${holders(r.user_count)} will lose what it allows.`
+                    : `Delete ${r.name}?`}
+                  onconfirm={() => remove(r)}
+                />
+              {/if}
             </span>
           {/if}
         </div>
@@ -276,7 +286,9 @@
           <div>
             <h3 class="font-mono font-semibold">{s.name}</h3>
             <p class="text-sm text-zinc-600 dark:text-zinc-400">
-              {s.reserved
+              {s.name === 'public'
+                ? `Built in: what everyone, signed in or not, may see. Put it on categories to make their assets public. On ${count(s.category_count, 'category', 'categories')}.`
+                : s.reserved
                 ? 'Built in: assets in no other scope.'
                 : `On ${count(s.category_count, 'category', 'categories')}; used by ${count(s.role_count, 'role', 'roles')}.`}
             </p>
