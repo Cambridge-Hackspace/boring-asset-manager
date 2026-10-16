@@ -13,7 +13,7 @@ func TestRestoreAssetAPI(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
 	adminCookie := sessionCookie(t, srv, admin.ID)
 	writer := userWithPermissions(t, srv, "writer@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite)
-	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
+	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsTrack)
 
 	rec := doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/assets", `{"name":"Saw","generator_keys":[{"generator_type":"qr","assigned_code":"S-1"},{"generator_type":"code128","assigned_code":"C-1"}]}`)
 	var created struct{ Asset models.AssetWithDetails }

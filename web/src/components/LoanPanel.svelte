@@ -3,7 +3,7 @@
   import { dueDate, endOfDay } from '../lib/assets';
   import { messageOf } from '../lib/errors';
   import type { AssetWithDetails, Person } from '../lib/models';
-  import { displayName } from '../lib/people';
+  import { choiceNames, personName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from './ErrorMessage.svelte';
 
@@ -22,6 +22,7 @@
   const canLend = $derived(session.canOn(asset.scopes, 'assets.lend'));
   const canBorrow = $derived(session.canOn(asset.scopes, 'assets.borrow'));
   const loan = $derived(asset.loan);
+  const names = $derived(choiceNames(people));
   const mine = $derived(!!loan && loan.borrower.id === session.user?.id);
   const today = new Date().toISOString().slice(0, 10);
   // Why it cannot be lent, if it cannot.
@@ -59,7 +60,7 @@
     const body: Record<string, string> = {};
     if (to) body.borrower_id = to;
     if (due) body.due_at = endOfDay(due);
-    const who = to ? displayName(people.find((p) => p.id === to) ?? { email: 'them' }) : 'you';
+    const who = to ? (names.get(to) ?? 'them') : 'you';
     void act(() => request('POST', `${path}/checkout`, body), `Lent to ${who}.`);
   }
 
@@ -75,7 +76,7 @@
   <ErrorMessage {error} />
   {#if loan}
     <p class="text-sm">
-      Lent to <strong>{mine ? 'you' : displayName(loan.borrower)}</strong>{loan.borrower.archived ? ' (who has left)' : ''} since
+      {#if mine || loan.borrower.id}Lent to <strong>{mine ? 'you' : personName(loan.borrower)}</strong>{loan.borrower.archived ? ' (who has left)' : ''}{:else}Lent out{/if} since
       {dueDate(loan.checked_out_at)}{loan.due_at ? `, due back ${dueDate(loan.due_at)}` : ''}.
       {#if loan.overdue}<span class="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-900 dark:bg-red-900 dark:text-red-100">Overdue</span>{/if}
     </p>
@@ -108,7 +109,7 @@
             <label class="label" for="loan-borrower">Lend to</label>
             <select id="loan-borrower" class="input" bind:value={borrowerId}>
               <option value="">Choose someone…</option>
-              {#each people as p (p.id)}<option value={p.id}>{displayName(p)}{p.name ? ` (${p.email})` : ''}</option>{/each}
+              {#each people as p (p.id)}<option value={p.id}>{names.get(p.id)}</option>{/each}
             </select>
           </div>
           <button type="button" class="btn-secondary" disabled={busy || !borrowerId} onclick={() => checkOut(borrowerId)}>Lend</button>

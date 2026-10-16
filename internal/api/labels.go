@@ -109,9 +109,10 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 		d.Quantity, d.Unit = strconv.Itoa(st.Quantity), st.Unit
 	}
 	if l := a.Loan; l != nil {
+		// By name only; a borrower hidden from the request (no ID) is blank.
 		d.Borrower = l.Borrower.Name
-		if d.Borrower == "" {
-			d.Borrower = l.Borrower.Email
+		if d.Borrower == "" && l.Borrower.ID != "" {
+			d.Borrower = UnnamedUser
 		}
 		if l.DueAt != nil {
 			d.Due = l.DueAt.UTC().Format("2006-01-02")

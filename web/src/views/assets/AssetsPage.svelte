@@ -7,7 +7,7 @@
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { exportUrl } from '../../lib/importing';
-  import { displayName } from '../../lib/people';
+  import { personName } from '../../lib/people';
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConditionBadge from '../../components/ConditionBadge.svelte';
@@ -184,7 +184,7 @@
             {/if}
             <td class="py-2 pr-4 font-medium">
               {#if a.photos[0]}<img src={photoUrl(a.asset.id, a.photos[0].id, true)} alt="" class="mr-2 inline-block h-8 w-8 rounded object-cover align-middle" loading="lazy" />{/if}<a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />
-              {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">Lent to {displayName(a.loan.borrower)}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
+              {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
             </td>
             <td class="py-2 pr-4">
               <span class="flex flex-wrap gap-1">

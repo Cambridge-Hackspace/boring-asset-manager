@@ -15,7 +15,7 @@ func TestAssetStockAPI(t *testing.T) {
 	stores := userWithPermissions(t, srv, "stores@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite, rbac.PermStockRecord)
 	counter := userWithPermissions(t, srv, "counter@hackspace.org", rbac.PermAssetsRead, rbac.PermStockRecord)
 	writer := userWithPermissions(t, srv, "writer@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite)
-	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
+	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsTrack)
 
 	assetOf := func(rec interface{ Bytes() []byte }) models.Asset {
 		t.Helper()
@@ -125,7 +125,8 @@ func TestAssetStockAPI(t *testing.T) {
 		t.Errorf("a stock that is not an object: %d", rec.Code)
 	}
 
-	// The history, newest first, for anyone who can read assets.
+	// The history, newest first, for anyone who can read assets; those who
+	// track them see who did what.
 	rec = doJSON(t, srv, reader, http.MethodGet, assetPath+"/history", "")
 	var history struct{ Events []models.Event }
 	_ = json.Unmarshal(rec.Body.Bytes(), &history)

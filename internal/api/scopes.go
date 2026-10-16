@@ -69,8 +69,8 @@ func (s *Server) mayPlace(w http.ResponseWriter, r *http.Request, perm string, c
 	return true
 }
 
-// readable keeps the assets the request may read, each showing only the
-// links to assets it may read too.
+// readable keeps the assets the request may read, each as shown would
+// show it.
 func (s *Server) readable(r *http.Request, assets []models.AssetWithDetails) ([]models.AssetWithDetails, error) {
 	kept := assets[:0:0]
 	for _, a := range assets {
@@ -78,16 +78,21 @@ func (s *Server) readable(r *http.Request, assets []models.AssetWithDetails) ([]
 			kept = append(kept, a)
 		}
 	}
+	for i := range kept {
+		redactPeople(r, &kept[i])
+	}
 	return kept, s.hideLinks(r, kept)
 }
 
 // shown is an asset as the request may see it: without links to assets it
-// cannot read. A failure to read their scopes hides every link.
+// cannot read, and its borrower only for those who track it. A failure to
+// read the linked assets' scopes hides every link.
 func (s *Server) shown(r *http.Request, a *models.AssetWithDetails) *models.AssetWithDetails {
 	if a == nil {
 		return nil
 	}
 	one := []models.AssetWithDetails{*a}
+	redactPeople(r, &one[0])
 	if err := s.hideLinks(r, one); err != nil {
 		one[0].Links, one[0].Location = []models.AssetLink{}, []models.LinkedAsset{}
 	}
@@ -225,3 +230,48 @@ func writeScopeError(w http.ResponseWriter, err error, action string) {
 		writeServerError(w, err, action)
 	}
 }
+
+// redactPeople takes emails from an asset's loan, which shows people by
+// name only, and the borrower too unless the request holds assets.track
+// for the asset or is the borrower.
+func redactPeople(r *http.Request, a *models.AssetWithDetails) {
+	if a.Loan == nil {
+		return
+	}
+	loan := redactLoan(r, *a.Loan, Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes))
+	a.Loan = &loan
+}
+
+// redactLoan is a loan without its borrower's email, and without its
+// borrower at all unless track is set or the request is the borrower.
+func redactLoan(r *http.Request, l models.Loan, track bool) models.Loan {
+	l.Borrower.Email = ""
+	if u := CurrentUser(r.Context()); !track && (u == nil || u.ID != l.Borrower.ID) {
+		l.Borrower = models.Person{}
+	}
+	return l
+}
+
+// redactEvent is an event of an asset as its history shows it: people by
+// name only, and only to those who track the asset.
+func redactEvent(e models.Event, track bool) models.Event {
+	if !track {
+		e.ActorUserID = nil
+	}
+	for _, p := range []**models.EventActor{&e.Payload.Actor, &e.Payload.Borrower} {
+		switch {
+		case *p == nil:
+		case !track:
+			*p = nil
+		default:
+			who := **p
+			who.Email = ""
+			*p = &who
+		}
+	}
+	return e
+}
+
+// UnnamedUser stands for a person who has no name yet: asset pages never
+// show emails.
+const UnnamedUser = "Unnamed user"

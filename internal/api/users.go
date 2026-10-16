@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -60,6 +61,11 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if req.Email == "" || req.Password == "" {
 		writeJSONError(w, http.StatusBadRequest, "Email and password are required")
+		return
+	}
+	// Asset pages show people by name, never by email (README §3.3).
+	if strings.TrimSpace(req.Name) == "" {
+		writeJSONError(w, http.StatusBadRequest, "A name is required")
 		return
 	}
 
@@ -218,8 +224,8 @@ func (s *Server) handleSetOwnName(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) setUserName(w http.ResponseWriter, r *http.Request, userID string) {
 	var req SetNameRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == nil {
-		writeJSONError(w, http.StatusBadRequest, "name is required (empty to show the email instead)")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == nil || strings.TrimSpace(*req.Name) == "" {
+		writeJSONError(w, http.StatusBadRequest, "A name is required")
 		return
 	}
 	user, err := s.store.SetUserName(userID, *req.Name)

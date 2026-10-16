@@ -4,6 +4,7 @@ import type { Permission, PermissionKey } from './models';
 
 export const permissions: { key: Permission; label: string; description: string }[] = [
   { key: 'assets.read', label: 'Read assets', description: 'See assets, categories, fields, history and label templates.' },
+  { key: 'assets.track', label: 'See who', description: 'See who borrowed assets and who changed them, by name, and the loans list.' },
   { key: 'stock.record', label: 'Record stock', description: 'Use and restock quantities, and mark things running low or restocked.' },
   { key: 'assets.report', label: 'Report problems', description: 'Report an asset as needing maintenance or out of service.' },
   { key: 'assets.borrow', label: 'Borrow', description: 'Check lendable assets out to themselves, and back in.' },
@@ -24,7 +25,7 @@ export function permissionLabel(key: string): string {
 }
 
 /** The permissions a role may hold in some scopes only: those acting on assets. */
-export const scopable: Permission[] = ['assets.read', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete'];
+export const scopable: Permission[] = ['assets.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete'];
 
 /** The reserved scope of assets that no category puts in another. */
 export const DEFAULT_SCOPE = 'default';

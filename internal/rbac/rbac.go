@@ -28,6 +28,9 @@ const (
 	PermAssetsLend = "assets.lend"
 	// PermReportsManage creates, edits and deletes saved reports.
 	PermReportsManage = "reports.manage"
+	// PermAssetsTrack sees the people around assets: who borrowed them, who
+	// changed them, and the loans list.
+	PermAssetsTrack = "assets.track"
 )
 
 var (
@@ -51,6 +54,7 @@ func AllPermissions() []string {
 		PermAssetsBorrow,
 		PermAssetsLend,
 		PermReportsManage,
+		PermAssetsTrack,
 	}
 }
 
@@ -117,6 +121,7 @@ const DefaultScope = "default"
 var scopable = map[string]bool{
 	PermAssetsRead: true, PermAssetsWrite: true, PermAssetsDelete: true,
 	PermAssetsReport: true, PermAssetsBorrow: true, PermAssetsLend: true,
+	PermAssetsTrack: true,
 	PermStockRecord: true,
 }
 

@@ -203,3 +203,49 @@ func sortedCopy(in []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// TestAssetsTrackIsGrantedToRolesThatRead runs migration 020 again on roles
+// made before it, as an upgrade would: whoever read assets keeps seeing the
+// people around them, in the same scopes.
+func TestAssetsTrackIsGrantedToRolesThatRead(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	if _, err := st.CreateScope("tools"); err != nil {
+		t.Fatal(err)
+	}
+	readers, _ := st.CreateRole(RoleInput{Name: "Readers", Permissions: []string{rbac.PermAssetsRead}})
+	keepers, _ := st.CreateRole(RoleInput{Name: "Keepers", Permissions: []string{"tools:" + rbac.PermAssetsRead, rbac.PermLabelsPrint}})
+	printers, _ := st.CreateRole(RoleInput{Name: "Printers", Permissions: []string{rbac.PermLabelsPrint}})
+
+	for _, stmt := range []string{
+		"DELETE FROM permissions WHERE permission_key = 'assets.track'",
+		"DELETE FROM schema_migrations WHERE version = 20",
+	} {
+		if _, err := st.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 2; i++ { // and again, changing nothing more
+		if err := st.Migrate(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Exec("DELETE FROM schema_migrations WHERE version = 20"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		id   string
+		want []string
+	}{
+		{readers.ID, []string{rbac.PermAssetsRead, rbac.PermAssetsTrack}},
+		{keepers.ID, []string{rbac.PermLabelsPrint, "tools:" + rbac.PermAssetsRead, "tools:" + rbac.PermAssetsTrack}},
+		{printers.ID, []string{rbac.PermLabelsPrint}},
+	} {
+		if r, _ := st.GetRole(c.id); !reflect.DeepEqual(r.Permissions, c.want) {
+			t.Errorf("%s: %v", r.Name, r.Permissions)
+		}
+	}
+}

@@ -42,7 +42,7 @@ func TestScopedAccessToAssets(t *testing.T) {
 	}
 
 	role, err := st.CreateRole(store.RoleInput{Name: "Tool keepers", Permissions: []string{
-		"tools:" + rbac.PermAssetsRead, "tools:" + rbac.PermAssetsWrite, rbac.PermLabelsPrint,
+		"tools:" + rbac.PermAssetsRead, "tools:" + rbac.PermAssetsWrite, "tools:" + rbac.PermAssetsTrack, rbac.PermLabelsPrint,
 	}})
 	if err != nil {
 		t.Fatal(err)

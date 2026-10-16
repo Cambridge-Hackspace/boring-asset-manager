@@ -311,10 +311,12 @@ func (s *Server) handleSetAssetRunningLow(w http.ResponseWriter, r *http.Request
 }
 
 // handleAssetHistory lists an asset's events a page at a time, newest first:
-// GET /api/v1/assets/{id}/history[?before=<event id>]
+// GET /api/v1/assets/{id}/history[?before=<event id>]. People show by name,
+// and only with assets.track.
 func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, ok := s.assetFor(w, r, id); !ok {
+	a, ok := s.assetFor(w, r, id)
+	if !ok {
 		return
 	}
 	events, more, err := s.store.ListAssetEvents(id, r.URL.Query().Get("before"), historyPage)
@@ -325,6 +327,10 @@ func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeServerError(w, err, "list the asset's history")
 		return
+	}
+	track := Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes)
+	for i := range events {
+		events[i] = redactEvent(events[i], track)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": events, "more": more})
 }

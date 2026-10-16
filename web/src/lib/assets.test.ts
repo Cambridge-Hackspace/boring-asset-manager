@@ -156,7 +156,7 @@ describe('loans', () => {
     // In the reader's own format, whatever their locale.
     expect(describeEvent(event('asset.checked_out', { borrower: bo, due_at: '2026-10-20T12:00:00Z' }))).toBe(`Lent to Bo, due back ${dueDate('2026-10-20T12:00:00Z')}`);
     expect(dueDate('2026-10-20T12:00:00Z')).toMatch(/20.*2026|2026.*20/);
-    expect(describeEvent(event('asset.checked_in', { borrower: { id: 'u', email: 'bo@hackspace.org' } }))).toBe('Checked in from bo@hackspace.org');
+    expect(describeEvent(event('asset.checked_in', { borrower: { id: 'u', email: 'bo@hackspace.org' } }))).toBe('Checked in from Unnamed user');
     expect(describeEvent(event('asset.overdue', { borrower: bo, due_at: '2026-10-20T12:00:00Z' }))).toBe(`Overdue: Bo was due to bring it back ${dueDate('2026-10-20T12:00:00Z')}`);
   });
 

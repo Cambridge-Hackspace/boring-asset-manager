@@ -108,9 +108,9 @@
         <input id="new-email" class="input" type="email" required autocomplete="off" bind:value={newEmail} />
       </div>
       <div>
-        <label class="label" for="new-name">Name (optional)</label>
-        <input id="new-name" class="input" maxlength="255" autocomplete="off" aria-describedby="new-name-help" bind:value={newName} />
-        <p id="new-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Shown instead of the email. Sign-in uses the email.</p>
+        <label class="label" for="new-name">Name</label>
+        <input id="new-name" class="input" required maxlength="255" autocomplete="off" aria-describedby="new-name-help" bind:value={newName} />
+        <p id="new-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">How asset pages show them; they never show emails. Sign-in uses the email.</p>
       </div>
       <div>
         <label class="label" for="new-password">Initial password</label>
@@ -152,7 +152,7 @@
               {#if renaming === u.id}
                 <form class="flex flex-wrap gap-2" onsubmit={(event) => saveName(event, u)}>
                   <label class="sr-only" for="name-{u.id}">Name for {u.email}</label>
-                  <input id="name-{u.id}" class="input w-48" maxlength="255" bind:value={nameDraft} />
+                  <input id="name-{u.id}" class="input w-48" required maxlength="255" bind:value={nameDraft} />
                   <button type="submit" class="btn-primary">Save name</button>
                   <button type="button" class="btn-secondary" onclick={() => (renaming = null)}>Cancel</button>
                 </form>

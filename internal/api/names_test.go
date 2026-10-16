@@ -29,6 +29,12 @@ func TestUserNamesAPI(t *testing.T) {
 	if rec.Code != http.StatusCreated || grace.Name != "Grace Hopper" {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body)
 	}
+	// Asset pages show people by name, so everyone has one.
+	for _, body := range []string{`{"email":"anon@hackspace.org","password":"Secret123!"}`, `{"email":"anon@hackspace.org","name":"  ","password":"Secret123!"}`} {
+		if rec := doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/users", body); rec.Code != http.StatusBadRequest {
+			t.Errorf("no name, %s: %d %s", body, rec.Code, rec.Body)
+		}
+	}
 	long := `{"email":"long@hackspace.org","name":"` + strings.Repeat("x", 256) + `","password":"Secret123!"}`
 	if rec := doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/users", long); rec.Code != http.StatusBadRequest {
 		t.Errorf("an overlong name: %d %s", rec.Code, rec.Body)
@@ -43,7 +49,7 @@ func TestUserNamesAPI(t *testing.T) {
 	if rec.Code != http.StatusOK || userOf(rec.Body.Bytes()).Name != "Rear Admiral Hopper" {
 		t.Errorf("rename: %d %s", rec.Code, rec.Body)
 	}
-	for _, bad := range []string{`{}`, `{"name":3}`, `nope`} {
+	for _, bad := range []string{`{}`, `{"name":3}`, `nope`, `{"name":""}`, `{"name":" "}`} {
 		if rec := doJSON(t, srv, adminCookie, http.MethodPut, path, bad); rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: %d", bad, rec.Code)
 		}

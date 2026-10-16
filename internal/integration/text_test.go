@@ -173,7 +173,7 @@ func TestOverlongEmailIsRefused(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin("ada@hackspace.org")
 	long := strings.Repeat("a", 250) + "@x.org"
-	r := c.send(http.MethodPost, "/users", map[string]any{"email": long, "password": "Secret123!"})
+	r := c.send(http.MethodPost, "/users", map[string]any{"email": long, "name": "Long", "password": "Secret123!"})
 	if r.status != http.StatusBadRequest || !strings.Contains(string(r.body), "longer than 255 characters") {
 		t.Errorf("got %s, want 400", r)
 	}

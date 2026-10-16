@@ -83,7 +83,8 @@ describe('LoanPanel', () => {
     const changes: string[] = [];
     render(LoanPanel, { asset: drill, onchange: (_a: AssetWithDetails, done: string) => changes.push(done) });
     expect(screen.queryByRole('button', { name: 'Borrow it myself' })).toBeNull();
-    await screen.findByRole('option', { name: 'Bo (bo@hackspace.org)' });
+    // By name; emails show only to tell apart two people of one name.
+    await screen.findByRole('option', { name: 'Bo' });
     await fireEvent.change(screen.getByLabelText('Lend to'), { target: { value: 'bo' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Lend' }));
     await vi.waitFor(() => expect(changes).toEqual(['Lent to Bo.']));
@@ -125,5 +126,13 @@ describe('LoanPanel, weighed', () => {
     const stock = { quantity: 20, unit: 'pcs', low_stock_threshold: null, is_running_low: false };
     render(LoanPanel, { asset: { ...drill, asset: { ...drill.asset, stock } }, onchange: () => {} });
     expect(screen.getByText(/counted by quantity, so it cannot be lent/)).toBeTruthy();
+  });
+
+  it('says only that it is lent out when the borrower is hidden', async () => {
+    session.permissions = ['assets.read'];
+    // Without assets.track the server leaves the borrower out.
+    render(LoanPanel, { asset: lentTo('', ''), onchange: () => {} });
+    expect(screen.getByText(/^Lent out since/)).toBeTruthy();
+    expect(screen.queryByText(/Lent to/)).toBeNull();
   });
 });
