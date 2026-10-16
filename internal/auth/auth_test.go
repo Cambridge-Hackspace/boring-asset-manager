@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestPasswordHashingAndVerification(t *testing.T) {
@@ -24,6 +26,18 @@ func TestPasswordHashingAndVerification(t *testing.T) {
 
 	if _, err := HashPassword(""); err == nil {
 		t.Error("expected empty password to produce error")
+	}
+}
+
+// TestHashesUseCost12 checks new hashes use cost 12. Other packages' tests
+// lower BcryptCost for speed; this package never does.
+func TestHashesUseCost12(t *testing.T) {
+	hash, err := HashPassword("correct-horse-battery-staple-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost, err := bcrypt.Cost([]byte(hash)); err != nil || cost != 12 {
+		t.Errorf("hash cost %d (%v), want 12", cost, err)
 	}
 }
 
