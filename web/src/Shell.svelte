@@ -31,7 +31,7 @@
 <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-zinc-900">
   Skip to content
 </a>
-<header class="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+<header class="border-b border-zinc-200 bg-white print:hidden dark:border-zinc-800 dark:bg-zinc-900">
   <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
     <a href="/" class="text-lg font-black tracking-tight">BAM!</a>
     <nav aria-label="Main" class="flex flex-1 flex-wrap gap-1">

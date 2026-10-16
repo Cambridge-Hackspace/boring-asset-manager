@@ -91,6 +91,16 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryRelationTypes)))
 	mux.Handle("PUT /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryRelationTypes)))
 
+	// Reports: anyone who reads assets runs them; reports:manage edits them.
+	mux.Handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))
+	mux.Handle("POST /api/v1/reports", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleSaveReport)))
+	mux.Handle("POST /api/v1/reports/preview", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handlePreviewReport)))
+	mux.Handle("GET /api/v1/reports/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetReport)))
+	mux.Handle("PUT /api/v1/reports/{id}", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleSaveReport)))
+	mux.Handle("DELETE /api/v1/reports/{id}", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleDeleteReport)))
+	mux.Handle("GET /api/v1/reports/{id}/run", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleRunReport)))
+	mux.Handle("GET /api/v1/reports/{id}/sections/{n}/csv", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleReportCSV)))
+
 	// Relation types, for links between assets
 	mux.Handle("GET /api/v1/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListRelationTypes)))
 	mux.Handle("POST /api/v1/relation-types", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCreateRelationType)))

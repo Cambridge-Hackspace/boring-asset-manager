@@ -318,7 +318,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 ### 3.3 RBAC Security Matrix
 
 * **Tables:** `users`, `roles`, `permissions`, `user_roles`, `role_permissions`.
-* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, from Phase 3 `labels:print`, and from Phase 7 `stock:record`, which uses, restocks and flags stock without being able to edit assets, `assets:report`, which reports an asset needing maintenance or out of service, and `assets:borrow` and `assets:lend` (§5.3)). Seeding grants every permission to the `admin` role, including permissions added by later releases. Migrations `011`, `013` and `014` grant `stock:record`, `assets:report`, `assets:borrow` and `assets:lend` to every role that had `assets:write`, so nobody loses what they could do.
+* **Permissions:** Granular string keys (`assets:read`, `assets:write`, `assets:delete`, `templates:manage`, `categories:manage`, `settings:manage`, `users:manage`, from Phase 3 `labels:print`, and from Phase 7 `stock:record`, which uses, restocks and flags stock without being able to edit assets, `assets:report`, which reports an asset needing maintenance or out of service, and `assets:borrow` and `assets:lend` (§5.3), and `reports:manage` (§6.3)). Seeding grants every permission to the `admin` role, including permissions added by later releases. Migrations `011`, `013` and `014` grant `stock:record`, `assets:report`, `assets:borrow` and `assets:lend` to every role that had `assets:write`, so nobody loses what they could do, and `017` grants `reports:manage` to every role that had `templates:manage`.
 * **Roles:** `GET /api/v1/roles` lists roles with their permissions, how many users who are not archived hold each (`user_count`), and which is `protected`; `POST /api/v1/roles` creates one and `PUT`/`DELETE /api/v1/roles/{id}` change or delete it, all with `users:manage` and a body of `{"name", "description", "permissions"}`. Names are unique and up to 64 characters; permissions must be known keys. Deleting a role takes it from everyone who holds it. The `admin` role is protected: it cannot be renamed, edited or deleted (`409`), since seeding recreates it by name and grants it every permission at each start. Editing and deleting roles follow the anti-lockout rule below.
 * **Union Principle:** When a user is assigned multiple roles, their effective permissions are the strict union of all granted rights across all assigned roles.
 * **Anti-Lockout Rule:** System operations must reject any deletion, deactivation, role removal, or role edit that results in zero active users possessing the `users:manage` permission. Each such change runs in one transaction that first takes the `users_manage` row of the `app_locks` table (migration `004`), so concurrent changes are checked one after another and two admins cannot remove each other at the same time.
@@ -433,6 +433,11 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
   | `{{asset.code.<generator_type>}}` | The asset's assigned code for that generator, e.g. `{{asset.code.micro_qr}}` |
   | `{{field.<key>}}` | The asset's value for that corpus field (empty when unset) |
   | `{{base_url}}` | `server.base_url` from the configuration |
+  | `{{asset.categories}}` | The asset's categories, by name, separated by commas |
+  | `{{asset.location}}` | Where the asset is, through location links (§3.6): `Shelf 2 › Bin A3` |
+  | `{{asset.condition}}` | `Working`, `Needs maintenance` or `Out of service` |
+  | `{{stock.quantity}}`, `{{stock.unit}}` | Its stock counted by quantity, and the unit (empty when not counted) |
+  | `{{loan.borrower}}`, `{{loan.due}}` | Who has it on loan, by name or email, and the day it is due back as `YYYY-MM-DD` in UTC (empty when not lent) |
 
   Unknown placeholders and unknown field keys are rejected when the template is saved. A field deleted later simply resolves to an empty string. A `generator` element without a `content_binding` encodes `{{asset.code.<its generator_type>}}`, and rendering fails for an asset that has no code of that type. Resolved generator payloads go through the same validator as asset generator keys before they are encoded.
 * **Element types:**
@@ -646,6 +651,25 @@ Spreadsheet formula injection is defused: on export a cell beginning with `=`, `
 * **Export Mode:** `POST /api/v1/labels/export` takes a template ID, up to 500 distinct asset IDs and a format (`pdf` or `zip`, with `"mono": true` for 1-bit PNGs), and streams back a multi-page PDF or a ZIP of PNGs named `<asset_id>.png`.
 * **Network Dispatch Mode:** `POST /api/v1/printers/{id}/print` (`labels:print`) takes a template ID, asset IDs and a copy count (1–20, at most 500 labels in all), checks the template against the printer's media (§4.4), and streams the job to the printer over TCP port 9100.
 * **All or nothing:** every asset is bound and validated before any output is produced, so a batch either renders completely or fails with `422` and a list of `{asset_id, path, message}` for the assets that could not be rendered. Archived assets are never labeled.
+
+### 6.3 Reports
+
+Saved reports (migration `017`) gather assets by a filter and show them as tables whose columns are content bindings, the same `{{...}}` placeholders labels use (§4.1). Anyone with `assets:read` runs them; `reports:manage` creates, edits and deletes them, and migration `017` grants it to roles that manage templates. Two are seeded to start from and can be edited or copied: "Running low", a shopping list grouped by category, and "On loan".
+
+* **The spec** is JSON, checked when saved as templates are, with unknown keys refused:
+  ```json
+  {
+    "filter": {"category_ids": ["…"], "search": "drill", "archived": false, "running_low": true, "loan": "open", "condition": "problem"},
+    "sections": [
+      {"type": "table", "title": "Shopping list",
+       "columns": [{"heading": "Asset", "binding": "{{asset.name}}"}, {"heading": "In stock", "binding": "{{stock.quantity}} {{stock.unit}}"}],
+       "sort_by": 1, "descending": true, "group_by": "category"}
+    ]
+  }
+  ```
+  Every filter is optional. `category_ids` keeps assets in any of those categories or below them; `running_low` keeps assets flagged running low themselves or in a flagged category, or below one; `loan` (`open`, `overdue`) and `condition` (a condition, or `problem`) work as on the asset list (§5.3, §3.2). A report has 1 to 20 sections and a table 1 to 30 columns; `sort_by` names a column from 0, sorting numbers as numbers and text ignoring case, and `group_by: "category"` lists each row under every category its asset is in, groups by name, marking those running low.
+* **Endpoints:** `GET /api/v1/reports` and `GET /api/v1/reports/{id}`; `POST /api/v1/reports` and `PUT`/`DELETE /api/v1/reports/{id}` with `{"name", "spec"}` (`reports:manage`). `GET /api/v1/reports/{id}/run` returns the result: how many assets matched and, per section, its headings and groups of rows, each with its asset's ID and cells. `POST /api/v1/reports/preview` with `{"spec"}` (`reports:manage`) runs an unsaved spec, for the editor. `GET /api/v1/reports/{id}/sections/{n}/csv` downloads table `n` (from 1) as CSV, written as the asset export writes its file (a byte order mark, and formula-like cells defused), with a first `Group` column when grouped, named after the report. A report naming a field deleted since it was saved answers `409`, asking to be edited.
+* **In the web app**, the Reports page lists them; a report runs when opened, prints without the app's navigation, and links each row to its asset. The editor offers placeholders as you type and previews the report before it is saved.
 
 ---
 
@@ -900,6 +924,9 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.10: Weights for Counted Items
 * [x] Consumable categories with a unit total their assets' stock in it, with thresholds in it, cascading where units match; weighed spools can be lent, and come back with what is left (§5.1, §5.3).
 
+#### Sub-Phase 7.11: Reports
+* [x] Saved reports: a filter over assets and table sections whose columns are template bindings, sorted and grouped by category, run, previewed, printed and downloaded as CSV; "Running low" and "On loan" to start from; new placeholders for labels and reports (§6.3, §4.1).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -910,8 +937,8 @@ Agreed, not yet scheduled or designed in detail.
 #### Photos on Assets
 * [ ] A few photos per asset, shown on its page and as a thumbnail in the list, stored like label images.
 
-#### Reports
-* [ ] Report pages built on the asset list's filters, starting with everything running low (categories and assets), exportable as CSV for a shopping list.
+#### Report Charts
+* [ ] Chart sections in reports: bar, donut and line, each grouping assets and measuring them, with lines over time from asset history.
 
 #### Deferred
 * **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.
