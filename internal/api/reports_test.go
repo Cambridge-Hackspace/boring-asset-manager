@@ -17,7 +17,7 @@ func TestReportsAPI(t *testing.T) {
 	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
 
 	// Two reports to start from.
-	rec := doJSON(t, srv, reader, http.MethodGet, "/api/v1/reports", "")
+	rec := doJSON(t, srv, reader, http.MethodGet, "/api/v1/reports?kind=report", "")
 	var list struct{ Reports []models.Report }
 	_ = json.Unmarshal(rec.Body.Bytes(), &list)
 	if rec.Code != http.StatusOK || len(list.Reports) != 2 || list.Reports[0].Name != "On loan" || list.Reports[1].Name != "Running low" {

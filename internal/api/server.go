@@ -106,6 +106,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("DELETE /api/v1/categories/{id}/fields/{field_id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleRemoveCategoryField)))
 	mux.Handle("GET /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryRelationTypes)))
 	mux.Handle("PUT /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryRelationTypes)))
+	mux.Handle("PUT /api/v1/categories/{id}/scan-template", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryScanTemplate)))
+	mux.Handle("GET /api/v1/categories/scan-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleScanConflicts)))
 
 	// Reports: anyone who reads assets runs them; reports.manage edits them.
 	mux.Handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))
@@ -114,6 +116,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/reports/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetReport)))
 	mux.Handle("PUT /api/v1/reports/{id}", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleSaveReport)))
 	mux.Handle("DELETE /api/v1/reports/{id}", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleDeleteReport)))
+	mux.Handle("POST /api/v1/reports/{id}/default", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleSetDefaultScanTemplate)))
 	mux.Handle("GET /api/v1/reports/{id}/run", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleRunReport)))
 	mux.Handle("GET /api/v1/reports/{id}/sections/{n}/csv", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleReportCSV)))
 

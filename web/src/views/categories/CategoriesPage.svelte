@@ -6,17 +6,23 @@
   import { session } from '../../lib/session.svelte';
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
+  import ConflictMark from '../../components/ConflictMark.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let categories = $state<Category[]>([]);
+  // Categories in scan template ties, with how many assets each (README §6.4).
+  let conflicts = $state<Record<string, number>>({});
   let loading = $state(true);
   let error = $state('');
 
   onMount(async () => {
     try {
       categories = (await request<{ categories: Category[] }>('GET', '/categories')).categories ?? [];
+      conflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/scan-conflicts')
+        .then((r) => r.categories ?? {})
+        .catch(() => ({}));
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -52,6 +58,9 @@
           <span class="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Running low</span>
         {:else if row.category.is_consumable}
           <span class="text-xs text-zinc-600 dark:text-zinc-400">Consumable</span>
+        {/if}
+        {#if conflicts[row.category.id]}
+          <a href="/assets?conflict=scan_template" class="text-xs"><ConflictMark label="Ties with another category over the scan template of {conflicts[row.category.id]} {conflicts[row.category.id] === 1 ? 'asset' : 'assets'}" /></a>
         {/if}
         {#if row.depth > 0}<span class="sr-only">(level {row.depth + 1})</span>{/if}
       </li>

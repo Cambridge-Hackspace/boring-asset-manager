@@ -72,6 +72,13 @@ type categoryTraits struct {
 	parents map[string]string
 	// scopes maps each category to the names of its own scopes.
 	scopes map[string][]string
+	// scan maps each category naming a scan template to it; created holds
+	// when each category was made, for choosing between templates.
+	scan    map[string]string
+	created map[string]time.Time
+	// depth and descendants count each category's ancestors and
+	// descendants.
+	depth, descendants map[string]int
 }
 
 // weighs reports whether an asset in these categories, counting its stock
@@ -89,23 +96,29 @@ func (t categoryTraits) weighs(categoryIDs []string, unit string) bool {
 func (s *Store) categoryTraits(q interface {
 	Query(string, ...any) (*sql.Rows, error)
 }) (categoryTraits, error) {
-	rows, err := q.Query("SELECT id, parent_id, is_lendable, is_consumable, stock_unit FROM categories")
+	rows, err := q.Query("SELECT id, parent_id, is_lendable, is_consumable, stock_unit, scan_template_id, created_at FROM categories")
 	if err != nil {
 		return categoryTraits{}, fmt.Errorf("reading categories: %w", err)
 	}
 	defer rows.Close()
 	parents, lendable, unit := map[string]string{}, map[string]bool{}, map[string]string{}
+	scan, created := map[string]string{}, map[string]time.Time{}
 	for rows.Next() {
 		var (
 			id                  string
 			parent              sql.NullString
 			canLend, consumable bool
 			u                   string
+			template            sql.NullString
+			made                time.Time
 		)
-		if err := rows.Scan(&id, &parent, &canLend, &consumable, &u); err != nil {
+		if err := rows.Scan(&id, &parent, &canLend, &consumable, &u, &template, &made); err != nil {
 			return categoryTraits{}, fmt.Errorf("scanning category: %w", err)
 		}
-		parents[id], lendable[id] = parent.String, canLend
+		parents[id], lendable[id], created[id] = parent.String, canLend, made
+		if template.String != "" {
+			scan[id] = template.String
+		}
 		if consumable {
 			unit[id] = u
 		}
@@ -117,7 +130,8 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, created: created}
+	t.depth, t.descendants = shape(parents)
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {
 			t.lendable[id] = t.lendable[id] || lendable[c]
@@ -507,6 +521,8 @@ type assetContext struct {
 	loans map[string]models.Loan
 	// photos holds every asset's photos, when ctx serves a list.
 	photos map[string][]models.AssetPhoto
+	// defaultScan is the default scan template's ID, once read.
+	defaultScan *string
 	// suggestions maps categories to the relation types they suggest.
 	suggestions map[string][]string
 }

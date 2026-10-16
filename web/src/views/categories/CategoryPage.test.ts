@@ -37,6 +37,7 @@ function api(extra: Record<string, (b: unknown) => unknown> = {}) {
     'GET /categories/power': () => ({ category: categories[1], active_count: 4 }),
     'GET /categories/paint': () => ({ category: categories[3], active_count: 2 }),
     'GET /fields': () => ({ fields: [fieldOf('serial', 'Serial'), fieldOf('voltage', 'Voltage'), fieldOf('notes', 'Notes')] }),
+    'GET /reports': () => ({ reports: [] }),
     ...extra,
   });
 }
@@ -167,5 +168,51 @@ describe('CategoryPage', () => {
     await fireEvent.submit(screen.getByRole('button', { name: 'Save scopes' }));
     await screen.findByText('Scopes saved.');
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ scope_ids: ['w', 'k'] });
+  });
+
+  // Everything the page loads for a category manager.
+  const loaded = (extra: Record<string, (b: unknown) => unknown> = {}) =>
+    api({
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'GET /categories/power/relation-types': () => ({ relation_type_ids: [] }),
+      'GET /scopes': () => ({ scopes: [] }),
+      'GET /categories/power/scopes': () => ({ scope_ids: [] }),
+      ...extra,
+    });
+
+  it('chooses a scan template, warning first when it would tie with another category', async () => {
+    const scan = (id: string, name: string) => ({ id, name, kind: 'scan', default: id === 'd', spec: { filter: {}, sections: [] }, created_at: '', updated_at: '' });
+    const { sent } = loaded({
+      'GET /reports': () => ({ reports: [scan('d', 'Scanned'), scan('bins', 'Bins')] }),
+      'GET /categories/scan-conflicts': (_b: unknown) => ({ categories: { tools: 0 } }),
+      'PUT /categories/power/scan-template': () => ({ category: categories[1] }),
+    });
+    // The answer about the change: power would tie with paint over 2 assets.
+    let asked = 0;
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+      if (url.includes('scan-conflicts?')) {
+        asked++;
+        return Promise.resolve(new Response(JSON.stringify({ categories: { power: 2, paint: 2 } }), { headers: { 'Content-Type': 'application/json' } }));
+      }
+      return realFetch(url, init);
+    });
+    render(CategoryPage, { params: { id: 'power' } });
+    const select = (await screen.findByLabelText('Shows')) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Its parent’s, or the default', 'Scanned (default)', 'Bins']);
+    await fireEvent.change(select, { target: { value: 'bins' } });
+    expect(await screen.findByText(/Saving this ties Paint with this category/)).toBeTruthy();
+    expect(asked).toBe(1);
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save scan template' }));
+    await screen.findByText('Scan template saved.');
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ scan_template_id: 'bins' });
+  });
+
+  it('says when its assets show a template chosen by a tie', async () => {
+    loaded({ 'GET /reports': () => ({ reports: [] }), 'GET /categories/scan-conflicts': () => ({ categories: { power: 3 } }) });
+    render(CategoryPage, { params: { id: 'power' } });
+    const note = await screen.findByRole('note');
+    expect(note.textContent).toContain('3 assets here show a scan template chosen by a tie');
+    expect(within(note).getByRole('link', { name: 'See which' }).getAttribute('href')).toBe('/assets?conflict=scan_template');
   });
 });

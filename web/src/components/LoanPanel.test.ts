@@ -18,6 +18,7 @@ const drill: AssetWithDetails = {
   location: [],
   suggested_relation_type_ids: [],
   scopes: ['default'],
+  scan_template: { template_id: 'default' },
   photos: [],
 };
 const lentTo = (id: string, name: string, overdue = false): AssetWithDetails => ({

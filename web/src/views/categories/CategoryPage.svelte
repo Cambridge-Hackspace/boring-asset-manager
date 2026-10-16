@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Scope } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
@@ -31,6 +31,19 @@
   const canScope = $derived(session.can('users.manage'));
   let scopes = $state<Scope[]>([]);
   let scopeIds = $state<string[]>([]);
+  // Scan templates (README §6.4): the one its assets show, and the ties
+  // between categories that choose them.
+  let scanTemplates = $state<Report[]>([]);
+  let scanTemplate = $state('');
+  let savedScanTemplate = $state('');
+  let conflicts = $state<Record<string, number>>({});
+  let afterSaving = $state<Record<string, number> | null>(null);
+  const newTies = $derived(
+    afterSaving && scanTemplate !== savedScanTemplate
+      ? Object.keys(afterSaving).filter((c) => (afterSaving![c] ?? 0) > (conflicts[c] ?? 0))
+      : [],
+  );
+  const categoryName = (cid: string) => categories.find((c) => c.id === cid)?.name ?? 'another category';
   let loading = $state(true);
   let error = $state('');
   let saved = $state('');
@@ -96,6 +109,14 @@
           relationTypes = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
           suggested = (await request<{ relation_type_ids: string[] }>('GET', `/categories/${encodeURIComponent(id)}/relation-types`)).relation_type_ids ?? [];
         }
+        if (canManage) {
+          scanTemplates = (await request<{ reports: Report[] }>('GET', '/reports?kind=scan')).reports ?? [];
+          scanTemplate = savedScanTemplate = c.scan_template_id ?? '';
+        }
+        // A warning, not the page: it may fail without stopping the rest.
+        conflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/scan-conflicts')
+          .then((r) => r.categories ?? {})
+          .catch(() => ({}));
         if (canSeeScopes) {
           scopes = ((await request<{ scopes: Scope[] }>('GET', '/scopes')).scopes ?? []).filter((s) => s.name !== DEFAULT_SCOPE); // public goes on categories; default cannot
           scopeIds = (await request<{ scope_ids: string[] }>('GET', `/categories/${encodeURIComponent(id)}/scopes`)).scope_ids ?? [];
@@ -114,6 +135,32 @@
     try {
       suggested = (await request<{ relation_type_ids: string[] }>('PUT', `/categories/${encodeURIComponent(id)}/relation-types`, { relation_type_ids: suggested })).relation_type_ids ?? [];
       saved = 'Suggestions saved.';
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  // What saving the chosen template would do, to warn before it ties.
+  async function checkScanTemplate() {
+    afterSaving = null;
+    if (scanTemplate === savedScanTemplate) return;
+    try {
+      const q = `category_id=${encodeURIComponent(id)}&scan_template_id=${encodeURIComponent(scanTemplate)}`;
+      afterSaving = (await request<{ categories: Record<string, number> }>('GET', `/categories/scan-conflicts?${q}`)).categories ?? {};
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function saveScanTemplate(event: SubmitEvent) {
+    event.preventDefault();
+    error = saved = '';
+    try {
+      await request('PUT', `/categories/${encodeURIComponent(id)}/scan-template`, { scan_template_id: scanTemplate || null });
+      savedScanTemplate = scanTemplate;
+      afterSaving = null;
+      conflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/scan-conflicts')).categories ?? {};
+      saved = 'Scan template saved.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -394,6 +441,37 @@
           {/each}
           <button type="submit" class="btn-secondary">Save suggestions</button>
         </form>
+      </section>
+    {/if}
+    {#if (conflicts[id] ?? 0) > 0}
+      <p class="mt-6 max-w-2xl rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100" role="note">
+        <span aria-hidden="true">⚠</span>
+        {conflicts[id] === 1 ? '1 asset' : `${conflicts[id]} assets`} here show a scan template chosen by a tie with another
+        category as close to them. <a class="underline" href="/assets?conflict=scan_template">See which</a>, and name a
+        template on one of the categories to settle it.
+      </p>
+    {/if}
+    {#if canManage && scanTemplates.length}
+      <section class="mt-6 max-w-2xl" aria-labelledby="scan-template-heading">
+        <h2 id="scan-template-heading" class="mb-1 text-lg font-semibold">Scan template</h2>
+        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">What scanning its assets, and those of its subcategories, shows, unless they choose their own.</p>
+        <form class="flex flex-wrap items-end gap-2" onsubmit={saveScanTemplate}>
+          <div>
+            <label class="label" for="scan-template">Shows</label>
+            <select id="scan-template" class="input" bind:value={scanTemplate} onchange={checkScanTemplate}>
+              <option value="">Its parent’s, or the default</option>
+              {#each scanTemplates as t (t.id)}<option value={t.id}>{t.name}{t.default ? ' (default)' : ''}</option>{/each}
+            </select>
+          </div>
+          <button type="submit" class="btn-secondary" disabled={scanTemplate === savedScanTemplate}>Save scan template</button>
+        </form>
+        {#if newTies.length}
+          <p class="mt-2 text-sm text-amber-800 dark:text-amber-300" role="alert">
+            <span aria-hidden="true">⚠</span>
+            Saving this ties {newTies.filter((c) => c !== id).map(categoryName).join(', ') || 'it'} with this category for some
+            assets in both: they would get a template chosen by which category is deeper, smaller or older.
+          </p>
+        {/if}
       </section>
     {/if}
     {#if canSeeScopes && scopes.length}

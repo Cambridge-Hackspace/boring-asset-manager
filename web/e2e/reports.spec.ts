@@ -52,3 +52,30 @@ test('chart what is in stock and what was used', async ({ signedIn: page, api })
   await expect(page.getByRole('img', { name: 'Bar chart of Quantity: m 25' })).toBeVisible();
   await expect(page.getByRole('img', { name: /^Line chart of history: Used \(m\): .* 15$/ })).toBeVisible();
 });
+
+test('scan templates: make one, and have a category choose it', async ({ signedIn: page, api }) => {
+  const name = unique('Bins');
+  const { category } = await api.call('POST', '/categories', { name: unique('Storage'), color_hex: '#1d4ed8' });
+  const { asset: bin } = await api.call('POST', '/assets', { name: unique('Bin'), category_ids: [category.id] });
+
+  await page.goto('/reports');
+  const section = page.getByRole('region', { name: 'Scan templates' });
+  await expect(section.getByRole('listitem').filter({ hasText: 'Scanned' })).toContainText('(default)');
+  await section.getByRole('link', { name: 'New scan template' }).click();
+  await page.getByLabel('Name', { exact: true }).fill(name);
+  await page.getByRole('group', { name: /^Actions/ }).getByRole('checkbox', { name: 'Use some' }).check();
+  await page.getByLabel('Preview with').fill(bin.asset.name);
+  await page.getByRole('button', { name: 'Find' }).click();
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Preview' })).toContainText('Actions: Open its page, Use some');
+  await page.getByRole('button', { name: 'Save scan template' }).click();
+  await expect(page).toHaveURL(/\/reports$/);
+  await expect(section).toContainText(name);
+
+  await page.goto(`/categories/${category.id}`);
+  await page.getByLabel('Shows').selectOption({ label: name });
+  await page.getByRole('button', { name: 'Save scan template' }).click();
+  await expect(page.getByRole('status')).toHaveText('Scan template saved.');
+  const saved = await api.call('GET', `/assets/${bin.asset.id}`);
+  expect(saved.asset.scan_template.source_category_id).toBe(category.id);
+});

@@ -70,6 +70,10 @@ type Section struct {
 	// GroupBy is, for a table, "" or "category": rows are grouped under each
 	// category their asset is in. A bar or donut chart's bars group by it.
 	GroupBy string `json:"group_by,omitempty"`
+	// Source, in a scan template's table, is what its rows are: "contents",
+	// what the scanned asset holds. Actions are an actions section's.
+	Source  string   `json:"source,omitempty"`
+	Actions []string `json:"actions,omitempty"`
 }
 
 // Column is a table column: a heading and a content binding.
@@ -133,8 +137,11 @@ func (s *Spec) check(fieldKnown func(string) bool) error {
 		if sec.Chart != "" || sec.Measure != "" || sec.Period != "" {
 			return fail("%s: a table has no chart, measure or period", where)
 		}
-		if len(sec.Columns) == 0 || len(sec.Columns) > MaxColumns {
-			return fail("%s: a table needs 1 to %d columns", where, MaxColumns)
+		if sec.Source != "" || len(sec.Actions) > 0 {
+			return fail("%s: only scan templates have sources and actions", where)
+		}
+		if err := checkColumns(sec.Columns, where, fieldKnown); err != nil {
+			return err
 		}
 		if sec.SortBy < 0 || sec.SortBy >= len(sec.Columns) {
 			return fail("%s: sort_by must name one of its columns", where)
@@ -142,22 +149,34 @@ func (s *Spec) check(fieldKnown func(string) bool) error {
 		if sec.GroupBy != "" && sec.GroupBy != "category" {
 			return fail("%s: group_by must be category", where)
 		}
-		for j, c := range sec.Columns {
-			col := fmt.Sprintf("%s, column %d", where, j+1)
-			if err := textcheck.Check(col+" heading", c.Heading, textcheck.MaxName); err != nil {
-				return fail("%v", err)
-			}
-			if err := textcheck.Check(col+" binding", c.Binding, MaxBinding); err != nil {
-				return fail("%v", err)
-			}
-			b, err := labels.ParseBinding(c.Binding)
-			if err != nil {
-				return fail("%s: %v", col, err)
-			}
-			for _, ref := range b.Refs() {
-				if ref.Kind == labels.RefField && fieldKnown != nil && !fieldKnown(ref.Arg) {
-					return fail("%s: unknown field %q", col, ref.Arg)
-				}
+	}
+	return nil
+}
+
+// checkColumns checks a section's 1 to MaxColumns columns: their headings,
+// and their bindings as label templates check theirs.
+func checkColumns(cols []Column, where string, fieldKnown func(string) bool) error {
+	fail := func(format string, args ...any) error {
+		return fmt.Errorf("%w: %s", ErrInvalidSpec, fmt.Sprintf(format, args...))
+	}
+	if len(cols) == 0 || len(cols) > MaxColumns {
+		return fail("%s: it needs 1 to %d columns", where, MaxColumns)
+	}
+	for j, c := range cols {
+		col := fmt.Sprintf("%s, column %d", where, j+1)
+		if err := textcheck.Check(col+" heading", c.Heading, textcheck.MaxName); err != nil {
+			return fail("%v", err)
+		}
+		if err := textcheck.Check(col+" binding", c.Binding, MaxBinding); err != nil {
+			return fail("%v", err)
+		}
+		b, err := labels.ParseBinding(c.Binding)
+		if err != nil {
+			return fail("%s: %v", col, err)
+		}
+		for _, ref := range b.Refs() {
+			if ref.Kind == labels.RefField && fieldKnown != nil && !fieldKnown(ref.Arg) {
+				return fail("%s: unknown field %q", col, ref.Arg)
 			}
 		}
 	}
@@ -181,6 +200,9 @@ type SectionResult struct {
 	Chart   string        `json:"chart,omitempty"`
 	Measure string        `json:"measure,omitempty"`
 	Series  []Series      `json:"series,omitempty"`
+	// Actions, for a scan's actions section, are the quick actions it
+	// offers; the web app shows those the viewer may take.
+	Actions []string `json:"actions,omitempty"`
 }
 
 // GroupResult is a group of rows, under a title when grouped.
