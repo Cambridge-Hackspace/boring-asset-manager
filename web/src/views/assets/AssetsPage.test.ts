@@ -29,6 +29,7 @@ const asset = (id: string, name: string): AssetWithDetails => ({
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  photos: [],
 });
 
 beforeEach(() => {

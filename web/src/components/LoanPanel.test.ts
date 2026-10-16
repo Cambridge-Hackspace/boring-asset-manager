@@ -17,6 +17,7 @@ const drill: AssetWithDetails = {
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  photos: [],
 };
 const lentTo = (id: string, name: string, overdue = false): AssetWithDetails => ({
   ...drill,

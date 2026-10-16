@@ -325,6 +325,8 @@ type AssetWithDetails struct {
 	Links                    []AssetLink   `json:"links"`
 	Location                 []LinkedAsset `json:"location"`
 	SuggestedRelationTypeIDs []string      `json:"suggested_relation_type_ids"`
+	// Photos are its photos, in order.
+	Photos []AssetPhoto `json:"photos"`
 }
 
 // Image is an uploaded PNG or JPEG placed on labels by static_image elements.
@@ -467,4 +469,17 @@ type Report struct {
 	Spec      json.RawMessage `json:"spec"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+// AssetPhoto is a photo of an asset; its bytes, and its thumbnail's, are
+// stored as files.
+type AssetPhoto struct {
+	ID          string    `json:"id"`
+	ThumbID     string    `json:"-"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	WidthPx     int       `json:"width_px"`
+	HeightPx    int       `json:"height_px"`
+	ByteSize    int64     `json:"byte_size"`
+	CreatedAt   time.Time `json:"created_at"`
 }

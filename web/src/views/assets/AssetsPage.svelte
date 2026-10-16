@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type AssetWithDetails, type Category } from '../../lib/models';
+  import { UNCATEGORIZED, photoUrl, type AssetWithDetails, type Category } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { exportUrl } from '../../lib/importing';
@@ -182,7 +182,8 @@
                 <input type="checkbox" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} />
               </td>
             {/if}
-            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />
+            <td class="py-2 pr-4 font-medium">
+              {#if a.photos[0]}<img src={photoUrl(a.asset.id, a.photos[0].id, true)} alt="" class="mr-2 inline-block h-8 w-8 rounded object-cover align-middle" loading="lazy" />{/if}<a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">Lent to {displayName(a.loan.borrower)}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
             </td>
             <td class="py-2 pr-4">

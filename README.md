@@ -199,7 +199,7 @@ BAM_UPDATE_BACKUP_COMMAND='pg_dump -Fc -f "$BAM_BACKUP_FILE" bam'
 BAM_UPDATE_RESTORE_COMMAND='pg_restore --clean --if-exists -d bam "$BAM_BACKUP_FILE"'
 ```
 
-`BAM_UPDATE_BACKUP=off` updates without a backup, which leaves a failed update's changes to the database in place. If the backup fails, nothing is changed and the old version is started again. Outside the updater, `bam backup --config <file> --to <file>` copies a SQLite database at any time, even while BAM runs, and `bam restore --config <file> --from <file>` puts one back while BAM is stopped.
+`BAM_UPDATE_BACKUP=off` updates without a backup, which leaves a failed update's changes to the database in place. If the backup fails, nothing is changed and the old version is started again. Outside the updater, `bam backup --config <file> --to <file>` copies a SQLite database at any time, even while BAM runs, and `bam restore --config <file> --from <file>` puts one back while BAM is stopped. Neither copies uploaded files: label images and asset photos live under `storage.local_path`, so back that directory up as well.
 
 On Linux (cron must be installed; on Arch, `cronie`):
 
@@ -296,6 +296,7 @@ Both run it nightly at 04:17; change the minute in the cron file, so that every 
 * Audit timestamps: `created_at`, `updated_at`, `archived_at`.
 * **Archiving and restoring:** `DELETE /api/v1/assets/{id}` (`assets:delete`) archives an asset and releases its codes for other assets. Archived assets cannot be edited, used or restocked, and are listed apart: `GET /api/v1/assets?archived=true`, most recently archived first, with the same category and search filters (search finds them by name, since their codes are released). `POST /api/v1/assets/{id}/restore` (`assets:delete`) brings one back with the codes archiving released, except any another asset has taken since; the response lists those as `skipped_codes`. Assets archived before archiving recorded their codes (§5.1) come back without codes. Restoring counts toward thresholds as creating does.
 * Optional stock counted by quantity: `stock_quantity`, `stock_unit`, `low_stock_threshold`, `is_running_low` (§5.1).
+* **Photos** (migration `018`): up to 10 per asset, in order, the first shown beside it in lists. `POST /api/v1/assets/{id}/photos` (`assets:write`) takes a JPEG or PNG of up to 15 MB, at most 12,000 pixels a side and 50 megapixels, as the `file` part of a multipart form. Every photo is decoded and encoded again, so it keeps no metadata from its file, such as where it was taken; a JPEG is first turned upright as its EXIF orientation says, and photos are scaled down to 2048 pixels on their longer side, with a thumbnail of 320. `GET /api/v1/assets/{id}/photos/{photo_id}` (`assets:read`) serves one, and `?size=thumb` its thumbnail; `DELETE` removes one and `PUT /api/v1/assets/{id}/photos` with `{"photo_ids": [...]}`, naming each once, orders them. Adding and removing are recorded in the asset's history. The files live under `storage.local_path/photos/`. Archived assets cannot be changed.
 * **Condition** (migration `013`): `ok`, `needs_maintenance` or `out_of_service`, returned as `condition` with a `condition_note` of up to 255 characters saying what is wrong. `PUT /api/v1/assets/{id}/condition` with `{"condition", "note"}` changes it: reporting a problem needs `assets:report` or `assets:write`, and marking an asset `ok` again needs `assets:write`; an ok asset keeps no note. Each change records `asset.condition_changed` with the condition before and after and the note, which channels can subscribe to (§5.2); the same condition and note again records nothing. Archived assets cannot be changed. The list filters on it with `?condition=`, one of the three or `problem` for any asset that is not ok, and the home page lists assets needing attention.
 
 
@@ -931,15 +932,15 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.12: Report Charts
 * [x] Bar, donut and line chart sections in reports: grouped and measured from the assets a report finds, or over time from their history, drawn in the web app with their data as tables and as CSV (§6.3).
 
+#### Sub-Phase 7.13: Photos on Assets
+* [x] Up to 10 photos per asset, stripped of metadata, turned upright and scaled, with thumbnails in the asset list, ordered, and recorded in history (§3.2).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
 
 #### Asset Associations, Later
-* [ ] The container's name on labels (a `{{asset.location}}` placeholder, with reports), a CSV column per relation type, and scanning a bin's code to list what is in it.
-
-#### Photos on Assets
-* [ ] A few photos per asset, shown on its page and as a thumbnail in the list, stored like label images.
+* [ ] A CSV column per relation type, and scanning a bin's code to list what is in it. (The container's name on labels came with `{{asset.location}}`, §4.1.)
 
 #### Deferred
 * **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.

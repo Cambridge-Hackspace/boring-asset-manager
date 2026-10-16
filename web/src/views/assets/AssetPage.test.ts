@@ -25,6 +25,7 @@ const withStock = (quantity: number, low: boolean): AssetWithDetails => ({
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  photos: [],
 });
 
 const used: AssetEvent = {

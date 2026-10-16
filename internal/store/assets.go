@@ -345,6 +345,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	if err := s.linkDetails(details, ctx); err != nil {
 		return nil, err
 	}
+	if err := s.photoDetails(details, ctx); err != nil {
+		return nil, err
+	}
 	return details, nil
 }
 

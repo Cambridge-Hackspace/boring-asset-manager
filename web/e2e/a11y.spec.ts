@@ -24,6 +24,16 @@ for (const scheme of ['light', 'dark'] as const) {
     await post(`/assets/${screws.asset.asset.id}/quantity`, { adjust: -15 });
     const archived = await post('/assets', { name: unique('Old saw'), generator_keys: [{ generator_type: 'qr', assigned_code: unique('OLD').toUpperCase() }] });
     await request.delete(`/api/v1/assets/${archived.asset.asset.id}`);
+    // With a photo.
+    await request.post(`/api/v1/assets/${asset.asset.asset.id}/photos`, {
+      multipart: {
+        file: {
+          name: 'ladder.png',
+          mimeType: 'image/png',
+          buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64'),
+        },
+      },
+    });
     // In a box, so its page shows a location and links.
     const box = await post('/assets', { name: unique('Box') });
     const { relation_types } = await (await request.get('/api/v1/relation-types')).json();
