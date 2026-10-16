@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ReportResult } from '../lib/models';
+  import ReportChart from './ReportChart.svelte';
 
   // A report's sections, as tables. csvHref, if given, links each table to
   // its CSV download.
@@ -9,14 +10,17 @@
 <p class="mb-4 text-sm text-zinc-600 dark:text-zinc-400">{result.assets === 1 ? '1 asset' : `${result.assets} assets`} match.</p>
 
 {#each result.sections as section, s (s)}
-  <section class="mb-8 break-inside-avoid" aria-label={section.title || `Table ${s + 1}`}>
+  <section class="mb-8 break-inside-avoid" aria-label={section.title || `${section.type === 'chart' ? 'Chart' : 'Table'} ${s + 1}`}>
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
       {#if section.title}<h2 class="text-lg font-semibold">{section.title}</h2>{/if}
       {#if csvHref}
         <a class="btn-secondary print:hidden" href={csvHref(s + 1)} download>Download CSV<span class="sr-only"> of {section.title || `table ${s + 1}`}</span></a>
       {/if}
     </div>
-    {#each section.groups as group, g (g)}
+    {#if section.type === 'chart' && section.chart}
+      <ReportChart kind={section.chart} series={section.series ?? []} title={section.title} />
+    {/if}
+    {#each section.groups ?? [] as group, g (g)}
       {#if group.title}
         <h3 class="mt-4 mb-1 font-medium">
           {group.title}
@@ -29,7 +33,7 @@
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="border-b border-zinc-300 dark:border-zinc-700">
-              <tr>{#each section.columns as heading, c (c)}<th scope="col" class="py-2 pr-4">{heading}</th>{/each}</tr>
+              <tr>{#each section.columns ?? [] as heading, c (c)}<th scope="col" class="py-2 pr-4">{heading}</th>{/each}</tr>
             </thead>
             <tbody>
               {#each group.rows as row, r (r)}

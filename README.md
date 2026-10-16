@@ -668,6 +668,7 @@ Saved reports (migration `017`) gather assets by a filter and show them as table
   }
   ```
   Every filter is optional. `category_ids` keeps assets in any of those categories or below them; `running_low` keeps assets flagged running low themselves or in a flagged category, or below one; `loan` (`open`, `overdue`) and `condition` (a condition, or `problem`) work as on the asset list (§5.3, §3.2). A report has 1 to 20 sections and a table 1 to 30 columns; `sort_by` names a column from 0, sorting numbers as numbers and text ignoring case, and `group_by: "category"` lists each row under every category its asset is in, groups by name, marking those running low.
+* **Charts** are sections too: `{"type": "chart", "chart": "bar" | "donut", "group_by": …, "measure": …}` or `{"type": "chart", "chart": "line", "measure": …, "period": "week" | "month"}`. Bars and donuts group the assets by `category` (each it is in), `condition`, `borrower`, `location`, `unit` or `field:<key>`, and measure `assets` (how many), `quantity` (their stock, split by unit unless grouped by it, so units never add up) or `loans` (how many are lent out); the 20 largest groups are shown and the rest added up as `Other`. Lines run over the last 12 weeks (from Monday, UTC) or months, from the history of the assets the report finds: stock `used` or `restocked`, a line per unit, or `loans` made. The web app draws charts itself, as bars, a donut or lines, each described for screen readers and with its numbers as a table, and a chart downloads as CSV like a table: a row per group or period, a column per line.
 * **Endpoints:** `GET /api/v1/reports` and `GET /api/v1/reports/{id}`; `POST /api/v1/reports` and `PUT`/`DELETE /api/v1/reports/{id}` with `{"name", "spec"}` (`reports:manage`). `GET /api/v1/reports/{id}/run` returns the result: how many assets matched and, per section, its headings and groups of rows, each with its asset's ID and cells. `POST /api/v1/reports/preview` with `{"spec"}` (`reports:manage`) runs an unsaved spec, for the editor. `GET /api/v1/reports/{id}/sections/{n}/csv` downloads table `n` (from 1) as CSV, written as the asset export writes its file (a byte order mark, and formula-like cells defused), with a first `Group` column when grouped, named after the report. A report naming a field deleted since it was saved answers `409`, asking to be edited.
 * **In the web app**, the Reports page lists them; a report runs when opened, prints without the app's navigation, and links each row to its asset. The editor offers placeholders as you type and previews the report before it is saved.
 
@@ -927,6 +928,9 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.11: Reports
 * [x] Saved reports: a filter over assets and table sections whose columns are template bindings, sorted and grouped by category, run, previewed, printed and downloaded as CSV; "Running low" and "On loan" to start from; new placeholders for labels and reports (§6.3, §4.1).
 
+#### Sub-Phase 7.12: Report Charts
+* [x] Bar, donut and line chart sections in reports: grouped and measured from the assets a report finds, or over time from their history, drawn in the web app with their data as tables and as CSV (§6.3).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -936,9 +940,6 @@ Agreed, not yet scheduled or designed in detail.
 
 #### Photos on Assets
 * [ ] A few photos per asset, shown on its page and as a thumbnail in the list, stored like label images.
-
-#### Report Charts
-* [ ] Chart sections in reports: bar, donut and line, each grouping assets and measuring them, with lines over time from asset history.
 
 #### Deferred
 * **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -251,4 +253,31 @@ func (s *Store) recordAfter(tx *sql.Tx, id string, before *assetSnapshot, trigge
 		return nil
 	}
 	return recordQuantity()
+}
+
+// AssetEventsSince lists assets' events of the kinds given recorded at or
+// after since, oldest first, for charts over time.
+func (s *Store) AssetEventsSince(kinds []string, since time.Time) ([]models.Event, error) {
+	if len(kinds) == 0 {
+		return []models.Event{}, nil
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?, ", len(kinds)), ", ")
+	args := []any{dbTime(since)}
+	for _, k := range kinds {
+		args = append(args, k)
+	}
+	rows, err := s.Query("SELECT "+eventColumns+" FROM events WHERE created_at >= ? AND asset_id IS NOT NULL AND kind IN ("+marks+") ORDER BY created_at, id", args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing events: %w", err)
+	}
+	defer rows.Close()
+	events := []models.Event{}
+	for rows.Next() {
+		e, err := scanEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
 }

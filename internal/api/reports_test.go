@@ -118,3 +118,43 @@ func TestReportsAPI(t *testing.T) {
 		t.Errorf("a deleted report: %d", rec.Code)
 	}
 }
+
+func TestReportChartsAPI(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets", `{"name":"Screws","stock":{"quantity":100,"unit":"pcs"}}`)
+	var a struct{ Asset models.AssetWithDetails }
+	_ = json.Unmarshal(rec.Body.Bytes(), &a)
+	doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/"+a.Asset.Asset.ID+"/quantity", `{"adjust":-30}`)
+	doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets", `{"name":"Drill"}`)
+
+	spec := `{"sections":[
+		{"type":"chart","title":"By unit","chart":"donut","group_by":"unit","measure":"assets"},
+		{"type":"chart","title":"Used","chart":"line","measure":"used","period":"month"}
+	]}`
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/reports/preview", `{"spec":`+spec+`}`)
+	var preview struct{ Result reports.Result }
+	_ = json.Unmarshal(rec.Body.Bytes(), &preview)
+	if rec.Code != http.StatusOK || len(preview.Result.Sections) != 2 {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+	donut := preview.Result.Sections[0]
+	if donut.Chart != "donut" || len(donut.Series) != 1 || len(donut.Series[0].Points) != 2 {
+		t.Errorf("donut: %+v", donut)
+	}
+	line := preview.Result.Sections[1].Series
+	if len(line) != 1 || line[0].Label != "Used (pcs)" || line[0].Points[reports.Periods-1].Value != 30 {
+		t.Errorf("line: %+v", line)
+	}
+
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/reports", `{"name":"Use","spec":`+spec+`}`)
+	var saved struct{ Report models.Report }
+	_ = json.Unmarshal(rec.Body.Bytes(), &saved)
+	rec = doJSON(t, srv, cookie, http.MethodGet, "/api/v1/reports/"+saved.Report.ID+"/sections/2/csv", "")
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Body.String(), "\xef\xbb\xbfPeriod,Used (pcs)\n") || !strings.HasSuffix(rec.Body.String(), ",30\n") {
+		t.Errorf("csv: %d %q", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/reports/preview", `{"spec":{"sections":[{"type":"chart","chart":"pie"}]}}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a pie: %d", rec.Code)
+	}
+}

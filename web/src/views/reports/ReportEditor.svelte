@@ -42,7 +42,12 @@
         const r = (await request<{ report: Report }>('GET', `/reports/${encodeURIComponent(id)}`)).report;
         name = r.name;
         categoryIds = [...(r.spec.filter.category_ids ?? [])];
-        spec = { filter: { ...r.spec.filter }, sections: r.spec.sections.map((s) => ({ ...newTable(), ...s, columns: s.columns.map((c) => ({ ...c })) })) };
+        spec = {
+          filter: { ...r.spec.filter },
+          sections: r.spec.sections.map((s) =>
+            s.type === 'chart' ? { ...newChart(), ...s, columns: [] } : { ...newTable(), ...s, columns: s.columns.map((c) => ({ ...c })) },
+          ),
+        };
       }
     } catch (err) {
       error = messageOf(err);
@@ -62,6 +67,15 @@
     if (f.loan) filter.loan = f.loan;
     if (f.condition) filter.condition = f.condition;
     const sections = spec.sections.map((s) => {
+      if (s.type === 'chart') {
+        const chart: ReportSection = { type: 'chart', columns: [], chart: s.chart, measure: s.measure };
+        if (s.title?.trim()) chart.title = s.title.trim();
+        if (s.chart === 'line') chart.period = s.period;
+        else chart.group_by = s.group_by;
+        // A chart has no columns; the API takes none.
+        const { columns: _none, ...rest } = chart;
+        return rest as ReportSection;
+      }
       const out: ReportSection = { type: 'table', columns: s.columns.map((c) => ({ heading: c.heading, binding: c.binding })) };
       if (s.title?.trim()) out.title = s.title.trim();
       if (s.sort_by) out.sort_by = s.sort_by;
@@ -98,6 +112,21 @@
       error = messageOf(err);
     } finally {
       busy = false;
+    }
+  }
+
+  function newChart(): ReportSection {
+    return { type: 'chart', title: '', columns: [], chart: 'bar', group_by: 'category', measure: 'assets', period: '' };
+  }
+
+  // Bars and donuts group and count; lines count history over time.
+  function chartKindChanged(s: ReportSection) {
+    if (s.chart === 'line') {
+      if (!['used', 'restocked', 'loans'].includes(s.measure ?? '')) s.measure = 'used';
+      s.period ||= 'month';
+    } else {
+      if (!['assets', 'quantity', 'loans'].includes(s.measure ?? '')) s.measure = 'assets';
+      s.group_by ||= 'category';
     }
   }
 
@@ -175,7 +204,61 @@
 
     {#each spec.sections as section, s (s)}
       <fieldset class="card max-w-3xl space-y-3">
-        <legend class="px-1 text-lg font-semibold">Table {s + 1}</legend>
+        <legend class="px-1 text-lg font-semibold">{section.type === 'chart' ? 'Chart' : 'Table'} {s + 1}</legend>
+        {#if section.type === 'chart'}
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="label" for="section-{s}-title">Title (optional)</label>
+              <input id="section-{s}-title" class="input" maxlength="255" bind:value={section.title} />
+            </div>
+            <div>
+              <label class="label" for="section-{s}-chart">Chart</label>
+              <select id="section-{s}-chart" class="input" bind:value={section.chart} onchange={() => chartKindChanged(section)}>
+                <option value="bar">Bars</option>
+                <option value="donut">Donut</option>
+                <option value="line">Line over time</option>
+              </select>
+            </div>
+            {#if section.chart === 'line'}
+              <div>
+                <label class="label" for="section-{s}-measure">Shows</label>
+                <select id="section-{s}-measure" class="input" bind:value={section.measure}>
+                  <option value="used">Stock used</option>
+                  <option value="restocked">Stock restocked</option>
+                  <option value="loans">Loans made</option>
+                </select>
+              </div>
+              <div>
+                <label class="label" for="section-{s}-period">Per</label>
+                <select id="section-{s}-period" class="input" bind:value={section.period}>
+                  <option value="week">Week, for 12 weeks</option>
+                  <option value="month">Month, for 12 months</option>
+                </select>
+              </div>
+            {:else}
+              <div>
+                <label class="label" for="section-{s}-groups">Grouped by</label>
+                <select id="section-{s}-groups" class="input" bind:value={section.group_by}>
+                  <option value="category">Category</option>
+                  <option value="condition">Condition</option>
+                  <option value="borrower">Who has it</option>
+                  <option value="location">Where it is</option>
+                  <option value="unit">Unit</option>
+                  {#each fields as f (f.id)}<option value="field:{f.key}">{f.label}</option>{/each}
+                </select>
+              </div>
+              <div>
+                <label class="label" for="section-{s}-measure">Counting</label>
+                <select id="section-{s}-measure" class="input" bind:value={section.measure}>
+                  <option value="assets">Assets</option>
+                  <option value="quantity">Quantity in stock, by unit</option>
+                  <option value="loans">Assets on loan</option>
+                </select>
+              </div>
+            {/if}
+          </div>
+          <p class="text-xs text-zinc-600 dark:text-zinc-400">Charts over time read the history of the assets the report finds, as it was recorded.</p>
+        {:else}
         <div class="grid gap-4 sm:grid-cols-3">
           <div>
             <label class="label" for="section-{s}-title">Title (optional)</label>
@@ -228,10 +311,11 @@
           A column shows text with placeholders, as labels do: <code>{'{{asset.name}}'}</code>, <code>{'{{stock.quantity}} {{stock.unit}}'}</code>,
           <code>{'{{field.serial}}'}</code>. Suggestions appear as you type.
         </p>
+        {/if}
         <div class="flex flex-wrap gap-2">
-          <button type="button" class="btn-secondary" onclick={() => addColumn(section)}>Add column</button>
+          {#if section.type === 'table'}<button type="button" class="btn-secondary" onclick={() => addColumn(section)}>Add column</button>{/if}
           {#if spec.sections.length > 1}
-            <button type="button" class="btn-secondary" onclick={() => spec.sections.splice(s, 1)}>Remove table {s + 1}</button>
+            <button type="button" class="btn-secondary" onclick={() => spec.sections.splice(s, 1)}>Remove {section.type === 'chart' ? 'chart' : 'table'} {s + 1}</button>
           {/if}
         </div>
       </fieldset>
@@ -239,6 +323,7 @@
 
     <div class="flex flex-wrap gap-2">
       <button type="button" class="btn-secondary" onclick={() => spec.sections.push(newTable())}>Add table</button>
+      <button type="button" class="btn-secondary" onclick={() => spec.sections.push(newChart())}>Add chart</button>
       <button type="button" class="btn-secondary" disabled={busy} onclick={runPreview}>Preview</button>
       <button type="submit" class="btn-primary" disabled={busy}>Save report</button>
     </div>

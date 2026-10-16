@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -50,9 +51,16 @@ func (s *Server) runSpec(spec *reports.Spec) (*reports.Result, error) {
 			kept = append(kept, assets[i])
 		}
 	}
+	now := time.Now()
+	var history []models.Event
+	if kinds, since := spec.HistoryKinds(now); len(kinds) > 0 {
+		if history, err = s.store.AssetEventsSince(kinds, since); err != nil {
+			return nil, err
+		}
+	}
 	return spec.Run(kept, categories, func(a *models.AssetWithDetails) labels.Data {
 		return bindingData(a, s.cfg.Server.BaseURL)
-	}), nil
+	}, history, now), nil
 }
 
 // handleListReports: GET /api/v1/reports
