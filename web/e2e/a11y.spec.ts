@@ -93,6 +93,7 @@ for (const scheme of ['light', 'dark'] as const) {
       [`/reports/${reports[0].id}`, ''],
       [`/reports/${charts.report.id}`, ''],
       ['/account', 'Your account'],
+      ['/help/scanning', 'Scanning'],
       ['/no-such-page', 'Page not found'],
     ];
     for (const [path, heading] of views) {

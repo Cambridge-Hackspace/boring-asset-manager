@@ -692,6 +692,10 @@ What scanning an asset's code shows is a scan template (migration `022`): a save
 * **Looking up:** `GET /api/v1/scan/{code}` (`assets.scan` for the asset; signed-out visitors too, with the public role) finds the active asset with that assigned code, of any generator type, or that ID, and answers with the asset's ID, name and stock unit, the template, and the template laid out for it. Its actions are narrowed to those the viewer may take now: `open` with `assets.read`, `edit` with `assets.write`, `use` for counted stock with `stock.record`, `borrow` for oneself when it is lendable, not lent and in service, with `assets.borrow`, `return` when lent, with `assets.lend` or as its borrower, and `report` with `assets.report` or `assets.write`, each in the asset's scopes. An asset the viewer cannot scan, an archived one, or none is `404`; a code two assets have, as codes of different kinds, is `409`. A template naming a field deleted since is `409`, asking for it to be edited.
 * **The scan page** in the web app, `/scan/{code}`, shows the template and takes its actions in place: using some stock, borrowing, giving back, and reporting a problem; opening and editing go to the asset's pages. It is open to signed-out visitors for public assets (§3.3), and every asset's page links to its own. Labels reach it with `{{scan_url}}` (§4.1).
 
+### 6.5 Help
+
+The web app carries its own user help: Markdown topics in `web/src/help/`, bundled with the app and rendered by a small renderer of its own (`web/src/lib/markdown.ts`: headings, paragraphs, lists, bold, italics, code, and links to the app's pages or https, everything else escaped). `/help` lists the topics and `/help/{topic}` shows one; both are open to everyone, signed in or not. Every page has one **Help** link, in the header, to the topic for that page; forms carry no help marks of their own. A topic is added by adding its file and, in `web/src/lib/help.ts`, its place in the list and the pages it covers; tests check that every page has a topic, that links between topics lead somewhere, and that the help says rather than asks.
+
 ---
 
 ## 7. Implementation Roadmap for Agents
@@ -974,6 +978,9 @@ Running BAM for real, and keeping it honest. In priority order:
 
 #### Sub-Phase 7.20: Scanning Codes
 * [x] Looking an asset up by its code, a scan page with quick actions open to the public role, and `{{scan_url}}` for labels (§6.4).
+
+#### Sub-Phase 7.21: Help
+* [x] User help in the web app, a topic per part of it, reached by one Help link on every page (§6.5).
 
 ### Upcoming Features
 

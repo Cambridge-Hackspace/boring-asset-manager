@@ -26,6 +26,7 @@ import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
 import ScanPage from './views/ScanPage.svelte';
+import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
 
 export interface Route {
@@ -70,4 +71,7 @@ export const routes: Route[] = [
   { pattern: '/roles', component: RolesPage, title: 'Roles', permissions: ['users.manage'], nav: 'Roles' },
   { pattern: '/tokens', component: TokensPage, title: 'API tokens', permissions: ['users.manage'], nav: 'API tokens' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },
+  // Help is for everyone, signed in or not (README §6.5).
+  { pattern: '/help', component: HelpPage, title: 'Help', public: true },
+  { pattern: '/help/:topic', component: HelpPage, title: 'Help', public: true },
 ];
