@@ -39,6 +39,7 @@ type Source interface {
 	ListAssets(categoryID, search string) ([]models.AssetWithDetails, error)
 	GetAssetByID(id string) (*models.AssetWithDetails, error)
 	GetEffectiveFieldsForCategories(ids []string) ([]models.EffectiveField, error)
+	ListRelationTypes() ([]models.RelationType, error)
 }
 
 // Problem is something wrong with a file, at a line (the header is line 1)
@@ -68,8 +69,18 @@ type Plan struct {
 	Problems          []Problem `json:"problems"`
 	ProblemCount      int       `json:"problem_count"`
 	UnknownCategories []string  `json:"unknown_categories"`
-	// Changes holds the rows to apply, once there are no problems.
-	Changes []store.ImportRow `json:"-"`
+	// The links the import adds, moves and removes, counted, with the first
+	// of them listed (README §6.1). RemoveLinks says whether links no row
+	// states are removed.
+	LinksAdded   int          `json:"links_added"`
+	LinksMoved   int          `json:"links_moved"`
+	LinksRemoved int          `json:"links_removed"`
+	LinkChanges  []LinkChange `json:"link_changes"`
+	RemoveLinks  bool         `json:"remove_links"`
+	// Changes holds the rows to apply, once there are no problems, and
+	// Links the links.
+	Changes []store.ImportRow  `json:"-"`
+	Links   []store.ImportLink `json:"-"`
 }
 
 func (p *Plan) problem(row int, column, format string, args ...any) {
@@ -145,7 +156,7 @@ func Suggest(header []string, corpus []models.Field) []string {
 		byName[t] = CodePrefix + t
 		byName[CodePrefix+t] = CodePrefix + t
 	}
-	for _, c := range []string{ColumnID, ColumnName, ColumnCategories, ColumnQuantity, ColumnUnit, ColumnThreshold} {
+	for _, c := range []string{ColumnID, ColumnName, ColumnCategories, ColumnQuantity, ColumnUnit, ColumnThreshold, ColumnLinks} {
 		byName[c] = c
 	}
 	out := make([]string, len(header))
@@ -163,6 +174,18 @@ func Suggest(header []string, corpus []models.Field) []string {
 // suggestions. Problems with the mapping or the rows are in the plan; an
 // error means the file could not be read, or the data behind it could not.
 func Prepare(src Source, data []byte, mapping []string) (*Plan, error) {
+	return PrepareWith(src, data, mapping, Options{})
+}
+
+// Options change how an import is planned.
+type Options struct {
+	// RemoveLinks removes links of the file's assets that no row states;
+	// without it, an import only adds and moves links.
+	RemoveLinks bool
+}
+
+// PrepareWith plans an import as Prepare does, with options.
+func PrepareWith(src Source, data []byte, mapping []string, opts Options) (*Plan, error) {
 	header, rows, err := parse(data)
 	if err != nil {
 		return nil, err
@@ -178,7 +201,7 @@ func Prepare(src Source, data []byte, mapping []string) (*Plan, error) {
 	if len(mapping) != len(header) {
 		return nil, fmt.Errorf("%w: the mapping has %d entries for %d columns", ErrUnreadable, len(mapping), len(header))
 	}
-	plan := &Plan{Rows: len(rows), Problems: []Problem{}, UnknownCategories: []string{}}
+	plan := &Plan{Rows: len(rows), Problems: []Problem{}, UnknownCategories: []string{}, LinkChanges: []LinkChange{}, RemoveLinks: opts.RemoveLinks}
 	for i, h := range header {
 		col := Column{Header: h, Suggested: suggested[i], Target: strings.TrimSpace(mapping[i])}
 		for _, rec := range rows {
@@ -224,9 +247,15 @@ func Prepare(src Source, data []byte, mapping []string) (*Plan, error) {
 		}
 	}
 	p.checkCodes()
+	if p.linksColumn() != "" {
+		if err := p.planLinks(opts.RemoveLinks); err != nil {
+			return nil, err
+		}
+	}
 	sort.Strings(plan.UnknownCategories)
 	if plan.ProblemCount > 0 {
-		plan.Changes = nil
+		plan.Changes, plan.Links, plan.LinkChanges = nil, nil, []LinkChange{}
+		plan.LinksAdded, plan.LinksMoved, plan.LinksRemoved = 0, 0, 0
 	}
 	return plan, nil
 }
@@ -247,7 +276,7 @@ func checkMapping(plan *Plan, fieldsByKey map[string]models.Field) bool {
 			hasID = true
 		case t == ColumnName:
 			hasName = true
-		case t == ColumnCategories, t == ColumnQuantity, t == ColumnUnit, t == ColumnThreshold:
+		case t == ColumnCategories, t == ColumnQuantity, t == ColumnUnit, t == ColumnThreshold, t == ColumnLinks:
 		case strings.HasPrefix(t, CodePrefix) && generators.IsValidGeneratorType(strings.TrimPrefix(t, CodePrefix)):
 		case strings.HasPrefix(t, FieldPrefix):
 			if _, ok := fieldsByKey[strings.TrimPrefix(t, FieldPrefix)]; !ok {
@@ -286,6 +315,8 @@ type planner struct {
 	unknown   map[string]bool
 	// owners maps "type\x00code" to who holds it once the import is done.
 	owners map[string][]owner
+	// linkCells are the rows' links cells, for planLinks.
+	linkCells []linkCell
 }
 
 func codeKey(t, code string) string { return t + "\x00" + code }
@@ -366,6 +397,9 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 	change := store.ImportRow{Codes: map[string]string{}, FieldValues: map[string]string{}}
 	if existing != nil {
 		change.ID = existing.Asset.ID
+	} else {
+		// Known now, so links in the file can name the asset it creates.
+		change.NewID = uuid.NewString()
 	}
 
 	// Name.
@@ -483,6 +517,14 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 			p.release(existing.Asset.ID, t)
 		}
 		p.claim(t, code, who)
+	}
+
+	if v, col, ok := cell(ColumnLinks); ok {
+		self := change.NewID
+		if existing != nil {
+			self = existing.Asset.ID
+		}
+		p.linkCells = append(p.linkCells, linkCell{line: line, column: col, self: self, value: v})
 	}
 
 	switch {

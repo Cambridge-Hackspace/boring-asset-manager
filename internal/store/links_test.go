@@ -165,8 +165,19 @@ func TestRelationTypes(t *testing.T) {
 			t.Errorf("%s: %v", what, err)
 		}
 	}
-	if _, err := st.CreateRelationType(RelationTypeInput{Name: "powers", InverseName: "z"}); !IsUniqueViolation(err) {
-		t.Errorf("a name in use: %v", err)
+	// A name in use, or one written as the same CSV verb as another.
+	for _, in := range []RelationTypeInput{{Name: "powers", InverseName: "z"}, {Name: "Powers!", InverseName: "z"}, {Name: "x", InverseName: "powered  by"}} {
+		if _, err := st.CreateRelationType(in); !errors.Is(err, ErrRelationSlugTaken) {
+			t.Errorf("%+v: %v", in, err)
+		}
+	}
+	if _, err := st.CreateRelationType(RelationTypeInput{Name: "!!", InverseName: "z"}); !errors.Is(err, ErrInvalidRelationType) {
+		t.Errorf("a name with no letters: %v", err)
+	}
+	for name, slug := range map[string]string{"contained in": "contained_in", " Has  Part ": "has_part", "used-with": "used_with", "Größe 2": "größe_2"} {
+		if got := RelationSlug(name); got != slug {
+			t.Errorf("%q is %q, want %q", name, got, slug)
+		}
 	}
 
 	// In use, only its names change, and it cannot be deleted.

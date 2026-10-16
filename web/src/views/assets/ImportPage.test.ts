@@ -21,6 +21,11 @@ const plan = (over: Partial<ImportPlan> = {}): ImportPlan => ({
   problems: [{ row: 1, column: 'Colour', message: 'column "Colour" is not mapped; choose where it goes or ignore it' }],
   problem_count: 1,
   unknown_categories: [],
+  links_added: 0,
+  links_moved: 0,
+  links_removed: 0,
+  link_changes: [],
+  remove_links: false,
   ...over,
 });
 

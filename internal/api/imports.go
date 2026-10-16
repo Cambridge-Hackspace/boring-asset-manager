@@ -18,45 +18,53 @@ const importBodyLimit = assetcsv.MaxBytes + 1<<20
 // readImport reads a multipart import request: the CSV in "file" and, if
 // given, a JSON array of column targets in "mapping". It writes the error
 // response itself when it fails.
-func readImport(w http.ResponseWriter, r *http.Request) (data []byte, mapping []string, ok bool) {
+func readImport(w http.ResponseWriter, r *http.Request) (data []byte, mapping []string, opts assetcsv.Options, ok bool) {
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Files are limited to %d bytes", assetcsv.MaxBytes))
-			return nil, nil, false
+			return nil, nil, opts, false
 		}
 		writeJSONError(w, http.StatusBadRequest, "Send the CSV as multipart/form-data in a field named file")
-		return nil, nil, false
+		return nil, nil, opts, false
 	}
 	defer r.MultipartForm.RemoveAll()
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Send the CSV as multipart/form-data in a field named file")
-		return nil, nil, false
+		return nil, nil, opts, false
 	}
 	defer file.Close()
 	data, err = io.ReadAll(io.LimitReader(file, assetcsv.MaxBytes+1))
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Could not read the file")
-		return nil, nil, false
+		return nil, nil, opts, false
 	}
 	if len(data) > assetcsv.MaxBytes {
 		writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Files are limited to %d bytes", assetcsv.MaxBytes))
-		return nil, nil, false
+		return nil, nil, opts, false
 	}
 	if raw := r.FormValue("mapping"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &mapping); err != nil || mapping == nil {
 			writeJSONError(w, http.StatusBadRequest, "mapping must be a JSON array with one target per column")
-			return nil, nil, false
+			return nil, nil, opts, false
 		}
 	}
-	return data, mapping, true
+	switch r.FormValue("remove_links") {
+	case "", "false":
+	case "true":
+		opts.RemoveLinks = true
+	default:
+		writeJSONError(w, http.StatusBadRequest, "remove_links must be true or false")
+		return nil, nil, opts, false
+	}
+	return data, mapping, opts, true
 }
 
 // prepareImport plans an import, writing the error response if the file
 // cannot be planned at all.
-func (s *Server) prepareImport(w http.ResponseWriter, data []byte, mapping []string) (*assetcsv.Plan, bool) {
-	plan, err := assetcsv.Prepare(s.store, data, mapping)
+func (s *Server) prepareImport(w http.ResponseWriter, data []byte, mapping []string, opts assetcsv.Options) (*assetcsv.Plan, bool) {
+	plan, err := assetcsv.PrepareWith(s.store, data, mapping, opts)
 	if errors.Is(err, assetcsv.ErrUnreadable) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return nil, false
@@ -71,11 +79,11 @@ func (s *Server) prepareImport(w http.ResponseWriter, data []byte, mapping []str
 // handleImportPreview checks an import without writing anything:
 // POST /api/v1/assets/import/preview
 func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
-	data, mapping, ok := readImport(w, r)
+	data, mapping, opts, ok := readImport(w, r)
 	if !ok {
 		return
 	}
-	if plan, ok := s.prepareImport(w, data, mapping); ok {
+	if plan, ok := s.prepareImport(w, data, mapping, opts); ok {
 		writeJSON(w, http.StatusOK, plan)
 	}
 }
@@ -83,7 +91,7 @@ func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
 // handleImport checks an import again and applies it in one transaction:
 // POST /api/v1/assets/import
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
-	data, mapping, ok := readImport(w, r)
+	data, mapping, opts, ok := readImport(w, r)
 	if !ok {
 		return
 	}
@@ -91,7 +99,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "mapping is required: confirm where each column goes")
 		return
 	}
-	plan, ok := s.prepareImport(w, data, mapping)
+	plan, ok := s.prepareImport(w, data, mapping, opts)
 	if !ok {
 		return
 	}
@@ -104,8 +112,8 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	created, err := s.actingStore(r).ImportAssets(plan.Changes)
-	if errors.Is(err, store.ErrGeneratorCodeExists) || errors.Is(err, store.ErrAssetNotFound) {
+	created, err := s.actingStore(r).ImportAssets(plan.Changes, plan.Links)
+	if errors.Is(err, store.ErrGeneratorCodeExists) || errors.Is(err, store.ErrAssetNotFound) || errors.Is(err, store.ErrImportOutdated) {
 		// Something changed since the check; nothing was imported.
 		writeJSONError(w, http.StatusConflict, "Assets changed while importing, and nothing was imported: "+err.Error())
 		return
@@ -115,9 +123,12 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"created":     plan.Create,
-		"updated":     plan.Update,
-		"unchanged":   plan.Unchanged,
-		"created_ids": created,
+		"created":       plan.Create,
+		"updated":       plan.Update,
+		"unchanged":     plan.Unchanged,
+		"links_added":   plan.LinksAdded,
+		"links_moved":   plan.LinksMoved,
+		"links_removed": plan.LinksRemoved,
+		"created_ids":   created,
 	})
 }

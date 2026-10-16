@@ -270,12 +270,30 @@ export interface ImportPlan {
   problems: ImportProblem[];
   problem_count: number;
   unknown_categories: string[];
+  /** The links it adds, moves and removes, counted, with the first of them listed. */
+  links_added: number;
+  links_moved: number;
+  links_removed: number;
+  link_changes: LinkChange[];
+  remove_links: boolean;
+}
+
+/** A link an import would change, as "Screws contained in Bin A3". */
+export interface LinkChange {
+  row?: number;
+  change: 'add' | 'move' | 'remove';
+  asset: string;
+  label: string;
+  other: string;
 }
 
 export interface ImportResult {
   created: number;
   updated: number;
   unchanged: number;
+  links_added: number;
+  links_moved: number;
+  links_removed: number;
   created_ids: string[];
 }
 

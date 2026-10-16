@@ -38,7 +38,7 @@ func checkImport(t testing.TB, w *world, data []byte, mapping []string) (importe
 		}
 		return false
 	}
-	if _, err := w.st.ImportAssets(plan.Changes); err != nil {
+	if _, err := w.st.ImportAssets(plan.Changes, plan.Links); err != nil {
 		t.Fatalf("the planner approved what the store refused: %v\nfile %q\nmapping %q", err, data, mapping)
 	}
 
@@ -51,7 +51,7 @@ func checkImport(t testing.TB, w *world, data []byte, mapping []string) (importe
 		t.Fatal(err)
 	}
 	var b bytes.Buffer
-	if err := Export(&b, assets, NewCategories(cats), []string{"qr", "micro_qr", "code128"}); err != nil {
+	if err := Export(&b, assets, NewCategories(cats), []string{"qr", "micro_qr", "code128"}, NewAssetRefs(assets)); err != nil {
 		t.Fatal(err)
 	}
 	again, err := Prepare(w.st, b.Bytes(), nil)

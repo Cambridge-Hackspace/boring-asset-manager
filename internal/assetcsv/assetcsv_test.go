@@ -137,7 +137,7 @@ func TestExport(t *testing.T) {
 		},
 	}
 	var b strings.Builder
-	if err := Export(&b, assets, NewCategories(tree), []string{"qr", "code128"}); err != nil {
+	if err := Export(&b, assets, NewCategories(tree), []string{"qr", "code128"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	want := BOM +
@@ -158,7 +158,7 @@ func TestExportingStock(t *testing.T) {
 		{Asset: models.Asset{ID: "a3", Name: "Drill"}},
 	}
 	var b strings.Builder
-	if err := Export(&b, assets, NewCategories(tree), []string{"qr"}); err != nil {
+	if err := Export(&b, assets, NewCategories(tree), []string{"qr"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	want := BOM +
