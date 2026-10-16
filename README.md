@@ -347,7 +347,7 @@ Text behaves the same on every database, whatever the server's defaults:
 
 Assets link to one another: a bin contains screws, a drill is used with its bits (migration `015`).
 
-* **Relation types** (`relation_types`) are a shared list, like the field corpus, managed with `categories:manage` through `GET` (`assets:read`), `POST /api/v1/relation-types` and `PUT`/`DELETE /api/v1/relation-types/{id}`. Each has a `name` read from the first asset and an `inverse_name` read from the second (`contains` / `contained in`), up to 64 characters, and three flags: `is_symmetric` for one that reads the same both ways (`used with`; its inverse is its name), `is_single` when the second asset can have one only (a thing is in one place), and `is_location` for one whose links give where things are (it must be single). `contains` (a location), `has part` and `used with` are seeded. While links use a type only its names can change, and it cannot be deleted (`409`, with how many links use it).
+* **Relation types** (`relation_types`) are a shared list, like the field corpus, managed with `categories:manage` through `GET` (`assets:read`), `POST /api/v1/relation-types` and `PUT`/`DELETE /api/v1/relation-types/{id}`. Each has a `name` read from the first asset and an `inverse_name` read from the second (`contains` / `contained in`), up to 64 characters, and three flags: `is_symmetric` for one that reads the same both ways (`used with`; its inverse is its name), `is_single` when the second asset can have one only (a thing is in one place), and `is_location` for one whose links give where things are (it must be single). `contains` (a location), `has part` and `used with` are seeded. Names are also written as verbs in CSV files (§6.1): lowercased, with each run of characters other than letters and digits made `_` (`contained in` is `contained_in`), so a name whose verb another type already has, or one with no letters or digits, is refused (`409`). While links use a type only its names can change, and it cannot be deleted (`409`, with how many links use it).
 * **Links** (`asset_links`) are stored once and read correctly from both assets. `POST /api/v1/assets/{id}/links` (`assets:write`) with `{"type_id", "asset_id", "outgoing"}` links the asset to another, reading from the asset: `outgoing` by the type's name (this bin contains those screws), otherwise by its inverse (these screws are contained in that bin). For a single type, linking the second asset anew moves it, ending its old link. A link that would make a loop of a single type (a bin inside its own contents), an asset linked to itself, a link that already exists (either way round for a symmetric type), and links to archived assets are refused. `DELETE /api/v1/assets/{id}/links/{link_id}` removes one. Changes serialize on the `asset_links` lock.
 * **On the asset:** `GET /api/v1/assets/{id}` lists `links`, each with the `label` read from the asset, the other asset and whether it is `outgoing`, and `location`, the chain of containers through location links, outermost first (Shelf 2 › Bin A3).
 * **History:** adding or removing a link records an `asset.edited` change on both assets (`"what": "link"`, the label read from that asset and the other asset's name); a move shows on the thing moved, its old container and its new one.
@@ -633,17 +633,19 @@ Some equipment is lent out: drills, multimeters, a ladder. Lending is turned on 
 | `code.<type>` | The assigned code for a generator type (`code.qr`, `code.micro_qr`, `code.code128`). |
 | `quantity`, `unit`, `low_stock_threshold` | Stock counted by quantity (§5.1). Export writes them only when some asset's stock is counted that way. On import a blank cell keeps what the asset has; a unit or threshold for an asset whose stock is not counted needs a quantity too. An import cannot stop counting, or remove a threshold. |
 | `field.<key>` | A field value, by corpus key. |
+| `links` | The asset's links (§3.6), each `verb:asset`, separated by `;`: `contained_in:Bin A3;used_with:Drill`. The verb is a relation type's name or inverse name written as a verb, read from this row's asset (case and spacing do not matter on import). The asset is a name when it names one active asset, otherwise an ID or an assigned code. Export writes the name where that works, and the ID where it does not (two assets of that name, or a name containing `;`); it writes the column only when some exported asset has links, listing each link from both ends. |
 
 Spreadsheet formula injection is defused: on export a cell beginning with `=`, `+`, `-`, `@`, a tab, a carriage return or `'` is prefixed with `'` (plain numbers such as `-5` are left alone), and on import a `'` followed by one of those characters is removed, so a file reads back exactly as it was written.
 
 **Export.** `GET /api/v1/assets/export.csv` (`assets:read`) takes the asset list's filters (`category_id`, `search`) and writes every matching asset, with a column for every generator type and every field any of them has a value for.
 
-**Import.** `POST /api/v1/assets/import/preview` and `POST /api/v1/assets/import` (`assets:write`) take the file (at most 5 MB and 5,000 rows) and a mapping from each column to `id`, `name`, `categories`, `quantity`, `unit`, `low_stock_threshold`, a generator type, a field key, or `ignore`.
+**Import.** `POST /api/v1/assets/import/preview` and `POST /api/v1/assets/import` (`assets:write`) take the file (at most 5 MB and 5,000 rows) and a mapping from each column to `id`, `name`, `categories`, `links`, `quantity`, `unit`, `low_stock_threshold`, a generator type, a field key, or `ignore`.
 
 1. **Mapping:** the preview suggests a mapping from the headers (the names above, and field labels as well as keys). Every column must be mapped or explicitly ignored, and the user confirms the mapping before importing.
 2. **Pre-flight validation:** every referenced category must already exist; otherwise the import is refused with the list of unknown references. Each row is then checked as the API would check it: required fields from the asset's effective fields, field types and select choices, and generator codes (format, and uniqueness both within the file and against other assets). Duplicate IDs within the file, unknown IDs and archived assets are errors.
 3. **Rows:** a row without an `id` creates an asset. A row whose `id` matches an asset updates it, and a blank cell leaves that value unchanged. The preview reports each problem with its row and column, and how many assets would be created, updated and left unchanged.
-4. **Atomic processing:** the import validates everything again, without trusting the preview, and applies every row in one transaction. Any error means nothing is written. Inventory thresholds (§5.1) are checked once afterwards, so each category records at most one event.
+4. **Links:** names in a `links` column are read as they will be once the rows are applied, so a file can create a bin and fill it, and a link stated from both ends counts once. Links that do not exist yet are added, and for a single type (§3.6) a new link moves the asset, ending its old one. By default nothing else is removed. With `remove_links=true` (the form field, beside the file and mapping; the web app's "Also remove links that no row states"), the links of the file's assets that no row states are removed too, so an exported file, edited, imports back exactly; assets the file does not mention keep theirs. The preview lists each link added, moved or removed (up to 500, with counts of all), and reports a cell that is not `verb:asset`, an unknown verb, an asset named by nothing or by several, an asset linked to itself, a new link to an archived asset, an asset put in two places, and a loop. Link changes are recorded in history with the trigger `import`.
+5. **Atomic processing:** the import validates everything again, without trusting the preview, and applies every row in one transaction. Any error means nothing is written. A link the preview planned to remove or move that has gone since, or one added since that the import would duplicate, refuses the import (`409`), asking for a new preview. Inventory thresholds (§5.1) are checked once afterwards, so each category records at most one event.
 
 
 
@@ -938,12 +940,15 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.14: Version in the Footer
 * [x] Every page names the running version, linked to its release, or the commit of a development build (§2.2).
 
+#### Sub-Phase 7.15: Links in CSV Files
+* [x] A `links` column of `verb:asset` entries, exported from both ends and imported with a preview, adding and moving links, and removing those no row states when asked (§6.1).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
 
 #### Asset Associations, Later
-* [ ] A CSV column per relation type, and scanning a bin's code to list what is in it. (The container's name on labels came with `{{asset.location}}`, §4.1.)
+* [ ] Scanning a bin's code to list what is in it. (The container's name on labels came with `{{asset.location}}`, §4.1.)
 
 #### Deferred
 * **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { ApiError, request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { IGNORE, describeProblem, duplicateTargets, importForm, summarize, targetOptions } from '../../lib/importing';
+  import { IGNORE, describeLinkChange, describeProblem, duplicateTargets, importForm, linkCounts, summarize, targetOptions } from '../../lib/importing';
   import type { Field, GeneratorInfo, ImportPlan, ImportResult } from '../../lib/models';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
@@ -22,8 +22,13 @@
   const options = $derived(targetOptions(fields, generators));
   const groups = $derived(['Asset', 'Stock', 'Codes', 'Fields'].map((g) => ({ name: g, options: options.filter((o) => o.group === g) })));
   const duplicates = $derived(duplicateTargets(mapping));
-  const checked = $derived(plan !== null && JSON.stringify(mapping) === checkedWith);
-  const ready = $derived(checked && plan !== null && plan.problem_count === 0 && plan.create + plan.update > 0);
+  // Removing links no row states, when the file has a links column.
+  let removeLinks = $state(false);
+  const hasLinks = $derived(mapping.includes('links'));
+  const checkKey = $derived(JSON.stringify([mapping, hasLinks && removeLinks]));
+  const checked = $derived(plan !== null && checkKey === checkedWith);
+  const linkChanges = $derived(plan ? plan.links_added + plan.links_moved + plan.links_removed : 0);
+  const ready = $derived(checked && plan !== null && plan.problem_count === 0 && plan.create + plan.update + linkChanges > 0);
 
   onMount(async () => {
     try {
@@ -43,10 +48,10 @@
     busy = true;
     error = '';
     try {
-      const next = await request<ImportPlan>('POST', '/assets/import/preview', importForm(file, withMapping ? mapping : undefined));
+      const next = await request<ImportPlan>('POST', '/assets/import/preview', importForm(file, withMapping ? mapping : undefined, hasLinks && removeLinks));
       plan = next;
       mapping = next.columns.map((c) => c.target);
-      checkedWith = JSON.stringify(mapping);
+      checkedWith = checkKey;
     } catch (err) {
       plan = null;
       error = messageOf(err);
@@ -69,7 +74,7 @@
     busy = true;
     error = '';
     try {
-      result = await request<ImportResult>('POST', '/assets/import', importForm(file, mapping));
+      result = await request<ImportResult>('POST', '/assets/import', importForm(file, mapping, hasLinks && removeLinks));
       plan = null;
       file = null;
     } catch (err) {
@@ -103,7 +108,7 @@
 {#if result}
   <div class="card mb-4" role="status">
     <p class="font-medium">
-      Imported: {result.created} new, {result.updated} updated, {result.unchanged} unchanged.
+      Imported: {result.created} new, {result.updated} updated, {result.unchanged} unchanged{linkCounts(result.links_added, result.links_moved, result.links_removed) ? `; ${linkCounts(result.links_added, result.links_moved, result.links_removed)}` : ''}.
     </p>
     <p class="mt-1 text-sm"><a class="underline" href="/assets">Back to the assets</a></p>
   </div>
@@ -152,6 +157,18 @@
     </table>
   </div>
 
+  {#if hasLinks}
+    <div class="mb-4 max-w-prose">
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" bind:checked={removeLinks} aria-describedby="remove-links-help" /> Also remove links that no row states
+      </label>
+      <p id="remove-links-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        Without this, an import only adds links and moves things between containers. With it, links of the file's assets that
+        no row mentions are removed, so an exported file you edit imports back exactly.
+      </p>
+    </div>
+  {/if}
+
   <h2 class="mb-2 text-lg font-semibold">Check</h2>
   {#if !checked}
     <p class="mb-2 text-sm">The mapping has changed since the last check.</p>
@@ -176,8 +193,17 @@
         {/if}
       </ul>
     {/if}
+    {#if plan.link_changes.length}
+      <details class="mb-4 text-sm">
+        <summary class="cursor-pointer">Link changes</summary>
+        <ul class="mt-1 list-disc space-y-1 pl-5">
+          {#each plan.link_changes as c, i (i)}<li>{describeLinkChange(c)}</li>{/each}
+          {#if linkChanges > plan.link_changes.length}<li>and {linkChanges - plan.link_changes.length} more.</li>{/if}
+        </ul>
+      </details>
+    {/if}
     <button type="button" class="btn-primary" onclick={runImport} disabled={!ready || busy}>
-      {busy ? 'Importing…' : `Import ${plan.create + plan.update} ${plan.create + plan.update === 1 ? 'asset' : 'assets'}`}
+      {busy ? 'Importing…' : plan.create + plan.update ? `Import ${plan.create + plan.update} ${plan.create + plan.update === 1 ? 'asset' : 'assets'}` : 'Import the links'}
     </button>
   {/if}
 {/if}

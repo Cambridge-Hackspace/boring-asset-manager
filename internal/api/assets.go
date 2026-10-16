@@ -229,9 +229,16 @@ func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list categories")
 		return
 	}
+	// Links name other assets as an import would find them: among all
+	// active assets, not only those exported.
+	active, err := s.store.ListAssets("", "")
+	if err != nil {
+		writeServerError(w, err, "list assets")
+		return
+	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="assets-%s.csv"`, time.Now().UTC().Format("20060102")))
-	if err := assetcsv.Export(w, assets, assetcsv.NewCategories(cats), generators.AllowedGeneratorTypes()); err != nil {
+	if err := assetcsv.Export(w, assets, assetcsv.NewCategories(cats), generators.AllowedGeneratorTypes(), assetcsv.NewAssetRefs(active)); err != nil {
 		// Headers are gone; all that is left is to stop.
 		return
 	}

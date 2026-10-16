@@ -15,6 +15,9 @@ import (
 type ImportRow struct {
 	// ID names the asset to update; empty creates one.
 	ID   string
+	// NewID, for a row creating an asset, is the ID to give it, so links
+	// in the same import can name it; empty picks one.
+	NewID string
 	Name string
 	// CategoryIDs replaces the asset's categories; nil leaves them as they
 	// are. An empty list means Uncategorized.
@@ -32,7 +35,7 @@ type ImportRow struct {
 // inventory lock, so either every row lands or none does, and thresholds are
 // checked once for the whole import. It returns the IDs of created assets,
 // in row order.
-func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
+func (s *Store) ImportAssets(rows []ImportRow, links []ImportLink) ([]string, error) {
 	if err := s.EnsureUncategorizedCategory(); err != nil {
 		return nil, err
 	}
@@ -49,7 +52,10 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 		for i, row := range rows {
 			ids[i] = row.ID
 			if row.ID == "" {
-				ids[i] = uuid.NewString()
+				ids[i] = row.NewID
+				if ids[i] == "" {
+					ids[i] = uuid.NewString()
+				}
 				created = append(created, ids[i])
 				continue
 			}
@@ -90,7 +96,7 @@ func (s *Store) ImportAssets(rows []ImportRow) ([]string, error) {
 				return err
 			}
 		}
-		return nil
+		return s.importLinksTx(tx, links)
 	})
 	if err != nil {
 		return nil, err
@@ -167,4 +173,166 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ErrImportOutdated is returned when assets or their links changed between
+// checking an import and applying it; nothing is applied.
+var ErrImportOutdated = errors.New("assets changed since the import was checked")
+
+// ImportLink is a link an import adds or, with Remove, one it removes.
+type ImportLink struct {
+	Remove bool
+	// LinkID names the link to remove.
+	LinkID string
+	// TypeID, From and To are the link to add, by asset ID (a new row's
+	// NewID included).
+	TypeID   string
+	From, To string
+}
+
+// importLinksTx applies an import's links, removals first, under the links
+// lock, and records them in both assets' history. A link that has gone, or
+// a result that would put a thing in two places or inside itself, means
+// something changed since the import was checked.
+func (s *Store) importLinksTx(tx *sql.Tx, links []ImportLink) error {
+	if len(links) == 0 {
+		return nil
+	}
+	if err := s.takeLock(tx, linksLock); err != nil {
+		return err
+	}
+	type relation struct{ name, inverse string }
+	relations := map[string]relation{}
+	rows, err := s.TxQuery(tx, "SELECT id, name, inverse_name FROM relation_types")
+	if err != nil {
+		return fmt.Errorf("reading relation types: %w", err)
+	}
+	for rows.Next() {
+		var id string
+		var r relation
+		if err := rows.Scan(&id, &r.name, &r.inverse); err != nil {
+			rows.Close()
+			return err
+		}
+		relations[id] = r
+	}
+	rows.Close()
+	names := map[string]string{}
+	nameOf := func(id string) (string, error) {
+		if n, ok := names[id]; ok {
+			return n, nil
+		}
+		var n string
+		if err := s.TxQueryRow(tx, "SELECT name FROM assets WHERE id = ?", id).Scan(&n); err != nil {
+			return "", fmt.Errorf("%w: asset %s: %v", ErrImportOutdated, id, err)
+		}
+		names[id] = n
+		return n, nil
+	}
+	changes := map[string][]models.EventChange{}
+	note := func(typeID, from, to string, removed bool) error {
+		fromName, err := nameOf(from)
+		if err != nil {
+			return err
+		}
+		toName, err := nameOf(to)
+		if err != nil {
+			return err
+		}
+		r := relations[typeID]
+		out := models.EventChange{What: "link", Key: to, Label: r.name, To: toName}
+		in := models.EventChange{What: "link", Key: from, Label: r.inverse, To: fromName}
+		if removed {
+			out.From, out.To, in.From, in.To = toName, "", fromName, ""
+		}
+		changes[from] = append(changes[from], out)
+		changes[to] = append(changes[to], in)
+		return nil
+	}
+	now := time.Now().UTC()
+	for _, l := range links {
+		if !l.Remove {
+			continue
+		}
+		var typeID, from, to string
+		err := s.TxQueryRow(tx, "SELECT relation_type_id, from_asset_id, to_asset_id FROM asset_links WHERE id = ?", l.LinkID).Scan(&typeID, &from, &to)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%w: a link to remove has gone", ErrImportOutdated)
+		}
+		if err != nil {
+			return fmt.Errorf("reading link: %w", err)
+		}
+		if _, err := s.TxExec(tx, "DELETE FROM asset_links WHERE id = ?", l.LinkID); err != nil {
+			return fmt.Errorf("removing link: %w", err)
+		}
+		if err := note(typeID, from, to, true); err != nil {
+			return err
+		}
+	}
+	for _, l := range links {
+		if l.Remove {
+			continue
+		}
+		if _, ok := relations[l.TypeID]; !ok {
+			return fmt.Errorf("%w: a relation type has gone", ErrImportOutdated)
+		}
+		if _, err := s.TxExec(tx, "INSERT INTO asset_links (id, relation_type_id, from_asset_id, to_asset_id, created_at) VALUES (?, ?, ?, ?, ?)",
+			uuid.NewString(), l.TypeID, l.From, l.To, now); err != nil {
+			if isUniqueViolation(err) {
+				return fmt.Errorf("%w: a link to add already exists", ErrImportOutdated)
+			}
+			return fmt.Errorf("adding link: %w", err)
+		}
+		if err := note(l.TypeID, l.From, l.To, false); err != nil {
+			return err
+		}
+	}
+	if err := s.checkSingleLinksTx(tx); err != nil {
+		return err
+	}
+	return s.recordLinkChanges(tx, changes, models.TriggerImport)
+}
+
+// checkSingleLinksTx checks every single relation's links: nothing is the
+// far end of two, and none makes a loop.
+func (s *Store) checkSingleLinksTx(tx *sql.Tx) error {
+	rows, err := s.TxQuery(tx, `SELECT l.relation_type_id, l.from_asset_id, l.to_asset_id FROM asset_links l
+		JOIN relation_types t ON t.id = l.relation_type_id AND t.is_single = TRUE`)
+	if err != nil {
+		return fmt.Errorf("reading links: %w", err)
+	}
+	defer rows.Close()
+	parent := map[string]map[string]string{}
+	for rows.Next() {
+		var typeID, from, to string
+		if err := rows.Scan(&typeID, &from, &to); err != nil {
+			return err
+		}
+		if parent[typeID] == nil {
+			parent[typeID] = map[string]string{}
+		}
+		if _, twice := parent[typeID][to]; twice {
+			return fmt.Errorf("%w: something would be in two places", ErrImportOutdated)
+		}
+		parent[typeID][to] = from
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, up := range parent {
+		for start := range up {
+			at := start
+			for depth := 0; depth <= len(up); depth++ {
+				next, ok := up[at]
+				if !ok {
+					break
+				}
+				if next == start {
+					return fmt.Errorf("%w: links would make a loop", ErrImportOutdated)
+				}
+				at = next
+			}
+		}
+	}
+	return nil
 }

@@ -1,6 +1,6 @@
 // Helpers for CSV import and export (README §6.1).
 
-import type { Field, GeneratorInfo, ImportPlan, ImportProblem } from './models';
+import type { Field, GeneratorInfo, ImportPlan, ImportProblem, LinkChange } from './models';
 
 export const IGNORE = 'ignore';
 
@@ -16,6 +16,7 @@ export function targetOptions(fields: Field[], generators: GeneratorInfo[]): Tar
     { value: 'id', label: 'ID (updates that asset)', group: 'Asset' },
     { value: 'name', label: 'Name', group: 'Asset' },
     { value: 'categories', label: 'Categories', group: 'Asset' },
+    { value: 'links', label: 'Links (verb:asset, such as contained_in:Bin A3)', group: 'Asset' },
     { value: 'quantity', label: 'Quantity', group: 'Stock' },
     { value: 'unit', label: 'Unit', group: 'Stock' },
     { value: 'low_stock_threshold', label: 'Low stock threshold', group: 'Stock' },
@@ -26,11 +27,12 @@ export function targetOptions(fields: Field[], generators: GeneratorInfo[]): Tar
   ];
 }
 
-/** The form an import request sends. */
-export function importForm(file: File, mapping?: string[]): FormData {
+/** The form an import request sends; removeLinks removes links no row states. */
+export function importForm(file: File, mapping?: string[], removeLinks = false): FormData {
   const form = new FormData();
   form.append('file', file);
   if (mapping) form.append('mapping', JSON.stringify(mapping));
+  if (removeLinks) form.append('remove_links', 'true');
   return form;
 }
 
@@ -64,5 +66,21 @@ export function describeProblem(p: ImportProblem): string {
 /** A plan's outcome in a sentence. */
 export function summarize(plan: ImportPlan): string {
   const rows = plan.rows === 1 ? '1 row' : `${plan.rows} rows`;
-  return `${rows}: ${plan.create} new, ${plan.update} updated, ${plan.unchanged} unchanged.`;
+  const links = linkCounts(plan.links_added, plan.links_moved, plan.links_removed);
+  return `${rows}: ${plan.create} new, ${plan.update} updated, ${plan.unchanged} unchanged${links ? `; ${links}` : ''}.`;
+}
+
+/** Link changes in words, or '' for none. */
+export function linkCounts(added = 0, moved = 0, removed = 0): string {
+  const parts: string[] = [];
+  if (added) parts.push(`${added} ${added === 1 ? 'link' : 'links'} added`);
+  if (moved) parts.push(`${moved} moved`);
+  if (removed) parts.push(`${removed} removed`);
+  return parts.join(', ');
+}
+
+/** A link change as a line of the preview. */
+export function describeLinkChange(c: LinkChange): string {
+  const what = { add: 'Add', move: 'Move', remove: 'Remove' }[c.change];
+  return `${what}: ${c.asset} ${c.label} ${c.other}${c.row ? ` (line ${c.row})` : ''}`;
 }

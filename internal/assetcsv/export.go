@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 // Column names, and the prefixes of generator and field columns.
@@ -19,9 +20,13 @@ const (
 	ColumnQuantity   = "quantity"
 	ColumnUnit       = "unit"
 	ColumnThreshold  = "low_stock_threshold"
+	ColumnLinks      = "links"
 	CodePrefix       = "code."
 	FieldPrefix      = "field."
 )
+
+// A links cell lists links as verb:asset, separated by LinkSeparator.
+const LinkSeparator = ";"
 
 // BOM starts every exported file, so spreadsheets read it as UTF-8.
 const BOM = "\xef\xbb\xbf"
@@ -53,13 +58,15 @@ func Undefuse(s string) string {
 
 // Export writes assets as CSV: id, name, categories, a code column for each
 // generator type, the stock columns when any asset's stock is counted
-// by quantity, and a field column for every field any asset has a value for,
-// by key.
-func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, generatorTypes []string) error {
-	stocked := false
+// by quantity, a field column for every field any asset has a value for,
+// by key, and, when any asset has links and refs is given, a links column,
+// naming other assets as refs does.
+func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs) error {
+	stocked, linked := false, false
 	keys := map[string]bool{}
 	for _, a := range assets {
 		stocked = stocked || a.Asset.Stock != nil
+		linked = linked || (refs != nil && len(a.Links) > 0)
 		for k, v := range a.FieldValues {
 			if v != "" {
 				keys[k] = true
@@ -81,6 +88,9 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 	}
 	for _, k := range fieldKeys {
 		header = append(header, FieldPrefix+k)
+	}
+	if linked {
+		header = append(header, ColumnLinks)
 	}
 
 	if _, err := io.WriteString(w, BOM); err != nil {
@@ -106,6 +116,9 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 		for _, k := range fieldKeys {
 			row = append(row, Defuse(a.FieldValues[k]))
 		}
+		if linked {
+			row = append(row, Defuse(linksCell(a.Links, refs)))
+		}
 		if err := cw.Write(row); err != nil {
 			return err
 		}
@@ -125,4 +138,13 @@ func stockCells(s *models.AssetStock) []string {
 		threshold = strconv.Itoa(*s.LowStockThreshold)
 	}
 	return []string{strconv.Itoa(s.Quantity), Defuse(s.Unit), threshold}
+}
+
+// linksCell writes an asset's links as verb:asset entries.
+func linksCell(links []models.AssetLink, refs *AssetRefs) string {
+	entries := make([]string, len(links))
+	for i, l := range links {
+		entries[i] = store.RelationSlug(l.Label) + ":" + refs.Ref(l.Asset.ID, l.Asset.Name)
+	}
+	return strings.Join(entries, LinkSeparator)
 }

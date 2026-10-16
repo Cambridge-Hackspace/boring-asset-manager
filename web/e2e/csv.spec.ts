@@ -56,3 +56,41 @@ test('export assets, edit the file, and import it back', async ({ signedIn: page
   expect(files.assets).toHaveLength(1);
   expect(files.assets[0].generator_keys[0]).toMatchObject({ generator_type: 'code128', assigned_code: `F-${tag}` });
 });
+
+test('fill a bin from a spreadsheet, then empty it again', async ({ signedIn: page }) => {
+  const tag = unique('links');
+  const bin = `Bin ${tag}`;
+  const screws = `Screws ${tag}`;
+  const file = (rows: string) => ({ name: 'links.csv', mimeType: 'text/csv', buffer: Buffer.from(rows) });
+
+  // The bin and its contents, made by one file: the link names the bin.
+  await goTo(page, 'Assets');
+  await page.getByRole('link', { name: 'Import CSV' }).click();
+  await page.getByLabel('CSV file').setInputFiles(file(`name,links\r\n${bin},\r\n${screws},contained_in:${bin}\r\n`));
+  await expect(page.getByText('2 rows: 2 new, 0 updated, 0 unchanged; 1 link added.')).toBeVisible();
+  await page.getByText('Link changes').click();
+  await expect(page.getByText(`Add: ${bin} contains ${screws} (line 3)`)).toBeVisible();
+  await page.getByRole('button', { name: 'Import 2 assets' }).click();
+  await expect(page.getByText('Imported: 2 new, 0 updated, 0 unchanged; 1 link added.')).toBeVisible();
+
+  // The export writes it from both ends.
+  await goTo(page, 'Assets');
+  await page.getByLabel('Search').fill(tag);
+  await page.getByRole('button', { name: 'Search' }).click();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Export CSV' }).click()]);
+  const exported = fs.readFileSync((await download.path())!).toString('utf8').slice(1).trim().split('\r\n');
+  expect(exported[0].endsWith(',links')).toBe(true);
+  const screwsRow = exported.find((l) => l.includes(`,${screws},`))!;
+  expect(screwsRow.endsWith(`,contained_in:${bin}`)).toBe(true);
+
+  // The screws' row with no links empties the bin, but only with the option.
+  const id = screwsRow.split(',')[0];
+  await page.getByRole('link', { name: 'Import CSV' }).click();
+  await page.getByLabel('CSV file').setInputFiles(file(`id,links\r\n${id},\r\n`));
+  await expect(page.getByText('1 row: 0 new, 0 updated, 1 unchanged.')).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Also remove links that no row states' }).check();
+  await page.getByRole('button', { name: 'Check again' }).click();
+  await expect(page.getByText('1 row: 0 new, 0 updated, 1 unchanged; 1 removed.')).toBeVisible();
+  await page.getByRole('button', { name: 'Import the links' }).click();
+  await expect(page.getByText('Imported: 0 new, 0 updated, 1 unchanged; 1 removed.')).toBeVisible();
+});

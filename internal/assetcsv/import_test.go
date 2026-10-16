@@ -96,7 +96,7 @@ func (w *world) apply(t *testing.T, file string) *Plan {
 	if plan.ProblemCount > 0 {
 		t.Fatalf("problems: %+v", plan.Problems)
 	}
-	if _, err := w.st.ImportAssets(plan.Changes); err != nil {
+	if _, err := w.st.ImportAssets(plan.Changes, plan.Links); err != nil {
 		t.Fatal(err)
 	}
 	return plan
@@ -302,7 +302,7 @@ func TestExportThenImportChangesNothing(t *testing.T) {
 	before := mustList(t, w.st)
 	cats, _ := w.st.ListAllCategories()
 	var b strings.Builder
-	if err := Export(&b, before, NewCategories(cats), []string{"qr", "micro_qr", "code128"}); err != nil {
+	if err := Export(&b, before, NewCategories(cats), []string{"qr", "micro_qr", "code128"}, NewAssetRefs(before)); err != nil {
 		t.Fatal(err)
 	}
 	plan := w.prepare(t, b.String(), nil)
@@ -323,7 +323,7 @@ func TestImportIsAllOrNothing(t *testing.T) {
 	if _, err := w.st.CreateAsset("Sneaky", nil, []models.AssetGeneratorKey{{GeneratorType: "code128", AssignedCode: "O3"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.st.ImportAssets(plan.Changes); !errors.Is(err, store.ErrGeneratorCodeExists) {
+	if _, err := w.st.ImportAssets(plan.Changes, plan.Links); !errors.Is(err, store.ErrGeneratorCodeExists) {
 		t.Fatalf("got %v", err)
 	}
 	for _, a := range mustList(t, w.st) {

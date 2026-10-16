@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
@@ -107,6 +108,9 @@ func (s *Store) CreateRelationType(in RelationTypeInput) (*models.RelationType, 
 	if err := in.normalize(); err != nil {
 		return nil, err
 	}
+	if err := s.checkSlugs("", in); err != nil {
+		return nil, err
+	}
 	id, now := uuid.NewString(), time.Now().UTC()
 	_, err := s.Exec("INSERT INTO relation_types (id, name, inverse_name, is_symmetric, is_single, is_location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		id, in.Name, in.InverseName, in.IsSymmetric, in.IsSingle, in.IsLocation, now, now)
@@ -121,6 +125,9 @@ func (s *Store) CreateRelationType(in RelationTypeInput) (*models.RelationType, 
 // under the old rules might break the new ones.
 func (s *Store) UpdateRelationType(id string, in RelationTypeInput) (*models.RelationType, error) {
 	if err := in.normalize(); err != nil {
+		return nil, err
+	}
+	if err := s.checkSlugs(id, in); err != nil {
 		return nil, err
 	}
 	was, err := s.GetRelationType(id)
@@ -453,7 +460,7 @@ func (s *Store) AddLink(assetID, typeID, otherID string, outgoing bool) (*models
 	}
 	changes[from.id] = append(changes[from.id], models.EventChange{What: "link", Key: to.id, Label: t.Name, To: to.name})
 	changes[to.id] = append(changes[to.id], models.EventChange{What: "link", Key: from.id, Label: t.InverseName, To: from.name})
-	if err := s.recordLinkChanges(tx, changes); err != nil {
+	if err := s.recordLinkChanges(tx, changes, models.TriggerManual); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -496,7 +503,7 @@ func (s *Store) RemoveLink(assetID, linkID string) (*models.AssetWithDetails, er
 	err = s.recordLinkChanges(tx, map[string][]models.EventChange{
 		from: {{What: "link", Key: to, Label: name, From: toName}},
 		to:   {{What: "link", Key: from, Label: inverse, From: fromName}},
-	})
+	}, models.TriggerManual)
 	if err != nil {
 		return nil, err
 	}
@@ -507,14 +514,14 @@ func (s *Store) RemoveLink(assetID, linkID string) (*models.AssetWithDetails, er
 }
 
 // recordLinkChanges records each asset's link changes as an edit of it.
-func (s *Store) recordLinkChanges(tx *sql.Tx, changes map[string][]models.EventChange) error {
+func (s *Store) recordLinkChanges(tx *sql.Tx, changes map[string][]models.EventChange, trigger string) error {
 	ids := make([]string, 0, len(changes))
 	for id := range changes {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
-		if err := s.recordAssetEvent(tx, models.EventAssetEdited, id, models.EventPayload{Trigger: models.TriggerManual, Changes: changes[id]}); err != nil {
+		if err := s.recordAssetEvent(tx, models.EventAssetEdited, id, models.EventPayload{Trigger: trigger, Changes: changes[id]}); err != nil {
 			return err
 		}
 	}
@@ -533,4 +540,54 @@ func (s *Store) holdsActiveTx(tx *sql.Tx, id string) (int, error) {
 		return 0, fmt.Errorf("checking what it holds: %w", err)
 	}
 	return n, nil
+}
+
+// RelationSlug is how a relation's name is written as a verb in CSV files
+// (README §6.1): in lower case, with each run of characters that are not
+// letters or digits as one underscore, so "contained in" is contained_in.
+func RelationSlug(name string) string {
+	var b strings.Builder
+	gap := false
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if gap && b.Len() > 0 {
+				b.WriteByte('_')
+			}
+			gap = false
+			b.WriteRune(r)
+			continue
+		}
+		gap = true
+	}
+	return b.String()
+}
+
+// ErrRelationSlugTaken refuses a relation type whose name or inverse name
+// would be written as the same verb as another type's.
+var ErrRelationSlugTaken = errors.New("another relation is written the same way in CSV files")
+
+// checkSlugs refuses names with no letters or digits, and names written as
+// the same verb as another type's; id is the type being edited, if any.
+func (s *Store) checkSlugs(id string, in RelationTypeInput) error {
+	types, err := s.ListRelationTypes()
+	if err != nil {
+		return err
+	}
+	taken := map[string]string{}
+	for _, t := range types {
+		if t.ID != id {
+			taken[RelationSlug(t.Name)] = t.Name
+			taken[RelationSlug(t.InverseName)] = t.InverseName
+		}
+	}
+	for _, n := range []string{in.Name, in.InverseName} {
+		slug := RelationSlug(n)
+		if slug == "" {
+			return fmt.Errorf("%w: %q needs a letter or digit", ErrInvalidRelationType, n)
+		}
+		if other, ok := taken[slug]; ok {
+			return fmt.Errorf("%w: %q and %q are both %s", ErrRelationSlugTaken, n, other, slug)
+		}
+	}
+	return nil
 }

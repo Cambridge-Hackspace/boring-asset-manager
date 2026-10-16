@@ -144,7 +144,7 @@ func writeLinkError(w http.ResponseWriter, err error, action string) {
 		writeJSONError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, store.ErrLinkNotFound):
 		writeJSONError(w, http.StatusNotFound, "Link not found")
-	case errors.Is(err, store.ErrRelationTypeInUse), errors.Is(err, store.ErrLinkExists), errors.Is(err, store.ErrLinkCycle),
+	case errors.Is(err, store.ErrRelationTypeInUse), errors.Is(err, store.ErrLinkExists), errors.Is(err, store.ErrLinkCycle), errors.Is(err, store.ErrRelationSlugTaken),
 		errors.Is(err, store.ErrAssetArchived):
 		writeJSONError(w, http.StatusConflict, err.Error())
 	case store.IsUniqueViolation(err):

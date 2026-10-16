@@ -161,7 +161,7 @@ func TestHistoryRecordsImports(t *testing.T) {
 	created, err := st.ImportAssets([]ImportRow{
 		{Name: "Saw", Codes: map[string]string{"qr": "S-1"}, Stock: &StockInput{Quantity: intp(3)}},
 		{ID: id, Name: "Drill", FieldValues: map[string]string{note.ID: "Blunt"}},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestHistoryRecordsImports(t *testing.T) {
 	}
 
 	// Importing the same again changes, and records, nothing.
-	if _, err := st.ImportAssets([]ImportRow{{ID: id, Name: "Drill", FieldValues: map[string]string{note.ID: "Blunt"}}}); err != nil {
+	if _, err := st.ImportAssets([]ImportRow{{ID: id, Name: "Drill", FieldValues: map[string]string{note.ID: "Blunt"}}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(history(t, st, id)); got != len(drill) {
