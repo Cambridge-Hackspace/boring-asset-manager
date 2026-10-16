@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { ancestry, flattenTree, subtree } from '../../lib/tree';
@@ -21,6 +21,8 @@
   let categories = $state<Category[]>([]);
   let effective = $state<EffectiveField[]>([]);
   let allFields = $state<Field[]>([]);
+  let relationTypes = $state<RelationType[]>([]);
+  let suggested = $state<string[]>([]);
   let loading = $state(true);
   let error = $state('');
   let saved = $state('');
@@ -75,12 +77,27 @@
         threshold = c.low_stock_threshold ?? null;
         activeCount = (await request<{ active_count: number }>('GET', `/categories/${encodeURIComponent(id)}`)).active_count;
         effective = (await request<{ fields: EffectiveField[] }>('GET', `/categories/${encodeURIComponent(id)}/fields`)).fields ?? [];
-        if (canManage) allFields = (await request<{ fields: Field[] }>('GET', '/fields')).fields ?? [];
+        if (canManage) {
+          allFields = (await request<{ fields: Field[] }>('GET', '/fields')).fields ?? [];
+          relationTypes = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
+          suggested = (await request<{ relation_type_ids: string[] }>('GET', `/categories/${encodeURIComponent(id)}/relation-types`)).relation_type_ids ?? [];
+        }
       }
     } catch (err) {
       error = messageOf(err);
     } finally {
       loading = false;
+    }
+  }
+
+  async function saveSuggestions(event: SubmitEvent) {
+    event.preventDefault();
+    error = saved = '';
+    try {
+      suggested = (await request<{ relation_type_ids: string[] }>('PUT', `/categories/${encodeURIComponent(id)}/relation-types`, { relation_type_ids: suggested })).relation_type_ids ?? [];
+      saved = 'Suggestions saved.';
+    } catch (err) {
+      error = messageOf(err);
     }
   }
 
@@ -321,5 +338,19 @@
         <p class="mt-2 text-xs text-zinc-600 dark:text-zinc-400">Adding a field another category already gives this one makes it this category’s own; required anywhere means required.</p>
       {/if}
     </section>
+    {#if canManage && relationTypes.length}
+      <section class="mt-6 max-w-2xl" aria-labelledby="relations-heading">
+        <h2 id="relations-heading" class="mb-1 text-lg font-semibold">Suggested links</h2>
+        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">Offered first when linking its assets, and those of its subcategories, to others.</p>
+        <form class="space-y-2" onsubmit={saveSuggestions}>
+          {#each relationTypes as t (t.id)}
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" value={t.id} bind:group={suggested} /> {t.is_symmetric ? t.name : `${t.name} / ${t.inverse_name}`}
+            </label>
+          {/each}
+          <button type="submit" class="btn-secondary">Save suggestions</button>
+        </form>
+      </section>
+    {/if}
   {/if}
 {/if}

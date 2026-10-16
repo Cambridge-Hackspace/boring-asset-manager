@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { amount, assetPayload, describeChange, describeEvent, dueDate, endOfDay, errorTarget, inputType, isWebURL, keptValues, stockDraft, stockPayload } from './assets';
-import type { AssetChange, AssetEvent, AssetStock, EffectiveField } from './models';
+import { amount, assetPayload, describeChange, describeEvent, dueDate, endOfDay, errorTarget, inputType, isWebURL, keptValues, linkChoices, stockDraft, stockPayload } from './assets';
+import type { AssetChange, AssetEvent, AssetStock, EffectiveField, RelationType } from './models';
 
 const ef = (key: string, required = false): EffectiveField => ({
   field: { id: key, key, label: key, validation_type: 'text', created_at: '', updated_at: '' },
@@ -163,5 +163,24 @@ describe('loans', () => {
   it('makes a loan due at the end of the chosen day, where the person is', () => {
     const due = new Date(endOfDay('2026-10-20'));
     expect([due.getFullYear(), due.getMonth(), due.getDate(), due.getHours(), due.getMinutes()]).toEqual([2026, 9, 20, 23, 59]);
+  });
+});
+
+describe('links', () => {
+  it('describes link changes from the asset whose history it is', () => {
+    expect(describeChange({ what: 'link', label: 'contained in', to: 'Bin A3' }, 'asset.edited')).toBe('Contained in Bin A3');
+    expect(describeChange({ what: 'link', label: 'contains', from: 'M3 screws' }, 'asset.edited')).toBe('No longer contains M3 screws');
+  });
+
+  it('offers each relation from both ends, suggested ones first', () => {
+    const type = (id: string, name: string, inverse: string, symmetric = false): RelationType => ({
+      id, name, inverse_name: inverse, is_symmetric: symmetric, is_single: false, is_location: false, created_at: '', updated_at: '', link_count: 0,
+    });
+    const choices = linkChoices([type('c', 'contains', 'contained in'), type('u', 'used with', 'used with', true)], ['u']);
+    expect(choices.map((c) => [c.label, c.outgoing, c.suggested])).toEqual([
+      ['used with', true, true],
+      ['contains', true, false],
+      ['contained in', false, false],
+    ]);
   });
 });

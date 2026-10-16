@@ -12,6 +12,7 @@
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import ConditionBadge from '../../components/ConditionBadge.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
+  import LinksPanel from '../../components/LinksPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
@@ -122,7 +123,8 @@
     }, `Reported: ${conditionLabel(reportCondition).toLowerCase()}.`);
   }
 
-  function loanChanged(a: AssetWithDetails, done: string) {
+  // After a loan or a link changes: show the asset as it is now.
+  function assetChanged(a: AssetWithDetails, done: string) {
     asset = a;
     saved = done;
     error = '';
@@ -188,6 +190,12 @@
       {/if}
     </div>
   </div>
+  {#if asset.location.length}
+    <nav aria-label="Location" class="-mt-2 mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+      In
+      {#each asset.location as place, i (place.id)}{#if i > 0}{' › '}{/if}<a class="underline" href="/assets/{encodeURIComponent(place.id)}">{place.name}</a>{/each}
+    </nav>
+  {/if}
   {#if asset.asset.archived_at}
     <p class="mb-4 rounded border border-zinc-300 bg-zinc-100 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800">
       Archived {when(asset.asset.archived_at)}. Its codes were released for other assets; restoring it gives back those no other asset has taken.
@@ -252,7 +260,7 @@
     {/if}
 
     {#if (asset.lendable || asset.loan) && !archived}
-      <LoanPanel {asset} onchange={loanChanged} />
+      <LoanPanel {asset} onchange={assetChanged} />
     {/if}
 
     <section class="card" aria-labelledby="details-heading">
@@ -296,6 +304,8 @@
         </details>
       {/if}
     </section>
+
+    <LinksPanel {asset} onchange={assetChanged} />
 
     {#if !archived}<LabelActions assetIds={[id]} />{/if}
 

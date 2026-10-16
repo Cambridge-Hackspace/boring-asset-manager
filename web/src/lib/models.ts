@@ -126,7 +126,7 @@ export interface AssetEvent {
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition';
+  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link';
   key?: string;
   label?: string;
   from?: string;
@@ -149,6 +149,10 @@ export interface AssetWithDetails {
   /** Whether it can be lent, and its open loan, if it is out. */
   lendable: boolean;
   loan: Loan | null;
+  /** Its links to other assets, where it is (outermost first), and the relation types its categories suggest. */
+  links: AssetLink[];
+  location: LinkedAsset[];
+  suggested_relation_type_ids: string[];
 }
 
 export interface GeneratorInfo {
@@ -351,4 +355,37 @@ export interface Loan {
   due_at: string | null;
   checked_in_at: string | null;
   overdue: boolean;
+}
+
+/** A kind of link between assets, named from each end. */
+export interface RelationType {
+  id: string;
+  name: string;
+  inverse_name: string;
+  /** Reads the same both ways, as "used with" does. */
+  is_symmetric: boolean;
+  /** The far end can be linked once only, so linking it again moves it. */
+  is_single: boolean;
+  /** Its links make an asset's location. */
+  is_location: boolean;
+  created_at: string;
+  updated_at: string;
+  link_count: number;
+}
+
+/** The asset at the other end of a link, or in a location. */
+export interface LinkedAsset {
+  id: string;
+  name: string;
+  archived?: boolean;
+}
+
+/** A link as one of its assets sees it. */
+export interface AssetLink {
+  id: string;
+  type_id: string;
+  /** The relation's name read from this asset: "contains" or "contained in". */
+  label: string;
+  asset: LinkedAsset;
+  outgoing: boolean;
 }

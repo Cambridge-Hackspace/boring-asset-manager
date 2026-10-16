@@ -24,6 +24,9 @@ const asset = (id: string, name: string): AssetWithDetails => ({
   effective_fields: [],
   lendable: false,
   loan: null,
+  links: [],
+  location: [],
+  suggested_relation_type_ids: [],
 });
 
 beforeEach(() => {

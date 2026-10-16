@@ -13,6 +13,9 @@ const drill: AssetWithDetails = {
   effective_fields: [],
   lendable: true,
   loan: null,
+  links: [],
+  location: [],
+  suggested_relation_type_ids: [],
 };
 const lentTo = (id: string, name: string, overdue = false): AssetWithDetails => ({
   ...drill,
