@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
@@ -241,9 +242,12 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	commit, modified := buildCommit()
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"name":     "BAM! (Boring Asset Manager)",
 		"version":  Version,
+		"commit":   commit,
+		"modified": modified,
 		"base_url": s.cfg.Server.BaseURL,
 		"dialect":  s.store.Dialect,
 	})
@@ -259,4 +263,26 @@ func (s *Server) actingStore(r *http.Request) *store.Store {
 		return s.store.As(u.ID)
 	}
 	return s.store
+}
+
+// buildCommit is the commit this binary was built from, shortened, and
+// whether the working tree had changes, as Go records when building in a
+// git checkout; empty when it was not.
+func buildCommit() (commit string, modified bool) {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "", false
+	}
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			commit = s.Value
+		case "vcs.modified":
+			modified = s.Value == "true"
+		}
+	}
+	if len(commit) > 12 {
+		commit = commit[:12]
+	}
+	return commit, modified
 }

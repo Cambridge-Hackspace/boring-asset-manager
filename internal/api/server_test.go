@@ -73,4 +73,13 @@ func TestHealthAndInfoEndpoints(t *testing.T) {
 	if infoResp["version"] != Version {
 		t.Errorf("expected version %s, got %v", Version, infoResp["version"])
 	}
+	// The commit is what the binary records, empty in a test binary, which
+	// go test builds without it.
+	commit, modified := buildCommit()
+	if c, ok := infoResp["commit"].(string); !ok || c != commit {
+		t.Errorf("commit %v, want %q", infoResp["commit"], commit)
+	}
+	if m, ok := infoResp["modified"].(bool); !ok || m != modified {
+		t.Errorf("modified %v, want %v", infoResp["modified"], modified)
+	}
 }
