@@ -15,6 +15,7 @@ type CreateCategoryRequest struct {
 	ParentID          *string `json:"parent_id,omitempty"`
 	ColorHex          string  `json:"color_hex,omitempty"`
 	IsConsumable      bool    `json:"is_consumable"`
+	IsLendable        bool    `json:"is_lendable"`
 	IsRunningLow      bool    `json:"is_running_low"`
 	LowStockThreshold *int    `json:"low_stock_threshold"`
 }
@@ -29,6 +30,7 @@ func (r CreateCategoryRequest) input() store.CategoryInput {
 		ParentID:          r.ParentID,
 		ColorHex:          r.ColorHex,
 		IsConsumable:      r.IsConsumable,
+		IsLendable:        r.IsLendable,
 		IsRunningLow:      r.IsRunningLow,
 		LowStockThreshold: r.LowStockThreshold,
 	}

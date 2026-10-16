@@ -228,6 +228,17 @@ func discordPayload(n Notification) discordMessage {
 			}
 			embed.Description += "Reported by " + by + "."
 		}
+	case e.Kind == models.EventAssetOverdue:
+		embed.Title, embed.Color = "Overdue: "+name, discordWarning
+		who := "someone"
+		if p.Borrower != nil {
+			who = escapeMarkdown(truncate(p.Borrower.Display(), 200))
+		}
+		embed.Description = "Lent to " + who
+		if p.DueAt != nil {
+			embed.Description += ", due back " + p.DueAt.UTC().Format("2 January 2006") + " (UTC)"
+		}
+		embed.Description += "."
 	default:
 		embed.Title = truncate(e.Kind, 200)
 		embed.Color = discordNeutral

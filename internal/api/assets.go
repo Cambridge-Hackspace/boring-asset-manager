@@ -78,7 +78,7 @@ const historyPage = 50
 
 func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := store.AssetFilter{CategoryID: q.Get("category_id"), Search: q.Get("search"), Condition: q.Get("condition")}
+	f := store.AssetFilter{CategoryID: q.Get("category_id"), Search: q.Get("search"), Condition: q.Get("condition"), Loan: q.Get("loan")}
 	switch q.Get("archived") {
 	case "", "false":
 	case "true":
@@ -90,6 +90,10 @@ func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	assets, err := s.store.FilterAssets(f)
 	if errors.Is(err, store.ErrInvalidCondition) {
 		writeJSONError(w, http.StatusBadRequest, "condition must be ok, needs_maintenance, out_of_service or problem")
+		return
+	}
+	if errors.Is(err, store.ErrInvalidLoanFilter) {
+		writeJSONError(w, http.StatusBadRequest, "loan must be open or overdue")
 		return
 	}
 	if err != nil {
@@ -196,6 +200,10 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 	err := s.actingStore(r).DeleteAsset(id)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
+		return
+	}
+	if errors.Is(err, store.ErrAssetOnLoan) {
+		writeJSONError(w, http.StatusConflict, err.Error())
 		return
 	}
 	if err != nil {

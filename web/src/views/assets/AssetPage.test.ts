@@ -19,6 +19,8 @@ const withStock = (quantity: number, low: boolean): AssetWithDetails => ({
   generator_keys: [],
   field_values: {},
   effective_fields: [],
+  lendable: false,
+  loan: null,
 });
 
 const used: AssetEvent = {

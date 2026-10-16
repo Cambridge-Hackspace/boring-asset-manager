@@ -30,6 +30,7 @@
   let parentId = $state('');
   let color = $state('#2563eb');
   let consumable = $state(false);
+  let lendable = $state(false);
   let runningLow = $state(false);
   let threshold = $state<number | null>(null);
   let busy = $state(false);
@@ -69,6 +70,7 @@
         parentId = c.parent_id ?? '';
         color = c.color_hex;
         consumable = c.is_consumable;
+        lendable = c.is_lendable;
         runningLow = c.is_running_low;
         threshold = c.low_stock_threshold ?? null;
         activeCount = (await request<{ active_count: number }>('GET', `/categories/${encodeURIComponent(id)}`)).active_count;
@@ -93,6 +95,7 @@
       parent_id: parentId || null,
       color_hex: color,
       is_consumable: consumable,
+      is_lendable: lendable,
       is_running_low: consumable && runningLow,
       low_stock_threshold: consumable && threshold ? threshold : null,
     };
@@ -247,6 +250,11 @@
               flag when there are enough again.
             </p>
           </div>
+        </fieldset>
+        <fieldset class="space-y-1">
+          <legend class="label">Lending</legend>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={lendable} aria-describedby="lend-help" /> Lendable</label>
+          <p id="lend-help" class="text-xs text-zinc-600 dark:text-zinc-400">Its assets, and those of its subcategories, can be checked out to people.</p>
         </fieldset>
       </div>
       <div class="flex flex-wrap gap-2">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amount, assetPayload, describeChange, describeEvent, errorTarget, inputType, isWebURL, keptValues, stockDraft, stockPayload } from './assets';
+import { amount, assetPayload, describeChange, describeEvent, dueDate, endOfDay, errorTarget, inputType, isWebURL, keptValues, stockDraft, stockPayload } from './assets';
 import type { AssetChange, AssetEvent, AssetStock, EffectiveField } from './models';
 
 const ef = (key: string, required = false): EffectiveField => ({
@@ -145,5 +145,23 @@ describe('stock', () => {
         { what: 'code', key: 'qr', label: 'QR Code', from: 'S-1' },
       ),
     ).toEqual(['Got back Code 128 C-1', 'Not given back QR Code S-1: another asset has it']);
+  });
+});
+
+describe('loans', () => {
+  it('describes lending in history', () => {
+    const event = (kind: string, payload: Partial<AssetEvent['payload']>): AssetEvent => ({ id: 'e', kind, created_at: '', payload: { trigger: 'manual', ...payload } });
+    const bo = { id: 'u', email: 'bo@hackspace.org', name: 'Bo' };
+    expect(describeEvent(event('asset.checked_out', { borrower: bo }))).toBe('Lent to Bo');
+    // In the reader's own format, whatever their locale.
+    expect(describeEvent(event('asset.checked_out', { borrower: bo, due_at: '2026-10-20T12:00:00Z' }))).toBe(`Lent to Bo, due back ${dueDate('2026-10-20T12:00:00Z')}`);
+    expect(dueDate('2026-10-20T12:00:00Z')).toMatch(/20.*2026|2026.*20/);
+    expect(describeEvent(event('asset.checked_in', { borrower: { id: 'u', email: 'bo@hackspace.org' } }))).toBe('Checked in from bo@hackspace.org');
+    expect(describeEvent(event('asset.overdue', { borrower: bo, due_at: '2026-10-20T12:00:00Z' }))).toBe(`Overdue: Bo was due to bring it back ${dueDate('2026-10-20T12:00:00Z')}`);
+  });
+
+  it('makes a loan due at the end of the chosen day, where the person is', () => {
+    const due = new Date(endOfDay('2026-10-20'));
+    expect([due.getFullYear(), due.getMonth(), due.getDate(), due.getHours(), due.getMinutes()]).toEqual([2026, 9, 20, 23, 59]);
   });
 });

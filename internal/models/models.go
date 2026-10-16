@@ -83,7 +83,9 @@ type Category struct {
 	ParentID     *string `json:"parent_id,omitempty"`
 	ColorHex     string  `json:"color_hex"`
 	IsConsumable bool    `json:"is_consumable"`
-	IsRunningLow bool    `json:"is_running_low"`
+	// IsLendable lets its assets, and those of its subcategories, be lent.
+	IsLendable   bool `json:"is_lendable"`
+	IsRunningLow bool `json:"is_running_low"`
 	// LowStockThreshold flags a consumable category as running low when its
 	// active count drops below it (README §5.1); nil means no threshold.
 	LowStockThreshold *int      `json:"low_stock_threshold"`
@@ -110,13 +112,21 @@ const (
 	// EventAssetConditionChanged records a change of an asset's condition, in
 	// the payload's Changes, with its Note. Channels can subscribe to it.
 	EventAssetConditionChanged = "asset.condition_changed"
+	// EventAssetCheckedOut and EventAssetCheckedIn record a loan, with its
+	// Borrower and, when checked out, when it is due; they are for history.
+	// EventAssetOverdue records once that a loan is past due; channels can
+	// subscribe to it.
+	EventAssetCheckedOut = "asset.checked_out"
+	EventAssetCheckedIn  = "asset.checked_in"
+	EventAssetOverdue    = "asset.overdue"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
 // asset's history, with no channel able to subscribe to them.
 func HistoryOnly(kind string) bool {
 	switch kind {
-	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored:
+	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
+		EventAssetCheckedOut, EventAssetCheckedIn:
 		return true
 	}
 	return false
@@ -128,6 +138,9 @@ const (
 	TriggerThreshold = "threshold"
 	// TriggerImport marks a change made by a CSV import.
 	TriggerImport = "import"
+	// TriggerSchedule marks an event BAM recorded by itself, such as a loan
+	// becoming overdue.
+	TriggerSchedule = "schedule"
 )
 
 // Event records something notifiers may announce. Its payload is a snapshot
@@ -164,6 +177,10 @@ type EventPayload struct {
 	Changes []EventChange `json:"changes,omitempty"`
 	// Note is what a person said about a change of condition.
 	Note string `json:"note,omitempty"`
+	// Borrower is who has, or had, the asset of a loan event, and DueAt when
+	// the loan is due back, if ever.
+	Borrower *EventActor `json:"borrower,omitempty"`
+	DueAt    *time.Time  `json:"due_at,omitempty"`
 }
 
 // EventChange is one change to an asset, as it read when it was made. What
@@ -292,6 +309,10 @@ type AssetWithDetails struct {
 	GeneratorKeys   []AssetGeneratorKey `json:"generator_keys"`
 	FieldValues     map[string]string   `json:"field_values"` // key -> value
 	EffectiveFields []EffectiveField    `json:"effective_fields"`
+	// Lendable is set when one of its categories, or their ancestors, is
+	// lendable; Loan is its open loan, if it is lent out.
+	Lendable bool  `json:"lendable"`
+	Loan     *Loan `json:"loan"`
 }
 
 // Image is an uploaded PNG or JPEG placed on labels by static_image elements.
@@ -365,4 +386,26 @@ const (
 // ValidCondition reports whether c is one of the conditions above.
 func ValidCondition(c string) bool {
 	return c == ConditionOK || c == ConditionNeedsMaintenance || c == ConditionOutOfService
+}
+
+// Person is a user as others see them: in loans and pickers.
+type Person struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	// Archived is set for a user who has left; their loans stay theirs.
+	Archived bool `json:"archived,omitempty"`
+}
+
+// Loan is an asset lent to someone (README §5.3). It is open until
+// CheckedInAt is set, and Overdue while open past DueAt.
+type Loan struct {
+	ID           string     `json:"id"`
+	AssetID      string     `json:"asset_id"`
+	AssetName    string     `json:"asset_name"`
+	Borrower     Person     `json:"borrower"`
+	CheckedOutAt time.Time  `json:"checked_out_at"`
+	DueAt        *time.Time `json:"due_at"`
+	CheckedInAt  *time.Time `json:"checked_in_at"`
+	Overdue      bool       `json:"overdue"`
 }

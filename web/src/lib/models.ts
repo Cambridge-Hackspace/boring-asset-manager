@@ -10,7 +10,9 @@ export type Permission =
   | 'users:manage'
   | 'labels:print'
   | 'stock:record'
-  | 'assets:report';
+  | 'assets:report'
+  | 'assets:borrow'
+  | 'assets:lend';
 
 export interface User {
   id: string;
@@ -60,6 +62,8 @@ export interface Category {
   parent_id?: string | null;
   color_hex: string;
   is_consumable: boolean;
+  /** Its assets, and those of its subcategories, can be lent. */
+  is_lendable: boolean;
   is_running_low: boolean;
   /** Flags the category when fewer active assets remain; null for none. */
   low_stock_threshold?: number | null;
@@ -105,7 +109,7 @@ export interface AssetEvent {
   payload: {
     /** Who caused it, with their name as it was then. */
     actor?: { id: string; email: string; name?: string; token?: boolean };
-    trigger: 'manual' | 'threshold' | 'import';
+    trigger: 'manual' | 'threshold' | 'import' | 'schedule';
     quantity?: number;
     change?: number;
     threshold?: number;
@@ -114,6 +118,9 @@ export interface AssetEvent {
     changes?: AssetChange[];
     /** What someone said about a change of condition. */
     note?: string;
+    /** Who has, or had, the asset of a loan event, and when it is due back. */
+    borrower?: { id: string; email: string; name?: string };
+    due_at?: string;
   };
 }
 
@@ -139,6 +146,9 @@ export interface AssetWithDetails {
   /** Values by field key, including ones kept from earlier categories. */
   field_values: Record<string, string>;
   effective_fields: EffectiveField[];
+  /** Whether it can be lent, and its open loan, if it is out. */
+  lendable: boolean;
+  loan: Loan | null;
 }
 
 export interface GeneratorInfo {
@@ -320,4 +330,25 @@ export interface APIToken {
   expires_at: string | null;
   last_used_at: string | null;
   revoked_at: string | null;
+}
+
+/** A user as others see them, in loans and pickers. */
+export interface Person {
+  id: string;
+  email: string;
+  name: string;
+  /** Set for someone who has left; their loans stay theirs. */
+  archived?: boolean;
+}
+
+/** An asset lent to someone; open until checked in. */
+export interface Loan {
+  id: string;
+  asset_id: string;
+  asset_name: string;
+  borrower: Person;
+  checked_out_at: string;
+  due_at: string | null;
+  checked_in_at: string | null;
+  overdue: boolean;
 }

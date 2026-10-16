@@ -20,6 +20,10 @@ const (
 	// PermAssetsReport reports an asset needing maintenance or out of
 	// service, without editing it.
 	PermAssetsReport = "assets:report"
+	// PermAssetsBorrow checks an asset out to oneself and back in.
+	PermAssetsBorrow = "assets:borrow"
+	// PermAssetsLend checks an asset out to anyone, and any loan back in.
+	PermAssetsLend = "assets:lend"
 )
 
 var (
@@ -40,6 +44,8 @@ func AllPermissions() []string {
 		PermLabelsPrint,
 		PermStockRecord,
 		PermAssetsReport,
+		PermAssetsBorrow,
+		PermAssetsLend,
 	}
 }
 

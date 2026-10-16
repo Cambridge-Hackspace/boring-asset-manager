@@ -124,13 +124,14 @@ type CategoryInput struct {
 	ParentID          *string
 	ColorHex          string
 	IsConsumable      bool
+	IsLendable        bool
 	IsRunningLow      bool
 	LowStockThreshold *int
 }
 
 // categoryColumns lists a category's columns, each prefixed, in scanCategory's order.
 func categoryColumns(prefix string) string {
-	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "is_running_low", "low_stock_threshold", "created_at", "updated_at"}
+	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "is_lendable", "is_running_low", "low_stock_threshold", "created_at", "updated_at"}
 	for i, c := range cols {
 		cols[i] = prefix + c
 	}
@@ -144,7 +145,7 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 		parentVal sql.NullString
 		threshold sql.NullInt64
 	)
-	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.IsRunningLow, &threshold, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.IsLendable, &c.IsRunningLow, &threshold, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, err
 	}
@@ -191,8 +192,8 @@ func (s *Store) CreateCategoryFrom(in CategoryInput) (*models.Category, error) {
 
 	now := time.Now().UTC()
 	err := s.withInventory(func(ic *inventoryChange) error {
-		query := `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, is_running_low, low_stock_threshold, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		if _, err := s.TxExec(ic.tx, query, categoryID, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsRunningLow, in.LowStockThreshold, now, now); err != nil {
+		query := `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, is_lendable, is_running_low, low_stock_threshold, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		if _, err := s.TxExec(ic.tx, query, categoryID, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsLendable, in.IsRunningLow, in.LowStockThreshold, now, now); err != nil {
 			return fmt.Errorf("inserting category: %w", err)
 		}
 		return s.setFlagByHand(ic, categoryID, false, in.IsRunningLow)
@@ -299,8 +300,8 @@ func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Categor
 		if err != nil {
 			return fmt.Errorf("reading category: %w", err)
 		}
-		query := `UPDATE categories SET name = ?, parent_id = ?, color_hex = ?, is_consumable = ?, is_running_low = ?, low_stock_threshold = ?, updated_at = ? WHERE id = ?`
-		if _, err := s.TxExec(ic.tx, query, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsRunningLow, in.LowStockThreshold, time.Now().UTC(), id); err != nil {
+		query := `UPDATE categories SET name = ?, parent_id = ?, color_hex = ?, is_consumable = ?, is_lendable = ?, is_running_low = ?, low_stock_threshold = ?, updated_at = ? WHERE id = ?`
+		if _, err := s.TxExec(ic.tx, query, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsLendable, in.IsRunningLow, in.LowStockThreshold, time.Now().UTC(), id); err != nil {
 			return fmt.Errorf("updating category: %w", err)
 		}
 		return s.setFlagByHand(ic, id, was, in.IsRunningLow)
