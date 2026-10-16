@@ -231,6 +231,12 @@ func (s *Store) insertAsset(tx *sql.Tx, assetID, name string, now time.Time, cat
 
 // GetAssetByID retrieves an asset and resolves its assigned categories, generator keys, and field values.
 func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
+	return s.readAsset(id, &assetContext{})
+}
+
+// readAsset reads an asset as GetAssetByID does, taking what it needs from
+// whole tables from ctx, which a list shares across its assets.
+func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetails, error) {
 	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, ` + stockColumns + ` FROM assets WHERE id = ?`
 	var (
 		a  models.Asset
@@ -333,10 +339,10 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 		FieldValues:     fieldValues,
 		EffectiveFields: effectiveFields,
 	}
-	if err := s.loanDetails(details); err != nil {
+	if err := s.loanDetails(details, ctx); err != nil {
 		return nil, err
 	}
-	if err := s.linkDetails(details); err != nil {
+	if err := s.linkDetails(details, ctx); err != nil {
 		return nil, err
 	}
 	return details, nil
@@ -460,8 +466,9 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 	}
 
 	var results []models.AssetWithDetails
+	ctx := &assetContext{list: true}
 	for _, id := range assetIDs {
-		detail, err := s.GetAssetByID(id)
+		detail, err := s.readAsset(id, ctx)
 		if err != nil {
 			continue
 		}

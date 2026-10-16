@@ -15,6 +15,7 @@ type CreateCategoryRequest struct {
 	ParentID          *string `json:"parent_id,omitempty"`
 	ColorHex          string  `json:"color_hex,omitempty"`
 	IsConsumable      bool    `json:"is_consumable"`
+	Unit              string  `json:"unit"`
 	IsLendable        bool    `json:"is_lendable"`
 	IsRunningLow      bool    `json:"is_running_low"`
 	LowStockThreshold *int    `json:"low_stock_threshold"`
@@ -30,6 +31,7 @@ func (r CreateCategoryRequest) input() store.CategoryInput {
 		ParentID:          r.ParentID,
 		ColorHex:          r.ColorHex,
 		IsConsumable:      r.IsConsumable,
+		Unit:              r.Unit,
 		IsLendable:        r.IsLendable,
 		IsRunningLow:      r.IsRunningLow,
 		LowStockThreshold: r.LowStockThreshold,
@@ -85,10 +87,20 @@ func (s *Server) handleGetCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	body := map[string]any{
 		"category":     cat,
 		"active_count": count,
-	})
+	}
+	// A category with a unit is measured by the total of its stock in it.
+	if cat.Unit != "" {
+		total, err := s.store.CategoryTotal(id, cat.Unit)
+		if err != nil {
+			writeServerError(w, err, "total the stock")
+			return
+		}
+		body["total"] = total
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {

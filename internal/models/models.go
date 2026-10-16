@@ -83,6 +83,9 @@ type Category struct {
 	ParentID     *string `json:"parent_id,omitempty"`
 	ColorHex     string  `json:"color_hex"`
 	IsConsumable bool    `json:"is_consumable"`
+	// Unit, on a consumable category, totals its assets' stock in that unit
+	// instead of counting them (README §5.1).
+	Unit string `json:"unit"`
 	// IsLendable lets its assets, and those of its subcategories, be lent.
 	IsLendable   bool `json:"is_lendable"`
 	IsRunningLow bool `json:"is_running_low"`
@@ -311,6 +314,9 @@ type AssetWithDetails struct {
 	EffectiveFields []EffectiveField    `json:"effective_fields"`
 	// Lendable is set when one of its categories, or their ancestors, is
 	// lendable; Loan is its open loan, if it is lent out.
+	// Weighed is set for an asset whose stock is its weight in the unit
+	// one of its categories totals: a spool, not a pooled quantity.
+	Weighed  bool  `json:"weighed"`
 	Lendable bool  `json:"lendable"`
 	Loan     *Loan `json:"loan"`
 	// Links are the asset's links to others; Location is where it is,

@@ -3,7 +3,7 @@ import type { Category } from './models';
 import { ancestry, flattenTree, subtree } from './tree';
 
 function cat(id: string, name: string, parent: string | null = null): Category {
-  return { id, name, parent_id: parent, color_hex: '#000000', is_consumable: false, is_lendable: false, is_running_low: false, created_at: '', updated_at: '' };
+  return { id, name, parent_id: parent, color_hex: '#000000', is_consumable: false, unit: '', is_lendable: false, is_running_low: false, created_at: '', updated_at: '' };
 }
 
 const cats = [

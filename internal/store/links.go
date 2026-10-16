@@ -210,37 +210,76 @@ func (s *Store) SetCategoryRelationTypes(categoryID string, typeIDs []string) ([
 	return s.CategoryRelationTypes(categoryID)
 }
 
-// linkDetails fills in an asset's links, its location and the relation
-// types its categories suggest.
-func (s *Store) linkDetails(a *models.AssetWithDetails) error {
-	a.Links, a.Location, a.SuggestedRelationTypeIDs = []models.AssetLink{}, []models.LinkedAsset{}, []string{}
-	rows, err := s.Query(`SELECT l.id, t.id, t.name, t.inverse_name, l.from_asset_id = ?, o.id, o.name, o.archived_at
-		FROM asset_links l
-		JOIN relation_types t ON t.id = l.relation_type_id
-		JOIN assets o ON o.id = CASE WHEN l.from_asset_id = ? THEN l.to_asset_id ELSE l.from_asset_id END
-		WHERE l.from_asset_id = ? OR l.to_asset_id = ?`, a.Asset.ID, a.Asset.ID, a.Asset.ID, a.Asset.ID)
+// rawLink is a link with both of its assets, as linkDetails reads it.
+type rawLink struct {
+	id, typeID, name, inverse string
+	location                  bool
+	from, to                  models.LinkedAsset
+}
+
+const rawLinkQuery = `SELECT l.id, t.id, t.name, t.inverse_name, t.is_location,
+		f.id, f.name, f.archived_at, o.id, o.name, o.archived_at
+	FROM asset_links l
+	JOIN relation_types t ON t.id = l.relation_type_id
+	JOIN assets f ON f.id = l.from_asset_id
+	JOIN assets o ON o.id = l.to_asset_id`
+
+// readLinks reads links, each listed under both of its assets.
+func (s *Store) readLinks(where string, args ...any) (map[string][]rawLink, error) {
+	rows, err := s.Query(rawLinkQuery+where, args...)
 	if err != nil {
-		return fmt.Errorf("reading links: %w", err)
+		return nil, fmt.Errorf("reading links: %w", err)
 	}
+	defer rows.Close()
+	out := map[string][]rawLink{}
 	for rows.Next() {
 		var (
-			l             models.AssetLink
-			name, inverse string
-			archived      sql.NullTime
+			l                rawLink
+			fromGone, toGone sql.NullTime
 		)
-		if err := rows.Scan(&l.ID, &l.TypeID, &name, &inverse, &l.Outgoing, &l.Asset.ID, &l.Asset.Name, &archived); err != nil {
-			rows.Close()
-			return fmt.Errorf("scanning link: %w", err)
+		if err := rows.Scan(&l.id, &l.typeID, &l.name, &l.inverse, &l.location, &l.from.ID, &l.from.Name, &fromGone, &l.to.ID, &l.to.Name, &toGone); err != nil {
+			return nil, fmt.Errorf("scanning link: %w", err)
 		}
-		l.Label, l.Asset.Archived = inverse, archived.Valid
-		if l.Outgoing {
-			l.Label = name
+		l.from.Archived, l.to.Archived = fromGone.Valid, toGone.Valid
+		out[l.from.ID] = append(out[l.from.ID], l)
+		if l.to.ID != l.from.ID {
+			out[l.to.ID] = append(out[l.to.ID], l)
 		}
-		a.Links = append(a.Links, l)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
+	return out, rows.Err()
+}
+
+// assetLinks returns the links of an asset: from the links of every asset,
+// read once, when ctx is shared by a list, and otherwise its own.
+func (s *Store) assetLinks(id string, ctx *assetContext) ([]rawLink, error) {
+	if !ctx.list {
+		links, err := s.readLinks(" WHERE l.from_asset_id = ? OR l.to_asset_id = ?", id, id)
+		return links[id], err
+	}
+	if ctx.links == nil {
+		links, err := s.readLinks("")
+		if err != nil {
+			return nil, err
+		}
+		ctx.links = links
+	}
+	return ctx.links[id], nil
+}
+
+// linkDetails fills in an asset's links, its location and the relation
+// types its categories suggest.
+func (s *Store) linkDetails(a *models.AssetWithDetails, ctx *assetContext) error {
+	a.Links, a.Location, a.SuggestedRelationTypeIDs = []models.AssetLink{}, []models.LinkedAsset{}, []string{}
+	links, err := s.assetLinks(a.Asset.ID, ctx)
+	if err != nil {
 		return err
+	}
+	for _, l := range links {
+		al := models.AssetLink{ID: l.id, TypeID: l.typeID, Label: l.inverse, Asset: l.from, Outgoing: l.from.ID == a.Asset.ID}
+		if al.Outgoing {
+			al.Label, al.Asset = l.name, l.to
+		}
+		a.Links = append(a.Links, al)
 	}
 	sort.Slice(a.Links, func(i, j int) bool {
 		if a.Links[i].Label != a.Links[j].Label {
@@ -249,67 +288,67 @@ func (s *Store) linkDetails(a *models.AssetWithDetails) error {
 		return a.Links[i].Asset.Name < a.Links[j].Asset.Name
 	})
 
-	// Where it is: up through location links, outermost first.
+	// Where it is: up through location links, outermost first. The first
+	// step comes from its own links; each further one reads the container's.
 	seen := map[string]bool{a.Asset.ID: true}
-	for at := a.Asset.ID; len(a.Location) < 50; {
-		var (
-			parent   models.LinkedAsset
-			archived sql.NullTime
-		)
-		err := s.QueryRow(`SELECT o.id, o.name, o.archived_at FROM asset_links l
-			JOIN relation_types t ON t.id = l.relation_type_id AND t.is_location = TRUE
-			JOIN assets o ON o.id = l.from_asset_id
-			WHERE l.to_asset_id = ? ORDER BY t.name LIMIT 1`, at).Scan(&parent.ID, &parent.Name, &archived)
-		if err == sql.ErrNoRows || seen[parent.ID] {
+	for at, here := a.Asset.ID, links; len(a.Location) < 50; {
+		var parent *rawLink
+		for i := range here {
+			l := &here[i]
+			if l.location && l.to.ID == at && (parent == nil || l.name < parent.name) {
+				parent = l
+			}
+		}
+		if parent == nil || seen[parent.from.ID] {
 			break
 		}
-		if err != nil {
-			return fmt.Errorf("reading location: %w", err)
+		seen[parent.from.ID] = true
+		a.Location = append([]models.LinkedAsset{parent.from}, a.Location...)
+		at = parent.from.ID
+		if here, err = s.assetLinks(at, ctx); err != nil {
+			return err
 		}
-		parent.Archived = archived.Valid
-		seen[parent.ID] = true
-		a.Location = append([]models.LinkedAsset{parent}, a.Location...)
-		at = parent.ID
 	}
 
 	// Suggested types, from its categories and their ancestors.
 	if len(a.Categories) == 0 {
 		return nil
 	}
-	cats, err := s.ListCategories()
+	traits, err := s.contextTraits(ctx)
 	if err != nil {
 		return err
 	}
-	parents := map[string]string{}
-	for _, c := range cats {
-		if c.ParentID != nil {
-			parents[c.ID] = *c.ParentID
+	if ctx.suggestions == nil {
+		ctx.suggestions = map[string][]string{}
+		rows, err := s.Query("SELECT category_id, relation_type_id FROM category_relation_types")
+		if err != nil {
+			return fmt.Errorf("reading suggested relations: %w", err)
 		}
-	}
-	wanted := map[string]bool{}
-	for _, c := range a.Categories {
-		for id, depth := c.ID, 0; id != "" && depth < 100; id, depth = parents[id], depth+1 {
-			wanted[id] = true
+		defer rows.Close()
+		for rows.Next() {
+			var cat, typeID string
+			if err := rows.Scan(&cat, &typeID); err != nil {
+				return err
+			}
+			ctx.suggestions[cat] = append(ctx.suggestions[cat], typeID)
 		}
-	}
-	rows, err = s.Query("SELECT category_id, relation_type_id FROM category_relation_types")
-	if err != nil {
-		return fmt.Errorf("reading suggested relations: %w", err)
-	}
-	defer rows.Close()
-	suggested := map[string]bool{}
-	for rows.Next() {
-		var cat, typeID string
-		if err := rows.Scan(&cat, &typeID); err != nil {
+		if err := rows.Err(); err != nil {
 			return err
 		}
-		if wanted[cat] && !suggested[typeID] {
-			suggested[typeID] = true
-			a.SuggestedRelationTypeIDs = append(a.SuggestedRelationTypeIDs, typeID)
+	}
+	suggested := map[string]bool{}
+	for _, c := range a.Categories {
+		for id, depth := c.ID, 0; id != "" && depth < 100; id, depth = traits.parents[id], depth+1 {
+			for _, typeID := range ctx.suggestions[id] {
+				if !suggested[typeID] {
+					suggested[typeID] = true
+					a.SuggestedRelationTypeIDs = append(a.SuggestedRelationTypeIDs, typeID)
+				}
+			}
 		}
 	}
 	sort.Strings(a.SuggestedRelationTypeIDs)
-	return rows.Err()
+	return nil
 }
 
 // linkEnd is an asset at one end of a link, as a change records it.

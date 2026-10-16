@@ -20,6 +20,7 @@ const withStock = (quantity: number, low: boolean): AssetWithDetails => ({
   field_values: {},
   effective_fields: [],
   lendable: false,
+  weighed: false,
   loan: null,
   links: [],
   location: [],

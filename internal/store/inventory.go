@@ -103,11 +103,13 @@ func (s *Store) withInventory(change func(ic *inventoryChange) error) error {
 	return nil
 }
 
-// stock is a thresholded category's state.
+// stock is a thresholded category's state: its count of active assets,
+// or for one with a unit, the total of their stock in it.
 type stock struct {
 	threshold  int
 	count      int
 	runningLow bool
+	unit       string
 }
 
 func (s stock) below() bool { return s.count < s.threshold }
@@ -115,7 +117,7 @@ func (s stock) below() bool { return s.count < s.threshold }
 // stockLevels reads every category that has a threshold, with its active
 // count.
 func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, error) {
-	rows, err := s.TxQuery(tx, "SELECT id, parent_id, is_running_low, low_stock_threshold FROM categories")
+	rows, err := s.TxQuery(tx, "SELECT id, parent_id, is_running_low, low_stock_threshold, stock_unit FROM categories")
 	if err != nil {
 		return nil, fmt.Errorf("reading categories: %w", err)
 	}
@@ -127,8 +129,9 @@ func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, error) {
 			parent     sql.NullString
 			runningLow bool
 			threshold  sql.NullInt64
+			unit       string
 		)
-		if err := rows.Scan(&id, &parent, &runningLow, &threshold); err != nil {
+		if err := rows.Scan(&id, &parent, &runningLow, &threshold, &unit); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scanning category: %w", err)
 		}
@@ -136,7 +139,7 @@ func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, error) {
 			parents[id] = parent.String
 		}
 		if threshold.Valid {
-			levels[id] = stock{threshold: int(threshold.Int64), runningLow: runningLow}
+			levels[id] = stock{threshold: int(threshold.Int64), runningLow: runningLow, unit: unit}
 		}
 	}
 	rows.Close()
@@ -157,11 +160,14 @@ func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, error) {
 	return levels, nil
 }
 
-// countActive counts the distinct active assets in each target category or
-// its descendants, given every category's parent.
+// countActive measures each target category with its descendants, given
+// every category's parent: the number of distinct active assets in it, or,
+// for a target with a unit, the total of their stock in that unit. An asset
+// in two subcategories counts once, and one whose stock is not counted in
+// the unit adds nothing to a total.
 func (s *Store) countActive(tx *sql.Tx, parents map[string]string, targets map[string]stock) (map[string]int, error) {
 	rows, err := s.TxQuery(tx, `
-		SELECT ac.category_id, ac.asset_id
+		SELECT ac.category_id, ac.asset_id, a.stock_quantity, a.stock_unit
 		FROM asset_categories ac
 		JOIN assets a ON a.id = ac.asset_id
 		WHERE a.archived_at IS NULL
@@ -171,19 +177,26 @@ func (s *Store) countActive(tx *sql.Tx, parents map[string]string, targets map[s
 	}
 	defer rows.Close()
 
-	seen := map[string]map[string]bool{}
+	type held struct {
+		quantity sql.NullInt64
+		unit     string
+	}
+	seen := map[string]map[string]held{}
 	for rows.Next() {
-		var cat, asset string
-		if err := rows.Scan(&cat, &asset); err != nil {
+		var (
+			cat, asset string
+			h          held
+		)
+		if err := rows.Scan(&cat, &asset, &h.quantity, &h.unit); err != nil {
 			return nil, fmt.Errorf("scanning category assignment: %w", err)
 		}
 		// Credit the asset to the category and each ancestor, once each.
 		for depth := 0; cat != "" && depth < 100; depth++ {
 			if _, ok := targets[cat]; ok {
 				if seen[cat] == nil {
-					seen[cat] = map[string]bool{}
+					seen[cat] = map[string]held{}
 				}
-				seen[cat][asset] = true
+				seen[cat][asset] = h
 			}
 			cat = parents[cat]
 		}
@@ -193,7 +206,16 @@ func (s *Store) countActive(tx *sql.Tx, parents map[string]string, targets map[s
 	}
 	counts := make(map[string]int, len(seen))
 	for cat, assets := range seen {
-		counts[cat] = len(assets)
+		unit := targets[cat].unit
+		if unit == "" {
+			counts[cat] = len(assets)
+			continue
+		}
+		for _, h := range assets {
+			if h.quantity.Valid && h.unit == unit {
+				counts[cat] += int(h.quantity.Int64)
+			}
+		}
 	}
 	return counts, nil
 }
@@ -215,6 +237,7 @@ func (s *Store) applyThresholds(ic *inventoryChange, before, after map[string]st
 			Trigger:     models.TriggerThreshold,
 			ActiveCount: &count,
 			Threshold:   &threshold,
+			Unit:        now.unit,
 		}); err != nil {
 			return err
 		}
@@ -369,6 +392,16 @@ func (s *Store) SetRunningLow(id string, low bool) (*models.Category, bool, erro
 // ActiveCount counts the distinct active assets in a category or its
 // descendants.
 func (s *Store) ActiveCount(id string) (int, error) {
+	return s.measureCategory(id, "")
+}
+
+// CategoryTotal totals the stock in unit of the active assets in a category
+// and its descendants, as a category with that unit is measured.
+func (s *Store) CategoryTotal(id, unit string) (int, error) {
+	return s.measureCategory(id, unit)
+}
+
+func (s *Store) measureCategory(id, unit string) (int, error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return 0, err
@@ -391,7 +424,7 @@ func (s *Store) ActiveCount(id string) (int, error) {
 		}
 	}
 	rows.Close()
-	counts, err := s.countActive(tx, parents, map[string]stock{id: {}})
+	counts, err := s.countActive(tx, parents, map[string]stock{id: {unit: unit}})
 	if err != nil {
 		return 0, err
 	}
