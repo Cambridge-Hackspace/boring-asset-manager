@@ -103,7 +103,7 @@ func (s *Server) handleListLoans(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list loans")
 		return
 	}
-	// Only loans of assets the requester can read.
+	// Only loans of assets the requester tracks, with names but no emails.
 	ids := make([]string, len(loans))
 	for i, l := range loans {
 		ids[i] = l.AssetID
@@ -115,8 +115,8 @@ func (s *Server) handleListLoans(w http.ResponseWriter, r *http.Request) {
 	}
 	kept := loans[:0:0]
 	for _, l := range loans {
-		if Allows(r.Context(), rbac.PermAssetsRead, scopes[l.AssetID]) {
-			kept = append(kept, l)
+		if Allows(r.Context(), rbac.PermAssetsTrack, scopes[l.AssetID]) {
+			kept = append(kept, redactLoan(r, l, true))
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"loans": kept})

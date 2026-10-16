@@ -48,7 +48,7 @@ test('users: roles, disabling, and the anti-lockout refusal', async ({ signedIn:
   await goTo(page, 'Users');
   await page.getByRole('button', { name: 'New user' }).click();
   await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Name (optional)').fill('Bo Brown');
+  await page.getByLabel('Name', { exact: true }).fill('Bo Brown');
   await page.getByLabel('Initial password').fill('BoPass123!');
   await page.getByRole('button', { name: 'Create user' }).click();
   await expect(page.getByRole('status')).toHaveText('User created.');
@@ -127,13 +127,13 @@ test('images: upload, see where they are used, and only delete unused ones', asy
 
 test('a user changes their own password', async ({ signedIn: admin, api, browser }) => {
   const email = `${unique('pw')}@hackspace.org`;
-  const user = await api.call('POST', '/users', { email, password: 'OldPass123!' });
+  const user = await api.call('POST', '/users', { email, name: 'Pat Password', password: 'OldPass123!' });
   expect(user.user.email).toBe(email);
   await admin.close();
 
   const page = await browser.newPage();
   await signIn(page, email, 'OldPass123!');
-  await page.getByRole('link', { name: email }).click();
+  await page.getByRole('link', { name: 'Pat Password' }).click();
   await page.getByLabel('Current password').fill('OldPass123!');
   await page.getByLabel('New password', { exact: true }).fill('NewPass456!');
   await page.getByLabel('Repeat new password').fill('NewPass456!');
@@ -183,7 +183,7 @@ test('roles: create one that only records stock, edit it, and delete it', async 
 test('a role that only records stock can use stock but not edit assets', async ({ signedIn: page, api }) => {
   const { role } = await api.call('POST', '/roles', { name: unique('Counters'), description: '', permissions: ['assets.read', 'stock.record'] });
   const email = `${unique('counter')}@hackspace.org`;
-  const { user } = await api.call('POST', '/users', { email, password: 'CountPass123!' });
+  const { user } = await api.call('POST', '/users', { email, name: 'Cat Counter', password: 'CountPass123!' });
   await api.call('PUT', `/users/${user.id}/roles`, { role_ids: [role.id] });
   const { asset } = await api.call('POST', '/assets', { name: unique('Washers'), stock: { quantity: 10, unit: 'pcs' } });
 

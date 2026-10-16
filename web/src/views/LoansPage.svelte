@@ -4,7 +4,7 @@
   import { dueDate } from '../lib/assets';
   import { messageOf } from '../lib/errors';
   import type { Loan, Person } from '../lib/models';
-  import { displayName } from '../lib/people';
+  import { choiceNames, personName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
@@ -73,7 +73,7 @@
       <label class="label" for="loans-person">Borrower</label>
       <select id="loans-person" class="input" bind:value={borrowerId} onchange={load}>
         <option value="">Everyone</option>
-        {#each people as p (p.id)}<option value={p.id}>{displayName(p)}</option>{/each}
+        {#each people as p (p.id)}<option value={p.id}>{choiceNames(people).get(p.id)}</option>{/each}
       </select>
     </div>
   </div>
@@ -103,7 +103,7 @@
         {#each loans as l (l.id)}
           <tr class="border-b border-zinc-200 dark:border-zinc-800">
             <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(l.asset_id)}">{l.asset_name}</a></td>
-            {#if canLend}<td class="py-2 pr-4">{displayName(l.borrower)}{l.borrower.archived ? ' (has left)' : ''}</td>{/if}
+            {#if canLend}<td class="py-2 pr-4">{personName(l.borrower)}{l.borrower.archived ? ' (has left)' : ''}</td>{/if}
             <td class="py-2 pr-4 whitespace-nowrap">{dueDate(l.checked_out_at)}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{l.due_at ? dueDate(l.due_at) : '—'}</td>
             <td class="py-2 pr-4 whitespace-nowrap">

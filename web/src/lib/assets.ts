@@ -1,7 +1,7 @@
 // Helpers for the asset form.
 
 import type { AssetChange, AssetEvent, AssetStock, Condition, EffectiveField, FieldType, GeneratorKey, RelationType } from './models';
-import { displayName } from './people';
+import { personName } from './people';
 
 /** The HTML input type for a field type (select fields use <select>). */
 export function inputType(type: FieldType): string {
@@ -147,12 +147,12 @@ export function describeEvent(e: AssetEvent): string {
     }
     case 'asset.checked_out': {
       const due = p.due_at ? `, due back ${dueDate(p.due_at)}` : '';
-      return `Lent to ${p.borrower ? displayName(p.borrower) : 'someone'}${due}`;
+      return `Lent to ${p.borrower ? personName(p.borrower) : 'someone'}${due}`;
     }
     case 'asset.checked_in':
-      return `Checked in from ${p.borrower ? displayName(p.borrower) : 'someone'}`;
+      return `Checked in from ${p.borrower ? personName(p.borrower) : 'someone'}`;
     case 'asset.overdue':
-      return `Overdue: ${p.borrower ? displayName(p.borrower) : 'the borrower'} was due to bring it back ${p.due_at ? dueDate(p.due_at) : ''}`.trim();
+      return `Overdue: ${p.borrower ? personName(p.borrower) : 'the borrower'} was due to bring it back ${p.due_at ? dueDate(p.due_at) : ''}`.trim();
     default:
       return e.kind;
   }

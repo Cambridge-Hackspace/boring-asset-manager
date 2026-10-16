@@ -17,7 +17,7 @@
     try {
       session.user = (await request<{ user: User }>('PUT', '/auth/name', { name })).user;
       name = session.user.name;
-      nameStatus = name ? 'Name saved.' : 'Name cleared; your email is shown instead.';
+      nameStatus = 'Name saved.';
     } catch (err) {
       nameError = messageOf(err);
     }
@@ -59,8 +59,8 @@
   <h2 class="text-lg font-semibold">Name</h2>
   <div>
     <label class="label" for="own-name">Your name</label>
-    <input id="own-name" class="input" maxlength="255" autocomplete="name" aria-describedby="own-name-help" bind:value={name} />
-    <p id="own-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Shown to others instead of your email, such as in asset history. You still sign in with your email.</p>
+    <input id="own-name" class="input" required maxlength="255" autocomplete="name" aria-describedby="own-name-help" bind:value={name} />
+    <p id="own-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">How others see you, such as in asset history; they never see your email. You still sign in with your email.</p>
   </div>
   <ErrorMessage error={nameError} />
   {#if nameStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{nameStatus}</p>{/if}

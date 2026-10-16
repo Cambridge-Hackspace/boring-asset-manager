@@ -17,7 +17,7 @@ func TestLendingAPI(t *testing.T) {
 	adminCookie := sessionCookie(t, srv, admin.ID)
 	member := userWithPermissions(t, srv, "member@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsBorrow)
 	lender := userWithPermissions(t, srv, "stores@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsLend)
-	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
+	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsTrack)
 	memberUser, err := srv.store.GetUserByEmail("member@hackspace.org")
 	if err != nil {
 		t.Fatal(err)

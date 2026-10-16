@@ -137,7 +137,7 @@ func TestChangeOwnPassword(t *testing.T) {
 
 func TestCreateUserEnforcesPasswordLength(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
-	rec := doJSON(t, srv, sessionCookie(t, srv, admin.ID), http.MethodPost, "/api/v1/users", `{"email":"x@test.org","password":"short"}`)
+	rec := doJSON(t, srv, sessionCookie(t, srv, admin.ID), http.MethodPost, "/api/v1/users", `{"email":"x@test.org","name":"X","password":"short"}`)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "8-72") {
 		t.Errorf("short password: %d %s", rec.Code, rec.Body.String())
 	}

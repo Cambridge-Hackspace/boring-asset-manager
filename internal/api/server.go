@@ -142,7 +142,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	lending := RequireAnyPermission(rbac.PermAssetsBorrow, rbac.PermAssetsLend)
 	mux.Handle("POST /api/v1/assets/{id}/checkout", lending(http.HandlerFunc(s.handleCheckOut)))
 	mux.Handle("POST /api/v1/assets/{id}/checkin", lending(http.HandlerFunc(s.handleCheckIn)))
-	mux.Handle("GET /api/v1/loans", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListLoans)))
+	mux.Handle("GET /api/v1/loans", RequirePermission(rbac.PermAssetsTrack)(http.HandlerFunc(s.handleListLoans)))
 	mux.Handle("GET /api/v1/people", RequireAnyPermission(rbac.PermAssetsLend, rbac.PermUsersManage)(http.HandlerFunc(s.handleListPeople)))
 	mux.Handle("GET /api/v1/assets/{id}/history", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetHistory)))
 

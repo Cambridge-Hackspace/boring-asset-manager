@@ -223,7 +223,7 @@ type EventCategory struct {
 // EventActor is a user, as they were when the event happened.
 type EventActor struct {
 	ID    string `json:"id"`
-	Email string `json:"email"`
+	Email string `json:"email,omitempty"`
 	Name  string `json:"name,omitempty"`
 	// Token is set when an API token acted; ID and Name are then the token's.
 	Token bool `json:"token,omitempty"`

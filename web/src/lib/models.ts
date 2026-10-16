@@ -13,7 +13,8 @@ export type Permission =
   | 'assets.report'
   | 'assets.borrow'
   | 'assets.lend'
-  | 'reports.manage';
+  | 'reports.manage'
+  | 'assets.track';
 
 /** A permission held in every scope, or in one as scope:permission (README §3.3). */
 export type PermissionKey = Permission | `${string}:${Permission}`;

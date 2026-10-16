@@ -69,7 +69,7 @@ describe('AssetPage stock', () => {
     expect(screen.getByText('Running low.')).toBeTruthy();
     expect(screen.getByText(/40 pcs left/)).toBeTruthy();
     expect(await screen.findByText('Used 60 pcs; 40 pcs left')).toBeTruthy();
-    expect(screen.getByText(/ada@hackspace.org/)).toBeTruthy();
+    expect(screen.getByText(/· Unnamed user/)).toBeTruthy();
     expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ adjust: -60 });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
@@ -122,9 +122,10 @@ describe('AssetPage history', () => {
     expect(await screen.findByText('Edited')).toBeTruthy();
     expect(screen.getByText('Name: Screws → M3 screws')).toBeTruthy();
     expect(screen.getByText('Added to Fixings')).toBeTruthy();
-    // By name when the person has one, by email otherwise.
+    // By name, never by email.
     expect(screen.getByText(/· Ada Lovelace$/)).toBeTruthy();
-    expect(screen.getByText(/· ada@hackspace.org$/)).toBeTruthy();
+    expect(screen.getByText(/· Unnamed user$/)).toBeTruthy();
+    expect(screen.queryByText(/hackspace.org/)).toBeNull();
     expect(screen.queryByText('Created by an import')).toBeNull();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Show older' }));

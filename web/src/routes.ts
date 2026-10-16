@@ -47,7 +47,7 @@ export const routes: Route[] = [
   { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports.manage'] },
   { pattern: '/reports/:id', component: ReportView, title: 'Report', permissions: ['assets.read'] },
   { pattern: '/reports/:id/edit', component: ReportEditor, title: 'Edit report', permissions: ['reports.manage'] },
-  { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.borrow', 'assets.lend'], nav: 'Loans' },
+  { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
   { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets.read'], nav: 'Categories' },
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories.manage'] },
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets.read'] },

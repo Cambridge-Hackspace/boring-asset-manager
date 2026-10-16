@@ -155,6 +155,7 @@ func TestUserAdministrationAndAntiLockout(t *testing.T) {
 	// 2. POST /api/v1/users (create regular user)
 	createBody, _ := json.Marshal(CreateUserRequest{
 		Email:    "regular@test.org",
+		Name:     "Regular",
 		Password: "UserPassword123!",
 	})
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/users", bytes.NewReader(createBody))
