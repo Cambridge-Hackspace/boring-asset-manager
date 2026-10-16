@@ -81,3 +81,8 @@ func (s *Images) Remove(id string) error {
 	}
 	return nil
 }
+
+// NewPhotos returns a store for asset photos, rooted at root/photos.
+func NewPhotos(root string) *Images {
+	return &Images{dir: filepath.Join(root, "photos")}
+}

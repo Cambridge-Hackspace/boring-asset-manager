@@ -499,6 +499,8 @@ type assetContext struct {
 	list  bool
 	links map[string][]rawLink
 	loans map[string]models.Loan
+	// photos holds every asset's photos, when ctx serves a list.
+	photos map[string][]models.AssetPhoto
 	// suggestions maps categories to the relation types they suggest.
 	suggestions map[string][]string
 }

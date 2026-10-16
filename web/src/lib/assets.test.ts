@@ -184,3 +184,10 @@ describe('links', () => {
     ]);
   });
 });
+
+describe('photos in history', () => {
+  it('names the photo added or removed', () => {
+    expect(describeChange({ what: 'photo', key: 'p1', to: 'front.jpg' }, 'asset.edited')).toBe('Photo added: front.jpg');
+    expect(describeChange({ what: 'photo', key: 'p1', from: 'front.jpg' }, 'asset.edited')).toBe('Photo removed: front.jpg');
+  });
+});

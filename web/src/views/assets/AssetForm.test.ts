@@ -65,6 +65,7 @@ describe('AssetForm', () => {
       links: [],
       location: [],
       suggested_relation_type_ids: [],
+      photos: [],
     };
     const { sent } = fakeApi({
       'GET /categories': () => ({ categories: [cat('tools', 'Tools')] }),
@@ -118,6 +119,7 @@ describe('AssetForm', () => {
       links: [],
       location: [],
       suggested_relation_type_ids: [],
+      photos: [],
     };
     const edit = fakeApi({
       'GET /categories': () => ({ categories: [] }),

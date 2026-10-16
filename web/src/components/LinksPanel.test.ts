@@ -20,6 +20,7 @@ const asset = (id: string, name: string, over: Partial<AssetWithDetails> = {}): 
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  photos: [],
   ...over,
 });
 

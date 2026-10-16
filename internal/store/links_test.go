@@ -234,6 +234,9 @@ func TestListsReadAssetsAsSingleReadsDo(t *testing.T) {
 	if _, err := st.CheckOut(drill, bo.ID, nil); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.AddPhoto(drill, photo("drill.jpg")); err != nil {
+		t.Fatal(err)
+	}
 	// An archived asset, linked to the shelf.
 	oldSaw := asset(t, st, "Old saw")
 	link(t, st, oldSaw, usedWith, shelf, true)

@@ -25,6 +25,7 @@ type Server struct {
 	cfg        *config.Config
 	store      *store.Store
 	images     *filestore.Images
+	photos     *filestore.Images
 	transport  printers.Transport
 	httpServer *http.Server
 }
@@ -37,6 +38,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		cfg:       cfg,
 		store:     st,
 		images:    filestore.NewImages(cfg.Storage.LocalPath),
+		photos:    filestore.NewPhotos(cfg.Storage.LocalPath),
 		transport: printers.NewDispatcher(cfg.Printers.Devices),
 	}
 
@@ -120,6 +122,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/assets/{id}/quantity", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleAdjustQuantity)))
 	mux.Handle("PUT /api/v1/assets/{id}/running-low", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleSetAssetRunningLow)))
 	mux.Handle("PUT /api/v1/assets/{id}/condition", RequireAnyPermission(rbac.PermAssetsReport, rbac.PermAssetsWrite)(http.HandlerFunc(s.handleSetAssetCondition)))
+	mux.Handle("POST /api/v1/assets/{id}/photos", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUploadPhoto)))
+	mux.Handle("PUT /api/v1/assets/{id}/photos", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleReorderPhotos)))
+	mux.Handle("GET /api/v1/assets/{id}/photos/{photo_id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetPhoto)))
+	mux.Handle("DELETE /api/v1/assets/{id}/photos/{photo_id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleRemovePhoto)))
 	mux.Handle("POST /api/v1/assets/{id}/links", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleAddLink)))
 	mux.Handle("DELETE /api/v1/assets/{id}/links/{link_id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleRemoveLink)))
 	lending := RequireAnyPermission(rbac.PermAssetsBorrow, rbac.PermAssetsLend)

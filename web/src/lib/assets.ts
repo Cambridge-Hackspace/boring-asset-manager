@@ -177,6 +177,8 @@ export function describeChange(c: AssetChange, kind: string): string {
       return fromTo('Unit', c);
     case 'threshold':
       return fromTo('Low-stock threshold', c);
+    case 'photo':
+      return c.to ? `Photo added: ${c.to}` : `Photo removed: ${c.from}`;
     case 'link': {
       const label = c.label ?? 'linked to';
       return c.to ? `${capitalized(label)} ${c.to}` : `No longer ${label} ${c.from}`;

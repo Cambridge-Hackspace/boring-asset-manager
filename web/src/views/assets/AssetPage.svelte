@@ -13,6 +13,7 @@
   import ConditionBadge from '../../components/ConditionBadge.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
+  import PhotosPanel from '../../components/PhotosPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
@@ -305,6 +306,7 @@
       {/if}
     </section>
 
+    <PhotosPanel {asset} onchange={assetChanged} />
     <LinksPanel {asset} onchange={assetChanged} />
 
     {#if !archived}<LabelActions assetIds={[id]} />{/if}

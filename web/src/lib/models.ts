@@ -129,7 +129,7 @@ export interface AssetEvent {
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link';
+  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo';
   key?: string;
   label?: string;
   from?: string;
@@ -158,6 +158,8 @@ export interface AssetWithDetails {
   links: AssetLink[];
   location: LinkedAsset[];
   suggested_relation_type_ids: string[];
+  /** Its photos, in order; the first is the one lists show. */
+  photos: AssetPhoto[];
 }
 
 export interface GeneratorInfo {
@@ -450,4 +452,20 @@ export interface ReportResult {
     measure?: string;
     series?: ChartSeries[];
   }[];
+}
+
+/** A photo of an asset. */
+export interface AssetPhoto {
+  id: string;
+  filename: string;
+  content_type: string;
+  width_px: number;
+  height_px: number;
+  byte_size: number;
+  created_at: string;
+}
+
+/** Where a photo of an asset, or its thumbnail, is served. */
+export function photoUrl(assetId: string, photoId: string, thumb = false): string {
+  return `/api/v1/assets/${encodeURIComponent(assetId)}/photos/${encodeURIComponent(photoId)}${thumb ? '?size=thumb' : ''}`;
 }
