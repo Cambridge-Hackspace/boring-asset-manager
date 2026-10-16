@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/assetcsv"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
@@ -52,16 +53,22 @@ type Filter struct {
 	Condition string `json:"condition,omitempty"`
 }
 
-// Section is one part of a report. Type is "table".
+// Section is one part of a report: Type is "table", or "chart" (see
+// charts.go).
 type Section struct {
-	Type    string   `json:"type"`
+	Type string `json:"type"`
+	// Chart is bar, donut or line; Measure what it adds up; Period, for a
+	// line, week or month.
+	Chart   string   `json:"chart,omitempty"`
+	Measure string   `json:"measure,omitempty"`
+	Period  string   `json:"period,omitempty"`
 	Title   string   `json:"title,omitempty"`
 	Columns []Column `json:"columns,omitempty"`
 	// SortBy is the column rows sort by, from 0; Descending reverses it.
 	SortBy     int  `json:"sort_by,omitempty"`
 	Descending bool `json:"descending,omitempty"`
-	// GroupBy is "" or "category": rows are grouped under each category
-	// their asset is in.
+	// GroupBy is, for a table, "" or "category": rows are grouped under each
+	// category their asset is in. A bar or donut chart's bars group by it.
 	GroupBy string `json:"group_by,omitempty"`
 }
 
@@ -114,8 +121,17 @@ func (s *Spec) check(fieldKnown func(string) bool) error {
 		if err := textcheck.Check(where+" title", sec.Title, textcheck.MaxName); err != nil {
 			return fail("%v", err)
 		}
+		if sec.Type == "chart" {
+			if err := checkChart(sec, where, fieldKnown); err != nil {
+				return err
+			}
+			continue
+		}
 		if sec.Type != "table" {
-			return fail("%s: type must be table", where)
+			return fail("%s: type must be table or chart", where)
+		}
+		if sec.Chart != "" || sec.Measure != "" || sec.Period != "" {
+			return fail("%s: a table has no chart, measure or period", where)
 		}
 		if len(sec.Columns) == 0 || len(sec.Columns) > MaxColumns {
 			return fail("%s: a table needs 1 to %d columns", where, MaxColumns)
@@ -155,12 +171,16 @@ type Result struct {
 	Assets int `json:"assets"`
 }
 
-// SectionResult is a table: its headings and its rows, in groups.
+// SectionResult is a table, with its headings and its rows in groups, or a
+// chart, with its series.
 type SectionResult struct {
 	Type    string        `json:"type"`
 	Title   string        `json:"title"`
-	Columns []string      `json:"columns"`
-	Groups  []GroupResult `json:"groups"`
+	Columns []string      `json:"columns,omitempty"`
+	Groups  []GroupResult `json:"groups,omitempty"`
+	Chart   string        `json:"chart,omitempty"`
+	Measure string        `json:"measure,omitempty"`
+	Series  []Series      `json:"series,omitempty"`
 }
 
 // GroupResult is a group of rows, under a title when grouped.
@@ -214,8 +234,9 @@ func (f Filter) Matches(a *models.AssetWithDetails, categories []models.Category
 }
 
 // Run lays out a report's sections for the assets its filter found, given
-// what each asset's bindings resolve against.
-func (s *Spec) Run(assets []models.AssetWithDetails, categories []models.Category, data func(*models.AssetWithDetails) labels.Data) *Result {
+// what each asset's bindings resolve against, and for line charts their
+// history (the events HistoryKinds names) up to now.
+func (s *Spec) Run(assets []models.AssetWithDetails, categories []models.Category, data func(*models.AssetWithDetails) labels.Data, history []models.Event, now time.Time) *Result {
 	flagged := map[string]bool{}
 	for _, c := range categories {
 		flagged[c.ID] = c.IsConsumable && c.IsRunningLow
@@ -226,6 +247,13 @@ func (s *Spec) Run(assets []models.AssetWithDetails, categories []models.Categor
 		resolved[i] = data(&assets[i])
 	}
 	for _, sec := range s.Sections {
+		if sec.Type == "chart" {
+			res.Sections = append(res.Sections, SectionResult{
+				Type: sec.Type, Title: sec.Title, Chart: sec.Chart, Measure: sec.Measure,
+				Series: runChart(sec, assets, resolved, history, now),
+			})
+			continue
+		}
 		out := SectionResult{Type: sec.Type, Title: sec.Title, Columns: make([]string, len(sec.Columns)), Groups: []GroupResult{}}
 		bindings := make([]labels.Binding, len(sec.Columns))
 		for i, c := range sec.Columns {
@@ -299,6 +327,9 @@ func WriteCSV(w io.Writer, sec SectionResult) error {
 		return err
 	}
 	cw := csv.NewWriter(w)
+	if sec.Type == "chart" {
+		return writeChartCSV(cw, sec)
+	}
 	grouped := len(sec.Groups) > 0 && sec.Groups[0].Title != ""
 	head := append([]string{}, sec.Columns...)
 	if grouped {

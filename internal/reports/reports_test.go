@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -110,7 +111,7 @@ func TestRunSortsAndGroups(t *testing.T) {
 		}
 		return d
 	}
-	res := spec.Run(assets, cats, data)
+	res := spec.Run(assets, cats, data, nil, time.Now())
 	if res.Assets != 4 || len(res.Sections) != 3 {
 		t.Fatalf("result %+v", res)
 	}

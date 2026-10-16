@@ -33,3 +33,22 @@ test('build a report, run it, and download a table as CSV', async ({ signedIn: p
   const csv = fs.readFileSync((await download.path())!, 'utf8');
   expect(csv).toBe(`﻿Asset,Count\n${tag} tool post,12\n${tag} chuck key,3\n`);
 });
+
+test('chart what is in stock and what was used', async ({ signedIn: page, api }) => {
+  const tag = unique('Tape');
+  const { asset } = await api.call('POST', '/assets', { name: `${tag} gaffer`, stock: { quantity: 40, unit: 'm' } });
+  await api.call('POST', `/assets/${asset.asset.id}/quantity`, { adjust: -15 });
+
+  await page.goto('/reports/new');
+  await page.getByLabel('Name').fill(unique('Tape use'));
+  await page.getByLabel('Search').fill(tag);
+  await page.getByRole('button', { name: 'Add chart' }).click();
+  await page.getByLabel('Grouped by').selectOption({ label: 'Unit' });
+  await page.getByLabel('Counting').selectOption({ label: 'Quantity in stock, by unit' });
+  await page.getByRole('button', { name: 'Add chart' }).click();
+  await page.getByLabel('Chart').nth(1).selectOption({ label: 'Line over time' });
+  await page.getByRole('button', { name: 'Save report' }).click();
+
+  await expect(page.getByRole('img', { name: 'Bar chart of Quantity: m 25' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /^Line chart of history: Used \(m\): .* 15$/ })).toBeVisible();
+});

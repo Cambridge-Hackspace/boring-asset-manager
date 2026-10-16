@@ -419,21 +419,35 @@ export interface ReportFilter {
 }
 
 export interface ReportSection {
-  type: 'table';
+  type: 'table' | 'chart';
   title?: string;
+  /** A table's columns, sorting and grouping. */
   columns: { heading: string; binding: string }[];
   sort_by?: number;
   descending?: boolean;
-  group_by?: '' | 'category';
+  /** For a table '' or 'category'; for a bar or donut chart what its bars group by: category, condition, borrower, location, unit or field:<key>. */
+  group_by?: string;
+  chart?: 'bar' | 'donut' | 'line';
+  /** assets, quantity or loans; for a line chart used, restocked or loans. */
+  measure?: string;
+  period?: '' | 'week' | 'month';
+}
+
+export interface ChartSeries {
+  label: string;
+  points: { label: string; value: number }[];
 }
 
 /** A report run against the assets its filter found. */
 export interface ReportResult {
   assets: number;
   sections: {
-    type: 'table';
+    type: 'table' | 'chart';
     title: string;
-    columns: string[];
-    groups: { title: string; running_low?: boolean; rows: { asset_id: string; cells: string[] }[] }[];
+    columns?: string[];
+    groups?: { title: string; running_low?: boolean; rows: { asset_id: string; cells: string[] }[] }[];
+    chart?: 'bar' | 'donut' | 'line';
+    measure?: string;
+    series?: ChartSeries[];
   }[];
 }

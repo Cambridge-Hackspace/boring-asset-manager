@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -237,4 +238,26 @@ func ids(list []models.Event) []string {
 		out[i] = e.ID
 	}
 	return out
+}
+
+func TestAssetEventsSince(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	start := time.Now().Add(-time.Second)
+	screws := stocked(t, st, "Screws", 10, "pcs", nil)
+	adjust(t, st, screws, -3)
+	asset(t, st, "Drill")
+	list, err := st.AssetEventsSince([]string{models.EventQuantityChanged}, start)
+	if err != nil || len(list) != 2 || list[1].Payload.Change == nil || *list[1].Payload.Change != -3 {
+		t.Fatalf("since the start: %+v, %v", list, err)
+	}
+	if list, _ := st.AssetEventsSince([]string{models.EventQuantityChanged}, time.Now().Add(time.Hour)); len(list) != 0 {
+		t.Errorf("from the future: %+v", list)
+	}
+	if list, _ := st.AssetEventsSince(nil, start); len(list) != 0 {
+		t.Errorf("no kinds: %+v", list)
+	}
+	if list, _ := st.AssetEventsSince([]string{models.EventAssetCreated, models.EventQuantityChanged}, start); len(list) != 4 {
+		t.Errorf("two kinds: %d", len(list))
+	}
 }

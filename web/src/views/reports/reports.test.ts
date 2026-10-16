@@ -118,3 +118,26 @@ describe('ReportsPage', () => {
     expect(screen.queryByRole('button', { name: /Copy/ })).toBeNull();
   });
 });
+
+describe('ReportEditor, charts', () => {
+  it('adds a chart and saves it as the API takes it', async () => {
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories }),
+      'GET /fields': () => ({ fields: [] }),
+      'GET /generators': () => ({ generators: [] }),
+      'POST /reports': () => ({ status: 201, body: { report: { ...lowReport, id: 'new' } } }),
+    });
+    render(ReportEditor, { params: {} });
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Use' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add chart' }));
+    await fireEvent.change(screen.getByLabelText('Chart'), { target: { value: 'line' } });
+    await fireEvent.change(screen.getByLabelText('Per'), { target: { value: 'week' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove table 1' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save report' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
+    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({
+      name: 'Use',
+      spec: { filter: {}, sections: [{ type: 'chart', chart: 'line', measure: 'used', period: 'week' }] },
+    });
+  });
+});

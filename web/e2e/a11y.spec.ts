@@ -38,6 +38,17 @@ for (const scheme of ['light', 'dark'] as const) {
 
     await page.emulateMedia({ colorScheme: scheme });
     const { reports } = await (await request.get('/api/v1/reports')).json();
+    const charts = await post('/reports', {
+      name: unique('Charts'),
+      spec: {
+        filter: {},
+        sections: [
+          { type: 'chart', title: 'By category', chart: 'bar', group_by: 'category', measure: 'assets' },
+          { type: 'chart', title: 'By unit', chart: 'donut', group_by: 'unit', measure: 'quantity' },
+          { type: 'chart', title: 'Used', chart: 'line', measure: 'used', period: 'week' },
+        ],
+      },
+    });
     const views: [string, string][] = [
       ['/', 'Welcome'],
       ['/assets', 'Assets'],
@@ -68,6 +79,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/reports', 'Reports'],
       ['/reports/new', 'New report'],
       [`/reports/${reports[0].id}`, ''],
+      [`/reports/${charts.report.id}`, ''],
       ['/account', 'Your account'],
       ['/no-such-page', 'Page not found'],
     ];

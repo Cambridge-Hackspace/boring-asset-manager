@@ -72,6 +72,7 @@ var fuzzRoutes = []route{
 	{method: "GET", path: "/api/v1/reports"},
 	{method: "POST", path: "/api/v1/reports", body: `{"name":"Report {n}","spec":{"filter":{"running_low":true,"category_ids":["{category}"]},"sections":[{"type":"table","title":"Low","columns":[{"heading":"Asset","binding":"{{asset.name}} {{stock.quantity}}"}],"group_by":"category"}]}}`},
 	{method: "POST", path: "/api/v1/reports/preview", body: `{"spec":{"filter":{"loan":"open"},"sections":[{"type":"table","columns":[{"heading":"Borrower","binding":"{{loan.borrower}}"}]}]}}`},
+	{method: "POST", path: "/api/v1/reports/preview", body: `{"spec":{"filter":{"category_ids":["{category}"]},"sections":[{"type":"chart","chart":"bar","group_by":"category","measure":"quantity"},{"type":"chart","chart":"line","measure":"used","period":"week"}]}}`},
 	{method: "GET", path: "/api/v1/reports/{report}"},
 	{method: "PUT", path: "/api/v1/reports/{report}", body: `{"name":"Renamed {n}","spec":{"sections":[{"type":"table","columns":[{"heading":"Where","binding":"{{asset.location}}"}]}]}}`},
 	{method: "GET", path: "/api/v1/reports/{report}/run"},
