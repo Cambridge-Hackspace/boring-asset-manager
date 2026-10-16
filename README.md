@@ -342,6 +342,17 @@ Text behaves the same on every database, whatever the server's defaults:
 * **PostgreSQL** databases must use the `UTF8` encoding; BAM refuses to start on any other, including `SQL_ASCII`.
 * **MariaDB** needs nothing set up: BAM creates its tables in `utf8mb4` with the exact collation `utf8mb4_nopad_bin`, whatever the database's default, and sets each connection's character set, SQL mode (strict) and time zone (UTC) itself. Migration `008` converts tables created by earlier versions, which took the database's default (often `latin1` with a case-insensitive collation).
 
+### 3.6 Asset Associations
+
+Assets link to one another: a bin contains screws, a drill is used with its bits (migration `015`).
+
+* **Relation types** (`relation_types`) are a shared list, like the field corpus, managed with `categories:manage` through `GET` (`assets:read`), `POST /api/v1/relation-types` and `PUT`/`DELETE /api/v1/relation-types/{id}`. Each has a `name` read from the first asset and an `inverse_name` read from the second (`contains` / `contained in`), up to 64 characters, and three flags: `is_symmetric` for one that reads the same both ways (`used with`; its inverse is its name), `is_single` when the second asset can have one only (a thing is in one place), and `is_location` for one whose links give where things are (it must be single). `contains` (a location), `has part` and `used with` are seeded. While links use a type only its names can change, and it cannot be deleted (`409`, with how many links use it).
+* **Links** (`asset_links`) are stored once and read correctly from both assets. `POST /api/v1/assets/{id}/links` (`assets:write`) with `{"type_id", "asset_id", "outgoing"}` links the asset to another, reading from the asset: `outgoing` by the type's name (this bin contains those screws), otherwise by its inverse (these screws are contained in that bin). For a single type, linking the second asset anew moves it, ending its old link. A link that would make a loop of a single type (a bin inside its own contents), an asset linked to itself, a link that already exists (either way round for a symmetric type), and links to archived assets are refused. `DELETE /api/v1/assets/{id}/links/{link_id}` removes one. Changes serialize on the `asset_links` lock.
+* **On the asset:** `GET /api/v1/assets/{id}` lists `links`, each with the `label` read from the asset, the other asset and whether it is `outgoing`, and `location`, the chain of containers through location links, outermost first (Shelf 2 › Bin A3).
+* **History:** adding or removing a link records an `asset.edited` change on both assets (`"what": "link"`, the label read from that asset and the other asset's name); a move shows on the thing moved, its old container and its new one.
+* **Archiving:** an asset that holds active assets through a location link cannot be archived until they are moved out (`409`). An archived asset keeps its links, marked as archived, so restoring it puts it back where it was.
+* **Suggestions:** `GET` and `PUT /api/v1/categories/{id}/relation-types` (`{"relation_type_ids": [...]}`, `categories:manage` to change) name the types a category suggests; an asset's `suggested_relation_type_ids` gathers them from its categories and their ancestors, and the web app offers them first.
+
 ---
 
 ## 4. Label Template Engine & Print Subsystem
@@ -882,15 +893,15 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.8: Lending
 * [x] Lendable categories; assets checked out to user accounts, by themselves (`assets:borrow`) or by lenders (`assets:lend`), with optional due dates; loans shown on assets, in the list and on a Loans page, recorded in history, and announced once when overdue (§5.3).
 
+#### Sub-Phase 7.9: Asset Associations
+* [x] Relation types named from each end, single and symmetric, with containers giving locations; links stored once, moves, loops refused, recorded in both assets' history; containers that hold anything kept from archiving; categories suggesting types (§3.6).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
 
-#### Asset Associations
-* [ ] **Relation types**, defined once in a shared list like the field corpus: a name for each direction (`contains` / `contained in`, `has part` / `part of`), whether an asset may have one or many of them (a thing is in one place, so linking it to a new bin moves it), and whether the relation reads the same both ways (`used with`). A link is stored once and reads correctly from both assets. Categories can suggest which relation types apply to their assets, as they assign fields.
-* [ ] **Containers as assets:** bins and shelves are ordinary assets with labels, so "where is it?" is a chain such as Shelf 2 > Bin A3 > M3 screws. Containment and `part of` refuse cycles, using the category tree's cycle check.
-* [ ] Moves recorded in the asset's history; a container that still holds anything cannot be archived.
-* [ ] Later: the container's name on labels, a CSV column per relation type, and scanning a bin's code to list what is in it.
+#### Asset Associations, Later
+* [ ] The container's name on labels (a `{{asset.location}}` placeholder, with reports), a CSV column per relation type, and scanning a bin's code to list what is in it.
 
 #### Weights for Counted Items
 * [ ] **Optional, per category:** a consumable category counted by items can give its assets a weight in the category's unit, so a 1 kg spool and a 2 kg spool of blue PLA sum to 3 kg, and the category's threshold is in that unit ("notify me below 1 kg"). Categories without a unit count each asset as 1, as they do now, for things that are truly atomic.

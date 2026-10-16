@@ -61,6 +61,9 @@ describe('AssetForm', () => {
       effective_fields: [field('weight', 'Weight', false, 'number')],
       lendable: false,
       loan: null,
+      links: [],
+      location: [],
+      suggested_relation_type_ids: [],
     };
     const { sent } = fakeApi({
       'GET /categories': () => ({ categories: [cat('tools', 'Tools')] }),
@@ -110,6 +113,9 @@ describe('AssetForm', () => {
       effective_fields: [],
       lendable: false,
       loan: null,
+      links: [],
+      location: [],
+      suggested_relation_type_ids: [],
     };
     const edit = fakeApi({
       'GET /categories': () => ({ categories: [] }),

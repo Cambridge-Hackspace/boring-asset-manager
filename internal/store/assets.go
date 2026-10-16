@@ -336,6 +336,9 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 	if err := s.loanDetails(details); err != nil {
 		return nil, err
 	}
+	if err := s.linkDetails(details); err != nil {
+		return nil, err
+	}
 	return details, nil
 }
 
@@ -663,6 +666,11 @@ func (s *Store) DeleteAsset(id string) error {
 		}
 		if lent > 0 {
 			return ErrAssetOnLoan
+		}
+		if held, err := s.holdsActiveTx(ic.tx, id); err != nil {
+			return err
+		} else if held > 0 {
+			return ErrContainerNotEmpty
 		}
 		before, err := s.snapshotAssetTx(ic.tx, id)
 		if err != nil {

@@ -1,6 +1,6 @@
 // Helpers for the asset form.
 
-import type { AssetChange, AssetEvent, AssetStock, Condition, EffectiveField, FieldType, GeneratorKey } from './models';
+import type { AssetChange, AssetEvent, AssetStock, Condition, EffectiveField, FieldType, GeneratorKey, RelationType } from './models';
 import { displayName } from './people';
 
 /** The HTML input type for a field type (select fields use <select>). */
@@ -177,6 +177,10 @@ export function describeChange(c: AssetChange, kind: string): string {
       return fromTo('Unit', c);
     case 'threshold':
       return fromTo('Low-stock threshold', c);
+    case 'link': {
+      const label = c.label ?? 'linked to';
+      return c.to ? `${capitalized(label)} ${c.to}` : `No longer ${label} ${c.from}`;
+    }
     case 'condition':
       return `Was ${conditionLabel((c.from ?? 'ok') as Condition).toLowerCase()}`;
     default:
@@ -214,4 +218,22 @@ export function dueDate(iso: string): string {
 export function endOfDay(day: string): string {
   const [y, m, d] = day.split('-').map(Number);
   return new Date(y!, m! - 1, d!, 23, 59, 59).toISOString();
+}
+
+function capitalized(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * The ways one asset can be linked to another, read from it: each type's
+ * name and, unless it reads the same both ways, its inverse. Types the
+ * asset's categories suggest come first.
+ */
+export function linkChoices(types: RelationType[], suggested: string[]): { key: string; typeId: string; outgoing: boolean; label: string; suggested: boolean }[] {
+  const choices = types.flatMap((t) => {
+    const s = suggested.includes(t.id);
+    const out = { key: `${t.id}:out`, typeId: t.id, outgoing: true, label: t.name, suggested: s };
+    return t.is_symmetric ? [out] : [out, { key: `${t.id}:in`, typeId: t.id, outgoing: false, label: t.inverse_name, suggested: s }];
+  });
+  return [...choices.filter((c) => c.suggested), ...choices.filter((c) => !c.suggested)];
 }

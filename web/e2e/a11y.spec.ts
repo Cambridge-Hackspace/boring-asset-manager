@@ -22,6 +22,11 @@ for (const scheme of ['light', 'dark'] as const) {
     await post(`/assets/${screws.asset.asset.id}/quantity`, { adjust: -15 });
     const archived = await post('/assets', { name: unique('Old saw'), generator_keys: [{ generator_type: 'qr', assigned_code: unique('OLD').toUpperCase() }] });
     await request.delete(`/api/v1/assets/${archived.asset.asset.id}`);
+    // In a box, so its page shows a location and links.
+    const box = await post('/assets', { name: unique('Box') });
+    const { relation_types } = await (await request.get('/api/v1/relation-types')).json();
+    const contains = relation_types.find((r: { name: string }) => r.name === 'contains');
+    await post(`/assets/${box.asset.asset.id}/links`, { type_id: contains.id, asset_id: asset.asset.asset.id, outgoing: true });
     // Out of service, so its page, the list and the home page show it.
     await request.put(`/api/v1/assets/${asset.asset.asset.id}/condition`, { data: { condition: 'out_of_service', note: 'Wobbly rung' } });
     const { template } = await post('/templates', {
@@ -56,6 +61,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/roles', 'Roles'],
       ['/tokens', 'API tokens'],
       ['/loans', 'Loans'],
+      ['/relations', 'Relations'],
       ['/account', 'Your account'],
       ['/no-such-page', 'Page not found'],
     ];

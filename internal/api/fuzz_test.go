@@ -67,6 +67,12 @@ var fuzzRoutes = []route{
 	{method: "DELETE", path: "/api/v1/categories/{category}"},
 	{method: "PUT", path: "/api/v1/categories/{category}/running-low", body: `{"running_low":true}`},
 	{method: "GET", path: "/api/v1/categories/{category}/fields"},
+	{method: "GET", path: "/api/v1/categories/{category}/relation-types"},
+	{method: "PUT", path: "/api/v1/categories/{category}/relation-types", body: `{"relation_type_ids":["{relation}"]}`},
+	{method: "GET", path: "/api/v1/relation-types"},
+	{method: "POST", path: "/api/v1/relation-types", body: `{"name":"powers {n}","inverse_name":"powered by {n}","is_single":true}`},
+	{method: "PUT", path: "/api/v1/relation-types/{relation}", body: `{"name":"feeds {n}","inverse_name":"fed by {n}"}`},
+	{method: "DELETE", path: "/api/v1/relation-types/{relation}"},
 	{method: "POST", path: "/api/v1/categories/effective-fields", body: `{"category_ids":["{category}","{category}"]}`},
 	{method: "POST", path: "/api/v1/categories/{category}/fields", body: `{"field_id":"{field}","is_required":true}`},
 	{method: "DELETE", path: "/api/v1/categories/{category}/fields/{field}"},
@@ -84,6 +90,8 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/assets/{asset}/quantity", body: `{"set":120}`},
 	{method: "PUT", path: "/api/v1/assets/{asset}/running-low", body: `{"running_low":true}`},
 	{method: "PUT", path: "/api/v1/assets/{asset}/condition", body: `{"condition":"needs_maintenance","note":"Blunt"}`},
+	{method: "POST", path: "/api/v1/assets/{asset}/links", body: `{"type_id":"{relation}","asset_id":"{asset}","outgoing":true}`},
+	{method: "DELETE", path: "/api/v1/assets/{asset}/links/{asset}"},
 	{method: "POST", path: "/api/v1/assets/{asset}/checkout", body: `{"borrower_id":"{user}","due_at":"2099-01-01T00:00:00Z"}`},
 	{method: "POST", path: "/api/v1/assets/{asset}/checkin"},
 	{method: "GET", path: "/api/v1/loans", query: map[string][]string{"state": {"open", "overdue", ""}, "borrower_id": {"{user}"}}},
@@ -173,6 +181,13 @@ func newFuzzer(tb testing.TB) *fuzzer {
 	for _, r := range roles {
 		fz.ids["role"] = append(fz.ids["role"], r.ID)
 	}
+	relations, err := st.ListRelationTypes()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	for _, r := range relations {
+		fz.ids["relation"] = append(fz.ids["relation"], r.ID)
+	}
 	// A category to be the parent of others, then each create once, as it
 	// is written, so every kind of ID exists.
 	fz.send(fuzzRequest{method: "POST", target: "/api/v1/categories", contentType: "application/json", body: []byte(`{"name":"Tools"}`), create: "category"})
@@ -215,6 +230,8 @@ func kindOf(path string) string {
 		return "role"
 	case "/api/v1/tokens":
 		return "token"
+	case "/api/v1/relation-types":
+		return "relation"
 	case "/api/v1/users":
 		return "user"
 	}
@@ -262,7 +279,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "field", "category", "asset", "template", "image", "printer", "channel"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "field", "category", "asset", "template", "image", "printer", "channel"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {

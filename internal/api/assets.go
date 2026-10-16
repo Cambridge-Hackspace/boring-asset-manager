@@ -202,7 +202,7 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 		return
 	}
-	if errors.Is(err, store.ErrAssetOnLoan) {
+	if errors.Is(err, store.ErrAssetOnLoan) || errors.Is(err, store.ErrContainerNotEmpty) {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return
 	}

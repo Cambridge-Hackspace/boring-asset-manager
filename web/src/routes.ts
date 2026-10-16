@@ -21,6 +21,7 @@ import TokensPage from './views/admin/TokensPage.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
+import RelationsPage from './views/RelationsPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -44,6 +45,7 @@ export const routes: Route[] = [
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories:manage'] },
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets:read'] },
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories:manage'], nav: 'Fields' },
+  { pattern: '/relations', component: RelationsPage, title: 'Relations', permissions: ['categories:manage'], nav: 'Relations' },
   { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates:manage'], nav: 'Templates' },
   { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates:manage'] },
   { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates:manage'] },

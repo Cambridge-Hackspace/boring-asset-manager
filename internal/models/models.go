@@ -313,6 +313,12 @@ type AssetWithDetails struct {
 	// lendable; Loan is its open loan, if it is lent out.
 	Lendable bool  `json:"lendable"`
 	Loan     *Loan `json:"loan"`
+	// Links are the asset's links to others; Location is where it is,
+	// outermost first, through location links; SuggestedRelationTypeIDs are
+	// the types its categories, or their ancestors, suggest.
+	Links                    []AssetLink   `json:"links"`
+	Location                 []LinkedAsset `json:"location"`
+	SuggestedRelationTypeIDs []string      `json:"suggested_relation_type_ids"`
 }
 
 // Image is an uploaded PNG or JPEG placed on labels by static_image elements.
@@ -408,4 +414,41 @@ type Loan struct {
 	DueAt        *time.Time `json:"due_at"`
 	CheckedInAt  *time.Time `json:"checked_in_at"`
 	Overdue      bool       `json:"overdue"`
+}
+
+// RelationType is a kind of link between assets (README §3.6), named from
+// each end: an asset "contains" another, which is "contained in" it.
+type RelationType struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	InverseName string `json:"inverse_name"`
+	// IsSymmetric reads the same both ways, as "used with" does.
+	IsSymmetric bool `json:"is_symmetric"`
+	// IsSingle lets an asset be the far end of one link of the type only,
+	// so linking it again moves it.
+	IsSingle bool `json:"is_single"`
+	// IsLocation makes its links an asset's location.
+	IsLocation bool      `json:"is_location"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	// LinkCount is how many links use it.
+	LinkCount int `json:"link_count"`
+}
+
+// LinkedAsset is the asset at the other end of a link, or in a location.
+type LinkedAsset struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Archived bool   `json:"archived,omitempty"`
+}
+
+// AssetLink is a link as one of its assets sees it: Label is the type's
+// name read from that end ("contains" or "contained in").
+type AssetLink struct {
+	ID     string      `json:"id"`
+	TypeID string      `json:"type_id"`
+	Label  string      `json:"label"`
+	Asset  LinkedAsset `json:"asset"`
+	// Outgoing is set when this asset is the link's from end.
+	Outgoing bool `json:"outgoing"`
 }

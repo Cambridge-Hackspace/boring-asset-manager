@@ -88,6 +88,14 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/categories/effective-fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleEffectiveFieldsForAsset)))
 	mux.Handle("POST /api/v1/categories/{id}/fields", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleAssignCategoryField)))
 	mux.Handle("DELETE /api/v1/categories/{id}/fields/{field_id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleRemoveCategoryField)))
+	mux.Handle("GET /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryRelationTypes)))
+	mux.Handle("PUT /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryRelationTypes)))
+
+	// Relation types, for links between assets
+	mux.Handle("GET /api/v1/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListRelationTypes)))
+	mux.Handle("POST /api/v1/relation-types", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCreateRelationType)))
+	mux.Handle("PUT /api/v1/relation-types/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateRelationType)))
+	mux.Handle("DELETE /api/v1/relation-types/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteRelationType)))
 
 	// Asset Registry & Dynamic Field Values endpoints
 	mux.Handle("GET /api/v1/assets", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListAssets)))
@@ -102,6 +110,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/assets/{id}/quantity", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleAdjustQuantity)))
 	mux.Handle("PUT /api/v1/assets/{id}/running-low", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleSetAssetRunningLow)))
 	mux.Handle("PUT /api/v1/assets/{id}/condition", RequireAnyPermission(rbac.PermAssetsReport, rbac.PermAssetsWrite)(http.HandlerFunc(s.handleSetAssetCondition)))
+	mux.Handle("POST /api/v1/assets/{id}/links", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleAddLink)))
+	mux.Handle("DELETE /api/v1/assets/{id}/links/{link_id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleRemoveLink)))
 	lending := RequireAnyPermission(rbac.PermAssetsBorrow, rbac.PermAssetsLend)
 	mux.Handle("POST /api/v1/assets/{id}/checkout", lending(http.HandlerFunc(s.handleCheckOut)))
 	mux.Handle("POST /api/v1/assets/{id}/checkin", lending(http.HandlerFunc(s.handleCheckIn)))
