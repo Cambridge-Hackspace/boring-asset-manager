@@ -1,19 +1,33 @@
 // Types mirroring internal/models as the API returns them.
 
 export type Permission =
-  | 'assets:read'
-  | 'assets:write'
-  | 'assets:delete'
-  | 'templates:manage'
-  | 'categories:manage'
-  | 'settings:manage'
-  | 'users:manage'
-  | 'labels:print'
-  | 'stock:record'
-  | 'assets:report'
-  | 'assets:borrow'
-  | 'assets:lend'
-  | 'reports:manage';
+  | 'assets.read'
+  | 'assets.write'
+  | 'assets.delete'
+  | 'templates.manage'
+  | 'categories.manage'
+  | 'settings.manage'
+  | 'users.manage'
+  | 'labels.print'
+  | 'stock.record'
+  | 'assets.report'
+  | 'assets.borrow'
+  | 'assets.lend'
+  | 'reports.manage';
+
+/** A permission held in every scope, or in one as scope:permission (README §3.3). */
+export type PermissionKey = Permission | `${string}:${Permission}`;
+
+/** A label on categories that roles can hold asset permissions in. */
+export interface Scope {
+  id: string;
+  name: string;
+  created_at: string;
+  /** The default scope, of assets in no other; it cannot be changed. */
+  reserved: boolean;
+  category_count: number;
+  role_count: number;
+}
 
 export interface User {
   id: string;
@@ -28,7 +42,7 @@ export interface User {
 
 export interface Me {
   user: User;
-  permissions: Permission[];
+  permissions: PermissionKey[];
 }
 
 export const fieldTypes = ['text', 'number', 'date', 'url', 'select'] as const;
@@ -158,6 +172,8 @@ export interface AssetWithDetails {
   links: AssetLink[];
   location: LinkedAsset[];
   suggested_relation_type_ids: string[];
+  /** The scopes it is in, from its categories and theirs, or default. */
+  scopes: string[];
   /** Its photos, in order; the first is the one lists show. */
   photos: AssetPhoto[];
 }
@@ -224,7 +240,7 @@ export interface Role {
   id: string;
   name: string;
   description: string;
-  permissions: Permission[];
+  permissions: PermissionKey[];
   /** How many users who are not archived hold it. */
   user_count: number;
   /** Set for the admin role, which always has every permission. */

@@ -2,6 +2,8 @@ package rbac
 
 import (
 	"errors"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +55,60 @@ func TestAntiLockoutGuard(t *testing.T) {
 	// Case 4: Not removing an admin (e.g., editing a regular user) -> Allowed
 	if err := ValidateAntiLockout(1, false); err != nil {
 		t.Errorf("expected operation to succeed when not removing admin, got %v", err)
+	}
+}
+
+func TestScopedPermissions(t *testing.T) {
+	perms := map[string]bool{"tools:" + PermAssetsWrite: true, PermAssetsRead: true, "tools:" + PermUsersManage: true}
+	cases := []struct {
+		perm   string
+		scopes []string
+		want   bool
+	}{
+		{PermAssetsRead, []string{"anything"}, true},
+		{PermAssetsWrite, []string{"tools"}, true},
+		{PermAssetsWrite, []string{"kitchen", "tools"}, true},
+		{PermAssetsWrite, []string{"kitchen"}, false},
+		{PermAssetsWrite, []string{DefaultScope}, false},
+		// Only asset permissions are scoped; a scoped key of another counts for nothing.
+		{PermUsersManage, []string{"tools"}, false},
+	}
+	for _, c := range cases {
+		if got := Allows(perms, c.perm, c.scopes); got != c.want {
+			t.Errorf("Allows(%s, %v) = %v", c.perm, c.scopes, got)
+		}
+	}
+	if !HasPermission(perms, PermAssetsWrite) || HasPermission(perms, PermAssetsDelete) || HasPermission(perms, PermUsersManage) {
+		t.Error("HasPermission should hold a permission held in any scope, and only then")
+	}
+	if s, p := SplitKey("tools:assets.read"); s != "tools" || p != "assets.read" {
+		t.Errorf("SplitKey: %q %q", s, p)
+	}
+	if s, p := SplitKey("assets.read"); s != "" || p != "assets.read" {
+		t.Errorf("SplitKey unscoped: %q %q", s, p)
+	}
+}
+
+func TestEffectiveScopes(t *testing.T) {
+	parents := map[string]string{"drills": "tools", "tools": "", "food": ""}
+	own := map[string][]string{"tools": {"workshop"}, "drills": {"power", "workshop"}}
+	parent := func(id string) string { return parents[id] }
+	ownOf := func(id string) []string { return own[id] }
+	if got := EffectiveScopes([]string{"drills"}, parent, ownOf); !reflect.DeepEqual(got, []string{"power", "workshop"}) {
+		t.Errorf("cascade: %v", got)
+	}
+	if got := EffectiveScopes([]string{"food"}, parent, ownOf); !reflect.DeepEqual(got, []string{DefaultScope}) {
+		t.Errorf("no scope: %v", got)
+	}
+	if got := EffectiveScopes(nil, parent, ownOf); !reflect.DeepEqual(got, []string{DefaultScope}) {
+		t.Errorf("no categories: %v", got)
+	}
+}
+
+func TestScopeNames(t *testing.T) {
+	for name, want := range map[string]bool{"tools": true, "wood-shop_2": true, "": false, "Tools": false, "-x": false, "a:b": false, "a.b": false, strings.Repeat("a", 65): false} {
+		if ValidScopeName(name) != want {
+			t.Errorf("ValidScopeName(%q) != %v", name, want)
+		}
 	}
 }

@@ -136,11 +136,11 @@ test('keyboard only: sign in, find the assets, and create one', async ({ page })
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('New asset');
   // Focus is on the page content: Tab past the breadcrumb to the first field.
-  await expect(page.getByLabel('Name')).toBeVisible();
-  for (let i = 0; i < 5 && !(await page.getByLabel('Name').evaluate((el) => el === document.activeElement)); i++) {
+  await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
+  for (let i = 0; i < 5 && !(await page.getByLabel('Name', { exact: true }).evaluate((el) => el === document.activeElement)); i++) {
     await page.keyboard.press('Tab');
   }
-  await expect(page.getByLabel('Name')).toBeFocused();
+  await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
   const name = unique('Keyboard ladder');
   await page.keyboard.type(name);
   await page.keyboard.press('Enter');

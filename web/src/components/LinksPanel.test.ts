@@ -20,12 +20,13 @@ const asset = (id: string, name: string, over: Partial<AssetWithDetails> = {}): 
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  scopes: ['default'],
   photos: [],
   ...over,
 });
 
 beforeEach(() => {
-  session.permissions = ['assets:read', 'assets:write'];
+  session.permissions = ['assets.read', 'assets.write'];
 });
 afterEach(() => {
   cleanup();
@@ -69,7 +70,7 @@ describe('LinksPanel', () => {
     expect(sent.some((r) => r.method === 'DELETE')).toBe(true);
 
     cleanup();
-    session.permissions = ['assets:read'];
+    session.permissions = ['assets.read'];
     render(LinksPanel, { asset: linked, onchange: () => {} });
     expect(screen.getByRole('link', { name: 'M3 screws' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Unlink/ })).toBeNull();

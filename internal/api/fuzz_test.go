@@ -49,8 +49,8 @@ var fuzzRoutes = []route{
 	{method: "PUT", path: "/api/v1/users/{user}/name", body: `{"name":"Grace {n}"}`},
 	{method: "PUT", path: "/api/v1/users/{user}/roles", body: `{"role_ids":["{role}"]}`},
 	{method: "GET", path: "/api/v1/roles"},
-	{method: "POST", path: "/api/v1/roles", body: `{"name":"Stores {n}","description":"Records stock","permissions":["assets:read","stock:record"]}`},
-	{method: "PUT", path: "/api/v1/roles/{role}", body: `{"name":"Readers {n}","description":"","permissions":["assets:read"]}`},
+	{method: "POST", path: "/api/v1/roles", body: `{"name":"Stores {n}","description":"Records stock","permissions":["assets.read","stock.record"]}`},
+	{method: "PUT", path: "/api/v1/roles/{role}", body: `{"name":"Readers {n}","description":"","permissions":["assets.read"]}`},
 	{method: "DELETE", path: "/api/v1/roles/{role}"},
 	{method: "GET", path: "/api/v1/tokens"},
 	{method: "POST", path: "/api/v1/tokens", body: `{"name":"Script {n}","role_ids":["{role}"],"expires_at":"2099-01-01T00:00:00Z"}`},
@@ -69,6 +69,12 @@ var fuzzRoutes = []route{
 	{method: "GET", path: "/api/v1/categories/{category}/fields"},
 	{method: "GET", path: "/api/v1/categories/{category}/relation-types"},
 	{method: "PUT", path: "/api/v1/categories/{category}/relation-types", body: `{"relation_type_ids":["{relation}"]}`},
+	{method: "GET", path: "/api/v1/categories/{category}/scopes"},
+	{method: "PUT", path: "/api/v1/categories/{category}/scopes", body: `{"scope_ids":["{scope}"]}`},
+	{method: "GET", path: "/api/v1/scopes"},
+	{method: "POST", path: "/api/v1/scopes", body: `{"name":"scope-{n}"}`},
+	{method: "PUT", path: "/api/v1/scopes/{scope}", body: `{"name":"renamed-{n}"}`},
+	{method: "DELETE", path: "/api/v1/scopes/{scope}"},
 	{method: "GET", path: "/api/v1/reports"},
 	{method: "POST", path: "/api/v1/reports", body: `{"name":"Report {n}","spec":{"filter":{"running_low":true,"category_ids":["{category}"]},"sections":[{"type":"table","title":"Low","columns":[{"heading":"Asset","binding":"{{asset.name}} {{stock.quantity}}"}],"group_by":"category"}]}}`},
 	{method: "POST", path: "/api/v1/reports/preview", body: `{"spec":{"filter":{"loan":"open"},"sections":[{"type":"table","columns":[{"heading":"Borrower","binding":"{{loan.borrower}}"}]}]}}`},
@@ -201,6 +207,13 @@ func newFuzzer(tb testing.TB) *fuzzer {
 	for _, r := range relations {
 		fz.ids["relation"] = append(fz.ids["relation"], r.ID)
 	}
+	scopes, err := st.ListScopes()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	for _, sc := range scopes {
+		fz.ids["scope"] = append(fz.ids["scope"], sc.ID)
+	}
 	reports, err := st.ListReports()
 	if err != nil {
 		tb.Fatal(err)
@@ -254,6 +267,8 @@ func kindOf(path string) string {
 		return "relation"
 	case "/api/v1/reports":
 		return "report"
+	case "/api/v1/scopes":
+		return "scope"
 	case "/api/v1/users":
 		return "user"
 	}
@@ -301,7 +316,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "report", "field", "category", "asset", "template", "image", "printer", "channel"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {

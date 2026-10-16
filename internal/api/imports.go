@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/assetcsv"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -61,10 +63,45 @@ func readImport(w http.ResponseWriter, r *http.Request) (data []byte, mapping []
 	return data, mapping, opts, true
 }
 
+// readableSource is the store as an import by this request sees it: assets
+// it cannot read are not there (README §3.3).
+type readableSource struct {
+	*store.Store
+	s *Server
+	r *http.Request
+}
+
+func (rs readableSource) ListAssets(categoryID, search string) ([]models.AssetWithDetails, error) {
+	assets, err := rs.Store.ListAssets(categoryID, search)
+	if err != nil {
+		return nil, err
+	}
+	return rs.s.readable(rs.r, assets)
+}
+
+func (rs readableSource) GetAssetByID(id string) (*models.AssetWithDetails, error) {
+	a, err := rs.Store.GetAssetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if !Allows(rs.r.Context(), rbac.PermAssetsRead, a.Scopes) {
+		return nil, store.ErrAssetNotFound
+	}
+	return rs.s.shown(rs.r, a), nil
+}
+
 // prepareImport plans an import, writing the error response if the file
-// cannot be planned at all.
-func (s *Server) prepareImport(w http.ResponseWriter, data []byte, mapping []string, opts assetcsv.Options) (*assetcsv.Plan, bool) {
-	plan, err := assetcsv.PrepareWith(s.store, data, mapping, opts)
+// cannot be planned at all. The importer may change only assets in scopes
+// they can write in.
+func (s *Server) prepareImport(w http.ResponseWriter, r *http.Request, data []byte, mapping []string, opts assetcsv.Options) (*assetcsv.Plan, bool) {
+	scopesOf, err := s.store.ScopeResolver()
+	if err != nil {
+		writeServerError(w, err, "read the categories' scopes")
+		return nil, false
+	}
+	opts.ScopesOf = scopesOf
+	opts.May = func(scopes []string) bool { return Allows(r.Context(), rbac.PermAssetsWrite, scopes) }
+	plan, err := assetcsv.PrepareWith(readableSource{s.store, s, r}, data, mapping, opts)
 	if errors.Is(err, assetcsv.ErrUnreadable) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return nil, false
@@ -83,7 +120,7 @@ func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if plan, ok := s.prepareImport(w, data, mapping, opts); ok {
+	if plan, ok := s.prepareImport(w, r, data, mapping, opts); ok {
 		writeJSON(w, http.StatusOK, plan)
 	}
 }
@@ -99,7 +136,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "mapping is required: confirm where each column goes")
 		return
 	}
-	plan, ok := s.prepareImport(w, data, mapping, opts)
+	plan, ok := s.prepareImport(w, r, data, mapping, opts)
 	if !ok {
 		return
 	}

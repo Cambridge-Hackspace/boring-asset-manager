@@ -327,6 +327,9 @@ type AssetWithDetails struct {
 	SuggestedRelationTypeIDs []string      `json:"suggested_relation_type_ids"`
 	// Photos are its photos, in order.
 	Photos []AssetPhoto `json:"photos"`
+	// Scopes are the scopes it is in: those of its categories and their
+	// ancestors, or the default scope (README §3.3).
+	Scopes []string `json:"scopes"`
 }
 
 // Image is an uploaded PNG or JPEG placed on labels by static_image elements.
@@ -482,4 +485,17 @@ type AssetPhoto struct {
 	HeightPx    int       `json:"height_px"`
 	ByteSize    int64     `json:"byte_size"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Scope is a label on categories that roles can hold asset permissions in
+// (README §3.3). Default is the reserved scope of assets in no other.
+type Scope struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	Reserved  bool      `json:"reserved"`
+	// CategoryCount and RoleCount count the categories it labels and the
+	// roles holding a permission in it.
+	CategoryCount int `json:"category_count"`
+	RoleCount     int `json:"role_count"`
 }

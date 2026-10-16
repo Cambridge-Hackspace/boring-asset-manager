@@ -47,10 +47,10 @@ func TestRestoreAssetAPI(t *testing.T) {
 		t.Errorf("archived=yes: %d", code)
 	}
 
-	// Restoring needs assets:delete, as archiving does.
+	// Restoring needs assets.delete, as archiving does.
 	for _, who := range []*http.Cookie{reader, writer} {
 		if rec := doJSON(t, srv, who, http.MethodPost, path, ""); rec.Code != http.StatusForbidden {
-			t.Errorf("restored without assets:delete: %d", rec.Code)
+			t.Errorf("restored without assets.delete: %d", rec.Code)
 		}
 	}
 	if rec := doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/assets/missing/restore", ""); rec.Code != http.StatusNotFound {

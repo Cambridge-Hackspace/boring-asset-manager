@@ -28,7 +28,7 @@ function api(extra: Record<string, (b: unknown) => unknown> = {}) {
 }
 
 beforeEach(() => {
-  session.permissions = ['templates:manage'];
+  session.permissions = ['templates.manage'];
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: () => {} }));
   localStorage.clear();
 });

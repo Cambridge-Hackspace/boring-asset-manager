@@ -18,11 +18,12 @@ const drill = (photos: AssetPhoto[]): AssetWithDetails => ({
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  scopes: ['default'],
   photos,
 });
 
 beforeEach(() => {
-  session.permissions = ['assets:read', 'assets:write'];
+  session.permissions = ['assets.read', 'assets.write'];
 });
 afterEach(() => {
   cleanup();
@@ -59,14 +60,14 @@ describe('PhotosPanel', () => {
   });
 
   it('only shows photos to readers, and stops at ten', () => {
-    session.permissions = ['assets:read'];
+    session.permissions = ['assets.read'];
     fakeApi({});
     render(PhotosPanel, { asset: drill([photo('p1')]), onchange: () => {} });
     expect(screen.getByRole('img')).toBeTruthy();
     expect(screen.queryByLabelText('Add a photo')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
     cleanup();
-    session.permissions = ['assets:read', 'assets:write'];
+    session.permissions = ['assets.read', 'assets.write'];
     render(PhotosPanel, { asset: drill(Array.from({ length: 10 }, (_, i) => photo(`p${i}`))), onchange: () => {} });
     expect(screen.queryByLabelText('Add a photo')).toBeNull();
     expect(screen.getByText(/remove one to add another/)).toBeTruthy();

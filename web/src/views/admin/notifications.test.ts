@@ -28,7 +28,7 @@ const delivery = (over: Partial<Delivery>): Delivery => ({
 });
 
 beforeEach(() => {
-  session.permissions = ['settings:manage'];
+  session.permissions = ['settings.manage'];
 });
 afterEach(() => {
   cleanup();

@@ -215,7 +215,7 @@ func TestRequirePermissionMiddleware(t *testing.T) {
 		t.Fatalf("expected 401, got %d", rec.Code)
 	}
 
-	// 2. Regular user (no users:manage permission) -> 403 Forbidden
+	// 2. Regular user (no users.manage permission) -> 403 Forbidden
 	regUser, err := st.CreateUser("viewer@example.org", "Pass12345!", true)
 	if err != nil {
 		t.Fatalf("creating regular user: %v", err)
@@ -239,7 +239,7 @@ func TestRequirePermissionMiddleware(t *testing.T) {
 		t.Errorf("expected error string in 403 response")
 	}
 
-	// 3. Admin user (holds users:manage) -> 200 OK
+	// 3. Admin user (holds users.manage) -> 200 OK
 	admin, err := st.CreateAdminUser("admin2@example.org", "Pass123456!")
 	if err != nil {
 		t.Fatalf("creating admin: %v", err)

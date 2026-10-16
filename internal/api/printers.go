@@ -188,7 +188,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(exportWriteTimeout))
-	scenes, ok := s.layoutBatch(w, t, req.AssetIDs)
+	scenes, ok := s.layoutBatch(w, r, t, req.AssetIDs)
 	if !ok {
 		return
 	}

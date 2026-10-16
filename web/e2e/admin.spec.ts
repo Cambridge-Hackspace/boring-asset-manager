@@ -17,7 +17,7 @@ test('printers: add one through the generated form and test-print', async ({ sig
   const name = unique('Rollo');
   await goTo(page, 'Printers');
   await page.getByRole('button', { name: 'Add printer' }).click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByLabel('Driver').selectOption('tspl');
   await page.getByLabel('Model').selectOption('Rollo X1038');
   await page.getByLabel('Loaded media').selectOption('2x1');
@@ -154,7 +154,7 @@ test('roles: create one that only records stock, edit it, and delete it', async 
   await expect(admin.getByRole('button')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'New role' }).click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('checkbox', { name: /Record stock/ }).check();
   await page.getByRole('button', { name: 'Create role' }).click();
   await expect(page.getByRole('status')).toHaveText(`Created ${name}.`);
@@ -181,7 +181,7 @@ test('roles: create one that only records stock, edit it, and delete it', async 
 });
 
 test('a role that only records stock can use stock but not edit assets', async ({ signedIn: page, api }) => {
-  const { role } = await api.call('POST', '/roles', { name: unique('Counters'), description: '', permissions: ['assets:read', 'stock:record'] });
+  const { role } = await api.call('POST', '/roles', { name: unique('Counters'), description: '', permissions: ['assets.read', 'stock.record'] });
   const email = `${unique('counter')}@hackspace.org`;
   const { user } = await api.call('POST', '/users', { email, password: 'CountPass123!' });
   await api.call('PUT', `/users/${user.id}/roles`, { role_ids: [role.id] });
@@ -199,11 +199,11 @@ test('a role that only records stock can use stock but not edit assets', async (
 });
 
 test('API tokens: make one, use it from a script, and revoke it', async ({ signedIn: page, api }) => {
-  const { role } = await api.call('POST', '/roles', { name: unique('Readers'), description: '', permissions: ['assets:read'] });
+  const { role } = await api.call('POST', '/roles', { name: unique('Readers'), description: '', permissions: ['assets.read'] });
   const name = unique('Dashboard');
   await goTo(page, 'API tokens');
   await page.getByRole('button', { name: 'New token' }).click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('checkbox', { name: role.name }).check();
   await page.getByRole('button', { name: 'Create token' }).click();
   const secret = await page.getByLabel('The new token').inputValue();
@@ -225,4 +225,48 @@ test('API tokens: make one, use it from a script, and revoke it', async ({ signe
   await expect(page.getByRole('status')).toHaveText(`Revoked ${name}.`);
   expect((await script.get('/api/v1/assets')).status()).toBe(401);
   await script.dispose();
+});
+
+test('scopes: a keeper of the tools edits the tools and nothing else', async ({ signedIn: page, api }) => {
+  const scope = unique('tools');
+  const { category } = await api.call('POST', '/categories', { name: unique('Tools'), color_hex: '#1d4ed8' });
+  const { asset: tool } = await api.call('POST', '/assets', { name: unique('Drill'), category_ids: [category.id] });
+  const { asset: other } = await api.call('POST', '/assets', { name: unique('Kettle') });
+
+  // The scope, and the category it labels.
+  await goTo(page, 'Roles');
+  await page.getByLabel('New scope').fill(scope);
+  await page.getByRole('button', { name: 'Add scope' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Created the scope ${scope}.`);
+  await page.goto(`/categories/${category.id}`);
+  await page.getByRole('checkbox', { name: scope }).check();
+  await page.getByRole('button', { name: 'Save scopes' }).click();
+  await expect(page.getByRole('status')).toHaveText('Scopes saved.');
+
+  // A role that reads everything but edits in the scope only.
+  const name = unique('Keepers');
+  await goTo(page, 'Roles');
+  await page.getByRole('button', { name: 'New role' }).click();
+  await page.getByLabel('Name', { exact: true }).fill(name);
+  await page.getByRole('checkbox', { name: /^Edit assets/ }).check();
+  await page.getByRole('combobox', { name: 'Where: Edit assets' }).selectOption('some');
+  await page.getByRole('checkbox', { name: `Edit assets in ${scope}` }).check();
+  await page.getByRole('button', { name: 'Create role' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Created ${name}.`);
+  const card = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name, exact: true }) });
+  await expect(card).toContainText(`Read assets, Edit assets in ${scope}`);
+  const roles = (await api.call('GET', '/roles')).roles as { id: string; name: string }[];
+
+  const email = `${unique('keeper')}@hackspace.org`;
+  const { user } = await api.call('POST', '/users', { email, name: 'Keeper', password: 'KeepPass123!' });
+  await api.call('PUT', `/users/${user.id}/roles`, { role_ids: [roles.find((r) => r.name === name)!.id] });
+
+  await page.context().clearCookies();
+  await signIn(page, email, 'KeepPass123!');
+  await page.goto(`/assets/${tool.asset.id}`);
+  await expect(page.getByRole('heading', { name: tool.asset.name })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit' })).toBeVisible();
+  await page.goto(`/assets/${other.asset.id}`);
+  await expect(page.getByRole('heading', { name: other.asset.name })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
 });

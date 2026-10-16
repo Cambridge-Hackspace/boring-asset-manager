@@ -17,6 +17,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -130,11 +131,12 @@ func conditionText(c string) string {
 	return "Working"
 }
 
-// layoutAsset loads an asset and lays out its label. A non-nil problem means
+// layoutAsset loads an asset and lays out its label. One the request cannot
+// read is not found, and its location shows only places it can read. A non-nil problem means
 // the asset itself cannot be labeled; err is reserved for server failures.
-func (s *Server) layoutAsset(t *labels.Template, assetID string, images render.ImageSource) (*render.Scene, *LabelProblem, error) {
+func (s *Server) layoutAsset(r *http.Request, t *labels.Template, assetID string, images render.ImageSource) (*render.Scene, *LabelProblem, error) {
 	a, err := s.store.GetAssetByID(assetID)
-	if errors.Is(err, store.ErrAssetNotFound) {
+	if errors.Is(err, store.ErrAssetNotFound) || (err == nil && !Allows(r.Context(), rbac.PermAssetsRead, a.Scopes)) {
 		return nil, &LabelProblem{AssetID: assetID, Message: "asset not found"}, nil
 	}
 	if err != nil {
@@ -143,7 +145,7 @@ func (s *Server) layoutAsset(t *labels.Template, assetID string, images render.I
 	if a.Asset.ArchivedAt != nil {
 		return nil, &LabelProblem{AssetID: assetID, Message: "asset is archived"}, nil
 	}
-	scene, err := render.Layout(t, s.labelData(a), images)
+	scene, err := render.Layout(t, s.labelData(s.shown(r, a)), images)
 	var le *render.LayoutError
 	if errors.As(err, &le) {
 		return nil, &LabelProblem{AssetID: assetID, Path: le.Path, Message: le.Message}, nil
@@ -191,7 +193,7 @@ func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	assetID := r.PathValue("id")
-	scene, problem, err := s.layoutAsset(t, assetID, s.newLabelImages())
+	scene, problem, err := s.layoutAsset(r, t, assetID, s.newLabelImages())
 	if err != nil {
 		writeServerError(w, err, "render label")
 		return
@@ -297,7 +299,7 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		var problem *LabelProblem
-		scene, problem, err = s.layoutAsset(t, req.AssetID, images)
+		scene, problem, err = s.layoutAsset(r, t, req.AssetID, images)
 		if problem != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, ErrorResponse{Error: "Label cannot be rendered", Details: []LabelProblem{*problem}})
 			return
@@ -364,14 +366,14 @@ func checkAssetIDs(w http.ResponseWriter, assetIDs []string) bool {
 
 // layoutBatch lays out every requested asset before anything is written, so
 // a batch either renders completely or not at all.
-func (s *Server) layoutBatch(w http.ResponseWriter, t *labels.Template, assetIDs []string) ([]*render.Scene, bool) {
+func (s *Server) layoutBatch(w http.ResponseWriter, r *http.Request, t *labels.Template, assetIDs []string) ([]*render.Scene, bool) {
 
 	images := s.newLabelImages()
 	scenes := make([]*render.Scene, 0, len(assetIDs))
 	var problems []LabelProblem
 	parts := 0
 	for _, id := range assetIDs {
-		scene, problem, err := s.layoutAsset(t, id, images)
+		scene, problem, err := s.layoutAsset(r, t, id, images)
 		if err != nil {
 			writeServerError(w, err, "render labels")
 			return nil, false
@@ -420,7 +422,7 @@ func (s *Server) handleExportLabels(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	scenes, ok := s.layoutBatch(w, t, req.AssetIDs)
+	scenes, ok := s.layoutBatch(w, r, t, req.AssetIDs)
 	if !ok {
 		return
 	}

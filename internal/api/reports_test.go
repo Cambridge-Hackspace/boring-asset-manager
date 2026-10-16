@@ -63,7 +63,7 @@ func TestReportsAPI(t *testing.T) {
 		}
 	}
 
-	// Saving and previewing need reports:manage; specs are checked.
+	// Saving and previewing need reports.manage; specs are checked.
 	rec = doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/fields", `{"key":"serial","label":"Serial","validation_type":"text"}`)
 	var field struct{ Field models.Field }
 	_ = json.Unmarshal(rec.Body.Bytes(), &field)

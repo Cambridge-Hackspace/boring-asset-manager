@@ -7,7 +7,7 @@ test('thresholds, running-low actions and notification channels', async ({ signe
   // A consumable category with a threshold, through the form. With nothing
   // in it, it is running low from the start.
   await page.goto('/categories/new');
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByLabel('Consumable').check();
   await page.getByLabel('Low stock threshold (optional)').fill('1');
   await page.getByRole('button', { name: 'Create category' }).click();
@@ -20,7 +20,7 @@ test('thresholds, running-low actions and notification channels', async ({ signe
   await goTo(page, 'Notifications');
   await page.getByRole('button', { name: 'Add channel' }).click();
   const form = page.getByRole('form', { name: 'New channel' });
-  await form.getByLabel('Name').fill(`Stores ${tag}`);
+  await form.getByLabel('Name', { exact: true }).fill(`Stores ${tag}`);
   await form.getByLabel('Webhook URL').fill('https://discord.com/api/webhooks/123/e2e-token');
   await form.getByRole('button', { name: 'Add channel' }).click();
   await expect(page.getByText('Channel saved.')).toBeVisible();

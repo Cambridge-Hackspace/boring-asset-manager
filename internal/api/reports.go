@@ -34,10 +34,14 @@ func (s *Server) parseSpec(raw json.RawMessage) (*reports.Spec, []byte, error) {
 	return spec, canonical, err
 }
 
-// runSpec runs a report against the assets its filter finds.
-func (s *Server) runSpec(spec *reports.Spec) (*reports.Result, error) {
+// runSpec runs a report against the assets its filter finds among those
+// the request can read.
+func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, error) {
 	f := spec.Filter
 	assets, err := s.store.FilterAssets(store.AssetFilter{Search: f.Search, Archived: f.Archived, Condition: f.Condition, Loan: f.Loan})
+	if err == nil {
+		assets, err = s.readable(r, assets)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +125,7 @@ func (s *Server) handleDeleteReport(w http.ResponseWriter, r *http.Request) {
 }
 
 // savedReport loads a report and runs it.
-func (s *Server) savedReport(w http.ResponseWriter, id string) (*models.Report, *reports.Result, bool) {
+func (s *Server) savedReport(w http.ResponseWriter, r *http.Request, id string) (*models.Report, *reports.Result, bool) {
 	report, err := s.store.GetReport(id)
 	if err != nil {
 		writeReportError(w, err, "read the report")
@@ -133,7 +137,7 @@ func (s *Server) savedReport(w http.ResponseWriter, id string) (*models.Report, 
 		writeJSONError(w, http.StatusConflict, "The report no longer fits: "+err.Error()+". Edit it to fix this.")
 		return nil, nil, false
 	}
-	result, err := s.runSpec(spec)
+	result, err := s.runSpec(r, spec)
 	if err != nil {
 		writeServerError(w, err, "run the report")
 		return nil, nil, false
@@ -143,7 +147,7 @@ func (s *Server) savedReport(w http.ResponseWriter, id string) (*models.Report, 
 
 // handleRunReport: GET /api/v1/reports/{id}/run
 func (s *Server) handleRunReport(w http.ResponseWriter, r *http.Request) {
-	report, result, ok := s.savedReport(w, r.PathValue("id"))
+	report, result, ok := s.savedReport(w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
@@ -165,7 +169,7 @@ func (s *Server) handlePreviewReport(w http.ResponseWriter, r *http.Request) {
 		writeReportError(w, err, "check the report")
 		return
 	}
-	result, err := s.runSpec(spec)
+	result, err := s.runSpec(r, spec)
 	if err != nil {
 		writeServerError(w, err, "run the report")
 		return
@@ -181,7 +185,7 @@ func (s *Server) handleReportCSV(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "The section is a number from 1")
 		return
 	}
-	report, result, ok := s.savedReport(w, r.PathValue("id"))
+	report, result, ok := s.savedReport(w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}

@@ -27,7 +27,7 @@ afterEach(() => {
 
 describe('LoansPage', () => {
   it('shows a member their own loans, past ones too, and checks one in', async () => {
-    session.permissions = ['assets:read', 'assets:borrow'];
+    session.permissions = ['assets.read', 'assets.borrow'];
     let loans = [loan('1', 'Drill', 'me'), loan('2', 'Saw', 'me', { checked_in_at: '2026-10-05T10:00:00Z' })];
     const { fetchMock, sent } = fakeApi({
       'GET /loans': () => ({ loans }),
@@ -50,7 +50,7 @@ describe('LoansPage', () => {
   });
 
   it('shows a lender everyone’s open loans, with who has each', async () => {
-    session.permissions = ['assets:read', 'assets:lend'];
+    session.permissions = ['assets.read', 'assets.lend'];
     const { fetchMock } = fakeApi({
       'GET /people': () => ({ people: [{ id: 'bo', email: 'bo@hackspace.org', name: 'Bo' }] }),
       'GET /loans': () => ({ loans: [loan('1', 'Drill', 'bo', { overdue: true, due_at: '2026-10-10T22:59:59Z' })] }),

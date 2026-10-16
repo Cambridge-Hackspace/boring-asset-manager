@@ -31,7 +31,7 @@ const result: ReportResult = {
 const categories = [{ id: 'fil', name: 'Filament', parent_id: null, color_hex: '#000000', is_consumable: true, unit: '', is_lendable: false, is_running_low: true, created_at: '', updated_at: '' }];
 
 beforeEach(() => {
-  session.permissions = ['assets:read', 'reports:manage'];
+  session.permissions = ['assets.read', 'reports.manage'];
 });
 afterEach(() => {
   cleanup();
@@ -110,7 +110,7 @@ describe('ReportsPage', () => {
   });
 
   it('only lists them for people who cannot manage reports', async () => {
-    session.permissions = ['assets:read'];
+    session.permissions = ['assets.read'];
     fakeApi({ 'GET /reports': () => ({ reports: [lowReport] }) });
     render(ReportsPage, { params: {} });
     await screen.findByRole('link', { name: 'Running low' });

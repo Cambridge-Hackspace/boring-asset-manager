@@ -20,7 +20,7 @@ test('fields and categories, with inheritance', async ({ signedIn: page }) => {
   const parent = unique('Tools');
   await goTo(page, 'Categories');
   await page.getByRole('link', { name: 'New category' }).click();
-  await page.getByLabel('Name').fill(parent);
+  await page.getByLabel('Name', { exact: true }).fill(parent);
   await page.getByRole('button', { name: 'Create category' }).click();
   await expect(page).toHaveURL(/\/categories\/[0-9a-f-]{36}$/);
   await page.getByLabel('Add a field').selectOption({ label });
@@ -30,7 +30,7 @@ test('fields and categories, with inheritance', async ({ signedIn: page }) => {
 
   await page.getByRole('link', { name: 'Add subcategory' }).click();
   await expect(page.getByLabel('Parent')).toHaveValue(/[0-9a-f-]{36}/);
-  await page.getByLabel('Name').fill('Drills');
+  await page.getByLabel('Name', { exact: true }).fill('Drills');
   await page.getByRole('button', { name: 'Create category' }).click();
   const row = page.getByRole('row').filter({ hasText: label });
   await expect(row).toContainText('Required');

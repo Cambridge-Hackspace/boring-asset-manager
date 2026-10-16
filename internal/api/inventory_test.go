@@ -48,11 +48,11 @@ func TestRunningLowAndThresholdsAPI(t *testing.T) {
 		t.Fatalf("after one asset: %s", rec.Body)
 	}
 
-	// The running-low action needs stock:record, not assets:write.
+	// The running-low action needs stock.record, not assets.write.
 	path := "/api/v1/categories/" + cat.ID + "/running-low"
 	for _, who := range []*http.Cookie{reader, writer} {
 		if rec := doJSON(t, srv, who, http.MethodPut, path, `{"running_low":true}`); rec.Code != http.StatusForbidden {
-			t.Errorf("without stock:record: %d", rec.Code)
+			t.Errorf("without stock.record: %d", rec.Code)
 		}
 	}
 	for _, bad := range []string{`{}`, `{"running_low":"yes"}`, `nope`} {

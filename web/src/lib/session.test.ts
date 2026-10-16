@@ -9,7 +9,7 @@ function json(status: number, body: unknown) {
 
 const me = {
   user: { id: 'u1', email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' },
-  permissions: ['assets:read', 'labels:print'],
+  permissions: ['assets.read', 'labels.print'],
 };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -32,9 +32,23 @@ describe('session', () => {
     await session.load();
     expect(session.loaded).toBe(true);
     expect(session.user?.email).toBe('ada@hackspace.org');
-    expect(session.can('assets:read')).toBe(true);
-    expect(session.can('users:manage')).toBe(false);
-    expect(session.canAny('users:manage', 'labels:print')).toBe(true);
+    expect(session.can('assets.read')).toBe(true);
+    expect(session.can('users.manage')).toBe(false);
+    expect(session.canAny('users.manage', 'labels.print')).toBe(true);
+  });
+
+  it('holds asset permissions in scopes', () => {
+    session.permissions = ['assets.read', 'tools:assets.write'];
+    // Enough to show what editing opens…
+    expect(session.can('assets.write')).toBe(true);
+    expect(session.can('assets.delete')).toBe(false);
+    // …but each asset is its scopes'.
+    expect(session.canOn(['tools'], 'assets.write')).toBe(true);
+    expect(session.canOn(['kitchen', 'tools'], 'assets.write')).toBe(true);
+    expect(session.canOn(['default'], 'assets.write')).toBe(false);
+    expect(session.canOn(['default'], 'assets.read')).toBe(true);
+    expect(session.canAnyOn(['default'], 'assets.report', 'assets.write')).toBe(false);
+    session.permissions = [];
   });
 
   it('treats 401 as signed out', async () => {

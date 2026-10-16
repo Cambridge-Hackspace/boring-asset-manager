@@ -182,6 +182,12 @@ type Options struct {
 	// RemoveLinks removes links of the file's assets that no row states;
 	// without it, an import only adds and moves links.
 	RemoveLinks bool
+	// May, when set, says whether the importer may change assets in these
+	// scopes (README §3.3), and ScopesOf gives the scopes of an asset in
+	// these categories. Rows changing, and links joining, assets they may
+	// not change are problems.
+	May      func(scopes []string) bool
+	ScopesOf func(categoryIDs []string) []string
 }
 
 // PrepareWith plans an import as Prepare does, with options.
@@ -231,7 +237,7 @@ func PrepareWith(src Source, data []byte, mapping []string, opts Options) (*Plan
 	p := &planner{
 		src: src, plan: plan, cats: NewCategories(cats), fields: fieldsByKey,
 		assets: map[string]*models.AssetWithDetails{}, effective: map[string][]models.EffectiveField{},
-		unknown: map[string]bool{}, owners: map[string][]owner{},
+		unknown: map[string]bool{}, owners: map[string][]owner{}, opts: opts, after: map[string][]string{},
 	}
 	for i := range active {
 		a := &active[i]
@@ -317,6 +323,31 @@ type planner struct {
 	owners map[string][]owner
 	// linkCells are the rows' links cells, for planLinks.
 	linkCells []linkCell
+	opts      Options
+	// after holds the scopes of the assets rows put in other categories,
+	// once they are, when opts.May is set.
+	after map[string][]string
+}
+
+// forbidden returns the scopes of an asset, before the import and after
+// it, that the importer may not change assets in, joined, or "".
+func (p *planner) forbidden(id string) string {
+	if p.opts.May == nil {
+		return ""
+	}
+	var sets [][]string
+	if a, ok := p.assets[id]; ok {
+		sets = append(sets, a.Scopes)
+	}
+	if after, ok := p.after[id]; ok {
+		sets = append(sets, after)
+	}
+	for _, s := range sets {
+		if !p.opts.May(s) {
+			return strings.Join(s, ", ")
+		}
+	}
+	return ""
 }
 
 func codeKey(t, code string) string { return t + "\x00" + code }
@@ -527,15 +558,26 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 		p.linkCells = append(p.linkCells, linkCell{line: line, column: col, self: self, value: v})
 	}
 
+	id := change.ID
+	if existing == nil {
+		id = change.NewID
+	}
+	if p.opts.May != nil && (existing == nil || change.CategoryIDs != nil) {
+		p.after[id] = p.opts.ScopesOf(change.CategoryIDs)
+	}
 	switch {
 	case existing == nil:
 		plan.Create++
 		plan.Changes = append(plan.Changes, change)
 	case unchanged(existing, change, p.fields):
 		plan.Unchanged++
+		return nil
 	default:
 		plan.Update++
 		plan.Changes = append(plan.Changes, change)
+	}
+	if bad := p.forbidden(id); bad != "" {
+		plan.problem(line, "", "you cannot change assets in %s", bad)
 	}
 	return nil
 }

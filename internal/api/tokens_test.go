@@ -35,7 +35,7 @@ func TestAPITokensAPI(t *testing.T) {
 	}
 	body := `{"name":"Dashboard","role_ids":["` + counters.ID + `"]}`
 	if rec := doJSON(t, srv, writer, http.MethodPost, "/api/v1/tokens", body); rec.Code != http.StatusForbidden {
-		t.Errorf("created without users:manage: %d", rec.Code)
+		t.Errorf("created without users.manage: %d", rec.Code)
 	}
 	rec := doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/tokens", body)
 	var created struct {

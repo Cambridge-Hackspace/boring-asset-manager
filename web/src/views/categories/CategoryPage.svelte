@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Scope } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { ancestry, flattenTree, subtree } from '../../lib/tree';
@@ -17,13 +17,19 @@
   // The app remounts the page when the path changes, so these never change.
   const id = untrack(() => params.id ?? '');
   const isNew = !id;
-  const canManage = $derived(session.can('categories:manage'));
+  const canManage = $derived(session.can('categories.manage'));
 
   let categories = $state<Category[]>([]);
   let effective = $state<EffectiveField[]>([]);
   let allFields = $state<Field[]>([]);
   let relationTypes = $state<RelationType[]>([]);
   let suggested = $state<string[]>([]);
+  // Scopes (README §3.3): category managers see them; only user managers
+  // change them, since they decide who reaches the assets.
+  const canSeeScopes = $derived(session.canAny('categories.manage', 'users.manage'));
+  const canScope = $derived(session.can('users.manage'));
+  let scopes = $state<Scope[]>([]);
+  let scopeIds = $state<string[]>([]);
   let loading = $state(true);
   let error = $state('');
   let saved = $state('');
@@ -89,6 +95,10 @@
           relationTypes = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
           suggested = (await request<{ relation_type_ids: string[] }>('GET', `/categories/${encodeURIComponent(id)}/relation-types`)).relation_type_ids ?? [];
         }
+        if (canSeeScopes) {
+          scopes = ((await request<{ scopes: Scope[] }>('GET', '/scopes')).scopes ?? []).filter((s) => !s.reserved);
+          scopeIds = (await request<{ scope_ids: string[] }>('GET', `/categories/${encodeURIComponent(id)}/scopes`)).scope_ids ?? [];
+        }
       }
     } catch (err) {
       error = messageOf(err);
@@ -103,6 +113,17 @@
     try {
       suggested = (await request<{ relation_type_ids: string[] }>('PUT', `/categories/${encodeURIComponent(id)}/relation-types`, { relation_type_ids: suggested })).relation_type_ids ?? [];
       saved = 'Suggestions saved.';
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function saveScopes(event: SubmitEvent) {
+    event.preventDefault();
+    error = saved = '';
+    try {
+      scopeIds = (await request<{ scope_ids: string[] }>('PUT', `/categories/${encodeURIComponent(id)}/scopes`, { scope_ids: scopeIds })).scope_ids ?? [];
+      saved = 'Scopes saved.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -140,7 +161,7 @@
     }
   }
 
-  // Flags or clears the category by hand, which needs only assets:write.
+  // Flags or clears the category by hand, which needs only assets.write.
   async function setRunningLow(low: boolean) {
     error = '';
     saved = '';
@@ -223,7 +244,7 @@
             : ''}.
         {/if}
       </p>
-      {#if session.can('stock:record')}
+      {#if session.can('stock.record')}
         <div class="mt-3">
           {#if category.is_running_low}
             <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(false)}>Mark restocked</button>
@@ -371,6 +392,23 @@
             </label>
           {/each}
           <button type="submit" class="btn-secondary">Save suggestions</button>
+        </form>
+      </section>
+    {/if}
+    {#if canSeeScopes && scopes.length}
+      <section class="mt-6 max-w-2xl" aria-labelledby="scopes-heading">
+        <h2 id="scopes-heading" class="mb-1 text-lg font-semibold">Scopes</h2>
+        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
+          Its assets, and those of its subcategories, are in these scopes, and roles holding permissions in them act on
+          those assets. Assets in no scope are in <span class="font-mono">default</span>.
+        </p>
+        <form class="space-y-2" onsubmit={saveScopes}>
+          {#each scopes as s (s.id)}
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" value={s.id} bind:group={scopeIds} disabled={!canScope} /> <span class="font-mono">{s.name}</span>
+            </label>
+          {/each}
+          {#if canScope}<button type="submit" class="btn-secondary">Save scopes</button>{/if}
         </form>
       </section>
     {/if}

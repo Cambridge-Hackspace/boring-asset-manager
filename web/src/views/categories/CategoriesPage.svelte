@@ -33,7 +33,7 @@
     <h1 class="text-2xl font-bold">Categories</h1>
     <p class="text-sm text-zinc-600 dark:text-zinc-400">Subcategories inherit their parents’ fields.</p>
   </div>
-  {#if session.can('categories:manage')}
+  {#if session.can('categories.manage')}
     <a class="btn-primary" href="/categories/new">New category</a>
   {/if}
 </div>

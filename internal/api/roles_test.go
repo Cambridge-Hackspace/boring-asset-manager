@@ -23,7 +23,7 @@ func TestRoleManagementAPI(t *testing.T) {
 		return v.Role
 	}
 
-	body := `{"name":"Stores","description":"Records stock","permissions":["assets:read","stock:record"]}`
+	body := `{"name":"Stores","description":"Records stock","permissions":["assets.read","stock.record"]}`
 	if rec := doJSON(t, srv, reader, http.MethodPost, "/api/v1/roles", body); rec.Code != http.StatusForbidden {
 		t.Errorf("a reader created a role: %d", rec.Code)
 	}
@@ -36,7 +36,7 @@ func TestRoleManagementAPI(t *testing.T) {
 		body:                           http.StatusConflict,
 		`{"name":"","permissions":[]}`: http.StatusBadRequest,
 		`{"name":"Odd","permissions":["assets:fly"]}`: http.StatusBadRequest,
-		`{"name":"Odd","permissions":"assets:read"}`:  http.StatusBadRequest,
+		`{"name":"Odd","permissions":"assets.read"}`:  http.StatusBadRequest,
 		`nope`: http.StatusBadRequest,
 	} {
 		if rec := doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/roles", bad); rec.Code != want {
@@ -45,7 +45,7 @@ func TestRoleManagementAPI(t *testing.T) {
 	}
 
 	path := "/api/v1/roles/" + stores.ID
-	rec = doJSON(t, srv, adminCookie, http.MethodPut, path, `{"name":"Counters","description":"","permissions":["stock:record"]}`)
+	rec = doJSON(t, srv, adminCookie, http.MethodPut, path, `{"name":"Counters","description":"","permissions":["stock.record"]}`)
 	if r := roleOf(rec.Body.Bytes()); rec.Code != http.StatusOK || r.Name != "Counters" || len(r.Permissions) != 1 {
 		t.Errorf("update: %d %s", rec.Code, rec.Body)
 	}

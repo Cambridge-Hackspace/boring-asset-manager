@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -177,6 +178,17 @@ func (s *Server) handleSetRunningLow(w http.ResponseWriter, r *http.Request) {
 	var req RunningLowRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RunningLow == nil {
 		writeJSONError(w, http.StatusBadRequest, "running_low (true or false) is required")
+		return
+	}
+	// Flagging a category flags its assets: it needs stock.record in the
+	// scopes they are in for being in it.
+	scopes, err := s.store.ScopesForCategories([]string{r.PathValue("id")})
+	if err != nil {
+		writeServerError(w, err, "read the category's scopes")
+		return
+	}
+	if !Allows(r.Context(), rbac.PermStockRecord, scopes) {
+		writeJSONError(w, http.StatusForbidden, "Forbidden: insufficient permissions for this category's scopes")
 		return
 	}
 	cat, changed, err := s.actingStore(r).SetRunningLow(r.PathValue("id"), *req.RunningLow)

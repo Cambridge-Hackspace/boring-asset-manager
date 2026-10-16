@@ -22,7 +22,7 @@ const effective: EffectiveField[] = [
 ];
 
 beforeEach(() => {
-  session.permissions = ['assets:read', 'categories:manage'];
+  session.permissions = ['assets.read', 'categories.manage'];
 });
 afterEach(() => {
   cleanup();
@@ -98,8 +98,8 @@ describe('CategoryPage', () => {
     expect(sent.filter((r) => r.method === 'PUT')[1]!.body).toMatchObject({ is_consumable: false, unit: '', is_running_low: false, low_stock_threshold: null });
   });
 
-  it('shows stock and lets people with stock:record flag it by hand', async () => {
-    session.permissions = ['assets:read', 'stock:record'];
+  it('shows stock and lets people with stock.record flag it by hand', async () => {
+    session.permissions = ['assets.read', 'stock.record'];
     const { sent } = api({ 'PUT /categories/paint/running-low': () => ({ category: categories[3], changed: true }) });
     render(CategoryPage, { params: { id: 'paint' } });
     const stock = await screen.findByRole('region', { name: 'Stock' });
@@ -112,9 +112,9 @@ describe('CategoryPage', () => {
     expect(await screen.findByText('Marked as restocked.')).toBeTruthy();
   });
 
-  it('offers no stock actions without stock:record, and none for non-consumables', async () => {
+  it('offers no stock actions without stock.record, and none for non-consumables', async () => {
     // Editing assets is not enough.
-    session.permissions = ['assets:read', 'assets:write'];
+    session.permissions = ['assets.read', 'assets.write'];
     api();
     render(CategoryPage, { params: { id: 'paint' } });
     const stock = await screen.findByRole('region', { name: 'Stock' });
@@ -125,12 +125,47 @@ describe('CategoryPage', () => {
     expect(screen.queryByRole('region', { name: 'Stock' })).toBeNull();
   });
 
-  it('is read-only without categories:manage', async () => {
-    session.permissions = ['assets:read'];
+  it('is read-only without categories.manage', async () => {
+    session.permissions = ['assets.read'];
     api();
     render(CategoryPage, { params: { id: 'power' } });
     await screen.findByRole('table');
     expect(screen.queryByLabelText('Name')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  });
+
+  it('puts it in scopes, for those who manage users, and shows them to category managers', async () => {
+    const scopes = [
+      { id: 'd', name: 'default', created_at: '', reserved: true, category_count: 0, role_count: 0 },
+      { id: 'w', name: 'workshop', created_at: '', reserved: false, category_count: 1, role_count: 0 },
+      { id: 'k', name: 'kitchen', created_at: '', reserved: false, category_count: 0, role_count: 0 },
+    ];
+    const scopeApi = () =>
+      api({
+        'GET /relation-types': () => ({ relation_types: [] }),
+        'GET /categories/power/relation-types': () => ({ relation_type_ids: [] }),
+        'GET /scopes': () => ({ scopes }),
+        'GET /categories/power/scopes': () => ({ scope_ids: ['w'] }),
+        'PUT /categories/power/scopes': (body) => body,
+      });
+
+    // A category manager sees them, but cannot change them.
+    scopeApi();
+    render(CategoryPage, { params: { id: 'power' } });
+    const section = (await screen.findByRole('heading', { name: 'Scopes' })).closest('section')!;
+    const boxes = within(section).getAllByRole('checkbox') as HTMLInputElement[];
+    // The default scope is not offered: it is where assets in no other are.
+    expect(boxes.map((b) => b.parentElement!.textContent!.trim())).toEqual(['workshop', 'kitchen']);
+    expect(boxes.map((b) => [b.checked, b.disabled])).toEqual([[true, true], [false, true]]);
+    expect(within(section).queryByRole('button', { name: 'Save scopes' })).toBeNull();
+    cleanup();
+
+    session.permissions = ['assets.read', 'categories.manage', 'users.manage'];
+    const { sent } = scopeApi();
+    render(CategoryPage, { params: { id: 'power' } });
+    await fireEvent.click(await screen.findByRole('checkbox', { name: 'kitchen' }));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save scopes' }));
+    await screen.findByText('Scopes saved.');
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ scope_ids: ['w', 'k'] });
   });
 });

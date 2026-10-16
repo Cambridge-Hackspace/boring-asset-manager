@@ -32,7 +32,7 @@ test('create an asset, preview and print its label, export a batch', async ({ si
   const code = unique('D').toUpperCase();
   await goTo(page, 'Assets');
   await page.getByRole('link', { name: 'New asset' }).click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('checkbox', { name: category }).check();
   // A required field the server enforces: leave it empty first.
   await page.getByLabel('QR Code', { exact: true }).fill(code);

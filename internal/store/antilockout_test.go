@@ -45,7 +45,7 @@ func TestRemoveUserRoleOnlyGuardsEffectiveRevocations(t *testing.T) {
 		t.Errorf("revoking an unheld role should succeed, got %v", err)
 	}
 
-	// The sole admin also holds users:manage through a second role, so dropping the
+	// The sole admin also holds users.manage through a second role, so dropping the
 	// admin role leaves them able to manage users.
 	managerRoleID := uuid.NewString()
 	if _, err := st.Exec("INSERT INTO roles (id, name, description) VALUES (?, ?, ?)", managerRoleID, "user-manager", "Manages users"); err != nil {
@@ -53,22 +53,22 @@ func TestRemoveUserRoleOnlyGuardsEffectiveRevocations(t *testing.T) {
 	}
 	var manageID string
 	if err := st.QueryRow("SELECT id FROM permissions WHERE permission_key = ?", rbac.PermUsersManage).Scan(&manageID); err != nil {
-		t.Fatalf("looking up users:manage: %v", err)
+		t.Fatalf("looking up users.manage: %v", err)
 	}
 	if _, err := st.Exec("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)", managerRoleID, manageID); err != nil {
-		t.Fatalf("granting users:manage: %v", err)
+		t.Fatalf("granting users.manage: %v", err)
 	}
 	if err := st.AssignUserRole(admin.ID, managerRoleID); err != nil {
 		t.Fatalf("assigning manager role: %v", err)
 	}
 	if err := st.RemoveUserRole(admin.ID, adminRole.ID); err != nil {
-		t.Errorf("revoking admin role while users:manage is retained via another role should succeed, got %v", err)
+		t.Errorf("revoking admin role while users.manage is retained via another role should succeed, got %v", err)
 	}
 
-	// Revoking the last role that grants users:manage must still be blocked.
+	// Revoking the last role that grants users.manage must still be blocked.
 	err = st.RemoveUserRole(admin.ID, managerRoleID)
 	if !errors.Is(err, rbac.ErrAntiLockoutTriggered) {
-		t.Errorf("expected ErrAntiLockoutTriggered when revoking the last users:manage grant, got %v", err)
+		t.Errorf("expected ErrAntiLockoutTriggered when revoking the last users.manage grant, got %v", err)
 	}
 }
 

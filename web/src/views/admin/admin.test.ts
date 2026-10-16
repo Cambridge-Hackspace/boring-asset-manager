@@ -28,7 +28,7 @@ const drivers: DriverInfo[] = [
 ];
 
 beforeEach(() => {
-  session.permissions = ['settings:manage', 'users:manage'];
+  session.permissions = ['settings.manage', 'users.manage'];
   session.user = { id: 'me', email: 'me@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' };
 });
 afterEach(() => {
@@ -78,8 +78,8 @@ describe('UsersPage', () => {
       }),
       'GET /roles': () => ({
         roles: [
-          { id: 'admin', name: 'admin', description: '', permissions: ['users:manage'] },
-          { id: 'viewer', name: 'viewer', description: '', permissions: ['assets:read'] },
+          { id: 'admin', name: 'admin', description: '', permissions: ['users.manage'] },
+          { id: 'viewer', name: 'viewer', description: '', permissions: ['assets.read'] },
         ],
       }),
       'PUT /users/me/roles': rolesPut,
@@ -89,7 +89,7 @@ describe('UsersPage', () => {
   }
 
   it('sets roles, and explains an anti-lockout refusal', async () => {
-    const { sent } = api(() => ({ status: 400, body: { error: "anti-lockout guard: operation rejected because at least one active user must retain 'users:manage'" } }));
+    const { sent } = api(() => ({ status: 400, body: { error: "anti-lockout guard: operation rejected because at least one active user must retain 'users.manage'" } }));
     render(UsersPage, { params: {} });
 
     const bo = (await screen.findByRole('cell', { name: 'bo@hackspace.org' })).closest('tr')!;

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
@@ -92,13 +93,17 @@ func UserPermissions(ctx context.Context) map[string]bool {
 	return nil
 }
 
-// HasPermission checks if the request context contains a specific permission.
+// HasPermission reports whether the request holds a permission: in every
+// scope, or, for an asset permission, in at least one. Handlers acting on an
+// asset check it with Allows too.
 func HasPermission(ctx context.Context, permKey string) bool {
-	perms := UserPermissions(ctx)
-	if perms == nil {
-		return false
-	}
-	return perms[permKey]
+	return rbac.HasPermission(UserPermissions(ctx), permKey)
+}
+
+// Allows reports whether the request holds a permission for an asset in
+// these scopes.
+func Allows(ctx context.Context, permKey string, scopes []string) bool {
+	return rbac.Allows(UserPermissions(ctx), permKey, scopes)
 }
 
 // Authenticate is an HTTP middleware that extracts and validates an API token
