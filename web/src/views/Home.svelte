@@ -7,6 +7,7 @@
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
   import CategoryBadge from '../components/CategoryBadge.svelte';
+  import ConditionBadge from '../components/ConditionBadge.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -15,6 +16,7 @@
 
   let low = $state<Category[] | null>(null);
   let lowAssets = $state<AssetWithDetails[]>([]);
+  let attention = $state<AssetWithDetails[]>([]);
   let error = $state('');
 
   onMount(async () => {
@@ -25,6 +27,7 @@
         request<{ assets: AssetWithDetails[] }>('GET', '/assets').then((r) => r.assets ?? []),
       ]);
       lowAssets = assets.filter((a) => a.asset.stock?.is_running_low).sort((a, b) => a.asset.name.localeCompare(b.asset.name));
+      attention = assets.filter((a) => a.asset.condition !== 'ok').sort((a, b) => a.asset.name.localeCompare(b.asset.name));
       low = all.filter((c) => c.is_consumable && c.is_running_low).sort((a, b) => a.name.localeCompare(b.name));
     } catch (err) {
       error = messageOf(err);
@@ -51,6 +54,21 @@
         {/each}
       </ul>
     {/if}
+  </section>
+{/if}
+
+{#if attention.length}
+  <section class="mt-6" aria-labelledby="attention-heading">
+    <h2 id="attention-heading" class="mb-2 text-lg font-semibold">Needs attention</h2>
+    <ul class="space-y-1 text-sm">
+      {#each attention as a (a.asset.id)}
+        <li>
+          <a class="underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a>
+          <ConditionBadge condition={a.asset.condition} />
+          {#if a.asset.condition_note}<span class="text-zinc-600 dark:text-zinc-400">{a.asset.condition_note}</span>{/if}
+        </li>
+      {/each}
+    </ul>
   </section>
 {/if}
 

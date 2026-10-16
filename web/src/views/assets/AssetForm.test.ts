@@ -54,7 +54,7 @@ describe('AssetForm', () => {
 
   it('shows a server error beside the input it is about', async () => {
     const existing: AssetWithDetails = {
-      asset: { id: 'a1', name: 'Drill', created_at: '', updated_at: '' },
+      asset: { id: 'a1', name: 'Drill', created_at: '', updated_at: '', condition: 'ok', condition_note: '' },
       categories: [cat('tools', 'Tools')],
       generator_keys: [],
       field_values: { weight: '', old_note: 'from before' },
@@ -101,7 +101,7 @@ describe('AssetForm', () => {
 
     cleanup();
     const existing: AssetWithDetails = {
-      asset: { id: 'a1', name: 'M3 screws', created_at: '', updated_at: '', stock: { quantity: 40, unit: 'pcs', low_stock_threshold: 50, is_running_low: true } },
+      asset: { id: 'a1', name: 'M3 screws', created_at: '', updated_at: '', condition: 'ok', condition_note: '', stock: { quantity: 40, unit: 'pcs', low_stock_threshold: 50, is_running_low: true } },
       categories: [],
       generator_keys: [],
       field_values: {},

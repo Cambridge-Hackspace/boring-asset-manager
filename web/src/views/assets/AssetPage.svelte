@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
-  import { amount, describeChange, describeEvent, isWebURL, keptValues } from '../../lib/assets';
+  import { amount, conditionLabel, describeChange, describeEvent, isWebURL, keptValues } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { actorName } from '../../lib/people';
-  import type { AssetEvent, AssetWithDetails, GeneratorInfo, GeneratorKey } from '../../lib/models';
+  import type { AssetEvent, AssetWithDetails, Condition, GeneratorInfo, GeneratorKey } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import ConditionBadge from '../../components/ConditionBadge.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
@@ -100,6 +101,30 @@
 
   const when = (iso: string) => new Date(iso).toLocaleString();
 
+  // Reporting a problem, or clearing one.
+  let reporting = $state(false);
+  let reportCondition = $state<Condition>('needs_maintenance');
+  let reportNote = $state('');
+
+  function startReport() {
+    reporting = true;
+    reportCondition = asset?.asset.condition === 'out_of_service' ? 'out_of_service' : 'needs_maintenance';
+    reportNote = asset?.asset.condition_note ?? '';
+  }
+
+  function report(event: SubmitEvent) {
+    event.preventDefault();
+    void stockAction(async () => {
+      const r = await request<{ asset: AssetWithDetails }>('PUT', `${path}/condition`, { condition: reportCondition, note: reportNote });
+      reporting = false;
+      return r;
+    }, `Reported: ${conditionLabel(reportCondition).toLowerCase()}.`);
+  }
+
+  function markWorking() {
+    void stockAction(() => request('PUT', `${path}/condition`, { condition: 'ok' }), 'Marked as working.');
+  }
+
   async function restore() {
     error = '';
     saved = '';
@@ -143,6 +168,12 @@
         {/if}
       {:else}
         {#if session.can('assets:write')}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>{/if}
+        {#if session.canAny('assets:report', 'assets:write') && !reporting}
+          <button type="button" class="btn-secondary" onclick={startReport}>Report a problem</button>
+        {/if}
+        {#if asset.asset.condition !== 'ok' && session.can('assets:write')}
+          <button type="button" class="btn-secondary" disabled={busy} onclick={markWorking}>Mark as working</button>
+        {/if}
         {#if session.can('assets:delete')}
           <ConfirmButton label="Archive" question="Archive this asset? Its codes become free for reuse." onconfirm={archive} />
         {/if}
@@ -153,6 +184,34 @@
     <p class="mb-4 rounded border border-zinc-300 bg-zinc-100 p-3 text-sm dark:border-zinc-700 dark:bg-zinc-800">
       Archived {when(asset.asset.archived_at)}. Its codes were released for other assets; restoring it gives back those no other asset has taken.
     </p>
+  {/if}
+  {#if asset.asset.condition !== 'ok'}
+    <p class="mb-4 flex flex-wrap items-center gap-2 text-sm">
+      <ConditionBadge condition={asset.asset.condition} />
+      {#if asset.asset.condition_note}<span>{asset.asset.condition_note}</span>{/if}
+    </p>
+  {/if}
+  {#if reporting}
+    <form class="card mb-4 max-w-xl space-y-3" onsubmit={report}>
+      <h2 class="text-lg font-semibold">Report a problem</h2>
+      <fieldset>
+        <legend class="label">How bad is it?</legend>
+        <label class="mr-4 inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="condition" value="needs_maintenance" bind:group={reportCondition} /> Needs maintenance, still usable
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="radio" name="condition" value="out_of_service" bind:group={reportCondition} /> Out of service, do not use
+        </label>
+      </fieldset>
+      <div>
+        <label class="label" for="condition-note">What is wrong?</label>
+        <input id="condition-note" class="input" maxlength="255" placeholder="The chuck slips" bind:value={reportNote} />
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="btn-primary" disabled={busy}>Report</button>
+        <button type="button" class="btn-secondary" onclick={() => (reporting = false)}>Cancel</button>
+      </div>
+    </form>
   {/if}
 
   <div class="grid gap-6 lg:grid-cols-2">

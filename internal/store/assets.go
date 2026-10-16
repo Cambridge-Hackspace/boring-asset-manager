@@ -231,12 +231,12 @@ func (s *Store) insertAsset(tx *sql.Tx, assetID, name string, now time.Time, cat
 
 // GetAssetByID retrieves an asset and resolves its assigned categories, generator keys, and field values.
 func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
-	query := `SELECT id, name, created_at, updated_at, archived_at, ` + stockColumns + ` FROM assets WHERE id = ?`
+	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, ` + stockColumns + ` FROM assets WHERE id = ?`
 	var (
 		a  models.Asset
 		sc stockScan
 	)
-	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt}, sc.dest()...)...)
+	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt, &a.Condition, &a.ConditionNote}, sc.dest()...)...)
 	if err == sql.ErrNoRows {
 		return nil, ErrAssetNotFound
 	}
@@ -337,16 +337,38 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 
 // ListAssets returns active assets, optionally filtered by category or search term.
 func (s *Store) ListAssets(categoryID string, search string) ([]models.AssetWithDetails, error) {
-	return s.listAssets(categoryID, search, false)
+	return s.FilterAssets(AssetFilter{CategoryID: categoryID, Search: search})
 }
 
 // ListArchivedAssets returns archived assets, most recently archived first,
 // filtered as ListAssets filters active ones.
 func (s *Store) ListArchivedAssets(categoryID string, search string) ([]models.AssetWithDetails, error) {
-	return s.listAssets(categoryID, search, true)
+	return s.FilterAssets(AssetFilter{CategoryID: categoryID, Search: search, Archived: true})
 }
 
-func (s *Store) listAssets(categoryID string, search string, archived bool) ([]models.AssetWithDetails, error) {
+// ConditionProblem, as AssetFilter.Condition, matches every asset whose
+// condition is not ok.
+const ConditionProblem = "problem"
+
+// ErrInvalidCondition is returned for a condition that is not one of
+// models.ValidCondition's, or a filter that is neither one nor
+// ConditionProblem.
+var ErrInvalidCondition = errors.New("condition must be ok, needs_maintenance or out_of_service")
+
+// AssetFilter chooses which assets a list holds. Empty fields match every
+// asset; Archived lists archived assets instead of active ones.
+type AssetFilter struct {
+	CategoryID string
+	Search     string
+	Archived   bool
+	// Condition is a condition, or ConditionProblem.
+	Condition string
+}
+
+// FilterAssets lists the assets a filter matches: active ones newest first,
+// archived ones most recently archived first.
+func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
+	categoryID, search, archived := f.CategoryID, f.Search, f.Archived
 	var (
 		whereClauses []string
 		args         []any
@@ -363,6 +385,18 @@ func (s *Store) listAssets(categoryID string, search string, archived bool) ([]m
 	if categoryID != "" {
 		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_categories WHERE category_id = ?)")
 		args = append(args, categoryID)
+	}
+
+	switch {
+	case f.Condition == "":
+	case f.Condition == ConditionProblem:
+		whereClauses = append(whereClauses, "a.asset_condition <> ?")
+		args = append(args, models.ConditionOK)
+	case models.ValidCondition(f.Condition):
+		whereClauses = append(whereClauses, "a.asset_condition = ?")
+		args = append(args, f.Condition)
+	default:
+		return nil, ErrInvalidCondition
 	}
 
 	query := fmt.Sprintf(`

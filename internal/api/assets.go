@@ -10,6 +10,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/assetcsv"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -76,19 +77,21 @@ type QuantityRequest struct {
 const historyPage = 50
 
 func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
-	categoryID := r.URL.Query().Get("category_id")
-	search := r.URL.Query().Get("search")
-
-	list := s.store.ListAssets
-	switch r.URL.Query().Get("archived") {
+	q := r.URL.Query()
+	f := store.AssetFilter{CategoryID: q.Get("category_id"), Search: q.Get("search"), Condition: q.Get("condition")}
+	switch q.Get("archived") {
 	case "", "false":
 	case "true":
-		list = s.store.ListArchivedAssets
+		f.Archived = true
 	default:
 		writeJSONError(w, http.StatusBadRequest, "archived must be true or false")
 		return
 	}
-	assets, err := list(categoryID, search)
+	assets, err := s.store.FilterAssets(f)
+	if errors.Is(err, store.ErrInvalidCondition) {
+		writeJSONError(w, http.StatusBadRequest, "condition must be ok, needs_maintenance, out_of_service or problem")
+		return
+	}
 	if err != nil {
 		writeServerError(w, err, "list assets")
 		return
@@ -309,5 +312,36 @@ func (s *Server) handleRestoreAsset(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err, "restore the asset")
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"asset": asset, "skipped_codes": skipped})
+	}
+}
+
+// ConditionRequest sets an asset's condition, with a note saying what is
+// wrong.
+type ConditionRequest struct {
+	Condition string `json:"condition"`
+	Note      string `json:"note"`
+}
+
+// handleSetAssetCondition reports a problem with an asset, or marks it
+// working again: PUT /api/v1/assets/{id}/condition. Reporting needs
+// assets:report or assets:write; marking an asset ok needs assets:write.
+func (s *Server) handleSetAssetCondition(w http.ResponseWriter, r *http.Request) {
+	var req ConditionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !models.ValidCondition(req.Condition) {
+		writeJSONError(w, http.StatusBadRequest, "condition must be ok, needs_maintenance or out_of_service")
+		return
+	}
+	if req.Condition == models.ConditionOK && !HasPermission(r.Context(), rbac.PermAssetsWrite) {
+		writeJSONError(w, http.StatusForbidden, "Marking an asset working again needs assets:write")
+		return
+	}
+	asset, changed, err := s.actingStore(r).SetAssetCondition(r.PathValue("id"), req.Condition, req.Note)
+	switch {
+	case errors.Is(err, store.ErrAssetNotFound):
+		writeJSONError(w, http.StatusNotFound, "Asset not found")
+	case err != nil:
+		writeStoreError(w, err, "set the condition")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"asset": asset, "changed": changed})
 	}
 }

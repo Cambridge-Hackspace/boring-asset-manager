@@ -103,6 +103,12 @@ describe('stock', () => {
     expect(describeEvent(event('asset.created', { trigger: 'import' }))).toBe('Created by an import');
     expect(describeEvent(event('asset.edited', {}))).toBe('Edited');
     expect(describeEvent(event('asset.restored', {}))).toBe('Restored');
+    const condition = (to: string, note?: string) =>
+      describeEvent(event('asset.condition_changed', { changes: [{ what: 'condition', from: 'ok', to }], note }));
+    expect(condition('out_of_service', 'Chuck slips')).toBe('Reported out of service: “Chuck slips”');
+    expect(condition('needs_maintenance')).toBe('Reported as needing maintenance');
+    expect(condition('ok')).toBe('Marked as working');
+    expect(describeChange({ what: 'condition', from: 'out_of_service', to: 'ok' }, 'asset.condition_changed')).toBe('Was out of service');
   });
 
   it('describes the changes an edit made', () => {

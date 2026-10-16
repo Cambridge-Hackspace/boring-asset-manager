@@ -9,6 +9,7 @@
   import { exportUrl } from '../../lib/importing';
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
+  import ConditionBadge from '../../components/ConditionBadge.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
 
@@ -22,6 +23,8 @@
   let categoryId = $state(router.query.get('category') ?? '');
   // Archived assets are listed apart, without codes or labels to print.
   let archived = $state(router.query.get('archived') === 'true');
+  // '' for any condition, 'problem' for anything not working, or one condition.
+  let condition = $state(router.query.get('condition') ?? '');
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
@@ -46,6 +49,7 @@
     if (search.trim()) q.set('search', search.trim());
     if (categoryId) q.set('category_id', categoryId);
     if (archived) q.set('archived', 'true');
+    if (condition) q.set('condition', condition);
     applied = { search, categoryId };
     try {
       assets = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
@@ -64,6 +68,7 @@
     if (search.trim()) q.set('search', search.trim());
     if (categoryId) q.set('category', categoryId);
     if (archived) q.set('archived', 'true');
+    if (condition) q.set('condition', condition);
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
     void load();
@@ -113,6 +118,16 @@
       <option value={true}>Archived assets</option>
     </select>
   </div>
+  <div>
+    <label class="label" for="asset-condition">Condition</label>
+    <select id="asset-condition" class="input" bind:value={condition} onchange={() => applyFilters()}>
+      <option value="">Any</option>
+      <option value="problem">Needs attention</option>
+      <option value="needs_maintenance">Needs maintenance</option>
+      <option value="out_of_service">Out of service</option>
+      <option value="ok">Working</option>
+    </select>
+  </div>
   <button type="submit" class="btn-secondary">Search</button>
 </form>
 
@@ -147,7 +162,7 @@
                 <input type="checkbox" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} />
               </td>
             {/if}
-            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a></td>
+            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} /></td>
             <td class="py-2 pr-4">
               <span class="flex flex-wrap gap-1">
                 {#each a.categories as c (c.id)}<CategoryBadge category={c} />{/each}
