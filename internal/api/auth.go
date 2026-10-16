@@ -73,19 +73,27 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAuthMe returns current session details and effective user permissions.
+// Signed out, the user is null and the permissions are the public role's.
+// API tokens are refused: they have no session.
 func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
-	user := CurrentUser(r.Context())
-	if user == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Authentication required")
+	if CurrentToken(r.Context()) != nil {
+		writeJSONError(w, http.StatusForbidden, "This needs a signed-in session; API tokens cannot use it")
 		return
 	}
+	user := CurrentUser(r.Context())
 
 	permsMap := UserPermissions(r.Context())
+	if user == nil {
+		permsMap = PublicPermissions(r.Context())
+	}
 	var permsList []string
 	for k, v := range permsMap {
 		if v {
 			permsList = append(permsList, k)
 		}
+	}
+	if permsList == nil {
+		permsList = []string{}
 	}
 	sort.Strings(permsList)
 

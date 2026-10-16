@@ -2,13 +2,14 @@
   import type { Snippet } from 'svelte';
   import { router } from './lib/router.svelte';
   import { displayName } from './lib/people';
-  import { session } from './lib/session.svelte';
+  import { session, signInPath } from './lib/session.svelte';
   import { routes } from './routes';
 
   let { children }: { children: Snippet } = $props();
 
   const navItems = $derived(
-    routes.filter((r) => r.nav && (!r.permissions || session.canAny(...r.permissions))),
+    // Signed out, nothing: the public see single pages, not the catalog.
+    routes.filter((r) => r.nav && !!session.user && (!r.permissions || session.canAny(...r.permissions))),
   );
 
   function current(pattern: string): boolean {
@@ -46,8 +47,12 @@
       {/each}
     </nav>
     <div class="flex items-center gap-3 text-sm">
-      <a href="/account" class="text-zinc-600 hover:underline dark:text-zinc-400">{session.user ? displayName(session.user) : ''}</a>
-      <button type="button" class="btn-secondary" onclick={() => session.signOut()}>Sign out</button>
+      {#if session.user}
+        <a href="/account" class="text-zinc-600 hover:underline dark:text-zinc-400">{displayName(session.user)}</a>
+        <button type="button" class="btn-secondary" onclick={() => session.signOut()}>Sign out</button>
+      {:else}
+        <a class="btn-secondary" href={signInPath(router.path + router.search)}>Sign in</a>
+      {/if}
     </div>
   </div>
 </header>

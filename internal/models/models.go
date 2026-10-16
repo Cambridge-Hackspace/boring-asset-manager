@@ -36,6 +36,9 @@ type RoleWithPermissions struct {
 	UserCount int `json:"user_count"`
 	// Protected is set for the admin role, which cannot be changed.
 	Protected bool `json:"protected"`
+	// Public is set for the public role: everyone holds it, signed in or
+	// not, and it may only read assets.
+	Public bool `json:"public"`
 }
 
 // Permission represents a granular permission key.

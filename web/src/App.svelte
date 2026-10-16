@@ -25,10 +25,12 @@
   });
 
   const allowed = $derived(!match?.route.permissions || session.canAny(...match.route.permissions));
+  // Signed out, a page is open when the public role allows it (README §3.3).
+  const openToPublic = $derived(!!match?.route.public && allowed);
 
-  // Signed-out visitors go to sign-in, and come back afterward.
+  // Other signed-out visitors go to sign-in, and come back afterward.
   $effect(() => {
-    if (session.loaded && !session.user && router.path !== '/sign-in') {
+    if (session.loaded && !session.user && router.path !== '/sign-in' && !openToPublic) {
       navigate(signInPath(router.path + router.search), true);
     }
   });
@@ -48,7 +50,7 @@
   <p class="p-8 text-sm text-zinc-600 dark:text-zinc-400" role="status">Loading…</p>
 {:else if router.path === '/sign-in'}
   <SignIn />
-{:else if session.user}
+{:else if session.user || openToPublic}
   <Shell>
     {#if !match}
       <NotFound />

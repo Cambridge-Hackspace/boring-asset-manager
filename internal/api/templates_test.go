@@ -183,6 +183,7 @@ func TestTemplateValidationDetails(t *testing.T) {
 
 func TestTemplateAndImagePermissions(t *testing.T) {
 	srv, _, _ := setupTestServer(t)
+	nothingPublic(t, srv)
 	user, err := srv.store.CreateUser("viewer@test.org", "ViewerSecret123!", true)
 	if err != nil {
 		t.Fatal(err)

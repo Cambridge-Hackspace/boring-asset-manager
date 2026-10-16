@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -112,14 +113,14 @@ func TestAuthLoginLogoutMeFlow(t *testing.T) {
 		t.Errorf("expected cookie to be cleared with MaxAge -1")
 	}
 
-	// 5. GET /api/v1/auth/me after logout should return 401
+	// 5. GET /api/v1/auth/me after logout answers as signed out: no user
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 	req.AddCookie(sessionCookie)
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 Unauthorized after session revoked, got %d", rec.Code)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"user":null`) {
+		t.Fatalf("expected no user after session revoked, got %d %s", rec.Code, rec.Body)
 	}
 }
 

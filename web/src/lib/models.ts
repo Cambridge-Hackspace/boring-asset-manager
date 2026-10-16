@@ -42,7 +42,8 @@ export interface User {
 }
 
 export interface Me {
-  user: User;
+  /** Null for a signed-out visitor, who holds the public role's permissions. */
+  user: User | null;
   permissions: PermissionKey[];
 }
 
@@ -246,6 +247,8 @@ export interface Role {
   user_count: number;
   /** Set for the admin role, which always has every permission. */
   protected: boolean;
+  /** Set for the public role, which everyone holds, signed in or not; it may only read. */
+  public: boolean;
 }
 
 export interface UserWithRoles extends User {

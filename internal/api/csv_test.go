@@ -31,6 +31,7 @@ func readCSV(t *testing.T, body string) [][]string {
 
 func TestExportAssetsCSV(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
+	nothingPublic(t, srv)
 	cookie := sessionCookie(t, srv, admin.ID)
 	tools, _ := srv.store.CreateCategory("Tools", nil, "", false, false)
 	drills, _ := srv.store.CreateCategory("Drills", &tools.ID, "", false, false)

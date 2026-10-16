@@ -49,9 +49,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.HandleFunc("GET /api/v1/info", s.handleInfo)
 	mux.HandleFunc("POST /api/v1/auth/login", s.handleLogin)
 
+	// Signed-out visitors hold the public role's permissions on the routes
+	// wrapped in OpenToPublic only: one asset's page, never the catalog.
+
 	// Authenticated session endpoints
 	mux.Handle("POST /api/v1/auth/logout", RequireAuth(http.HandlerFunc(s.handleLogout)))
-	mux.Handle("GET /api/v1/auth/me", RequireAuth(http.HandlerFunc(s.handleAuthMe)))
+	mux.HandleFunc("GET /api/v1/auth/me", s.handleAuthMe)
 	mux.Handle("PUT /api/v1/auth/name", RequireAuth(http.HandlerFunc(s.handleSetOwnName)))
 	mux.Handle("PUT /api/v1/auth/password", RequireAuth(http.HandlerFunc(s.handleChangePassword)))
 
@@ -126,7 +129,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/assets/import/preview", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImportPreview)))
 	mux.Handle("POST /api/v1/assets/import", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImport)))
 	mux.Handle("POST /api/v1/assets", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleCreateAsset)))
-	mux.Handle("GET /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetAsset)))
+	mux.Handle("GET /api/v1/assets/{id}", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetAsset))))
 	mux.Handle("PUT /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUpdateAsset)))
 	mux.Handle("DELETE /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsDelete)(http.HandlerFunc(s.handleDeleteAsset)))
 	mux.Handle("POST /api/v1/assets/{id}/restore", RequirePermission(rbac.PermAssetsDelete)(http.HandlerFunc(s.handleRestoreAsset)))
@@ -135,7 +138,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PUT /api/v1/assets/{id}/condition", RequireAnyPermission(rbac.PermAssetsReport, rbac.PermAssetsWrite)(http.HandlerFunc(s.handleSetAssetCondition)))
 	mux.Handle("POST /api/v1/assets/{id}/photos", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUploadPhoto)))
 	mux.Handle("PUT /api/v1/assets/{id}/photos", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleReorderPhotos)))
-	mux.Handle("GET /api/v1/assets/{id}/photos/{photo_id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetPhoto)))
+	mux.Handle("GET /api/v1/assets/{id}/photos/{photo_id}", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetPhoto))))
 	mux.Handle("DELETE /api/v1/assets/{id}/photos/{photo_id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleRemovePhoto)))
 	mux.Handle("POST /api/v1/assets/{id}/links", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleAddLink)))
 	mux.Handle("DELETE /api/v1/assets/{id}/links/{link_id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleRemoveLink)))
@@ -144,7 +147,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/assets/{id}/checkin", lending(http.HandlerFunc(s.handleCheckIn)))
 	mux.Handle("GET /api/v1/loans", RequirePermission(rbac.PermAssetsTrack)(http.HandlerFunc(s.handleListLoans)))
 	mux.Handle("GET /api/v1/people", RequireAnyPermission(rbac.PermAssetsLend, rbac.PermUsersManage)(http.HandlerFunc(s.handleListPeople)))
-	mux.Handle("GET /api/v1/assets/{id}/history", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetHistory)))
+	mux.Handle("GET /api/v1/assets/{id}/history", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetHistory))))
 
 	// Label templates
 	mux.Handle("GET /api/v1/templates", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListTemplates)))
@@ -164,7 +167,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/assets/{id}/label", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetLabel)))
 	mux.Handle("POST /api/v1/templates/preview", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handlePreviewTemplate)))
 	mux.Handle("POST /api/v1/labels/export", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportLabels)))
-	mux.Handle("GET /api/v1/generators", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListGenerators)))
+	mux.Handle("GET /api/v1/generators", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListGenerators))))
 
 	// Network printers
 	// Template designers read printers too, for their media size and DPI.

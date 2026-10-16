@@ -192,3 +192,16 @@ func ValidateAntiLockout(activeAdminsCount int, willRemoveAdmin bool) error {
 	}
 	return nil
 }
+
+// The public role is everyone's, signed in or not (README §3.3), and its
+// scope, on no categories until some are put in it, holds what it may see.
+const (
+	PublicRole  = "public"
+	PublicScope = "public"
+)
+
+// PublicAllowed reports whether the public role may hold perm: signed-out
+// visitors may look, never change anything.
+func PublicAllowed(perm string) bool {
+	return perm == PermAssetsRead
+}

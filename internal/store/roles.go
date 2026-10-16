@@ -101,6 +101,7 @@ func (s *Store) ListRoles() ([]models.RoleWithPermissions, error) {
 	for i := range roles {
 		roles[i].UserCount = counts[roles[i].ID]
 		roles[i].Protected = roles[i].Name == AdminRoleName
+		roles[i].Public = roles[i].Name == rbac.PublicRole
 	}
 	return roles, countRows.Err()
 }
@@ -200,6 +201,9 @@ const AdminRoleName = "admin"
 var (
 	// ErrRoleProtected is returned when changing or deleting the admin role.
 	ErrRoleProtected = errors.New("the admin role always has every permission and cannot be changed or deleted")
+	// ErrPublicRole is returned when renaming or deleting the public role,
+	// or giving it more than reading.
+	ErrPublicRole = errors.New("the public role is everyone's, signed in or not: it keeps its name, cannot be deleted, and may only read assets")
 	// ErrInvalidRole wraps the reason a role cannot be saved as given.
 	ErrInvalidRole = errors.New("invalid role")
 )
@@ -304,8 +308,19 @@ func (s *Store) UpdateRole(id string, in RoleInput) (*models.RoleWithPermissions
 		return nil, err
 	}
 	err := s.withAdminGuard(func(tx *sql.Tx) error {
-		if err := s.editableRoleTx(tx, id); err != nil {
+		name, err := s.editableRoleTx(tx, id)
+		if err != nil {
 			return err
+		}
+		if name == rbac.PublicRole {
+			if in.Name != rbac.PublicRole {
+				return ErrPublicRole
+			}
+			for _, p := range in.Permissions {
+				if _, key := rbac.SplitKey(p); !rbac.PublicAllowed(key) {
+					return ErrPublicRole
+				}
+			}
 		}
 		if _, err := s.TxExec(tx, "UPDATE roles SET name = ?, description = ? WHERE id = ?", in.Name, in.Description, id); err != nil {
 			return fmt.Errorf("updating role: %w", err)
@@ -322,8 +337,12 @@ func (s *Store) UpdateRole(id string, in RoleInput) (*models.RoleWithPermissions
 // anti-lockout guard.
 func (s *Store) DeleteRole(id string) error {
 	return s.withAdminGuard(func(tx *sql.Tx) error {
-		if err := s.editableRoleTx(tx, id); err != nil {
+		name, err := s.editableRoleTx(tx, id)
+		if err != nil {
 			return err
+		}
+		if name == rbac.PublicRole {
+			return ErrPublicRole
 		}
 		// Its grants and assignments go with it (ON DELETE CASCADE).
 		if _, err := s.TxExec(tx, "DELETE FROM roles WHERE id = ?", id); err != nil {
@@ -333,20 +352,27 @@ func (s *Store) DeleteRole(id string) error {
 	})
 }
 
-// editableRoleTx checks that a role exists and is not the admin role.
-func (s *Store) editableRoleTx(tx *sql.Tx, id string) error {
+// editableRoleTx checks that a role exists and is not the admin role, and
+// returns its name.
+func (s *Store) editableRoleTx(tx *sql.Tx, id string) (string, error) {
 	var name string
 	err := s.TxQueryRow(tx, "SELECT name FROM roles WHERE id = ?", id).Scan(&name)
 	if err == sql.ErrNoRows {
-		return ErrRoleNotFound
+		return "", ErrRoleNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("reading role: %w", err)
+		return "", fmt.Errorf("reading role: %w", err)
 	}
 	if name == AdminRoleName {
-		return ErrRoleProtected
+		return "", ErrRoleProtected
 	}
-	return nil
+	return name, nil
+}
+
+// PublicPermissions are the permissions of the public role, which everyone
+// holds, signed in or not.
+func (s *Store) PublicPermissions() (map[string]bool, error) {
+	return grantedKeys(storeQuerier{s}, "SELECT id FROM roles WHERE name = ?", rbac.PublicRole)
 }
 
 // setRolePermissionsTx replaces a role's permissions with keys, which must

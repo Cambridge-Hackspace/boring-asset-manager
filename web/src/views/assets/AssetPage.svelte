@@ -314,7 +314,7 @@
     <PhotosPanel {asset} onchange={assetChanged} />
     <LinksPanel {asset} onchange={assetChanged} />
 
-    {#if !archived}<LabelActions assetIds={[id]} />{/if}
+    {#if !archived && session.user}<LabelActions assetIds={[id]} />{/if}
 
     {#if history.length}
       <section class="card" aria-labelledby="history-heading">
