@@ -186,6 +186,7 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
     '{{asset.id}}',
     '{{base_url}}',
     '{{base_url}}/a/{{asset.id}}',
+    '{{scan_url}}',
     '{{asset.categories}}',
     '{{asset.location}}',
     '{{asset.condition}}',

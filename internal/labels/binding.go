@@ -25,6 +25,7 @@ const (
 	RefStockUnit                      // {{stock.unit}}
 	RefLoanBorrower                   // {{loan.borrower}}
 	RefLoanDue                        // {{loan.due}}
+	RefScanURL                        // {{scan_url}}
 )
 
 // simpleRefs are the placeholders that take no argument.
@@ -39,6 +40,7 @@ var simpleRefs = map[string]RefKind{
 	"stock.unit":       RefStockUnit,
 	"loan.borrower":    RefLoanBorrower,
 	"loan.due":         RefLoanDue,
+	"scan_url":         RefScanURL,
 }
 
 // Ref is one placeholder. Arg holds the generator type or field key.
@@ -179,6 +181,9 @@ func (b Binding) Resolve(d Data) string {
 			sb.WriteString(d.Borrower)
 		case RefLoanDue:
 			sb.WriteString(d.Due)
+		case RefScanURL:
+			// The asset's scan page (README §6.4), by ID, which never changes.
+			sb.WriteString(strings.TrimRight(d.BaseURL, "/") + "/scan/" + d.AssetID)
 		}
 	}
 	return sb.String()

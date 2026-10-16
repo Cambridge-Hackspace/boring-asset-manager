@@ -107,6 +107,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryRelationTypes)))
 	mux.Handle("PUT /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryRelationTypes)))
 	mux.Handle("PUT /api/v1/categories/{id}/scan-template", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryScanTemplate)))
+	mux.Handle("GET /api/v1/scan/{code}", OpenToPublic(RequirePermission(rbac.PermAssetsScan)(http.HandlerFunc(s.handleScan))))
 	mux.Handle("GET /api/v1/categories/scan-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleScanConflicts)))
 
 	// Reports: anyone who reads assets runs them; reports.manage edits them.

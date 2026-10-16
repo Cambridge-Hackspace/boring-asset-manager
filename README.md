@@ -443,6 +443,7 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
   | `{{asset.condition}}` | `Working`, `Needs maintenance` or `Out of service` |
   | `{{stock.quantity}}`, `{{stock.unit}}` | Its stock counted by quantity, and the unit (empty when not counted) |
   | `{{loan.borrower}}`, `{{loan.due}}` | Who has it on loan, by name ("Unnamed user" for someone without one; empty without `assets.track`, §3.3), and the day it is due back as `YYYY-MM-DD` in UTC (empty when not lent) |
+  | `{{scan_url}}` | The asset's scan page, `{{base_url}}/scan/<asset ID>` (§6.4): a QR code of it takes whoever scans the label there |
 
   Unknown placeholders and unknown field keys are rejected when the template is saved. A field deleted later simply resolves to an empty string. A `generator` element without a `content_binding` encodes `{{asset.code.<its generator_type>}}`, and rendering fails for an asset that has no code of that type. Resolved generator payloads go through the same validator as asset generator keys before they are encoded.
 * **Element types:**
@@ -688,6 +689,8 @@ What scanning an asset's code shows is a scan template (migration `022`): a save
 * **Ties are marked**, since someone should settle them: an asset's `scan_template` gives the template, the category it came from and, when a tie between different templates decided it, `conflict` and the categories in it (`contenders`). `GET /api/v1/assets?conflict=scan_template` lists those assets, and `GET /api/v1/categories/scan-conflicts` the categories in ties, with how many active assets each; with `?category_id=…&scan_template_id=…` (empty for none) it answers as if that category named that template. The web app marks them with a yellow triangle on the asset, in the asset list and in the category tree, and the category form warns before saving a template that would make a new tie. Ordinary inheritance is never marked.
 * **Endpoints:** scan templates are reports: `GET /api/v1/reports?kind=scan` lists them, and `POST /api/v1/reports` with `"kind": "scan"` creates one; a report keeps its kind. `POST /api/v1/reports/preview` with `{"kind": "scan", "asset_id", "spec"}` lays one out for an asset the editor can read. Running one as a report, or downloading its CSV, is `409`. The Reports page lists them apart, with the default marked.
 * **`assets.scan`** looks an asset up by its code and sees its scan page. Migration `022` grants it to every role that reads assets, in the same scopes, the public role among them (§3.3).
+* **Looking up:** `GET /api/v1/scan/{code}` (`assets.scan` for the asset; signed-out visitors too, with the public role) finds the active asset with that assigned code, of any generator type, or that ID, and answers with the asset's ID, name and stock unit, the template, and the template laid out for it. Its actions are narrowed to those the viewer may take now: `open` with `assets.read`, `edit` with `assets.write`, `use` for counted stock with `stock.record`, `borrow` for oneself when it is lendable, not lent and in service, with `assets.borrow`, `return` when lent, with `assets.lend` or as its borrower, and `report` with `assets.report` or `assets.write`, each in the asset's scopes. An asset the viewer cannot scan, an archived one, or none is `404`; a code two assets have, as codes of different kinds, is `409`. A template naming a field deleted since is `409`, asking for it to be edited.
+* **The scan page** in the web app, `/scan/{code}`, shows the template and takes its actions in place: using some stock, borrowing, giving back, and reporting a problem; opening and editing go to the asset's pages. It is open to signed-out visitors for public assets (§3.3), and every asset's page links to its own. Labels reach it with `{{scan_url}}` (§4.1).
 
 ---
 
@@ -969,15 +972,15 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.19: Scan Templates
 * [x] Reports of kind scan, chosen by categories with inheritance and a default, ties settled by depth, size and age and marked for someone to settle (§6.4).
 
+#### Sub-Phase 7.20: Scanning Codes
+* [x] Looking an asset up by its code, a scan page with quick actions open to the public role, and `{{scan_url}}` for labels (§6.4).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
 
-#### Asset Associations, Later
-* [ ] Scanning a bin's code to list what is in it. (The container's name on labels came with `{{asset.location}}`, §4.1.)
-
 #### Deferred
-* **QR codes linking to an asset's page:** left to template authors, since a QR code's content is already a binding they choose. A ready-made binding for the asset's address may come with a custom generator later.
+* **QR codes linking to an asset's page:** a QR code's content is a binding template authors choose; `{{scan_url}}` (§6.4) gives the asset's scan page for it, so no generator of its own is needed.
 
 ---
 
