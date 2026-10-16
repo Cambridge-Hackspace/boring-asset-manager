@@ -12,6 +12,7 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import ConditionBadge from '../../components/ConditionBadge.svelte';
+  import ConflictMark from '../../components/ConflictMark.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
@@ -275,6 +276,13 @@
         {#if asset.scopes && !(asset.scopes.length === 1 && asset.scopes[0] === DEFAULT_SCOPE)}
           <dt class="font-medium">Scopes</dt>
           <dd>{asset.scopes.join(', ')}</dd>
+        {/if}
+        {#if asset.scan_template?.conflict}
+          <dt class="font-medium">Scan page</dt>
+          <dd>
+            <ConflictMark /> Chosen by a tie between categories as close to it as each other.
+            <a class="underline" href="/categories">Name a template on one of them</a> to settle it.
+          </dd>
         {/if}
         {#each asset.effective_fields as e (e.field.id)}
           <dt class="font-medium">{e.field.label}</dt>

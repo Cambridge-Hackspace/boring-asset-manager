@@ -32,7 +32,7 @@ func normalizeReportName(name string) (string, error) {
 
 // ListReports lists every report by name.
 func (s *Store) ListReports() ([]models.Report, error) {
-	rows, err := s.Query("SELECT id, name, spec, created_at, updated_at FROM reports ORDER BY name, id")
+	rows, err := s.Query("SELECT id, name, kind, is_default, spec, created_at, updated_at FROM reports ORDER BY name, id")
 	if err != nil {
 		return nil, fmt.Errorf("listing reports: %w", err)
 	}
@@ -53,14 +53,14 @@ func scanReport(row interface{ Scan(...any) error }) (models.Report, error) {
 		r    models.Report
 		spec string
 	)
-	err := row.Scan(&r.ID, &r.Name, &spec, &r.CreatedAt, &r.UpdatedAt)
+	err := row.Scan(&r.ID, &r.Name, &r.Kind, &r.Default, &spec, &r.CreatedAt, &r.UpdatedAt)
 	r.Spec = []byte(spec)
 	return r, err
 }
 
 // GetReport returns a report, or ErrReportNotFound.
 func (s *Store) GetReport(id string) (*models.Report, error) {
-	r, err := scanReport(s.QueryRow("SELECT id, name, spec, created_at, updated_at FROM reports WHERE id = ?", id))
+	r, err := scanReport(s.QueryRow("SELECT id, name, kind, is_default, spec, created_at, updated_at FROM reports WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		return nil, ErrReportNotFound
 	}
@@ -104,9 +104,13 @@ func (s *Store) UpdateReport(id, name string, spec []byte) (*models.Report, erro
 	return s.GetReport(id)
 }
 
-// DeleteReport deletes a report.
+// DeleteReport deletes a report, unless it is a scan template in use.
 func (s *Store) DeleteReport(id string) error {
-	if _, err := s.GetReport(id); err != nil {
+	r, err := s.GetReport(id)
+	if err != nil {
+		return err
+	}
+	if err := s.scanTemplateInUse(r); err != nil {
 		return err
 	}
 	if _, err := s.Exec("DELETE FROM reports WHERE id = ?", id); err != nil {

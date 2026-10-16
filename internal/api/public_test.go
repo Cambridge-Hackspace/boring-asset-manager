@@ -38,7 +38,7 @@ func TestThePublicRole(t *testing.T) {
 	}
 
 	// What signed-out visitors hold.
-	if body := expect("me, signed out", nil, http.MethodGet, "/api/v1/auth/me", "", http.StatusOK); !strings.Contains(body, `"user":null`) || !strings.Contains(body, `"permissions":["public:assets.read"]`) {
+	if body := expect("me, signed out", nil, http.MethodGet, "/api/v1/auth/me", "", http.StatusOK); !strings.Contains(body, `"user":null`) || !strings.Contains(body, `"permissions":["public:assets.read","public:assets.scan"]`) {
 		t.Errorf("me, signed out: %s", body)
 	}
 
@@ -93,7 +93,7 @@ func TestThePublicRole(t *testing.T) {
 	// The role keeps its name, stays, and only ever reads.
 	role, _ := st.GetRoleByName(rbac.PublicRole)
 	path := "/api/v1/roles/" + role.ID
-	if body := expect("listing roles", adminCookie, http.MethodGet, "/api/v1/roles", "", http.StatusOK); !strings.Contains(body, `"name":"public","description":"Everyone, signed in or not","permissions":["public:assets.read"],"user_count":0,"protected":false,"public":true`) {
+	if body := expect("listing roles", adminCookie, http.MethodGet, "/api/v1/roles", "", http.StatusOK); !strings.Contains(body, `"name":"public","description":"Everyone, signed in or not","permissions":["public:assets.read","public:assets.scan"],"user_count":0,"protected":false,"public":true`) {
 		t.Errorf("listing roles: %s", body)
 	}
 	expect("renaming it", adminCookie, http.MethodPut, path, `{"name":"everyone","permissions":["public:assets.read"]}`, http.StatusConflict)

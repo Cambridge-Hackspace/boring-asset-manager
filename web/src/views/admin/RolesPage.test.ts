@@ -160,8 +160,8 @@ describe('RolesPage', () => {
     await fireEvent.click(within(card).getByRole('button', { name: 'Edit public' }));
     expect((screen.getByLabelText('Name') as HTMLInputElement).readOnly).toBe(true);
     const offered = screen.getAllByRole('checkbox', { name: / — / });
-    expect(offered).toHaveLength(1);
-    expect(offered[0]!.parentElement!.textContent!.trim()).toMatch(/^Read assets — /);
+    // Looking and scanning, nothing else.
+    expect(offered.map((c) => c.parentElement!.textContent!.trim().split(' — ')[0])).toEqual(['Read assets', 'Scan codes']);
 
     const scopeCard = screen.getAllByRole('heading', { name: 'public' })[1]!.closest('li')!;
     expect(scopeCard.textContent).toContain('make their assets public. On 2 categories.');

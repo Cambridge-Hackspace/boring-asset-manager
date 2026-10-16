@@ -10,7 +10,10 @@
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
-  let reports = $state<Report[]>([]);
+  let all = $state<Report[]>([]);
+  const reports = $derived(all.filter((r) => r.kind !== 'scan'));
+  // Scan templates (README §6.4): what scanning an asset shows.
+  const scanTemplates = $derived(all.filter((r) => r.kind === 'scan'));
   let loading = $state(true);
   let error = $state('');
   let status = $state('');
@@ -18,7 +21,7 @@
 
   async function load() {
     try {
-      reports = (await request<{ reports: Report[] }>('GET', '/reports')).reports ?? [];
+      all = (await request<{ reports: Report[] }>('GET', '/reports')).reports ?? [];
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -33,6 +36,17 @@
     try {
       const res = await request<{ report: Report }>('POST', '/reports', { name: `${r.name} (copy)`, spec: r.spec });
       navigate(`/reports/${encodeURIComponent(res.report.id)}/edit`);
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function makeDefault(r: Report) {
+    error = status = '';
+    try {
+      await request('POST', `/reports/${encodeURIComponent(r.id)}/default`);
+      status = `${r.name} is now the default scan template.`;
+      await load();
     } catch (err) {
       error = messageOf(err);
     }
@@ -76,4 +90,33 @@
       </li>
     {/each}
   </ul>
+{/if}
+
+{#if !loading && (canManage || scanTemplates.length)}
+  <section class="mt-8" aria-labelledby="scan-templates-heading">
+    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <h2 id="scan-templates-heading" class="text-xl font-semibold">Scan templates</h2>
+      {#if canManage}<a class="btn-secondary" href="/scan-templates/new">New scan template</a>{/if}
+    </div>
+    <p class="mb-3 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
+      What scanning an asset’s code shows. Each category can choose one for its assets and subcategories; the rest show
+      the default.
+    </p>
+    <ul class="space-y-2">
+      {#each scanTemplates as r (r.id)}
+        <li class="card flex flex-wrap items-center justify-between gap-2">
+          <span class="font-medium">{r.name}{#if r.default}<span class="ml-2 text-sm font-normal text-zinc-600 dark:text-zinc-400">(default)</span>{/if}</span>
+          {#if canManage}
+            <span class="inline-flex flex-wrap gap-2">
+              <a class="btn-secondary" href="/scan-templates/{encodeURIComponent(r.id)}/edit" aria-label="Edit {r.name}">Edit</a>
+              {#if !r.default}
+                <button type="button" class="btn-secondary" aria-label="Make {r.name} the default" onclick={() => makeDefault(r)}>Make default</button>
+                <ConfirmButton label="Delete" question="Delete {r.name}?" onconfirm={() => remove(r)} />
+              {/if}
+            </span>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+  </section>
 {/if}

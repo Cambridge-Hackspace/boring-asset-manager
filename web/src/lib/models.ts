@@ -14,7 +14,8 @@ export type Permission =
   | 'assets.borrow'
   | 'assets.lend'
   | 'reports.manage'
-  | 'assets.track';
+  | 'assets.track'
+  | 'assets.scan';
 
 /** A permission held in every scope, or in one as scope:permission (README §3.3). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -86,6 +87,8 @@ export interface Category {
   is_running_low: boolean;
   /** Flags the category when fewer active assets remain; null for none. */
   low_stock_threshold?: number | null;
+  /** The scan template its assets, and its subcategories' that name none, show. */
+  scan_template_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -176,6 +179,7 @@ export interface AssetWithDetails {
   suggested_relation_type_ids: string[];
   /** The scopes it is in, from its categories and theirs, or default. */
   scopes: string[];
+  scan_template: ScanChoice;
   /** Its photos, in order; the first is the one lists show. */
   photos: AssetPhoto[];
 }
@@ -439,6 +443,10 @@ export interface AssetLink {
 export interface Report {
   id: string;
   name: string;
+  /** A report, or a scan template: what scanning an asset shows (README §6.4). */
+  kind: 'report' | 'scan';
+  /** The scan template assets show when no category names one. */
+  default: boolean;
   spec: ReportSpec;
   created_at: string;
   updated_at: string;
@@ -459,7 +467,8 @@ export interface ReportFilter {
 }
 
 export interface ReportSection {
-  type: 'table' | 'chart';
+  /** details and actions are a scan template's. */
+  type: 'table' | 'chart' | 'details' | 'actions';
   title?: string;
   /** A table's columns, sorting and grouping. */
   columns: { heading: string; binding: string }[];
@@ -471,6 +480,22 @@ export interface ReportSection {
   /** assets, quantity or loans; for a line chart used, restocked or loans. */
   measure?: string;
   period?: '' | 'week' | 'month';
+  /** In a scan template, a table's rows: contents, what the scanned asset holds. */
+  source?: 'contents';
+  /** An actions section's quick actions. */
+  actions?: ScanAction[];
+}
+
+export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report'] as const;
+export type ScanAction = (typeof scanActions)[number];
+
+/** The scan template an asset shows, and why: the closest category naming one, or the default. */
+export interface ScanChoice {
+  template_id: string;
+  source_category_id?: string;
+  /** Set when equally close categories named different templates, and the tie was broken by depth, size or age. */
+  conflict?: boolean;
+  contenders?: string[];
 }
 
 export interface ChartSeries {
@@ -482,8 +507,9 @@ export interface ChartSeries {
 export interface ReportResult {
   assets: number;
   sections: {
-    type: 'table' | 'chart';
+    type: 'table' | 'chart' | 'details' | 'actions';
     title: string;
+    actions?: ScanAction[];
     columns?: string[];
     groups?: { title: string; running_low?: boolean; rows: { asset_id: string; cells: string[] }[] }[];
     chart?: 'bar' | 'donut' | 'line';

@@ -79,6 +79,12 @@ const historyPage = 50
 func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := store.AssetFilter{CategoryID: q.Get("category_id"), Search: q.Get("search"), Condition: q.Get("condition"), Loan: q.Get("loan")}
+	switch q.Get("conflict") {
+	case "", "scan_template":
+	default:
+		writeJSONError(w, http.StatusBadRequest, "conflict must be scan_template")
+		return
+	}
 	switch q.Get("archived") {
 	case "", "false":
 	case "true":
@@ -103,6 +109,16 @@ func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	if assets, err = s.readable(r, assets); err != nil {
 		writeServerError(w, err, "read the assets' links")
 		return
+	}
+	// Those whose scan template was chosen by a tie (README §6.4).
+	if q.Get("conflict") == "scan_template" {
+		kept := assets[:0]
+		for _, a := range assets {
+			if a.ScanTemplate.Conflict {
+				kept = append(kept, a)
+			}
+		}
+		assets = kept
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

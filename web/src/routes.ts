@@ -21,6 +21,7 @@ import TokensPage from './views/admin/TokensPage.svelte';
 import ReportsPage from './views/reports/ReportsPage.svelte';
 import ReportView from './views/reports/ReportView.svelte';
 import ReportEditor from './views/reports/ReportEditor.svelte';
+import ScanTemplateEditor from './views/reports/ScanTemplateEditor.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
@@ -49,6 +50,8 @@ export const routes: Route[] = [
   { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports.manage'] },
   { pattern: '/reports/:id', component: ReportView, title: 'Report', permissions: ['assets.read'] },
   { pattern: '/reports/:id/edit', component: ReportEditor, title: 'Edit report', permissions: ['reports.manage'] },
+  { pattern: '/scan-templates/new', component: ScanTemplateEditor, title: 'New scan template', permissions: ['reports.manage'] },
+  { pattern: '/scan-templates/:id/edit', component: ScanTemplateEditor, title: 'Edit scan template', permissions: ['reports.manage'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
   { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets.read'], nav: 'Categories' },
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories.manage'] },

@@ -353,6 +353,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 		return nil, err
 	}
 	details.Scopes = traits.scopesOf(catIDs)
+	if details.ScanTemplate, err = s.contextScan(ctx, catIDs); err != nil {
+		return nil, err
+	}
 	return details, nil
 }
 

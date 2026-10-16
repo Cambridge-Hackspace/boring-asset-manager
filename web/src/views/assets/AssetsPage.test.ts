@@ -30,6 +30,7 @@ const asset = (id: string, name: string): AssetWithDetails => ({
   location: [],
   suggested_relation_type_ids: [],
   scopes: ['default'],
+  scan_template: { template_id: 'default' },
   photos: [],
 });
 
@@ -63,5 +64,21 @@ describe('AssetsPage', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole('link', { name: 'Saw' })).toBeNull();
     expect(screen.getAllByRole('row')).toHaveLength(2);
+  });
+
+  it('marks assets whose scan template was chosen by a tie', async () => {
+    fakeApi({
+      'GET /categories': () => ({ categories: [category] }),
+      'GET /assets': () => ({
+        assets: [
+          { ...asset('a1', 'Kettle'), scan_template: { template_id: 't', source_category_id: 'tools', conflict: true, contenders: ['tools', 'kitchen'] } },
+          asset('a2', 'Drill'),
+        ],
+      }),
+    });
+    render(AssetsPage, { params: {} });
+    const marks = await screen.findAllByRole('img', { name: 'Scan template chosen by a tie between categories' });
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.closest('tr')!.textContent).toContain('Kettle');
   });
 });

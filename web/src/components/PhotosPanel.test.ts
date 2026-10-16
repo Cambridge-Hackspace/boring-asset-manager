@@ -19,6 +19,7 @@ const drill = (photos: AssetPhoto[]): AssetWithDetails => ({
   location: [],
   suggested_relation_type_ids: [],
   scopes: ['default'],
+  scan_template: { template_id: 'default' },
   photos,
 });
 

@@ -94,9 +94,12 @@ type Category struct {
 	IsRunningLow bool `json:"is_running_low"`
 	// LowStockThreshold flags a consumable category as running low when its
 	// active count drops below it (README §5.1); nil means no threshold.
-	LowStockThreshold *int      `json:"low_stock_threshold"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	LowStockThreshold *int `json:"low_stock_threshold"`
+	// ScanTemplateID names the scan template its assets, and those of its
+	// subcategories that name none, show when scanned (README §6.4).
+	ScanTemplateID *string   `json:"scan_template_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // Event kinds (README §5.1).
@@ -333,6 +336,21 @@ type AssetWithDetails struct {
 	// Scopes are the scopes it is in: those of its categories and their
 	// ancestors, or the default scope (README §3.3).
 	Scopes []string `json:"scopes"`
+	// ScanTemplate is the scan template it shows when scanned, and why.
+	ScanTemplate ScanChoice `json:"scan_template"`
+}
+
+// ScanChoice is the scan template an asset uses (README §6.4): the one its
+// nearest category naming one names, SourceCategoryID, or the default when
+// none does. Conflict is set when categories at the same distance name
+// different templates and the tie was broken by how deep they are, how
+// many subcategories they have or how old they are; Contenders are those
+// categories, for someone to settle.
+type ScanChoice struct {
+	TemplateID       string   `json:"template_id"`
+	SourceCategoryID string   `json:"source_category_id,omitempty"`
+	Conflict         bool     `json:"conflict,omitempty"`
+	Contenders       []string `json:"contenders,omitempty"`
 }
 
 // Image is an uploaded PNG or JPEG placed on labels by static_image elements.
@@ -470,8 +488,12 @@ type AssetLink struct {
 // Report is a saved report (README §6.3): a name and its spec, JSON that
 // the reports package reads.
 type Report struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Kind is report or scan (README §6.4); Default marks the scan template
+	// assets use when no category names one.
+	Kind      string          `json:"kind"`
+	Default   bool            `json:"default"`
 	Spec      json.RawMessage `json:"spec"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`

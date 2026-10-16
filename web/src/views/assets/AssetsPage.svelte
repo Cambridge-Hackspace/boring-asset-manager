@@ -11,6 +11,7 @@
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConditionBadge from '../../components/ConditionBadge.svelte';
+  import ConflictMark from '../../components/ConflictMark.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
 
@@ -28,6 +29,8 @@
   let condition = $state(router.query.get('condition') ?? '');
   // '' for any, 'open' for assets lent out, 'overdue' for those past due.
   let loan = $state(router.query.get('loan') ?? '');
+  // scan_template lists only assets whose scan template was chosen by a tie.
+  let conflict = $state(router.query.get('conflict') ?? '');
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
@@ -59,6 +62,7 @@
     if (archived) q.set('archived', 'true');
     if (condition) q.set('condition', condition);
     if (loan) q.set('loan', loan);
+    if (conflict) q.set('conflict', conflict);
     applied = { search, categoryId };
     try {
       const found = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
@@ -81,6 +85,7 @@
     if (archived) q.set('archived', 'true');
     if (condition) q.set('condition', condition);
     if (loan) q.set('loan', loan);
+    if (conflict) q.set('conflict', conflict);
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
     void load();
@@ -152,6 +157,13 @@
 </form>
 
 <ErrorMessage {error} />
+{#if conflict === 'scan_template'}
+  <p class="mb-3 text-sm" role="status">
+    <ConflictMark /> Showing assets whose scan template was chosen by a tie between categories as close to them as each
+    other. Name a template on one of those categories to settle it.
+    <button type="button" class="underline" onclick={() => ((conflict = ''), applyFilters())}>Show all</button>
+  </p>
+{/if}
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading assets…</p>
@@ -183,7 +195,7 @@
               </td>
             {/if}
             <td class="py-2 pr-4 font-medium">
-              {#if a.photos[0]}<img src={photoUrl(a.asset.id, a.photos[0].id, true)} alt="" class="mr-2 inline-block h-8 w-8 rounded object-cover align-middle" loading="lazy" />{/if}<a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />
+              {#if a.photos[0]}<img src={photoUrl(a.asset.id, a.photos[0].id, true)} alt="" class="mr-2 inline-block h-8 w-8 rounded object-cover align-middle" loading="lazy" />{/if}<a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.scan_template?.conflict}<ConflictMark />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
             </td>
             <td class="py-2 pr-4">

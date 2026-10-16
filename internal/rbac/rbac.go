@@ -31,6 +31,8 @@ const (
 	// PermAssetsTrack sees the people around assets: who borrowed them, who
 	// changed them, and the loans list.
 	PermAssetsTrack = "assets.track"
+	// PermAssetsScan looks an asset up by its code, and sees its scan page.
+	PermAssetsScan = "assets.scan"
 )
 
 var (
@@ -55,6 +57,7 @@ func AllPermissions() []string {
 		PermAssetsLend,
 		PermReportsManage,
 		PermAssetsTrack,
+		PermAssetsScan,
 	}
 }
 
@@ -122,6 +125,7 @@ var scopable = map[string]bool{
 	PermAssetsRead: true, PermAssetsWrite: true, PermAssetsDelete: true,
 	PermAssetsReport: true, PermAssetsBorrow: true, PermAssetsLend: true,
 	PermAssetsTrack: true,
+	PermAssetsScan:  true,
 	PermStockRecord: true,
 }
 
@@ -203,5 +207,5 @@ const (
 // PublicAllowed reports whether the public role may hold perm: signed-out
 // visitors may look, never change anything.
 func PublicAllowed(perm string) bool {
-	return perm == PermAssetsRead
+	return perm == PermAssetsRead || perm == PermAssetsScan
 }

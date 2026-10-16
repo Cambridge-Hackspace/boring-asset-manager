@@ -66,6 +66,7 @@ describe('AssetForm', () => {
       location: [],
       suggested_relation_type_ids: [],
       scopes: ['default'],
+      scan_template: { template_id: 'default' },
       photos: [],
     };
     const { sent } = fakeApi({
@@ -121,6 +122,7 @@ describe('AssetForm', () => {
       location: [],
       suggested_relation_type_ids: [],
       scopes: ['default'],
+      scan_template: { template_id: 'default' },
       photos: [],
     };
     const edit = fakeApi({

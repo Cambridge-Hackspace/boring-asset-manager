@@ -10,6 +10,8 @@ import type { Report, ReportResult } from '../../lib/models';
 const lowReport: Report = {
   id: 'low',
   name: 'Running low',
+  kind: 'report',
+  default: false,
   spec: {
     filter: { running_low: true },
     sections: [{ type: 'table', title: 'Shopping list', columns: [{ heading: 'Asset', binding: '{{asset.name}}' }, { heading: 'In stock', binding: '{{stock.quantity}} {{stock.unit}}' }], group_by: 'category' }],

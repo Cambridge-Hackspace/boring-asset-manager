@@ -88,6 +88,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/relations', 'Relations'],
       ['/reports', 'Reports'],
       ['/reports/new', 'New report'],
+      ['/scan-templates/new', 'New scan template'],
       [`/reports/${reports[0].id}`, ''],
       [`/reports/${charts.report.id}`, ''],
       ['/account', 'Your account'],
