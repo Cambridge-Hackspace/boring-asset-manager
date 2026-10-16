@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -200,5 +201,65 @@ func TestRelationTypes(t *testing.T) {
 	}
 	if a, _ := st.GetAssetByID(asset(t, st, "Cordless drill", drills.ID)); len(a.SuggestedRelationTypeIDs) != 1 || a.SuggestedRelationTypeIDs[0] != powers.ID {
 		t.Errorf("suggested to a drill: %v", a.SuggestedRelationTypeIDs)
+	}
+}
+
+// TestListsReadAssetsAsSingleReadsDo checks that a list, which reads every
+// link, loan and category once for all its assets, gives each asset exactly
+// what reading it alone gives.
+func TestListsReadAssetsAsSingleReadsDo(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	contains, usedWith := relation(t, st, "contains"), relation(t, st, "used with")
+	tools, err := st.CreateCategoryFrom(CategoryInput{Name: "Tools", IsLendable: true, IsConsumable: true, Unit: "g"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetCategoryRelationTypes(tools.ID, []string{usedWith.ID}); err != nil {
+		t.Fatal(err)
+	}
+	bo, err := st.CreateNamedUser("bo@hackspace.org", "Bo", "a long enough password", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shelf, bin := asset(t, st, "Shelf"), asset(t, st, "Bin")
+	spool, err := st.CreateAssetWithStock("Spool", []string{tools.ID}, nil, nil, &StockInput{Quantity: intp(900), Unit: "g"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	drill := asset(t, st, "Drill", tools.ID)
+	link(t, st, shelf, contains, bin, true)
+	link(t, st, bin, contains, spool.Asset.ID, true)
+	link(t, st, drill, usedWith, spool.Asset.ID, true)
+	if _, err := st.CheckOut(drill, bo.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	// An archived asset, linked to the shelf.
+	oldSaw := asset(t, st, "Old saw")
+	link(t, st, oldSaw, usedWith, shelf, true)
+	archive(t, st, oldSaw)
+
+	for _, archived := range []bool{false, true} {
+		list, err := st.FilterAssets(AssetFilter{Archived: archived})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list) == 0 {
+			t.Fatalf("archived %v: an empty list", archived)
+		}
+		for _, listed := range list {
+			alone, err := st.GetAssetByID(listed.Asset.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(listed, *alone) {
+				t.Errorf("%s listed:\n%+v\nalone:\n%+v", listed.Asset.Name, listed, *alone)
+			}
+		}
+	}
+	// And the case the list path must not get wrong: the deep location.
+	got, _ := st.FilterAssets(AssetFilter{Search: "Spool"})
+	if len(got) != 1 || len(got[0].Location) != 2 || got[0].Location[0].Name != "Shelf" || got[0].Location[1].Name != "Bin" || !got[0].Weighed {
+		t.Errorf("the spool in a list: %+v", got)
 	}
 }

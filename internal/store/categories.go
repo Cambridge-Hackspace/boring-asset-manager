@@ -23,6 +23,7 @@ const (
 
 var (
 	ErrCategoryNotFound             = errors.New("category not found")
+	ErrUnitRequiresConsumable       = errors.New("only consumable categories can total their stock in a unit")
 	ErrCycleDetected                = errors.New("cannot set parent: circular reference detected")
 	ErrSelfParent                   = errors.New("category cannot be its own parent")
 	ErrParentNotFound               = errors.New("parent category not found")
@@ -107,6 +108,14 @@ func validateCategoryAttributes(id string, in CategoryInput) error {
 	if in.IsRunningLow && !in.IsConsumable {
 		return ErrRunningLowRequiresConsumable
 	}
+	if in.Unit != "" {
+		if !in.IsConsumable {
+			return ErrUnitRequiresConsumable
+		}
+		if err := textcheck.Check("unit", in.Unit, MaxStockUnit); err != nil {
+			return err
+		}
+	}
 	if in.LowStockThreshold != nil {
 		if !in.IsConsumable {
 			return ErrThresholdRequiresConsumable
@@ -124,6 +133,7 @@ type CategoryInput struct {
 	ParentID          *string
 	ColorHex          string
 	IsConsumable      bool
+	Unit              string
 	IsLendable        bool
 	IsRunningLow      bool
 	LowStockThreshold *int
@@ -131,7 +141,7 @@ type CategoryInput struct {
 
 // categoryColumns lists a category's columns, each prefixed, in scanCategory's order.
 func categoryColumns(prefix string) string {
-	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "is_lendable", "is_running_low", "low_stock_threshold", "created_at", "updated_at"}
+	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "stock_unit", "is_lendable", "is_running_low", "low_stock_threshold", "created_at", "updated_at"}
 	for i, c := range cols {
 		cols[i] = prefix + c
 	}
@@ -145,7 +155,7 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 		parentVal sql.NullString
 		threshold sql.NullInt64
 	)
-	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.IsLendable, &c.IsRunningLow, &threshold, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.Unit, &c.IsLendable, &c.IsRunningLow, &threshold, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, err
 	}
@@ -168,7 +178,7 @@ func (s *Store) CreateCategory(name string, parentID *string, colorHex string, i
 // records a running-low event, and one created with a threshold above its
 // (empty) active count flags itself.
 func (s *Store) CreateCategoryFrom(in CategoryInput) (*models.Category, error) {
-	in.Name = strings.TrimSpace(in.Name)
+	in.Name, in.Unit = strings.TrimSpace(in.Name), strings.TrimSpace(in.Unit)
 	if in.Name == "" {
 		return nil, errors.New("category name cannot be empty")
 	}
@@ -192,8 +202,8 @@ func (s *Store) CreateCategoryFrom(in CategoryInput) (*models.Category, error) {
 
 	now := time.Now().UTC()
 	err := s.withInventory(func(ic *inventoryChange) error {
-		query := `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, is_lendable, is_running_low, low_stock_threshold, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		if _, err := s.TxExec(ic.tx, query, categoryID, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsLendable, in.IsRunningLow, in.LowStockThreshold, now, now); err != nil {
+		query := `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, stock_unit, is_lendable, is_running_low, low_stock_threshold, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		if _, err := s.TxExec(ic.tx, query, categoryID, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.Unit, in.IsLendable, in.IsRunningLow, in.LowStockThreshold, now, now); err != nil {
 			return fmt.Errorf("inserting category: %w", err)
 		}
 		return s.setFlagByHand(ic, categoryID, false, in.IsRunningLow)
@@ -270,7 +280,7 @@ func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Categor
 		return nil, err
 	}
 
-	in.Name = strings.TrimSpace(in.Name)
+	in.Name, in.Unit = strings.TrimSpace(in.Name), strings.TrimSpace(in.Unit)
 	if in.Name == "" {
 		return nil, errors.New("category name cannot be empty")
 	}
@@ -300,8 +310,8 @@ func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Categor
 		if err != nil {
 			return fmt.Errorf("reading category: %w", err)
 		}
-		query := `UPDATE categories SET name = ?, parent_id = ?, color_hex = ?, is_consumable = ?, is_lendable = ?, is_running_low = ?, low_stock_threshold = ?, updated_at = ? WHERE id = ?`
-		if _, err := s.TxExec(ic.tx, query, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.IsLendable, in.IsRunningLow, in.LowStockThreshold, time.Now().UTC(), id); err != nil {
+		query := `UPDATE categories SET name = ?, parent_id = ?, color_hex = ?, is_consumable = ?, stock_unit = ?, is_lendable = ?, is_running_low = ?, low_stock_threshold = ?, updated_at = ? WHERE id = ?`
+		if _, err := s.TxExec(ic.tx, query, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.Unit, in.IsLendable, in.IsRunningLow, in.LowStockThreshold, time.Now().UTC(), id); err != nil {
 			return fmt.Errorf("updating category: %w", err)
 		}
 		return s.setFlagByHand(ic, id, was, in.IsRunningLow)

@@ -564,7 +564,7 @@ Stock is counted in one of two ways, for two kinds of things:
 | The threshold is on | The category | The asset |
 | Using some up | Archive the asset | Use or restock it (`POST /api/v1/assets/{id}/quantity`) |
 
-The two are never added together, since they count different things (3 spools and 500 g of solder make no total).
+The two meet in one place: things labeled one by one that are used up gradually, such as filament spools. A consumable category with a unit (below) weighs them rather than counting them, so a 1000 g spool and a 2000 g spool make 3000 g. Otherwise the two are never added together, since they count different things (3 spools and 500 g of solder make no total).
 
 #### Counted by items
 
@@ -575,7 +575,8 @@ The two are never added together, since they count different things (3 spools an
   * The rule reacts to the count *crossing* the threshold, not to its level. A manual change stands until the count next crosses, so the automatic rule never undoes a person's decision.
   * Anything that changes an active count is checked: creating, archiving, deleting or recategorizing assets; moving or deleting categories; imports (checked once, after the whole file); and changing the threshold itself (setting it above the current count flags at once).
   * Changes that can move a count serialize on an application lock, so two simultaneous archives cannot both miss a crossing.
-* **Events:** every change of the flag, manual or automatic, records an event (`category.running_low` or `category.restocked`) in the same transaction as the change: the category, the user whose action caused it, whether it was manual or automatic, and for automatic changes the count and threshold. A change that rolls back records nothing, and two people flagging at once produce one event.
+* **Weighing instead of counting:** a consumable category may have a `unit` (up to 32 characters, migration `016`). Its level is then the total stock, in that unit, of the distinct active assets in it and its descendants that count their stock by quantity in that unit (a spool of filament with 1000 g); other assets add nothing. The threshold is in the unit too, and `GET /api/v1/categories/{id}` reports the level as `total` beside `active_count`. Each category measures by its own unit, so totals carry up to parent categories only where the units match. Using or restocking such an asset, or checking a lent one back in with what is left (§5.3), is checked against the thresholds as any other change, and the category's events carry the unit. An asset whose stock is in the unit of one of its categories, or their ancestors, is `weighed`.
+* **Events:** every change of the flag, manual or automatic, records an event (`category.running_low` or `category.restocked`) in the same transaction as the change: the category, the user whose action caused it, whether it was manual or automatic, and for automatic changes the count (or total) and threshold, with the unit of a category that weighs. A change that rolls back records nothing, and two people flagging at once produce one event.
 
 #### Counted by quantity
 
@@ -605,8 +606,8 @@ Some equipment is lent out: drills, multimeters, a ladder. Lending is turned on 
 
 * **Lendable categories:** `is_lendable` on a category lets its assets, and those of every category below it, be checked out. `GET /api/v1/assets/{id}` says whether an asset is `lendable`, and gives its open `loan`, if any: the borrower (`id`, `email`, `name`, and `archived` if they have left), when it went out, when it is due back, and whether it is `overdue`.
 * **Who may lend:** `assets:borrow` checks an asset out to oneself and checks one's own loans back in; `assets:lend` checks an asset out to any active user and checks any loan back in. Migration `014` grants both to every role that had `assets:write`. Borrowers are always user accounts; `GET /api/v1/people` (`assets:lend` or `users:manage`) lists the active users a loan can name. An API token can lend with `assets:lend`, naming the borrower, but cannot borrow.
-* **Checking out:** `POST /api/v1/assets/{id}/checkout` with `{"borrower_id", "due_at"}`, both optional: no borrower means whoever is signed in, and `due_at` is an RFC 3339 time (the web app sends the end of the chosen day in the browser's time zone, since the server has no local time zone of its own). It is refused (`409`) for an asset that is archived, in no lendable category, counted by quantity, out of service, or already lent: one borrower at a time. Lending part of a pooled quantity is not supported; label each item to lend it.
-* **Checking in:** `POST /api/v1/assets/{id}/checkin` ends the open loan. A lent asset cannot be archived until it is checked in (`409`). A borrower who is archived keeps their loans, so it stays clear who had the drill.
+* **Checking out:** `POST /api/v1/assets/{id}/checkout` with `{"borrower_id", "due_at"}`, both optional: no borrower means whoever is signed in, and `due_at` is an RFC 3339 time (the web app sends the end of the chosen day in the browser's time zone, since the server has no local time zone of its own). It is refused (`409`) for an asset that is archived, in no lendable category, out of service, already lent (one borrower at a time), or counted by quantity without being weighed (§5.1): lending part of a pooled quantity is not supported, so label each item to lend it, but a weighed spool is lent like anything else.
+* **Checking in:** `POST /api/v1/assets/{id}/checkin` ends the open loan. For an asset counted by quantity, such as a spool, `{"left": n}` says how much came back; the difference is recorded as use and checked against thresholds. A lent asset cannot be archived until it is checked in (`409`). A borrower who is archived keeps their loans, so it stays clear who had the drill.
 * **Loans and the list:** `GET /api/v1/loans` (`assets:read`) lists loans newest first, returned ones too, with `?borrower_id=` and `?state=open` or `overdue`. The asset list filters with `?loan=open` or `overdue` and shows who has each asset. The Loans page shows lenders every open loan and borrowers their own, past and present.
 * **History and notices:** checking out and in record `asset.checked_out` and `asset.checked_in` in the asset's history, with the borrower as they were named then and the due date. The notification worker in `bam serve` sweeps for open loans past due each time it polls and records `asset.overdue` once per loan, with the trigger `schedule`; channels can subscribe to it, and several servers sharing a database still record it once.
 
@@ -896,17 +897,15 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.9: Asset Associations
 * [x] Relation types named from each end, single and symmetric, with containers giving locations; links stored once, moves, loops refused, recorded in both assets' history; containers that hold anything kept from archiving; categories suggesting types (§3.6).
 
+#### Sub-Phase 7.10: Weights for Counted Items
+* [x] Consumable categories with a unit total their assets' stock in it, with thresholds in it, cascading where units match; weighed spools can be lent, and come back with what is left (§5.1, §5.3).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
 
 #### Asset Associations, Later
 * [ ] The container's name on labels (a `{{asset.location}}` placeholder, with reports), a CSV column per relation type, and scanning a bin's code to list what is in it.
-
-#### Weights for Counted Items
-* [ ] **Optional, per category:** a consumable category counted by items can give its assets a weight in the category's unit, so a 1 kg spool and a 2 kg spool of blue PLA sum to 3 kg, and the category's threshold is in that unit ("notify me below 1 kg"). Categories without a unit count each asset as 1, as they do now, for things that are truly atomic.
-* [ ] The weight can be lowered as a spool is used, through the same use action as quantities, and the totals cascade to parent categories as counts do now, but only where the units match.
-* [ ] A lent spool checked back in asks how much is left, and records the difference as use.
 
 #### Photos on Assets
 * [ ] A few photos per asset, shown on its page and as a thumbnail in the list, stored like label images.

@@ -12,6 +12,7 @@ const drill: AssetWithDetails = {
   field_values: {},
   effective_fields: [],
   lendable: true,
+  weighed: false,
   loan: null,
   links: [],
   location: [],
@@ -93,5 +94,34 @@ describe('LoanPanel', () => {
     render(LoanPanel, { asset: { ...drill, asset: { ...drill.asset, condition: 'out_of_service' } }, onchange: () => {} });
     expect(screen.getByText(/out of service, so it cannot be lent/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Lend' })).toBeNull();
+  });
+});
+
+describe('LoanPanel, weighed', () => {
+  it('lends a spool, and records what is left when it comes back', async () => {
+    session.permissions = ['assets:read', 'assets:lend'];
+    const stock = { quantity: 1000, unit: 'g', low_stock_threshold: null, is_running_low: false };
+    const spool: AssetWithDetails = { ...drill, weighed: true, asset: { ...drill.asset, stock } };
+    const { sent } = fakeApi({
+      'GET /people': () => ({ people: [] }),
+      'POST /assets/a1/checkin': () => ({ asset: spool }),
+    });
+    const done: string[] = [];
+    const { rerender } = render(LoanPanel, { asset: spool, onchange: (_a: AssetWithDetails, d: string) => done.push(d) });
+    expect(screen.getByText('Available to borrow.')).toBeTruthy();
+
+    await rerender({ asset: { ...lentTo('bo', 'Bo'), weighed: true, asset: { ...drill.asset, stock } } });
+    await fireEvent.input(screen.getByLabelText('Left now (g), if weighed'), { target: { value: '250' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Check in' }));
+    await vi.waitFor(() => expect(done).toEqual(['Checked in.']));
+    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ left: 250 });
+  });
+
+  it('will not lend part of a pooled quantity', () => {
+    session.permissions = ['assets:read', 'assets:lend'];
+    fakeApi({ 'GET /people': () => ({ people: [] }) });
+    const stock = { quantity: 20, unit: 'pcs', low_stock_threshold: null, is_running_low: false };
+    render(LoanPanel, { asset: { ...drill, asset: { ...drill.asset, stock } }, onchange: () => {} });
+    expect(screen.getByText(/counted by quantity, so it cannot be lent/)).toBeTruthy();
   });
 });

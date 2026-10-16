@@ -93,7 +93,7 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/assets/{asset}/links", body: `{"type_id":"{relation}","asset_id":"{asset}","outgoing":true}`},
 	{method: "DELETE", path: "/api/v1/assets/{asset}/links/{asset}"},
 	{method: "POST", path: "/api/v1/assets/{asset}/checkout", body: `{"borrower_id":"{user}","due_at":"2099-01-01T00:00:00Z"}`},
-	{method: "POST", path: "/api/v1/assets/{asset}/checkin"},
+	{method: "POST", path: "/api/v1/assets/{asset}/checkin", body: `{"left":250}`},
 	{method: "GET", path: "/api/v1/loans", query: map[string][]string{"state": {"open", "overdue", ""}, "borrower_id": {"{user}"}}},
 	{method: "GET", path: "/api/v1/people"},
 	{method: "GET", path: "/api/v1/assets/{asset}/history"},

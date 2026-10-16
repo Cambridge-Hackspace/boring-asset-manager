@@ -60,41 +60,70 @@ func scanLoan(row interface{ Scan(...any) error }, now time.Time) (models.Loan, 
 	return l, err
 }
 
-// lendableCategories returns the categories whose assets may be lent: the
-// lendable ones and every category below one.
-func (s *Store) lendableCategories(q interface {
+// categoryTraits are what categories pass down to their subcategories.
+type categoryTraits struct {
+	// lendable holds the categories whose assets may be lent: the lendable
+	// ones and every category below one.
+	lendable map[string]bool
+	// units holds, for each category, the units it or an ancestor totals
+	// stock in (README §5.1).
+	units map[string]map[string]bool
+	// parents maps each category to its parent.
+	parents map[string]string
+}
+
+// weighs reports whether an asset in these categories, counting its stock
+// in unit, is a thing weighed rather than a pooled quantity: one of its
+// categories totals stock in that unit.
+func (t categoryTraits) weighs(categoryIDs []string, unit string) bool {
+	for _, id := range categoryIDs {
+		if unit != "" && t.units[id][unit] {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) categoryTraits(q interface {
 	Query(string, ...any) (*sql.Rows, error)
-}) (map[string]bool, error) {
-	rows, err := q.Query("SELECT id, parent_id, is_lendable FROM categories")
+}) (categoryTraits, error) {
+	rows, err := q.Query("SELECT id, parent_id, is_lendable, is_consumable, stock_unit FROM categories")
 	if err != nil {
-		return nil, fmt.Errorf("reading categories: %w", err)
+		return categoryTraits{}, fmt.Errorf("reading categories: %w", err)
 	}
 	defer rows.Close()
-	parents, own := map[string]string{}, map[string]bool{}
+	parents, lendable, unit := map[string]string{}, map[string]bool{}, map[string]string{}
 	for rows.Next() {
 		var (
-			id       string
-			parent   sql.NullString
-			lendable bool
+			id                  string
+			parent              sql.NullString
+			canLend, consumable bool
+			u                   string
 		)
-		if err := rows.Scan(&id, &parent, &lendable); err != nil {
-			return nil, fmt.Errorf("scanning category: %w", err)
+		if err := rows.Scan(&id, &parent, &canLend, &consumable, &u); err != nil {
+			return categoryTraits{}, fmt.Errorf("scanning category: %w", err)
 		}
-		parents[id], own[id] = parent.String, lendable
+		parents[id], lendable[id] = parent.String, canLend
+		if consumable {
+			unit[id] = u
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return categoryTraits{}, err
 	}
-	out := map[string]bool{}
-	for id := range own {
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents}
+	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {
-			if own[c] {
-				out[id] = true
-				break
+			t.lendable[id] = t.lendable[id] || lendable[c]
+			if unit[c] != "" {
+				if t.units[id] == nil {
+					t.units[id] = map[string]bool{}
+				}
+				t.units[id][unit[c]] = true
 			}
 		}
 	}
-	return out, nil
+	return t, nil
 }
 
 // storeQuerier runs queries outside a transaction.
@@ -115,13 +144,34 @@ func (q txQuerier) Query(query string, args ...any) (*sql.Rows, error) {
 }
 
 // loanDetails fills in whether an asset may be lent and its open loan.
-func (s *Store) loanDetails(a *models.AssetWithDetails) error {
-	lendable, err := s.lendableCategories(storeQuerier{s})
+func (s *Store) loanDetails(a *models.AssetWithDetails, ctx *assetContext) error {
+	traits, err := s.contextTraits(ctx)
 	if err != nil {
 		return err
 	}
-	for _, c := range a.Categories {
-		a.Lendable = a.Lendable || lendable[c.ID]
+	ids := make([]string, len(a.Categories))
+	for i, c := range a.Categories {
+		ids[i] = c.ID
+		a.Lendable = a.Lendable || traits.lendable[c.ID]
+	}
+	if st := a.Asset.Stock; st != nil {
+		a.Weighed = traits.weighs(ids, st.Unit)
+	}
+	if ctx.list {
+		if ctx.loans == nil {
+			open, err := s.ListLoans(LoanFilter{State: LoansOpen})
+			if err != nil {
+				return err
+			}
+			ctx.loans = make(map[string]models.Loan, len(open))
+			for _, l := range open {
+				ctx.loans[l.AssetID] = l
+			}
+		}
+		if l, ok := ctx.loans[a.Asset.ID]; ok {
+			a.Loan = &l
+		}
+		return nil
 	}
 	l, err := scanLoan(s.QueryRow("SELECT "+loanColumns+loanJoins+" WHERE l.asset_id = ? AND l.checked_in_at IS NULL", a.Asset.ID), time.Now())
 	if err == sql.ErrNoRows {
@@ -177,30 +227,38 @@ func (s *Store) CheckOut(assetID, borrowerID string, dueAt *time.Time) (*models.
 	var (
 		archived  sql.NullTime
 		quantity  sql.NullInt64
+		unit      string
 		condition string
 	)
-	if err := s.TxQueryRow(tx, "SELECT archived_at, stock_quantity, asset_condition FROM assets WHERE id = ?", assetID).Scan(&archived, &quantity, &condition); err != nil {
+	if err := s.TxQueryRow(tx, "SELECT archived_at, stock_quantity, stock_unit, asset_condition FROM assets WHERE id = ?", assetID).Scan(&archived, &quantity, &unit, &condition); err != nil {
 		return nil, fmt.Errorf("reading asset: %w", err)
 	}
 	switch {
 	case archived.Valid:
 		return nil, ErrAssetArchived
-	case quantity.Valid:
-		return nil, ErrLentByQuantity
 	case condition == models.ConditionOutOfService:
 		return nil, ErrOutOfService
 	}
-	lendable, err := s.lendableCategories(txQuerier{s, tx})
+	traits, err := s.categoryTraits(txQuerier{s, tx})
 	if err != nil {
 		return nil, err
 	}
+	var ids []string
 	ok := false
-	err = s.scanPairs(tx, "SELECT category_id, category_id FROM asset_categories WHERE asset_id = ?", assetID, func(id, _ string) { ok = ok || lendable[id] })
+	err = s.scanPairs(tx, "SELECT category_id, category_id FROM asset_categories WHERE asset_id = ?", assetID, func(id, _ string) {
+		ids = append(ids, id)
+		ok = ok || traits.lendable[id]
+	})
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, ErrNotLendable
+	}
+	// A spool weighed in its category's unit is lent like any other thing;
+	// part of a pooled quantity is not.
+	if quantity.Valid && !traits.weighs(ids, unit) {
+		return nil, ErrLentByQuantity
 	}
 	var open int
 	if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM asset_loans WHERE asset_id = ? AND checked_in_at IS NULL", assetID).Scan(&open); err != nil {
@@ -236,39 +294,60 @@ func (s *Store) CheckOut(assetID, borrowerID string, dueAt *time.Time) (*models.
 }
 
 // CheckIn ends an asset's open loan. When onlyBorrower is set, the loan must
-// be theirs: people who may only borrow check in their own loans.
-func (s *Store) CheckIn(assetID, onlyBorrower string) (*models.AssetWithDetails, error) {
-	tx, err := s.DB.Begin()
+// be theirs: people who may only borrow check in their own loans. left, when
+// given, is how much of an asset counted by quantity came back, such as a
+// spool's weight; the difference is recorded as use, and thresholds are
+// checked as for any use.
+func (s *Store) CheckIn(assetID, onlyBorrower string, left *int) (*models.AssetWithDetails, error) {
+	err := s.withInventory(func(ic *inventoryChange) error {
+		tx := ic.tx
+		if err := s.lockAssetTx(tx, assetID); err != nil {
+			return err
+		}
+		var loanID, borrowerID string
+		err := s.TxQueryRow(tx, "SELECT id, borrower_id FROM asset_loans WHERE asset_id = ? AND checked_in_at IS NULL", assetID).Scan(&loanID, &borrowerID)
+		if err == sql.ErrNoRows {
+			return ErrNotLent
+		}
+		if err != nil {
+			return fmt.Errorf("reading loan: %w", err)
+		}
+		if onlyBorrower != "" && onlyBorrower != borrowerID {
+			return ErrNotYourLoan
+		}
+		if _, err := s.TxExec(tx, "UPDATE asset_loans SET checked_in_at = ?, returned_by = ? WHERE id = ?", time.Now().UTC(), s.actorID(), loanID); err != nil {
+			return fmt.Errorf("checking in: %w", err)
+		}
+		borrower, err := s.personTx(tx, borrowerID)
+		if err != nil {
+			return err
+		}
+		if err := s.recordAssetEvent(tx, models.EventAssetCheckedIn, assetID, models.EventPayload{Trigger: models.TriggerManual, Borrower: borrower}); err != nil {
+			return err
+		}
+		if left == nil {
+			return nil
+		}
+		was, err := s.readStockTx(tx, assetID)
+		if err != nil {
+			return err
+		}
+		if was == nil {
+			return ErrNotStocked
+		}
+		if *left < 0 || *left > MaxQuantity {
+			return ErrQuantityOutOfRange
+		}
+		if *left == was.Quantity {
+			return nil
+		}
+		if _, err := s.TxExec(tx, "UPDATE assets SET stock_quantity = ?, updated_at = ? WHERE id = ?", *left, time.Now().UTC(), assetID); err != nil {
+			return fmt.Errorf("setting what is left: %w", err)
+		}
+		return s.recordQuantityTx(tx, assetID, was, *left)
+	})
 	if err != nil {
-		return nil, fmt.Errorf("beginning transaction: %w", err)
-	}
-	defer tx.Rollback()
-	if err := s.lockAssetTx(tx, assetID); err != nil {
 		return nil, err
-	}
-	var loanID, borrowerID string
-	err = s.TxQueryRow(tx, "SELECT id, borrower_id FROM asset_loans WHERE asset_id = ? AND checked_in_at IS NULL", assetID).Scan(&loanID, &borrowerID)
-	if err == sql.ErrNoRows {
-		return nil, ErrNotLent
-	}
-	if err != nil {
-		return nil, fmt.Errorf("reading loan: %w", err)
-	}
-	if onlyBorrower != "" && onlyBorrower != borrowerID {
-		return nil, ErrNotYourLoan
-	}
-	if _, err := s.TxExec(tx, "UPDATE asset_loans SET checked_in_at = ?, returned_by = ? WHERE id = ?", time.Now().UTC(), s.actorID(), loanID); err != nil {
-		return nil, fmt.Errorf("checking in: %w", err)
-	}
-	borrower, err := s.personTx(tx, borrowerID)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.recordAssetEvent(tx, models.EventAssetCheckedIn, assetID, models.EventPayload{Trigger: models.TriggerManual, Borrower: borrower}); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("committing: %w", err)
 	}
 	return s.GetAssetByID(assetID)
 }
@@ -408,4 +487,30 @@ func (s *Store) ListPeople() ([]models.Person, error) {
 		people = append(people, p)
 	}
 	return people, rows.Err()
+}
+
+// assetContext holds what reading an asset needs from whole tables. It is
+// loaded on first use, so a list of assets reads each table once rather
+// than once per asset.
+type assetContext struct {
+	traits *categoryTraits
+	// list is set when the context serves a list, which reads every link
+	// and open loan at once; links and loans then hold them by asset.
+	list  bool
+	links map[string][]rawLink
+	loans map[string]models.Loan
+	// suggestions maps categories to the relation types they suggest.
+	suggestions map[string][]string
+}
+
+// contextTraits returns the category traits, reading them the first time.
+func (s *Store) contextTraits(ctx *assetContext) (categoryTraits, error) {
+	if ctx.traits == nil {
+		t, err := s.categoryTraits(storeQuerier{s})
+		if err != nil {
+			return categoryTraits{}, err
+		}
+		ctx.traits = &t
+	}
+	return *ctx.traits, nil
 }

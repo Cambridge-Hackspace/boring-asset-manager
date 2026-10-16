@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
+  import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
@@ -35,10 +36,13 @@
   let lendable = $state(false);
   let runningLow = $state(false);
   let threshold = $state<number | null>(null);
+  let unit = $state('');
   let busy = $state(false);
 
   // Stock, for consumable categories.
   let activeCount = $state<number | null>(null);
+  // For a category with a unit, the total of its stock in it.
+  let total = $state<number | null>(null);
   let flagging = $state(false);
 
   // Assigning a field.
@@ -75,7 +79,10 @@
         lendable = c.is_lendable;
         runningLow = c.is_running_low;
         threshold = c.low_stock_threshold ?? null;
-        activeCount = (await request<{ active_count: number }>('GET', `/categories/${encodeURIComponent(id)}`)).active_count;
+        unit = c.unit;
+        const level = await request<{ active_count: number; total?: number }>('GET', `/categories/${encodeURIComponent(id)}`);
+        activeCount = level.active_count;
+        total = level.total ?? null;
         effective = (await request<{ fields: EffectiveField[] }>('GET', `/categories/${encodeURIComponent(id)}/fields`)).fields ?? [];
         if (canManage) {
           allFields = (await request<{ fields: Field[] }>('GET', '/fields')).fields ?? [];
@@ -114,6 +121,7 @@
       is_consumable: consumable,
       is_lendable: lendable,
       is_running_low: consumable && runningLow,
+      unit: consumable ? unit.trim() : '',
       low_stock_threshold: consumable && threshold ? threshold : null,
     };
     try {
@@ -204,9 +212,16 @@
       <h2 id="stock-heading" class="mb-1 text-lg font-semibold">Stock</h2>
       <p class="text-sm">
         <strong>{category.is_running_low ? 'Running low.' : 'In stock.'}</strong>
-        {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`} here and in its subcategories{category.low_stock_threshold
-          ? `; flagged automatically below ${category.low_stock_threshold}`
-          : ''}.
+        {#if category.unit}
+          {amount(total ?? 0, category.unit)} here and in its subcategories, in
+          {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`}{category.low_stock_threshold
+            ? `; flagged automatically below ${amount(category.low_stock_threshold, category.unit)}`
+            : ''}.
+        {:else}
+          {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`} here and in its subcategories{category.low_stock_threshold
+            ? `; flagged automatically below ${category.low_stock_threshold}`
+            : ''}.
+        {/if}
       </p>
       {#if session.can('stock:record')}
         <div class="mt-3">
@@ -250,6 +265,13 @@
             <input type="checkbox" bind:checked={runningLow} disabled={!consumable} aria-describedby="low-help" /> Running low
           </label>
           <p id="low-help" class="text-xs text-zinc-600 dark:text-zinc-400">Only consumable categories can run low.</p>
+          <div>
+            <label class="label" for="cat-unit" class:opacity-50={!consumable}>Unit (optional)</label>
+            <input id="cat-unit" class="input w-32" maxlength="32" placeholder="g" disabled={!consumable} aria-describedby="unit-help" bind:value={unit} />
+            <p id="unit-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              Weighs instead of counting: totals the stock its assets count in this unit, such as spools in g, and the threshold is in it too. Leave empty to count items.
+            </p>
+          </div>
           <div>
             <label class="label" for="cat-threshold" class:opacity-50={!consumable}>Low stock threshold (optional)</label>
             <input

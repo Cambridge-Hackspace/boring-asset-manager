@@ -49,9 +49,22 @@ func (s *Server) handleCheckOut(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"asset": asset})
 }
 
+// CheckInRequest ends a loan. Left, for an asset counted by quantity, is
+// how much came back.
+type CheckInRequest struct {
+	Left *int `json:"left"`
+}
+
 // handleCheckIn ends an asset's loan: POST /api/v1/assets/{id}/checkin.
 // Without assets:lend, only the borrower's own loan can be checked in.
 func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
+	var req CheckInRequest
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "Invalid request body (left, if given, is a whole number)")
+			return
+		}
+	}
 	onlyBorrower := ""
 	if !HasPermission(r.Context(), rbac.PermAssetsLend) {
 		u := CurrentUser(r.Context())
@@ -61,7 +74,7 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 		}
 		onlyBorrower = u.ID
 	}
-	asset, err := s.actingStore(r).CheckIn(r.PathValue("id"), onlyBorrower)
+	asset, err := s.actingStore(r).CheckIn(r.PathValue("id"), onlyBorrower, req.Left)
 	if err != nil {
 		writeLoanError(w, err, "check the asset in")
 		return
@@ -104,7 +117,7 @@ func writeLoanError(w http.ResponseWriter, err error, action string) {
 	case errors.Is(err, store.ErrNotLendable), errors.Is(err, store.ErrLentByQuantity), errors.Is(err, store.ErrOutOfService),
 		errors.Is(err, store.ErrAlreadyLent), errors.Is(err, store.ErrNotLent), errors.Is(err, store.ErrAssetArchived):
 		writeJSONError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, store.ErrBorrowerNotFound), errors.Is(err, store.ErrDueInPast):
+	case errors.Is(err, store.ErrBorrowerNotFound), errors.Is(err, store.ErrDueInPast), errors.Is(err, store.ErrNotStocked), errors.Is(err, store.ErrQuantityOutOfRange):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	default:
 		writeStoreError(w, err, action)

@@ -7,7 +7,7 @@ import { session } from '../../lib/session.svelte';
 import type { AssetWithDetails, Category, EffectiveField } from '../../lib/models';
 
 const cat = (id: string, name: string): Category => ({
-  id, name, parent_id: null, color_hex: '#336699', is_consumable: false, is_lendable: false, is_running_low: false, created_at: '', updated_at: '',
+  id, name, parent_id: null, color_hex: '#336699', is_consumable: false, unit: '', is_lendable: false, is_running_low: false, created_at: '', updated_at: '',
 });
 const field = (key: string, label: string, required = false, type: 'text' | 'number' = 'text'): EffectiveField => ({
   field: { id: key, key, label, validation_type: type, created_at: '', updated_at: '' },
@@ -60,6 +60,7 @@ describe('AssetForm', () => {
       field_values: { weight: '', old_note: 'from before' },
       effective_fields: [field('weight', 'Weight', false, 'number')],
       lendable: false,
+      weighed: false,
       loan: null,
       links: [],
       location: [],
@@ -112,6 +113,7 @@ describe('AssetForm', () => {
       field_values: {},
       effective_fields: [],
       lendable: false,
+      weighed: false,
       loan: null,
       links: [],
       location: [],

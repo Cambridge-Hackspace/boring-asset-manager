@@ -176,7 +176,8 @@ func discordPayload(n Notification) discordMessage {
 		embed.Title = "Running low: " + name
 		embed.Color = categoryColor(p.Category)
 		if p.Trigger == models.TriggerThreshold && p.ActiveCount != nil && p.Threshold != nil {
-			embed.Description = fmt.Sprintf("Down to %s, below the threshold of %d.", items(*p.ActiveCount), *p.Threshold)
+			level, threshold := categoryLevel(p)
+			embed.Description = fmt.Sprintf("Down to %s, below the threshold of %s.", level, threshold)
 			if by != "" {
 				embed.Description += " Last change by " + by + "."
 			}
@@ -189,7 +190,8 @@ func discordPayload(n Notification) discordMessage {
 		embed.Title = "Restocked: " + name
 		embed.Color = discordNeutral
 		if p.Trigger == models.TriggerThreshold && p.ActiveCount != nil && p.Threshold != nil {
-			embed.Description = fmt.Sprintf("Back to %s, at or above the threshold of %d.", items(*p.ActiveCount), *p.Threshold)
+			level, threshold := categoryLevel(p)
+			embed.Description = fmt.Sprintf("Back to %s, at or above the threshold of %s.", level, threshold)
 			if by != "" {
 				embed.Description += " Last change by " + by + "."
 			}
@@ -311,3 +313,12 @@ var markdownChars = strings.NewReplacer(`\`, `\\`, `*`, `\*`, `_`, `\_`, `~`, `\
 
 // escapeMarkdown stops user text being read as Discord formatting.
 func escapeMarkdown(s string) string { return markdownChars.Replace(s) }
+
+// categoryLevel gives a category's level and threshold: counts of items, or
+// for a category with a unit, amounts in it.
+func categoryLevel(p models.EventPayload) (level, threshold string) {
+	if p.Unit != "" {
+		return amount(*p.ActiveCount, p.Unit), amount(*p.Threshold, p.Unit)
+	}
+	return items(*p.ActiveCount), strconv.Itoa(*p.Threshold)
+}

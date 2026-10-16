@@ -62,6 +62,8 @@ export interface Category {
   parent_id?: string | null;
   color_hex: string;
   is_consumable: boolean;
+  /** On a consumable category, totals its assets' stock in this unit instead of counting them; empty counts them. */
+  unit: string;
   /** Its assets, and those of its subcategories, can be lent. */
   is_lendable: boolean;
   is_running_low: boolean;
@@ -148,6 +150,8 @@ export interface AssetWithDetails {
   effective_fields: EffectiveField[];
   /** Whether it can be lent, and its open loan, if it is out. */
   lendable: boolean;
+  /** Its stock is its weight in a unit one of its categories totals: a spool, not a pooled quantity. */
+  weighed: boolean;
   loan: Loan | null;
   /** Its links to other assets, where it is (outermost first), and the relation types its categories suggest. */
   links: AssetLink[];

@@ -69,17 +69,17 @@ func TestLendingAndReturning(t *testing.T) {
 	}
 
 	// Only the borrower, or a lender, checks it in.
-	if _, err := st.CheckIn(drill, lender.ID); !errors.Is(err, ErrNotYourLoan) {
+	if _, err := st.CheckIn(drill, lender.ID, nil); !errors.Is(err, ErrNotYourLoan) {
 		t.Errorf("someone else's loan: %v", err)
 	}
-	a, err = st.As(bo.ID).CheckIn(drill, bo.ID)
+	a, err = st.As(bo.ID).CheckIn(drill, bo.ID, nil)
 	if err != nil || a.Loan != nil {
 		t.Fatalf("checked in %+v, %v", a, err)
 	}
 	if e := history(t, st, drill)[0]; e.Kind != models.EventAssetCheckedIn || e.Payload.Borrower.ID != bo.ID || e.Payload.Actor.ID != bo.ID {
 		t.Errorf("checked in: %+v", e.Payload)
 	}
-	if _, err := st.CheckIn(drill, ""); !errors.Is(err, ErrNotLent) {
+	if _, err := st.CheckIn(drill, "", nil); !errors.Is(err, ErrNotLent) {
 		t.Errorf("checking in twice: %v", err)
 	}
 
@@ -171,7 +171,7 @@ func TestOverdueLoansAreAnnouncedOnce(t *testing.T) {
 	if _, err := st.CheckOut(ladder, bo.ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CheckIn(saw, ""); err != nil {
+	if _, err := st.CheckIn(saw, "", nil); err != nil {
 		t.Fatal(err)
 	}
 

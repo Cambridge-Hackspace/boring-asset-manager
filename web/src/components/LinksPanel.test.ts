@@ -15,6 +15,7 @@ const asset = (id: string, name: string, over: Partial<AssetWithDetails> = {}): 
   field_values: {},
   effective_fields: [],
   lendable: false,
+  weighed: false,
   loan: null,
   links: [],
   location: [],

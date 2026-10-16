@@ -13,6 +13,8 @@
   let people = $state<Person[]>([]);
   let borrowerId = $state('');
   let due = $state('');
+  // For a weighed asset coming back: how much is left, if it was measured.
+  let left = $state<number | null>(null);
   let busy = $state(false);
   let error = $state('');
 
@@ -24,7 +26,7 @@
   const today = new Date().toISOString().slice(0, 10);
   // Why it cannot be lent, if it cannot.
   const blocked = $derived(
-    asset.asset.stock
+    asset.asset.stock && !asset.weighed
       ? 'It is counted by quantity, so it cannot be lent; label each item to lend it.'
       : asset.asset.condition === 'out_of_service'
         ? 'It is out of service, so it cannot be lent until it is working again.'
@@ -62,7 +64,9 @@
   }
 
   function checkIn() {
-    void act(() => request('POST', `${path}/checkin`), 'Checked in.');
+    const body = asset.asset.stock && left !== null ? { left } : undefined;
+    void act(() => request('POST', `${path}/checkin`, body), 'Checked in.');
+    left = null;
   }
 </script>
 
@@ -76,7 +80,15 @@
       {#if loan.overdue}<span class="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-900 dark:bg-red-900 dark:text-red-100">Overdue</span>{/if}
     </p>
     {#if canLend || (canBorrow && mine)}
-      <button type="button" class="btn-secondary mt-3" disabled={busy} onclick={checkIn}>Check in</button>
+      <div class="mt-3 flex flex-wrap items-end gap-2">
+        {#if asset.asset.stock}
+          <div>
+            <label class="label" for="loan-left">Left now{asset.asset.stock.unit ? ` (${asset.asset.stock.unit})` : ''}, if weighed</label>
+            <input id="loan-left" class="input w-32" type="number" min="0" step="1" bind:value={left} />
+          </div>
+        {/if}
+        <button type="button" class="btn-secondary" disabled={busy} onclick={checkIn}>Check in</button>
+      </div>
     {/if}
   {:else if blocked}
     <p class="text-sm">Available to borrow, but not now. {blocked}</p>
