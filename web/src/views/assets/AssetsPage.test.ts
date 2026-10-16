@@ -29,11 +29,12 @@ const asset = (id: string, name: string): AssetWithDetails => ({
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  scopes: ['default'],
   photos: [],
 });
 
 beforeEach(() => {
-  session.permissions = ['assets:read'];
+  session.permissions = ['assets.read'];
 });
 afterEach(() => {
   cleanup();

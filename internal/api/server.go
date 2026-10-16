@@ -55,7 +55,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PUT /api/v1/auth/name", RequireAuth(http.HandlerFunc(s.handleSetOwnName)))
 	mux.Handle("PUT /api/v1/auth/password", RequireAuth(http.HandlerFunc(s.handleChangePassword)))
 
-	// User administration endpoints (requires users:manage)
+	// User administration endpoints (requires users.manage)
 	mux.Handle("GET /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListUsers)))
 	mux.Handle("POST /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateUser)))
 	mux.Handle("PATCH /api/v1/users/{id}/status", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateUserStatus)))
@@ -66,6 +66,16 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))
 	mux.Handle("PUT /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateRole)))
 	mux.Handle("DELETE /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteRole)))
+
+	// Scopes (README §3.3): who may see and change assets is users.manage's
+	// to decide; category managers read them to see what labels are there.
+	seeScopes := RequireAnyPermission(rbac.PermUsersManage, rbac.PermCategoriesManage)
+	mux.Handle("GET /api/v1/scopes", seeScopes(http.HandlerFunc(s.handleListScopes)))
+	mux.Handle("POST /api/v1/scopes", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSaveScope)))
+	mux.Handle("PUT /api/v1/scopes/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSaveScope)))
+	mux.Handle("DELETE /api/v1/scopes/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteScope)))
+	mux.Handle("GET /api/v1/categories/{id}/scopes", seeScopes(http.HandlerFunc(s.handleCategoryScopes)))
+	mux.Handle("PUT /api/v1/categories/{id}/scopes", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetCategoryScopes)))
 
 	// API tokens: managed only from a signed-in session, never by a token.
 	manageTokens := func(h http.HandlerFunc) http.Handler { return RequireAuth(RequirePermission(rbac.PermUsersManage)(h)) }
@@ -94,7 +104,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryRelationTypes)))
 	mux.Handle("PUT /api/v1/categories/{id}/relation-types", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryRelationTypes)))
 
-	// Reports: anyone who reads assets runs them; reports:manage edits them.
+	// Reports: anyone who reads assets runs them; reports.manage edits them.
 	mux.Handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))
 	mux.Handle("POST /api/v1/reports", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleSaveReport)))
 	mux.Handle("POST /api/v1/reports/preview", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handlePreviewReport)))

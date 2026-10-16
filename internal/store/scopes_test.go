@@ -1,0 +1,205 @@
+package store
+
+import (
+	"errors"
+	"reflect"
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
+)
+
+func TestAssetsAreInTheScopesOfTheirCategories(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	workshop, err := st.CreateScope("workshop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	power, _ := st.CreateScope("power")
+	tools, _ := st.CreateCategory("Tools", nil, "", false, false)
+	drills, _ := st.CreateCategory("Drills", &tools.ID, "", false, false)
+	food, _ := st.CreateCategory("Food", nil, "", false, false)
+	if _, err := st.SetCategoryScopes(tools.ID, []string{workshop.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.SetCategoryScopes(drills.ID, []string{power.ID, power.ID}); err != nil || len(got) != 1 {
+		t.Fatalf("drills: %v, %v", got, err)
+	}
+
+	for name, c := range map[string]struct {
+		cats []string
+		want []string
+	}{
+		"a drill, from its category and the one above": {[]string{drills.ID}, []string{"power", "workshop"}},
+		"in a category with no scope":                  {[]string{food.ID}, []string{rbac.DefaultScope}},
+		"in no category":                               {nil, []string{rbac.DefaultScope}},
+		"in both":                                      {[]string{food.ID, tools.ID}, []string{"workshop"}},
+	} {
+		a, err := st.CreateAsset(name, c.cats, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(a.Scopes, c.want) {
+			t.Errorf("%s: read alone, %v", name, a.Scopes)
+		}
+		list, _ := st.ListAssets("", name)
+		if len(list) != 1 || !reflect.DeepEqual(list[0].Scopes, c.want) {
+			t.Errorf("%s: in a list, %+v", name, list)
+		}
+		if got, _ := st.AssetScopes([]string{a.Asset.ID, "nobody"}); !reflect.DeepEqual(got[a.Asset.ID], c.want) || len(got) != 1 {
+			t.Errorf("%s: AssetScopes %v", name, got)
+		}
+		if got, _ := st.ScopesForCategories(c.cats); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: ScopesForCategories %v", name, got)
+		}
+	}
+
+	// Taking the label off the parent leaves the drill in power alone.
+	if _, err := st.SetCategoryScopes(tools.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.ScopesForCategories([]string{drills.ID}); !reflect.DeepEqual(got, []string{"power"}) {
+		t.Errorf("after unlabeling: %v", got)
+	}
+}
+
+func TestManagingScopes(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	scopes, err := st.ListScopes()
+	if err != nil || len(scopes) != 1 || scopes[0].Name != rbac.DefaultScope || !scopes[0].Reserved {
+		t.Fatalf("seeded: %+v, %v", scopes, err)
+	}
+	def := scopes[0]
+	for _, name := range []string{"", "Tools", "a b", "a:b", strings.Repeat("a", 65)} {
+		if _, err := st.CreateScope(name); !errors.Is(err, ErrInvalidScope) {
+			t.Errorf("%q: %v", name, err)
+		}
+	}
+	if _, err := st.CreateScope(rbac.DefaultScope); !IsUniqueViolation(err) {
+		t.Errorf("a second default: %v", err)
+	}
+	for what, err := range map[string]error{
+		"rename": func() error { _, err := st.RenameScope(def.ID, "other"); return err }(),
+		"delete": st.DeleteScope(def.ID),
+		"put on category": func() error {
+			c, _ := st.CreateCategory("C", nil, "", false, false)
+			_, err := st.SetCategoryScopes(c.ID, []string{def.ID})
+			return err
+		}(),
+	} {
+		if !errors.Is(err, ErrScopeReserved) {
+			t.Errorf("the default scope, %s: %v", what, err)
+		}
+	}
+
+	// A scope in use stays until nothing uses it; renaming carries roles along.
+	tools, _ := st.CreateScope(" tools ")
+	cat, _ := st.CreateCategory("Tools", nil, "", false, false)
+	if _, err := st.SetCategoryScopes(cat.ID, []string{tools.ID}); err != nil {
+		t.Fatal(err)
+	}
+	role, err := st.CreateRole(RoleInput{Name: "Tool keepers", Permissions: []string{"tools:" + rbac.PermAssetsWrite}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.GetScope(tools.ID); got.Name != "tools" || got.CategoryCount != 1 || got.RoleCount != 1 {
+		t.Errorf("counts: %+v", got)
+	}
+	if err := st.DeleteScope(tools.ID); !errors.Is(err, ErrScopeInUse) {
+		t.Errorf("deleting in use: %v", err)
+	}
+	if _, err := st.RenameScope(tools.ID, "workshop"); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := st.GetRole(role.ID); !reflect.DeepEqual(r.Permissions, []string{"workshop:" + rbac.PermAssetsWrite}) {
+		t.Errorf("after renaming: %v", r.Permissions)
+	}
+	if _, err := st.SetCategoryScopes(cat.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteRole(role.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteScope(tools.ID); err != nil {
+		t.Errorf("deleting unused: %v", err)
+	}
+	if _, err := st.GetScope(tools.ID); !errors.Is(err, ErrScopeNotFound) {
+		t.Errorf("after deleting: %v", err)
+	}
+}
+
+func TestScopedRolePermissions(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	if _, err := st.CreateScope("tools"); err != nil {
+		t.Fatal(err)
+	}
+	for what, perms := range map[string][]string{
+		"an unscopable permission": {"tools:" + rbac.PermUsersManage},
+		"an unknown scope":         {"kitchen:" + rbac.PermAssetsRead},
+		"an unknown permission":    {"tools:assets.fly"},
+	} {
+		if _, err := st.CreateRole(RoleInput{Name: what, Permissions: perms}); !errors.Is(err, ErrInvalidRole) {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+
+	// A permission in every scope covers it in one.
+	role, err := st.CreateRole(RoleInput{Name: "Keepers", Permissions: []string{
+		"tools:" + rbac.PermAssetsWrite, rbac.PermAssetsRead, "tools:" + rbac.PermAssetsRead, "default:" + rbac.PermAssetsLend,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{rbac.PermAssetsRead, "default:" + rbac.PermAssetsLend, "tools:" + rbac.PermAssetsWrite}
+	if !reflect.DeepEqual(role.Permissions, want) {
+		t.Errorf("role: %v", role.Permissions)
+	}
+
+	u, _ := st.CreateNamedUser("ada@hackspace.org", "Ada", "a long enough password", true)
+	if err := st.SetUserRoles(u.ID, []string{role.ID}); err != nil {
+		t.Fatal(err)
+	}
+	perms, err := st.GetUserPermissions(u.ID)
+	if err != nil || !reflect.DeepEqual(perms, map[string]bool{want[0]: true, want[1]: true, want[2]: true}) {
+		t.Errorf("user: %v, %v", perms, err)
+	}
+	_, secret, err := st.CreateToken("Script", []string{role.ID}, nil, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, perms, err := st.AuthenticateToken(secret); err != nil || !reflect.DeepEqual(perms, map[string]bool{want[0]: true, want[1]: true, want[2]: true}) {
+		t.Errorf("token: %v, %v", perms, err)
+	}
+
+	// Editing the role replaces both kinds of grant.
+	if r, err := st.UpdateRole(role.ID, RoleInput{Name: "Keepers", Permissions: []string{"tools:" + rbac.PermAssetsRead}}); err != nil || !reflect.DeepEqual(r.Permissions, []string{"tools:" + rbac.PermAssetsRead}) {
+		t.Errorf("edited: %+v, %v", r, err)
+	}
+}
+
+func TestPermissionKeysAreDotted(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	var colons int
+	if err := st.QueryRow("SELECT COUNT(*) FROM permissions WHERE permission_key LIKE '%:%'").Scan(&colons); err != nil || colons != 0 {
+		t.Errorf("keys with colons: %d, %v", colons, err)
+	}
+	admin, _ := st.GetRoleByName(AdminRoleName)
+	if r, _ := st.GetRole(admin.ID); !reflect.DeepEqual(r.Permissions, sortedCopy(rbac.AllPermissions())) {
+		t.Errorf("admin: %v", r.Permissions)
+	}
+	var desc string
+	if err := st.QueryRow("SELECT description FROM permissions WHERE permission_key = ?", rbac.PermStockRecord).Scan(&desc); err != nil || desc != "Core permission: stock.record" {
+		t.Errorf("description: %q, %v", desc, err)
+	}
+}
+
+func sortedCopy(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	return out
+}

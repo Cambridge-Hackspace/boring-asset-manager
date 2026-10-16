@@ -47,7 +47,7 @@
   function explain(err: unknown): string {
     const msg = messageOf(err);
     return msg.includes('anti-lockout')
-      ? 'Refused: at least one active user must keep the users:manage permission, and this change would remove the last one.'
+      ? 'Refused: at least one active user must keep the users.manage permission, and this change would remove the last one.'
       : msg;
   }
 

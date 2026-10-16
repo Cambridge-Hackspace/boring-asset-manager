@@ -89,31 +89,11 @@ func (s *Store) ListUsers() ([]models.User, error) {
 }
 
 // GetUserPermissions returns the effective permission set for a user by computing
-// the strict union across all assigned roles.
+// the strict union across all assigned roles: keys held in every scope, and
+// those held in some as scope:key.
 func (s *Store) GetUserPermissions(userID string) (map[string]bool, error) {
-	query := `
-		SELECT DISTINCT p.permission_key
-		FROM user_roles ur
-		JOIN role_permissions rp ON ur.role_id = rp.role_id
-		JOIN permissions p ON rp.permission_id = p.id
-		JOIN users u ON ur.user_id = u.id
-		WHERE ur.user_id = ? AND u.is_active = TRUE AND u.archived_at IS NULL
-	`
-	rows, err := s.Query(query, userID)
-	if err != nil {
-		return nil, fmt.Errorf("querying user permissions: %w", err)
-	}
-	defer rows.Close()
-
-	effective := make(map[string]bool)
-	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, fmt.Errorf("scanning permission key: %w", err)
-		}
-		effective[key] = true
-	}
-	return effective, nil
+	return grantedKeys(storeQuerier{s}, `SELECT ur.role_id FROM user_roles ur JOIN users u ON u.id = ur.user_id
+		WHERE ur.user_id = ? AND u.is_active = TRUE AND u.archived_at IS NULL`, userID)
 }
 
 // UserHasPermission checks whether an active user has a specific permission.
@@ -269,7 +249,7 @@ func (s *Store) AssignUserRole(userID, roleID string) error {
 
 // RemoveUserRole revokes a role from a user with Anti-Lockout enforcement. The
 // guard only refuses a revocation that actually leaves no active user with
-// users:manage; revoking a role the user does not hold, or one whose
+// users.manage; revoking a role the user does not hold, or one whose
 // permission they also get from another role, is always allowed.
 func (s *Store) RemoveUserRole(userID, roleID string) error {
 	return s.withAdminGuard(func(tx *sql.Tx) error {

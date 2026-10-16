@@ -10,7 +10,7 @@ test('build a report, run it, and download a table as CSV', async ({ signedIn: p
   await expect(page.getByRole('link', { name: 'Running low', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'New report' }).click();
   const name = unique('Lathe parts');
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByLabel('Search').fill(tag);
   await page.getByLabel('Title (optional)').fill('Parts');
   await page.getByRole('button', { name: 'Add column' }).click();
@@ -40,7 +40,7 @@ test('chart what is in stock and what was used', async ({ signedIn: page, api })
   await api.call('POST', `/assets/${asset.asset.id}/quantity`, { adjust: -15 });
 
   await page.goto('/reports/new');
-  await page.getByLabel('Name').fill(unique('Tape use'));
+  await page.getByLabel('Name', { exact: true }).fill(unique('Tape use'));
   await page.getByLabel('Search').fill(tag);
   await page.getByRole('button', { name: 'Add chart' }).click();
   await page.getByLabel('Grouped by').selectOption({ label: 'Unit' });

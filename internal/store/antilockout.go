@@ -8,11 +8,11 @@ import (
 )
 
 // adminLock names the lock row that serializes changes able to remove
-// users:manage from an active user.
+// users.manage from an active user.
 const adminLock = "users_manage"
 
 // withAdminGuard runs change in a transaction holding the admin lock and
-// commits it only if it leaves at least one active user with users:manage
+// commits it only if it leaves at least one active user with users.manage
 // (when there was one before). Holding the lock means two such changes never
 // both see the other's admin still in place: the second waits for the first
 // to commit, then counts again.
@@ -60,7 +60,7 @@ const activeAdminsQuery = `
 	WHERE u.is_active = TRUE AND u.archived_at IS NULL AND p.permission_key = ?
 `
 
-// countActiveAdmins counts active users holding users:manage, within tx.
+// countActiveAdmins counts active users holding users.manage, within tx.
 func (s *Store) countActiveAdmins(tx *sql.Tx) (int, error) {
 	var count int
 	err := s.TxQueryRow(tx, activeAdminsQuery, rbac.PermUsersManage).Scan(&count)

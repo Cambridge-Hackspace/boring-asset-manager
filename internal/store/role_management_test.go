@@ -99,7 +99,7 @@ func TestRoleChangesFollowTheAntiLockoutRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := st.UpdateRole(managers.ID, RoleInput{Name: "Managers", Permissions: []string{rbac.PermAssetsRead}}); !errors.Is(err, rbac.ErrAntiLockoutTriggered) {
-		t.Errorf("taking users:manage from the last manager: %v", err)
+		t.Errorf("taking users.manage from the last manager: %v", err)
 	}
 	if err := st.DeleteRole(managers.ID); !errors.Is(err, rbac.ErrAntiLockoutTriggered) {
 		t.Errorf("deleting the last manager's role: %v", err)
@@ -133,8 +133,15 @@ func TestStockRecordIsGrantedToRolesThatCouldWrite(t *testing.T) {
 	}
 	rerun := func(step string) {
 		t.Helper()
-		if _, err := st.Exec("DELETE FROM schema_migrations WHERE version = 11"); err != nil {
-			t.Fatal(err)
+		// Migration 011 knows the keys as they were before 019 renamed them,
+		// so the keys go back, and both run again.
+		for _, stmt := range []string{
+			"UPDATE permissions SET permission_key = REPLACE(permission_key, '.', ':')",
+			"DELETE FROM schema_migrations WHERE version IN (11, 19)",
+		} {
+			if _, err := st.Exec(stmt); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if err := st.Migrate(); err != nil {
 			t.Fatalf("%s: %v", step, err)
@@ -155,7 +162,7 @@ func TestStockRecordIsGrantedToRolesThatCouldWrite(t *testing.T) {
 				has = has || p == rbac.PermStockRecord
 			}
 			if has != c.want {
-				t.Errorf("%s: %s has stock:record: %v, want %v", step, r.Name, has, c.want)
+				t.Errorf("%s: %s has stock.record: %v, want %v", step, r.Name, has, c.want)
 			}
 		}
 		admin, _ := st.GetRoleByName(AdminRoleName)
@@ -164,7 +171,7 @@ func TestStockRecordIsGrantedToRolesThatCouldWrite(t *testing.T) {
 		}
 	}
 
-	// As the database was before migration 011: no stock:record at all.
+	// As the database was before migration 011: no stock.record at all.
 	if _, err := st.Exec("DELETE FROM permissions WHERE permission_key = ?", rbac.PermStockRecord); err != nil {
 		t.Fatal(err)
 	}

@@ -25,6 +25,7 @@ const withStock = (quantity: number, low: boolean): AssetWithDetails => ({
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  scopes: ['default'],
   photos: [],
 });
 
@@ -36,7 +37,7 @@ const used: AssetEvent = {
 };
 
 beforeEach(() => {
-  session.permissions = ['assets:read', 'stock:record'];
+  session.permissions = ['assets.read', 'stock.record'];
 });
 afterEach(() => {
   cleanup();
@@ -81,7 +82,7 @@ describe('AssetPage stock', () => {
   });
 
   it('hides the stock actions from people who cannot record stock, even if they edit assets', async () => {
-    session.permissions = ['assets:read', 'assets:write'];
+    session.permissions = ['assets.read', 'assets.write'];
     fakeApi({
       'GET /assets/a1': () => ({ asset: withStock(5, true) }),
       'GET /generators': () => ({ generators: [] }),
@@ -135,7 +136,7 @@ describe('AssetPage history', () => {
 
 describe('AssetPage archived', () => {
   it('offers only a restore, and says which codes another asset took', async () => {
-    session.permissions = ['assets:read', 'assets:write', 'stock:record', 'assets:delete', 'labels:print'];
+    session.permissions = ['assets.read', 'assets.write', 'stock.record', 'assets.delete', 'labels.print'];
     const archived: AssetWithDetails = { ...withStock(40, false), asset: { ...withStock(40, false).asset, archived_at: '2026-10-15T10:00:00Z' } };
     const restored: AssetEvent = {
       id: 'e3',
@@ -180,7 +181,7 @@ describe('AssetPage condition', () => {
   });
 
   it('lets a member report a problem but not clear it', async () => {
-    session.permissions = ['assets:read', 'assets:report'];
+    session.permissions = ['assets.read', 'assets.report'];
     let current = withStock(5, false);
     const { sent } = fakeApi({
       'GET /assets/a1': () => ({ asset: current }),
@@ -206,7 +207,7 @@ describe('AssetPage condition', () => {
   });
 
   it('lets someone who edits assets mark it working again', async () => {
-    session.permissions = ['assets:read', 'assets:write'];
+    session.permissions = ['assets.read', 'assets.write'];
     let current = broken(withStock(5, false), 'needs_maintenance', 'Blunt');
     const { sent } = fakeApi({
       'GET /assets/a1': () => ({ asset: current }),
@@ -223,5 +224,36 @@ describe('AssetPage condition', () => {
     expect(await screen.findByText('Marked as working.')).toBeTruthy();
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ condition: 'ok' });
     expect(screen.queryByText('Needs maintenance')).toBeNull();
+  });
+});
+
+describe('AssetPage scopes', () => {
+  it('offers what the reader holds in the asset’s scopes, and names them', async () => {
+    session.permissions = ['assets.read', 'tools:assets.write', 'tools:stock.record'];
+    const inScope = (scopes: string[]) => ({ ...withStock(10, false), scopes });
+
+    fakeApi({
+      'GET /assets/a1': () => ({ asset: inScope(['tools']) }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    expect(await screen.findByRole('link', { name: 'Edit' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Use' })).toBeTruthy();
+    expect(screen.getByText('Scopes').nextElementSibling!.textContent).toBe('tools');
+    cleanup();
+    vi.unstubAllGlobals();
+
+    fakeApi({
+      'GET /assets/a1': () => ({ asset: inScope(['default']) }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    await screen.findByRole('heading', { name: 'M3 screws' });
+    expect(screen.queryByRole('link', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use' })).toBeNull();
+    // The default scope alone is not worth naming.
+    expect(screen.queryByText('Scopes')).toBeNull();
   });
 });

@@ -100,8 +100,9 @@ func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list assets")
 		return
 	}
-	if assets == nil {
-		assets = []models.AssetWithDetails{}
+	if assets, err = s.readable(r, assets); err != nil {
+		writeServerError(w, err, "read the assets' links")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -116,18 +117,13 @@ func (s *Server) handleGetAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	asset, err := s.store.GetAssetByID(id)
-	if errors.Is(err, store.ErrAssetNotFound) {
-		writeJSONError(w, http.StatusNotFound, "Asset not found")
-		return
-	}
-	if err != nil {
-		writeServerError(w, err, "query asset")
+	asset, ok := s.assetFor(w, r, id)
+	if !ok {
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"asset": asset,
+		"asset": s.shown(r, asset),
 	})
 }
 
@@ -138,6 +134,9 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.mayPlace(w, r, rbac.PermAssetsWrite, req.CategoryIDs) {
+		return
+	}
 	asset, err := s.actingStore(r).CreateAssetWithStock(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input())
 	if errors.Is(err, store.ErrGeneratorCodeExists) {
 		writeJSONError(w, http.StatusConflict, err.Error())
@@ -149,7 +148,7 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"asset": asset,
+		"asset": s.shown(r, asset),
 	})
 }
 
@@ -171,6 +170,13 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := s.assetFor(w, r, id, rbac.PermAssetsWrite); !ok {
+		return
+	}
+	// Moving it to other categories needs the permission in their scopes too.
+	if req.CategoryIDs != nil && !s.mayPlace(w, r, rbac.PermAssetsWrite, req.CategoryIDs) {
+		return
+	}
 	asset, err := s.actingStore(r).UpdateAssetWithStock(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, stock)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
@@ -186,7 +192,7 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"asset": asset,
+		"asset": s.shown(r, asset),
 	})
 }
 
@@ -197,6 +203,9 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, ok := s.assetFor(w, r, id, rbac.PermAssetsDelete); !ok {
+		return
+	}
 	err := s.actingStore(r).DeleteAsset(id)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
@@ -224,14 +233,21 @@ func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list assets")
 		return
 	}
+	if assets, err = s.readable(r, assets); err != nil {
+		writeServerError(w, err, "read the assets' links")
+		return
+	}
 	cats, err := s.store.ListAllCategories()
 	if err != nil {
 		writeServerError(w, err, "list categories")
 		return
 	}
 	// Links name other assets as an import would find them: among all
-	// active assets, not only those exported.
+	// active assets the requester can read, not only those exported.
 	active, err := s.store.ListAssets("", "")
+	if err == nil {
+		active, err = s.readable(r, active)
+	}
 	if err != nil {
 		writeServerError(w, err, "list assets")
 		return
@@ -256,6 +272,9 @@ func (s *Server) handleAdjustQuantity(w http.ResponseWriter, r *http.Request) {
 	if req.Adjust != nil {
 		delta = *req.Adjust
 	}
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermStockRecord); !ok {
+		return
+	}
 	asset, err := s.actingStore(r).AdjustQuantity(r.PathValue("id"), delta, req.Set)
 	switch {
 	case errors.Is(err, store.ErrAssetNotFound):
@@ -265,7 +284,7 @@ func (s *Server) handleAdjustQuantity(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeStoreError(w, err, "change the quantity")
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"asset": asset})
+		writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 	}
 }
 
@@ -277,6 +296,9 @@ func (s *Server) handleSetAssetRunningLow(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, http.StatusBadRequest, "running_low (true or false) is required")
 		return
 	}
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermStockRecord); !ok {
+		return
+	}
 	asset, changed, err := s.actingStore(r).SetAssetRunningLow(r.PathValue("id"), *req.RunningLow)
 	switch {
 	case errors.Is(err, store.ErrAssetNotFound):
@@ -284,7 +306,7 @@ func (s *Server) handleSetAssetRunningLow(w http.ResponseWriter, r *http.Request
 	case err != nil:
 		writeStoreError(w, err, "update the asset")
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"asset": asset, "changed": changed})
+		writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset), "changed": changed})
 	}
 }
 
@@ -292,11 +314,7 @@ func (s *Server) handleSetAssetRunningLow(w http.ResponseWriter, r *http.Request
 // GET /api/v1/assets/{id}/history[?before=<event id>]
 func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, err := s.store.GetAssetByID(id); errors.Is(err, store.ErrAssetNotFound) {
-		writeJSONError(w, http.StatusNotFound, "Asset not found")
-		return
-	} else if err != nil {
-		writeServerError(w, err, "query asset")
+	if _, ok := s.assetFor(w, r, id); !ok {
 		return
 	}
 	events, more, err := s.store.ListAssetEvents(id, r.URL.Query().Get("before"), historyPage)
@@ -315,6 +333,9 @@ func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 // released that no other asset has taken since:
 // POST /api/v1/assets/{id}/restore
 func (s *Server) handleRestoreAsset(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsDelete); !ok {
+		return
+	}
 	asset, skipped, err := s.actingStore(r).RestoreAsset(r.PathValue("id"))
 	switch {
 	case errors.Is(err, store.ErrAssetNotFound):
@@ -326,7 +347,7 @@ func (s *Server) handleRestoreAsset(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeStoreError(w, err, "restore the asset")
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"asset": asset, "skipped_codes": skipped})
+		writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset), "skipped_codes": skipped})
 	}
 }
 
@@ -339,15 +360,19 @@ type ConditionRequest struct {
 
 // handleSetAssetCondition reports a problem with an asset, or marks it
 // working again: PUT /api/v1/assets/{id}/condition. Reporting needs
-// assets:report or assets:write; marking an asset ok needs assets:write.
+// assets.report or assets.write; marking an asset ok needs assets.write.
 func (s *Server) handleSetAssetCondition(w http.ResponseWriter, r *http.Request) {
 	var req ConditionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !models.ValidCondition(req.Condition) {
 		writeJSONError(w, http.StatusBadRequest, "condition must be ok, needs_maintenance or out_of_service")
 		return
 	}
-	if req.Condition == models.ConditionOK && !HasPermission(r.Context(), rbac.PermAssetsWrite) {
-		writeJSONError(w, http.StatusForbidden, "Marking an asset working again needs assets:write")
+	a, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsReport, rbac.PermAssetsWrite)
+	if !ok {
+		return
+	}
+	if req.Condition == models.ConditionOK && !Allows(r.Context(), rbac.PermAssetsWrite, a.Scopes) {
+		writeJSONError(w, http.StatusForbidden, "Marking an asset working again needs assets.write")
 		return
 	}
 	asset, changed, err := s.actingStore(r).SetAssetCondition(r.PathValue("id"), req.Condition, req.Note)
@@ -357,6 +382,6 @@ func (s *Server) handleSetAssetCondition(w http.ResponseWriter, r *http.Request)
 	case err != nil:
 		writeStoreError(w, err, "set the condition")
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"asset": asset, "changed": changed})
+		writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset), "changed": changed})
 	}
 }

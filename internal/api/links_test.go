@@ -30,7 +30,7 @@ func TestAssetLinksAPI(t *testing.T) {
 		t.Fatalf("relation types: %d %s", rec.Code, rec.Body)
 	}
 
-	// Types are managed with categories:manage.
+	// Types are managed with categories.manage.
 	body := `{"name":"powers","inverse_name":"powered by","is_single":true}`
 	if rec := doJSON(t, srv, writer, http.MethodPost, "/api/v1/relation-types", body); rec.Code != http.StatusForbidden {
 		t.Errorf("a writer made a type: %d", rec.Code)
@@ -62,7 +62,7 @@ func TestAssetLinksAPI(t *testing.T) {
 	}
 	bin, screws := newAsset("Bin A3"), newAsset("M3 screws")
 
-	// Links need assets:write, and read from the asset the request names.
+	// Links need assets.write, and read from the asset the request names.
 	path := "/api/v1/assets/" + screws + "/links"
 	linkBody := `{"type_id":"` + contains + `","asset_id":"` + bin + `","outgoing":false}`
 	if rec := doJSON(t, srv, reader, http.MethodPost, path, linkBody); rec.Code != http.StatusForbidden {

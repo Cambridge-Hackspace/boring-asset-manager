@@ -101,7 +101,7 @@
   <h1 class="text-2xl font-bold">Assets</h1>
   <div class="flex flex-wrap gap-2">
     {#if !archived}<a class="btn-secondary" href={exportUrl(applied.search, applied.categoryId)} download>Export CSV</a>{/if}
-    {#if session.can('assets:write')}
+    {#if session.can('assets.write')}
       <a class="btn-secondary" href="/assets/import">Import CSV</a>
       <a class="btn-primary" href="/assets/new">New asset</a>
     {/if}

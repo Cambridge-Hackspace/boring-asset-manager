@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -116,22 +117,39 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "type_id and asset_id are required")
 		return
 	}
+	// A link changes both assets: it shows, and is recorded, on each.
+	for _, id := range []string{r.PathValue("id"), req.AssetID} {
+		if _, ok := s.assetFor(w, r, id, rbac.PermAssetsWrite); !ok {
+			return
+		}
+	}
 	a, err := s.actingStore(r).AddLink(r.PathValue("id"), req.TypeID, req.AssetID, req.Outgoing)
 	if err != nil {
 		writeLinkError(w, err, "link the assets")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"asset": a})
+	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, a)})
 }
 
 // handleRemoveLink: DELETE /api/v1/assets/{id}/links/{link_id}
 func (s *Server) handleRemoveLink(w http.ResponseWriter, r *http.Request) {
+	this, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite)
+	if !ok {
+		return
+	}
+	for _, l := range this.Links {
+		if l.ID == r.PathValue("link_id") {
+			if _, ok := s.assetFor(w, r, l.Asset.ID, rbac.PermAssetsWrite); !ok {
+				return
+			}
+		}
+	}
 	a, err := s.actingStore(r).RemoveLink(r.PathValue("id"), r.PathValue("link_id"))
 	if err != nil {
 		writeLinkError(w, err, "unlink the assets")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"asset": a})
+	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, a)})
 }
 
 func writeLinkError(w http.ResponseWriter, err error, action string) {

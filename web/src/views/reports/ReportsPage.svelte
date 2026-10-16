@@ -14,7 +14,7 @@
   let loading = $state(true);
   let error = $state('');
   let status = $state('');
-  const canManage = $derived(session.can('reports:manage'));
+  const canManage = $derived(session.can('reports.manage'));
 
   async function load() {
     try {

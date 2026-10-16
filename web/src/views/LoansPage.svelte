@@ -11,7 +11,7 @@
   let { params: _params }: { params: Record<string, string> } = $props();
 
   // Lenders see everyone's loans; others see their own, past ones too.
-  const canLend = session.can('assets:lend');
+  const canLend = session.can('assets.lend');
   let loans = $state<Loan[]>([]);
   let people = $state<Person[]>([]);
   let show = $state(canLend ? 'open' : '');

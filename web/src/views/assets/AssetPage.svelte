@@ -5,6 +5,7 @@
   import { messageOf } from '../../lib/errors';
   import { actorName } from '../../lib/people';
   import type { AssetEvent, AssetWithDetails, Condition, GeneratorInfo, GeneratorKey } from '../../lib/models';
+  import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
@@ -174,18 +175,18 @@
     <h1 class="text-2xl font-bold">{asset.asset.name}</h1>
     <div class="flex flex-wrap gap-2">
       {#if archived}
-        {#if session.can('assets:delete')}
+        {#if session.canOn(asset.scopes, 'assets.delete')}
           <button type="button" class="btn-primary" disabled={busy} onclick={restore}>Restore</button>
         {/if}
       {:else}
-        {#if session.can('assets:write')}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>{/if}
-        {#if session.canAny('assets:report', 'assets:write') && !reporting}
+        {#if session.canOn(asset.scopes, 'assets.write')}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>{/if}
+        {#if session.canAnyOn(asset.scopes, 'assets.report', 'assets.write') && !reporting}
           <button type="button" class="btn-secondary" onclick={startReport}>Report a problem</button>
         {/if}
-        {#if asset.asset.condition !== 'ok' && session.can('assets:write')}
+        {#if asset.asset.condition !== 'ok' && session.canOn(asset.scopes, 'assets.write')}
           <button type="button" class="btn-secondary" disabled={busy} onclick={markWorking}>Mark as working</button>
         {/if}
-        {#if session.can('assets:delete')}
+        {#if session.canOn(asset.scopes, 'assets.delete')}
           <ConfirmButton label="Archive" question="Archive this asset? Its codes become free for reuse." onconfirm={archive} />
         {/if}
       {/if}
@@ -242,7 +243,7 @@
             ? `; flagged automatically below ${amount(stock.low_stock_threshold, stock.unit)}`
             : ''}.
         </p>
-        {#if session.can('stock:record') && !archived}
+        {#if session.canOn(asset.scopes, 'stock.record') && !archived}
           <div class="mt-3 flex flex-wrap items-end gap-2">
             <div>
               <label class="label" for="stock-amount">How many{stock.unit ? ` (${stock.unit})` : ''}</label>
@@ -271,6 +272,10 @@
         <dd class="flex flex-wrap gap-1">
           {#each asset.categories as c (c.id)}<CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />{/each}
         </dd>
+        {#if asset.scopes && !(asset.scopes.length === 1 && asset.scopes[0] === DEFAULT_SCOPE)}
+          <dt class="font-medium">Scopes</dt>
+          <dd>{asset.scopes.join(', ')}</dd>
+        {/if}
         {#each asset.effective_fields as e (e.field.id)}
           <dt class="font-medium">{e.field.label}</dt>
           <dd>

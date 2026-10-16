@@ -16,7 +16,7 @@ const field = (key: string, label: string, required = false, type: 'text' | 'num
 const generators = [{ type: 'qr', name: 'QR Code', error_correction_levels: ['M'], code_rules: 'Any text.' }];
 
 beforeEach(() => {
-  session.permissions = ['assets:read', 'assets:write'];
+  session.permissions = ['assets.read', 'assets.write'];
 });
 afterEach(() => {
   cleanup();
@@ -65,6 +65,7 @@ describe('AssetForm', () => {
       links: [],
       location: [],
       suggested_relation_type_ids: [],
+      scopes: ['default'],
       photos: [],
     };
     const { sent } = fakeApi({
@@ -119,6 +120,7 @@ describe('AssetForm', () => {
       links: [],
       location: [],
       suggested_relation_type_ids: [],
+      scopes: ['default'],
       photos: [],
     };
     const edit = fakeApi({

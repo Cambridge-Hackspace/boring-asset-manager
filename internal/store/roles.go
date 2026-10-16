@@ -56,6 +56,33 @@ func (s *Store) ListRoles() ([]models.RoleWithPermissions, error) {
 	}
 	rows.Close()
 
+	// Grants in some scopes only, as scope:key.
+	scoped, err := s.Query(`SELECT rps.role_id, sc.name, p.permission_key FROM role_permission_scopes rps
+		JOIN scopes sc ON sc.id = rps.scope_id
+		JOIN permissions p ON p.id = rps.permission_id`)
+	if err != nil {
+		return nil, fmt.Errorf("querying scoped permissions: %w", err)
+	}
+	defer scoped.Close()
+	byRole := map[string][]string{}
+	for scoped.Next() {
+		var roleID, scope, key string
+		if err := scoped.Scan(&roleID, &scope, &key); err != nil {
+			return nil, fmt.Errorf("scanning scoped permission: %w", err)
+		}
+		byRole[roleID] = append(byRole[roleID], scope+rbac.ScopeSeparator+key)
+	}
+	if err := scoped.Err(); err != nil {
+		return nil, err
+	}
+	scoped.Close()
+	for i := range roles {
+		if extra := byRole[roles[i].ID]; len(extra) > 0 {
+			roles[i].Permissions = append(roles[i].Permissions, extra...)
+			sort.Strings(roles[i].Permissions)
+		}
+	}
+
 	counts := map[string]int{}
 	countRows, err := s.Query(`SELECT ur.role_id, COUNT(*) FROM user_roles ur JOIN users u ON u.id = ur.user_id
 		WHERE u.archived_at IS NULL GROUP BY ur.role_id`)
@@ -208,11 +235,21 @@ func (in *RoleInput) normalize() error {
 	seen := map[string]bool{}
 	perms := make([]string, 0, len(in.Permissions))
 	for _, p := range in.Permissions {
-		if !known[p] {
+		scope, key := rbac.SplitKey(p)
+		if !known[key] {
 			return fmt.Errorf("%w: unknown permission %q", ErrInvalidRole, p)
 		}
-		if !seen[p] {
-			seen[p] = true
+		if scope != "" && !rbac.Scopable(key) {
+			return fmt.Errorf("%w: %s holds in every scope; it cannot be given in one", ErrInvalidRole, key)
+		}
+		if scope != "" && !rbac.ValidScopeName(scope) {
+			return fmt.Errorf("%w: no scope is %q", ErrInvalidRole, scope)
+		}
+		seen[p] = true
+	}
+	for p := range seen {
+		// A permission in every scope covers it in each.
+		if scope, key := rbac.SplitKey(p); scope == "" || !seen[key] {
 			perms = append(perms, p)
 		}
 	}
@@ -260,7 +297,7 @@ func (s *Store) CreateRole(in RoleInput) (*models.RoleWithPermissions, error) {
 }
 
 // UpdateRole renames a role and replaces its permissions, under the
-// anti-lockout guard: taking users:manage from the role of the last active
+// anti-lockout guard: taking users.manage from the role of the last active
 // user who has it is refused.
 func (s *Store) UpdateRole(id string, in RoleInput) (*models.RoleWithPermissions, error) {
 	if err := in.normalize(); err != nil {
@@ -313,18 +350,35 @@ func (s *Store) editableRoleTx(tx *sql.Tx, id string) error {
 }
 
 // setRolePermissionsTx replaces a role's permissions with keys, which must
-// be known.
+// be known, each in every scope or, as scope:key, in an existing scope.
 func (s *Store) setRolePermissionsTx(tx *sql.Tx, roleID string, keys []string) error {
-	if _, err := s.TxExec(tx, "DELETE FROM role_permissions WHERE role_id = ?", roleID); err != nil {
-		return fmt.Errorf("clearing permissions: %w", err)
+	for _, table := range []string{"role_permissions", "role_permission_scopes"} {
+		if _, err := s.TxExec(tx, "DELETE FROM "+table+" WHERE role_id = ?", roleID); err != nil {
+			return fmt.Errorf("clearing permissions: %w", err)
+		}
 	}
-	for _, key := range keys {
+	for _, p := range keys {
+		scope, key := rbac.SplitKey(p)
 		var permID string
 		if err := s.TxQueryRow(tx, "SELECT id FROM permissions WHERE permission_key = ?", key).Scan(&permID); err != nil {
 			return fmt.Errorf("finding permission %s: %w", key, err)
 		}
-		if _, err := s.TxExec(tx, "INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)", roleID, permID); err != nil {
-			return fmt.Errorf("granting %s: %w", key, err)
+		if scope == "" {
+			if _, err := s.TxExec(tx, "INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)", roleID, permID); err != nil {
+				return fmt.Errorf("granting %s: %w", key, err)
+			}
+			continue
+		}
+		var scopeID string
+		err := s.TxQueryRow(tx, "SELECT id FROM scopes WHERE name = ?", scope).Scan(&scopeID)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%w: no scope is %q", ErrInvalidRole, scope)
+		}
+		if err != nil {
+			return fmt.Errorf("finding scope %s: %w", scope, err)
+		}
+		if _, err := s.TxExec(tx, "INSERT INTO role_permission_scopes (role_id, permission_id, scope_id) VALUES (?, ?, ?)", roleID, permID, scopeID); err != nil {
+			return fmt.Errorf("granting %s: %w", p, err)
 		}
 	}
 	return nil

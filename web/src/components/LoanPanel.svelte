@@ -19,8 +19,8 @@
   let error = $state('');
 
   const path = $derived(`/assets/${encodeURIComponent(asset.asset.id)}`);
-  const canLend = $derived(session.can('assets:lend'));
-  const canBorrow = $derived(session.can('assets:borrow'));
+  const canLend = $derived(session.canOn(asset.scopes, 'assets.lend'));
+  const canBorrow = $derived(session.canOn(asset.scopes, 'assets.borrow'));
   const loan = $derived(asset.loan);
   const mine = $derived(!!loan && loan.borrower.id === session.user?.id);
   const today = new Date().toISOString().slice(0, 10);

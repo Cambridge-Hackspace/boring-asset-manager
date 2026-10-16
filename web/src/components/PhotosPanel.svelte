@@ -15,7 +15,7 @@
 
   const id = $derived(asset.asset.id);
   const path = $derived(`/assets/${encodeURIComponent(id)}/photos`);
-  const canEdit = $derived(session.can('assets:write') && !asset.asset.archived_at);
+  const canEdit = $derived(session.canOn(asset.scopes, 'assets.write') && !asset.asset.archived_at);
 
   async function act(action: () => Promise<{ asset: AssetWithDetails }>, done: string) {
     error = '';

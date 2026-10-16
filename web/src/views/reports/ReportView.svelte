@@ -41,13 +41,13 @@
     <div class="flex flex-wrap gap-2 print:hidden">
       <button type="button" class="btn-secondary" onclick={run}>Run again</button>
       <button type="button" class="btn-secondary" onclick={() => window.print()}>Print</button>
-      {#if session.can('reports:manage')}<a class="btn-secondary" href="{path}/edit">Edit</a>{/if}
+      {#if session.can('reports.manage')}<a class="btn-secondary" href="{path}/edit">Edit</a>{/if}
     </div>
   </div>
   <p class="mb-2 text-xs text-zinc-600 dark:text-zinc-400">As of {ranAt}.</p>
   <ReportTables {result} csvHref={(n) => `/api/v1${path}/sections/${n}/csv`} />
 {:else}
   <p class="text-sm">
-    {#if session.can('reports:manage')}<a class="underline" href="{path}/edit">Edit the report</a> to fix it.{/if}
+    {#if session.can('reports.manage')}<a class="underline" href="{path}/edit">Edit the report</a> to fix it.{/if}
   </p>
 {/if}

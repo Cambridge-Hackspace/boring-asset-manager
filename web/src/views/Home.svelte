@@ -20,7 +20,7 @@
   let error = $state('');
 
   onMount(async () => {
-    if (!session.can('assets:read')) return;
+    if (!session.can('assets.read')) return;
     try {
       const [all, assets] = await Promise.all([
         request<{ categories: Category[] }>('GET', '/categories').then((r) => r.categories ?? []),

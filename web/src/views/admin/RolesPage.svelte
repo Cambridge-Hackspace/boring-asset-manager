@@ -2,25 +2,31 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Permission, Role } from '../../lib/models';
-  import { permissionLabel, permissions } from '../../lib/permissions';
+  import type { Permission, PermissionKey, Role, Scope } from '../../lib/models';
+  import { describeKey, heldIn, permissions, scopable, setHeld } from '../../lib/permissions';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let roles = $state<Role[]>([]);
+  let scopes = $state<Scope[]>([]);
   let loading = $state(true);
   let error = $state('');
   let status = $state('');
 
   // The role being edited: null for none, '' for a new one.
   let editing = $state<string | null>(null);
-  let draft = $state<{ name: string; description: string; permissions: Permission[] }>({ name: '', description: '', permissions: [] });
+  let draft = $state<{ name: string; description: string; permissions: PermissionKey[] }>({ name: '', description: '', permissions: [] });
 
   async function load() {
     try {
-      roles = (await request<{ roles: Role[] }>('GET', '/roles')).roles ?? [];
+      const [r, s] = await Promise.all([
+        request<{ roles: Role[] }>('GET', '/roles'),
+        request<{ scopes: Scope[] }>('GET', '/scopes'),
+      ]);
+      roles = r.roles ?? [];
+      scopes = s.scopes ?? [];
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -34,16 +40,17 @@
   function explain(err: unknown): string {
     const msg = messageOf(err);
     return msg.includes('anti-lockout')
-      ? 'Refused: at least one active user must keep the users:manage permission, and this change would remove the last one.'
+      ? 'Refused: at least one active user must keep the users.manage permission, and this change would remove the last one.'
       : msg;
   }
 
   function start(role?: Role) {
     error = status = '';
     editing = role?.id ?? '';
+    onlySome = [];
     draft = role
       ? { name: role.name, description: role.description, permissions: [...role.permissions] }
-      : { name: '', description: '', permissions: ['assets:read'] };
+      : { name: '', description: '', permissions: ['assets.read'] };
   }
 
   async function save(event: SubmitEvent) {
@@ -73,6 +80,63 @@
   }
 
   const holders = (n: number) => (n === 1 ? '1 user' : `${n} users`);
+
+  // Scopes matter once there is one besides the default.
+  const scoped = $derived(scopes.length > 1);
+
+  // Permissions set to "Only in…", which stay chosen while no scope is ticked yet.
+  let onlySome = $state<Permission[]>([]);
+  const chosen = (p: Permission, held: 'all' | string[]) => held === 'all' || held.length > 0 || onlySome.includes(p);
+
+  function toggle(p: Permission, on: boolean) {
+    onlySome = onlySome.filter((x) => x !== p);
+    draft.permissions = setHeld(draft.permissions, p, on ? 'all' : []);
+  }
+
+  function choose(p: Permission, where: string) {
+    onlySome = where === 'all' ? onlySome.filter((x) => x !== p) : [...onlySome, p];
+    draft.permissions = setHeld(draft.permissions, p, where === 'all' ? 'all' : []);
+  }
+
+  function toggleScope(p: Permission, scope: string, on: boolean) {
+    const held = heldIn(draft.permissions, p);
+    const now = held === 'all' ? [] : held;
+    draft.permissions = setHeld(draft.permissions, p, on ? [...now, scope] : now.filter((s) => s !== scope));
+  }
+
+  // Scopes themselves: the one being renamed, and a new one's name.
+  let renaming = $state<string | null>(null);
+  let scopeName = $state('');
+  let newScope = $state('');
+
+  async function saveScope(event: SubmitEvent, id?: string) {
+    event.preventDefault();
+    error = status = '';
+    const name = (id ? scopeName : newScope).trim();
+    try {
+      if (id) await request('PUT', `/scopes/${encodeURIComponent(id)}`, { name });
+      else await request('POST', '/scopes', { name });
+      status = id ? `Renamed the scope to ${name}.` : `Created the scope ${name}.`;
+      renaming = null;
+      newScope = '';
+      await load();
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function removeScope(scope: Scope) {
+    error = status = '';
+    try {
+      await request('DELETE', `/scopes/${encodeURIComponent(scope.id)}`);
+      status = `Deleted the scope ${scope.name}.`;
+      await load();
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -101,10 +165,44 @@
     <fieldset class="space-y-2">
       <legend class="label">Permissions</legend>
       {#each permissions as p (p.key)}
-        <label class="flex items-start gap-2 text-sm">
-          <input class="mt-1" type="checkbox" value={p.key} bind:group={draft.permissions} />
-          <span><span class="font-medium">{p.label}</span> <span class="text-zinc-600 dark:text-zinc-400">— {p.description}</span></span>
-        </label>
+        {@const held = heldIn(draft.permissions, p.key)}
+        <div>
+          <label class="flex items-start gap-2 text-sm">
+            <input
+              class="mt-1"
+              type="checkbox"
+              checked={chosen(p.key, held)}
+              onchange={(e) => toggle(p.key, e.currentTarget.checked)}
+            />
+            <span><span class="font-medium">{p.label}</span> <span class="text-zinc-600 dark:text-zinc-400">— {p.description}</span></span>
+          </label>
+          {#if scoped && scopable.includes(p.key) && chosen(p.key, held)}
+            <div class="mt-1 ml-6 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <select
+                class="input w-auto"
+                aria-label="Where: {p.label}"
+                value={held === 'all' ? 'all' : 'some'}
+                onchange={(e) => choose(p.key, e.currentTarget.value)}
+              >
+                <option value="all">In every scope</option>
+                <option value="some">Only in…</option>
+              </select>
+              {#if held !== 'all'}
+                {#each scopes as s (s.id)}
+                  <label class="flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      aria-label="{p.label} in {s.name}"
+                      checked={held.includes(s.name)}
+                      onchange={(e) => toggleScope(p.key, s.name, e.currentTarget.checked)}
+                    />
+                    {s.name}
+                  </label>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+        </div>
       {/each}
     </fieldset>
     <div class="flex gap-2">
@@ -142,9 +240,57 @@
           {/if}
         </div>
         <p class="mt-2 text-sm">
-          {r.protected ? 'Every permission' : r.permissions.map(permissionLabel).join(', ') || 'No permissions'}
+          {r.protected ? 'Every permission' : r.permissions.map(describeKey).join(', ') || 'No permissions'}
         </p>
       </li>
     {/each}
   </ul>
 {/if}
+
+<section class="mt-8 max-w-2xl" aria-labelledby="scopes-heading">
+  <h2 id="scopes-heading" class="mb-2 text-xl font-semibold">Scopes</h2>
+  <p class="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+    A scope is a label on categories, passed down to their subcategories. A role can hold asset permissions in some
+    scopes only, and then acts on the assets in those. Assets in no other scope are in <span class="font-mono">default</span>.
+  </p>
+  <form class="mb-4 flex flex-wrap items-end gap-2" onsubmit={(e) => saveScope(e)}>
+    <div>
+      <label class="label" for="new-scope">New scope</label>
+      <input id="new-scope" class="input" required maxlength="64" placeholder="such as workshop" bind:value={newScope} />
+    </div>
+    <button type="submit" class="btn-secondary">Add scope</button>
+  </form>
+  <ul class="space-y-2">
+    {#each scopes as s (s.id)}
+      <li class="card flex flex-wrap items-center justify-between gap-2">
+        {#if renaming === s.id}
+          <form class="flex flex-wrap items-end gap-2" onsubmit={(e) => saveScope(e, s.id)}>
+            <div>
+              <label class="label" for="scope-{s.id}">Name</label>
+              <input id="scope-{s.id}" class="input" required maxlength="64" bind:value={scopeName} />
+            </div>
+            <button type="submit" class="btn-primary">Rename</button>
+            <button type="button" class="btn-secondary" onclick={() => (renaming = null)}>Cancel</button>
+          </form>
+        {:else}
+          <div>
+            <h3 class="font-mono font-semibold">{s.name}</h3>
+            <p class="text-sm text-zinc-600 dark:text-zinc-400">
+              {s.reserved
+                ? 'Built in: assets in no other scope.'
+                : `On ${count(s.category_count, 'category', 'categories')}; used by ${count(s.role_count, 'role', 'roles')}.`}
+            </p>
+          </div>
+          {#if !s.reserved}
+            <span class="inline-flex flex-wrap gap-2">
+              <button type="button" class="btn-secondary" aria-label="Rename {s.name}" onclick={() => ((renaming = s.id), (scopeName = s.name))}>
+                Rename
+              </button>
+              <ConfirmButton label="Delete scope" question="Delete the scope {s.name}?" onconfirm={() => removeScope(s)} />
+            </span>
+          {/if}
+        {/if}
+      </li>
+    {/each}
+  </ul>
+</section>

@@ -5,7 +5,7 @@ import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
 import type { APIToken } from '../../lib/models';
 
-const roles = [{ id: 'counters', name: 'Counters', description: '', permissions: ['stock:record'], user_count: 0, protected: false }];
+const roles = [{ id: 'counters', name: 'Counters', description: '', permissions: ['stock.record'], user_count: 0, protected: false }];
 const old: APIToken = {
   id: 't1',
   name: 'Old script',
@@ -17,7 +17,7 @@ const old: APIToken = {
 };
 
 beforeEach(() => {
-  session.permissions = ['users:manage'];
+  session.permissions = ['users.manage'];
 });
 afterEach(() => {
   cleanup();

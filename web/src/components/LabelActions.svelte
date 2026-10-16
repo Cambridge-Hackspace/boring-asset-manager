@@ -20,7 +20,7 @@
   let status = $state('');
   let busy = $state(false);
 
-  const canPrint = $derived(session.can('labels:print'));
+  const canPrint = $derived(session.can('labels.print'));
   const single = $derived(assetIds.length === 1 ? assetIds[0]! : null);
   const labelURL = (fmt: string) =>
     single ? `/api/v1/assets/${encodeURIComponent(single)}/label?template_id=${encodeURIComponent(templateId)}&format=${fmt}` : '';

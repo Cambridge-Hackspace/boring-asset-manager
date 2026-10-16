@@ -50,18 +50,18 @@ func TestAssetStockAPI(t *testing.T) {
 		t.Fatalf("an asset without stock: %s", raw)
 	}
 
-	// Using and restocking need stock:record, not assets:write.
+	// Using and restocking need stock.record, not assets.write.
 	path := "/api/v1/assets/" + a.ID + "/quantity"
 	for _, who := range []*http.Cookie{reader, writer} {
 		if rec := doJSON(t, srv, who, http.MethodPost, path, `{"adjust":-1}`); rec.Code != http.StatusForbidden {
-			t.Errorf("used stock without stock:record: %d", rec.Code)
+			t.Errorf("used stock without stock.record: %d", rec.Code)
 		}
 	}
 	if rec := doJSON(t, srv, counter, http.MethodPost, path, `{"adjust":0}`); rec.Code != http.StatusOK {
-		t.Errorf("stock:record alone: %d %s", rec.Code, rec.Body)
+		t.Errorf("stock.record alone: %d %s", rec.Code, rec.Body)
 	}
 	if rec := doJSON(t, srv, counter, http.MethodPut, "/api/v1/assets/"+a.ID, `{"name":"Renamed"}`); rec.Code != http.StatusForbidden {
-		t.Errorf("stock:record edited an asset: %d", rec.Code)
+		t.Errorf("stock.record edited an asset: %d", rec.Code)
 	}
 	for _, bad := range []string{`{}`, `{"adjust":-1,"set":3}`, `{"adjust":"-1"}`, `nope`, `{"set":-1}`} {
 		if rec := doJSON(t, srv, stores, http.MethodPost, path, bad); rec.Code != http.StatusBadRequest {

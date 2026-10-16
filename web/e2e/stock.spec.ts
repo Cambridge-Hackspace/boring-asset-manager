@@ -4,7 +4,7 @@ test('count stock by quantity: use it up, see it run low, restock', async ({ sig
   const name = unique('M3 screws');
   await goTo(page, 'Assets');
   await page.getByRole('link', { name: 'New asset' }).click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('checkbox', { name: 'Count stock by quantity' }).check();
   await page.getByLabel('Quantity', { exact: true }).fill('200');
   await page.getByLabel('Unit (optional)').fill('pcs');

@@ -70,6 +70,8 @@ type categoryTraits struct {
 	units map[string]map[string]bool
 	// parents maps each category to its parent.
 	parents map[string]string
+	// scopes maps each category to the names of its own scopes.
+	scopes map[string][]string
 }
 
 // weighs reports whether an asset in these categories, counting its stock
@@ -111,7 +113,11 @@ func (s *Store) categoryTraits(q interface {
 	if err := rows.Err(); err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents}
+	scopes, err := readCategoryScopes(q)
+	if err != nil {
+		return categoryTraits{}, err
+	}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes}
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {
 			t.lendable[id] = t.lendable[id] || lendable[c]

@@ -4,7 +4,7 @@ test('lend a tool; the borrower checks it in, then borrows it themselves', async
   const { category } = await api.call('POST', '/categories', { name: unique('Power tools'), color_hex: '#0ea5e9', is_consumable: false, is_lendable: true });
   const name = unique('Drill');
   const { asset } = await api.call('POST', '/assets', { name, category_ids: [category.id] });
-  const { role } = await api.call('POST', '/roles', { name: unique('Members'), description: '', permissions: ['assets:read', 'assets:borrow'] });
+  const { role } = await api.call('POST', '/roles', { name: unique('Members'), description: '', permissions: ['assets.read', 'assets.borrow'] });
   const email = `${unique('member')}@hackspace.org`;
   const member = unique('Member');
   const { user } = await api.call('POST', '/users', { email, name: member, password: 'MemberPass123!' });

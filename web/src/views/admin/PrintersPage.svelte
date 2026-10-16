@@ -25,8 +25,8 @@
   let testAsset = $state<AssetWithDetails | null>(null);
   let testStatus = $state('');
 
-  const canManage = $derived(session.can('settings:manage'));
-  const canPrint = $derived(session.can('labels:print'));
+  const canManage = $derived(session.can('settings.manage'));
+  const canPrint = $derived(session.can('labels.print'));
 
   async function load() {
     try {

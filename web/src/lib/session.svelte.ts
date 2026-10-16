@@ -1,21 +1,31 @@
 // The signed-in user and what they may do.
 
 import { ApiError, request, setUnauthorizedHandler } from './api';
-import type { Me, Permission, User } from './models';
+import type { Me, Permission, PermissionKey, User } from './models';
 import { navigate, router } from './router.svelte';
 
 class Session {
   user = $state<User | null>(null);
-  permissions = $state<Permission[]>([]);
+  permissions = $state<PermissionKey[]>([]);
   /** False until the first /auth/me answer, so the app does not flash sign-in. */
   loaded = $state(false);
 
+  /** Holds the permission in every scope, or in at least one: enough to show what it opens. */
   can(permission: Permission): boolean {
-    return this.permissions.includes(permission);
+    return this.permissions.some((k) => k === permission || k.endsWith(':' + permission));
   }
 
   canAny(...permissions: Permission[]): boolean {
     return permissions.some((p) => this.can(p));
+  }
+
+  /** Holds the permission for an asset in these scopes. */
+  canOn(scopes: string[] | undefined, permission: Permission): boolean {
+    return this.permissions.includes(permission) || (scopes ?? []).some((s) => this.permissions.includes(`${s}:${permission}`));
+  }
+
+  canAnyOn(scopes: string[] | undefined, ...permissions: Permission[]): boolean {
+    return permissions.some((p) => this.canOn(scopes, p));
   }
 
   async load(): Promise<void> {

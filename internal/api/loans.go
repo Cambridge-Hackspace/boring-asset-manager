@@ -11,7 +11,7 @@ import (
 )
 
 // CheckOutRequest lends an asset. BorrowerID defaults to whoever is signed
-// in; naming someone else needs assets:lend. DueAt is optional.
+// in; naming someone else needs assets.lend. DueAt is optional.
 type CheckOutRequest struct {
 	BorrowerID string     `json:"borrower_id"`
 	DueAt      *time.Time `json:"due_at"`
@@ -37,8 +37,12 @@ func (s *Server) handleCheckOut(w http.ResponseWriter, r *http.Request) {
 		}
 		req.BorrowerID = self
 	}
-	if req.BorrowerID != self && !HasPermission(r.Context(), rbac.PermAssetsLend) {
-		writeJSONError(w, http.StatusForbidden, "Lending to someone else needs assets:lend")
+	a, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsBorrow, rbac.PermAssetsLend)
+	if !ok {
+		return
+	}
+	if req.BorrowerID != self && !Allows(r.Context(), rbac.PermAssetsLend, a.Scopes) {
+		writeJSONError(w, http.StatusForbidden, "Lending to someone else needs assets.lend")
 		return
 	}
 	asset, err := s.actingStore(r).CheckOut(r.PathValue("id"), req.BorrowerID, req.DueAt)
@@ -46,7 +50,7 @@ func (s *Server) handleCheckOut(w http.ResponseWriter, r *http.Request) {
 		writeLoanError(w, err, "lend the asset")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"asset": asset})
+	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
 // CheckInRequest ends a loan. Left, for an asset counted by quantity, is
@@ -56,7 +60,7 @@ type CheckInRequest struct {
 }
 
 // handleCheckIn ends an asset's loan: POST /api/v1/assets/{id}/checkin.
-// Without assets:lend, only the borrower's own loan can be checked in.
+// Without assets.lend, only the borrower's own loan can be checked in.
 func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	var req CheckInRequest
 	if r.ContentLength != 0 {
@@ -65,11 +69,15 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	a, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsBorrow, rbac.PermAssetsLend)
+	if !ok {
+		return
+	}
 	onlyBorrower := ""
-	if !HasPermission(r.Context(), rbac.PermAssetsLend) {
+	if !Allows(r.Context(), rbac.PermAssetsLend, a.Scopes) {
 		u := CurrentUser(r.Context())
 		if u == nil {
-			writeJSONError(w, http.StatusForbidden, "Checking in needs assets:lend")
+			writeJSONError(w, http.StatusForbidden, "Checking in needs assets.lend")
 			return
 		}
 		onlyBorrower = u.ID
@@ -79,7 +87,7 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 		writeLoanError(w, err, "check the asset in")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"asset": asset})
+	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
 // handleListLoans lists loans, newest first:
@@ -95,7 +103,23 @@ func (s *Server) handleListLoans(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list loans")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"loans": loans})
+	// Only loans of assets the requester can read.
+	ids := make([]string, len(loans))
+	for i, l := range loans {
+		ids[i] = l.AssetID
+	}
+	scopes, err := s.store.AssetScopes(ids)
+	if err != nil {
+		writeServerError(w, err, "read the assets' scopes")
+		return
+	}
+	kept := loans[:0:0]
+	for _, l := range loans {
+		if Allows(r.Context(), rbac.PermAssetsRead, scopes[l.AssetID]) {
+			kept = append(kept, l)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"loans": kept})
 }
 
 // handleListPeople lists who an asset can be lent to: GET /api/v1/people

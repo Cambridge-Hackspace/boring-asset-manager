@@ -186,7 +186,30 @@ func (p *planner) planLinks(remove bool) error {
 	removed := map[string]bool{}
 	var removals, additions []store.ImportLink
 	changes := []LinkChange{}
+	// A link changes both its assets, so the importer must be able to
+	// change each; a removal is reported on the row of its asset in the file.
+	lineOf := map[string]int{}
+	for _, c := range p.linkCells {
+		if lineOf[c.self] == 0 {
+			lineOf[c.self] = c.line
+		}
+	}
+	guarded := map[string]bool{}
+	guard := func(line int, ids ...string) {
+		for _, id := range ids {
+			if line == 0 {
+				line = lineOf[id]
+			}
+		}
+		for _, id := range ids {
+			if bad := p.forbidden(id); bad != "" && !guarded[id] {
+				guarded[id] = true
+				plan.problem(line, p.linksColumn(), "you cannot change the links of %s, in %s", nameOf(id), bad)
+			}
+		}
+	}
 	note := func(line int, change string, l plannedLink) {
+		guard(line, l.from, l.to)
 		changes = append(changes, LinkChange{Row: line, Change: change, Asset: nameOf(l.from), Label: byID[l.typeID].Name, Other: nameOf(l.to)})
 	}
 	for _, k := range order {
@@ -204,6 +227,7 @@ func (p *planner) planLinks(remove bool) error {
 			for ek, e := range existing {
 				if e.typeID == l.typeID && e.to == l.to && !removed[ek] {
 					removed[ek] = true
+					guard(l.line, e.from)
 					removals = append(removals, store.ImportLink{Remove: true, LinkID: existingID[ek]})
 					change = "move"
 				}

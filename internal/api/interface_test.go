@@ -38,7 +38,7 @@ func TestEffectiveFieldsForANewAsset(t *testing.T) {
 
 	nobody, _ := srv.store.CreateUser("nobody@test.org", "Pass1234!", true)
 	if rec := doJSON(t, srv, sessionCookie(t, srv, nobody.ID), http.MethodPost, "/api/v1/categories/effective-fields", `{}`); rec.Code != http.StatusForbidden {
-		t.Errorf("without assets:read: %d", rec.Code)
+		t.Errorf("without assets.read: %d", rec.Code)
 	}
 }
 
@@ -96,7 +96,7 @@ func TestRolesAPI(t *testing.T) {
 
 	// The former admin can no longer manage users.
 	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/roles", ""); rec.Code != http.StatusForbidden {
-		t.Errorf("roles without users:manage: %d", rec.Code)
+		t.Errorf("roles without users.manage: %d", rec.Code)
 	}
 }
 
@@ -182,7 +182,7 @@ func TestPrinterFitCheck(t *testing.T) {
 	}
 
 	// Template designers can read printers and check fit, but not print.
-	dc := userWithPermissions(t, srv, "designer@test.org", "templates:manage")
+	dc := userWithPermissions(t, srv, "designer@test.org", "templates.manage")
 	if rec := doJSON(t, srv, dc, http.MethodPost, "/api/v1/printers/"+id+"/fit", `{"width_mm":90,"height_mm":29,"dpi":300}`); rec.Code != http.StatusOK {
 		t.Errorf("designer fit check: %d", rec.Code)
 	}

@@ -10,7 +10,7 @@ const contains: RelationType = {
 };
 
 beforeEach(() => {
-  session.permissions = ['categories:manage'];
+  session.permissions = ['categories.manage'];
 });
 afterEach(() => {
   cleanup();

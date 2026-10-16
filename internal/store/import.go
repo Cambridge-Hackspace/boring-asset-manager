@@ -14,11 +14,11 @@ import (
 // ImportRow is one validated asset change from an import (README §6.1).
 type ImportRow struct {
 	// ID names the asset to update; empty creates one.
-	ID   string
+	ID string
 	// NewID, for a row creating an asset, is the ID to give it, so links
 	// in the same import can name it; empty picks one.
 	NewID string
-	Name string
+	Name  string
 	// CategoryIDs replaces the asset's categories; nil leaves them as they
 	// are. An empty list means Uncategorized.
 	CategoryIDs []string

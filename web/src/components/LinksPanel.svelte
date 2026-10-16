@@ -18,7 +18,7 @@
   let busy = $state(false);
   let error = $state('');
 
-  const canEdit = $derived(session.can('assets:write') && !asset.asset.archived_at);
+  const canEdit = $derived(session.canOn(asset.scopes, 'assets.write') && !asset.asset.archived_at);
   const choices = $derived(linkChoices(types, asset.suggested_relation_type_ids));
   const path = $derived(`/assets/${encodeURIComponent(asset.asset.id)}/links`);
 

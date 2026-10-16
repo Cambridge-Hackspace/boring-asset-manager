@@ -74,7 +74,7 @@ func TestAPITokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, perms, _ := st.AuthenticateToken(secret); perms[rbac.PermStockRecord] {
-		t.Errorf("still has stock:record: %v", perms)
+		t.Errorf("still has stock.record: %v", perms)
 	}
 	if err := st.DeleteRole(counters.ID); err != nil {
 		t.Fatal(err)

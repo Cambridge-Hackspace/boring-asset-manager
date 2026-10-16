@@ -209,23 +209,11 @@ func (s *Store) AuthenticateToken(secret string) (*models.APIToken, map[string]b
 		}
 		t.LastUsedAt = &now
 	}
-	rows, err := s.Query(`SELECT DISTINCT p.permission_key FROM api_token_roles tr
-		JOIN role_permissions rp ON rp.role_id = tr.role_id
-		JOIN permissions p ON p.id = rp.permission_id
-		WHERE tr.token_id = ?`, t.ID)
+	perms, err := grantedKeys(storeQuerier{s}, "SELECT role_id FROM api_token_roles WHERE token_id = ?", t.ID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading token permissions: %w", err)
 	}
-	defer rows.Close()
-	perms := map[string]bool{}
-	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, nil, fmt.Errorf("scanning token permission: %w", err)
-		}
-		perms[key] = true
-	}
-	return &t, perms, rows.Err()
+	return &t, perms, nil
 }
 
 // AsToken returns a view of the store whose changes are attributed to an

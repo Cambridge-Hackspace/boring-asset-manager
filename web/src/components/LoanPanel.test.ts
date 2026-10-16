@@ -17,6 +17,7 @@ const drill: AssetWithDetails = {
   links: [],
   location: [],
   suggested_relation_type_ids: [],
+  scopes: ['default'],
   photos: [],
 };
 const lentTo = (id: string, name: string, overdue = false): AssetWithDetails => ({
@@ -43,7 +44,7 @@ afterEach(() => {
 
 describe('LoanPanel', () => {
   it('lets a member borrow it, with a due date, and check it back in', async () => {
-    session.permissions = ['assets:read', 'assets:borrow'];
+    session.permissions = ['assets.read', 'assets.borrow'];
     const { sent } = fakeApi({
       'POST /assets/a1/checkout': () => ({ asset: lentTo('me', 'Me') }),
       'POST /assets/a1/checkin': () => ({ asset: drill }),
@@ -65,7 +66,7 @@ describe('LoanPanel', () => {
   });
 
   it('does not let a member check in someone else’s loan', async () => {
-    session.permissions = ['assets:read', 'assets:borrow'];
+    session.permissions = ['assets.read', 'assets.borrow'];
     fakeApi({});
     render(LoanPanel, { asset: lentTo('bo', 'Bo', true), onchange: () => {} });
     expect(screen.getByText(/Lent to/).textContent).toContain('Bo');
@@ -74,7 +75,7 @@ describe('LoanPanel', () => {
   });
 
   it('lets a lender lend to someone they choose', async () => {
-    session.permissions = ['assets:read', 'assets:lend'];
+    session.permissions = ['assets.read', 'assets.lend'];
     const { sent } = fakeApi({
       'GET /people': () => ({ people: [{ id: 'bo', email: 'bo@hackspace.org', name: 'Bo' }] }),
       'POST /assets/a1/checkout': () => ({ asset: lentTo('bo', 'Bo') }),
@@ -90,7 +91,7 @@ describe('LoanPanel', () => {
   });
 
   it('says why an asset cannot be lent now', async () => {
-    session.permissions = ['assets:read', 'assets:lend'];
+    session.permissions = ['assets.read', 'assets.lend'];
     fakeApi({ 'GET /people': () => ({ people: [] }) });
     render(LoanPanel, { asset: { ...drill, asset: { ...drill.asset, condition: 'out_of_service' } }, onchange: () => {} });
     expect(screen.getByText(/out of service, so it cannot be lent/)).toBeTruthy();
@@ -100,7 +101,7 @@ describe('LoanPanel', () => {
 
 describe('LoanPanel, weighed', () => {
   it('lends a spool, and records what is left when it comes back', async () => {
-    session.permissions = ['assets:read', 'assets:lend'];
+    session.permissions = ['assets.read', 'assets.lend'];
     const stock = { quantity: 1000, unit: 'g', low_stock_threshold: null, is_running_low: false };
     const spool: AssetWithDetails = { ...drill, weighed: true, asset: { ...drill.asset, stock } };
     const { sent } = fakeApi({
@@ -119,7 +120,7 @@ describe('LoanPanel, weighed', () => {
   });
 
   it('will not lend part of a pooled quantity', () => {
-    session.permissions = ['assets:read', 'assets:lend'];
+    session.permissions = ['assets.read', 'assets.lend'];
     fakeApi({ 'GET /people': () => ({ people: [] }) });
     const stock = { quantity: 20, unit: 'pcs', low_stock_threshold: null, is_running_low: false };
     render(LoanPanel, { asset: { ...drill, asset: { ...drill.asset, stock } }, onchange: () => {} });

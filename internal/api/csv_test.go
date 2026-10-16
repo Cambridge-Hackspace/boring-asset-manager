@@ -87,7 +87,7 @@ func TestExportAssetsCSV(t *testing.T) {
 
 	nobody := userWithPermissions(t, srv, "nobody@hackspace.org", rbac.PermLabelsPrint)
 	if rec := doJSON(t, srv, nobody, http.MethodGet, "/api/v1/assets/export.csv", ""); rec.Code != http.StatusForbidden {
-		t.Errorf("without assets:read: %d", rec.Code)
+		t.Errorf("without assets.read: %d", rec.Code)
 	}
 }
 
@@ -188,7 +188,7 @@ func TestImportAssetsAPI(t *testing.T) {
 	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
 	for _, path := range []string{"/api/v1/assets/import/preview", "/api/v1/assets/import"} {
 		if rec := postImport(t, srv, reader, path, file, mapping); rec.Code != http.StatusForbidden {
-			t.Errorf("%s without assets:write: %d", path, rec.Code)
+			t.Errorf("%s without assets.write: %d", path, rec.Code)
 		}
 	}
 }

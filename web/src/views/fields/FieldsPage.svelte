@@ -15,7 +15,7 @@
   let error = $state('');
   let editing = $state<string | null>(null); // a field ID, 'new', or null
 
-  const canManage = $derived(session.can('categories:manage'));
+  const canManage = $derived(session.can('categories.manage'));
 
   async function load() {
     try {

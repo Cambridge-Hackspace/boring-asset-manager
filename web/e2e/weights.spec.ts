@@ -5,7 +5,7 @@ test('weigh filament: a category totals its spools in grams, and one lent comes 
   // Made through the form, with a unit.
   await goTo(page, 'Categories');
   await page.getByRole('link', { name: 'New category' }).click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('checkbox', { name: 'Consumable' }).check();
   await page.getByLabel('Unit (optional)').fill('g');
   await page.getByLabel('Low stock threshold (optional)').fill('1000');

@@ -380,7 +380,7 @@ func (s *Store) CreateAdminUser(email, password string) (*models.User, error) {
 	}, nil
 }
 
-// CountActiveAdmins returns the number of active users possessing users:manage permission.
+// CountActiveAdmins returns the number of active users possessing users.manage permission.
 func (s *Store) CountActiveAdmins() (int, error) {
 	var count int
 	err := s.QueryRow(activeAdminsQuery, rbac.PermUsersManage).Scan(&count)

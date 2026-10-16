@@ -348,6 +348,11 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	if err := s.photoDetails(details, ctx); err != nil {
 		return nil, err
 	}
+	traits, err := s.contextTraits(ctx)
+	if err != nil {
+		return nil, err
+	}
+	details.Scopes = traits.scopesOf(catIDs)
 	return details, nil
 }
 

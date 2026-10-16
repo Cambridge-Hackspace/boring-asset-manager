@@ -11,6 +11,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/photos"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 	"github.com/google/uuid"
 )
@@ -22,6 +23,9 @@ const photoUploadLimit = photos.MaxBytes + 64<<10
 // handleUploadPhoto adds a photo to an asset, from a multipart form with the
 // photo in its "file" part: POST /api/v1/assets/{id}/photos
 func (s *Server) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
+		return
+	}
 	tooBig := fmt.Sprintf("Photos are limited to %d MB", photos.MaxBytes>>20)
 	file, header, err := r.FormFile("file")
 	if err != nil {
@@ -73,12 +77,15 @@ func (s *Server) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
 		writePhotoError(w, err, "add the photo")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"asset": asset})
+	writeJSON(w, http.StatusCreated, map[string]any{"asset": s.shown(r, asset)})
 }
 
 // handleGetPhoto serves a photo, or with ?size=thumb its thumbnail:
 // GET /api/v1/assets/{id}/photos/{photo_id}
 func (s *Server) handleGetPhoto(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.assetFor(w, r, r.PathValue("id")); !ok {
+		return
+	}
 	p, err := s.store.GetPhoto(r.PathValue("id"), r.PathValue("photo_id"))
 	if err != nil {
 		writePhotoError(w, err, "read the photo")
@@ -101,18 +108,24 @@ func (s *Server) handleGetPhoto(w http.ResponseWriter, r *http.Request) {
 
 // handleRemovePhoto removes a photo: DELETE /api/v1/assets/{id}/photos/{photo_id}
 func (s *Server) handleRemovePhoto(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
+		return
+	}
 	asset, removed, err := s.actingStore(r).RemovePhoto(r.PathValue("id"), r.PathValue("photo_id"))
 	if err != nil {
 		writePhotoError(w, err, "remove the photo")
 		return
 	}
 	s.removePhotoFiles(*removed)
-	writeJSON(w, http.StatusOK, map[string]any{"asset": asset})
+	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
 // handleReorderPhotos puts an asset's photos in order, the first being the
 // one lists show: PUT /api/v1/assets/{id}/photos with {"photo_ids": [...]}
 func (s *Server) handleReorderPhotos(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
+		return
+	}
 	var req struct {
 		PhotoIDs []string `json:"photo_ids"`
 	}
@@ -125,7 +138,7 @@ func (s *Server) handleReorderPhotos(w http.ResponseWriter, r *http.Request) {
 		writePhotoError(w, err, "order the photos")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"asset": asset})
+	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
 // removePhotoFiles removes a photo's files. A file left behind wastes space
