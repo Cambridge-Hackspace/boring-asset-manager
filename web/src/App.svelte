@@ -4,6 +4,7 @@
   import { session, signInPath } from './lib/session.svelte';
   import { routes } from './routes';
   import Shell from './Shell.svelte';
+  import Footer from './components/Footer.svelte';
   import SignIn from './views/SignIn.svelte';
   import NotFound from './views/NotFound.svelte';
   import Forbidden from './views/Forbidden.svelte';
@@ -60,3 +61,5 @@
     {/if}
   </Shell>
 {/if}
+
+<Footer />

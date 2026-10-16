@@ -1,4 +1,4 @@
-import { ADMIN_EMAIL, ADMIN_PASSWORD, expect, test } from './fixtures';
+import { ADMIN_EMAIL, ADMIN_PASSWORD, expect, signIn, test } from './fixtures';
 
 test('signed-out visitors sign in and return to the page they asked for', async ({ page }) => {
   await page.goto('/categories?x=1');
@@ -31,4 +31,12 @@ test('the app is served for client routes and refuses unknown API paths', async 
   const api = await page.request.get('/api/v1/no-such-thing');
   expect(api.status()).toBe(404);
   expect(api.headers()['content-type']).toBe('application/json');
+});
+
+test('every page says which build is running, signed in or not', async ({ page }) => {
+  // The test server is built from the working tree, not a release.
+  await page.goto('/sign-in');
+  await expect(page.getByRole('contentinfo')).toContainText('BAM! development build');
+  await signIn(page);
+  await expect(page.getByRole('contentinfo')).toContainText('BAM! development build');
 });

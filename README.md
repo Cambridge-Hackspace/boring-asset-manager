@@ -178,7 +178,7 @@ To serve plain HTTP on the network without a proxy instead, set `host = "0.0.0.0
 
 ### 2.2 Releases & Updates
 
-Each version tag pushed to GitHub, such as `v1.2.0`, is built by `.github/workflows/release.yml`: the Go suites run, then `tools/release/build.sh` builds the binaries with the tag as their version (`bam version`), and they are published as the release's files with `SHA256SUMS`. A tag with a suffix, such as `v1.2.0-rc.1`, is published as a pre-release. `.github/workflows/build.yml` runs the same build on every push and pull request, so a change that breaks it shows up before a tag does. Instead of building, an installation can start from a release (§2.1, using the downloaded file in place of `bin/bam-<os>-<arch>`):
+Each version tag pushed to GitHub, such as `v1.2.0`, is built by `.github/workflows/release.yml`: the Go suites run, then `tools/release/build.sh` builds the binaries with the tag as their version (`bam version`), and they are published as the release's files with `SHA256SUMS`. A tag with a suffix, such as `v1.2.0-rc.1`, is published as a pre-release. The web app's footer, on every page and the sign-in page too, names the running version and links to its release; a build that is not a release says "development build", with the commit it was built from. `GET /api/v1/info`, which needs no sign-in, reports both (`version`, `commit` and whether the tree had changes, `modified`; the commit is recorded by Go when building in a git checkout). `.github/workflows/build.yml` runs the same build on every push and pull request, so a change that breaks it shows up before a tag does. Instead of building, an installation can start from a release (§2.1, using the downloaded file in place of `bin/bam-<os>-<arch>`):
 
 ```sh
 curl -fLO https://github.com/Cambridge-Hackspace/boring-asset-manager/releases/latest/download/bam-linux-amd64
@@ -934,6 +934,9 @@ Running BAM for real, and keeping it honest. In priority order:
 
 #### Sub-Phase 7.13: Photos on Assets
 * [x] Up to 10 photos per asset, stripped of metadata, turned upright and scaled, with thumbnails in the asset list, ordered, and recorded in history (§3.2).
+
+#### Sub-Phase 7.14: Version in the Footer
+* [x] Every page names the running version, linked to its release, or the commit of a development build (§2.2).
 
 ### Upcoming Features
 
