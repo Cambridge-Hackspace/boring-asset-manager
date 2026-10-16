@@ -15,9 +15,10 @@ var (
 	ErrUserInactive       = errors.New("account is deactivated")
 )
 
-const (
-	BcryptCost = 12
-)
+// BcryptCost is the cost new password hashes use. Test packages that sign
+// people in lower it to bcrypt.MinCost: under the race detector, one hash or
+// check at 12 takes seconds, and the API suite ran past go test's timeout.
+var BcryptCost = 12
 
 // Password length limits, in bytes. bcrypt cannot use more than 72.
 const (
