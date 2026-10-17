@@ -296,7 +296,7 @@ func TestPlanningSplitsBigJobs(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		entries = append(entries, models.SpoolEntry{ID: strconv.Itoa(i), TemplateID: &tmpl, Destination: "printer:" + printer, Copies: 20})
 	}
-	jobs, skipped := o.plan(entries, true)
+	jobs, skipped, _ := o.plan(entries, true)
 	if len(jobs) != 2 || len(jobs[0].EntryIDs) != 25 || len(jobs[1].EntryIDs) != 5 || len(skipped) != 0 {
 		t.Errorf("planned %d jobs of %d and %d", len(jobs), len(jobs[0].EntryIDs), len(jobs[len(jobs)-1].EntryIDs))
 	}

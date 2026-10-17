@@ -5,7 +5,7 @@
   import { messageOf } from '../lib/errors';
   import type { Spool, SpoolAddResult, SpoolDestination, SpoolEntry, SpoolJob, SpoolPrintResult } from '../lib/models';
   import { actorName } from '../lib/people';
-  import { addedMessage, destinationName, groupEntries, jobActive, jobStateName, printedMessage, printersFor, shared, templateName, templatesFor } from '../lib/spool';
+  import { addedMessage, destinationName, groupEntries, jobActive, jobStateName, poolsFor, printedMessage, printersFor, printing, shared, templateName, templatesFor } from '../lib/spool';
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
@@ -16,7 +16,7 @@
 
   type View = 'waiting' | 'jobs' | 'printed';
   let view = $state<View>('waiting');
-  let spool = $state<Spool>({ entries: [], templates: [], printers: [], fits: {} });
+  let spool = $state<Spool>({ entries: [], templates: [], printers: [], pools: [], fits: {}, pool_fits: {} });
   let jobs = $state<SpoolJob[]>([]);
   let older = $state(false);
   let mine = $state(false);
@@ -38,9 +38,10 @@
   const chosen = $derived(spool.entries.filter((e) => selected.includes(e.id)));
   // Choosing a template offers only the printers it suits, and the reverse.
   const destinationChoices = $derived(printersFor(spool, shared(chosen, (e) => e.template_id)));
+  const poolChoices = $derived(poolsFor(spool, shared(chosen, (e) => e.template_id)));
   const templateChoices = $derived(templatesFor(spool, shared(chosen, (e) => e.destination)));
   const allSelected = $derived(selectable.length > 0 && selectable.every((e) => selected.includes(e.id)));
-  const readyToPrint = $derived(spool.entries.filter((e) => e.ready && e.destination.startsWith('printer:')));
+  const readyToPrint = $derived(spool.entries.filter((e) => e.ready && printing(e.destination)));
   // While anything is printing, the page checks on it.
   const busy = $derived(spool.entries.some((e) => e.job) || jobs.some((j) => jobActive(j.state)));
 
@@ -241,7 +242,16 @@
           {#each jobs as j (j.id)}
             <tr class="border-b border-zinc-200 align-top dark:border-zinc-800">
               <td class="py-2 pr-4 whitespace-nowrap">{when(j.created_at)}<span class="block text-xs text-zinc-600 dark:text-zinc-400">{actorName(j.created_by)}</span></td>
-              <td class="py-2 pr-4">{j.target}</td>
+              <td class="py-2 pr-4">
+                {j.target}
+                {#if j.members?.length}
+                  <ul class="text-xs text-zinc-600 dark:text-zinc-400" aria-label="Its printers">
+                    {#each j.members as m (m.printer_id)}
+                      <li>{m.printer}: {m.dropped ? 'dropped out' : m.sending ? `sending, ${m.printed} printed` : `${m.printed} printed`}</li>
+                    {/each}
+                  </ul>
+                {/if}
+              </td>
               <td class="py-2 pr-4">{j.template_name}</td>
               <td class="py-2 pr-4 whitespace-nowrap">{j.state === 'sending' ? `${j.printed} of ${j.labels}` : j.labels}</td>
               <td class="py-2 pr-4">
@@ -257,6 +267,7 @@
                     <select id="resend-{j.id}" class="input" bind:value={resendTo[j.id]}>
                       <option value="">{j.target}</option>
                       {#each printersFor(spool, j.template_id).filter((p) => p.id !== j.printer_id) as p (p.id)}<option value="printer:{p.id}">{p.name}</option>{/each}
+                      {#each poolsFor(spool, j.template_id).filter((p) => p.id !== j.pool_id) as p (p.id)}<option value="pool:{p.id}">{p.name} (pool)</option>{/each}
                       {#if !j.download}<option value="download">Download</option>{/if}
                     </select>
                     <button type="button" class="btn-secondary" onclick={() => resend(j)}>Send again</button>
@@ -300,7 +311,16 @@
               <label class="label" for="spool-destination">Print on</label>
               <select id="spool-destination" class="input" bind:value={setDestination}>
                 <option value="">Not chosen</option>
-                {#each destinationChoices as p (p.id)}<option value="printer:{p.id}">{p.name}</option>{/each}
+                {#if destinationChoices.length}
+                  <optgroup label="Printers">
+                    {#each destinationChoices as p (p.id)}<option value="printer:{p.id}">{p.name}</option>{/each}
+                  </optgroup>
+                {/if}
+                {#if poolChoices.length}
+                  <optgroup label="Pools">
+                    {#each poolChoices as p (p.id)}<option value="pool:{p.id}">{p.name}</option>{/each}
+                  </optgroup>
+                {/if}
                 <option value="download">Download (PDF or ZIP)</option>
               </select>
             </div>
@@ -360,7 +380,7 @@
               <button type="button" class="btn-secondary" disabled={!ready.length} onclick={() => download(ready, 'pdf')}>Download PDF</button>
               <button type="button" class="btn-secondary" disabled={!ready.length} onclick={() => download(ready, 'zip')}>Download ZIP</button>
             </div>
-          {:else if g.destination.startsWith('printer:') && ready.length}
+          {:else if printing(g.destination) && ready.length}
             <button type="button" class="btn-secondary" onclick={() => print(ready.map((e) => e.id))}>Print {count(readyLabels)}</button>
           {/if}
         </div>

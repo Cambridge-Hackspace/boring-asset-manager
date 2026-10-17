@@ -7,6 +7,7 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PrinterForm from './PrinterForm.svelte';
+  import PoolsSection from './PoolsSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -166,3 +167,5 @@
     {/each}
   </ul>
 {/if}
+
+{#if !loading}<PoolsSection {printers} />{/if}

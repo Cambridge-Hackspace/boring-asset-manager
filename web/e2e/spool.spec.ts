@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { expect, goTo, test, unique } from './fixtures';
+import { FakePrinter, expect, goTo, test, unique } from './fixtures';
 
 // The spool (README §6.2): labels gathered from a category and an asset's
 // page, sorted onto a download, downloaded, then found in the Printed list
@@ -88,4 +88,55 @@ test('print a group from the spool to a printer', async ({ signedIn: page, api, 
   await expect(row).toContainText(templateName);
   await page.getByRole('button', { name: 'Printed' }).click();
   for (const name of names) await expect(page.getByRole('row').filter({ hasText: name })).toContainText(printerName);
+});
+
+// A pool shares a job's labels between its printers.
+test('share a job between the printers of a pool', async ({ signedIn: page, api, printer }) => {
+  const second = new FakePrinter();
+  await second.start();
+  try {
+    const templateName = unique('Rollo 2x1');
+    const { template } = await api.call('POST', '/templates', {
+      name: templateName, units: 'in', width: 2, height: 1, dpi: 203,
+      elements: [{ type: 'text', x: 0.1, y: 0.2, width: 1.8, height: 0.5, font_size: 12, content_binding: '{{asset.name}}' }],
+    });
+    const names = [unique('Left'), unique('Right')];
+    for (const [i, fake] of [printer, second].entries()) {
+      await api.call('POST', '/printers', { name: names[i], driver: 'tspl', model: 'Rollo X1038', media: '2x1', connection: { type: 'tcp', address: `127.0.0.1:${fake.port}` } });
+    }
+
+    const poolName = unique('Bench');
+    await goTo(page, 'Printers');
+    await page.getByRole('button', { name: 'Add pool' }).click();
+    const form = page.getByRole('form', { name: 'New pool' });
+    await form.getByLabel('Name').fill(poolName);
+    await form.getByLabel('Labels in a batch').fill('1');
+    for (const name of names) await form.getByRole('checkbox', { name }).check();
+    await form.getByRole('button', { name: 'Save pool' }).click();
+    await expect(page.getByText(`Saved ${poolName}.`)).toBeVisible();
+    const { pools } = await api.call('GET', '/printer-pools');
+    const pool = pools.find((p: { name: string }) => p.name === poolName);
+
+    const ids: string[] = [];
+    for (let i = 0; i < 4; i++) ids.push((await api.call('POST', '/assets', { name: unique('Washer') })).asset.asset.id);
+    await api.call('POST', '/spool', { asset_ids: ids, template_id: template.id, destination: `pool:${pool.id}` });
+
+    await goTo(page, 'Spool');
+    const group = page.getByRole('region', { name: new RegExp(`${poolName} · ${templateName} · 4 labels`) });
+    await group.getByRole('button', { name: 'Print 4 labels' }).click();
+    await expect(page.getByText('Sent 4 labels to print in 1 job.')).toBeVisible();
+
+    // Both printers print, four labels between them.
+    await expect.poll(() => printer.jobs.length + second.jobs.length, { timeout: 10_000 }).toBe(4);
+    expect(printer.jobs.length).toBeGreaterThan(0);
+    expect(second.jobs.length).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: 'Jobs' }).click();
+    const row = page.getByRole('row').filter({ hasText: poolName }).filter({ has: page.getByRole('list', { name: 'Its printers' }) });
+    await expect(row).toContainText('Printed');
+    const parts = row.getByRole('list', { name: 'Its printers' });
+    for (const name of names) await expect(parts).toContainText(new RegExp(`${name}: [1-3] printed`));
+  } finally {
+    await second.stop();
+  }
 });

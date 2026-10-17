@@ -42,13 +42,16 @@ type SpoolChoice struct {
 	Name string `json:"name"`
 }
 
-// SpoolResponse is the spool, with the templates and printers its entries
-// can take and, for each template, the printers its labels suit.
+// SpoolResponse is the spool, with the templates, printers and pools its
+// entries can take and, for each template, the printers its labels suit
+// (Fits) and the pools with a printer they suit (PoolFits).
 type SpoolResponse struct {
 	Entries   []SpoolEntryView    `json:"entries"`
 	Templates []SpoolChoice       `json:"templates"`
 	Printers  []SpoolChoice       `json:"printers"`
+	Pools     []SpoolChoice       `json:"pools"`
 	Fits      map[string][]string `json:"fits"`
+	PoolFits  map[string][]string `json:"pool_fits"`
 }
 
 // spoolOptions are the templates and printers spool entries can take, and
@@ -56,6 +59,7 @@ type SpoolResponse struct {
 type spoolOptions struct {
 	templates map[string]*labels.Template
 	printers  map[string]*models.Printer
+	pools     map[string]*models.PrinterPool
 	// unfit maps a template and a printer to why its labels do not suit
 	// that printer; a pair missing from it fits.
 	unfit map[string]map[string]string
@@ -73,8 +77,17 @@ func (s *Server) loadSpoolOptions() (*spoolOptions, error) {
 	if err != nil {
 		return nil, err
 	}
-	o := &spoolOptions{templates: map[string]*labels.Template{}, printers: map[string]*models.Printer{}, unfit: map[string]map[string]string{},
-		resp: SpoolResponse{Templates: []SpoolChoice{}, Printers: []SpoolChoice{}, Fits: map[string][]string{}}}
+	pools, err := s.store.ListPools()
+	if err != nil {
+		return nil, err
+	}
+	o := &spoolOptions{templates: map[string]*labels.Template{}, printers: map[string]*models.Printer{}, pools: map[string]*models.PrinterPool{}, unfit: map[string]map[string]string{},
+		resp: SpoolResponse{Templates: []SpoolChoice{}, Printers: []SpoolChoice{}, Pools: []SpoolChoice{}, Fits: map[string][]string{}, PoolFits: map[string][]string{}}}
+	for i := range pools {
+		p := &pools[i]
+		o.pools[p.ID] = p
+		o.resp.Pools = append(o.resp.Pools, SpoolChoice{ID: p.ID, Name: p.Name})
+	}
 	for i := range printerList {
 		p := &printerList[i]
 		o.printers[p.ID] = p
@@ -93,17 +106,51 @@ func (s *Server) loadSpoolOptions() (*spoolOptions, error) {
 				o.resp.Fits[t.ID] = append(o.resp.Fits[t.ID], p.ID)
 			}
 		}
+		o.resp.PoolFits[t.ID] = []string{}
+		for _, p := range pools {
+			if len(o.poolMembersFor(&p, t.ID)) > 0 {
+				o.resp.PoolFits[t.ID] = append(o.resp.PoolFits[t.ID], p.ID)
+			}
+		}
 	}
 	return o, nil
 }
 
+// poolMembersFor lists a pool's printers that a template's labels suit.
+func (o *spoolOptions) poolMembersFor(p *models.PrinterPool, templateID string) []models.PoolMember {
+	var out []models.PoolMember
+	for _, m := range p.Members {
+		if _, unfit := o.unfit[templateID][m.PrinterID]; !unfit {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // onlyPrinter is where an entry with this template goes when nothing else
-// says: the one printer its labels suit, when exactly one does.
+// says: the one pool its labels suit, when every printer they suit is in
+// it; or else, with no pool they suit, the one printer, when only one is.
 func (o *spoolOptions) onlyPrinter(templateID *string) string {
-	if templateID == nil || len(o.resp.Fits[*templateID]) != 1 {
+	if templateID == nil {
 		return ""
 	}
-	return models.DestinationPrinterPrefix + o.resp.Fits[*templateID][0]
+	fits, pools := o.resp.Fits[*templateID], o.resp.PoolFits[*templateID]
+	switch {
+	case len(pools) == 1:
+		in := map[string]bool{}
+		for _, m := range o.pools[pools[0]].Members {
+			in[m.PrinterID] = true
+		}
+		for _, p := range fits {
+			if !in[p] {
+				return ""
+			}
+		}
+		return models.DestinationPoolPrefix + pools[0]
+	case len(pools) == 0 && len(fits) == 1:
+		return models.DestinationPrinterPrefix + fits[0]
+	}
+	return ""
 }
 
 // problems says what keeps a waiting entry from printing as it stands,
@@ -135,6 +182,10 @@ func (o *spoolOptions) blockers(e models.SpoolEntry) []string {
 		id := strings.TrimPrefix(e.Destination, models.DestinationPrinterPrefix)
 		if why, ok := o.unfit[t.ID][id]; ok {
 			out = append(out, fmt.Sprintf("%s does not suit %s: %s", t.Name, o.printers[id].Name, why))
+		}
+	case strings.HasPrefix(e.Destination, models.DestinationPoolPrefix) && t != nil:
+		if p := o.pools[strings.TrimPrefix(e.Destination, models.DestinationPoolPrefix)]; p != nil && len(o.poolMembersFor(p, t.ID)) == 0 {
+			out = append(out, fmt.Sprintf("No printer in %s suits %s", p.Name, t.Name))
 		}
 	}
 	return out
@@ -369,6 +420,8 @@ func writeSpoolError(w http.ResponseWriter, err error, action string) {
 		writeJSONError(w, http.StatusBadRequest, "No template has that ID")
 	case errors.Is(err, store.ErrPrinterNotFound):
 		writeJSONError(w, http.StatusBadRequest, "No printer has that ID")
+	case errors.Is(err, store.ErrPoolNotFound):
+		writeJSONError(w, http.StatusBadRequest, "No printer pool has that ID")
 	case errors.Is(err, store.ErrInvalidDestination), errors.Is(err, store.ErrInvalidCopies):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, store.ErrAssetNotFound):

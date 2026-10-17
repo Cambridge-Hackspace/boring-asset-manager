@@ -541,7 +541,7 @@ export function photoUrl(assetId: string, photoId: string, thumb = false): strin
 }
 
 /** Where a spool entry prints: a printer, a download, or nowhere yet (README §6.2). */
-export type SpoolDestination = `printer:${string}` | 'download' | '';
+export type SpoolDestination = `printer:${string}` | `pool:${string}` | 'download' | '';
 
 /** Someone who added or printed a spool entry, by name. */
 export interface SpoolActor {
@@ -580,7 +580,10 @@ export interface Spool {
   entries: SpoolEntry[];
   templates: { id: string; name: string }[];
   printers: { id: string; name: string }[];
+  pools: { id: string; name: string }[];
   fits: Record<string, string[]>;
+  /** For each template, the pools with a printer its labels suit. */
+  pool_fits: Record<string, string[]>;
 }
 
 /** What adding to the spool did. */
@@ -598,7 +601,10 @@ export interface SpoolJob {
   template_id: string | null;
   template_name: string;
   printer_id: string | null;
-  /** The printer as it was named, or "Download". */
+  /** The pool it went to, if any, and how each of its printers is getting on. */
+  pool_id?: string;
+  members?: { printer_id: string; printer: string; printed: number; sending: boolean; dropped: boolean }[];
+  /** The printer or pool as it was named, or "Download". */
   target: string;
   download: boolean;
   state: SpoolJobState;
@@ -617,4 +623,18 @@ export interface SpoolJob {
 export interface SpoolPrintResult {
   jobs: SpoolJob[];
   skipped: { entry_id: string; asset_name: string; reason: string }[];
+  /** Such as a pool's printer sitting a job out. */
+  warnings?: string[];
+}
+
+/** Printers loaded alike that share print jobs: each job is cut into batches of batch_size labels (README §6.2). */
+export interface PrinterPool {
+  id: string;
+  name: string;
+  batch_size: number;
+  /** Every member takes a fixed share of the batches, rather than those on direct connections taking the next as they free up. */
+  fixed_shares: boolean;
+  members: { printer_id: string; share: number }[];
+  created_at: string;
+  updated_at: string;
 }

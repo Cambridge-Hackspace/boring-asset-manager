@@ -59,6 +59,9 @@ for (const scheme of ['light', 'dark'] as const) {
         ],
       },
     });
+    // A printer in a pool, for the printers page.
+    const a11yPrinter = await post('/printers', { name: unique('A11y QL'), driver: 'brother_ql', model: 'QL-810W', media: 'dk-22205', connection: { type: 'tcp', address: '127.0.0.1:9' } });
+    await post('/printer-pools', { name: unique('A11y pool'), members: [{ printer_id: a11yPrinter.printer.id, share: 2 }] });
     // Labels waiting in the spool, one ready and one with problems.
     await post('/spool', { asset_ids: [asset.asset.asset.id], template_id: template.id, destination: 'download' });
     await post('/spool', { asset_ids: [box.asset.asset.id] });

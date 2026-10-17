@@ -147,6 +147,12 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/printers", body: `{"name":"Front desk {n}","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"10.0.0.9"},"media":"dk-22205"}`},
 	{method: "PUT", path: "/api/v1/printers/{printer}", body: `{"name":"Back desk {n}","driver":"tspl","model":"Rollo X1038","connection":{"type":"ipp","address":"ipp://cups.lan/printers/x"},"media":"4x6"}`},
 	{method: "DELETE", path: "/api/v1/printers/{printer}"},
+	{method: "GET", path: "/api/v1/printer-pools"},
+	{method: "POST", path: "/api/v1/printer-pools", body: `{"name":"Pool {n}","batch_size":5,"members":[{"printer_id":"{printer}","share":2}]}`},
+	{method: "GET", path: "/api/v1/printer-pools/{pool}"},
+	{method: "PUT", path: "/api/v1/printer-pools/{pool}", body: `{"name":"Bench {n}","fixed_shares":true,"members":[{"printer_id":"{printer}"}]}`},
+	{method: "POST", path: "/api/v1/spool", body: `{"asset_ids":["{asset}"],"template_id":"{template}","destination":"pool:{pool}"}`},
+	{method: "DELETE", path: "/api/v1/printer-pools/{pool}"},
 	{method: "GET", path: "/api/v1/spool", query: map[string][]string{"printed": {"true", "false"}, "older": {"true"}, "mine": {"true"}}},
 	{method: "POST", path: "/api/v1/spool", body: `{"asset_ids":["{asset}"],"template_id":"{template}","copies":2}`},
 	{method: "POST", path: "/api/v1/spool", body: `{"category_id":"{category}","subcategories":true,"destination":"download"}`},
@@ -297,6 +303,8 @@ func kindOf(path string) string {
 		return "spool"
 	case "/api/v1/spool/print":
 		return "job"
+	case "/api/v1/printer-pools":
+		return "pool"
 	}
 	return ""
 }
@@ -342,7 +350,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job", "pool"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {

@@ -33,7 +33,7 @@ var (
 	ErrSpoolEntryBusy = errors.New("a job is printing that label")
 	// ErrInvalidDestination is returned for a destination that is neither
 	// a download nor a printer's.
-	ErrInvalidDestination = errors.New(`destination must be "download", "printer:<id>" or empty`)
+	ErrInvalidDestination = errors.New(`destination must be "download", "printer:<id>", "pool:<id>" or empty`)
 	// ErrInvalidCopies is returned for copies out of range.
 	ErrInvalidCopies = fmt.Errorf("copies must be 1-%d", MaxSpoolCopies)
 	// ErrTemplateInUse is returned for deleting a label template that
@@ -75,7 +75,7 @@ type SpoolUpdate struct {
 const spoolColumns = `e.id, e.asset_id, a.name, a.archived_at, e.template_id, e.printer_id, e.to_download, e.copies, e.problem,
 	e.added_by, COALESCE(adu.name, adt.name, ''), adt.id IS NOT NULL, e.added_at,
 	e.printed_at, e.printed_by, COALESCE(pru.name, prt.name, ''), prt.id IS NOT NULL, e.printed_template, e.printed_on,
-	b.state, j.id, j.target_name`
+	b.state, j.id, j.target_name, e.pool_id`
 
 const spoolJoins = ` FROM spool_entries e JOIN assets a ON a.id = e.asset_id
 	LEFT JOIN users adu ON adu.id = e.added_by LEFT JOIN api_tokens adt ON adt.id = e.added_by
@@ -92,12 +92,12 @@ func scanSpoolEntry(row interface{ Scan(...any) error }) (models.SpoolEntry, err
 		printedName           string
 		addedToken, prntToken bool
 		batchState, jobID     sql.NullString
-		jobTarget             sql.NullString
+		jobTarget, pool       sql.NullString
 	)
 	err := row.Scan(&e.ID, &e.AssetID, &e.AssetName, &archived, &template, &printer, &download, &e.Copies, &e.Problem,
 		&addedBy, &e.AddedBy.Name, &addedToken, &e.AddedAt,
 		&printed, &printedBy, &printedName, &prntToken, &e.PrintedTemplate, &e.PrintedOn,
-		&batchState, &jobID, &jobTarget)
+		&batchState, &jobID, &jobTarget, &pool)
 	if err != nil {
 		return e, err
 	}
@@ -110,6 +110,8 @@ func scanSpoolEntry(row interface{ Scan(...any) error }) (models.SpoolEntry, err
 		e.Destination = models.DestinationDownload
 	case printer.Valid && printer.String != "":
 		e.Destination = models.DestinationPrinterPrefix + printer.String
+	case pool.Valid && pool.String != "":
+		e.Destination = models.DestinationPoolPrefix + pool.String
 	}
 	e.AddedBy.ID, e.AddedBy.Token = addedBy.String, addedToken
 	if !printed.Valid && (batchState.String == models.SpoolWaiting || batchState.String == models.SpoolSending) {
@@ -183,28 +185,38 @@ func (s *Store) ListSpool(f SpoolFilter) ([]models.SpoolEntry, error) {
 	return entries, nil
 }
 
-// destinationColumns turns a destination into its printer_id and
-// to_download columns, checking the printer exists.
+// destinationColumns turns a destination into its printer_id, pool_id and
+// to_download columns, checking the printer or pool exists.
 func (s *Store) destinationColumns(q interface {
 	QueryRow(string, ...any) *sql.Row
-}, destination string) (printerID *string, download bool, err error) {
+}, destination string) (printerID, poolID *string, download bool, err error) {
 	switch {
 	case destination == "":
-		return nil, false, nil
+		return nil, nil, false, nil
 	case destination == models.DestinationDownload:
-		return nil, true, nil
+		return nil, nil, true, nil
+	case strings.HasPrefix(destination, models.DestinationPoolPrefix):
+		id := strings.TrimPrefix(destination, models.DestinationPoolPrefix)
+		var n int
+		if err := q.QueryRow("SELECT COUNT(*) FROM printer_pools WHERE id = ?", id).Scan(&n); err != nil {
+			return nil, nil, false, fmt.Errorf("finding the pool: %w", err)
+		}
+		if n == 0 {
+			return nil, nil, false, ErrPoolNotFound
+		}
+		return nil, &id, false, nil
 	case strings.HasPrefix(destination, models.DestinationPrinterPrefix):
 		id := strings.TrimPrefix(destination, models.DestinationPrinterPrefix)
 		var n int
 		if err := q.QueryRow("SELECT COUNT(*) FROM printers WHERE id = ?", id).Scan(&n); err != nil {
-			return nil, false, fmt.Errorf("finding the printer: %w", err)
+			return nil, nil, false, fmt.Errorf("finding the printer: %w", err)
 		}
 		if n == 0 {
-			return nil, false, ErrPrinterNotFound
+			return nil, nil, false, ErrPrinterNotFound
 		}
-		return &id, false, nil
+		return &id, nil, false, nil
 	}
-	return nil, false, ErrInvalidDestination
+	return nil, nil, false, ErrInvalidDestination
 }
 
 // templateExists checks a label template exists.
@@ -264,7 +276,7 @@ func (s *Store) AddToSpool(adds []SpoolAdd) (added []models.SpoolEntry, already 
 				return nil, nil, err
 			}
 		}
-		printerID, download, err := s.destinationColumns(q, a.Destination)
+		printerID, poolID, download, err := s.destinationColumns(q, a.Destination)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -294,8 +306,8 @@ func (s *Store) AddToSpool(adds []SpoolAdd) (added []models.SpoolEntry, already 
 		}
 		// A microsecond apart, so the spool lists them in the order given.
 		id := uuid.NewString()
-		_, err = s.TxExec(tx, `INSERT INTO spool_entries (id, asset_id, template_id, printer_id, to_download, copies, added_by, added_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id, a.AssetID, a.TemplateID, printerID, download, a.Copies, s.actorID(), now.Add(time.Duration(len(ids))*time.Microsecond))
+		_, err = s.TxExec(tx, `INSERT INTO spool_entries (id, asset_id, template_id, printer_id, pool_id, to_download, copies, added_by, added_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, a.AssetID, a.TemplateID, printerID, poolID, download, a.Copies, s.actorID(), now.Add(time.Duration(len(ids))*time.Microsecond))
 		if err != nil {
 			return nil, nil, fmt.Errorf("adding to the spool: %w", err)
 		}
@@ -396,11 +408,11 @@ func (s *Store) UpdateSpool(ids []string, u SpoolUpdate) error {
 		set, args = append(set, "template_id = ?"), append(args, u.TemplateID)
 	}
 	if u.SetDestination {
-		printerID, download, err := s.destinationColumns(q, u.Destination)
+		printerID, poolID, download, err := s.destinationColumns(q, u.Destination)
 		if err != nil {
 			return err
 		}
-		set, args = append(set, "printer_id = ?", "to_download = ?"), append(args, printerID, download)
+		set, args = append(set, "printer_id = ?", "pool_id = ?", "to_download = ?"), append(args, printerID, poolID, download)
 	}
 	if u.Copies != nil {
 		set, args = append(set, "copies = ?"), append(args, *u.Copies)
