@@ -28,6 +28,9 @@ var (
 	// ErrSpoolEntryNotFound is returned for an entry that is not in the
 	// spool, or not in the state the change needs.
 	ErrSpoolEntryNotFound = errors.New("spool entry not found")
+	// ErrSpoolEntryBusy is returned for changing an entry a job is
+	// printing.
+	ErrSpoolEntryBusy = errors.New("a job is printing that label")
 	// ErrInvalidDestination is returned for a destination that is neither
 	// a download nor a printer's.
 	ErrInvalidDestination = errors.New(`destination must be "download", "printer:<id>" or empty`)
@@ -48,12 +51,14 @@ type SpoolAdd struct {
 
 // SpoolFilter selects spool entries: those waiting, or with Printed those
 // printed since PrintedSince (all of them when it is zero); with AddedBy,
-// only those that user or token added; with IDs, only those.
+// only those that user or token added; with IDs, only those; with JobID,
+// only those last in that job.
 type SpoolFilter struct {
 	Printed      bool
 	PrintedSince time.Time
 	AddedBy      string
 	IDs          []string
+	JobID        string
 }
 
 // SpoolUpdate changes waiting entries: the template when SetTemplate is
@@ -69,11 +74,13 @@ type SpoolUpdate struct {
 
 const spoolColumns = `e.id, e.asset_id, a.name, a.archived_at, e.template_id, e.printer_id, e.to_download, e.copies, e.problem,
 	e.added_by, COALESCE(adu.name, adt.name, ''), adt.id IS NOT NULL, e.added_at,
-	e.printed_at, e.printed_by, COALESCE(pru.name, prt.name, ''), prt.id IS NOT NULL, e.printed_template, e.printed_on`
+	e.printed_at, e.printed_by, COALESCE(pru.name, prt.name, ''), prt.id IS NOT NULL, e.printed_template, e.printed_on,
+	b.state, j.id, j.target_name`
 
 const spoolJoins = ` FROM spool_entries e JOIN assets a ON a.id = e.asset_id
 	LEFT JOIN users adu ON adu.id = e.added_by LEFT JOIN api_tokens adt ON adt.id = e.added_by
-	LEFT JOIN users pru ON pru.id = e.printed_by LEFT JOIN api_tokens prt ON prt.id = e.printed_by`
+	LEFT JOIN users pru ON pru.id = e.printed_by LEFT JOIN api_tokens prt ON prt.id = e.printed_by
+	LEFT JOIN spool_batches b ON b.id = e.batch_id LEFT JOIN spool_jobs j ON j.id = b.job_id`
 
 func scanSpoolEntry(row interface{ Scan(...any) error }) (models.SpoolEntry, error) {
 	var (
@@ -84,10 +91,13 @@ func scanSpoolEntry(row interface{ Scan(...any) error }) (models.SpoolEntry, err
 		addedBy, printedBy    sql.NullString
 		printedName           string
 		addedToken, prntToken bool
+		batchState, jobID     sql.NullString
+		jobTarget             sql.NullString
 	)
 	err := row.Scan(&e.ID, &e.AssetID, &e.AssetName, &archived, &template, &printer, &download, &e.Copies, &e.Problem,
 		&addedBy, &e.AddedBy.Name, &addedToken, &e.AddedAt,
-		&printed, &printedBy, &printedName, &prntToken, &e.PrintedTemplate, &e.PrintedOn)
+		&printed, &printedBy, &printedName, &prntToken, &e.PrintedTemplate, &e.PrintedOn,
+		&batchState, &jobID, &jobTarget)
 	if err != nil {
 		return e, err
 	}
@@ -102,6 +112,9 @@ func scanSpoolEntry(row interface{ Scan(...any) error }) (models.SpoolEntry, err
 		e.Destination = models.DestinationPrinterPrefix + printer.String
 	}
 	e.AddedBy.ID, e.AddedBy.Token = addedBy.String, addedToken
+	if !printed.Valid && (batchState.String == models.SpoolWaiting || batchState.String == models.SpoolSending) {
+		e.Job = &models.SpoolJobRef{ID: jobID.String, State: batchState.String, Target: jobTarget.String}
+	}
 	if printed.Valid {
 		at := printed.Time.UTC()
 		e.PrintedAt = &at
@@ -129,6 +142,9 @@ func (s *Store) ListSpool(f SpoolFilter) ([]models.SpoolEntry, error) {
 	}
 	if f.AddedBy != "" {
 		where, args = append(where, "e.added_by = ?"), append(args, f.AddedBy)
+	}
+	if f.JobID != "" {
+		where, args = append(where, "e.batch_id IN (SELECT id FROM spool_batches WHERE job_id = ?)"), append(args, f.JobID)
 	}
 	if f.IDs != nil {
 		if len(f.IDs) == 0 {
@@ -309,8 +325,30 @@ func (s *Store) assetExists(tx *sql.Tx, id string) error {
 	return nil
 }
 
-// waitingIn checks every ID names a waiting entry, within tx.
+// waitingIn checks every ID names a waiting entry that no job is printing,
+// within tx.
 func (s *Store) waitingIn(tx *sql.Tx, ids []string) error {
+	if err := s.waitingOrBusyIn(tx, ids); err != nil {
+		return err
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	var busy int
+	err := s.TxQueryRow(tx, `SELECT COUNT(*) FROM spool_entries WHERE id IN (`+placeholders(len(ids))+`)
+		AND batch_id IN (SELECT id FROM spool_batches WHERE state IN ('waiting', 'sending'))`, args...).Scan(&busy)
+	if err != nil {
+		return fmt.Errorf("finding spool entries being printed: %w", err)
+	}
+	if busy > 0 {
+		return ErrSpoolEntryBusy
+	}
+	return nil
+}
+
+// waitingOrBusyIn checks every ID names a waiting entry, within tx.
+func (s *Store) waitingOrBusyIn(tx *sql.Tx, ids []string) error {
 	if len(ids) == 0 {
 		return ErrSpoolEntryNotFound
 	}
@@ -408,42 +446,6 @@ func (s *Store) SetSpoolProblems(problems map[string]string) error {
 		}
 	}
 	return nil
-}
-
-// MarkSpoolPrinted records waiting entries as printed with the template
-// and on the printer named, or downloaded when printer is empty, and their
-// labels in their assets' histories, all or none.
-func (s *Store) MarkSpoolPrinted(ids []string, template, printer string) error {
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return fmt.Errorf("beginning transaction: %w", err)
-	}
-	defer tx.Rollback()
-	if err := s.waitingIn(tx, ids); err != nil {
-		return err
-	}
-	on := printer
-	if on == "" {
-		on = "Download"
-	}
-	now := dbTime(time.Now())
-	for _, id := range ids {
-		var assetID string
-		var copies int
-		if err := s.TxQueryRow(tx, "SELECT asset_id, copies FROM spool_entries WHERE id = ?", id).Scan(&assetID, &copies); err != nil {
-			return fmt.Errorf("reading spool entry: %w", err)
-		}
-		_, err := s.TxExec(tx, `UPDATE spool_entries SET printed_at = ?, printed_by = ?, printed_template = ?, printed_on = ?, problem = ''
-			WHERE id = ?`, now, s.actorID(), template, on, id)
-		if err != nil {
-			return fmt.Errorf("marking printed: %w", err)
-		}
-		label := &models.EventLabel{Template: template, Printer: printer, Download: printer == "", Copies: copies}
-		if err := s.recordAssetEvent(tx, models.EventAssetLabelPrinted, assetID, models.EventPayload{Trigger: models.TriggerManual, Label: label}); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
 }
 
 // RecordLabelsPrinted records labels printed outside the spool in their

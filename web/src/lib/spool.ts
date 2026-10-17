@@ -2,7 +2,7 @@
 // anywhere assets are, and sorting its entries onto templates and printers.
 
 import { request } from './api';
-import type { Spool, SpoolAddResult, SpoolDestination, SpoolEntry } from './models';
+import type { Spool, SpoolAddResult, SpoolDestination, SpoolEntry, SpoolJob, SpoolPrintResult } from './models';
 
 /** What to add: assets by ID, a category's (with its subcategories'), or those an asset filter matches. */
 export interface SpoolAddRequest {
@@ -104,4 +104,37 @@ export function rememberQueueNewLabels(userId: string, queue: boolean): void {
   } catch {
     // Not remembered: private windows and blocked storage start ticked again.
   }
+}
+
+/** Says what printing did: the jobs sent off, and what was left out. */
+export function printedMessage(r: SpoolPrintResult): string {
+  const total = r.jobs.reduce((n, j) => n + j.labels, 0);
+  const parts = [
+    r.jobs.length
+      ? `Sent ${labels(total)} to print in ${r.jobs.length === 1 ? '1 job' : `${r.jobs.length} jobs`}`
+      : 'Nothing was ready to print',
+  ];
+  if (r.skipped.length) parts.push(`${labels(r.skipped.length)} left out: ${r.skipped.map((s) => `${s.asset_name} (${s.reason})`).join(', ')}`);
+  return parts.join('; ') + '.';
+}
+
+/** A job's state, as the jobs list says it. */
+export function jobStateName(j: Pick<SpoolJob, 'state' | 'download'>): string {
+  switch (j.state) {
+    case 'waiting':
+      return 'Waiting';
+    case 'sending':
+      return 'Sending';
+    case 'done':
+      return j.download ? 'Downloaded' : 'Printed';
+    case 'failed':
+      return 'Failed';
+    case 'canceled':
+      return 'Canceled';
+  }
+}
+
+/** Whether a job is still going, so the page keeps checking on it. */
+export function jobActive(state: string): boolean {
+  return state === 'waiting' || state === 'sending';
 }

@@ -570,9 +570,12 @@ type SpoolEntry struct {
 	Destination string  `json:"destination"`
 	Copies      int     `json:"copies"`
 	// Problem says why its label could not be produced last time.
-	Problem string     `json:"problem,omitempty"`
-	AddedBy EventActor `json:"added_by"`
-	AddedAt time.Time  `json:"added_at"`
+	Problem string `json:"problem,omitempty"`
+	// Job is the job it is being printed in, while that is waiting or
+	// sending; it cannot be changed meanwhile.
+	Job     *SpoolJobRef `json:"job,omitempty"`
+	AddedBy EventActor   `json:"added_by"`
+	AddedAt time.Time    `json:"added_at"`
 	// PrintedAt, PrintedBy, PrintedTemplate and PrintedOn say when, by
 	// whom, with which template and on which printer (or "Download") it
 	// was printed, as they were named then.
@@ -580,4 +583,43 @@ type SpoolEntry struct {
 	PrintedBy       *EventActor `json:"printed_by,omitempty"`
 	PrintedTemplate string      `json:"printed_template,omitempty"`
 	PrintedOn       string      `json:"printed_on,omitempty"`
+}
+
+// Spool job and batch states (README §6.2).
+const (
+	SpoolWaiting  = "waiting"
+	SpoolSending  = "sending"
+	SpoolDone     = "done"
+	SpoolFailed   = "failed"
+	SpoolCanceled = "canceled"
+)
+
+// SpoolJobRef names the job a waiting entry is in, while it is being
+// printed: its state, and the printer it goes to.
+type SpoolJobRef struct {
+	ID     string `json:"id"`
+	State  string `json:"state"`
+	Target string `json:"target"`
+}
+
+// SpoolJob is a printing of spool entries on one printer with one
+// template, or a download of them (README §6.2). Its template and target
+// are named as they were then. Labels counts every copy; Printed those
+// printed so far.
+type SpoolJob struct {
+	ID           string     `json:"id"`
+	TemplateID   *string    `json:"template_id"`
+	TemplateName string     `json:"template_name"`
+	PrinterID    *string    `json:"printer_id"`
+	Target       string     `json:"target"`
+	Download     bool       `json:"download"`
+	State        string     `json:"state"`
+	Error        string     `json:"error,omitempty"`
+	Labels       int        `json:"labels"`
+	Printed      int        `json:"printed"`
+	Entries      int        `json:"entries"`
+	CreatedBy    EventActor `json:"created_by"`
+	CreatedAt    time.Time  `json:"created_at"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	FinishedAt   *time.Time `json:"finished_at,omitempty"`
 }

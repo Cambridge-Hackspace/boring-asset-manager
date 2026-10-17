@@ -173,9 +173,7 @@ func TestSpoolLifecycle(t *testing.T) {
 	}
 
 	// Printing moves entries to the Printed list and into history.
-	if err := ada.MarkSpoolPrinted([]string{first.ID}, "Shelf label", "Front desk"); err != nil {
-		t.Fatal(err)
-	}
+	printOn(t, ada, first.ID, tmpl.ID, front)
 	printed, _ := st.ListSpool(SpoolFilter{Printed: true})
 	if len(printed) != 1 || printed[0].PrintedAt == nil || printed[0].PrintedBy.Name != "Ada" || printed[0].PrintedTemplate != "Shelf label" || printed[0].PrintedOn != "Front desk" {
 		t.Fatalf("printed: %+v", printed)
@@ -183,13 +181,13 @@ func TestSpoolLifecycle(t *testing.T) {
 	if recent, _ := st.ListSpool(SpoolFilter{Printed: true, PrintedSince: time.Now().Add(time.Hour)}); len(recent) != 0 {
 		t.Errorf("printed since an hour from now: %d", len(recent))
 	}
-	if err := st.MarkSpoolPrinted([]string{first.ID}, "Shelf label", ""); !errors.Is(err, ErrSpoolEntryNotFound) {
+	if err := st.RecordSpoolDownload([]string{first.ID}, tmpl.ID, "Shelf label"); !errors.Is(err, ErrSpoolEntryNotFound) {
 		t.Errorf("printing a printed entry again: %v", err)
 	}
 	if err := st.RemoveFromSpool([]string{first.ID}); !errors.Is(err, ErrSpoolEntryNotFound) {
 		t.Errorf("removing a printed entry: %v", err)
 	}
-	if err := ada.MarkSpoolPrinted([]string{added[1].ID}, "Shelf label", ""); err != nil {
+	if err := ada.RecordSpoolDownload([]string{added[1].ID}, tmpl.ID, "Shelf label"); err != nil {
 		t.Fatal(err)
 	}
 	events, _, err := st.ListAssetEvents(saw.Asset.ID, "", 10)
@@ -308,5 +306,25 @@ func TestTokensAddToTheSpool(t *testing.T) {
 	}
 	if by := added[0].AddedBy; by.ID != token.ID || by.Name != "Intake script" || !by.Token {
 		t.Errorf("added by %+v", by)
+	}
+}
+
+// printOn prints a waiting entry on a printer as the store's actor, through
+// a job, as the spooler does.
+func printOn(t *testing.T, st *Store, entryID, templateID string, p *models.Printer) {
+	t.Helper()
+	tmpl, err := st.GetTemplate(templateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateSpoolJobs([]SpoolJobNew{{TemplateID: templateID, TemplateName: tmpl.Name, PrinterID: p.ID, PrinterName: p.Name, EntryIDs: []string{entryID}}}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := st.ClaimSpoolBatch(p.ID)
+	if err != nil || b == nil {
+		t.Fatalf("claiming: %+v, %v", b, err)
+	}
+	if err := st.FinishSpoolBatch(b, SpoolOutcome{Printed: []string{entryID}, Printer: p.Name}); err != nil {
+		t.Fatal(err)
 	}
 }

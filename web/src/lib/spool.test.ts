@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addedMessage, destinationName, groupEntries, printersFor, queueNewLabels, rememberQueueNewLabels, shared, templatesFor } from './spool';
+import { addedMessage, destinationName, groupEntries, jobStateName, printedMessage, printersFor, queueNewLabels, rememberQueueNewLabels, shared, templatesFor } from './spool';
 import type { Spool, SpoolEntry } from './models';
 
 const entry = (id: string, destination: SpoolEntry['destination'], template: string | null): SpoolEntry => ({
@@ -96,5 +96,16 @@ describe('the spool', () => {
     });
     expect(queueNewLabels('ada')).toBe(true);
     expect(() => rememberQueueNewLabels('ada', false)).not.toThrow();
+  });
+
+  it('says what printing did, and how jobs stand', () => {
+    const job = (labels: number) => ({ id: 'j', template_id: 't', template_name: 'Tag', printer_id: 'p', target: 'Front', download: false, state: 'waiting' as const, labels, printed: 0, entries: 1, created_by: { id: 'me' }, created_at: '' });
+    expect(printedMessage({ jobs: [job(2), job(3)], skipped: [] })).toBe('Sent 5 labels to print in 2 jobs.');
+    expect(printedMessage({ jobs: [], skipped: [{ entry_id: 'e', asset_name: 'Saw', reason: 'No template chosen' }] })).toBe(
+      'Nothing was ready to print; 1 label left out: Saw (No template chosen).',
+    );
+    expect(jobStateName({ state: 'done', download: true })).toBe('Downloaded');
+    expect(jobStateName({ state: 'done', download: false })).toBe('Printed');
+    expect(jobStateName({ state: 'failed', download: false })).toBe('Failed');
   });
 });

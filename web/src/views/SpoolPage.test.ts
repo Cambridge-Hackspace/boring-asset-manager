@@ -16,6 +16,7 @@ const entry = (id: string, name: string, destination: SpoolEntry['destination'],
   added_by: { id: 'me', name: 'Me' },
   added_at: '2026-10-16T10:00:00Z',
   problems: [],
+  ready: !over.problems?.length && !over.job,
   ...over,
 });
 
@@ -44,6 +45,7 @@ afterEach(() => {
 describe('SpoolPage', () => {
   it('groups waiting labels by printer and template, with what keeps them from printing', async () => {
     fakeApi({
+      'GET /spool/jobs': () => ({ jobs: [] }),
       'GET /spool': () =>
         spoolOf([
           entry('1', 'Bin 1', 'printer:p1', 'shelf'),
@@ -62,6 +64,7 @@ describe('SpoolPage', () => {
   it('sets templates and printers in bulk, offering only what fits', async () => {
     let spool = spoolOf([entry('1', 'Bin 1', 'printer:p1', 'shelf'), entry('2', 'Bin 2', 'printer:p1', 'shelf'), entry('3', 'Tag me', 'printer:p2', 'tag')]);
     const { sent } = fakeApi({
+      'GET /spool/jobs': () => ({ jobs: [] }),
       'GET /spool': () => spool,
       'PATCH /spool': (body) => {
         const b = body as { entry_ids: string[]; destination?: SpoolEntry['destination'] };
@@ -102,7 +105,8 @@ describe('SpoolPage', () => {
 
   it('downloads a group, counting what could not be produced', async () => {
     let spool = spoolOf([entry('1', 'Bin 1', 'download', 'shelf'), entry('2', 'Bin 2', 'download', 'shelf'), entry('3', 'Broken', 'download', 'shelf', { problems: ['Its asset is archived'] })]);
-    const { sent } = fakeApi({ 'GET /spool': () => spool });
+    const { sent } = fakeApi({ 'GET /spool/jobs': () => ({ jobs: [] }),
+      'GET /spool': () => spool });
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
       if (url.endsWith('/spool/download')) {
@@ -117,8 +121,8 @@ describe('SpoolPage', () => {
     render(SpoolPage, { params: {} });
     await fireEvent.click(await screen.findByRole('button', { name: 'Download PDF' }));
     expect(await screen.findByText('Downloaded 1 label. 1 label could not be produced and stayed in the spool.')).toBeTruthy();
-    // Only those ready went.
-    expect(sent.length).toBe(2);
+    // Only those ready went, and the list was read again.
+    expect(sent.filter((r) => r.path === '/spool').length).toBe(2);
   });
 
   it('lists what was printed, to print again, and only one’s own when asked', async () => {
@@ -126,6 +130,7 @@ describe('SpoolPage', () => {
       entry('9', 'Bin 1', 'download', 'shelf', { printed_at: '2026-10-15T10:00:00Z', printed_by: { id: 'me', name: 'Me' }, printed_template: 'Shelf', printed_on: 'Download', copies: 2 }),
     ];
     const { fetchMock, sent } = fakeApi({
+      'GET /spool/jobs': () => ({ jobs: [] }),
       'GET /spool': () => spoolOf(fetchMock.mock.calls.at(-1)![0].includes('printed=true') ? printed : []),
       'POST /spool/requeue': () => ({ status: 201, body: { added: [{ id: 'new' }], already_waiting: [], skipped: [] } }),
     });
@@ -140,8 +145,88 @@ describe('SpoolPage', () => {
     expect(await screen.findByText('Added 1 label to the spool.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/spool/requeue')!.body).toEqual({ entry_ids: ['9'] });
 
-    await fireEvent.click(screen.getByRole('checkbox', { name: /Include those printed over 30 days ago/ }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Include those over 30 days old/ }));
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Only labels I added' }));
-    await vi.waitFor(() => expect(fetchMock.mock.calls.at(-1)![0]).toContain('printed=true&older=true&mine=true'));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.map((c) => c[0] as string).filter((u) => u.includes('/spool?')).at(-1)).toContain('printed=true&older=true&mine=true'));
+  });
+
+  it('prints a group in the background, showing its labels as they go', async () => {
+    let spool = spoolOf([entry('1', 'Bin 1', 'printer:p1', 'shelf', { copies: 2 }), entry('2', 'Bin 2', 'printer:p1', 'shelf')]);
+    const job = { id: 'j1', template_id: 'shelf', template_name: 'Shelf', printer_id: 'p1', target: 'Front desk', download: false, state: 'waiting' as const, labels: 3, printed: 0, entries: 2, created_by: { id: 'me', name: 'Me' }, created_at: '2026-10-16T10:00:00Z' };
+    const { sent } = fakeApi({
+      'GET /spool/jobs': () => ({ jobs: [] }),
+      'GET /spool': () => spool,
+      'POST /spool/print': () => {
+        spool = { ...spool, entries: spool.entries.map((e) => ({ ...e, ready: false, job: { id: 'j1', state: 'sending' as const, target: 'Front desk' } })) };
+        return { status: 201, body: { jobs: [job], skipped: [] } };
+      },
+    });
+    render(SpoolPage, { params: {} });
+    expect(await screen.findByRole('button', { name: 'Print everything ready (3 labels)' })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Print 3 labels' }));
+    expect(await screen.findByText('Sent 3 labels to print in 1 job.')).toBeTruthy();
+    expect(sent.find((r) => r.path === '/spool/print')!.body).toEqual({ entry_ids: ['1', '2'] });
+    // Being printed, they cannot be chosen or changed.
+    expect((await screen.findAllByText('Sending to Front desk…')).length).toBe(2);
+    expect((screen.getByRole('checkbox', { name: 'Select Bin 1' }) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /Print everything ready/ })).toBeNull();
+  });
+
+  it('keeps checking on jobs while they print', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let reads = 0;
+      fakeApi({
+        'GET /spool/jobs': () => ({ jobs: [] }),
+        'GET /spool': () => {
+          reads++;
+          return spoolOf([entry('1', 'Bin 1', 'printer:p1', 'shelf', reads < 3 ? { job: { id: 'j', state: 'sending', target: 'Front desk' } } : {})]);
+        },
+      });
+      render(SpoolPage, { params: {} });
+      await screen.findByText('Sending to Front desk…');
+      await vi.advanceTimersByTimeAsync(4500);
+      expect(await screen.findByText('Ready')).toBeTruthy();
+      const settled = reads;
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(reads).toBe(settled);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lists jobs, cancels one waiting, and sends one again elsewhere', async () => {
+    const base = { template_id: 'tag', template_name: 'Tag', printer_id: 'p2', target: 'Back room', download: false, entries: 1, created_by: { id: 'me', name: 'Me' }, created_at: '2026-10-16T10:00:00Z' };
+    let jobs = [
+      { ...base, id: 'j2', state: 'waiting' as const, labels: 2, printed: 0 },
+      { ...base, id: 'j1', state: 'done' as const, labels: 1, printed: 1 },
+      { ...base, id: 'j0', state: 'failed' as const, labels: 1, printed: 0, error: 'Could not deliver these to Back room: refused' },
+    ];
+    const { sent } = fakeApi({
+      'GET /spool/jobs': () => ({ jobs }),
+      'GET /spool': () => spoolOf([]),
+      'POST /spool/jobs/j2/cancel': () => {
+        jobs = jobs.map((j) => (j.id === 'j2' ? { ...j, state: 'canceled' as const } : j)) as typeof jobs;
+        return { canceled: 'j2' };
+      },
+      'POST /spool/jobs/j1/resend': () => ({ status: 201, body: { added: [{ id: 'e' }], already_waiting: [], skipped: [], jobs: [{ id: 'j3' }] } }),
+    });
+    render(SpoolPage, { params: {} });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Jobs' }));
+    const rows = await screen.findAllByRole('row');
+    expect(rows[3]!.textContent).toContain('Could not deliver these to Back room');
+    // Only what printed can be sent again; a failed job's labels wait in the spool.
+    expect(within(rows[3]!).queryByRole('button', { name: 'Send again' })).toBeNull();
+    await fireEvent.click(within(rows[1]!).getByRole('button', { name: 'Cancel the job printing 2 labels on Back room' }));
+    expect(await screen.findByText('Canceled; its 2 labels wait in the spool again.')).toBeTruthy();
+    expect(await screen.findByText('Canceled')).toBeTruthy();
+
+    // Tag labels suit both printers; the job went to the back room.
+    const to = within(rows[2]!).getByRole('combobox') as HTMLSelectElement;
+    expect([...to.options].map((o) => o.textContent)).toEqual(['Back room', 'Front desk', 'Download']);
+    await fireEvent.change(to, { target: { value: 'printer:p1' } });
+    await fireEvent.click(within(rows[2]!).getByRole('button', { name: 'Send again' }));
+    expect(await screen.findByText('Added 1 label to the spool, and sent to print.')).toBeTruthy();
+    expect(sent.find((r) => r.path === '/spool/jobs/j1/resend')!.body).toEqual({ destination: 'printer:p1' });
   });
 });

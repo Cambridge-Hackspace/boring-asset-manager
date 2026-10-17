@@ -31,6 +31,9 @@ const printedShown = 30 * 24 * time.Hour
 type SpoolEntryView struct {
 	models.SpoolEntry
 	Problems []string `json:"problems"`
+	// Ready is set for one that can be printed as it stands: nothing
+	// blocks it, and no job is printing it.
+	Ready bool `json:"ready"`
 }
 
 // SpoolChoice names a template or printer an entry can take.
@@ -103,8 +106,18 @@ func (o *spoolOptions) onlyPrinter(templateID *string) string {
 	return models.DestinationPrinterPrefix + o.resp.Fits[*templateID][0]
 }
 
-// problems says what keeps a waiting entry from printing as it stands.
+// problems says what keeps a waiting entry from printing as it stands,
+// and why its label could not be produced last time.
 func (o *spoolOptions) problems(e models.SpoolEntry) []string {
+	out := o.blockers(e)
+	if e.Problem != "" {
+		out = append(out, e.Problem)
+	}
+	return out
+}
+
+// blockers says what keeps a waiting entry from printing as it stands.
+func (o *spoolOptions) blockers(e models.SpoolEntry) []string {
 	out := []string{}
 	if e.AssetArchived {
 		out = append(out, "Its asset is archived, and archived assets are never labeled")
@@ -123,9 +136,6 @@ func (o *spoolOptions) problems(e models.SpoolEntry) []string {
 		if why, ok := o.unfit[t.ID][id]; ok {
 			out = append(out, fmt.Sprintf("%s does not suit %s: %s", t.Name, o.printers[id].Name, why))
 		}
-	}
-	if e.Problem != "" {
-		out = append(out, e.Problem)
 	}
 	return out
 }
@@ -169,6 +179,7 @@ func (s *Server) handleListSpool(w http.ResponseWriter, r *http.Request) {
 		v := SpoolEntryView{SpoolEntry: e, Problems: []string{}}
 		if !f.Printed {
 			v.Problems = o.problems(e)
+			v.Ready = len(o.blockers(e)) == 0 && e.Job == nil
 		}
 		resp.Entries = append(resp.Entries, v)
 	}
@@ -345,6 +356,10 @@ func (s *Server) addToSpool(w http.ResponseWriter, r *http.Request, adds []store
 
 // writeSpoolError answers a failure to change the spool.
 func writeSpoolError(w http.ResponseWriter, err error, action string) {
+	if status, msg, ok := spoolJobError(err); ok {
+		writeJSONError(w, status, msg)
+		return
+	}
 	switch {
 	case errors.Is(err, store.ErrSpoolFull):
 		writeJSONError(w, http.StatusUnprocessableEntity, "The spool holds at most "+fmt.Sprint(store.MaxSpoolWaiting)+" labels waiting; print or remove some first")
@@ -611,7 +626,7 @@ func (s *Server) handleDownloadSpool(w http.ResponseWriter, r *http.Request) {
 	for i, d := range done {
 		ids[i] = d.entry.ID
 	}
-	if err := s.actingStore(r).MarkSpoolPrinted(ids, t.Name, ""); err != nil {
+	if err := s.actingStore(r).RecordSpoolDownload(ids, t.ID, t.Name); err != nil {
 		writeSpoolError(w, err, "mark the labels printed")
 		return
 	}

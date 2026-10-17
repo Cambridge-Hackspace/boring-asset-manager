@@ -567,8 +567,12 @@ export interface SpoolEntry {
   printed_by?: SpoolActor;
   printed_template?: string;
   printed_on?: string;
-  /** What keeps a waiting entry from printing as it stands. */
+  /** What keeps a waiting entry from printing as it stands, and why it could not be produced last time. */
   problems: string[];
+  /** It can be printed as it stands: nothing blocks it and no job is printing it. */
+  ready?: boolean;
+  /** The job printing it, while that waits or sends; it cannot be changed meanwhile. */
+  job?: { id: string; state: SpoolJobState; target: string };
 }
 
 /** The spool, with the templates and printers its entries can take and the printers each template suits. */
@@ -584,4 +588,33 @@ export interface SpoolAddResult {
   added: SpoolEntry[];
   already_waiting: string[];
   skipped: { asset_id: string; reason: string }[];
+}
+
+export type SpoolJobState = 'waiting' | 'sending' | 'done' | 'failed' | 'canceled';
+
+/** A printing of spool entries on one printer with one template, or a download of them. */
+export interface SpoolJob {
+  id: string;
+  template_id: string | null;
+  template_name: string;
+  printer_id: string | null;
+  /** The printer as it was named, or "Download". */
+  target: string;
+  download: boolean;
+  state: SpoolJobState;
+  error?: string;
+  /** Every copy, and those printed so far. */
+  labels: number;
+  printed: number;
+  entries: number;
+  created_by: SpoolActor;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+}
+
+/** What printing the spool did: the jobs made, and the entries left out with why. */
+export interface SpoolPrintResult {
+  jobs: SpoolJob[];
+  skipped: { entry_id: string; asset_name: string; reason: string }[];
 }

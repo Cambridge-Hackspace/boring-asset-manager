@@ -1,20 +1,23 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { request, requestDownload } from '../lib/api';
   import { dueDate } from '../lib/assets';
   import { messageOf } from '../lib/errors';
-  import type { Spool, SpoolAddResult, SpoolDestination, SpoolEntry } from '../lib/models';
+  import type { Spool, SpoolAddResult, SpoolDestination, SpoolEntry, SpoolJob, SpoolPrintResult } from '../lib/models';
   import { actorName } from '../lib/people';
-  import { addedMessage, destinationName, groupEntries, printersFor, shared, templateName, templatesFor } from '../lib/spool';
+  import { addedMessage, destinationName, groupEntries, jobActive, jobStateName, printedMessage, printersFor, shared, templateName, templatesFor } from '../lib/spool';
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
   // The spool (README §6.2): labels waiting to print, sorted onto templates
-  // and printers in bulk; and the Printed list, to print again from.
+  // and printers in bulk and printed in the background; the jobs printing
+  // them; and the Printed list, to print again from.
   let { params: _params }: { params: Record<string, string> } = $props();
 
+  type View = 'waiting' | 'jobs' | 'printed';
+  let view = $state<View>('waiting');
   let spool = $state<Spool>({ entries: [], templates: [], printers: [], fits: {} });
-  let printed = $state(false);
+  let jobs = $state<SpoolJob[]>([]);
   let older = $state(false);
   let mine = $state(false);
   let selected = $state<string[]>([]);
@@ -26,13 +29,20 @@
   let setTemplate = $state('');
   let setDestination = $state('');
   let setCopies = $state(1);
+  // Where each past job is sent again: '' for where it went.
+  let resendTo = $state<Record<string, string>>({});
 
-  const groups = $derived(printed ? [] : groupEntries(spool));
+  const groups = $derived(view === 'waiting' ? groupEntries(spool) : []);
+  // Entries a job is printing cannot be selected or changed.
+  const selectable = $derived(spool.entries.filter((e) => !e.job));
   const chosen = $derived(spool.entries.filter((e) => selected.includes(e.id)));
   // Choosing a template offers only the printers it suits, and the reverse.
   const destinationChoices = $derived(printersFor(spool, shared(chosen, (e) => e.template_id)));
   const templateChoices = $derived(templatesFor(spool, shared(chosen, (e) => e.destination)));
-  const allSelected = $derived(spool.entries.length > 0 && spool.entries.every((e) => selected.includes(e.id)));
+  const allSelected = $derived(selectable.length > 0 && selectable.every((e) => selected.includes(e.id)));
+  const readyToPrint = $derived(spool.entries.filter((e) => e.ready && e.destination.startsWith('printer:')));
+  // While anything is printing, the page checks on it.
+  const busy = $derived(spool.entries.some((e) => e.job) || jobs.some((j) => jobActive(j.state)));
 
   // Each load is numbered, so a slow answer to an older one cannot replace
   // what a newer one asked for.
@@ -41,14 +51,19 @@
   async function load() {
     const n = ++loads;
     const q = new URLSearchParams();
-    if (printed) q.set('printed', 'true');
-    if (printed && older) q.set('older', 'true');
+    if (view === 'printed') q.set('printed', 'true');
+    if (view !== 'waiting' && older) q.set('older', 'true');
     if (mine) q.set('mine', 'true');
     try {
-      const got = await request<Spool>('GET', `/spool?${q}`);
+      const [got, gotJobs] = await Promise.all([
+        // The jobs view reads the spool too, for the printers to send to.
+        request<Spool>('GET', view === 'jobs' ? '/spool' : `/spool?${q}`),
+        request<{ jobs: SpoolJob[] }>('GET', `/spool/jobs${view === 'jobs' && older ? '?older=true' : ''}`),
+      ]);
       if (n !== loads) return;
       spool = got;
-      selected = selected.filter((id) => spool.entries.some((e) => e.id === id));
+      jobs = gotJobs.jobs ?? [];
+      selected = selected.filter((id) => spool.entries.some((e) => e.id === id && !e.job));
     } catch (err) {
       if (n === loads) error = messageOf(err);
     } finally {
@@ -56,24 +71,31 @@
     }
   }
 
+  let poll: ReturnType<typeof setInterval> | undefined;
+  $effect(() => {
+    if (!busy) return;
+    poll = setInterval(() => void load(), 2000);
+    return () => clearInterval(poll);
+  });
   onMount(load);
+  onDestroy(() => clearInterval(poll));
 
-  function show(isPrinted: boolean) {
-    if (printed === isPrinted) return;
-    printed = isPrinted;
+  function show(next: View) {
+    if (view === next) return;
+    view = next;
     selected = [];
     error = status = '';
     void load();
   }
 
   function toggleGroup(entries: SpoolEntry[]) {
-    const ids = entries.map((e) => e.id);
+    const ids = entries.filter((e) => !e.job).map((e) => e.id);
     const all = ids.every((id) => selected.includes(id));
     selected = all ? selected.filter((id) => !ids.includes(id)) : [...new Set([...selected, ...ids])];
   }
 
   function toggleAll() {
-    selected = allSelected ? [] : spool.entries.map((e) => e.id);
+    selected = allSelected ? [] : selectable.map((e) => e.id);
   }
 
   async function act(done: string, work: () => Promise<unknown>) {
@@ -101,12 +123,42 @@
     });
   }
 
+  // Printing makes jobs the server sends in the background, each printer
+  // one at a time and printers side by side.
+  async function print(entryIds?: string[]) {
+    error = status = '';
+    try {
+      const r = await request<SpoolPrintResult>('POST', '/spool/print', entryIds ? { entry_ids: entryIds } : {});
+      status = printedMessage(r);
+      selected = [];
+      await load();
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
   async function printAgain() {
     error = status = '';
     try {
       const r = await request<SpoolAddResult>('POST', '/spool/requeue', { entry_ids: selected });
       status = addedMessage(r);
       selected = [];
+      await load();
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  function cancel(j: SpoolJob) {
+    return act(`Canceled; its ${count(j.labels)} wait in the spool again.`, () => request('POST', `/spool/jobs/${encodeURIComponent(j.id)}/cancel`));
+  }
+
+  async function resend(j: SpoolJob) {
+    error = status = '';
+    const to = resendTo[j.id] ?? '';
+    try {
+      const r = await request<SpoolAddResult & { jobs: SpoolJob[] }>('POST', `/spool/jobs/${encodeURIComponent(j.id)}/resend`, to ? { destination: to } : {});
+      status = r.jobs.length ? `${addedMessage(r).replace(/\.$/, '')}, and sent to print.` : addedMessage(r);
       await load();
     } catch (err) {
       error = messageOf(err);
@@ -140,20 +192,27 @@
   }
 
   const when = (iso: string) => dueDate(iso);
+  const jobOf = (e: SpoolEntry) => (e.job?.state === 'sending' ? `Sending to ${e.job.target}` : `Waiting for ${e.job?.target}`);
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
   <h1 class="text-2xl font-bold">Spool</h1>
   <div class="flex gap-1" role="group" aria-label="Show">
-    <button type="button" class={printed ? 'btn-secondary' : 'btn-primary'} aria-pressed={!printed} onclick={() => show(false)}>Waiting</button>
-    <button type="button" class={printed ? 'btn-primary' : 'btn-secondary'} aria-pressed={printed} onclick={() => show(true)}>Printed</button>
+    {#each [['waiting', 'Waiting'], ['jobs', 'Jobs'], ['printed', 'Printed']] as [key, label] (key)}
+      <button type="button" class={view === key ? 'btn-primary' : 'btn-secondary'} aria-pressed={view === key} onclick={() => show(key as View)}>{label}</button>
+    {/each}
   </div>
 </div>
 
-<div class="mb-4 flex flex-wrap gap-4 text-sm">
-  <label class="flex items-center gap-2"><input type="checkbox" bind:checked={mine} onchange={load} /> Only labels I added</label>
-  {#if printed}
-    <label class="flex items-center gap-2"><input type="checkbox" bind:checked={older} onchange={load} /> Include those printed over 30 days ago</label>
+<div class="mb-4 flex flex-wrap items-center gap-4 text-sm">
+  {#if view !== 'jobs'}
+    <label class="flex items-center gap-2"><input type="checkbox" bind:checked={mine} onchange={load} /> Only labels I added</label>
+  {/if}
+  {#if view !== 'waiting'}
+    <label class="flex items-center gap-2"><input type="checkbox" bind:checked={older} onchange={load} /> Include those over 30 days old</label>
+  {/if}
+  {#if view === 'waiting' && readyToPrint.length}
+    <button type="button" class="btn-primary" onclick={() => print()}>Print everything ready ({count(readyToPrint.reduce((n, e) => n + e.copies, 0))})</button>
   {/if}
 </div>
 
@@ -162,21 +221,70 @@
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading the spool…</p>
+{:else if view === 'jobs'}
+  {#if jobs.length === 0}
+    <p class="text-sm text-zinc-600 dark:text-zinc-400">No print jobs{older ? '' : ' in the last 30 days'}.</p>
+  {:else}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="border-b border-zinc-300 dark:border-zinc-700">
+          <tr>
+            <th scope="col" class="py-2 pr-4">When</th>
+            <th scope="col" class="py-2 pr-4">Printer</th>
+            <th scope="col" class="py-2 pr-4">Template</th>
+            <th scope="col" class="py-2 pr-4">Labels</th>
+            <th scope="col" class="py-2 pr-4">State</th>
+            <th scope="col" class="py-2"><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each jobs as j (j.id)}
+            <tr class="border-b border-zinc-200 align-top dark:border-zinc-800">
+              <td class="py-2 pr-4 whitespace-nowrap">{when(j.created_at)}<span class="block text-xs text-zinc-600 dark:text-zinc-400">{actorName(j.created_by)}</span></td>
+              <td class="py-2 pr-4">{j.target}</td>
+              <td class="py-2 pr-4">{j.template_name}</td>
+              <td class="py-2 pr-4 whitespace-nowrap">{j.state === 'sending' ? `${j.printed} of ${j.labels}` : j.labels}</td>
+              <td class="py-2 pr-4">
+                <span class={j.state === 'failed' ? 'font-medium text-red-700 dark:text-red-400' : ''}>{jobStateName(j)}</span>
+                {#if j.error}<span class="block text-xs">{j.error}</span>{/if}
+              </td>
+              <td class="py-2">
+                {#if j.state === 'waiting'}
+                  <button type="button" class="btn-secondary" aria-label="Cancel the job printing {count(j.labels)} on {j.target}" onclick={() => cancel(j)}>Cancel</button>
+                {:else if j.printed > 0 && !jobActive(j.state)}
+                  <div class="flex flex-wrap items-center gap-2">
+                    <label class="sr-only" for="resend-{j.id}">Send the labels of the {when(j.created_at)} job on {j.target} again to</label>
+                    <select id="resend-{j.id}" class="input" bind:value={resendTo[j.id]}>
+                      <option value="">{j.target}</option>
+                      {#each printersFor(spool, j.template_id).filter((p) => p.id !== j.printer_id) as p (p.id)}<option value="printer:{p.id}">{p.name}</option>{/each}
+                      {#if !j.download}<option value="download">Download</option>{/if}
+                    </select>
+                    <button type="button" class="btn-secondary" onclick={() => resend(j)}>Send again</button>
+                  </div>
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
 {:else if spool.entries.length === 0}
   <p class="text-sm text-zinc-600 dark:text-zinc-400">
-    {#if printed}Nothing printed{older ? '' : ' in the last 30 days'}.{:else}The spool is empty. Add labels from the asset list, a category, or an asset's page.{/if}
+    {#if view === 'printed'}Nothing printed{older ? '' : ' in the last 30 days'}.{:else}The spool is empty. Add labels from the asset list, a category, or an asset's page.{/if}
   </p>
 {:else}
   <p class="sr-only" role="status">{count(spool.entries.length)}, {selected.length} selected.</p>
-  <p class="mb-2 text-sm"><label class="flex items-center gap-2"><input type="checkbox" checked={allSelected} onchange={toggleAll} /> Select all {count(spool.entries.length)}</label></p>
+  <p class="mb-2 text-sm"><label class="flex items-center gap-2"><input type="checkbox" checked={allSelected} onchange={toggleAll} disabled={!selectable.length} /> Select all {count(selectable.length)}</label></p>
 
   {#if selected.length}
     <section class="sticky top-0 z-10 mb-4 rounded border border-zinc-300 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900" aria-label="Change the selected labels">
       <p class="mb-2 text-sm font-medium">{count(selected.length)} selected</p>
-      {#if printed}
+      {#if view === 'printed'}
         <button type="button" class="btn-primary" onclick={printAgain}>Print again</button>
       {:else}
         <div class="flex flex-wrap items-end gap-3">
+          <button type="button" class="btn-primary" onclick={() => print(selected)}>Print</button>
           <form class="flex items-end gap-2" onsubmit={(e) => (e.preventDefault(), update({ template_id: setTemplate }, `Template set for ${count(selected.length)}.`))}>
             <div>
               <label class="label" for="spool-template">Template</label>
@@ -211,7 +319,7 @@
     </section>
   {/if}
 
-  {#if printed}
+  {#if view === 'printed'}
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
         <thead class="border-b border-zinc-300 dark:border-zinc-700">
@@ -240,7 +348,8 @@
     </div>
   {:else}
     {#each groups as g, gi (g.key)}
-      {@const ready = g.entries.filter((e) => e.problems.length === 0)}
+      {@const ready = g.entries.filter((e) => e.ready)}
+      {@const readyLabels = ready.reduce((n, e) => n + e.copies, 0)}
       <section class="mb-6" aria-labelledby="spool-group-{gi}">
         <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 id="spool-group-{gi}" class="text-lg font-semibold">
@@ -251,6 +360,8 @@
               <button type="button" class="btn-secondary" disabled={!ready.length} onclick={() => download(ready, 'pdf')}>Download PDF</button>
               <button type="button" class="btn-secondary" disabled={!ready.length} onclick={() => download(ready, 'zip')}>Download ZIP</button>
             </div>
+          {:else if g.destination.startsWith('printer:') && ready.length}
+            <button type="button" class="btn-secondary" onclick={() => print(ready.map((e) => e.id))}>Print {count(readyLabels)}</button>
           {/if}
         </div>
         <div class="overflow-x-auto">
@@ -258,23 +369,31 @@
             <thead class="border-b border-zinc-300 dark:border-zinc-700">
               <tr>
                 <th scope="col" class="w-8 py-2 pr-2">
-                  <input type="checkbox" aria-label="Select every label for {destinationName(spool, g.destination)}, {templateName(spool, g.templateId)}" checked={g.entries.every((e) => selected.includes(e.id))} onchange={() => toggleGroup(g.entries)} />
+                  <input
+                    type="checkbox"
+                    aria-label="Select every label for {destinationName(spool, g.destination)}, {templateName(spool, g.templateId)}"
+                    checked={g.entries.some((e) => !e.job) && g.entries.every((e) => e.job || selected.includes(e.id))}
+                    disabled={g.entries.every((e) => e.job)}
+                    onchange={() => toggleGroup(g.entries)}
+                  />
                 </th>
                 <th scope="col" class="py-2 pr-4">Asset</th>
                 <th scope="col" class="py-2 pr-4">Copies</th>
                 <th scope="col" class="py-2 pr-4">Added</th>
-                <th scope="col" class="py-2">Problems</th>
+                <th scope="col" class="py-2">State</th>
               </tr>
             </thead>
             <tbody>
               {#each g.entries as e (e.id)}
                 <tr class="border-b border-zinc-200 dark:border-zinc-800">
-                  <td class="py-2 pr-2"><input type="checkbox" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} /></td>
+                  <td class="py-2 pr-2"><input type="checkbox" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} disabled={!!e.job} /></td>
                   <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
                   <td class="py-2 pr-4">{e.copies}</td>
                   <td class="py-2 pr-4">{actorName(e.added_by)}, {when(e.added_at)}</td>
                   <td class="py-2">
-                    {#if e.problems.length}
+                    {#if e.job}
+                      <span class="text-zinc-700 dark:text-zinc-300">{jobOf(e)}…</span>
+                    {:else if e.problems.length}
                       <ul class="text-amber-800 dark:text-amber-300">
                         {#each e.problems as p, i (i)}<li><span aria-hidden="true">⚠</span> {p}</li>{/each}
                       </ul>
