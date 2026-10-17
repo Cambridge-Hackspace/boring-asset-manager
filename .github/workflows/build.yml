@@ -1,6 +1,7 @@
 # Builds a release binary on every push and pull request, the way the release
 # workflow does (README §2.2), so a change that breaks the build shows up
-# before a tag does. The suites themselves run in reaper (README §8.1).
+# before a tag does, on Linux and, cross-compiled, on Windows. The suites
+# themselves run in reaper (README §8.1).
 name: build
 
 on:
@@ -20,4 +21,4 @@ jobs:
       - name: Build
         env:
           CONTAINER: docker
-        run: tools/release/build.sh linux/amd64
+        run: tools/release/build.sh linux/amd64 windows/amd64
