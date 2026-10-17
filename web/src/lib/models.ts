@@ -16,7 +16,8 @@ export type Permission =
   | 'reports.manage'
   | 'assets.track'
   | 'assets.scan'
-  | 'assets.act';
+  | 'assets.act'
+  | 'events.read';
 
 /** A permission held in every scope, or in one as scope:permission (README §3.3). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -667,4 +668,25 @@ export interface OfferedAction {
   key: string;
   label: string;
   confirm?: string;
+}
+
+/** A live event connection a server holds open, for an API token or a signed-in user (README §5.4). */
+export interface LiveConnection {
+  id: string;
+  token_id?: string;
+  user_id?: string;
+  remote: string;
+  opened_at: string;
+  seen_at: string;
+}
+
+/** A device's answer to an action pressed: done or failed, with a message. */
+export interface ActionReply {
+  id: string;
+  event_id: string;
+  name: string;
+  token: boolean;
+  ok: boolean;
+  message: string;
+  created_at: string;
 }

@@ -41,4 +41,32 @@ describe('ActionButtons', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Identify' }));
     expect(await screen.findByText(/pressed a moment ago/)).toBeTruthy();
   });
+
+  it('shows what devices answer, or that none did', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let replies: unknown[] = [];
+      fakeApi({
+        'POST /assets/a1/actions/identify': () => ({ status: 201, body: { event_id: 'e1' } }),
+        'GET /assets/a1/actions/replies': () => ({ replies }),
+      });
+      render(ActionButtons, { assetId: 'a1', actions });
+      await fireEvent.click(screen.getByRole('button', { name: 'Identify' }));
+      await screen.findByText('Identify: sent.');
+      replies = [
+        { id: 'r1', event_id: 'e1', name: 'Cabinet A', token: true, ok: true, message: 'Lit drawer A3', created_at: '' },
+        { id: 'r2', event_id: 'e1', name: 'Cabinet B', token: true, ok: false, message: '', created_at: '' },
+      ];
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(await screen.findByText('Cabinet A: Lit drawer A3')).toBeTruthy();
+      expect(screen.getByText('Cabinet B: failed')).toBeTruthy();
+
+      replies = [];
+      await fireEvent.click(screen.getByRole('button', { name: 'Identify' }));
+      await vi.advanceTimersByTimeAsync(9000);
+      expect(await screen.findByText('Identify: sent; nothing answered.')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

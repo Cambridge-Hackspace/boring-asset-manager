@@ -14,6 +14,7 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'assets.write', label: 'Edit assets', description: 'Create, edit and import assets, and mark them working again.' },
   { key: 'assets.delete', label: 'Archive assets', description: 'Archive and restore assets.' },
   { key: 'labels.print', label: 'Print labels', description: 'Send labels to printers.' },
+  { key: 'events.read', label: 'Receive events live', description: 'Be sent events as they happen over a live connection, as devices such as a cabinet that lights drawers are.' },
   { key: 'categories.manage', label: 'Manage categories', description: 'Create and edit categories and fields.' },
   { key: 'templates.manage', label: 'Manage templates', description: 'Design label templates and upload their images.' },
   { key: 'reports.manage', label: 'Manage reports', description: 'Create, edit and delete saved reports; anyone who reads assets can run them.' },
@@ -27,7 +28,7 @@ export function permissionLabel(key: string): string {
 }
 
 /** The permissions a role may hold in some scopes only: those acting on assets. */
-export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.act', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete'];
+export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.act', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete'];
 
 /** The reserved scope of assets that no category puts in another. */
 export const DEFAULT_SCOPE = 'default';

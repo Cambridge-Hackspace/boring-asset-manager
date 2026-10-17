@@ -127,6 +127,8 @@ func Serve(configPath string) error {
 	go (&notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL}).Run(workerCtx)
 	// Print jobs from the spool until the server stops.
 	go server.RunSpool(workerCtx)
+	// Send live connections the events they ask for.
+	go server.RunLive(workerCtx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

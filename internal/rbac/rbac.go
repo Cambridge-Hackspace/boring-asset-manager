@@ -35,6 +35,8 @@ const (
 	PermAssetsScan = "assets.scan"
 	// PermAssetsAct presses actions on assets, such as Identify.
 	PermAssetsAct = "assets.act"
+	// PermEventsRead receives events live, as devices do (README §5.4).
+	PermEventsRead = "events.read"
 )
 
 var (
@@ -61,6 +63,7 @@ func AllPermissions() []string {
 		PermAssetsTrack,
 		PermAssetsScan,
 		PermAssetsAct,
+		PermEventsRead,
 	}
 }
 
@@ -130,6 +133,7 @@ var scopable = map[string]bool{
 	PermAssetsTrack: true,
 	PermAssetsScan:  true,
 	PermAssetsAct:   true,
+	PermEventsRead:  true,
 	PermStockRecord: true,
 }
 
