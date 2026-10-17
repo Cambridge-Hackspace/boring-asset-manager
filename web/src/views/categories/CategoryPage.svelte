@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
@@ -11,6 +11,7 @@
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import AddToSpool from '../../components/AddToSpool.svelte';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -43,6 +44,20 @@
       ? Object.keys(afterSaving).filter((c) => (afterSaving![c] ?? 0) > (conflicts[c] ?? 0))
       : [],
   );
+  // Label templates (README §6.2): the one its assets join the spool with,
+  // and the ties between categories that choose them.
+  let labelTemplates = $state<TemplateSummary[]>([]);
+  let labelTemplate = $state('');
+  let savedLabelTemplate = $state('');
+  let labelConflicts = $state<Record<string, number>>({});
+  let labelAfterSaving = $state<Record<string, number> | null>(null);
+  const newLabelTies = $derived(
+    labelAfterSaving && labelTemplate !== savedLabelTemplate
+      ? Object.keys(labelAfterSaving).filter((c) => (labelAfterSaving![c] ?? 0) > (labelConflicts[c] ?? 0))
+      : [],
+  );
+  const canSpool = $derived(session.can('labels.print'));
+  let withSubcategories = $state(true);
   const categoryName = (cid: string) => categories.find((c) => c.id === cid)?.name ?? 'another category';
   let loading = $state(true);
   let error = $state('');
@@ -112,6 +127,13 @@
         if (canManage) {
           scanTemplates = (await request<{ reports: Report[] }>('GET', '/reports?kind=scan')).reports ?? [];
           scanTemplate = savedScanTemplate = c.scan_template_id ?? '';
+          labelTemplates = (await request<{ templates: TemplateSummary[] }>('GET', '/templates')).templates ?? [];
+          labelTemplate = savedLabelTemplate = c.label_template_id ?? '';
+        }
+        if (canManage || canSpool) {
+          labelConflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')
+            .then((r) => r.categories ?? {})
+            .catch(() => ({}));
         }
         // A warning, not the page: it may fail without stopping the rest.
         conflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/scan-conflicts')
@@ -161,6 +183,32 @@
       afterSaving = null;
       conflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/scan-conflicts')).categories ?? {};
       saved = 'Scan template saved.';
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  // What saving the chosen label template would do, to warn before it ties.
+  async function checkLabelTemplate() {
+    labelAfterSaving = null;
+    if (labelTemplate === savedLabelTemplate) return;
+    try {
+      const q = `category_id=${encodeURIComponent(id)}&label_template_id=${encodeURIComponent(labelTemplate)}`;
+      labelAfterSaving = (await request<{ categories: Record<string, number> }>('GET', `/categories/label-conflicts?${q}`)).categories ?? {};
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function saveLabelTemplate(event: SubmitEvent) {
+    event.preventDefault();
+    error = saved = '';
+    try {
+      await request('PUT', `/categories/${encodeURIComponent(id)}/label-template`, { label_template_id: labelTemplate || null });
+      savedLabelTemplate = labelTemplate;
+      labelAfterSaving = null;
+      labelConflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')).categories ?? {};
+      saved = 'Label template saved.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -471,6 +519,47 @@
             Saving this ties {newTies.filter((c) => c !== id).map(categoryName).join(', ') || 'it'} with this category for some
             assets in both: they would get a template chosen by which category is deeper, smaller or older.
           </p>
+        {/if}
+      </section>
+    {/if}
+    {#if (labelConflicts[id] ?? 0) > 0}
+      <p class="mt-6 max-w-2xl rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100" role="note">
+        <span aria-hidden="true">⚠</span>
+        {labelConflicts[id] === 1 ? '1 asset' : `${labelConflicts[id]} assets`} here take a label template chosen by a tie with
+        another category as close to them. <a class="underline" href="/assets?conflict=label_template">See which</a>, and name a
+        template on one of the categories to settle it.
+      </p>
+    {/if}
+    {#if (canManage && labelTemplates.length) || canSpool}
+      <section class="mt-6 max-w-2xl" aria-labelledby="labels-heading">
+        <h2 id="labels-heading" class="mb-1 text-lg font-semibold">Labels</h2>
+        {#if canManage && labelTemplates.length}
+          <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
+            The template its assets, and those of its subcategories, join the spool with, unless they choose their own.
+          </p>
+          <form class="mb-4 flex flex-wrap items-end gap-2" onsubmit={saveLabelTemplate}>
+            <div>
+              <label class="label" for="label-template">Label template</label>
+              <select id="label-template" class="input" bind:value={labelTemplate} onchange={checkLabelTemplate}>
+                <option value="">Its parent’s, or none</option>
+                {#each labelTemplates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+              </select>
+            </div>
+            <button type="submit" class="btn-secondary" disabled={labelTemplate === savedLabelTemplate}>Save label template</button>
+          </form>
+          {#if newLabelTies.length}
+            <p class="mb-4 text-sm text-amber-800 dark:text-amber-300" role="alert">
+              <span aria-hidden="true">⚠</span>
+              Saving this ties {newLabelTies.filter((c) => c !== id).map(categoryName).join(', ') || 'it'} with this category for
+              some assets in both: they would get a template chosen by which category is deeper, smaller or older.
+            </p>
+          {/if}
+        {/if}
+        {#if canSpool}
+          <div class="flex flex-wrap items-center gap-3">
+            <AddToSpool what={() => ({ category_id: id, subcategories: withSubcategories })} label="Add its assets to the spool" />
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={withSubcategories} /> With its subcategories’</label>
+          </div>
         {/if}
       </section>
     {/if}

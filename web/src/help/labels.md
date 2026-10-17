@@ -7,3 +7,5 @@
 ## Printing
 
 On an asset's page, or for several assets ticked on the list, choose a template to download labels as SVG, PNG or PDF, or send them to a printer set up on the **Printers** page. **Images** holds logos and pictures for templates.
+
+To gather labels over time and print them together, sorted onto several printers, use the [spool](/help/spool).

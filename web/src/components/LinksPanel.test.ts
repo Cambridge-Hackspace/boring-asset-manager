@@ -22,6 +22,7 @@ const asset = (id: string, name: string, over: Partial<AssetWithDetails> = {}): 
   suggested_relation_type_ids: [],
   scopes: ['default'],
   scan_template: { template_id: 'default' },
+  label_template: { template_id: '' },
   photos: [],
   ...over,
 });

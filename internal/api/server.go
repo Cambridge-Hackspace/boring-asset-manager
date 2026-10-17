@@ -109,6 +109,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PUT /api/v1/categories/{id}/scan-template", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryScanTemplate)))
 	mux.Handle("GET /api/v1/scan/{code}", OpenToPublic(RequirePermission(rbac.PermAssetsScan)(http.HandlerFunc(s.handleScan))))
 	mux.Handle("GET /api/v1/categories/scan-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleScanConflicts)))
+	mux.Handle("PUT /api/v1/categories/{id}/label-template", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryLabelTemplate)))
+	mux.Handle("GET /api/v1/categories/label-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleLabelConflicts)))
 
 	// Reports: anyone who reads assets runs them; reports.manage edits them.
 	mux.Handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))
@@ -184,6 +186,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PUT /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUpdatePrinter)))
 	mux.Handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
 	mux.Handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
+
+	// The spool, a print queue for labels (README §6.2)
+	spool := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermLabelsPrint)(h) }
+	mux.Handle("GET /api/v1/spool", spool(s.handleListSpool))
+	mux.Handle("POST /api/v1/spool", spool(s.handleAddToSpool))
+	mux.Handle("PATCH /api/v1/spool", spool(s.handleUpdateSpool))
+	mux.Handle("POST /api/v1/spool/remove", spool(s.handleRemoveFromSpool))
+	mux.Handle("POST /api/v1/spool/requeue", spool(s.handleRequeueSpool))
+	mux.Handle("POST /api/v1/spool/download", spool(s.handleDownloadSpool))
 
 	// Notification channels (README §5.2)
 	manage := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermSettingsManage)(h) }

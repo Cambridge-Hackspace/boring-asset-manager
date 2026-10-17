@@ -14,6 +14,7 @@
   import ConditionBadge from '../../components/ConditionBadge.svelte';
   import ConflictMark from '../../components/ConflictMark.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
+  import AddToSpool from '../../components/AddToSpool.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
@@ -287,6 +288,13 @@
             {/if}
           </dd>
         {/if}
+        {#if asset.label_template?.conflict && session.can('labels.print')}
+          <dt class="font-medium">Label template</dt>
+          <dd>
+            <ConflictMark label="Label template chosen by a tie between categories" /> Chosen by a tie between categories as close to it as
+            each other. <a class="underline" href="/categories">Name a template on one of them</a> to settle it.
+          </dd>
+        {/if}
         {#each asset.effective_fields as e (e.field.id)}
           <dt class="font-medium">{e.field.label}</dt>
           <dd>
@@ -326,6 +334,9 @@
     <LinksPanel {asset} onchange={assetChanged} />
 
     {#if !archived && session.user}<LabelActions assetIds={[id]} />{/if}
+    {#if !archived && session.can('labels.print')}
+      <p><AddToSpool what={() => ({ asset_ids: [id] })} label="Add its label to the spool" /></p>
+    {/if}
 
     {#if history.length}
       <section class="card" aria-labelledby="history-heading">

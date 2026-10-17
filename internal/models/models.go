@@ -97,9 +97,12 @@ type Category struct {
 	LowStockThreshold *int `json:"low_stock_threshold"`
 	// ScanTemplateID names the scan template its assets, and those of its
 	// subcategories that name none, show when scanned (README §6.4).
-	ScanTemplateID *string   `json:"scan_template_id"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ScanTemplateID *string `json:"scan_template_id"`
+	// LabelTemplateID names the label template its assets, and those of its
+	// subcategories that name none, join the spool with (README §6.2).
+	LabelTemplateID *string   `json:"label_template_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // Event kinds (README §5.1).
@@ -128,6 +131,9 @@ const (
 	EventAssetCheckedOut = "asset.checked_out"
 	EventAssetCheckedIn  = "asset.checked_in"
 	EventAssetOverdue    = "asset.overdue"
+	// EventAssetLabelPrinted records labels of an asset sent to a printer or
+	// downloaded from the spool, with its Label; it is for history.
+	EventAssetLabelPrinted = "asset.label_printed"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -135,7 +141,7 @@ const (
 func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
-		EventAssetCheckedOut, EventAssetCheckedIn:
+		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted:
 		return true
 	}
 	return false
@@ -190,6 +196,18 @@ type EventPayload struct {
 	// the loan is due back, if ever.
 	Borrower *EventActor `json:"borrower,omitempty"`
 	DueAt    *time.Time  `json:"due_at,omitempty"`
+	// Label is what a label printed event printed.
+	Label *EventLabel `json:"label,omitempty"`
+}
+
+// EventLabel describes an asset's labels printed (README §6.2): the
+// template, as named then; the printer, as named then, or Download for a
+// PDF or ZIP from the spool; and how many copies.
+type EventLabel struct {
+	Template string `json:"template"`
+	Printer  string `json:"printer,omitempty"`
+	Download bool   `json:"download,omitempty"`
+	Copies   int    `json:"copies"`
 }
 
 // EventChange is one change to an asset, as it read when it was made. What
@@ -337,16 +355,20 @@ type AssetWithDetails struct {
 	// ancestors, or the default scope (README §3.3).
 	Scopes []string `json:"scopes"`
 	// ScanTemplate is the scan template it shows when scanned, and why.
-	ScanTemplate ScanChoice `json:"scan_template"`
+	ScanTemplate TemplateChoice `json:"scan_template"`
+	// LabelTemplate is the label template the spool queues it with, and why;
+	// TemplateID is empty when no category names one.
+	LabelTemplate TemplateChoice `json:"label_template"`
 }
 
-// ScanChoice is the scan template an asset uses (README §6.4): the one its
-// nearest category naming one names, SourceCategoryID, or the default when
-// none does. Conflict is set when categories at the same distance name
-// different templates and the tie was broken by how deep they are, how
-// many subcategories they have or how old they are; Contenders are those
+// TemplateChoice is the scan template (README §6.4) or label template
+// (§6.2) an asset uses: the one its nearest category naming one names,
+// SourceCategoryID, or, for scan templates, the default when none does.
+// Conflict is set when categories at the same distance name different
+// templates and the tie was broken by how deep they are, how many
+// subcategories they have or how old they are; Contenders are those
 // categories, for someone to settle.
-type ScanChoice struct {
+type TemplateChoice struct {
 	TemplateID       string   `json:"template_id"`
 	SourceCategoryID string   `json:"source_category_id,omitempty"`
 	Conflict         bool     `json:"conflict,omitempty"`
@@ -523,4 +545,39 @@ type Scope struct {
 	// roles holding a permission in it.
 	CategoryCount int `json:"category_count"`
 	RoleCount     int `json:"role_count"`
+}
+
+// Spool destinations (README §6.2): DestinationDownload, or
+// DestinationPrinterPrefix followed by a printer's ID. An entry with none
+// waits for one to be chosen.
+const (
+	DestinationDownload      = "download"
+	DestinationPrinterPrefix = "printer:"
+)
+
+// SpoolEntry is one asset's label in the spool (README §6.2): waiting to be
+// printed, or printed once PrintedAt is set.
+type SpoolEntry struct {
+	ID            string `json:"id"`
+	AssetID       string `json:"asset_id"`
+	AssetName     string `json:"asset_name"`
+	AssetArchived bool   `json:"asset_archived"`
+	// AssetScopes are the asset's scopes, for checking who may see it.
+	AssetScopes []string `json:"-"`
+	// TemplateID is the label template, if one is chosen; Destination is
+	// where it prints, empty until chosen.
+	TemplateID  *string `json:"template_id"`
+	Destination string  `json:"destination"`
+	Copies      int     `json:"copies"`
+	// Problem says why its label could not be produced last time.
+	Problem string     `json:"problem,omitempty"`
+	AddedBy EventActor `json:"added_by"`
+	AddedAt time.Time  `json:"added_at"`
+	// PrintedAt, PrintedBy, PrintedTemplate and PrintedOn say when, by
+	// whom, with which template and on which printer (or "Download") it
+	// was printed, as they were named then.
+	PrintedAt       *time.Time  `json:"printed_at,omitempty"`
+	PrintedBy       *EventActor `json:"printed_by,omitempty"`
+	PrintedTemplate string      `json:"printed_template,omitempty"`
+	PrintedOn       string      `json:"printed_on,omitempty"`
 }

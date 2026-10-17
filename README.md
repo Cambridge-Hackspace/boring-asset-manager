@@ -659,6 +659,18 @@ Spreadsheet formula injection is defused: on export a cell beginning with `=`, `
 * **Export Mode:** `POST /api/v1/labels/export` takes a template ID, up to 500 distinct asset IDs and a format (`pdf` or `zip`, with `"mono": true` for 1-bit PNGs), and streams back a multi-page PDF or a ZIP of PNGs named `<asset_id>.png`.
 * **Network Dispatch Mode:** `POST /api/v1/printers/{id}/print` (`labels.print`) takes a template ID, asset IDs and a copy count (1–20, at most 500 labels in all), checks the template against the printer's media (§4.4), and streams the job to the printer over TCP port 9100.
 * **All or nothing:** every asset is bound and validated before any output is produced, so a batch either renders completely or fails with `422` and a list of `{asset_id, path, message}` for the assets that could not be rendered. Archived assets are never labeled.
+* **History:** labels sent to a printer record `asset.label_printed` in each asset's history, with the template and printer as they were named then and the copies. Exports are not recorded, since they may never be printed. Channels cannot subscribe to it.
+
+#### The Spool
+
+The spool (migration `023`) is a print queue that labels gather in over time, to be sorted onto templates and printers in bulk and printed together. There is one, shared by everyone with `labels.print`, which every spool endpoint needs; each entry also needs its asset readable in its scopes (§3.3), and entries for assets a requester cannot read are neither listed nor changed for them.
+
+* **Label templates on categories:** a category names the label template its assets join the spool with (`PUT /api/v1/categories/{id}/label-template` with `{"label_template_id"}`, null for none; `categories.manage`), and its subcategories take it unless they name their own. The template is chosen as scan templates are (§6.4): the closest category, ties settled by depth, size and age, with no default. An asset's `label_template` gives the choice; ties are marked as for scan templates, listed by `GET /api/v1/assets?conflict=label_template` and `GET /api/v1/categories/label-conflicts`. A template a category names cannot be deleted (`409`).
+* **Entries:** each is one asset's label: a template, a destination (`printer:<id>`, `download`, or none yet), copies (1–20), who added it and when. An asset may wait more than once with different templates, but adding one already waiting with the same template adds nothing. Deleting a printer or a template leaves its entries without one. At most 5,000 labels wait at once; an add that would pass that adds nothing (`422`).
+* **Adding:** `POST /api/v1/spool` takes exactly one of `asset_ids`, `category_id` (with `"subcategories": true` for those below it too) or `filter` (an asset filter as `GET /api/v1/assets` takes it, never archived). Each label takes `template_id` when given, else its categories' template; `destination` when given, else the one printer whose fit check (§4.4) its template passes, if only one does; and `copies`, 1 by default. The answer lists the entries `added` (`201` when there are any), the assets `already_waiting`, and those `skipped` as archived or not found. The web app adds from the asset list (the selection, or everything the filters show), a category, an asset's page, its scan page, the new-asset form and CSV imports; the last two start ticked and remember each person's choice in their browser.
+* **Sorting:** `GET /api/v1/spool` lists the waiting entries in the order added, with the templates and printers and which printers each template suits (`fits`), and each entry's `problems`: no template, no destination, a template its printer does not suit, an archived asset, or why its label could not be produced last time. `?mine=true` keeps those the requester added. `PATCH /api/v1/spool` sets `template_id`, `destination` or `copies` on `entry_ids`, all or none, and clears their last problem; setting a template on entries with no destination sends them to the one printer it suits, if only one does. `POST /api/v1/spool/remove` takes entries out.
+* **Downloading:** `POST /api/v1/spool/download` lays out `entry_ids`, all of one template, each as many times as its copies, as one PDF or a ZIP of PNGs (`"mono": true` for 1-bit). Labels that cannot be produced stay waiting with the reason, and `X-Spool-Problems` says how many; the rest count as printed.
+* **Printed:** printed entries stay, as the Printed list: `GET /api/v1/spool?printed=true`, most recent first, from the last 30 days unless `?older=true`, with the template and printer as named when printed. `POST /api/v1/spool/requeue` puts them back to print again with the template, destination and copies they had. Printing records `asset.label_printed` in each asset's history; a download names no printer and sets `download`.
 
 ### 6.3 Reports
 
@@ -981,6 +993,11 @@ Running BAM for real, and keeping it honest. In priority order:
 
 #### Sub-Phase 7.21: Help
 * [x] User help in the web app, a topic per part of it, reached by one Help link on every page (§6.5).
+
+#### Sub-Phase 7.22: The Spool
+* [x] A shared print queue: label templates on categories, adding from everywhere assets are, sorting in bulk, downloading, the Printed list, and labels printed in assets' histories (§6.2).
+* [ ] Printing from the spool in the background, one job at a time per printer and printers in parallel, with resending past jobs.
+* [ ] Printer pools sharing a job's labels.
 
 ### Upcoming Features
 

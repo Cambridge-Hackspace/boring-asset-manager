@@ -4,6 +4,8 @@
   import { messageOf } from '../../lib/errors';
   import { IGNORE, describeLinkChange, describeProblem, duplicateTargets, importForm, linkCounts, summarize, targetOptions } from '../../lib/importing';
   import type { Field, GeneratorInfo, ImportPlan, ImportResult } from '../../lib/models';
+  import { session } from '../../lib/session.svelte';
+  import { addedMessage, addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -18,6 +20,10 @@
   let busy = $state(false);
   let error = $state('');
   let result = $state<ImportResult | null>(null);
+  // New assets' labels join the spool (README §6.2), as each person last chose.
+  const canSpool = session.can('labels.print');
+  let queueLabels = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
+  let spooled = $state('');
 
   const options = $derived(targetOptions(fields, generators));
   const groups = $derived(['Asset', 'Stock', 'Codes', 'Fields'].map((g) => ({ name: g, options: options.filter((o) => o.group === g) })));
@@ -77,6 +83,15 @@
       result = await request<ImportResult>('POST', '/assets/import', importForm(file, mapping, hasLinks && removeLinks));
       plan = null;
       file = null;
+      spooled = '';
+      if (canSpool) {
+        rememberQueueNewLabels(session.user?.id ?? '', queueLabels);
+        // The import is done either way; a spool that cannot take the labels
+        // says so here, and they can be added from the asset list.
+        if (queueLabels && result.created_ids?.length) {
+          spooled = await addToSpool({ asset_ids: result.created_ids }).then(addedMessage, (err) => `The labels were not added to the spool: ${messageOf(err)}`);
+        }
+      }
     } catch (err) {
       // The server checks again; if something changed, show its findings.
       if (err instanceof ApiError && err.status === 422) {
@@ -110,6 +125,7 @@
     <p class="font-medium">
       Imported: {result.created} new, {result.updated} updated, {result.unchanged} unchanged{linkCounts(result.links_added, result.links_moved, result.links_removed) ? `; ${linkCounts(result.links_added, result.links_moved, result.links_removed)}` : ''}.
     </p>
+    {#if spooled}<p class="mt-1 text-sm">{spooled} <a class="underline" href="/spool">Open the spool</a></p>{/if}
     <p class="mt-1 text-sm"><a class="underline" href="/assets">Back to the assets</a></p>
   </div>
 {/if}
@@ -201,6 +217,9 @@
           {#if linkChanges > plan.link_changes.length}<li>and {linkChanges - plan.link_changes.length} more.</li>{/if}
         </ul>
       </details>
+    {/if}
+    {#if canSpool && plan.create > 0}
+      <label class="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabels} /> Add the new assets’ labels to the spool</label>
     {/if}
     <button type="button" class="btn-primary" onclick={runImport} disabled={!ready || busy}>
       {busy ? 'Importing…' : plan.create + plan.update ? `Import ${plan.create + plan.update} ${plan.create + plan.update === 1 ? 'asset' : 'assets'}` : 'Import the links'}

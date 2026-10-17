@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import ScanPage from './ScanPage.svelte';
 import { fakeApi } from '../test/fetch';
+import { session } from '../lib/session.svelte';
 import type { ScanAction } from '../lib/models';
 
 afterEach(() => {
@@ -65,5 +66,18 @@ describe('ScanPage', () => {
     render(ScanPage, { params: { code: 'NOPE' } });
     expect(await screen.findByRole('heading', { name: 'Not found', level: 1 })).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain('No asset has that code');
+  });
+
+  it('adds the label to the spool, for those who print labels', async () => {
+    session.permissions = ['assets.scan', 'labels.print'];
+    const { sent } = fakeApi({
+      'GET /scan/BIN-A3': () => scanOf(10, []),
+      'POST /spool': () => ({ status: 201, body: { added: [{ id: 'e1' }], already_waiting: [], skipped: [] } }),
+    });
+    render(ScanPage, { params: { code: 'BIN-A3' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add its label to the spool' }));
+    expect(await screen.findByText('Added 1 label to the spool.')).toBeTruthy();
+    expect(sent.find((r) => r.path === '/spool')!.body).toEqual({ asset_ids: ['b1'] });
+    session.permissions = [];
   });
 });

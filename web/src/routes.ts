@@ -25,6 +25,7 @@ import ScanTemplateEditor from './views/reports/ScanTemplateEditor.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
+import SpoolPage from './views/SpoolPage.svelte';
 import ScanPage from './views/ScanPage.svelte';
 import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
@@ -56,6 +57,7 @@ export const routes: Route[] = [
   { pattern: '/scan-templates/new', component: ScanTemplateEditor, title: 'New scan template', permissions: ['reports.manage'] },
   { pattern: '/scan-templates/:id/edit', component: ScanTemplateEditor, title: 'Edit scan template', permissions: ['reports.manage'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
+  { pattern: '/spool', component: SpoolPage, title: 'Spool', permissions: ['labels.print'], nav: 'Spool' },
   { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets.read'], nav: 'Categories' },
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories.manage'] },
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets.read'] },

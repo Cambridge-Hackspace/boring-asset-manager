@@ -79,6 +79,10 @@ func (s *Server) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusNotFound, "Template not found")
 		return
 	}
+	if errors.Is(err, store.ErrTemplateInUse) {
+		writeJSONError(w, http.StatusConflict, err.Error())
+		return
+	}
 	if err != nil {
 		writeStoreError(w, err, "delete the template")
 		return

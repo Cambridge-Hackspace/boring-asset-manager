@@ -60,15 +60,15 @@ func TestChoosingAScanTemplate(t *testing.T) {
 
 	for what, w := range map[string]struct {
 		cats []*models.Category
-		want models.ScanChoice
+		want models.TemplateChoice
 	}{
-		"no template anywhere": {[]*models.Category{plain}, models.ScanChoice{TemplateID: defaultScanID}},
-		"inherited":            {[]*models.Category{a11}, models.ScanChoice{TemplateID: ta, SourceCategoryID: a.ID}},
-		"(a) the closest wins, even from another tree": {[]*models.Category{a11, b1}, models.ScanChoice{TemplateID: tb, SourceCategoryID: b.ID}},
-		"(b) then the longest ancestry":                {[]*models.Category{x1, y1}, models.ScanChoice{TemplateID: tx, SourceCategoryID: x.ID, Conflict: true, Contenders: sorted(x.ID, y.ID)}},
-		"(c) then the fewest descendants":              {[]*models.Category{a1, b1}, models.ScanChoice{TemplateID: tb, SourceCategoryID: b.ID, Conflict: true, Contenders: sorted(a.ID, b.ID)}},
-		"(d) then the oldest":                          {[]*models.Category{c, d}, models.ScanChoice{TemplateID: tx, SourceCategoryID: c.ID, Conflict: true, Contenders: sorted(c.ID, d.ID)}},
-		"a tie on one template is no conflict":         {[]*models.Category{a, e}, models.ScanChoice{TemplateID: ta, SourceCategoryID: e.ID}},
+		"no template anywhere": {[]*models.Category{plain}, models.TemplateChoice{TemplateID: defaultScanID}},
+		"inherited":            {[]*models.Category{a11}, models.TemplateChoice{TemplateID: ta, SourceCategoryID: a.ID}},
+		"(a) the closest wins, even from another tree": {[]*models.Category{a11, b1}, models.TemplateChoice{TemplateID: tb, SourceCategoryID: b.ID}},
+		"(b) then the longest ancestry":                {[]*models.Category{x1, y1}, models.TemplateChoice{TemplateID: tx, SourceCategoryID: x.ID, Conflict: true, Contenders: sorted(x.ID, y.ID)}},
+		"(c) then the fewest descendants":              {[]*models.Category{a1, b1}, models.TemplateChoice{TemplateID: tb, SourceCategoryID: b.ID, Conflict: true, Contenders: sorted(a.ID, b.ID)}},
+		"(d) then the oldest":                          {[]*models.Category{c, d}, models.TemplateChoice{TemplateID: tx, SourceCategoryID: c.ID, Conflict: true, Contenders: sorted(c.ID, d.ID)}},
+		"a tie on one template is no conflict":         {[]*models.Category{a, e}, models.TemplateChoice{TemplateID: ta, SourceCategoryID: e.ID}},
 	} {
 		ids := []string{}
 		for _, c := range w.cats {
@@ -91,7 +91,7 @@ func TestChoosingAScanTemplate(t *testing.T) {
 	if _, err := st.SetCategoryScanTemplate(a1.ID, &tx); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := st.ListAssets("", "(c) then the fewest descendants"); !reflect.DeepEqual(got[0].ScanTemplate, models.ScanChoice{TemplateID: tx, SourceCategoryID: a1.ID}) {
+	if got, _ := st.ListAssets("", "(c) then the fewest descendants"); !reflect.DeepEqual(got[0].ScanTemplate, models.TemplateChoice{TemplateID: tx, SourceCategoryID: a1.ID}) {
 		t.Errorf("overridden: %+v", got[0].ScanTemplate)
 	}
 
@@ -162,7 +162,7 @@ func TestManagingScanTemplates(t *testing.T) {
 	if got, err := st.SetCategoryScanTemplate(shelf.ID, nil); err != nil || got.ScanTemplateID != nil {
 		t.Errorf("naming none: %+v, %v", got, err)
 	}
-	if a, _ := st.CreateAsset("Plate", []string{shelf.ID}, nil, nil); !reflect.DeepEqual(a.ScanTemplate, models.ScanChoice{TemplateID: bins.ID}) {
+	if a, _ := st.CreateAsset("Plate", []string{shelf.ID}, nil, nil); !reflect.DeepEqual(a.ScanTemplate, models.TemplateChoice{TemplateID: bins.ID}) {
 		t.Errorf("the new default: %+v", a.ScanTemplate)
 	}
 }
