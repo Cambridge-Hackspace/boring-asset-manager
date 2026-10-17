@@ -9,6 +9,7 @@ const actionLabels: Record<ScanAction, string> = {
   borrow: 'Borrow it',
   return: 'Give it back',
   report: 'Report a problem',
+  actions: 'Its actions, such as Identify',
 };
 
 /** A quick action's name, as editors and previews show it. */

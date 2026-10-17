@@ -2,10 +2,11 @@
   import { onMount, untrack } from 'svelte';
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
-  import type { Condition, ReportResult } from '../lib/models';
+  import type { Condition, OfferedAction, ReportResult } from '../lib/models';
   import { scanActionLabel } from '../lib/scan';
   import { session } from '../lib/session.svelte';
   import AddToSpool from '../components/AddToSpool.svelte';
+  import ActionButtons from '../components/ActionButtons.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import ScanResult from '../components/ScanResult.svelte';
 
@@ -16,7 +17,7 @@
   const code = untrack(() => params.code ?? '');
 
   interface Scan {
-    asset: { id: string; name: string; counted: boolean; unit?: string };
+    asset: { id: string; name: string; counted: boolean; unit?: string; actions?: OfferedAction[] };
     template: { id: string; name: string };
     result: ReportResult;
   }
@@ -105,6 +106,8 @@
               </button>
             {:else if action === 'return'}
               <button type="button" class="btn-primary" disabled={busy} onclick={() => act(() => request('POST', `${path}/checkin`), 'Given back.')}>Give it back</button>
+            {:else if action === 'actions' && scan!.asset.actions?.length}
+              <ActionButtons assetId={scan!.asset.id} actions={scan!.asset.actions} />
             {:else if action === 'report'}
               <button type="button" class="btn-secondary" aria-expanded={reporting} onclick={() => (reporting = !reporting)}>Report a problem</button>
             {/if}

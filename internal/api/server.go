@@ -29,6 +29,7 @@ type Server struct {
 	photos     *filestore.Images
 	transport  printers.Transport
 	spool      *spooler
+	presses    *pressLimiter
 	httpServer *http.Server
 }
 
@@ -43,6 +44,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		photos:    filestore.NewPhotos(cfg.Storage.LocalPath),
 		transport: printers.NewDispatcher(cfg.Printers.Devices),
 		spool:     newSpooler(),
+		presses:   newPressLimiter(),
 	}
 
 	// Unauthenticated public endpoints
@@ -113,6 +115,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/categories/scan-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleScanConflicts)))
 	mux.Handle("PUT /api/v1/categories/{id}/label-template", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryLabelTemplate)))
 	mux.Handle("GET /api/v1/categories/label-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleLabelConflicts)))
+
+	// Actions on assets (README §5.4)
+	mux.Handle("GET /api/v1/actions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListActions)))
+	mux.Handle("POST /api/v1/actions", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveAction)))
+	mux.Handle("PUT /api/v1/actions/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveAction)))
+	mux.Handle("DELETE /api/v1/actions/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteAction)))
+	mux.Handle("GET /api/v1/categories/{id}/actions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryActions)))
+	mux.Handle("PUT /api/v1/categories/{id}/actions", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryActions)))
+	mux.Handle("POST /api/v1/assets/{id}/actions/{key}", RequirePermission(rbac.PermAssetsAct)(http.HandlerFunc(s.handlePressAction)))
 
 	// Reports: anyone who reads assets runs them; reports.manage edits them.
 	mux.Handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))

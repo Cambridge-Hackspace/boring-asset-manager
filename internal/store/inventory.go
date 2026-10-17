@@ -294,24 +294,36 @@ func (s *Store) recordEvent(tx *sql.Tx, kind, categoryID string, payload models.
 // recordAssetEvent stores an event about an asset, filling in the asset, its
 // unit and the acting user as they are now.
 func (s *Store) recordAssetEvent(tx *sql.Tx, kind, assetID string, payload models.EventPayload) error {
+	_, err := s.recordAssetEventID(tx, kind, assetID, payload)
+	return err
+}
+
+// recordAssetEventID is recordAssetEvent, returning the event's ID.
+func (s *Store) recordAssetEventID(tx *sql.Tx, kind, assetID string, payload models.EventPayload) (string, error) {
 	a := models.EventAsset{ID: assetID}
 	err := s.TxQueryRow(tx, "SELECT name, stock_unit FROM assets WHERE id = ?", assetID).Scan(&a.Name, &payload.Unit)
 	if err != nil {
-		return fmt.Errorf("reading asset for event: %w", err)
+		return "", fmt.Errorf("reading asset for event: %w", err)
 	}
 	payload.Asset = &a
-	return s.insertEvent(tx, kind, nil, &assetID, payload)
+	return s.insertEventID(tx, kind, nil, &assetID, payload)
 }
 
 // insertEvent stores an event about a category or an asset, filling in the
 // acting user, and queues its deliveries.
 func (s *Store) insertEvent(tx *sql.Tx, kind string, categoryID, assetID *string, payload models.EventPayload) error {
+	_, err := s.insertEventID(tx, kind, categoryID, assetID, payload)
+	return err
+}
+
+// insertEventID is insertEvent, returning the event's ID.
+func (s *Store) insertEventID(tx *sql.Tx, kind string, categoryID, assetID *string, payload models.EventPayload) (string, error) {
 	var actorID *string
 	if s.actor != "" {
 		actor := models.EventActor{ID: s.actor}
 		err := s.TxQueryRow(tx, "SELECT email, name FROM users WHERE id = ?", s.actor).Scan(&actor.Email, &actor.Name)
 		if err != nil && err != sql.ErrNoRows {
-			return fmt.Errorf("reading user for event: %w", err)
+			return "", fmt.Errorf("reading user for event: %w", err)
 		}
 		payload.Actor = &actor
 		actorID = &actor.ID
@@ -320,26 +332,26 @@ func (s *Store) insertEvent(tx *sql.Tx, kind string, categoryID, assetID *string
 		actor := models.EventActor{ID: s.actorToken, Token: true}
 		err := s.TxQueryRow(tx, "SELECT name FROM api_tokens WHERE id = ?", s.actorToken).Scan(&actor.Name)
 		if err != nil && err != sql.ErrNoRows {
-			return fmt.Errorf("reading token for event: %w", err)
+			return "", fmt.Errorf("reading token for event: %w", err)
 		}
 		payload.Actor = &actor
 	}
 
 	raw, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("encoding event: %w", err)
+		return "", fmt.Errorf("encoding event: %w", err)
 	}
 	id, now := uuid.NewString(), dbTime(time.Now())
 	_, err = s.TxExec(tx, "INSERT INTO events (id, kind, category_id, asset_id, actor_user_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		id, kind, categoryID, assetID, actorID, string(raw), now)
 	if err != nil {
-		return fmt.Errorf("recording event: %w", err)
+		return "", fmt.Errorf("recording event: %w", err)
 	}
 	if models.HistoryOnly(kind) {
 		// History only: no channel can subscribe to it.
-		return nil
+		return id, nil
 	}
-	return s.fanOut(tx, id, kind, now)
+	return id, s.fanOut(tx, id, kind, now)
 }
 
 // setFlagByHand records a manual change of a category's flag within ic,

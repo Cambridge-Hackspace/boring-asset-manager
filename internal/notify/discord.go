@@ -241,6 +241,15 @@ func discordPayload(n Notification) discordMessage {
 			embed.Description += ", due back " + p.DueAt.UTC().Format("2 January 2006") + " (UTC)"
 		}
 		embed.Description += "."
+	case e.Kind == models.EventAssetAction:
+		label := "Action"
+		if p.Action != nil {
+			label = p.Action.Label
+		}
+		embed.Title, embed.Color = escapeMarkdown(truncate(label, 100))+": "+name, discordNeutral
+		if by != "" {
+			embed.Description = "Pressed by " + by + "."
+		}
 	default:
 		embed.Title = truncate(e.Kind, 200)
 		embed.Color = discordNeutral

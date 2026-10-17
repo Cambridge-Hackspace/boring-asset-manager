@@ -29,6 +29,7 @@ import SpoolPage from './views/SpoolPage.svelte';
 import ScanPage from './views/ScanPage.svelte';
 import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
+import ActionsPage from './views/ActionsPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -63,6 +64,7 @@ export const routes: Route[] = [
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets.read'] },
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields' },
   { pattern: '/relations', component: RelationsPage, title: 'Relations', permissions: ['categories.manage'], nav: 'Relations' },
+  { pattern: '/actions', component: ActionsPage, title: 'Actions', permissions: ['categories.manage'], nav: 'Actions' },
   { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates.manage'], nav: 'Templates' },
   { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates.manage'] },
   { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates.manage'] },

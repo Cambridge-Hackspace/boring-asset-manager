@@ -354,6 +354,7 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	}
 	details.Scopes = traits.scopesOf(catIDs)
 	details.LabelTemplate = traits.chooseLabel(catIDs)
+	details.Actions = traits.offered(catIDs)
 	if details.ScanTemplate, err = s.contextScan(ctx, catIDs); err != nil {
 		return nil, err
 	}
