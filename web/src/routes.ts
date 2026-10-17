@@ -1,8 +1,10 @@
 // The app's pages, in navigation order. Entries with a nav label appear in
-// the main navigation for users holding one of their permissions.
+// the main navigation for users holding one of their permissions, under
+// their group if they have one (lib/nav.ts).
 
 import type { Component } from 'svelte';
 import type { Permission } from './lib/models';
+import type { NavGroup } from './lib/nav';
 import Home from './views/Home.svelte';
 import AssetsPage from './views/assets/AssetsPage.svelte';
 import AssetPage from './views/assets/AssetPage.svelte';
@@ -39,6 +41,8 @@ export interface Route {
   permissions?: Permission[];
   /** The label in the main navigation, if the page is listed there. */
   nav?: string;
+  /** The navigation group it is listed under; none puts it on its own. */
+  group?: NavGroup;
   /** Signed-out visitors may open it too, when the public role allows (README §3.3). */
   public?: boolean;
 }
@@ -51,29 +55,29 @@ export const routes: Route[] = [
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'], public: true },
   { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
+  { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
+  { pattern: '/spool', component: SpoolPage, title: 'Spool', permissions: ['labels.print'], nav: 'Spool' },
   { pattern: '/reports', component: ReportsPage, title: 'Reports', permissions: ['assets.read'], nav: 'Reports' },
   { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports.manage'] },
   { pattern: '/reports/:id', component: ReportView, title: 'Report', permissions: ['assets.read'] },
   { pattern: '/reports/:id/edit', component: ReportEditor, title: 'Edit report', permissions: ['reports.manage'] },
   { pattern: '/scan-templates/new', component: ScanTemplateEditor, title: 'New scan template', permissions: ['reports.manage'] },
   { pattern: '/scan-templates/:id/edit', component: ScanTemplateEditor, title: 'Edit scan template', permissions: ['reports.manage'] },
-  { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
-  { pattern: '/spool', component: SpoolPage, title: 'Spool', permissions: ['labels.print'], nav: 'Spool' },
-  { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets.read'], nav: 'Categories' },
+  { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets.read'], nav: 'Categories', group: 'Catalog' },
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories.manage'] },
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets.read'] },
-  { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields' },
-  { pattern: '/relations', component: RelationsPage, title: 'Relations', permissions: ['categories.manage'], nav: 'Relations' },
-  { pattern: '/actions', component: ActionsPage, title: 'Actions', permissions: ['categories.manage'], nav: 'Actions' },
-  { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates.manage'], nav: 'Templates' },
+  { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields', group: 'Catalog' },
+  { pattern: '/relations', component: RelationsPage, title: 'Relations', permissions: ['categories.manage'], nav: 'Relations', group: 'Catalog' },
+  { pattern: '/actions', component: ActionsPage, title: 'Actions', permissions: ['categories.manage'], nav: 'Actions', group: 'Catalog' },
+  { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates.manage'], nav: 'Templates', group: 'Labels' },
   { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates.manage'] },
   { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates.manage'] },
-  { pattern: '/images', component: ImagesPage, title: 'Images', permissions: ['templates.manage'], nav: 'Images' },
-  { pattern: '/printers', component: PrintersPage, title: 'Printers', permissions: ['settings.manage', 'labels.print'], nav: 'Printers' },
-  { pattern: '/notifications', component: NotificationsPage, title: 'Notifications', permissions: ['settings.manage'], nav: 'Notifications' },
-  { pattern: '/users', component: UsersPage, title: 'Users', permissions: ['users.manage'], nav: 'Users' },
-  { pattern: '/roles', component: RolesPage, title: 'Roles', permissions: ['users.manage'], nav: 'Roles' },
-  { pattern: '/tokens', component: TokensPage, title: 'API tokens', permissions: ['users.manage'], nav: 'API tokens' },
+  { pattern: '/images', component: ImagesPage, title: 'Images', permissions: ['templates.manage'], nav: 'Images', group: 'Labels' },
+  { pattern: '/printers', component: PrintersPage, title: 'Printers', permissions: ['settings.manage', 'labels.print'], nav: 'Printers', group: 'Labels' },
+  { pattern: '/users', component: UsersPage, title: 'Users', permissions: ['users.manage'], nav: 'Users', group: 'Admin' },
+  { pattern: '/roles', component: RolesPage, title: 'Roles', permissions: ['users.manage'], nav: 'Roles', group: 'Admin' },
+  { pattern: '/tokens', component: TokensPage, title: 'API tokens', permissions: ['users.manage'], nav: 'API tokens', group: 'Admin' },
+  { pattern: '/notifications', component: NotificationsPage, title: 'Notifications', permissions: ['settings.manage'], nav: 'Notifications', group: 'Admin' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },
   // Help is for everyone, signed in or not (README §6.5).
   { pattern: '/help', component: HelpPage, title: 'Help', public: true },

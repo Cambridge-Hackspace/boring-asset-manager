@@ -3,19 +3,19 @@
   import { router } from './lib/router.svelte';
   import { displayName } from './lib/people';
   import { helpFor } from './lib/help';
+  import { isCurrent, navSections } from './lib/nav';
   import { session, signInPath } from './lib/session.svelte';
   import { routes } from './routes';
+  import NavMenu from './components/NavMenu.svelte';
 
   let { children }: { children: Snippet } = $props();
 
-  const navItems = $derived(
+  const sections = $derived(
     // Signed out, nothing: the public see single pages, not the catalog.
-    routes.filter((r) => r.nav && !!session.user && (!r.permissions || session.canAny(...r.permissions))),
+    session.user ? navSections(routes, (...p) => session.canAny(...p)) : [],
   );
 
-  function current(pattern: string): boolean {
-    return pattern === '/' ? router.path === '/' : router.path === pattern || router.path.startsWith(pattern + '/');
-  }
+  const itemClass = 'rounded-md px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800';
 
   let main: HTMLElement | undefined = $state();
   // Move focus to the page after navigating, so screen readers announce it.
@@ -37,14 +37,20 @@
   <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
     <a href="/" class="text-lg font-black tracking-tight">BAM!</a>
     <nav aria-label="Main" class="flex flex-1 flex-wrap gap-1">
-      {#each navItems as item (item.pattern)}
-        <a
-          href={item.pattern}
-          aria-current={current(item.pattern) ? 'page' : undefined}
-          class="rounded-md px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 aria-[current=page]:bg-zinc-900 aria-[current=page]:text-white dark:hover:bg-zinc-800 dark:aria-[current=page]:bg-zinc-100 dark:aria-[current=page]:text-zinc-900"
-        >
-          {item.nav}
-        </a>
+      {#each sections as section (section.group ?? '')}
+        {#if section.group && section.links.length > 1}
+          <NavMenu label={section.group} links={section.links} {itemClass} />
+        {:else}
+          {#each section.links as link (link.href)}
+            <a
+              href={link.href}
+              aria-current={isCurrent(link.href, router.path) ? 'page' : undefined}
+              class="{itemClass} aria-[current=page]:bg-zinc-900 aria-[current=page]:text-white dark:aria-[current=page]:bg-zinc-100 dark:aria-[current=page]:text-zinc-900"
+            >
+              {link.label}
+            </a>
+          {/each}
+        {/if}
       {/each}
     </nav>
     <div class="flex items-center gap-3 text-sm">

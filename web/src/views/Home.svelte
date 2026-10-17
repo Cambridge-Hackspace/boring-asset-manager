@@ -3,6 +3,7 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import type { AssetWithDetails, Category } from '../lib/models';
+  import { navSections, type NavLink } from '../lib/nav';
   import { displayName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
@@ -12,7 +13,7 @@
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
-  const sections = $derived(routes.filter((r) => r.nav && (!r.permissions || session.canAny(...r.permissions))));
+  const sections = $derived(navSections(routes, (...p) => session.canAny(...p)));
 
   let low = $state<Category[] | null>(null);
   let lowAssets = $state<AssetWithDetails[]>([]);
@@ -72,10 +73,21 @@
   </section>
 {/if}
 
-{#if sections.length}
-  <ul class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-    {#each sections as section (section.pattern)}
-      <li><a class="card block font-medium hover:border-zinc-400" href={section.pattern}>{section.nav}</a></li>
+{#snippet cards(links: NavLink[])}
+  <ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {#each links as link (link.href)}
+      <li><a class="card block font-medium hover:border-zinc-400" href={link.href}>{link.label}</a></li>
     {/each}
   </ul>
-{/if}
+{/snippet}
+
+{#each sections as section (section.group ?? '')}
+  {#if section.group}
+    <section class="mt-6" aria-labelledby="nav-{section.group.toLowerCase()}-heading">
+      <h2 id="nav-{section.group.toLowerCase()}-heading" class="mb-2 text-lg font-semibold">{section.group}</h2>
+      {@render cards(section.links)}
+    </section>
+  {:else}
+    <div class="mt-6">{@render cards(section.links)}</div>
+  {/if}
+{/each}

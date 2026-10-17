@@ -130,6 +130,12 @@ for (const scheme of ['light', 'dark'] as const) {
       await audit(page, `/spool ${tab} (${scheme})`);
     }
 
+    // A navigation menu, open.
+    await page.goto('/');
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Admin' }).click();
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Roles' })).toBeVisible();
+    await audit(page, `/ with the Admin menu open (${scheme})`);
+
     await page.context().clearCookies();
     await page.goto('/sign-in');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
@@ -188,4 +194,49 @@ test('keyboard only: confirm buttons keep focus where it belongs', async ({ sign
   await page.keyboard.press('Tab');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeFocused();
+});
+
+test('keyboard only: the navigation menus open, close, and lead to their pages', async ({ signedIn: page }) => {
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  const admin = nav.getByRole('button', { name: 'Admin' });
+  await admin.focus();
+  await page.keyboard.press('Enter');
+  await expect(admin).toHaveAttribute('aria-expanded', 'true');
+  // The menu's links follow its button.
+  await page.keyboard.press('Tab');
+  await expect(nav.getByRole('link', { name: 'Users' })).toBeFocused();
+  // Escape closes it and returns to the button.
+  await page.keyboard.press('Escape');
+  await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0);
+  await expect(admin).toBeFocused();
+
+  // Tabbing out of an open menu closes it.
+  await page.keyboard.press('Enter');
+  for (let i = 0; i < 5; i++) await page.keyboard.press('Tab');
+  await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0);
+
+  // A link goes to its page, closes the menu, and marks the menu current.
+  await admin.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(nav.getByRole('link', { name: 'Roles' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Roles');
+  await expect(admin).toHaveAttribute('aria-expanded', 'false');
+  await expect(admin).toHaveAttribute('data-current', 'true');
+});
+
+test('the home page lists the same pages, in the same groups', async ({ signedIn: page }) => {
+  await page.goto('/');
+  const main = page.locator('#main');
+  for (const [group, links] of [
+    ['Catalog', ['Categories', 'Fields', 'Relations', 'Actions']],
+    ['Labels', ['Templates', 'Images', 'Printers']],
+    ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications']],
+  ] as const) {
+    const section = main.getByRole('region', { name: group });
+    await expect(section.getByRole('link')).toHaveText([...links]);
+  }
 });
