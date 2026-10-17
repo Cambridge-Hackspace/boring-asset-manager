@@ -151,6 +151,10 @@ su -m bam -c "bam admin create --config /usr/local/etc/bam/config.toml \
 
 The data lives in `/var/db/bam`, which the rc script creates. BAM runs under `daemon(8)`, which logs to syslog with the tag `bam` (`/var/log/messages`). The script's settings, all optional, are listed at its top (`bam_config`, `bam_user`, `bam_dbdir`, and `bam_env` for environment overrides); set them with `sysrc`. To use printers on device files, give the `bam` account write access to them (a `devfs.rules` entry) and list them under `[printers]`. To upgrade, replace `/usr/local/bin/bam` and run `service bam restart`.
 
+#### Windows
+
+Releases include `bam-windows-amd64.exe` (or build it with `tools/release/build.sh windows/amd64`). There is no service packaging or updater for Windows: from a folder of its own, run `bam init` to write a `config.toml` there, set `base_url` and the paths in it, then `bam migrate`, `bam admin create --email … --password …` and `bam serve`, under whatever keeps it running (Task Scheduler at startup, or a service wrapper such as NSSM). Printers can use the `windows` connection, through the spooler (§4.4).
+
 #### The reverse proxy
 
 The example configurations listen on `127.0.0.1:8080` and expect an HTTPS address in `base_url`, which also marks session cookies `Secure`. Any reverse proxy will do. With Caddy, which obtains a certificate itself:
