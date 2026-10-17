@@ -54,3 +54,38 @@ test('gather labels in the spool, sort them, and download them', async ({ signed
   await page.getByRole('link', { name: bins[0]! }).click();
   await expect(page.getByText(`Downloaded its label (${templateName})`)).toBeVisible();
 });
+
+// Printing from the spool goes out in the background, a job per printer
+// and template, and the Jobs list follows it to the end.
+test('print a group from the spool to a printer', async ({ signedIn: page, api, printer }) => {
+  const templateName = unique('Rollo 2x1');
+  const { template } = await api.call('POST', '/templates', {
+    name: templateName, units: 'in', width: 2, height: 1, dpi: 203,
+    elements: [{ type: 'text', x: 0.1, y: 0.2, width: 1.8, height: 0.5, font_size: 12, content_binding: '{{asset.name}}' }],
+  });
+  const printerName = unique('Rollo');
+  const created = await api.call('POST', '/printers', {
+    name: printerName, driver: 'tspl', model: 'Rollo X1038', media: '2x1', connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` },
+  });
+  const names = [unique('Bolt'), unique('Nut')];
+  const ids: string[] = [];
+  for (const name of names) ids.push((await api.call('POST', '/assets', { name })).asset.asset.id);
+  await api.call('POST', '/spool', { asset_ids: ids, template_id: template.id, destination: `printer:${created.printer.id}`, copies: 2 });
+
+  await goTo(page, 'Spool');
+  const group = page.getByRole('region', { name: new RegExp(`${printerName} · ${templateName} · 2 labels`) });
+  await group.getByRole('button', { name: 'Print 4 labels' }).click();
+  await expect(page.getByText('Sent 4 labels to print in 1 job.')).toBeVisible();
+
+  // One job, each label printed twice.
+  const job = (await printer.job()).toString('latin1');
+  expect(job.match(/PRINT 1,2\r\n/g)).toHaveLength(2);
+  await expect(group).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Jobs' }).click();
+  const row = page.getByRole('row').filter({ hasText: printerName });
+  await expect(row).toContainText('Printed');
+  await expect(row).toContainText(templateName);
+  await page.getByRole('button', { name: 'Printed' }).click();
+  for (const name of names) await expect(page.getByRole('row').filter({ hasText: name })).toContainText(printerName);
+});

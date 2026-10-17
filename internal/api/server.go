@@ -28,6 +28,7 @@ type Server struct {
 	images     *filestore.Images
 	photos     *filestore.Images
 	transport  printers.Transport
+	spool      *spooler
 	httpServer *http.Server
 }
 
@@ -41,6 +42,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		images:    filestore.NewImages(cfg.Storage.LocalPath),
 		photos:    filestore.NewPhotos(cfg.Storage.LocalPath),
 		transport: printers.NewDispatcher(cfg.Printers.Devices),
+		spool:     newSpooler(),
 	}
 
 	// Unauthenticated public endpoints
@@ -188,13 +190,17 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
 
 	// The spool, a print queue for labels (README §6.2)
-	spool := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermLabelsPrint)(h) }
-	mux.Handle("GET /api/v1/spool", spool(s.handleListSpool))
-	mux.Handle("POST /api/v1/spool", spool(s.handleAddToSpool))
-	mux.Handle("PATCH /api/v1/spool", spool(s.handleUpdateSpool))
-	mux.Handle("POST /api/v1/spool/remove", spool(s.handleRemoveFromSpool))
-	mux.Handle("POST /api/v1/spool/requeue", spool(s.handleRequeueSpool))
-	mux.Handle("POST /api/v1/spool/download", spool(s.handleDownloadSpool))
+	printing := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermLabelsPrint)(h) }
+	mux.Handle("GET /api/v1/spool", printing(s.handleListSpool))
+	mux.Handle("POST /api/v1/spool", printing(s.handleAddToSpool))
+	mux.Handle("PATCH /api/v1/spool", printing(s.handleUpdateSpool))
+	mux.Handle("POST /api/v1/spool/remove", printing(s.handleRemoveFromSpool))
+	mux.Handle("POST /api/v1/spool/requeue", printing(s.handleRequeueSpool))
+	mux.Handle("POST /api/v1/spool/download", printing(s.handleDownloadSpool))
+	mux.Handle("POST /api/v1/spool/print", printing(s.handlePrintSpool))
+	mux.Handle("GET /api/v1/spool/jobs", printing(s.handleListSpoolJobs))
+	mux.Handle("POST /api/v1/spool/jobs/{id}/cancel", printing(s.handleCancelSpoolJob))
+	mux.Handle("POST /api/v1/spool/jobs/{id}/resend", printing(s.handleResendSpoolJob))
 
 	// Notification channels (README §5.2)
 	manage := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermSettingsManage)(h) }

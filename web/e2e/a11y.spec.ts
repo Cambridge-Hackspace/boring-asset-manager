@@ -62,6 +62,11 @@ for (const scheme of ['light', 'dark'] as const) {
     // Labels waiting in the spool, one ready and one with problems.
     await post('/spool', { asset_ids: [asset.asset.asset.id], template_id: template.id, destination: 'download' });
     await post('/spool', { asset_ids: [box.asset.asset.id] });
+    // And one downloaded, for the Jobs and Printed views.
+    await post('/spool', { asset_ids: [screws.asset.asset.id], template_id: template.id, destination: 'download' });
+    const { entries } = await (await request.get('/api/v1/spool')).json();
+    const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
+    await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
     const views: [string, string][] = [
       ['/', 'Welcome'],
       ['/assets', 'Assets'],
@@ -107,6 +112,14 @@ for (const scheme of ['light', 'dark'] as const) {
       else await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await page.waitForLoadState('networkidle');
       await audit(page, `${path} (${scheme})`);
+    }
+
+    // The spool's other views are tabs of one page.
+    for (const tab of ['Jobs', 'Printed']) {
+      await page.goto('/spool');
+      await page.getByRole('button', { name: tab }).click();
+      await page.waitForLoadState('networkidle');
+      await audit(page, `/spool ${tab} (${scheme})`);
     }
 
     await page.context().clearCookies();

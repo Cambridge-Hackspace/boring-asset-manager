@@ -197,7 +197,12 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.transport.Send(r.Context(), p.Connection, job); err != nil {
+	// The printer's turn, so a job from the spool never interleaves.
+	turn := s.printerTurn(p.ID)
+	turn.Lock()
+	err = s.transport.Send(r.Context(), p.Connection, job)
+	turn.Unlock()
+	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
 		return
 	}

@@ -125,6 +125,8 @@ func Serve(configPath string) error {
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
 	go (&notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL}).Run(workerCtx)
+	// Print jobs from the spool until the server stops.
+	go server.RunSpool(workerCtx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

@@ -155,6 +155,11 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/spool/download", body: `{"entry_ids":["{spool}"],"format":"pdf"}`},
 	{method: "POST", path: "/api/v1/spool/download", body: `{"entry_ids":["{spool}"],"format":"zip","mono":true}`},
 	{method: "POST", path: "/api/v1/spool/requeue", body: `{"entry_ids":["{spool}"]}`},
+	{method: "POST", path: "/api/v1/spool/print", body: `{}`},
+	{method: "POST", path: "/api/v1/spool/print", body: `{"entry_ids":["{spool}"]}`},
+	{method: "GET", path: "/api/v1/spool/jobs", query: map[string][]string{"older": {"true", ""}}},
+	{method: "POST", path: "/api/v1/spool/jobs/{job}/cancel"},
+	{method: "POST", path: "/api/v1/spool/jobs/{job}/resend", body: `{"destination":"download"}`},
 	{method: "POST", path: "/api/v1/spool/remove", body: `{"entry_ids":["{spool}"]}`},
 	{method: "GET", path: "/api/v1/notifiers/drivers"},
 	{method: "GET", path: "/api/v1/notifiers/deliveries"},
@@ -290,6 +295,8 @@ func kindOf(path string) string {
 		return "user"
 	case "/api/v1/spool":
 		return "spool"
+	case "/api/v1/spool/print":
+		return "job"
 	}
 	return ""
 }
@@ -335,7 +342,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {
