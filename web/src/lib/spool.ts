@@ -39,7 +39,7 @@ export interface SpoolGroup {
   entries: SpoolEntry[];
 }
 
-/** Groups entries by destination and template: printers in name order, then downloads, then entries with nowhere to go. */
+/** Groups entries by destination and template: printers and pools in name order, then downloads, then entries with nowhere to go. */
 export function groupEntries(spool: Spool): SpoolGroup[] {
   const groups = new Map<string, SpoolGroup>();
   for (const e of spool.entries) {
@@ -47,15 +47,24 @@ export function groupEntries(spool: Spool): SpoolGroup[] {
     if (!groups.has(key)) groups.set(key, { key, destination: e.destination, templateId: e.template_id, entries: [] });
     groups.get(key)!.entries.push(e);
   }
-  const rank = (g: SpoolGroup) => (g.destination.startsWith('printer:') ? 0 : g.destination === 'download' ? 1 : 2);
+  const rank = (g: SpoolGroup) => (printing(g.destination) ? 0 : g.destination === 'download' ? 1 : 2);
   const title = (g: SpoolGroup) => `${destinationName(spool, g.destination)} ${templateName(spool, g.templateId)}`;
   return [...groups.values()].sort((a, b) => rank(a) - rank(b) || title(a).localeCompare(title(b)));
 }
 
-/** A destination's name: its printer's, "Download", or that none is chosen. */
-export function destinationName(spool: Pick<Spool, 'printers'>, destination: SpoolDestination): string {
+/** Whether a destination is a printer or a pool, which print jobs go to. */
+export function printing(destination: string): boolean {
+  return destination.startsWith('printer:') || destination.startsWith('pool:');
+}
+
+/** A destination's name: its printer's or pool's, "Download", or that none is chosen. */
+export function destinationName(spool: Pick<Spool, 'printers' | 'pools'>, destination: SpoolDestination): string {
   if (destination === 'download') return 'Download';
   if (!destination) return 'No printer chosen';
+  if (destination.startsWith('pool:')) {
+    const id = destination.slice('pool:'.length);
+    return spool.pools.find((p) => p.id === id)?.name ?? 'A deleted pool';
+  }
   const id = destination.slice('printer:'.length);
   return spool.printers.find((p) => p.id === id)?.name ?? 'A deleted printer';
 }
@@ -72,8 +81,19 @@ export function printersFor(spool: Spool, templateId: string | null | undefined)
   return spool.printers.filter((p) => fit.has(p.id));
 }
 
-/** The templates entries going to this destination can take: those that suit its printer, or every template. */
+/** The pools entries with this template can go to: those with a printer it suits, or every pool when it is not known. */
+export function poolsFor(spool: Spool, templateId: string | null | undefined): Spool['pools'] {
+  if (!templateId) return spool.pools;
+  const fit = new Set(spool.pool_fits[templateId] ?? []);
+  return spool.pools.filter((p) => fit.has(p.id));
+}
+
+/** The templates entries going to this destination can take: those that suit its printer or pool, or every template. */
 export function templatesFor(spool: Spool, destination: SpoolDestination | undefined): Spool['templates'] {
+  if (destination?.startsWith('pool:')) {
+    const id = destination.slice('pool:'.length);
+    return spool.templates.filter((t) => (spool.pool_fits[t.id] ?? []).includes(id));
+  }
   if (!destination?.startsWith('printer:')) return spool.templates;
   const id = destination.slice('printer:'.length);
   return spool.templates.filter((t) => (spool.fits[t.id] ?? []).includes(id));
@@ -115,7 +135,7 @@ export function printedMessage(r: SpoolPrintResult): string {
       : 'Nothing was ready to print',
   ];
   if (r.skipped.length) parts.push(`${labels(r.skipped.length)} left out: ${r.skipped.map((s) => `${s.asset_name} (${s.reason})`).join(', ')}`);
-  return parts.join('; ') + '.';
+  return [parts.join('; ') + '.', ...(r.warnings ?? []).map((w) => w + '.')].join(' ');
 }
 
 /** A job's state, as the jobs list says it. */

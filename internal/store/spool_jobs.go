@@ -26,20 +26,25 @@ var (
 	ErrSpoolBatchGiven = errors.New("the batch was given up as abandoned")
 )
 
-// SpoolJobNew is a job to make: entries to print with one template on one
-// printer.
+// SpoolJobNew is a job to make: entries to print with one template, on one
+// printer, or with PoolID set, shared by a pool's Members in batches of
+// BatchSize labels.
 type SpoolJobNew struct {
 	TemplateID, TemplateName string
 	PrinterID, PrinterName   string
+	PoolID, PoolName         string
+	Members                  []PoolJobMember
+	BatchSize                int
 	EntryIDs                 []string
 }
 
-// SpoolBatch is a batch claimed to send: its job's template, who asked for
-// it, the printer, and its entries.
+// SpoolBatch is a batch claimed to send: its job's template and pool, who
+// asked for it, the printer, and its entries.
 type SpoolBatch struct {
 	ID, JobID      string
 	TemplateID     *string
 	TemplateName   string
+	PoolID         string
 	PrinterID      string
 	CreatedBy      string
 	CreatedByToken bool
@@ -57,8 +62,10 @@ func (s *Store) actorColumns() (id any, token bool) {
 	return s.actorID(), s.actor == "" && s.actorToken != ""
 }
 
-// CreateSpoolJobs makes jobs to print waiting entries, each a single batch
-// on its printer, all or none.
+// CreateSpoolJobs makes jobs to print waiting entries, all or none: a job
+// on a printer is a single batch; a pool's is cut into batches, those for
+// members that do not pull given to them by their shares, and the rest left
+// for whichever pulling member is free first.
 func (s *Store) CreateSpoolJobs(jobs []SpoolJobNew) ([]string, error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -75,29 +82,102 @@ func (s *Store) CreateSpoolJobs(jobs []SpoolJobNew) ([]string, error) {
 		if err := s.waitingIn(tx, j.EntryIDs); err != nil {
 			return nil, err
 		}
-		labels, err := s.copiesOf(tx, j.EntryIDs)
+		entries, err := s.entryCopies(tx, j.EntryIDs)
 		if err != nil {
 			return nil, err
 		}
-		jobID, batchID := uuid.NewString(), uuid.NewString()
+		labels := 0
+		for _, e := range entries {
+			labels += e.Copies
+		}
+		jobID := uuid.NewString()
 		// A microsecond apart, so they are sent in the order made.
 		at := now.Add(time.Duration(i) * time.Microsecond)
-		_, err = s.TxExec(tx, `INSERT INTO spool_jobs (id, template_id, template_name, printer_id, target_name, state, labels, created_by, created_by_token, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, jobID, j.TemplateID, j.TemplateName, j.PrinterID, j.PrinterName, models.SpoolWaiting, labels, by, byToken, at)
+		var printerID, poolID any
+		target := j.PrinterName
+		if j.PoolID != "" {
+			poolID, target = j.PoolID, j.PoolName
+		} else {
+			printerID = j.PrinterID
+		}
+		_, err = s.TxExec(tx, `INSERT INTO spool_jobs (id, template_id, template_name, printer_id, pool_id, target_name, state, labels, created_by, created_by_token, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, jobID, j.TemplateID, j.TemplateName, printerID, poolID, target, models.SpoolWaiting, labels, by, byToken, at)
 		if err != nil {
 			return nil, fmt.Errorf("making a print job: %w", err)
 		}
-		_, err = s.TxExec(tx, `INSERT INTO spool_batches (id, job_id, seq, printer_id, printer_name, state, labels) VALUES (?, ?, 0, ?, ?, ?, ?)`,
-			batchID, jobID, j.PrinterID, j.PrinterName, models.SpoolWaiting, labels)
-		if err != nil {
-			return nil, fmt.Errorf("making a print job: %w", err)
+		if j.PoolID == "" {
+			if err := s.insertBatch(tx, jobID, 0, &j.PrinterID, j.PrinterName, entries); err != nil {
+				return nil, err
+			}
+			ids = append(ids, jobID)
+			continue
 		}
-		if err := s.setBatch(tx, j.EntryIDs, batchID); err != nil {
-			return nil, err
+		for _, m := range j.Members {
+			if _, err := s.TxExec(tx, "INSERT INTO spool_job_members (job_id, printer_id, pulls) VALUES (?, ?, ?)", jobID, m.PrinterID, m.Pulls); err != nil {
+				return nil, fmt.Errorf("making a print job: %w", err)
+			}
+		}
+		batches := cutBatches(entries, j.BatchSize)
+		picks := shareOut(j.Members, len(batches))
+		for n, batch := range batches {
+			m := j.Members[picks[n]]
+			if m.Pulls {
+				err = s.insertBatch(tx, jobID, n, nil, "", batch)
+			} else {
+				err = s.insertBatch(tx, jobID, n, &m.PrinterID, m.PrinterName, batch)
+			}
+			if err != nil {
+				return nil, err
+			}
 		}
 		ids = append(ids, jobID)
 	}
 	return ids, tx.Commit()
+}
+
+// entryCopies reads entries' copies, in the order of ids, within tx.
+func (s *Store) entryCopies(tx *sql.Tx, ids []string) ([]SpoolBatchEntry, error) {
+	byID := map[string]SpoolBatchEntry{}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.TxQuery(tx, "SELECT id, asset_id, copies FROM spool_entries WHERE id IN ("+placeholders(len(ids))+")", args...)
+	if err != nil {
+		return nil, fmt.Errorf("reading labels: %w", err)
+	}
+	for rows.Next() {
+		var e SpoolBatchEntry
+		if err := rows.Scan(&e.ID, &e.AssetID, &e.Copies); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		byID[e.ID] = e
+	}
+	rows.Close()
+	out := make([]SpoolBatchEntry, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, byID[id])
+	}
+	return out, rows.Err()
+}
+
+// insertBatch makes a waiting batch of entries, for a printer or, with
+// none, for a pool's members to take, within tx.
+func (s *Store) insertBatch(tx *sql.Tx, jobID string, seq int, printerID *string, printerName string, entries []SpoolBatchEntry) error {
+	labels := 0
+	ids := make([]string, len(entries))
+	for i, e := range entries {
+		labels += e.Copies
+		ids[i] = e.ID
+	}
+	batchID := uuid.NewString()
+	_, err := s.TxExec(tx, `INSERT INTO spool_batches (id, job_id, seq, printer_id, printer_name, state, labels) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		batchID, jobID, seq, printerID, printerName, models.SpoolWaiting, labels)
+	if err != nil {
+		return fmt.Errorf("making a print job: %w", err)
+	}
+	return s.setBatch(tx, ids, batchID)
 }
 
 // copiesOf totals entries' copies, within tx.
@@ -210,11 +290,16 @@ func (s *Store) ClaimSpoolBatch(printerID string) (*SpoolBatch, error) {
 		return nil, nil
 	}
 	b := &SpoolBatch{PrinterID: printerID}
-	var template, createdBy sql.NullString
-	err = s.TxQueryRow(tx, `SELECT b.id, b.job_id, j.template_id, j.template_name, j.created_by, j.created_by_token
+	var template, createdBy, pool sql.NullString
+	// Its own batches, or a pool's no printer holds, when it is still in
+	// that job: one that pulls, or any member once no puller is left.
+	err = s.TxQueryRow(tx, `SELECT b.id, b.job_id, j.template_id, j.template_name, j.created_by, j.created_by_token, j.pool_id
 		FROM spool_batches b JOIN spool_jobs j ON j.id = b.job_id
-		WHERE b.printer_id = ? AND b.state = ? ORDER BY j.created_at, j.id, b.seq LIMIT 1`, printerID, models.SpoolWaiting).
-		Scan(&b.ID, &b.JobID, &template, &b.TemplateName, &createdBy, &b.CreatedByToken)
+		WHERE b.state = ? AND (b.printer_id = ? OR (b.printer_id IS NULL AND EXISTS (
+			SELECT 1 FROM spool_job_members m WHERE m.job_id = b.job_id AND m.printer_id = ? AND m.dropped = FALSE
+			AND (m.pulls = TRUE OR NOT EXISTS (SELECT 1 FROM spool_job_members p WHERE p.job_id = b.job_id AND p.pulls = TRUE AND p.dropped = FALSE)))))
+		ORDER BY j.created_at, j.id, b.seq LIMIT 1`, models.SpoolWaiting, printerID, printerID).
+		Scan(&b.ID, &b.JobID, &template, &b.TemplateName, &createdBy, &b.CreatedByToken, &pool)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -224,9 +309,11 @@ func (s *Store) ClaimSpoolBatch(printerID string) (*SpoolBatch, error) {
 	if template.Valid {
 		b.TemplateID = &template.String
 	}
-	b.CreatedBy = createdBy.String
+	b.CreatedBy, b.PoolID = createdBy.String, pool.String
 	now := dbTime(time.Now())
-	if _, err := s.TxExec(tx, "UPDATE spool_batches SET state = ?, started_at = ?, heartbeat_at = ? WHERE id = ?", models.SpoolSending, now, now, b.ID); err != nil {
+	_, err = s.TxExec(tx, `UPDATE spool_batches SET state = ?, started_at = ?, heartbeat_at = ?, printer_id = ?,
+		printer_name = (SELECT name FROM printers WHERE id = ?) WHERE id = ?`, models.SpoolSending, now, now, printerID, printerID, b.ID)
+	if err != nil {
 		return nil, fmt.Errorf("claiming a batch: %w", err)
 	}
 	if err := s.updateJobState(tx, b.JobID); err != nil {
@@ -268,6 +355,9 @@ type SpoolOutcome struct {
 	Printer  string
 	Problems map[string]string
 	Failure  string
+	// HandBack, with Failure, gives a pool batch back to the rest of the
+	// pool, the printer dropping out of the job, rather than failing it.
+	HandBack bool
 }
 
 // FinishSpoolBatch records how sending a batch went, with the labels
@@ -290,10 +380,69 @@ func (s *Store) FinishSpoolBatch(b *SpoolBatch, o SpoolOutcome) error {
 	if state != models.SpoolSending {
 		return ErrSpoolBatchGiven
 	}
-	if err := s.finishBatchTx(tx, b.ID, b.JobID, b.TemplateName, o); err != nil {
+	if o.HandBack && b.PoolID != "" {
+		err = s.handBackTx(tx, b, o)
+	} else {
+		err = s.finishBatchTx(tx, b.ID, b.JobID, b.TemplateName, o)
+	}
+	if err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+// handBackTx gives a pool batch its printer could not print back to the
+// rest of the pool, with any other batches that printer was given, and
+// drops the printer from the job. With no member left, the job's waiting
+// batches fail with why the last could not print them.
+func (s *Store) handBackTx(tx *sql.Tx, b *SpoolBatch, o SpoolOutcome) error {
+	for id, problem := range o.Problems {
+		if _, err := s.TxExec(tx, "UPDATE spool_entries SET problem = ? WHERE id = ? AND printed_at IS NULL", clip(problem), id); err != nil {
+			return fmt.Errorf("recording a spool problem: %w", err)
+		}
+	}
+	if _, err := s.TxExec(tx, "UPDATE spool_job_members SET dropped = TRUE WHERE job_id = ? AND printer_id = ?", b.JobID, b.PrinterID); err != nil {
+		return fmt.Errorf("dropping a printer from a job: %w", err)
+	}
+	_, err := s.TxExec(tx, `UPDATE spool_batches SET state = ?, printer_id = NULL, printer_name = '', started_at = NULL, heartbeat_at = NULL
+		WHERE id = ? OR (job_id = ? AND state = ? AND printer_id = ?)`, models.SpoolWaiting, b.ID, b.JobID, models.SpoolWaiting, b.PrinterID)
+	if err != nil {
+		return fmt.Errorf("handing a batch back: %w", err)
+	}
+	var left int
+	if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM spool_job_members WHERE job_id = ? AND dropped = FALSE", b.JobID).Scan(&left); err != nil {
+		return fmt.Errorf("counting a job's printers: %w", err)
+	}
+	if left == 0 {
+		if err := s.failWaitingTx(tx, b.JobID, "No printer of the pool could print these. The last: "+o.Failure); err != nil {
+			return err
+		}
+	}
+	return s.updateJobState(tx, b.JobID)
+}
+
+// failWaitingTx fails a job's waiting batches no printer holds, within tx.
+func (s *Store) failWaitingTx(tx *sql.Tx, jobID, failure string) error {
+	rows, err := s.TxQuery(tx, "SELECT id FROM spool_batches WHERE job_id = ? AND state = ? AND printer_id IS NULL", jobID, models.SpoolWaiting)
+	if err != nil {
+		return fmt.Errorf("finding a job's batches: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	for _, id := range ids {
+		if err := s.finishBatchTx(tx, id, jobID, "", SpoolOutcome{Failure: failure}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) finishBatchTx(tx *sql.Tx, batchID, jobID, template string, o SpoolOutcome) error {
@@ -421,7 +570,10 @@ func (s *Store) CancelSpoolJob(id string) error {
 // again marked as perhaps printed; and batches waiting for a printer that
 // was deleted fail too. It returns how many batches it failed.
 func (s *Store) SweepSpool(staleBefore time.Time) (int, error) {
-	type stale struct{ id, job, printer string }
+	type stale struct {
+		id, job, printer string
+		pool             bool
+	}
 	var found []stale
 	rows, err := s.Query(`SELECT id, job_id, printer_name FROM spool_batches WHERE state = ? AND heartbeat_at < ?`, models.SpoolSending, dbTime(staleBefore))
 	if err != nil {
@@ -437,14 +589,17 @@ func (s *Store) SweepSpool(staleBefore time.Time) (int, error) {
 	}
 	rows.Close()
 	var orphans []stale
-	rows, err = s.Query(`SELECT b.id, b.job_id, b.printer_name FROM spool_batches b JOIN spool_jobs j ON j.id = b.job_id
-		WHERE b.state = ? AND b.printer_id IS NULL AND j.to_download = FALSE`, models.SpoolWaiting)
+	// Waiting for a printer since deleted, or for a pool none of whose
+	// printers is left in the job.
+	rows, err = s.Query(`SELECT b.id, b.job_id, COALESCE(NULLIF(b.printer_name, ''), j.target_name), j.pool_id IS NOT NULL FROM spool_batches b JOIN spool_jobs j ON j.id = b.job_id
+		WHERE b.state = ? AND b.printer_id IS NULL AND j.to_download = FALSE AND (j.pool_id IS NULL OR NOT EXISTS (
+			SELECT 1 FROM spool_job_members m WHERE m.job_id = j.id AND m.dropped = FALSE))`, models.SpoolWaiting)
 	if err != nil {
 		return 0, fmt.Errorf("finding orphaned batches: %w", err)
 	}
 	for rows.Next() {
 		var b stale
-		if err := rows.Scan(&b.id, &b.job, &b.printer); err != nil {
+		if err := rows.Scan(&b.id, &b.job, &b.printer, &b.pool); err != nil {
 			rows.Close()
 			return 0, err
 		}
@@ -480,7 +635,11 @@ func (s *Store) SweepSpool(staleBefore time.Time) (int, error) {
 		}
 	}
 	for _, b := range orphans {
-		if err := finish(b, models.SpoolWaiting, fmt.Sprintf("%s was deleted before these were sent", b.printer)); err != nil {
+		msg := fmt.Sprintf("%s was deleted before these were sent", b.printer)
+		if b.pool {
+			msg = fmt.Sprintf("No printer of %s is left to print these", b.printer)
+		}
+		if err := finish(b, models.SpoolWaiting, msg); err != nil {
 			return n, err
 		}
 	}
@@ -490,7 +649,7 @@ func (s *Store) SweepSpool(staleBefore time.Time) (int, error) {
 const spoolJobColumns = `j.id, j.template_id, j.template_name, j.printer_id, j.target_name, j.to_download, j.state, j.error, j.labels,
 	(SELECT COALESCE(SUM(e.copies), 0) FROM spool_entries e JOIN spool_batches b ON b.id = e.batch_id WHERE b.job_id = j.id AND e.printed_at IS NOT NULL),
 	(SELECT COUNT(*) FROM spool_entries e JOIN spool_batches b ON b.id = e.batch_id WHERE b.job_id = j.id),
-	j.created_by, COALESCE(cu.name, ct.name, ''), j.created_by_token, j.created_at, j.started_at, j.finished_at`
+	j.created_by, COALESCE(cu.name, ct.name, ''), j.created_by_token, j.created_at, j.started_at, j.finished_at, j.pool_id`
 
 // ListSpoolJobs lists jobs made since since (all when zero), newest first;
 // with IDs, only those.
@@ -522,9 +681,10 @@ func (s *Store) ListSpoolJobs(since time.Time, ids []string) ([]models.SpoolJob,
 			template, printer sql.NullString
 			by                sql.NullString
 			started, finished sql.NullTime
+			pool              sql.NullString
 		)
 		err := rows.Scan(&j.ID, &template, &j.TemplateName, &printer, &j.Target, &j.Download, &j.State, &j.Error, &j.Labels, &j.Printed, &j.Entries,
-			&by, &j.CreatedBy.Name, &j.CreatedBy.Token, &j.CreatedAt, &started, &finished)
+			&by, &j.CreatedBy.Name, &j.CreatedBy.Token, &j.CreatedAt, &started, &finished, &pool)
 		if err != nil {
 			return nil, fmt.Errorf("scanning a print job: %w", err)
 		}
@@ -533,6 +693,9 @@ func (s *Store) ListSpoolJobs(since time.Time, ids []string) ([]models.SpoolJob,
 		}
 		if printer.Valid {
 			j.PrinterID = &printer.String
+		}
+		if pool.Valid {
+			j.PoolID = &pool.String
 		}
 		j.CreatedBy.ID = by.String
 		if started.Valid {
@@ -545,7 +708,45 @@ func (s *Store) ListSpoolJobs(since time.Time, ids []string) ([]models.SpoolJob,
 		}
 		jobs = append(jobs, j)
 	}
-	return jobs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	return jobs, s.jobMembers(jobs)
+}
+
+// jobMembers fills in, for pool jobs, how each member is getting on.
+func (s *Store) jobMembers(jobs []models.SpoolJob) error {
+	for i := range jobs {
+		if jobs[i].PoolID == nil {
+			continue
+		}
+		rows, err := s.Query(`SELECT m.printer_id, COALESCE(p.name, ''), m.dropped,
+			(SELECT COALESCE(SUM(e.copies), 0) FROM spool_entries e JOIN spool_batches b ON b.id = e.batch_id
+				WHERE b.job_id = m.job_id AND b.printer_id = m.printer_id AND e.printed_at IS NOT NULL),
+			(SELECT COUNT(*) FROM spool_batches b WHERE b.job_id = m.job_id AND b.printer_id = m.printer_id AND b.state = ?)
+			FROM spool_job_members m LEFT JOIN printers p ON p.id = m.printer_id WHERE m.job_id = ? ORDER BY p.name, m.printer_id`,
+			models.SpoolSending, jobs[i].ID)
+		if err != nil {
+			return fmt.Errorf("reading a job's printers: %w", err)
+		}
+		jobs[i].Members = []models.SpoolJobMember{}
+		for rows.Next() {
+			var m models.SpoolJobMember
+			var sending int
+			if err := rows.Scan(&m.PrinterID, &m.Printer, &m.Dropped, &m.Printed, &sending); err != nil {
+				rows.Close()
+				return err
+			}
+			m.Sending = sending > 0
+			jobs[i].Members = append(jobs[i].Members, m)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // TokenPermissions reads an API token that still works, and its

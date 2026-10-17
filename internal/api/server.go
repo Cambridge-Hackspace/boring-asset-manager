@@ -188,6 +188,11 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PUT /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUpdatePrinter)))
 	mux.Handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
 	mux.Handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
+	mux.Handle("GET /api/v1/printer-pools", canSeePrinters(http.HandlerFunc(s.handleListPools)))
+	mux.Handle("GET /api/v1/printer-pools/{id}", canSeePrinters(http.HandlerFunc(s.handleGetPool)))
+	mux.Handle("POST /api/v1/printer-pools", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSavePool)))
+	mux.Handle("PUT /api/v1/printer-pools/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSavePool)))
+	mux.Handle("DELETE /api/v1/printer-pools/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePool)))
 
 	// The spool, a print queue for labels (README §6.2)
 	printing := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermLabelsPrint)(h) }

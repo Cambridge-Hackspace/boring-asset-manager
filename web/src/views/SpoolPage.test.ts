@@ -30,7 +30,9 @@ const spoolOf = (entries: SpoolEntry[]): Spool => ({
     { id: 'p1', name: 'Front desk' },
     { id: 'p2', name: 'Back room' },
   ],
+  pools: [{ id: 'bench', name: 'Bench' }],
   fits: { shelf: ['p1'], tag: ['p1', 'p2'] },
+  pool_fits: { shelf: [], tag: ['bench'] },
 });
 
 beforeEach(() => {
@@ -223,10 +225,49 @@ describe('SpoolPage', () => {
 
     // Tag labels suit both printers; the job went to the back room.
     const to = within(rows[2]!).getByRole('combobox') as HTMLSelectElement;
-    expect([...to.options].map((o) => o.textContent)).toEqual(['Back room', 'Front desk', 'Download']);
+    expect([...to.options].map((o) => o.textContent)).toEqual(['Back room', 'Front desk', 'Bench (pool)', 'Download']);
     await fireEvent.change(to, { target: { value: 'printer:p1' } });
     await fireEvent.click(within(rows[2]!).getByRole('button', { name: 'Send again' }));
     expect(await screen.findByText('Added 1 label to the spool, and sent to print.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/spool/jobs/j1/resend')!.body).toEqual({ destination: 'printer:p1' });
+  });
+
+  it('offers pools the selection suits, prints to them, and shows each printer’s part', async () => {
+    let spool = spoolOf([entry('1', 'Tag me', 'printer:p2', 'tag'), entry('2', 'Shelf me', 'printer:p1', 'shelf')]);
+    const job = {
+      id: 'j', template_id: 'tag', template_name: 'Tag', printer_id: null, pool_id: 'bench', target: 'Bench', download: false, state: 'sending' as const,
+      labels: 4, printed: 2, entries: 4, created_by: { id: 'me', name: 'Me' }, created_at: '2026-10-16T10:00:00Z',
+      members: [
+        { printer_id: 'p1', printer: 'Front desk', printed: 2, sending: true, dropped: false },
+        { printer_id: 'p2', printer: 'Back room', printed: 0, sending: false, dropped: true },
+      ],
+    };
+    const { sent } = fakeApi({
+      'GET /spool/jobs': () => ({ jobs: [job] }),
+      'GET /spool': () => spool,
+      'PATCH /spool': () => {
+        spool = { ...spool, entries: spool.entries.map((e) => (e.id === '1' ? { ...e, destination: 'pool:bench' as const } : e)) };
+        return { updated: 1 };
+      },
+      'POST /spool/print': () => ({ status: 201, body: { jobs: [job], skipped: [], warnings: ['Back room sits out Bench’s Tag labels: no'] } }),
+    });
+    render(SpoolPage, { params: {} });
+    // Shelf labels suit no pool; tag labels suit the bench.
+    await fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Shelf me' }));
+    expect(screen.queryByRole('group', { name: 'Pools' })).toBeNull();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select Shelf me' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Select Tag me' }));
+    const pools = screen.getByRole('group', { name: 'Pools' });
+    expect(within(pools).getAllByRole('option').map((o) => o.textContent)).toEqual(['Bench']);
+    await fireEvent.change(screen.getByLabelText('Print on'), { target: { value: 'pool:bench' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Set printer' }));
+    const bench = (await screen.findByRole('heading', { name: /Bench · Tag · 1 label/ })).closest('section')!;
+    await fireEvent.click(within(bench).getByRole('button', { name: 'Print 1 label' }));
+    expect(await screen.findByText(/Sent 4 labels to print in 1 job\. Back room sits out Bench’s Tag labels: no\./)).toBeTruthy();
+    expect(sent.find((r) => r.path === '/spool/print')!.body).toEqual({ entry_ids: ['1'] });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Jobs' }));
+    const parts = await screen.findByRole('list', { name: 'Its printers' });
+    expect(within(parts).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Front desk: sending, 2 printed', 'Back room: dropped out']);
   });
 });

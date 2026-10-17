@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addedMessage, destinationName, groupEntries, jobStateName, printedMessage, printersFor, queueNewLabels, rememberQueueNewLabels, shared, templatesFor } from './spool';
+import { addedMessage, destinationName, groupEntries, jobStateName, poolsFor, printedMessage, printersFor, queueNewLabels, rememberQueueNewLabels, shared, templatesFor } from './spool';
 import type { Spool, SpoolEntry } from './models';
 
 const entry = (id: string, destination: SpoolEntry['destination'], template: string | null): SpoolEntry => ({
@@ -25,7 +25,9 @@ const spool = (entries: SpoolEntry[]): Spool => ({
     { id: 'p1', name: 'Front desk' },
     { id: 'p2', name: 'Back room' },
   ],
+  pools: [{ id: 'bench', name: 'Bench' }],
   fits: { shelf: ['p1'], tag: ['p1', 'p2'] },
+  pool_fits: { shelf: [], tag: ['bench'] },
 });
 
 afterEach(() => {
@@ -107,5 +109,17 @@ describe('the spool', () => {
     expect(jobStateName({ state: 'done', download: true })).toBe('Downloaded');
     expect(jobStateName({ state: 'done', download: false })).toBe('Printed');
     expect(jobStateName({ state: 'failed', download: false })).toBe('Failed');
+  });
+
+  it('knows pools: their names, the templates they take, and their warnings', () => {
+    const s = spool([entry('1', 'pool:bench', 'tag'), entry('2', 'printer:p1', 'shelf')]);
+    expect(destinationName(s, 'pool:bench')).toBe('Bench');
+    expect(destinationName(s, 'pool:gone')).toBe('A deleted pool');
+    expect(poolsFor(s, 'shelf')).toEqual([]);
+    expect(poolsFor(s, 'tag').map((p) => p.name)).toEqual(['Bench']);
+    expect(templatesFor(s, 'pool:bench').map((t) => t.name)).toEqual(['Tag']);
+    // Pools print, so they come with the printers.
+    expect(groupEntries(s).map((g) => g.destination)).toEqual(['pool:bench', 'printer:p1']);
+    expect(printedMessage({ jobs: [], skipped: [], warnings: ['Wide sits out Bench'] })).toBe('Nothing was ready to print. Wide sits out Bench.');
   });
 });

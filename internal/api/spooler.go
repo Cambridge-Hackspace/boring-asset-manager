@@ -161,7 +161,8 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 	}
 	plan, err := planFor(p, t)
 	if err != nil {
-		return store.SpoolOutcome{Failure: fmt.Sprintf("%s does not suit %s: %v", t.Name, p.Name, err)}
+		// In a pool, the rest take it.
+		return store.SpoolOutcome{Failure: fmt.Sprintf("%s does not suit %s: %v", t.Name, p.Name, err), HandBack: b.PoolID != ""}
 	}
 	r, err := s.requestAs(ctx, b.CreatedBy, b.CreatedByToken)
 	if err != nil {
@@ -225,7 +226,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 		if ctx.Err() != nil {
 			return store.SpoolOutcome{Failure: fmt.Sprintf("The server stopped while sending these to %s; they may have printed. Check before printing them again", p.Name), Problems: out.Problems}
 		}
-		return store.SpoolOutcome{Failure: fmt.Sprintf("Could not deliver these to %s: %v", p.Name, err), Problems: out.Problems}
+		return store.SpoolOutcome{Failure: fmt.Sprintf("Could not deliver these to %s: %v", p.Name, err), Problems: out.Problems, HandBack: b.PoolID != ""}
 	}
 	return out
 }

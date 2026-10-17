@@ -548,11 +548,12 @@ type Scope struct {
 }
 
 // Spool destinations (README §6.2): DestinationDownload, or
-// DestinationPrinterPrefix followed by a printer's ID. An entry with none
-// waits for one to be chosen.
+// DestinationPrinterPrefix or DestinationPoolPrefix followed by a printer's
+// or a pool's ID. An entry with none waits for one to be chosen.
 const (
 	DestinationDownload      = "download"
 	DestinationPrinterPrefix = "printer:"
+	DestinationPoolPrefix    = "pool:"
 )
 
 // SpoolEntry is one asset's label in the spool (README §6.2): waiting to be
@@ -607,19 +608,55 @@ type SpoolJobRef struct {
 // are named as they were then. Labels counts every copy; Printed those
 // printed so far.
 type SpoolJob struct {
-	ID           string     `json:"id"`
-	TemplateID   *string    `json:"template_id"`
-	TemplateName string     `json:"template_name"`
-	PrinterID    *string    `json:"printer_id"`
-	Target       string     `json:"target"`
-	Download     bool       `json:"download"`
-	State        string     `json:"state"`
-	Error        string     `json:"error,omitempty"`
-	Labels       int        `json:"labels"`
-	Printed      int        `json:"printed"`
-	Entries      int        `json:"entries"`
-	CreatedBy    EventActor `json:"created_by"`
-	CreatedAt    time.Time  `json:"created_at"`
-	StartedAt    *time.Time `json:"started_at,omitempty"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	ID           string  `json:"id"`
+	TemplateID   *string `json:"template_id"`
+	TemplateName string  `json:"template_name"`
+	PrinterID    *string `json:"printer_id"`
+	Target       string  `json:"target"`
+	// PoolID is the pool it went to, if any; Members say how each of its
+	// printers is getting on with it.
+	PoolID     *string          `json:"pool_id,omitempty"`
+	Members    []SpoolJobMember `json:"members,omitempty"`
+	Download   bool             `json:"download"`
+	State      string           `json:"state"`
+	Error      string           `json:"error,omitempty"`
+	Labels     int              `json:"labels"`
+	Printed    int              `json:"printed"`
+	Entries    int              `json:"entries"`
+	CreatedBy  EventActor       `json:"created_by"`
+	CreatedAt  time.Time        `json:"created_at"`
+	StartedAt  *time.Time       `json:"started_at,omitempty"`
+	FinishedAt *time.Time       `json:"finished_at,omitempty"`
+}
+
+// SpoolJobMember is a pool's printer in one of its jobs: the labels it has
+// printed, whether it is sending now, and whether it dropped out after
+// failing.
+type SpoolJobMember struct {
+	PrinterID string `json:"printer_id"`
+	Printer   string `json:"printer"`
+	Printed   int    `json:"printed"`
+	Sending   bool   `json:"sending"`
+	Dropped   bool   `json:"dropped"`
+}
+
+// PrinterPool is a set of printers loaded alike that share print jobs
+// (README §6.2). Each job is cut into batches of BatchSize labels. Members
+// take the next batch when they have sent their last, except those behind
+// a spooler, and every member when FixedShares is set, which take a fixed
+// share of the batches by their Share.
+type PrinterPool struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	BatchSize   int          `json:"batch_size"`
+	FixedShares bool         `json:"fixed_shares"`
+	Members     []PoolMember `json:"members"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+// PoolMember is a printer in a pool, and its share of fixed-share batches.
+type PoolMember struct {
+	PrinterID string `json:"printer_id"`
+	Share     int    `json:"share"`
 }

@@ -13,9 +13,9 @@ An asset's label already waiting with the same template is not added twice. Arch
 
 ## Templates and printers
 
-Each label takes the template its category names, under **Labels** on the category's page; a subcategory takes its parent's unless it names its own. When only one printer suits that template, the label goes to it.
+Each label takes the template its category names, under **Labels** on the category's page; a subcategory takes its parent's unless it names its own. When only one printer suits that template, the label goes to it; when only one pool does, and holds every printer that suits it, the label goes to the pool.
 
-On the spool, labels are grouped by printer and template. Tick some, or a whole group, then set their template, printer or copies together. Only printers a template suits are offered, and only templates a printer takes. **Download** stands in for a printer, for labels printed on sheets.
+On the spool, labels are grouped by printer and template. Tick some, or a whole group, then set their template, printer or copies together. Only printers and pools a template suits are offered, and only templates a printer or pool takes. **Download** stands in for a printer, for labels printed on sheets.
 
 Anything that keeps a label from printing is marked beside it: no template or printer, a template the printer does not suit, or an archived asset. So is why it failed last time, such as a printer that could not be reached; that does not stop it printing again, and changing the label clears it.
 
@@ -27,9 +27,17 @@ Jobs print in the background, so you can go on working. Each printer takes one j
 
 If a label cannot be produced, it stays in the spool with the reason, and the rest print. If the printer cannot be reached, the job's labels all stay, with the error, to print again. If the server stops while sending, they stay marked as perhaps printed: look at the printer before printing them again.
 
+## Pools
+
+A **pool** is a set of printers loaded with the same labels, such as three Rollos with 4 × 6 in labels, set up under **Pools** on the **Printers** page. Send labels to a pool rather than a printer, and its printers share them.
+
+A pool's job is cut into batches, 10 labels each unless the pool says otherwise. Each printer takes the next batch as soon as it has sent its last, so a faster printer ends up printing more and none waits for another. A label's copies always come out of one printer. Printers behind a spooler (IPP or Windows) take every job at once whatever their speed, so they get a fixed share of the batches instead, by their share; tick **Every printer takes a fixed share** to share out every pool job that way.
+
+A printer whose labels do not suit a job's template sits that job out, with a warning when you print. A printer that cannot be reached hands its batch to the rest of the pool and drops out of that job; the job fails only when every printer has. A printer can be in several pools, and still be used on its own.
+
 ## Jobs
 
-**Jobs** lists the print jobs and downloads of the last 30 days: the printer, the template, how many labels, and how each went. **Cancel** stops a job not yet started, and its labels wait in the spool again. **Send again** sends what a finished job printed once more, to the same printer, to another, or as a download: its labels go back in the spool and, to a printer, print at once.
+**Jobs** lists the print jobs and downloads of the last 30 days: the printer or pool, the template, how many labels, and how each went; a pool's job shows how many each of its printers has printed. **Cancel** stops a job not yet started, and its labels wait in the spool again. **Send again** sends what a finished job printed once more, to the same printer, to another, or as a download: its labels go back in the spool and, to a printer, print at once.
 
 ## Downloading
 
