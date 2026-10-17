@@ -601,7 +601,7 @@ The two meet in one place: things labeled one by one that are used up gradually,
 
 ### 5.2 Notifiers
 
-Notifications go out through pluggable notifier drivers, in the same way printers use print drivers. Discord is the first.
+Notifications go out through pluggable notifier drivers, in the same way printers use print drivers: Discord and MQTT.
 
 * **Drivers** (`internal/notify`) declare their options, which options are secret, how to validate them and how to deliver an event. Events themselves are neutral; each driver decides how to present them. `GET /api/v1/notifiers/drivers` lists them.
 * **Channels** (`notification_channels`) are configured through `/api/v1/notifiers` (`settings.manage`): a name, a driver, its options, an enabled switch and the event kinds the channel subscribes to. There can be any number. Secret options can be written but are never returned; reads show only whether they are set. `POST /api/v1/notifiers/{id}/test` sends a test message.
@@ -610,6 +610,7 @@ Notifications go out through pluggable notifier drivers, in the same way printer
   * Network errors and `5xx` responses are retried with exponential backoff; a `429` waits as long as the service asks. Other `4xx` responses fail at once, and anything still unsent after 24 hours is given up.
   * The outcome of recent deliveries is visible in `GET /api/v1/notifiers/deliveries`.
 * **Discord** (`discord`): a webhook URL (secret), accepted only on Discord's own hosts (`discord.com`, `discordapp.com` and their `ptb.` and `canary.` variants), so the server cannot be pointed at arbitrary addresses. "Running low" is an embed in the category's color with the category name, a link to `{base_url}/categories/{id}`, the triggering user, the reason and a timestamp; "Restocked" is a shorter, neutral embed. An asset's messages link to `{base_url}/assets/{id}`, give its quantity and threshold with their unit, and are amber, since an asset has no color of its own. A change of condition is titled "Out of service" (red), "Needs maintenance" (amber) or "Working again" (neutral), with the note and who reported it. An overdue loan is "Overdue" (amber), naming the borrower and the day it was due (UTC).
+* **MQTT** (`mqtt`), for those running a broker, such as Home Assistant's: each event is published as JSON, with people by name only and a link to what it is about, to `<topic prefix>/<kind>/<asset or category ID>` (a test message to `<prefix>/test`), at QoS 1, not retained. Options: the broker, `mqtts://host[:port]` for TLS (8883 unless given) or `mqtt://host[:port]` to send without encryption (1883), so sending in the clear is chosen explicitly; the topic prefix (no `+`, `#` or NUL); a client ID (`bam` unless given; at most 23 characters); a user name and password (secret); a CA certificate in PEM, to trust a broker whose certificate no public authority signed (the system's authorities otherwise); and a client certificate and key in PEM (the key secret), for brokers that know clients by certificate. Each delivery connects, publishes, waits for the broker's acknowledgment and disconnects, so no connection is kept alive between them. A broker refusing the credentials or the client, or one whose certificate is not trusted, fails the delivery at once; one not reachable, or not answering, is retried. The client is the part of MQTT 3.1.1 publishing needs, written here rather than taken from a library. Like the other channels, MQTT channels are set up by `settings.manage`, and their broker may be any address.
 
 ### 5.3 Lending
 
@@ -1025,7 +1026,7 @@ Running BAM for real, and keeping it honest. In priority order:
 #### Sub-Phase 7.23: Actions and Live Events
 * [x] Actions on assets, such as Identify, offered by categories with cascading, pressed from asset and scan pages, and recorded with what a device needs to find the thing (§5.4).
 * [x] Live connections devices open with an API token, sent the events they may see across servers sharing a database, with answers to actions (§5.4).
-* [ ] An MQTT notifier.
+* [x] An MQTT notifier, with user names and passwords, TLS with a CA of its own, and client certificates (§5.2).
 
 ### Upcoming Features
 

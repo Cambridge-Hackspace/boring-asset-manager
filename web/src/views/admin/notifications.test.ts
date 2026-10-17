@@ -12,6 +12,14 @@ const drivers: NotifierDriver[] = [
     label: 'Discord',
     options: [{ name: 'webhook_url', label: 'Webhook URL', description: 'From Discord.', required: true, secret: true }],
   },
+  {
+    driver: 'mqtt',
+    label: 'MQTT',
+    options: [
+      { name: 'broker', label: 'Broker', description: 'mqtts://host', required: true, secret: false },
+      { name: 'ca_cert', label: 'CA certificate', description: 'PEM.', required: false, secret: false, multiline: true },
+    ],
+  },
 ];
 const events = [
   { kind: 'category.running_low', label: 'A category is running low' },
@@ -116,5 +124,25 @@ describe('outcome', () => {
     expect(outcome({ status: 'sent', attempts: 3 })).toBe('Sent after 3 attempts');
     expect(outcome({ status: 'failed', attempts: 1 })).toBe('Failed');
     expect(outcome({ status: 'failed', attempts: 9 })).toBe('Failed after 9 attempts');
+  });
+
+});
+
+describe('ChannelForm', () => {
+  it('takes a certificate over several lines for an MQTT channel', async () => {
+    const { sent } = api([], { 'POST /notifiers': () => ({ status: 201, body: { channel: { ...channel, driver: 'mqtt' } } }) });
+    render(NotificationsPage, { params: {} });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add channel' }));
+    const form = screen.getByRole('form', { name: 'New channel' });
+    await fireEvent.input(within(form).getByLabelText('Name'), { target: { value: 'Broker' } });
+    await fireEvent.change(within(form).getByLabelText('Service'), { target: { value: 'mqtt' } });
+    await fireEvent.input(await within(form).findByLabelText('Broker'), { target: { value: 'mqtts://broker.lan' } });
+    const ca = within(form).getByLabelText(/CA certificate/);
+    expect(ca.tagName).toBe('TEXTAREA');
+    const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----';
+    await fireEvent.input(ca, { target: { value: pem } });
+    await fireEvent.submit(within(form).getByRole('button', { name: 'Add channel' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
+    expect((sent.find((r) => r.method === 'POST')!.body as { options: Record<string, string> }).options.ca_cert).toBe(pem);
   });
 });

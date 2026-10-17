@@ -78,16 +78,30 @@
   {#each info?.options ?? [] as o (o.name)}
     <div>
       <label class="label" for="{prefix}-opt-{o.name}">{o.label}{o.required ? '' : ' (optional)'}</label>
-      <input
-        id="{prefix}-opt-{o.name}"
-        class="input"
-        type={o.secret ? 'password' : 'text'}
-        autocomplete="off"
-        required={o.required && !keeps(o.name)}
-        placeholder={keeps(o.name) ? 'Set; leave blank to keep it' : ''}
-        aria-describedby="{prefix}-opt-{o.name}-help"
-        bind:value={options[o.name]}
-      />
+      {#if o.multiline}
+        <textarea
+          id="{prefix}-opt-{o.name}"
+          class="input font-mono text-xs"
+          rows="4"
+          autocomplete="off"
+          spellcheck="false"
+          required={o.required && !keeps(o.name)}
+          placeholder={keeps(o.name) ? 'Set; leave blank to keep it' : ''}
+          aria-describedby="{prefix}-opt-{o.name}-help"
+          bind:value={options[o.name]}
+        ></textarea>
+      {:else}
+        <input
+          id="{prefix}-opt-{o.name}"
+          class="input"
+          type={o.secret ? 'password' : 'text'}
+          autocomplete="off"
+          required={o.required && !keeps(o.name)}
+          placeholder={keeps(o.name) ? 'Set; leave blank to keep it' : ''}
+          aria-describedby="{prefix}-opt-{o.name}-help"
+          bind:value={options[o.name]}
+        />
+      {/if}
       <p id="{prefix}-opt-{o.name}-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
         {o.description}{o.secret ? ' It is never shown again once saved.' : ''}
       </p>

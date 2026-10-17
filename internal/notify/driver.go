@@ -46,6 +46,8 @@ type OptionInfo struct {
 	Required    bool   `json:"required"`
 	// Secret options can be written but are never returned.
 	Secret bool `json:"secret"`
+	// Multiline options take several lines, such as a PEM certificate.
+	Multiline bool `json:"multiline,omitempty"`
 }
 
 // Notification is an event as a driver receives it.
@@ -120,6 +122,9 @@ var (
 
 func init() {
 	if err := Register(Discord{}); err != nil {
+		panic(err)
+	}
+	if err := Register(MQTT{}); err != nil {
 		panic(err)
 	}
 }

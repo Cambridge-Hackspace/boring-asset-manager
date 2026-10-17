@@ -341,6 +341,8 @@ export interface NotifierOption {
   required: boolean;
   /** Secret options can be written but are never returned. */
   secret: boolean;
+  /** Takes several lines, such as a PEM certificate. */
+  multiline?: boolean;
 }
 
 export interface NotifierDriver {
