@@ -7,6 +7,6 @@ BAM! keeps track of a space's things: what there is, where it is, who has it, an
 - **Labels** print an asset's name and codes, to stick on it. See [Labels and printing](/help/labels).
 - **Scanning** a label's code shows what the asset is and what you can do with it. See [Scanning](/help/scanning).
 
-What you see depends on your roles: the menu at the top shows the parts you can use. If something you need is missing, ask whoever manages users.
+What you see depends on your roles: the menu at the top shows the parts you can use. Everyday pages sit on their own; the rest are gathered under **Catalog** (categories, fields, relations and actions), **Labels** (templates, images and printers) and **Admin** (users, roles, API tokens and notifications), and the home page lists them the same way. If something you need is missing, ask whoever manages users.
 
 Every page has a **Help** link at the top that opens the help for that page.

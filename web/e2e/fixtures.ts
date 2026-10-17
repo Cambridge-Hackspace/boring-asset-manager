@@ -76,7 +76,25 @@ export const test = base.extend<{ signedIn: Page; api: Api; printer: FakePrinter
 
 export { expect };
 
-/** Clicks a link in the main navigation. */
+/** The navigation group each grouped page is listed under (src/routes.ts). */
+const navGroupOf: Record<string, string> = {
+  Categories: 'Catalog', Fields: 'Catalog', Relations: 'Catalog', Actions: 'Catalog',
+  Templates: 'Labels', Images: 'Labels', Printers: 'Labels',
+  Users: 'Admin', Roles: 'Admin', 'API tokens': 'Admin', Notifications: 'Admin',
+};
+
+/**
+ * Clicks a link in the main navigation, opening its group's menu first
+ * when the page is in one (a group of one page is a plain link).
+ */
 export async function goTo(page: Page, name: string): Promise<void> {
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true }).click();
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  const link = nav.getByRole('link', { name, exact: true });
+  const group = navGroupOf[name];
+  if (group) {
+    const menu = nav.getByRole('button', { name: group, exact: true });
+    await expect(link.or(menu)).toBeVisible();
+    if (await menu.isVisible()) await menu.click();
+  }
+  await link.click();
 }
