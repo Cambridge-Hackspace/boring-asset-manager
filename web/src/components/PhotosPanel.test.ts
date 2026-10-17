@@ -21,6 +21,7 @@ const drill = (photos: AssetPhoto[]): AssetWithDetails => ({
   scopes: ['default'],
   scan_template: { template_id: 'default' },
   label_template: { template_id: '' },
+  actions: [],
   photos,
 });
 

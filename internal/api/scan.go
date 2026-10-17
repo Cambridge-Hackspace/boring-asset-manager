@@ -79,6 +79,9 @@ type ScanAsset struct {
 	Name    string `json:"name"`
 	Counted bool   `json:"counted"`
 	Unit    string `json:"unit,omitempty"`
+	// Actions are those its categories offer, when the viewer may press
+	// them.
+	Actions []models.OfferedAction `json:"actions,omitempty"`
 }
 
 // ScanTemplateRef names the template a scan used.
@@ -168,6 +171,9 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	if st := asset.Asset.Stock; st != nil {
 		out.Asset.Counted, out.Asset.Unit = true, st.Unit
 	}
+	if may["actions"] {
+		out.Asset.Actions = asset.Actions
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -185,5 +191,7 @@ func (s *Server) scanActionsFor(r *http.Request, a *models.AssetWithDetails) map
 		"borrow": user != nil && a.Lendable && a.Loan == nil && a.Asset.Condition != models.ConditionOutOfService && can(rbac.PermAssetsBorrow),
 		"return": a.Loan != nil && (can(rbac.PermAssetsLend) || (mine && can(rbac.PermAssetsBorrow))),
 		"report": can(rbac.PermAssetsReport) || can(rbac.PermAssetsWrite),
+		// The actions its categories offer, such as Identify (README §5.4).
+		"actions": len(a.Actions) > 0 && can(rbac.PermAssetsAct),
 	}
 }

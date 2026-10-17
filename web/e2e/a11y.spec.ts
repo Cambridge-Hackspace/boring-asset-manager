@@ -59,6 +59,9 @@ for (const scheme of ['light', 'dark'] as const) {
         ],
       },
     });
+    // An action its category offers, for the asset and actions pages.
+    const identify = await post('/actions', { key: unique('identify').toLowerCase(), label: 'Identify', confirm: 'Light it up?' });
+    await request.put(`/api/v1/categories/${cat.category.id}/actions`, { data: { actions: [{ action_id: identify.action.id, cascades: true }] } });
     // A printer in a pool, for the printers page.
     const a11yPrinter = await post('/printers', { name: unique('A11y QL'), driver: 'brother_ql', model: 'QL-810W', media: 'dk-22205', connection: { type: 'tcp', address: '127.0.0.1:9' } });
     await post('/printer-pools', { name: unique('A11y pool'), members: [{ printer_id: a11yPrinter.printer.id, share: 2 }] });
@@ -99,6 +102,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/loans', 'Loans'],
       ['/spool', 'Spool'],
       ['/relations', 'Relations'],
+      ['/actions', 'Actions'],
       ['/reports', 'Reports'],
       ['/reports/new', 'New report'],
       ['/scan-templates/new', 'New scan template'],
@@ -107,6 +111,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/account', 'Your account'],
       ['/help/scanning', 'Scanning'],
       ['/help/spool', 'The spool'],
+      ['/help/actions', 'Actions'],
       ['/no-such-page', 'Page not found'],
     ];
     for (const [path, heading] of views) {

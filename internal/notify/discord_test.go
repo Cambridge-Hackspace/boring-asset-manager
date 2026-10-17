@@ -342,3 +342,19 @@ func TestDiscordOverdueEmbed(t *testing.T) {
 		t.Errorf("overdue: %+v", e)
 	}
 }
+
+func TestDiscordActionEmbed(t *testing.T) {
+	n := Notification{BaseURL: "https://bam.example", Event: models.Event{
+		Kind: models.EventAssetAction,
+		Payload: models.EventPayload{
+			Asset:   &models.EventAsset{ID: "a1", Name: "Drawer A3"},
+			Trigger: models.TriggerManual,
+			Actor:   &models.EventActor{ID: "u1", Name: "Ada"},
+			Action:  &models.EventAction{Key: "identify", Label: "*Identify*"},
+		},
+	}}
+	e := discordPayload(n).Embeds[0]
+	if e.Title != `\*Identify\*: Drawer A3` || e.Description != "Pressed by Ada." || e.URL != "https://bam.example/assets/a1" {
+		t.Errorf("an action: %+v", e)
+	}
+}

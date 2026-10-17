@@ -15,7 +15,8 @@ export type Permission =
   | 'assets.lend'
   | 'reports.manage'
   | 'assets.track'
-  | 'assets.scan';
+  | 'assets.scan'
+  | 'assets.act';
 
 /** A permission held in every scope, or in one as scope:permission (README §3.3). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -147,6 +148,8 @@ export interface AssetEvent {
     due_at?: string;
     /** What a label printed event printed: the template and printer as named then, or a download. */
     label?: { template: string; printer?: string; download?: boolean; copies: number };
+    /** What an action event pressed, and the asset and the containers it is in. */
+    action?: { key: string; label: string };
   };
 }
 
@@ -186,6 +189,8 @@ export interface AssetWithDetails {
   scan_template: TemplateChoice;
   /** The label template the spool queues it with; template_id is empty when no category names one. */
   label_template: TemplateChoice;
+  /** The actions its categories offer on it, such as Identify (README §5.4). */
+  actions: OfferedAction[];
   /** Its photos, in order; the first is the one lists show. */
   photos: AssetPhoto[];
 }
@@ -492,7 +497,7 @@ export interface ReportSection {
   actions?: ScanAction[];
 }
 
-export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report'] as const;
+export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report', 'actions'] as const;
 export type ScanAction = (typeof scanActions)[number];
 
 /** The scan or label template an asset uses, and why: the closest category naming one, or for scan templates the default. */
@@ -637,4 +642,29 @@ export interface PrinterPool {
   members: { printer_id: string; share: number }[];
   created_at: string;
   updated_at: string;
+}
+
+/** A button people press on assets, such as Identify, recording an asset.action event (README §5.4). */
+export interface AssetAction {
+  id: string;
+  key: string;
+  label: string;
+  /** Asked before it is taken, when set. */
+  confirm: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** An action a category offers on its assets, and with cascades on its subcategories'. */
+export interface CategoryAction {
+  action_id: string;
+  cascades: boolean;
+}
+
+/** An action an asset's categories offer on it. */
+export interface OfferedAction {
+  id: string;
+  key: string;
+  label: string;
+  confirm?: string;
 }

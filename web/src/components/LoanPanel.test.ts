@@ -20,6 +20,7 @@ const drill: AssetWithDetails = {
   scopes: ['default'],
   scan_template: { template_id: 'default' },
   label_template: { template_id: '' },
+  actions: [],
   photos: [],
 };
 const lentTo = (id: string, name: string, overdue = false): AssetWithDetails => ({

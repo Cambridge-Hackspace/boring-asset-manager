@@ -33,6 +33,8 @@ const (
 	PermAssetsTrack = "assets.track"
 	// PermAssetsScan looks an asset up by its code, and sees its scan page.
 	PermAssetsScan = "assets.scan"
+	// PermAssetsAct presses actions on assets, such as Identify.
+	PermAssetsAct = "assets.act"
 )
 
 var (
@@ -58,6 +60,7 @@ func AllPermissions() []string {
 		PermReportsManage,
 		PermAssetsTrack,
 		PermAssetsScan,
+		PermAssetsAct,
 	}
 }
 
@@ -126,6 +129,7 @@ var scopable = map[string]bool{
 	PermAssetsReport: true, PermAssetsBorrow: true, PermAssetsLend: true,
 	PermAssetsTrack: true,
 	PermAssetsScan:  true,
+	PermAssetsAct:   true,
 	PermStockRecord: true,
 }
 

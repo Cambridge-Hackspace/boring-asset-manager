@@ -134,6 +134,9 @@ const (
 	// EventAssetLabelPrinted records labels of an asset sent to a printer or
 	// downloaded from the spool, with its Label; it is for history.
 	EventAssetLabelPrinted = "asset.label_printed"
+	// EventAssetAction records an action pressed on an asset, with its
+	// Action; channels and live connections can subscribe to it.
+	EventAssetAction = "asset.action"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -198,6 +201,9 @@ type EventPayload struct {
 	DueAt    *time.Time  `json:"due_at,omitempty"`
 	// Label is what a label printed event printed.
 	Label *EventLabel `json:"label,omitempty"`
+	// Action is the action an action event pressed, and what a device
+	// needs to find the thing.
+	Action *EventAction `json:"action,omitempty"`
 }
 
 // EventLabel describes an asset's labels printed (README §6.2): the
@@ -359,6 +365,8 @@ type AssetWithDetails struct {
 	// LabelTemplate is the label template the spool queues it with, and why;
 	// TemplateID is empty when no category names one.
 	LabelTemplate TemplateChoice `json:"label_template"`
+	// Actions are those its categories offer on it (README §5.4).
+	Actions []OfferedAction `json:"actions"`
 }
 
 // TemplateChoice is the scan template (README §6.4) or label template
@@ -659,4 +667,50 @@ type PrinterPool struct {
 type PoolMember struct {
 	PrinterID string `json:"printer_id"`
 	Share     int    `json:"share"`
+}
+
+// AssetAction is an action people press on assets, such as Identify
+// (README §5.4). Pressing one records an asset.action event, which devices
+// and notification channels act on. Confirm, when set, is asked first.
+type AssetAction struct {
+	ID        string    `json:"id"`
+	Key       string    `json:"key"`
+	Label     string    `json:"label"`
+	Confirm   string    `json:"confirm"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CategoryAction is an action a category offers on its assets, and with
+// Cascades on those of its subcategories.
+type CategoryAction struct {
+	ActionID string `json:"action_id"`
+	Cascades bool   `json:"cascades"`
+}
+
+// OfferedAction is an action an asset's categories offer on it.
+type OfferedAction struct {
+	ID      string `json:"id"`
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+	Confirm string `json:"confirm,omitempty"`
+}
+
+// EventAction is the action an asset.action event pressed: its key and
+// label, and the asset and the containers it is in, outermost first, each
+// with its codes and field values, for a device to find it by.
+type EventAction struct {
+	Key      string       `json:"key"`
+	Label    string       `json:"label"`
+	Asset    EventThing   `json:"asset"`
+	Location []EventThing `json:"location"`
+}
+
+// EventThing is an asset as an action event carries it: its codes, by
+// generator type, and its field values, by field key.
+type EventThing struct {
+	ID     string            `json:"id"`
+	Name   string            `json:"name"`
+	Codes  map[string]string `json:"codes"`
+	Fields map[string]string `json:"fields"`
 }

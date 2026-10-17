@@ -15,6 +15,7 @@
   import ConflictMark from '../../components/ConflictMark.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
   import AddToSpool from '../../components/AddToSpool.svelte';
+  import ActionButtons from '../../components/ActionButtons.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
@@ -332,6 +333,13 @@
 
     <PhotosPanel {asset} onchange={assetChanged} />
     <LinksPanel {asset} onchange={assetChanged} />
+
+    {#if !archived && asset.actions?.length && session.canOn(asset.scopes, 'assets.act')}
+      <section class="card" aria-labelledby="actions-heading">
+        <h2 id="actions-heading" class="mb-3 text-lg font-semibold">Actions</h2>
+        <ActionButtons assetId={id} actions={asset.actions} />
+      </section>
+    {/if}
 
     {#if !archived && session.user}<LabelActions assetIds={[id]} />{/if}
     {#if !archived && session.can('labels.print')}

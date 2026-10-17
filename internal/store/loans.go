@@ -76,7 +76,11 @@ type categoryTraits struct {
 	// it; created holds when each category was made, for choosing between
 	// templates.
 	scan, label map[string]string
-	created     map[string]time.Time
+	// actions holds the actions by ID, and offers those each category
+	// offers itself.
+	actions map[string]models.AssetAction
+	offers  map[string][]models.CategoryAction
+	created map[string]time.Time
 	// depth and descendants count each category's ancestors and
 	// descendants.
 	depth, descendants map[string]int
@@ -134,7 +138,11 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, created: created}
+	actions, offers, err := readActionTraits(q)
+	if err != nil {
+		return categoryTraits{}, err
+	}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, created: created, actions: actions, offers: offers}
 	t.depth, t.descendants = shape(parents)
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {

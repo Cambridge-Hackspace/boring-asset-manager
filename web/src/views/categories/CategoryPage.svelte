@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetAction, type CategoryAction } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
@@ -57,6 +57,10 @@
       : [],
   );
   const canSpool = $derived(session.can('labels.print'));
+  // Actions (README §5.4): which it offers on its assets, and whether its
+  // subcategories' too.
+  let actions = $state<AssetAction[]>([]);
+  let offered = $state<Record<string, { on: boolean; cascades: boolean }>>({});
   let withSubcategories = $state(true);
   const categoryName = (cid: string) => categories.find((c) => c.id === cid)?.name ?? 'another category';
   let loading = $state(true);
@@ -129,6 +133,12 @@
           scanTemplate = savedScanTemplate = c.scan_template_id ?? '';
           labelTemplates = (await request<{ templates: TemplateSummary[] }>('GET', '/templates')).templates ?? [];
           labelTemplate = savedLabelTemplate = c.label_template_id ?? '';
+          actions = (await request<{ actions: AssetAction[] }>('GET', '/actions')).actions ?? [];
+          const own = (await request<{ actions: CategoryAction[] }>('GET', `/categories/${encodeURIComponent(id)}/actions`)).actions ?? [];
+          offered = Object.fromEntries(actions.map((a) => {
+            const o = own.find((x) => x.action_id === a.id);
+            return [a.id, { on: !!o, cascades: o?.cascades ?? true }];
+          }));
         }
         if (canManage || canSpool) {
           labelConflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')
@@ -209,6 +219,18 @@
       labelAfterSaving = null;
       labelConflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')).categories ?? {};
       saved = 'Label template saved.';
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function saveActions(event: SubmitEvent) {
+    event.preventDefault();
+    error = saved = '';
+    const chosen = actions.filter((a) => offered[a.id]?.on).map((a) => ({ action_id: a.id, cascades: offered[a.id]!.cascades }));
+    try {
+      await request('PUT', `/categories/${encodeURIComponent(id)}/actions`, { actions: chosen });
+      saved = 'Actions saved.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -561,6 +583,23 @@
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={withSubcategories} /> With its subcategories’</label>
           </div>
         {/if}
+      </section>
+    {/if}
+    {#if canManage && actions.length}
+      <section class="mt-6 max-w-2xl" aria-labelledby="actions-heading">
+        <h2 id="actions-heading" class="mb-1 text-lg font-semibold">Actions</h2>
+        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">Buttons offered on its assets, such as Identify. <a class="underline" href="/actions">Define actions</a>.</p>
+        <form class="space-y-2" onsubmit={saveActions}>
+          {#each actions as a (a.id)}
+            <div class="flex flex-wrap items-center gap-4 text-sm">
+              <label class="flex min-w-48 items-center gap-2"><input type="checkbox" bind:checked={offered[a.id]!.on} /> {a.label}</label>
+              {#if offered[a.id]?.on}
+                <label class="flex items-center gap-2"><input type="checkbox" bind:checked={offered[a.id]!.cascades} /> On its subcategories’ assets too</label>
+              {/if}
+            </div>
+          {/each}
+          <button type="submit" class="btn-secondary">Save actions</button>
+        </form>
       </section>
     {/if}
     {#if canSeeScopes && scopes.length}
