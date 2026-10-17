@@ -197,6 +197,15 @@ func TestPrintSendsRotatedLabelsToThePrinter(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"labels":4`) {
 		t.Fatalf("print: got %d %s", rec.Code, rec.Body.String())
 	}
+	// Each asset's history records its labels (README §6.2).
+	for _, id := range []string{a.Asset.ID, b.Asset.ID} {
+		events, _, err := srv.store.ListAssetEvents(id, "", 1)
+		if err != nil || len(events) != 1 || events[0].Kind != models.EventAssetLabelPrinted ||
+			*events[0].Payload.Label != (models.EventLabel{Template: "QL 90x29", Printer: "QL dk-11201", Copies: 2}) ||
+			events[0].Payload.Actor == nil || events[0].Payload.Actor.ID != admin.ID {
+			t.Errorf("history of %s: %+v, %v", id, events, err)
+		}
+	}
 
 	jobs := ql.waitForJobs(t, 1, 3*time.Second)
 	if len(jobs) != 1 {
@@ -299,6 +308,10 @@ func TestPrintToAnUnreachablePrinter(t *testing.T) {
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+ql90+`","asset_ids":["`+asset.Asset.ID+`"]}`)
 	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "printer unreachable") {
 		t.Errorf("got %d %s, want 502", rec.Code, rec.Body.String())
+	}
+	// Nothing printed, so nothing in its history but its creation.
+	if events, _, _ := srv.store.ListAssetEvents(asset.Asset.ID, "", 10); len(events) != 1 || events[0].Kind != models.EventAssetCreated {
+		t.Errorf("history after a failed print: %+v", events)
 	}
 }
 

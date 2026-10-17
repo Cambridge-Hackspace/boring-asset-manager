@@ -153,6 +153,12 @@ export function describeEvent(e: AssetEvent): string {
       return `Checked in from ${p.borrower ? personName(p.borrower) : 'someone'}`;
     case 'asset.overdue':
       return `Overdue: ${p.borrower ? personName(p.borrower) : 'the borrower'} was due to bring it back ${p.due_at ? dueDate(p.due_at) : ''}`.trim();
+    case 'asset.label_printed': {
+      const l = p.label;
+      if (!l) return 'Label printed';
+      const what = l.copies === 1 ? 'its label' : `${l.copies} labels`;
+      return l.download ? `Downloaded ${what} (${l.template})` : `Printed ${what} on ${l.printer} (${l.template})`;
+    }
     default:
       return e.kind;
   }

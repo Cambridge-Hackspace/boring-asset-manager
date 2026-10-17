@@ -4,6 +4,8 @@
   import { messageOf } from '../lib/errors';
   import type { Condition, ReportResult } from '../lib/models';
   import { scanActionLabel } from '../lib/scan';
+  import { session } from '../lib/session.svelte';
+  import AddToSpool from '../components/AddToSpool.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import ScanResult from '../components/ScanResult.svelte';
 
@@ -127,6 +129,10 @@
       {/if}
     {/snippet}
   </ScanResult>
+  {#if session.can('labels.print')}
+    {@const assetId = scan.asset.id}
+    <p class="mt-4"><AddToSpool what={() => ({ asset_ids: [assetId] })} label="Add its label to the spool" /></p>
+  {/if}
 {:else}
   <h1 class="mb-4 text-2xl font-bold">Not found</h1>
   <ErrorMessage {error} />

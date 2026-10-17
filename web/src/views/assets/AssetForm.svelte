@@ -5,6 +5,8 @@
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
+  import { session } from '../../lib/session.svelte';
+  import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -28,6 +30,9 @@
   let codes = $state<Record<string, string>>({});
   let values = $state<Record<string, string>>({});
   let stock = $state<StockDraft>(stockDraft(null));
+  // New assets' labels join the spool (README §6.2), as each person last chose.
+  const canSpool = isNew && session.can('labels.print');
+  let queueLabel = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
 
   const tree = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const kept = $derived(original ? keptValues(original.field_values, effective) : []);
@@ -84,6 +89,12 @@
     try {
       if (isNew) {
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
+        if (canSpool) {
+          rememberQueueNewLabels(session.user?.id ?? '', queueLabel);
+          // The asset is made either way; one the spool cannot take now can
+          // still be added from its page.
+          if (queueLabel) await addToSpool({ asset_ids: [res.asset.asset.id] }).catch(() => undefined);
+        }
         navigate(`/assets/${encodeURIComponent(res.asset.asset.id)}`, true);
       } else {
         await request('PUT', `/assets/${encodeURIComponent(id)}`, body);
@@ -244,6 +255,9 @@
       {/each}
     </fieldset>
 
+    {#if canSpool}
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabel} /> Add a label to the spool</label>
+    {/if}
     <div class="flex gap-2">
       <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create asset' : 'Save'}</button>
       <a class="btn-secondary" href={isNew ? '/assets' : `/assets/${encodeURIComponent(id)}`}>Cancel</a>

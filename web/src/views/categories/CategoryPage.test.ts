@@ -38,6 +38,7 @@ function api(extra: Record<string, (b: unknown) => unknown> = {}) {
     'GET /categories/paint': () => ({ category: categories[3], active_count: 2 }),
     'GET /fields': () => ({ fields: [fieldOf('serial', 'Serial'), fieldOf('voltage', 'Voltage'), fieldOf('notes', 'Notes')] }),
     'GET /reports': () => ({ reports: [] }),
+    'GET /templates': () => ({ templates: [] }),
     ...extra,
   });
 }
@@ -214,5 +215,59 @@ describe('CategoryPage', () => {
     const note = await screen.findByRole('note');
     expect(note.textContent).toContain('3 assets here show a scan template chosen by a tie');
     expect(within(note).getByRole('link', { name: 'See which' }).getAttribute('href')).toBe('/assets?conflict=scan_template');
+  });
+
+  it('chooses a label template, warning first when it would tie with another category', async () => {
+    const tmpl = (id: string, name: string) => ({ id, name, units: 'mm', width: 62, height: 29, dpi: 300 });
+    const { sent } = loaded({
+      'GET /templates': () => ({ templates: [tmpl('shelf', 'Shelf'), tmpl('tag', 'Tag')] }),
+      'GET /categories/label-conflicts': () => ({ categories: {} }),
+      'PUT /categories/power/label-template': () => ({ category: categories[1] }),
+    });
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+      if (url.includes('label-conflicts?')) {
+        expect(url).toContain('category_id=power&label_template_id=tag');
+        return Promise.resolve(new Response(JSON.stringify({ categories: { power: 1, paint: 1 } }), { headers: { 'Content-Type': 'application/json' } }));
+      }
+      return realFetch(url, init);
+    });
+    render(CategoryPage, { params: { id: 'power' } });
+    const select = (await screen.findByLabelText('Label template')) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Its parent’s, or none', 'Shelf', 'Tag']);
+    await fireEvent.change(select, { target: { value: 'tag' } });
+    expect(await screen.findByText(/Saving this ties Paint with this category/)).toBeTruthy();
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save label template' }));
+    await screen.findByText('Label template saved.');
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ label_template_id: 'tag' });
+  });
+
+  it('says when its assets take a label template chosen by a tie', async () => {
+    loaded({ 'GET /categories/label-conflicts': () => ({ categories: { power: 2 } }) });
+    render(CategoryPage, { params: { id: 'power' } });
+    const note = await screen.findByRole('note');
+    expect(note.textContent).toContain('2 assets here take a label template chosen by a tie');
+    expect(within(note).getByRole('link', { name: 'See which' }).getAttribute('href')).toBe('/assets?conflict=label_template');
+  });
+
+  it('adds its assets to the spool, with or without its subcategories’', async () => {
+    session.permissions = ['assets.read', 'labels.print'];
+    const { sent } = api({
+      'GET /categories/label-conflicts': () => ({ categories: {} }),
+      'POST /spool': () => ({ status: 201, body: { added: [{ id: 'e1' }, { id: 'e2' }], already_waiting: ['a3'], skipped: [] } }),
+    });
+    render(CategoryPage, { params: { id: 'power' } });
+    // Without categories.manage there is no template to choose, only the spool.
+    const add = await screen.findByRole('button', { name: 'Add its assets to the spool' });
+    expect(screen.queryByLabelText('Label template')).toBeNull();
+    await fireEvent.click(add);
+    expect(await screen.findByText('Added 2 labels to the spool; 1 label already waiting.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('checkbox', { name: /With its subcategories/ }));
+    await fireEvent.click(add);
+    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'POST').length).toBe(2));
+    expect(sent.filter((r) => r.method === 'POST').map((r) => r.body)).toEqual([
+      { category_id: 'power', subcategories: true },
+      { category_id: 'power', subcategories: false },
+    ]);
   });
 });

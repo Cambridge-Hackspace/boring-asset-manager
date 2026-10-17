@@ -141,7 +141,7 @@ type CategoryInput struct {
 
 // categoryColumns lists a category's columns, each prefixed, in scanCategory's order.
 func categoryColumns(prefix string) string {
-	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "stock_unit", "is_lendable", "is_running_low", "low_stock_threshold", "scan_template_id", "created_at", "updated_at"}
+	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "stock_unit", "is_lendable", "is_running_low", "low_stock_threshold", "scan_template_id", "label_template_id", "created_at", "updated_at"}
 	for i, c := range cols {
 		cols[i] = prefix + c
 	}
@@ -155,8 +155,9 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 		parentVal sql.NullString
 		threshold sql.NullInt64
 		template  sql.NullString
+		label     sql.NullString
 	)
-	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.Unit, &c.IsLendable, &c.IsRunningLow, &threshold, &template, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.Unit, &c.IsLendable, &c.IsRunningLow, &threshold, &template, &label, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, err
 	}
@@ -169,6 +170,9 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 	}
 	if template.Valid && template.String != "" {
 		c.ScanTemplateID = &template.String
+	}
+	if label.Valid && label.String != "" {
+		c.LabelTemplateID = &label.String
 	}
 	return c, nil
 }

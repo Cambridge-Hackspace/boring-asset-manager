@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/assetcsv"
@@ -77,13 +78,25 @@ type QuantityRequest struct {
 const historyPage = 50
 
 func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	assets, ok := s.filterAssets(w, r, r.URL.Query())
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"assets": assets,
+	})
+}
+
+// filterAssets lists the assets a query selects, as GET /api/v1/assets
+// takes it, keeping those the request may read. On a bad query or a
+// failure it answers the request itself.
+func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Values) ([]models.AssetWithDetails, bool) {
 	f := store.AssetFilter{CategoryID: q.Get("category_id"), Search: q.Get("search"), Condition: q.Get("condition"), Loan: q.Get("loan")}
 	switch q.Get("conflict") {
-	case "", "scan_template":
+	case "", "scan_template", "label_template":
 	default:
-		writeJSONError(w, http.StatusBadRequest, "conflict must be scan_template")
-		return
+		writeJSONError(w, http.StatusBadRequest, "conflict must be scan_template or label_template")
+		return nil, false
 	}
 	switch q.Get("archived") {
 	case "", "false":
@@ -91,39 +104,37 @@ func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 		f.Archived = true
 	default:
 		writeJSONError(w, http.StatusBadRequest, "archived must be true or false")
-		return
+		return nil, false
 	}
 	assets, err := s.store.FilterAssets(f)
 	if errors.Is(err, store.ErrInvalidCondition) {
 		writeJSONError(w, http.StatusBadRequest, "condition must be ok, needs_maintenance, out_of_service or problem")
-		return
+		return nil, false
 	}
 	if errors.Is(err, store.ErrInvalidLoanFilter) {
 		writeJSONError(w, http.StatusBadRequest, "loan must be open or overdue")
-		return
+		return nil, false
 	}
 	if err != nil {
 		writeServerError(w, err, "list assets")
-		return
+		return nil, false
 	}
 	if assets, err = s.readable(r, assets); err != nil {
 		writeServerError(w, err, "read the assets' links")
-		return
+		return nil, false
 	}
-	// Those whose scan template was chosen by a tie (README §6.4).
-	if q.Get("conflict") == "scan_template" {
+	// Those whose scan template (README §6.4) or label template (§6.2) was
+	// chosen by a tie.
+	if conflict := q.Get("conflict"); conflict != "" {
 		kept := assets[:0]
 		for _, a := range assets {
-			if a.ScanTemplate.Conflict {
+			if conflict == "scan_template" && a.ScanTemplate.Conflict || conflict == "label_template" && a.LabelTemplate.Conflict {
 				kept = append(kept, a)
 			}
 		}
 		assets = kept
 	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"assets": assets,
-	})
+	return assets, true
 }
 
 func (s *Server) handleGetAsset(w http.ResponseWriter, r *http.Request) {

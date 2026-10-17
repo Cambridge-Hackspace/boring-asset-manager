@@ -14,6 +14,8 @@
   let categories = $state<Category[]>([]);
   // Categories in scan template ties, with how many assets each (README §6.4).
   let conflicts = $state<Record<string, number>>({});
+  // And in label template ties (§6.2).
+  let labelConflicts = $state<Record<string, number>>({});
   let loading = $state(true);
   let error = $state('');
 
@@ -21,6 +23,9 @@
     try {
       categories = (await request<{ categories: Category[] }>('GET', '/categories')).categories ?? [];
       conflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/scan-conflicts')
+        .then((r) => r.categories ?? {})
+        .catch(() => ({}));
+      labelConflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')
         .then((r) => r.categories ?? {})
         .catch(() => ({}));
     } catch (err) {
@@ -61,6 +66,9 @@
         {/if}
         {#if conflicts[row.category.id]}
           <a href="/assets?conflict=scan_template" class="text-xs"><ConflictMark label="Ties with another category over the scan template of {conflicts[row.category.id]} {conflicts[row.category.id] === 1 ? 'asset' : 'assets'}" /></a>
+        {/if}
+        {#if labelConflicts[row.category.id]}
+          <a href="/assets?conflict=label_template" class="text-xs"><ConflictMark label="Ties with another category over the label template of {labelConflicts[row.category.id]} {labelConflicts[row.category.id] === 1 ? 'asset' : 'assets'}" /></a>
         {/if}
         {#if row.depth > 0}<span class="sr-only">(level {row.depth + 1})</span>{/if}
       </li>

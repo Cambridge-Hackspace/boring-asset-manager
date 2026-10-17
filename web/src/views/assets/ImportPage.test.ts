@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import ImportPage from './ImportPage.svelte';
 import { fakeApi } from '../../test/fetch';
+import { session } from '../../lib/session.svelte';
 import type { ImportPlan } from '../../lib/models';
 
 afterEach(() => {
@@ -127,5 +128,26 @@ describe('ImportPage', () => {
     await chooseFile();
     expect(await screen.findByText('unreadable file: the file is empty')).toBeTruthy();
     expect(screen.queryByText('Columns')).toBeNull();
+  });
+
+  it('adds the new assets’ labels to the spool, for those who print them', async () => {
+    session.permissions = ['assets.read', 'assets.write', 'labels.print'];
+    session.user = { id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '' };
+    localStorage.clear();
+    const { sent } = fakeApi({
+      'GET /fields': () => ({ fields: [] }),
+      'GET /generators': () => ({ generators: [] }),
+      'POST /assets/import/preview': () => plan({ columns: plan().columns.map((c, i) => ({ ...c, target: i === 0 ? 'name' : 'ignore' })), create: 2, problems: [], problem_count: 0 }),
+      'POST /assets/import': () => ({ created: 2, updated: 0, unchanged: 0, created_ids: ['a', 'b'] }),
+      'POST /spool': () => ({ status: 201, body: { added: [{ id: 'e1' }, { id: 'e2' }], already_waiting: [], skipped: [] } }),
+    });
+    render(ImportPage, { params: {} });
+    await chooseFile();
+    const box = (await screen.findByRole('checkbox', { name: 'Add the new assets’ labels to the spool' })) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Import 2 assets' }));
+    expect(await screen.findByText('Added 2 labels to the spool.')).toBeTruthy();
+    expect(sent.find((r) => r.path === '/spool')!.body).toEqual({ asset_ids: ['a', 'b'] });
+    session.permissions = [];
   });
 });

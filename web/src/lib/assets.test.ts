@@ -109,6 +109,10 @@ describe('stock', () => {
     expect(condition('needs_maintenance')).toBe('Reported as needing maintenance');
     expect(condition('ok')).toBe('Marked as working');
     expect(describeChange({ what: 'condition', from: 'out_of_service', to: 'ok' }, 'asset.condition_changed')).toBe('Was out of service');
+    const printed = (label: NonNullable<AssetEvent['payload']['label']>) => describeEvent(event('asset.label_printed', { label }));
+    expect(printed({ template: 'Shelf', printer: 'Front desk', copies: 1 })).toBe('Printed its label on Front desk (Shelf)');
+    expect(printed({ template: 'Shelf', printer: 'Front desk', copies: 3 })).toBe('Printed 3 labels on Front desk (Shelf)');
+    expect(printed({ template: 'Tag', download: true, copies: 2 })).toBe('Downloaded 2 labels (Tag)');
   });
 
   it('describes the changes an edit made', () => {

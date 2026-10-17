@@ -99,8 +99,16 @@ func (s *Store) UpdateTemplate(t *labels.Template) (*labels.Template, error) {
 	return &updated, nil
 }
 
-// DeleteTemplate removes a template.
+// DeleteTemplate removes a template, unless categories name it as their
+// label template. Spool entries with it are left with none.
 func (s *Store) DeleteTemplate(id string) error {
+	var n int
+	if err := s.QueryRow("SELECT COUNT(*) FROM categories WHERE label_template_id = ?", id).Scan(&n); err != nil {
+		return fmt.Errorf("counting categories: %w", err)
+	}
+	if n > 0 {
+		return fmt.Errorf("%w: %d categories name it; choose another for them first", ErrTemplateInUse, n)
+	}
 	res, err := s.Exec(`DELETE FROM templates WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("deleting template: %w", err)

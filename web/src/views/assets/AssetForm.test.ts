@@ -67,6 +67,7 @@ describe('AssetForm', () => {
       suggested_relation_type_ids: [],
       scopes: ['default'],
       scan_template: { template_id: 'default' },
+      label_template: { template_id: '' },
       photos: [],
     };
     const { sent } = fakeApi({
@@ -123,6 +124,7 @@ describe('AssetForm', () => {
       suggested_relation_type_ids: [],
       scopes: ['default'],
       scan_template: { template_id: 'default' },
+      label_template: { template_id: '' },
       photos: [],
     };
     const edit = fakeApi({
@@ -140,5 +142,48 @@ describe('AssetForm', () => {
     await vi.waitFor(() => expect(edit.sent.some((r) => r.method === 'PUT')).toBe(true));
     expect(edit.sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ stock: { unit: 'screws', low_stock_threshold: 50 } });
     expect((edit.sent.find((r) => r.method === 'PUT')!.body as { stock: object }).stock).not.toHaveProperty('quantity');
+  });
+
+  it('adds a new asset’s label to the spool, remembering whether to next time', async () => {
+    session.permissions = ['assets.read', 'assets.write', 'labels.print'];
+    session.user = { id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '' };
+    localStorage.clear();
+    const routes = {
+      'GET /categories': () => ({ categories: [] }),
+      'GET /generators': () => ({ generators: [] }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' } } } }),
+      'POST /spool': () => ({ status: 201, body: { added: [{ id: 'e' }], already_waiting: [], skipped: [] } }),
+    };
+    let { sent } = fakeApi(routes);
+    render(AssetForm, { params: {} });
+    const box = (await screen.findByRole('checkbox', { name: 'Add a label to the spool' })) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Drill' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+    expect(sent.find((r) => r.path === '/spool')!.body).toEqual({ asset_ids: ['new-id'] });
+    cleanup();
+
+    // Unticked once, it stays unticked, and nothing is queued.
+    ({ sent } = fakeApi(routes));
+    render(AssetForm, { params: {} });
+    await fireEvent.click(await screen.findByRole('checkbox', { name: 'Add a label to the spool' }));
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Saw' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.path === '/assets' && r.method === 'POST')).toBe(true));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sent.some((r) => r.path === '/spool')).toBe(false);
+    cleanup();
+    fakeApi(routes);
+    render(AssetForm, { params: {} });
+    expect(((await screen.findByRole('checkbox', { name: 'Add a label to the spool' })) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('offers the spool only to those who print labels, and only for new assets', async () => {
+    fakeApi({ 'GET /categories': () => ({ categories: [] }), 'GET /generators': () => ({ generators: [] }), 'POST /categories/effective-fields': () => ({ fields: [] }) });
+    render(AssetForm, { params: {} });
+    await screen.findByLabelText('Name');
+    expect(screen.queryByRole('checkbox', { name: 'Add a label to the spool' })).toBeNull();
   });
 });

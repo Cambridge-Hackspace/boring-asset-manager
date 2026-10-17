@@ -59,6 +59,9 @@ for (const scheme of ['light', 'dark'] as const) {
         ],
       },
     });
+    // Labels waiting in the spool, one ready and one with problems.
+    await post('/spool', { asset_ids: [asset.asset.asset.id], template_id: template.id, destination: 'download' });
+    await post('/spool', { asset_ids: [box.asset.asset.id] });
     const views: [string, string][] = [
       ['/', 'Welcome'],
       ['/assets', 'Assets'],
@@ -86,6 +89,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/roles', 'Roles'],
       ['/tokens', 'API tokens'],
       ['/loans', 'Loans'],
+      ['/spool', 'Spool'],
       ['/relations', 'Relations'],
       ['/reports', 'Reports'],
       ['/reports/new', 'New report'],
@@ -94,6 +98,7 @@ for (const scheme of ['light', 'dark'] as const) {
       [`/reports/${charts.report.id}`, ''],
       ['/account', 'Your account'],
       ['/help/scanning', 'Scanning'],
+      ['/help/spool', 'The spool'],
       ['/no-such-page', 'Page not found'],
     ];
     for (const [path, heading] of views) {

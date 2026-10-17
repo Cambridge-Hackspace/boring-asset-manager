@@ -29,7 +29,7 @@ var (
 	ErrReportInUse = errors.New("scan template in use")
 )
 
-// scanCandidate is a category naming a scan template, found from one of an
+// scanCandidate is a category naming a template, found from one of an
 // asset's categories at a distance: 0 for the category itself, 1 for its
 // parent, and so on.
 type scanCandidate struct {
@@ -37,24 +37,36 @@ type scanCandidate struct {
 	distance         int
 }
 
-// chooseScan picks the scan template for an asset in these categories:
-// the one named by the closest category up from any of them; among those
-// equally close, by the category with (b) the longest ancestry, then (c)
-// the fewest descendants, then (d) the oldest, then by ID. Ties broken by
-// (b) to (d) between different templates are conflicts, with the
-// categories involved. With no candidate, it is the default template.
-func (t categoryTraits) chooseScan(categoryIDs []string, defaultID string) models.ScanChoice {
+// chooseScan picks the scan template for an asset in these categories.
+func (t categoryTraits) chooseScan(categoryIDs []string, defaultID string) models.TemplateChoice {
+	return t.choose(t.scan, categoryIDs, defaultID)
+}
+
+// chooseLabel picks the label template the spool queues an asset in these
+// categories with, by the same rules, with no default.
+func (t categoryTraits) chooseLabel(categoryIDs []string) models.TemplateChoice {
+	return t.choose(t.label, categoryIDs, "")
+}
+
+// choose picks the template, of those named maps categories to, for an
+// asset in these categories: the one named by the closest category up from
+// any of them; among those equally close, by the category with (b) the
+// longest ancestry, then (c) the fewest descendants, then (d) the oldest,
+// then by ID. Ties broken by (b) to (d) between different templates are
+// conflicts, with the categories involved. With no candidate, it is
+// defaultID.
+func (t categoryTraits) choose(named map[string]string, categoryIDs []string, defaultID string) models.TemplateChoice {
 	var found []scanCandidate
 	for _, c := range categoryIDs {
 		for id, d := c, 0; id != "" && d < 100; id, d = t.parents[id], d+1 {
-			if tmpl := t.scan[id]; tmpl != "" {
+			if tmpl := named[id]; tmpl != "" {
 				found = append(found, scanCandidate{template: tmpl, source: id, distance: d})
 				break
 			}
 		}
 	}
 	if len(found) == 0 {
-		return models.ScanChoice{TemplateID: defaultID}
+		return models.TemplateChoice{TemplateID: defaultID}
 	}
 	closest := found[0].distance
 	for _, f := range found {
@@ -83,7 +95,7 @@ func (t categoryTraits) chooseScan(categoryIDs []string, defaultID string) model
 		}
 		return a < b
 	})
-	choice := models.ScanChoice{TemplateID: tied[0].template, SourceCategoryID: tied[0].source}
+	choice := models.TemplateChoice{TemplateID: tied[0].template, SourceCategoryID: tied[0].source}
 	if len(templates) > 1 {
 		choice.Conflict = true
 		for _, c := range tied {
@@ -122,15 +134,15 @@ func (s *Store) defaultScanTemplate() (string, error) {
 
 // contextScan returns the scan template for an asset in these categories,
 // reading the default the first time.
-func (s *Store) contextScan(ctx *assetContext, categoryIDs []string) (models.ScanChoice, error) {
+func (s *Store) contextScan(ctx *assetContext, categoryIDs []string) (models.TemplateChoice, error) {
 	traits, err := s.contextTraits(ctx)
 	if err != nil {
-		return models.ScanChoice{}, err
+		return models.TemplateChoice{}, err
 	}
 	if ctx.defaultScan == nil {
 		id, err := s.defaultScanTemplate()
 		if err != nil {
-			return models.ScanChoice{}, err
+			return models.TemplateChoice{}, err
 		}
 		ctx.defaultScan = &id
 	}
@@ -211,15 +223,29 @@ func (s *Store) SetCategoryScanTemplate(categoryID string, templateID *string) (
 // categoryID set, it answers as if that category named templateID (nil for
 // none): what saving it would do.
 func (s *Store) ScanConflicts(categoryID string, templateID *string) (map[string]int, error) {
+	return s.templateConflicts(func(t categoryTraits) map[string]string { return t.scan }, categoryID, templateID)
+}
+
+// LabelConflicts lists the categories involved in active assets' label
+// template conflicts, as ScanConflicts does for scan templates.
+func (s *Store) LabelConflicts(categoryID string, templateID *string) (map[string]int, error) {
+	return s.templateConflicts(func(t categoryTraits) map[string]string { return t.label }, categoryID, templateID)
+}
+
+// templateConflicts lists the categories involved in active assets'
+// conflicts over the templates that named, given the categories' traits,
+// maps categories to.
+func (s *Store) templateConflicts(named func(categoryTraits) map[string]string, categoryID string, templateID *string) (map[string]int, error) {
 	traits, err := s.categoryTraits(storeQuerier{s})
 	if err != nil {
 		return nil, err
 	}
+	templates := named(traits)
 	if categoryID != "" {
 		if templateID == nil {
-			delete(traits.scan, categoryID)
+			delete(templates, categoryID)
 		} else {
-			traits.scan[categoryID] = *templateID
+			templates[categoryID] = *templateID
 		}
 	}
 	rows, err := s.Query(`SELECT ac.asset_id, ac.category_id FROM asset_categories ac
@@ -241,7 +267,7 @@ func (s *Store) ScanConflicts(categoryID string, templateID *string) (map[string
 	}
 	involved := map[string]int{}
 	for _, c := range cats {
-		for _, id := range traits.chooseScan(c, "").Contenders {
+		for _, id := range traits.choose(templates, c, "").Contenders {
 			involved[id]++
 		}
 	}

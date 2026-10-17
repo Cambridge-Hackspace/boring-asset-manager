@@ -89,6 +89,8 @@ export interface Category {
   low_stock_threshold?: number | null;
   /** The scan template its assets, and its subcategories' that name none, show. */
   scan_template_id?: string | null;
+  /** The label template its assets, and its subcategories' that name none, join the spool with. */
+  label_template_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -143,6 +145,8 @@ export interface AssetEvent {
     /** Who has, or had, the asset of a loan event, and when it is due back. */
     borrower?: { id: string; email: string; name?: string };
     due_at?: string;
+    /** What a label printed event printed: the template and printer as named then, or a download. */
+    label?: { template: string; printer?: string; download?: boolean; copies: number };
   };
 }
 
@@ -179,7 +183,9 @@ export interface AssetWithDetails {
   suggested_relation_type_ids: string[];
   /** The scopes it is in, from its categories and theirs, or default. */
   scopes: string[];
-  scan_template: ScanChoice;
+  scan_template: TemplateChoice;
+  /** The label template the spool queues it with; template_id is empty when no category names one. */
+  label_template: TemplateChoice;
   /** Its photos, in order; the first is the one lists show. */
   photos: AssetPhoto[];
 }
@@ -489,8 +495,8 @@ export interface ReportSection {
 export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report'] as const;
 export type ScanAction = (typeof scanActions)[number];
 
-/** The scan template an asset shows, and why: the closest category naming one, or the default. */
-export interface ScanChoice {
+/** The scan or label template an asset uses, and why: the closest category naming one, or for scan templates the default. */
+export interface TemplateChoice {
   template_id: string;
   source_category_id?: string;
   /** Set when equally close categories named different templates, and the tie was broken by depth, size or age. */
@@ -532,4 +538,50 @@ export interface AssetPhoto {
 /** Where a photo of an asset, or its thumbnail, is served. */
 export function photoUrl(assetId: string, photoId: string, thumb = false): string {
   return `/api/v1/assets/${encodeURIComponent(assetId)}/photos/${encodeURIComponent(photoId)}${thumb ? '?size=thumb' : ''}`;
+}
+
+/** Where a spool entry prints: a printer, a download, or nowhere yet (README §6.2). */
+export type SpoolDestination = `printer:${string}` | 'download' | '';
+
+/** Someone who added or printed a spool entry, by name. */
+export interface SpoolActor {
+  id: string;
+  name?: string;
+  token?: boolean;
+}
+
+/** One asset's label in the spool: waiting, or printed once printed_at is set. */
+export interface SpoolEntry {
+  id: string;
+  asset_id: string;
+  asset_name: string;
+  asset_archived: boolean;
+  template_id: string | null;
+  destination: SpoolDestination;
+  copies: number;
+  /** Why its label could not be produced last time. */
+  problem?: string;
+  added_by: SpoolActor;
+  added_at: string;
+  printed_at?: string;
+  printed_by?: SpoolActor;
+  printed_template?: string;
+  printed_on?: string;
+  /** What keeps a waiting entry from printing as it stands. */
+  problems: string[];
+}
+
+/** The spool, with the templates and printers its entries can take and the printers each template suits. */
+export interface Spool {
+  entries: SpoolEntry[];
+  templates: { id: string; name: string }[];
+  printers: { id: string; name: string }[];
+  fits: Record<string, string[]>;
+}
+
+/** What adding to the spool did. */
+export interface SpoolAddResult {
+  added: SpoolEntry[];
+  already_waiting: string[];
+  skipped: { asset_id: string; reason: string }[];
 }

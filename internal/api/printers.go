@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"log"
 	"net/http"
 	"time"
 
@@ -167,17 +168,8 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	driver, err := printers.Lookup(p.Driver)
-	if err != nil {
-		writeServerError(w, err, "find the printer's driver")
-		return
-	}
 	// Check the template against the printer before laying out assets.
-	label := printers.LabelSpec{WidthMM: t.Width, HeightMM: t.Height, DPI: t.DPI}
-	if t.Units == labels.UnitsIn {
-		label.WidthMM, label.HeightMM = t.Width*25.4, t.Height*25.4
-	}
-	plan, err := driver.Plan(store.PrinterSettings(p), label)
+	plan, err := planFor(p, t)
 	if errors.Is(err, printers.ErrDoesNotFit) {
 		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -209,11 +201,30 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
 		return
 	}
+	// The labels are printed whether or not their history records it.
+	if err := s.actingStore(r).RecordLabelsPrinted(req.AssetIDs, t.Name, p.Name, req.Copies); err != nil {
+		log.Printf("recording labels printed on %s: %v", p.Name, err)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"printer_id": p.ID,
 		"labels":     len(rendered),
 		"bytes":      len(job),
 	})
+}
+
+// planFor plans printing labels of template t on printer p: its driver's
+// plan, or an error wrapping printers.ErrDoesNotFit when they do not suit
+// the media loaded.
+func planFor(p *models.Printer, t *labels.Template) (printers.Plan, error) {
+	driver, err := printers.Lookup(p.Driver)
+	if err != nil {
+		return nil, fmt.Errorf("finding the printer's driver: %w", err)
+	}
+	label := printers.LabelSpec{WidthMM: t.Width, HeightMM: t.Height, DPI: t.DPI}
+	if t.Units == labels.UnitsIn {
+		label.WidthMM, label.HeightMM = t.Width*25.4, t.Height*25.4
+	}
+	return driver.Plan(store.PrinterSettings(p), label)
 }
 
 // FitRequest asks whether labels of a physical size suit a printer.

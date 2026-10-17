@@ -87,6 +87,8 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/reports/preview", body: `{"kind":"scan","asset_id":"{asset}","spec":{"sections":[{"type":"actions","actions":["open"]}]}}`},
 	{method: "PUT", path: "/api/v1/categories/{category}/scan-template", body: `{"scan_template_id":"{report}"}`},
 	{method: "GET", path: "/api/v1/categories/scan-conflicts"},
+	{method: "PUT", path: "/api/v1/categories/{category}/label-template", body: `{"label_template_id":"{template}"}`},
+	{method: "GET", path: "/api/v1/categories/label-conflicts", query: map[string][]string{"category_id": {"{category}"}, "label_template_id": {"{template}", ""}}},
 	{method: "GET", path: "/api/v1/scan/{asset}"},
 	{method: "GET", path: "/api/v1/reports/{report}/sections/1/csv"},
 	{method: "DELETE", path: "/api/v1/reports/{report}"},
@@ -97,7 +99,7 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/categories/effective-fields", body: `{"category_ids":["{category}","{category}"]}`},
 	{method: "POST", path: "/api/v1/categories/{category}/fields", body: `{"field_id":"{field}","is_required":true}`},
 	{method: "DELETE", path: "/api/v1/categories/{category}/fields/{field}"},
-	{method: "GET", path: "/api/v1/assets", query: map[string][]string{"search": {"dri", "%", ""}, "category_id": {"{category}"}, "archived": {"true", "false"}, "condition": {"problem", "ok"}, "loan": {"open", "overdue"}}},
+	{method: "GET", path: "/api/v1/assets", query: map[string][]string{"search": {"dri", "%", ""}, "category_id": {"{category}"}, "archived": {"true", "false"}, "condition": {"problem", "ok"}, "loan": {"open", "overdue"}, "conflict": {"scan_template", "label_template"}}},
 	{method: "GET", path: "/api/v1/assets/export.csv", query: map[string][]string{"search": {"a"}, "category_id": {"{category}"}}},
 	{method: "POST", path: "/api/v1/assets/import/preview", kind: "csv"},
 	{method: "POST", path: "/api/v1/assets/import", kind: "csv"},
@@ -145,6 +147,15 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/printers", body: `{"name":"Front desk {n}","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"10.0.0.9"},"media":"dk-22205"}`},
 	{method: "PUT", path: "/api/v1/printers/{printer}", body: `{"name":"Back desk {n}","driver":"tspl","model":"Rollo X1038","connection":{"type":"ipp","address":"ipp://cups.lan/printers/x"},"media":"4x6"}`},
 	{method: "DELETE", path: "/api/v1/printers/{printer}"},
+	{method: "GET", path: "/api/v1/spool", query: map[string][]string{"printed": {"true", "false"}, "older": {"true"}, "mine": {"true"}}},
+	{method: "POST", path: "/api/v1/spool", body: `{"asset_ids":["{asset}"],"template_id":"{template}","copies":2}`},
+	{method: "POST", path: "/api/v1/spool", body: `{"category_id":"{category}","subcategories":true,"destination":"download"}`},
+	{method: "POST", path: "/api/v1/spool", body: `{"filter":{"search":"saw","condition":"ok"},"destination":"printer:{printer}"}`},
+	{method: "PATCH", path: "/api/v1/spool", body: `{"entry_ids":["{spool}"],"template_id":"{template}","destination":"printer:{printer}","copies":3}`},
+	{method: "POST", path: "/api/v1/spool/download", body: `{"entry_ids":["{spool}"],"format":"pdf"}`},
+	{method: "POST", path: "/api/v1/spool/download", body: `{"entry_ids":["{spool}"],"format":"zip","mono":true}`},
+	{method: "POST", path: "/api/v1/spool/requeue", body: `{"entry_ids":["{spool}"]}`},
+	{method: "POST", path: "/api/v1/spool/remove", body: `{"entry_ids":["{spool}"]}`},
 	{method: "GET", path: "/api/v1/notifiers/drivers"},
 	{method: "GET", path: "/api/v1/notifiers/deliveries"},
 	{method: "GET", path: "/api/v1/notifiers"},
@@ -277,6 +288,8 @@ func kindOf(path string) string {
 		return "scope"
 	case "/api/v1/users":
 		return "user"
+	case "/api/v1/spool":
+		return "spool"
 	}
 	return ""
 }
@@ -322,7 +335,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {
@@ -496,7 +509,8 @@ func (fz *fuzzer) alive() {
 	}
 }
 
-// firstID finds the first "id" in a JSON document, breadth first.
+// firstID finds the first "id" in a JSON document, breadth first; a list's
+// items count one level below the list.
 func firstID(doc []byte) string {
 	var v any
 	if json.Unmarshal(doc, &v) != nil {
@@ -504,8 +518,13 @@ func firstID(doc []byte) string {
 	}
 	queue := []any{v}
 	for len(queue) > 0 {
-		m, ok := queue[0].(map[string]any)
+		next := queue[0]
 		queue = queue[1:]
+		if list, ok := next.([]any); ok {
+			queue = append(queue, list...)
+			continue
+		}
+		m, ok := next.(map[string]any)
 		if !ok {
 			continue
 		}

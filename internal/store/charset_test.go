@@ -125,10 +125,10 @@ func oldMariaDBSchema(t *testing.T, st *Store) {
 	exec("SET FOREIGN_KEY_CHECKS = 1")
 
 	timestamp := regexp.MustCompile(`\bTIMESTAMP\b`)
-	// Migrations 9, 10, 13 to 19 and 22 too, though they came later: they add
-	// columns and tables the store reads, so the test can write through the
-	// store. Their columns are latin1 as well.
-	for _, v := range []int{1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16, 17, 18, 19, 22} {
+	// Migrations 9, 10, 13 to 19, 22 and 23 too, though they came later:
+	// they add columns and tables the store reads, so the test can write
+	// through the store. Their columns are latin1 as well.
+	for _, v := range []int{1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16, 17, 18, 19, 22, 23} {
 		matches, _ := fs.Glob(migrations.MigrationFiles, fmt.Sprintf("%03d_*.sql", v))
 		if len(matches) != 1 {
 			t.Fatalf("migration %d: %v", v, matches)
