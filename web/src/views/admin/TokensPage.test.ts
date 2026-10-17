@@ -83,4 +83,23 @@ describe('TokensPage', () => {
     expect(days).toBeGreaterThan(29.9);
     expect(days).toBeLessThan(30.1);
   });
+
+  it('shows which tokens are connected live', async () => {
+    const live: APIToken = { ...old, id: 'cab', name: 'Cabinet A', revoked_at: null };
+    const at = '2026-10-17T09:00:00Z';
+    fakeApi({
+      'GET /tokens': () => ({ tokens: [live, old] }),
+      'GET /roles': () => ({ roles }),
+      'GET /tokens/connections': () => ({
+        connections: [
+          { id: 'c2', token_id: 'cab', remote: '10.0.0.8:1', opened_at: at, seen_at: at },
+          { id: 'c1', token_id: 'cab', remote: '10.0.0.7:1', opened_at: at, seen_at: at },
+        ],
+      }),
+    });
+    render(TokensPage, { params: {} });
+    const row = (await screen.findByRole('cell', { name: 'Cabinet A' })).closest('tr')!;
+    expect(row.textContent).toContain('2 live connections, since');
+    expect(screen.getByRole('cell', { name: 'Old script' }).closest('tr')!.textContent).not.toContain('live');
+  });
 });

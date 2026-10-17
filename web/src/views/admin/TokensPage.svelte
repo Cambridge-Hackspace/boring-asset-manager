@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { APIToken, Role } from '../../lib/models';
+  import type { APIToken, LiveConnection, Role } from '../../lib/models';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
@@ -32,11 +32,17 @@
   const roleName = (id: string) => roles.find((r) => r.id === id)?.name ?? id;
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '');
 
+  // Live connections each token holds open now, on any server (README §5.4).
+  let connections = $state<LiveConnection[]>([]);
+  const liveFor = (id: string) => connections.filter((c) => c.token_id === id);
+
   async function load() {
     try {
-      [tokens, roles] = await Promise.all([
+      [tokens, roles, connections] = await Promise.all([
         request<{ tokens: APIToken[] }>('GET', '/tokens').then((r) => r.tokens ?? []),
         request<{ roles: Role[] }>('GET', '/roles').then((r) => (r.roles ?? []).filter((role) => !role.public)), // everyone holds the public role
+        // Extra: the tokens show without it.
+        request<{ connections: LiveConnection[] }>('GET', '/tokens/connections').then((r) => r.connections ?? [], () => []),
       ]);
     } catch (err) {
       error = messageOf(err);
@@ -173,7 +179,14 @@
             <td class="py-2 pr-4">{t.role_ids.map(roleName).join(', ') || 'None'}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{when(t.created_at)}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{when(t.last_used_at) || 'Never'}</td>
-            <td class="py-2 pr-4 whitespace-nowrap">{standing(t)}</td>
+            <td class="py-2 pr-4 whitespace-nowrap">
+              {standing(t)}
+              {#if liveFor(t.id).length}
+                <span class="block text-xs text-zinc-600 dark:text-zinc-400">
+                  {liveFor(t.id).length === 1 ? 'Connected live' : `${liveFor(t.id).length} live connections`}, since {new Date(liveFor(t.id).at(-1)!.opened_at).toLocaleString()}
+                </span>
+              {/if}
+            </td>
             <td class="py-2 text-right">
               {#if !t.revoked_at}
                 <ConfirmButton label="Revoke" question="Revoke {t.name}? Scripts using it stop working at once." onconfirm={() => revoke(t)} />

@@ -58,6 +58,8 @@ func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeStoreError(w, err, "revoke the token")
 	default:
+		// Its live connections end now, here; other servers notice soon.
+		s.live.closeToken(t.ID, "the token was revoked")
 		writeJSON(w, http.StatusOK, map[string]*models.APIToken{"token": t})
 	}
 }

@@ -714,3 +714,26 @@ type EventThing struct {
 	Codes  map[string]string `json:"codes"`
 	Fields map[string]string `json:"fields"`
 }
+
+// LiveConnection is a live event connection a server holds open (README
+// §5.4): for an API token, or for a signed-in user.
+type LiveConnection struct {
+	ID       string    `json:"id"`
+	TokenID  *string   `json:"token_id,omitempty"`
+	UserID   *string   `json:"user_id,omitempty"`
+	Remote   string    `json:"remote"`
+	OpenedAt time.Time `json:"opened_at"`
+	SeenAt   time.Time `json:"seen_at"`
+}
+
+// ActionReply is a device's answer to an action pressed: done or failed,
+// with a message, and who answered as they were named then.
+type ActionReply struct {
+	ID        string    `json:"id"`
+	EventID   string    `json:"event_id"`
+	Name      string    `json:"name"`
+	Token     bool      `json:"token"`
+	OK        bool      `json:"ok"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"created_at"`
+}

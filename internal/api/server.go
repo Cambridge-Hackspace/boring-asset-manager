@@ -30,6 +30,7 @@ type Server struct {
 	transport  printers.Transport
 	spool      *spooler
 	presses    *pressLimiter
+	live       *liveHub
 	httpServer *http.Server
 }
 
@@ -45,6 +46,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		transport: printers.NewDispatcher(cfg.Printers.Devices),
 		spool:     newSpooler(),
 		presses:   newPressLimiter(),
+		live:      newLiveHub(),
 	}
 
 	// Unauthenticated public endpoints
@@ -89,6 +91,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/tokens", manageTokens(s.handleListTokens))
 	mux.Handle("POST /api/v1/tokens", manageTokens(s.handleCreateToken))
 	mux.Handle("DELETE /api/v1/tokens/{id}", manageTokens(s.handleRevokeToken))
+	mux.Handle("GET /api/v1/tokens/connections", manageTokens(s.handleLiveConnections))
 
 	// Field Corpus endpoints
 	mux.Handle("GET /api/v1/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListFields)))
@@ -124,6 +127,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /api/v1/categories/{id}/actions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryActions)))
 	mux.Handle("PUT /api/v1/categories/{id}/actions", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryActions)))
 	mux.Handle("POST /api/v1/assets/{id}/actions/{key}", RequirePermission(rbac.PermAssetsAct)(http.HandlerFunc(s.handlePressAction)))
+	mux.Handle("GET /api/v1/assets/{id}/actions/replies", RequirePermission(rbac.PermAssetsAct)(http.HandlerFunc(s.handleActionReplies)))
+	mux.Handle("GET /api/v1/events/live", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleLiveEvents)))
 
 	// Reports: anyone who reads assets runs them; reports.manage edits them.
 	mux.Handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))
@@ -233,7 +238,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /", webui.Handler())
 
 	// Wrap root handler with session extraction middleware
-	rootHandler := LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(mux)))
+	rootHandler := LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(s.PokeLive(mux))))
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
