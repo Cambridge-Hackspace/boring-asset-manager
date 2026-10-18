@@ -209,7 +209,7 @@ func FuzzToolArguments(f *testing.F) {
 		if json.Unmarshal([]byte(args), &arguments) != nil {
 			return
 		}
-		cs, _ := connect(t, Caller{Kind: "token", ID: "t", Name: "T", Permissions: perms}, allTools(), 404, `{"error":"Not found"}`)
+		cs, _ := connect(t, Caller{Kind: "person", ID: "t", Name: "T", Token: "Claude", Permissions: perms}, allTools(), 404, `{"error":"Not found"}`)
 		_, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: arguments})
 		if err != nil && slices.Contains(ToolNames(), name) && !strings.Contains(err.Error(), "invalid") && !strings.Contains(err.Error(), "validat") {
 			t.Errorf("%s(%s): %v", name, args, err)

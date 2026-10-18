@@ -30,15 +30,20 @@ const TokenPrefix = "bam_"
 // a minute, so a busy script does not write on every request.
 const tokenUseInterval = time.Minute
 
-const tokenColumns = "id, name, created_by, created_at, expires_at, last_used_at, revoked_at"
+// tokenColumns and tokenTables read a token, with the name of the user a
+// personal token belongs to.
+const (
+	tokenColumns = "t.id, t.name, t.created_by, t.created_at, t.expires_at, t.last_used_at, t.revoked_at, t.user_id, u.name"
+	tokenTables  = "api_tokens t LEFT JOIN users u ON u.id = t.user_id"
+)
 
 func scanToken(row interface{ Scan(...any) error }) (models.APIToken, error) {
 	var (
-		t         models.APIToken
-		createdBy sql.NullString
+		t                         models.APIToken
+		createdBy, userID, userNm sql.NullString
 	)
-	err := row.Scan(&t.ID, &t.Name, &createdBy, &t.CreatedAt, &t.ExpiresAt, &t.LastUsedAt, &t.RevokedAt)
-	t.CreatedBy = createdBy.String
+	err := row.Scan(&t.ID, &t.Name, &createdBy, &t.CreatedAt, &t.ExpiresAt, &t.LastUsedAt, &t.RevokedAt, &userID, &userNm)
+	t.CreatedBy, t.UserID, t.UserName = createdBy.String, userID.String, userNm.String
 	t.RoleIDs = []string{}
 	return t, err
 }
@@ -47,6 +52,17 @@ func scanToken(row interface{ Scan(...any) error }) (models.APIToken, error) {
 // and returns it with its secret, which is shown once and not stored. A nil
 // expiresAt never expires.
 func (s *Store) CreateToken(name string, roleIDs []string, expiresAt *time.Time, createdBy string) (*models.APIToken, string, error) {
+	return s.createToken(name, roleIDs, expiresAt, createdBy, "")
+}
+
+// CreatePersonalToken creates a personal token for a user, for an assistant:
+// it holds no roles, and acts as the user, with their permissions as they are
+// whenever it is used. It returns the token with its secret, shown once.
+func (s *Store) CreatePersonalToken(userID, name string, expiresAt *time.Time) (*models.APIToken, string, error) {
+	return s.createToken(name, nil, expiresAt, userID, userID)
+}
+
+func (s *Store) createToken(name string, roleIDs []string, expiresAt *time.Time, createdBy, userID string) (*models.APIToken, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, "", fmt.Errorf("%w: a name is required", ErrInvalidToken)
@@ -74,12 +90,15 @@ func (s *Store) CreateToken(name string, roleIDs []string, expiresAt *time.Time,
 		return nil, "", fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer tx.Rollback()
-	var by any
+	var by, owner any
 	if createdBy != "" {
 		by = createdBy
 	}
-	_, err = s.TxExec(tx, "INSERT INTO api_tokens (id, name, token_hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, name, sessionKey(secret), by, now, expiresAt)
+	if userID != "" {
+		owner = userID
+	}
+	_, err = s.TxExec(tx, "INSERT INTO api_tokens (id, name, token_hash, created_by, created_at, expires_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		id, name, sessionKey(secret), by, now, expiresAt, owner)
 	if err != nil {
 		return nil, "", fmt.Errorf("inserting token: %w", err)
 	}
@@ -107,9 +126,27 @@ func (s *Store) CreateToken(name string, roleIDs []string, expiresAt *time.Time,
 	return t, secret, err
 }
 
-// ListTokens returns every token, revoked ones included, newest first.
+// ListTokens returns every token, personal ones and revoked ones included,
+// newest first.
 func (s *Store) ListTokens() ([]models.APIToken, error) {
-	rows, err := s.Query("SELECT " + tokenColumns + " FROM api_tokens ORDER BY created_at DESC, id")
+	return s.listTokens("")
+}
+
+// ListPersonalTokens returns a user's personal tokens, revoked ones
+// included, newest first.
+func (s *Store) ListPersonalTokens(userID string) ([]models.APIToken, error) {
+	if userID == "" {
+		return []models.APIToken{}, nil
+	}
+	return s.listTokens(userID)
+}
+
+func (s *Store) listTokens(userID string) ([]models.APIToken, error) {
+	query, args := "SELECT "+tokenColumns+" FROM "+tokenTables, []any{}
+	if userID != "" {
+		query, args = query+" WHERE t.user_id = ?", append(args, userID)
+	}
+	rows, err := s.Query(query+" ORDER BY t.created_at DESC, t.id", args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing tokens: %w", err)
 	}
@@ -140,7 +177,7 @@ func (s *Store) ListTokens() ([]models.APIToken, error) {
 
 // GetToken returns a token, or ErrTokenNotFound.
 func (s *Store) GetToken(id string) (*models.APIToken, error) {
-	t, err := scanToken(s.QueryRow("SELECT "+tokenColumns+" FROM api_tokens WHERE id = ?", id))
+	t, err := scanToken(s.QueryRow("SELECT "+tokenColumns+" FROM "+tokenTables+" WHERE t.id = ?", id))
 	if err == sql.ErrNoRows {
 		return nil, ErrTokenNotFound
 	}
@@ -188,15 +225,19 @@ func (s *Store) RevokeToken(id string) (*models.APIToken, error) {
 }
 
 // AuthenticateToken finds the token with this secret and the permissions
-// its roles grant. A token that is unknown, revoked or expired is
-// ErrTokenNotFound. Its last use is recorded, at most once a minute.
+// its roles grant, or, for a personal token, its user's permissions now. A
+// token that is unknown, revoked or expired, or personal to a user who is
+// deactivated or archived, is ErrTokenNotFound. Its last use is recorded, at
+// most once a minute.
 func (s *Store) AuthenticateToken(secret string) (*models.APIToken, map[string]bool, error) {
 	if !strings.HasPrefix(secret, TokenPrefix) {
 		return nil, nil, ErrTokenNotFound
 	}
 	now := time.Now().UTC()
-	t, err := scanToken(s.QueryRow("SELECT "+tokenColumns+" FROM api_tokens WHERE token_hash = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
-		sessionKey(secret), now))
+	t, err := scanToken(s.QueryRow("SELECT "+tokenColumns+" FROM "+tokenTables+
+		" WHERE t.token_hash = ? AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at > ?)"+
+		" AND (t.user_id IS NULL OR (u.is_active = ? AND u.archived_at IS NULL))",
+		sessionKey(secret), now, true))
 	if err == sql.ErrNoRows {
 		return nil, nil, ErrTokenNotFound
 	}
@@ -209,7 +250,12 @@ func (s *Store) AuthenticateToken(secret string) (*models.APIToken, map[string]b
 		}
 		t.LastUsedAt = &now
 	}
-	perms, err := grantedKeys(storeQuerier{s}, "SELECT role_id FROM api_token_roles WHERE token_id = ?", t.ID)
+	var perms map[string]bool
+	if t.UserID != "" {
+		perms, err = s.GetUserPermissions(t.UserID)
+	} else {
+		perms, err = grantedKeys(storeQuerier{s}, "SELECT role_id FROM api_token_roles WHERE token_id = ?", t.ID)
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading token permissions: %w", err)
 	}

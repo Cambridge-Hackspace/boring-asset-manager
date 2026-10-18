@@ -328,11 +328,12 @@ func (s *Server) handleLiveEvents(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUpgradeRequired, "Connect with a WebSocket (version 13) to receive events live")
 		return
 	}
+	// A personal token's connections count against its user.
 	var tokenID, userID string
-	if t := CurrentToken(r.Context()); t != nil {
-		tokenID = t.ID
-	} else if u := CurrentUser(r.Context()); u != nil {
+	if u := CurrentUser(r.Context()); u != nil {
 		userID = u.ID
+	} else if t := CurrentToken(r.Context()); t != nil {
+		tokenID = t.ID
 	}
 	open, err := s.store.ListLiveConnections(time.Now().Add(-liveStale), tokenID, userID)
 	if err != nil {

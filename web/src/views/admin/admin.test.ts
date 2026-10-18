@@ -199,26 +199,31 @@ describe('UsersPage', () => {
 });
 
 describe('AccountPage', () => {
+  // The Assistants section reads the account's personal tokens.
+  const assistants = { 'GET /auth/tokens': () => ({ tokens: [] }), 'GET /info': () => ({ mcp: true, base_url: 'https://bam.example.org' }) };
+  const changes = <R extends { method: string }>(sent: R[]) => sent.filter((r) => r.method !== 'GET');
+
   it('refuses mismatched passwords without asking the server', async () => {
-    const { sent } = fakeApi({});
+    const { sent } = fakeApi({ ...assistants });
     render(AccountPage, { params: {} });
     await fireEvent.input(screen.getByLabelText('Current password'), { target: { value: 'OldPass123!' } });
     await fireEvent.input(screen.getByLabelText('New password'), { target: { value: 'NewPass123!' } });
     await fireEvent.input(screen.getByLabelText('Repeat new password'), { target: { value: 'NewPass124!' } });
     await fireEvent.submit(screen.getByRole('button', { name: 'Change password' }));
     expect(screen.getByRole('alert').textContent).toContain('do not match');
-    expect(sent).toHaveLength(0);
+    expect(changes(sent)).toHaveLength(0);
   });
 
   it('sets your own name, and shows it where you are named', async () => {
     const { sent } = fakeApi({
+      ...assistants,
       'PUT /auth/name': (body) => ({ user: { ...session.user, ...(body as object) } }),
     });
     render(AccountPage, { params: {} });
     await fireEvent.input(screen.getByLabelText('Your name'), { target: { value: 'Ada Lovelace' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
     await screen.findByText('Name saved.');
-    expect(sent[0]!.body).toEqual({ name: 'Ada Lovelace' });
+    expect(changes(sent)[0]!.body).toEqual({ name: 'Ada Lovelace' });
     expect(session.user!.name).toBe('Ada Lovelace');
   });
 });
