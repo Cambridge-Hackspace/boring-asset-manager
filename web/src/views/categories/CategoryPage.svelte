@@ -44,18 +44,21 @@
       ? Object.keys(afterSaving).filter((c) => (afterSaving![c] ?? 0) > (conflicts[c] ?? 0))
       : [],
   );
-  // Label templates (README §6.2): the one its assets join the spool with,
-  // and the ties between categories that choose them.
+  // Label templates (README §6.2): those its assets join the spool with, in
+  // order of preference, and the ties between categories that choose them.
   let labelTemplates = $state<TemplateSummary[]>([]);
-  let labelTemplate = $state('');
-  let savedLabelTemplate = $state('');
+  let labelList = $state<string[]>([]);
+  let savedLabelList = $state<string[]>([]);
+  let adding = $state('');
   let labelConflicts = $state<Record<string, number>>({});
   let labelAfterSaving = $state<Record<string, number> | null>(null);
+  const labelsChanged = $derived(labelList.join(',') !== savedLabelList.join(','));
   const newLabelTies = $derived(
-    labelAfterSaving && labelTemplate !== savedLabelTemplate
+    labelAfterSaving && labelsChanged
       ? Object.keys(labelAfterSaving).filter((c) => (labelAfterSaving![c] ?? 0) > (labelConflicts[c] ?? 0))
       : [],
   );
+  const templateName = (tid: string) => labelTemplates.find((t) => t.id === tid)?.name ?? 'A deleted template';
   const canSpool = $derived(session.can('labels.print'));
   // Actions (README §5.4): which it offers on its assets, and whether its
   // subcategories' too.
@@ -132,7 +135,8 @@
           scanTemplates = (await request<{ reports: Report[] }>('GET', '/reports?kind=scan')).reports ?? [];
           scanTemplate = savedScanTemplate = c.scan_template_id ?? '';
           labelTemplates = (await request<{ templates: TemplateSummary[] }>('GET', '/templates')).templates ?? [];
-          labelTemplate = savedLabelTemplate = c.label_template_id ?? '';
+          labelList = [...(c.label_template_ids ?? [])];
+          savedLabelList = [...labelList];
           actions = (await request<{ actions: AssetAction[] }>('GET', '/actions')).actions ?? [];
           const own = (await request<{ actions: CategoryAction[] }>('GET', `/categories/${encodeURIComponent(id)}/actions`)).actions ?? [];
           offered = Object.fromEntries(actions.map((a) => {
@@ -198,27 +202,39 @@
     }
   }
 
-  // What saving the chosen label template would do, to warn before it ties.
-  async function checkLabelTemplate() {
+  // What saving the label templates as listed would do, to warn before
+  // they tie.
+  async function checkLabelTemplates() {
     labelAfterSaving = null;
-    if (labelTemplate === savedLabelTemplate) return;
+    if (!labelsChanged) return;
     try {
-      const q = `category_id=${encodeURIComponent(id)}&label_template_id=${encodeURIComponent(labelTemplate)}`;
+      const q = `category_id=${encodeURIComponent(id)}&label_template_ids=${encodeURIComponent(labelList.join(','))}`;
       labelAfterSaving = (await request<{ categories: Record<string, number> }>('GET', `/categories/label-conflicts?${q}`)).categories ?? {};
     } catch (err) {
       error = messageOf(err);
     }
   }
 
-  async function saveLabelTemplate(event: SubmitEvent) {
+  function changeLabels(next: string[]) {
+    labelList = next;
+    void checkLabelTemplates();
+  }
+
+  function moveLabel(i: number, by: number) {
+    const next = [...labelList];
+    [next[i], next[i + by]] = [next[i + by]!, next[i]!];
+    changeLabels(next);
+  }
+
+  async function saveLabelTemplates(event: SubmitEvent) {
     event.preventDefault();
     error = saved = '';
     try {
-      await request('PUT', `/categories/${encodeURIComponent(id)}/label-template`, { label_template_id: labelTemplate || null });
-      savedLabelTemplate = labelTemplate;
+      await request('PUT', `/categories/${encodeURIComponent(id)}/label-template`, { label_template_ids: labelList });
+      savedLabelList = [...labelList];
       labelAfterSaving = null;
       labelConflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')).categories ?? {};
-      saved = 'Label template saved.';
+      saved = 'Label templates saved.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -557,17 +573,35 @@
         <h2 id="labels-heading" class="mb-1 text-lg font-semibold">Labels</h2>
         {#if canManage && labelTemplates.length}
           <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
-            The template its assets, and those of its subcategories, join the spool with, unless they choose their own.
+            The templates its assets, and those of its subcategories, join the spool with, unless they choose their own. Each
+            label takes the first that suits the printer it goes to, so the same label can come in several sizes.
           </p>
-          <form class="mb-4 flex flex-wrap items-end gap-2" onsubmit={saveLabelTemplate}>
-            <div>
-              <label class="label" for="label-template">Label template</label>
-              <select id="label-template" class="input" bind:value={labelTemplate} onchange={checkLabelTemplate}>
-                <option value="">Its parent’s, or none</option>
-                {#each labelTemplates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
-              </select>
+          <form class="mb-4 space-y-2" aria-label="Label templates" onsubmit={saveLabelTemplates}>
+            {#if labelList.length}
+              <ol class="space-y-1 text-sm">
+                {#each labelList as tid, i (tid)}
+                  <li class="flex flex-wrap items-center gap-2">
+                    <span class="min-w-48">{i + 1}. {templateName(tid)}</span>
+                    <button type="button" class="btn-secondary" aria-label="Move {templateName(tid)} up" disabled={i === 0} onclick={() => moveLabel(i, -1)}>↑</button>
+                    <button type="button" class="btn-secondary" aria-label="Move {templateName(tid)} down" disabled={i === labelList.length - 1} onclick={() => moveLabel(i, 1)}>↓</button>
+                    <button type="button" class="btn-secondary" aria-label="Remove {templateName(tid)}" onclick={() => changeLabels(labelList.filter((x) => x !== tid))}>Remove</button>
+                  </li>
+                {/each}
+              </ol>
+            {:else}
+              <p class="text-sm text-zinc-600 dark:text-zinc-400">None: its parent’s, if it names any.</p>
+            {/if}
+            <div class="flex flex-wrap items-end gap-2">
+              <div>
+                <label class="label" for="label-template-add">Add a template</label>
+                <select id="label-template-add" class="input" bind:value={adding}>
+                  <option value="">Choose one</option>
+                  {#each labelTemplates.filter((t) => !labelList.includes(t.id)) as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+                </select>
+              </div>
+              <button type="button" class="btn-secondary" disabled={!adding} onclick={() => { changeLabels([...labelList, adding]); adding = ''; }}>Add</button>
+              <button type="submit" class="btn-primary" disabled={!labelsChanged}>Save label templates</button>
             </div>
-            <button type="submit" class="btn-secondary" disabled={labelTemplate === savedLabelTemplate}>Save label template</button>
           </form>
           {#if newLabelTies.length}
             <p class="mb-4 text-sm text-amber-800 dark:text-amber-300" role="alert">

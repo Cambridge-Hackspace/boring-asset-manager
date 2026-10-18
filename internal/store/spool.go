@@ -47,6 +47,9 @@ type SpoolAdd struct {
 	TemplateID  *string
 	Destination string
 	Copies      int
+	// FromCategory is set when the template is the asset's categories'
+	// choice rather than one chosen by hand.
+	FromCategory bool
 }
 
 // SpoolFilter selects spool entries: those waiting, or with Printed those
@@ -75,7 +78,7 @@ type SpoolUpdate struct {
 const spoolColumns = `e.id, e.asset_id, a.name, a.archived_at, e.template_id, e.printer_id, e.to_download, e.copies, e.problem,
 	e.added_by, COALESCE(adu.name, adt.name, ''), adt.id IS NOT NULL, e.added_at,
 	e.printed_at, e.printed_by, COALESCE(pru.name, prt.name, ''), prt.id IS NOT NULL, e.printed_template, e.printed_on,
-	b.state, j.id, j.target_name, e.pool_id`
+	b.state, j.id, j.target_name, e.pool_id, e.template_from_category`
 
 const spoolJoins = ` FROM spool_entries e JOIN assets a ON a.id = e.asset_id
 	LEFT JOIN users adu ON adu.id = e.added_by LEFT JOIN api_tokens adt ON adt.id = e.added_by
@@ -97,7 +100,7 @@ func scanSpoolEntry(row interface{ Scan(...any) error }) (models.SpoolEntry, err
 	err := row.Scan(&e.ID, &e.AssetID, &e.AssetName, &archived, &template, &printer, &download, &e.Copies, &e.Problem,
 		&addedBy, &e.AddedBy.Name, &addedToken, &e.AddedAt,
 		&printed, &printedBy, &printedName, &prntToken, &e.PrintedTemplate, &e.PrintedOn,
-		&batchState, &jobID, &jobTarget, &pool)
+		&batchState, &jobID, &jobTarget, &pool, &e.TemplateFromCategory)
 	if err != nil {
 		return e, err
 	}
@@ -306,8 +309,8 @@ func (s *Store) AddToSpool(adds []SpoolAdd) (added []models.SpoolEntry, already 
 		}
 		// A microsecond apart, so the spool lists them in the order given.
 		id := uuid.NewString()
-		_, err = s.TxExec(tx, `INSERT INTO spool_entries (id, asset_id, template_id, printer_id, pool_id, to_download, copies, added_by, added_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, a.AssetID, a.TemplateID, printerID, poolID, download, a.Copies, s.actorID(), now.Add(time.Duration(len(ids))*time.Microsecond))
+		_, err = s.TxExec(tx, `INSERT INTO spool_entries (id, asset_id, template_id, template_from_category, printer_id, pool_id, to_download, copies, added_by, added_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, a.AssetID, a.TemplateID, a.FromCategory && a.TemplateID != nil, printerID, poolID, download, a.Copies, s.actorID(), now.Add(time.Duration(len(ids))*time.Microsecond))
 		if err != nil {
 			return nil, nil, fmt.Errorf("adding to the spool: %w", err)
 		}
@@ -405,7 +408,8 @@ func (s *Store) UpdateSpool(ids []string, u SpoolUpdate) error {
 				return err
 			}
 		}
-		set, args = append(set, "template_id = ?"), append(args, u.TemplateID)
+		// A template set by hand stays when printers' rolls change.
+		set, args = append(set, "template_id = ?", "template_from_category = ?"), append(args, u.TemplateID, false)
 	}
 	if u.SetDestination {
 		printerID, poolID, download, err := s.destinationColumns(q, u.Destination)
@@ -478,19 +482,94 @@ func (s *Store) RecordLabelsPrinted(assetIDs []string, template, printer string,
 	return tx.Commit()
 }
 
-// SetCategoryLabelTemplate names the label template a category's assets
-// join the spool with, or with nil, none, so they take their parent's.
+// MaxCategoryLabelTemplates bounds how many label templates a category
+// names.
+const MaxCategoryLabelTemplates = 10
+
+// ErrInvalidLabelTemplates is wrapped by refusals of a category's list of
+// label templates.
+var ErrInvalidLabelTemplates = errors.New("invalid label templates")
+
+// MoveSpoolTemplates gives waiting entries other templates of their
+// categories', by entry ID, when their printer's roll no longer suits the
+// ones they have. Entries in a job, printed, or whose template was chosen
+// by hand are left alone; it returns how many moved.
+func (s *Store) MoveSpoolTemplates(templates map[string]string) (int, error) {
+	if len(templates) == 0 {
+		return 0, nil
+	}
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if err := s.takeLock(tx, "spool"); err != nil {
+		return 0, err
+	}
+	moved := 0
+	for id, template := range templates {
+		res, err := s.TxExec(tx, `UPDATE spool_entries SET template_id = ?, problem = '' WHERE id = ? AND template_from_category = ?
+			AND printed_at IS NULL AND NOT EXISTS (SELECT 1 FROM spool_batches b WHERE b.id = spool_entries.batch_id AND b.state IN (?, ?))`,
+			template, id, true, models.SpoolWaiting, models.SpoolSending)
+		if err != nil {
+			return 0, fmt.Errorf("moving a label to another template: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			moved++
+		}
+	}
+	return moved, tx.Commit()
+}
+
+// SetCategoryLabelTemplate names the one label template a category's
+// assets join the spool with, or with nil, none; see
+// SetCategoryLabelTemplates.
 func (s *Store) SetCategoryLabelTemplate(categoryID string, templateID *string) (*models.Category, error) {
+	var ids []string
+	if templateID != nil {
+		ids = []string{*templateID}
+	}
+	return s.SetCategoryLabelTemplates(categoryID, ids)
+}
+
+// SetCategoryLabelTemplates names the label templates a category's assets
+// join the spool with, in order of preference, or with none, so they take
+// their parent's.
+func (s *Store) SetCategoryLabelTemplates(categoryID string, templateIDs []string) (*models.Category, error) {
 	if _, err := s.GetCategoryByID(categoryID); err != nil {
 		return nil, err
 	}
-	if templateID != nil {
-		if err := templateExists(s, *templateID); err != nil {
+	if len(templateIDs) > MaxCategoryLabelTemplates {
+		return nil, fmt.Errorf("%w: a category names at most %d", ErrInvalidLabelTemplates, MaxCategoryLabelTemplates)
+	}
+	seen := map[string]bool{}
+	for _, id := range templateIDs {
+		if seen[id] {
+			return nil, fmt.Errorf("%w: a template is named twice", ErrInvalidLabelTemplates)
+		}
+		seen[id] = true
+		if err := templateExists(s, id); err != nil {
 			return nil, err
 		}
 	}
-	if _, err := s.Exec("UPDATE categories SET label_template_id = ?, updated_at = ? WHERE id = ?", templateID, time.Now().UTC(), categoryID); err != nil {
-		return nil, fmt.Errorf("setting the label template: %w", err)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := s.TxExec(tx, "DELETE FROM category_label_templates WHERE category_id = ?", categoryID); err != nil {
+		return nil, fmt.Errorf("setting the label templates: %w", err)
+	}
+	for i, id := range templateIDs {
+		if _, err := s.TxExec(tx, "INSERT INTO category_label_templates (category_id, template_id, sort_order) VALUES (?, ?, ?)", categoryID, id, i); err != nil {
+			return nil, fmt.Errorf("setting the label templates: %w", err)
+		}
+	}
+	if _, err := s.TxExec(tx, "UPDATE categories SET updated_at = ? WHERE id = ?", time.Now().UTC(), categoryID); err != nil {
+		return nil, fmt.Errorf("setting the label templates: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing: %w", err)
 	}
 	return s.GetCategoryByID(categoryID)
 }

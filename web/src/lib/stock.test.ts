@@ -39,6 +39,7 @@ describe('describeChanges', () => {
         stranded: [
           { template_id: 't', template_name: 'Bin tag', destination: 'printer:a', target: 'Front desk', labels: 2 },
           { template_id: 't', template_name: 'Bin tag', destination: 'pool:b', target: 'Bench', labels: 1 },
+          { template_id: 't', template_name: 'Bin tag', destination: 'printer:a', target: 'Front desk', labels: 4, move_to: 'w', move_to_name: 'Wide tag' },
         ],
         categories: [{ id: 'c1', name: 'Tools' }, { id: 'c2', name: 'Bins' }],
         pools: [{ id: 'b', name: 'Bench' }],
@@ -46,6 +47,7 @@ describe('describeChanges', () => {
     ).toEqual([
       '2 labels waiting for Front desk with Bin tag would no longer fit.',
       '1 label waiting for Bench with Bin tag would no longer fit.',
+      '4 labels waiting for Front desk with Bin tag would move to Wide tag, their category’s next template that fits.',
       'No printer would suit the label template of the categories Tools, Bins.',
       'The printers in Bench would no longer be loaded alike.',
     ]);

@@ -139,6 +139,33 @@ func (o *spoolOptions) warn(templateID, destination string, warnings ...string) 
 	o.resp.FitWarnings[templateID][destination] = append(o.resp.FitWarnings[templateID][destination], warnings...)
 }
 
+// suits reports whether a template's labels suit a destination: the
+// printer, a printer in the pool, or a download, which takes any.
+func (o *spoolOptions) suits(templateID, destination string) bool {
+	if id, ok := strings.CutPrefix(destination, models.DestinationPrinterPrefix); ok {
+		_, unfit := o.unfit[templateID][id]
+		return o.templates[templateID] != nil && !unfit
+	}
+	if id, ok := strings.CutPrefix(destination, models.DestinationPoolPrefix); ok {
+		return o.pools[id] != nil && len(o.poolMembersFor(o.pools[id], templateID)) > 0
+	}
+	return o.templates[templateID] != nil
+}
+
+// preferred is the first of a category's templates, in order of
+// preference, that suits a destination; with none that does, or no
+// destination, the first.
+func (o *spoolOptions) preferred(templateIDs []string, destination string) string {
+	if destination != "" {
+		for _, id := range templateIDs {
+			if o.suits(id, destination) {
+				return id
+			}
+		}
+	}
+	return templateIDs[0]
+}
+
 // poolMembersFor lists a pool's printers that a template's labels suit.
 func (o *spoolOptions) poolMembersFor(p *models.PrinterPool, templateID string) []models.PoolMember {
 	var out []models.PoolMember
@@ -396,16 +423,19 @@ func (s *Server) handleAddToSpool(w http.ResponseWriter, r *http.Request) {
 	adds := make([]store.SpoolAdd, 0, len(assets))
 	for _, a := range assets {
 		add := store.SpoolAdd{AssetID: a.Asset.ID, Copies: copies}
+		if req.Destination != nil {
+			add.Destination = *req.Destination
+		}
 		switch {
 		case req.TemplateID != "":
 			add.TemplateID = &req.TemplateID
-		case a.LabelTemplate.TemplateID != "":
-			id := a.LabelTemplate.TemplateID
-			add.TemplateID = &id
+		case len(a.LabelTemplate.TemplateIDs) > 0:
+			// The first of its categories' templates that suits where it
+			// goes, or with nowhere yet, the first.
+			id := o.preferred(a.LabelTemplate.TemplateIDs, add.Destination)
+			add.TemplateID, add.FromCategory = &id, true
 		}
-		if req.Destination != nil {
-			add.Destination = *req.Destination
-		} else {
+		if req.Destination == nil {
 			add.Destination = o.onlyPrinter(add.TemplateID)
 		}
 		adds = append(adds, add)
@@ -574,7 +604,7 @@ func (s *Server) handleRequeueSpool(w http.ResponseWriter, r *http.Request) {
 			skipped = append(skipped, SpoolSkipped{AssetID: e.AssetID, Reason: "archived"})
 			continue
 		}
-		adds = append(adds, store.SpoolAdd{AssetID: e.AssetID, TemplateID: e.TemplateID, Destination: e.Destination, Copies: e.Copies})
+		adds = append(adds, store.SpoolAdd{AssetID: e.AssetID, TemplateID: e.TemplateID, Destination: e.Destination, Copies: e.Copies, FromCategory: e.TemplateFromCategory})
 	}
 	s.addToSpool(w, r, adds, skipped)
 }
@@ -716,10 +746,12 @@ func (s *Server) handleDownloadSpool(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-// CategoryLabelTemplateRequest names a category's label template, or with
-// null or "", none.
+// CategoryLabelTemplateRequest names a category's label templates in order
+// of preference (label_template_ids), or just one (label_template_id); an
+// empty list, null or "" names none.
 type CategoryLabelTemplateRequest struct {
-	LabelTemplateID *string `json:"label_template_id"`
+	LabelTemplateIDs []string `json:"label_template_ids"`
+	LabelTemplateID  *string  `json:"label_template_id"`
 }
 
 // handleSetCategoryLabelTemplate: PUT /api/v1/categories/{id}/label-template
@@ -729,15 +761,18 @@ func (s *Server) handleSetCategoryLabelTemplate(w http.ResponseWriter, r *http.R
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if req.LabelTemplateID != nil && *req.LabelTemplateID == "" {
-		req.LabelTemplateID = nil
+	ids := req.LabelTemplateIDs
+	if req.LabelTemplateIDs == nil && req.LabelTemplateID != nil && *req.LabelTemplateID != "" {
+		ids = []string{*req.LabelTemplateID}
 	}
-	cat, err := s.store.SetCategoryLabelTemplate(r.PathValue("id"), req.LabelTemplateID)
+	cat, err := s.store.SetCategoryLabelTemplates(r.PathValue("id"), ids)
 	switch {
 	case errors.Is(err, store.ErrCategoryNotFound):
 		writeJSONError(w, http.StatusNotFound, "Category not found")
 	case errors.Is(err, store.ErrTemplateNotFound):
 		writeJSONError(w, http.StatusBadRequest, "No label template has that ID")
+	case errors.Is(err, store.ErrInvalidLabelTemplates):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case err != nil:
 		writeStoreError(w, err, "set the label template")
 	default:
@@ -747,14 +782,17 @@ func (s *Server) handleSetCategoryLabelTemplate(w http.ResponseWriter, r *http.R
 
 // handleLabelConflicts lists the categories in label template conflicts,
 // as handleScanConflicts does for scan templates:
-// GET /api/v1/categories/label-conflicts[?category_id=&label_template_id=]
+// GET /api/v1/categories/label-conflicts[?category_id=&label_template_ids=a,b]
+// (or label_template_id= for one)
 func (s *Server) handleLabelConflicts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	var template *string
-	if t := q.Get("label_template_id"); t != "" {
-		template = &t
+	var templates []string
+	if list := q.Get("label_template_ids"); list != "" {
+		templates = strings.Split(list, ",")
+	} else if t := q.Get("label_template_id"); t != "" {
+		templates = []string{t}
 	}
-	involved, err := s.store.LabelConflicts(q.Get("category_id"), template)
+	involved, err := s.store.LabelConflicts(q.Get("category_id"), templates)
 	if err != nil {
 		writeServerError(w, err, "find label template conflicts")
 		return

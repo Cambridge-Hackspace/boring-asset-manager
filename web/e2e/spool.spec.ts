@@ -168,3 +168,50 @@ test('changing a printer’s roll says which waiting labels it strands, and temp
   await goTo(page, 'Templates');
   await expect(page.getByRole('row', { name: new RegExp(tagName) })).not.toContainText(name);
 });
+
+test('a category’s labels take the first of its templates that fits, and move when the roll changes', async ({ signedIn: page, api, printer }) => {
+  const name = unique('Bench QL');
+  const { printer: ql } = await api.call('POST', '/printers', {
+    name, driver: 'brother_ql', model: 'QL-810W', connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` }, media: 'dk-11201',
+  });
+  const narrow = unique('Narrow tag');
+  const wide = unique('Wide tag');
+  await api.call('POST', '/templates', {
+    name: narrow, units: 'mm', width: 90, height: 29, dpi: 300,
+    elements: [{ type: 'text', x: 28, y: 4, width: 58, height: 10, font_size: 14, content_binding: '{{asset.name}}' }],
+  });
+  await api.call('POST', '/templates', {
+    name: wide, units: 'mm', width: 62, height: 40, dpi: 300,
+    elements: [{ type: 'text', x: 4, y: 4, width: 54, height: 10, font_size: 14, content_binding: '{{asset.name}}' }],
+  });
+  const catName = unique('Clamps');
+  const { category } = await api.call('POST', '/categories', { name: catName, color_hex: '#7c3aed' });
+
+  // List both, the wide one first, then put the narrow one first.
+  await page.goto(`/categories/${category.id}`);
+  const add = page.getByLabel('Add a template');
+  await add.selectOption({ label: wide });
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await add.selectOption({ label: narrow });
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: `Move ${narrow} up` }).click();
+  await page.getByRole('button', { name: 'Save label templates' }).click();
+  await expect(page.getByText('Label templates saved.')).toBeVisible();
+
+  // Sent to the QL, a label takes the narrow one, which its roll suits.
+  const { asset } = await api.call('POST', '/assets', { name: unique('Clamp'), category_ids: [category.id] });
+  const { added } = await api.call('POST', '/spool', { asset_ids: [asset.asset.id], destination: `printer:${ql.id}` });
+  expect(added[0].template_id).not.toBeNull();
+
+  // Loading 62 mm tape moves it to the wide one, as the form says first.
+  await goTo(page, 'Printers');
+  await page.getByRole('button', { name: `Edit ${name}` }).click();
+  await page.getByLabel('Loaded media').selectOption('dk-22205');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Saving this change would affect:' })).toContainText(`1 label waiting for ${name} with ${narrow} would move to ${wide}`);
+  await page.getByRole('button', { name: 'Save anyway' }).click();
+  await expect(page.getByRole('article', { name })).toContainText('DK-22205 62 mm continuous');
+
+  await goTo(page, 'Spool');
+  await expect(page.getByRole('heading', { name: new RegExp(`${name} · ${wide}`) })).toBeVisible();
+});

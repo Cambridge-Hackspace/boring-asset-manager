@@ -25,7 +25,8 @@ type PrinterChanges struct {
 }
 
 // StrandedLabels are waiting labels a change would leave where they no
-// longer fit.
+// longer fit. Those whose template came from their categories move to the
+// first other template of their categories' that fits, when one does.
 type StrandedLabels struct {
 	TemplateID   string `json:"template_id"`
 	TemplateName string `json:"template_name"`
@@ -33,6 +34,9 @@ type StrandedLabels struct {
 	// Target names the printer or pool.
 	Target string `json:"target"`
 	Labels int    `json:"labels"`
+	// MoveTo and MoveToName are the template they would move to.
+	MoveTo     string `json:"move_to,omitempty"`
+	MoveToName string `json:"move_to_name,omitempty"`
 }
 
 // Empty reports whether the change affects nothing.
@@ -40,20 +44,22 @@ func (c PrinterChanges) Empty() bool {
 	return len(c.Stranded) == 0 && len(c.Categories) == 0 && len(c.Pools) == 0
 }
 
-// printerChanges works out what replacing a printer with next would affect.
-func (s *Server) printerChanges(next *models.Printer) (PrinterChanges, error) {
+// printerChanges works out what replacing a printer with next would affect,
+// and which waiting labels would move to another template, by entry ID.
+func (s *Server) printerChanges(next *models.Printer) (PrinterChanges, map[string]string, error) {
 	changes := PrinterChanges{Stranded: []StrandedLabels{}, Categories: []SpoolChoice{}, Pools: []SpoolChoice{}}
+	moves := map[string]string{}
 	all, err := s.store.ListPrinters()
 	if err != nil {
-		return changes, err
+		return changes, nil, err
 	}
 	templates, err := s.store.ListTemplates()
 	if err != nil {
-		return changes, err
+		return changes, nil, err
 	}
 	pools, err := s.store.ListPools()
 	if err != nil {
-		return changes, err
+		return changes, nil, err
 	}
 	byID := map[string]*models.Printer{}
 	for i := range all {
@@ -98,10 +104,21 @@ func (s *Server) printerChanges(next *models.Printer) (PrinterChanges, error) {
 		return ids
 	}
 
+	// Whether a template would suit a destination after the change.
+	suitsAfter := func(templateID, destination string) bool {
+		if id, ok := strings.CutPrefix(destination, models.DestinationPrinterPrefix); ok {
+			return after[key{templateID, id}]
+		}
+		if id, ok := strings.CutPrefix(destination, models.DestinationPoolPrefix); ok {
+			return poolByID[id] != nil && anyFits(after, templateID, members(poolByID[id]))
+		}
+		return false
+	}
+
 	// Labels waiting for it, or for a pool it is in.
 	entries, err := s.store.ListSpool(store.SpoolFilter{})
 	if err != nil {
-		return changes, err
+		return changes, nil, err
 	}
 	stranded := map[string]*StrandedLabels{}
 	var order []string
@@ -126,12 +143,30 @@ func (s *Server) printerChanges(next *models.Printer) (PrinterChanges, error) {
 		default:
 			continue
 		}
-		k := t + "|" + e.Destination
+		// Its categories' first other template that fits, if it took theirs.
+		moveTo := ""
+		if e.TemplateFromCategory {
+			if a, err := s.store.GetAssetByID(e.AssetID); err == nil {
+				for _, id := range a.LabelTemplate.TemplateIDs {
+					if id != t && templateByID[id] != nil && suitsAfter(id, e.Destination) {
+						moveTo = id
+						break
+					}
+				}
+			}
+		}
+		k := t + "|" + e.Destination + "|" + moveTo
 		if stranded[k] == nil {
 			stranded[k] = &StrandedLabels{TemplateID: t, TemplateName: templateByID[t].Name, Destination: e.Destination, Target: target}
+			if moveTo != "" {
+				stranded[k].MoveTo, stranded[k].MoveToName = moveTo, templateByID[moveTo].Name
+			}
 			order = append(order, k)
 		}
 		stranded[k].Labels += e.Copies
+		if moveTo != "" {
+			moves[e.ID] = moveTo
+		}
 	}
 	for _, k := range order {
 		changes.Stranded = append(changes.Stranded, *stranded[k])
@@ -140,13 +175,20 @@ func (s *Server) printerChanges(next *models.Printer) (PrinterChanges, error) {
 	// Categories whose template only it suits.
 	categories, err := s.store.ListCategories()
 	if err != nil {
-		return changes, err
+		return changes, nil, err
+	}
+	// A category is left without a printer when one of its templates suits
+	// a printer now and none would after.
+	anyTemplateFits := func(fits map[key]bool, ids []string) bool {
+		for _, id := range ids {
+			if templateByID[id] != nil && anyFits(fits, id, printerIDs) {
+				return true
+			}
+		}
+		return false
 	}
 	for _, c := range categories {
-		if c.LabelTemplateID == nil || templateByID[*c.LabelTemplateID] == nil {
-			continue
-		}
-		if anyFits(before, *c.LabelTemplateID, printerIDs) && !anyFits(after, *c.LabelTemplateID, printerIDs) {
+		if anyTemplateFits(before, c.LabelTemplateIDs) && !anyTemplateFits(after, c.LabelTemplateIDs) {
 			changes.Categories = append(changes.Categories, SpoolChoice{ID: c.ID, Name: c.Name})
 		}
 	}
@@ -172,7 +214,7 @@ func (s *Server) printerChanges(next *models.Printer) (PrinterChanges, error) {
 		}
 	}
 	sort.Slice(changes.Categories, func(i, j int) bool { return changes.Categories[i].Name < changes.Categories[j].Name })
-	return changes, nil
+	return changes, moves, nil
 }
 
 // loadedKey says what a printer prints: its roll's size and its DPI.

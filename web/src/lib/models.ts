@@ -93,6 +93,8 @@ export interface Category {
   scan_template_id?: string | null;
   /** The label template its assets, and its subcategories' that name none, join the spool with. */
   label_template_id?: string | null;
+  /** Its label templates, in order of preference; the first is label_template_id. */
+  label_template_ids?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -255,7 +257,8 @@ export interface DriverMedia {
 
 /** What changing a printer would leave without a printer, said before it is saved. */
 export interface PrinterChanges {
-  stranded: { template_id: string; template_name: string; destination: string; target: string; labels: number }[];
+  /** Labels it would leave where they no longer fit; those with move_to would take that template of their categories' instead. */
+  stranded: { template_id: string; template_name: string; destination: string; target: string; labels: number; move_to?: string; move_to_name?: string }[];
   categories: { id: string; name: string }[];
   pools: { id: string; name: string }[];
 }

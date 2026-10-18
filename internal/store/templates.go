@@ -103,7 +103,7 @@ func (s *Store) UpdateTemplate(t *labels.Template) (*labels.Template, error) {
 // label template. Spool entries with it are left with none.
 func (s *Store) DeleteTemplate(id string) error {
 	var n int
-	if err := s.QueryRow("SELECT COUNT(*) FROM categories WHERE label_template_id = ?", id).Scan(&n); err != nil {
+	if err := s.QueryRow("SELECT COUNT(DISTINCT category_id) FROM category_label_templates WHERE template_id = ?", id).Scan(&n); err != nil {
 		return fmt.Errorf("counting categories: %w", err)
 	}
 	if n > 0 {

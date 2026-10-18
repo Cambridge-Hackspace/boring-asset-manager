@@ -219,29 +219,42 @@ describe('CategoryPage', () => {
     expect(within(note).getByRole('link', { name: 'See which' }).getAttribute('href')).toBe('/assets?conflict=scan_template');
   });
 
-  it('chooses a label template, warning first when it would tie with another category', async () => {
+  it('lists label templates in order of preference, warning first when they would tie with another category', async () => {
     const tmpl = (id: string, name: string) => ({ id, name, units: 'mm', width: 62, height: 29, dpi: 300 });
     const { sent } = loaded({
-      'GET /templates': () => ({ templates: [tmpl('shelf', 'Shelf'), tmpl('tag', 'Tag')] }),
+      'GET /templates': () => ({ templates: [tmpl('shelf', 'Shelf'), tmpl('tag', 'Tag'), tmpl('wide', 'Wide')] }),
       'GET /categories/label-conflicts': () => ({ categories: {} }),
       'PUT /categories/power/label-template': () => ({ category: categories[1] }),
     });
+    const asked: string[] = [];
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
       if (url.includes('label-conflicts?')) {
-        expect(url).toContain('category_id=power&label_template_id=tag');
+        asked.push(decodeURIComponent(url.split('?')[1]!));
         return Promise.resolve(new Response(JSON.stringify({ categories: { power: 1, paint: 1 } }), { headers: { 'Content-Type': 'application/json' } }));
       }
       return realFetch(url, init);
     });
     render(CategoryPage, { params: { id: 'power' } });
-    const select = (await screen.findByLabelText('Label template')) as HTMLSelectElement;
-    expect([...select.options].map((o) => o.textContent)).toEqual(['Its parent’s, or none', 'Shelf', 'Tag']);
-    await fireEvent.change(select, { target: { value: 'tag' } });
+    const add = (await screen.findByLabelText('Add a template')) as HTMLSelectElement;
+    expect([...add.options].map((o) => o.textContent)).toEqual(['Choose one', 'Shelf', 'Tag', 'Wide']);
+    expect(screen.getByText('None: its parent’s, if it names any.')).toBeTruthy();
+
+    for (const id of ['tag', 'wide']) {
+      await fireEvent.change(add, { target: { value: id } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    }
+    // Added ones are no longer offered; the second moves up to first.
+    expect([...add.options].map((o) => o.textContent)).toEqual(['Choose one', 'Shelf']);
+    await fireEvent.click(screen.getByRole('button', { name: 'Move Wide up' }));
+    const list = within(screen.getByRole('form', { name: 'Label templates' })).getByRole('list');
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent?.split('↑')[0]?.trim())).toEqual(['1. Wide', '2. Tag']);
+    expect(asked.at(-1)).toBe('category_id=power&label_template_ids=wide,tag');
     expect(await screen.findByText(/Saving this ties Paint with this category/)).toBeTruthy();
-    await fireEvent.submit(screen.getByRole('button', { name: 'Save label template' }));
-    await screen.findByText('Label template saved.');
-    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ label_template_id: 'tag' });
+
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save label templates' }));
+    await screen.findByText('Label templates saved.');
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ label_template_ids: ['wide', 'tag'] });
   });
 
   it('says when its assets take a label template chosen by a tie', async () => {
@@ -261,7 +274,7 @@ describe('CategoryPage', () => {
     render(CategoryPage, { params: { id: 'power' } });
     // Without categories.manage there is no template to choose, only the spool.
     const add = await screen.findByRole('button', { name: 'Add its assets to the spool' });
-    expect(screen.queryByLabelText('Label template')).toBeNull();
+    expect(screen.queryByLabelText('Add a template')).toBeNull();
     await fireEvent.click(add);
     expect(await screen.findByText('Added 2 labels to the spool; 1 label already waiting.')).toBeTruthy();
     await fireEvent.click(screen.getByRole('checkbox', { name: /With its subcategories/ }));

@@ -141,7 +141,7 @@ type CategoryInput struct {
 
 // categoryColumns lists a category's columns, each prefixed, in scanCategory's order.
 func categoryColumns(prefix string) string {
-	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "stock_unit", "is_lendable", "is_running_low", "low_stock_threshold", "scan_template_id", "label_template_id", "created_at", "updated_at"}
+	cols := []string{"id", "name", "parent_id", "color_hex", "is_consumable", "stock_unit", "is_lendable", "is_running_low", "low_stock_threshold", "scan_template_id", "created_at", "updated_at"}
 	for i, c := range cols {
 		cols[i] = prefix + c
 	}
@@ -155,9 +155,8 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 		parentVal sql.NullString
 		threshold sql.NullInt64
 		template  sql.NullString
-		label     sql.NullString
 	)
-	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.Unit, &c.IsLendable, &c.IsRunningLow, &threshold, &template, &label, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.Name, &parentVal, &c.ColorHex, &c.IsConsumable, &c.Unit, &c.IsLendable, &c.IsRunningLow, &threshold, &template, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return c, err
 	}
@@ -171,10 +170,50 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 	if template.Valid && template.String != "" {
 		c.ScanTemplateID = &template.String
 	}
-	if label.Valid && label.String != "" {
-		c.LabelTemplateID = &label.String
-	}
+	c.LabelTemplateIDs = []string{}
 	return c, nil
+}
+
+// labelTemplateLists maps each category naming label templates to them, in
+// order of preference.
+func labelTemplateLists(q interface {
+	Query(string, ...any) (*sql.Rows, error)
+}) (map[string][]string, error) {
+	rows, err := q.Query(`SELECT category_id, template_id FROM category_label_templates ORDER BY category_id, sort_order`)
+	if err != nil {
+		return nil, fmt.Errorf("reading label templates: %w", err)
+	}
+	defer rows.Close()
+	lists := map[string][]string{}
+	for rows.Next() {
+		var category, template string
+		if err := rows.Scan(&category, &template); err != nil {
+			return nil, fmt.Errorf("scanning a label template: %w", err)
+		}
+		lists[category] = append(lists[category], template)
+	}
+	return lists, rows.Err()
+}
+
+// withLabelTemplates sets categories' label templates.
+func (s *Store) withLabelTemplates(categories []models.Category) error {
+	lists, err := labelTemplateLists(storeQuerier{s})
+	if err != nil {
+		return err
+	}
+	for i := range categories {
+		setLabelTemplates(&categories[i], lists[categories[i].ID])
+	}
+	return nil
+}
+
+func setLabelTemplates(c *models.Category, list []string) {
+	c.LabelTemplateIDs, c.LabelTemplateID = []string{}, nil
+	if len(list) > 0 {
+		c.LabelTemplateIDs = list
+		first := list[0]
+		c.LabelTemplateID = &first
+	}
 }
 
 // CreateCategory creates a new category record with cycle validation.
@@ -232,7 +271,11 @@ func (s *Store) GetCategoryByID(id string) (*models.Category, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying category by id: %w", err)
 	}
-	return &c, nil
+	list := []models.Category{c}
+	if err := s.withLabelTemplates(list); err != nil {
+		return nil, err
+	}
+	return &list[0], nil
 }
 
 // ListCategories returns all categories. The virtual 'uncategorized' category is hidden if it contains 0 assets.
@@ -269,7 +312,9 @@ func (s *Store) ListCategories() ([]models.Category, error) {
 		}
 		result = append(result, cat)
 	}
-
+	if err := s.withLabelTemplates(result); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -531,5 +576,8 @@ func (s *Store) ListAllCategories() ([]models.Category, error) {
 		}
 		all = append(all, c)
 	}
-	return all, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return all, s.withLabelTemplates(all)
 }
