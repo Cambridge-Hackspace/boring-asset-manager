@@ -35,3 +35,11 @@ describe('choiceNames', () => {
     expect([...names.values()]).toEqual(['Ada', 'Sam (sam@a.org)', 'Sam (sam@b.org)']);
   });
 });
+
+describe('actorName, for the signed-in user', () => {
+  it('says "you" for what they did, and names others as before', () => {
+    expect(actorName({ id: 'u1', name: '' }, 'u1')).toBe('you');
+    expect(actorName({ id: 'u2', name: '' }, 'u1')).toBe('Unnamed user');
+    expect(actorName({ id: 'u1', name: 'Kiosk', token: true }, 'u1')).toBe('API token “Kiosk”');
+  });
+});

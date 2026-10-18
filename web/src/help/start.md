@@ -9,4 +9,6 @@ BAM! keeps track of a space's things: what there is, where it is, who has it, an
 
 What you see depends on your roles: the menu at the top shows the parts you can use. Everyday pages sit on their own; the rest are gathered under **Catalog** (categories, fields, relations and actions), **Labels** (templates, images and printers) and **Admin** (users, roles, API tokens and notifications), and the home page lists them the same way. If something you need is missing, ask whoever manages users.
 
+Setting BAM! up for the first time, the home page lists the steps, ticking each off as it is done: naming yourself, adding a printer, creating categories, a role for members and the people who use it, and, if you like, making some categories public and adding a notification channel.
+
 Every page has a **Help** link at the top that opens the help for that page.

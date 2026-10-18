@@ -202,3 +202,44 @@ func TestDriversListModelDPI(t *testing.T) {
 		}
 	}
 }
+
+func TestSetSomeoneElsesPassword(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	pat, err := srv.store.CreateUser("pat@example.com", "Forgotten123!", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patSession := sessionCookie(t, srv, pat.ID)
+
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/users/"+pat.ID+"/password", `{"password":"short"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("too short: %d", rec.Code)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/users/nobody/password", `{"password":"NewSecret123!"}`); rec.Code != http.StatusNotFound {
+		t.Errorf("nobody: %d", rec.Code)
+	}
+	// Only whoever manages users may.
+	if rec := doJSON(t, srv, patSession, http.MethodPut, "/api/v1/users/"+admin.ID+"/password", `{"password":"NewSecret123!"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("by someone who does not manage users: %d", rec.Code)
+	}
+
+	rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/users/"+pat.ID+"/password", `{"password":"NewSecret123!"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("setting it: %d %s", rec.Code, rec.Body)
+	}
+	// Pat is signed out, and signs in with the new one.
+	if rec := doJSON(t, srv, patSession, http.MethodGet, "/api/v1/auth/me", ""); !strings.Contains(rec.Body.String(), `"user":null`) {
+		t.Errorf("Pat's session survived: %s", rec.Body)
+	}
+	if rec := doJSON(t, srv, nil, http.MethodPost, "/api/v1/auth/login", `{"email":"pat@example.com","password":"NewSecret123!"}`); rec.Code != http.StatusOK {
+		t.Errorf("signing in with the new password: %d", rec.Code)
+	}
+
+	// Setting one's own keeps the session that did it.
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/users/"+admin.ID+"/password", `{"password":"MyOwnNew123!"}`); rec.Code != http.StatusOK {
+		t.Fatalf("setting one's own: %d", rec.Code)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/auth/me", ""); strings.Contains(rec.Body.String(), `"user":null`) {
+		t.Errorf("the session that set its own password ended: %s", rec.Body)
+	}
+}

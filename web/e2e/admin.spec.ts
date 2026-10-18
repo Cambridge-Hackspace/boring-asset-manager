@@ -104,7 +104,7 @@ test('users: roles, disabling, and the anti-lockout refusal', async ({ signedIn:
   await page.getByRole('button', { name: 'Save name' }).click();
   await expect(page.getByRole('status')).toHaveText(`${email} is now shown as Bo Green.`);
 
-  await page.getByRole('button', { name: `Roles for ${email}` }).click();
+  await page.getByRole('button', { name: `Change roles for ${email}` }).click();
   await page.getByRole('checkbox', { name: 'admin' }).check();
   await page.getByRole('button', { name: 'Save roles' }).click();
   await expect(page.getByRole('status')).toHaveText(`Roles updated for ${email}.`);
@@ -112,7 +112,7 @@ test('users: roles, disabling, and the anti-lockout refusal', async ({ signedIn:
   await expect(page.getByRole('row').filter({ hasText: email })).toContainText('Disabled');
 
   // The other admin is disabled, so the signed-in admin is the last one.
-  await page.getByRole('button', { name: `Roles for ${ADMIN_EMAIL}` }).click();
+  await page.getByRole('button', { name: `Change roles for ${ADMIN_EMAIL}` }).click();
   await page.getByRole('checkbox', { name: 'admin' }).uncheck();
   await page.getByRole('button', { name: 'Save roles' }).click();
   await expect(page.getByRole('alert')).toContainText('would remove the last one');
@@ -209,7 +209,7 @@ test('roles: create one that only records stock, edit it, and delete it', async 
 
   // Users can be given it.
   await goTo(page, 'Users');
-  await page.getByRole('button', { name: `Roles for ${ADMIN_EMAIL}` }).click();
+  await page.getByRole('button', { name: `Change roles for ${ADMIN_EMAIL}` }).click();
   await expect(page.getByRole('checkbox', { name })).toBeVisible();
   await page.getByRole('button', { name: 'Cancel' }).click();
 
@@ -315,4 +315,32 @@ test('scopes: a keeper of the tools edits the tools and nothing else', async ({ 
   await page.goto(`/assets/${other.asset.id}`);
   await expect(page.getByRole('heading', { name: other.asset.name })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
+});
+
+test('users: set a password for someone who forgot theirs, who is told on sign-in whom to ask', async ({ signedIn: page, api, browser }) => {
+  const email = `${unique('forgetful')}@hackspace.org`;
+  await api.call('POST', '/users', { email, name: 'Fran Forgetful', password: 'Forgotten123!' });
+
+  await goTo(page, 'Users');
+  await page.getByRole('button', { name: `Set password for ${email}` }).click();
+  await page.getByLabel(`New password for ${email}`).fill('BrandNew456!');
+  await page.getByRole('button', { name: 'Save password' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Password set for ${email}. They are signed out everywhere; give them the new one.`);
+
+  // They sign in with the new one, from a page that says whom to ask.
+  const fran = await browser.newPage();
+  await fran.goto('/sign-in');
+  await expect(fran.getByText('Forgot your password? Ask whoever manages users here to set a new one.')).toBeVisible();
+  await fran.getByLabel('Email').fill(email);
+  await fran.getByLabel('Password').fill('BrandNew456!');
+  await fran.getByRole('button', { name: 'Sign in' }).click();
+  await expect(fran.getByRole('heading', { level: 1 })).toHaveText('Welcome');
+
+  // Their account says what they may do, in words; and a page they may
+  // not open says what it needs.
+  await fran.goto('/account');
+  await expect(fran.getByRole('region', { name: 'What you may do' })).toContainText('You hold no roles yet.');
+  await fran.goto('/users');
+  await expect(fran.getByRole('main')).toContainText('Users needs Manage users, which your account does not have.');
+  await fran.close();
 });

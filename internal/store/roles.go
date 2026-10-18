@@ -103,7 +103,36 @@ func (s *Store) ListRoles() ([]models.RoleWithPermissions, error) {
 		roles[i].Protected = roles[i].Name == AdminRoleName
 		roles[i].Public = roles[i].Name == rbac.PublicRole
 	}
+	// Roles made here first, by name regardless of case; then the built-in
+	// ones, admin and public.
+	sort.SliceStable(roles, func(i, j int) bool {
+		a, b := roles[i], roles[j]
+		if builtIn(a) != builtIn(b) {
+			return builtIn(b)
+		}
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+	})
 	return roles, countRows.Err()
+}
+
+func builtIn(r models.RoleWithPermissions) bool { return r.Protected || r.Public }
+
+// RoleNamesOf lists the names of the roles a user holds, by name.
+func (s *Store) RoleNamesOf(userID string) ([]string, error) {
+	rows, err := s.Query("SELECT r.name FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ? ORDER BY r.name", userID)
+	if err != nil {
+		return nil, fmt.Errorf("querying the user's roles: %w", err)
+	}
+	defer rows.Close()
+	names := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scanning role name: %w", err)
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
 }
 
 // UserRoleIDs maps each user with roles to their role IDs, sorted.
@@ -189,6 +218,32 @@ func (s *Store) ChangePassword(userID, current, next, keepToken string) error {
 	}
 	if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ? AND id <> ?", userID, sessionKey(keepToken)); err != nil {
 		return fmt.Errorf("ending other sessions: %w", err)
+	}
+	return tx.Commit()
+}
+
+// SetPassword sets a user's password for them, as whoever manages users
+// does for someone who has forgotten theirs, and ends every session of
+// theirs but keepToken, if given.
+func (s *Store) SetPassword(userID, next, keepToken string) error {
+	hash, err := auth.HashPassword(next)
+	if err != nil {
+		return err
+	}
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := s.TxExec(tx, "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?", hash, time.Now().UTC(), userID)
+	if err != nil {
+		return fmt.Errorf("updating password: %w", err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrUserNotFound
+	}
+	if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ? AND id <> ?", userID, sessionKey(keepToken)); err != nil {
+		return fmt.Errorf("ending sessions: %w", err)
 	}
 	return tx.Commit()
 }

@@ -241,6 +241,38 @@ func (s *Server) setUserName(w http.ResponseWriter, r *http.Request, userID stri
 	}
 }
 
+// SetPasswordRequest sets someone's password for them.
+type SetPasswordRequest struct {
+	Password string `json:"password"`
+}
+
+// handleSetUserPassword sets a user's password, for someone who has
+// forgotten theirs, and signs them out everywhere (but for the session
+// making the change, when it is their own):
+// PUT /api/v1/users/{id}/password
+func (s *Server) handleSetUserPassword(w http.ResponseWriter, r *http.Request) {
+	var req SetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	keep := ""
+	if sess := CurrentSession(r.Context()); sess != nil && CurrentUser(r.Context()).ID == r.PathValue("id") {
+		keep = sess.ID
+	}
+	err := s.store.SetPassword(r.PathValue("id"), req.Password, keep)
+	switch {
+	case errors.Is(err, store.ErrUserNotFound):
+		writeJSONError(w, http.StatusNotFound, "User not found")
+	case errors.Is(err, auth.ErrPasswordPolicy):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeServerError(w, err, "set the password")
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"message": "Password set"})
+	}
+}
+
 // RoleRequest creates or edits a role.
 type RoleRequest struct {
 	Name        string   `json:"name"`

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,8 +62,9 @@ func Migrate(configPath string) error {
 	return nil
 }
 
-// AdminCreate provisions an initial administrator account.
-func AdminCreate(configPath, email, password string) error {
+// AdminCreate provisions an initial administrator account, named name if
+// it is not empty.
+func AdminCreate(configPath, email, password, name string) error {
 	if email == "" {
 		return errors.New("--email is required")
 	}
@@ -93,8 +95,43 @@ func AdminCreate(configPath, email, password string) error {
 	if err != nil {
 		return fmt.Errorf("provisioning administrator account: %w", err)
 	}
+	if strings.TrimSpace(name) != "" {
+		if user, err = st.SetUserName(user.ID, name); err != nil {
+			return fmt.Errorf("naming the administrator: %w", err)
+		}
+	}
 
 	fmt.Printf("Administrator account provisioned successfully: %s (ID: %s)\n", user.Email, user.ID)
+	return nil
+}
+
+// AdminPassword sets the password of the account with an email, for
+// someone locked out, and signs them out everywhere. It changes nothing
+// else about the account.
+func AdminPassword(configPath, email, password string) error {
+	if email == "" {
+		return errors.New("--email is required")
+	}
+	if password == "" {
+		return errors.New("--password is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
+		return fmt.Errorf("opening database (%s): %w", cfg.Database.Type, err)
+	}
+	defer st.Close()
+	user, err := st.GetUserByEmail(email)
+	if err != nil {
+		return fmt.Errorf("finding %s: %w", email, err)
+	}
+	if err := st.SetPassword(user.ID, password, ""); err != nil {
+		return fmt.Errorf("setting the password: %w", err)
+	}
+	fmt.Printf("Password set for %s; they are signed out everywhere.\n", user.Email)
 	return nil
 }
 

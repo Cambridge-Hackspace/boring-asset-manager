@@ -7,6 +7,8 @@ import { navigate, router } from './router.svelte';
 class Session {
   user = $state<User | null>(null);
   permissions = $state<PermissionKey[]>([]);
+  /** The names of the roles the signed-in user holds. */
+  roles = $state<string[]>([]);
   /** False until the first /auth/me answer, so the app does not flash sign-in. */
   loaded = $state(false);
 
@@ -58,11 +60,13 @@ class Session {
   private set(me: Me): void {
     this.user = me.user;
     this.permissions = me.permissions ?? [];
+    this.roles = me.roles ?? [];
   }
 
   private clear(): void {
     this.user = null;
     this.permissions = [];
+    this.roles = [];
   }
 }
 

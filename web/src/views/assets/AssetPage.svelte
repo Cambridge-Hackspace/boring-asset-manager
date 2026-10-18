@@ -331,7 +331,7 @@
                 </ul>
               {/if}
               <span class="block text-xs text-zinc-600 dark:text-zinc-400">
-                {when(e.created_at)}{e.payload.actor ? ` · ${actorName(e.payload.actor)}` : ''}
+                {when(e.created_at)}{e.payload.actor ? ` · ${actorName(e.payload.actor, session.user?.id)}` : ''}
               </span>
             </li>
           {/each}

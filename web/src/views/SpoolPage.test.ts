@@ -154,7 +154,7 @@ describe('SpoolPage', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Printed' }));
     const row = (await screen.findByRole('link', { name: 'Bin 1' })).closest('tr')!;
     expect(row.textContent).toContain('Download');
-    expect(row.textContent).toContain('Me');
+    expect(row.textContent).toContain('you');
     await fireEvent.click(within(row).getByRole('checkbox'));
     await fireEvent.click(screen.getByRole('button', { name: 'Print again' }));
     expect(await screen.findByText('Added 1 label to the spool.')).toBeTruthy();

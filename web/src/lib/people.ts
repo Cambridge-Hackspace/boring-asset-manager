@@ -10,9 +10,10 @@ export function personName(person: { name?: string }): string {
   return person.name?.trim() || 'Unnamed user';
 }
 
-/** Who made a change in an asset's history: a person or an API token. */
-export function actorName(actor: { name?: string; token?: boolean }): string {
-  return actor.token ? `API token “${actor.name ?? ''}”` : personName(actor);
+/** Who made a change in an asset's history: a person, "you" when it was me, or an API token. */
+export function actorName(actor: { id?: string; name?: string; token?: boolean }, me?: string): string {
+  if (actor.token) return `API token “${actor.name ?? ''}”`;
+  return me && actor.id === me ? 'you' : personName(actor);
 }
 
 /**
