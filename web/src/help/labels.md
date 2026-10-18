@@ -12,4 +12,6 @@ Each printer has a roll loaded. Brother QL printers take Brother's own rolls, al
 
 A template prints on a printer when its size and DPI suit the roll loaded; the template editor checks as you choose a printer. Printers do not reach every edge of every label, so it also warns when part of the template is where the printer does not print, or so near a die-cut label's edge that it may be cut off. Warnings never stop printing.
 
+The template list shows which printers each template prints on, as their rolls are loaded now. Changing a printer's roll never changes a template: a template that does not suit the new roll waits until one it suits is loaded again. Before saving a new roll, the printer form says which labels waiting in the spool would no longer fit, which categories' templates no printer would suit, and which pools' printers would no longer be loaded alike.
+
 To gather labels over time and print them together, sorted onto several printers, use the [spool](/help/spool).

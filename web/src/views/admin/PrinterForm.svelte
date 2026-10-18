@@ -2,8 +2,8 @@
   import { untrack } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { DriverInfo, LabelStock, Printer, PrinterConnection } from '../../lib/models';
-  import { describeStock, stockFor } from '../../lib/stock';
+  import type { DriverInfo, LabelStock, Printer, PrinterChanges, PrinterConnection } from '../../lib/models';
+  import { describeChanges, describeStock, stockFor } from '../../lib/stock';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Creates a printer, or edits one when printer is given. The form is
@@ -36,6 +36,14 @@
   );
   let error = $state('');
   let busy = $state(false);
+  // What saving would affect, shown before saving a change that affects
+  // anything; saving again saves it.
+  let affects = $state<string[]>([]);
+  // Changing the printer again needs asking again.
+  $effect(() => {
+    void [name, driver, model, media, connType, address];
+    affects = [];
+  });
 
   const info = $derived(drivers.find((d) => d.driver === driver));
   // Custom stock this model takes, if its driver takes any.
@@ -71,8 +79,17 @@
     busy = true;
     const body = { name, driver, model, media, connection: { type: connType, address }, options: optionPayload() };
     try {
-      if (initial) await request('PUT', `/printers/${encodeURIComponent(initial.id)}`, body);
-      else await request('POST', '/printers', body);
+      if (initial) {
+        const path = `/printers/${encodeURIComponent(initial.id)}`;
+        if (!affects.length) {
+          const { changes } = await request<{ changes: PrinterChanges }>('POST', `${path}/changes`, body);
+          affects = describeChanges(changes);
+          if (affects.length) return;
+        }
+        await request('PUT', path, body);
+      } else {
+        await request('POST', '/printers', body);
+      }
       onsaved();
     } catch (err) {
       error = messageOf(err);
@@ -188,8 +205,19 @@
   {/if}
 
   <ErrorMessage {error} />
+  {#if affects.length}
+    <div class="space-y-2 rounded-md border border-amber-300 p-3 dark:border-amber-700" role="group" aria-labelledby="{pid}-affects">
+      <p id="{pid}-affects" class="text-sm font-medium">Saving this change would affect:</p>
+      <ul class="list-disc space-y-1 pl-5 text-sm text-amber-900 dark:text-amber-200">
+        {#each affects as a (a)}<li>{a}</li>{/each}
+      </ul>
+    </div>
+  {/if}
   <div class="flex gap-2">
-    <button type="submit" class="btn-primary" disabled={busy}>{initial ? 'Save' : 'Add printer'}</button>
+    <button type="submit" class="btn-primary" disabled={busy}>{initial ? (affects.length ? 'Save anyway' : 'Save') : 'Add printer'}</button>
+    {#if affects.length}
+      <button type="button" class="btn-secondary" onclick={() => (affects = [])}>Keep editing</button>
+    {/if}
     <button type="button" class="btn-secondary" onclick={oncancel}>Cancel</button>
   </div>
 </form>

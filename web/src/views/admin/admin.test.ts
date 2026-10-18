@@ -97,6 +97,50 @@ describe('PrinterForm with custom stock', () => {
   });
 });
 
+describe('PrinterForm changing a roll', () => {
+  const printer = {
+    id: 'p1', name: 'Front desk', driver: 'brother_ql', model: 'QL-810W', media: 'dk-11201',
+    connection: { type: 'tcp' as const, address: 'ql.lan' }, created_at: '', updated_at: '',
+  };
+  const twoRolls: DriverInfo[] = [{
+    ...drivers[0]!,
+    media: [...drivers[0]!.media, { id: 'dk-22205', name: 'DK-22205', width_mm: 62, die_cut: false }],
+  }];
+
+  it('says what saving would affect, and saves only when asked again', async () => {
+    const { sent } = fakeApi({
+      'POST /printers/p1/changes': () => ({
+        changes: { stranded: [{ template_id: 't', template_name: 'Bin tag', destination: 'printer:p1', target: 'Front desk', labels: 3 }], categories: [], pools: [] },
+      }),
+      'PUT /printers/p1': () => ({ printer }),
+    });
+    const onsaved = vi.fn();
+    render(PrinterForm, { printer, drivers: twoRolls, onsaved, oncancel: () => {} });
+    await fireEvent.change(screen.getByLabelText('Loaded media'), { target: { value: 'dk-22205' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+
+    const group = await screen.findByRole('group', { name: 'Saving this change would affect:' });
+    expect(group.textContent).toContain('3 labels waiting for Front desk with Bin tag would no longer fit.');
+    expect(sent.some((r) => r.method === 'PUT')).toBe(false);
+
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save anyway' }));
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect((sent.find((r) => r.method === 'PUT')!.body as { media: string }).media).toBe('dk-22205');
+  });
+
+  it('saves at once when nothing is affected', async () => {
+    const { sent } = fakeApi({
+      'POST /printers/p1/changes': () => ({ changes: { stranded: [], categories: [], pools: [] } }),
+      'PUT /printers/p1': () => ({ printer }),
+    });
+    const onsaved = vi.fn();
+    render(PrinterForm, { printer, drivers: twoRolls, onsaved, oncancel: () => {} });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect(sent.map((r) => r.method)).toEqual(['POST', 'PUT']);
+  });
+});
+
 describe('UsersPage', () => {
   function api(rolesPut: () => unknown) {
     return fakeApi({

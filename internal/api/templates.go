@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -21,7 +22,28 @@ func (s *Server) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list templates")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"templates": templates})
+	resp := map[string]any{"templates": templates}
+	// Those who may see printers are told which suit each template, as
+	// loaded now.
+	if HasPermission(r.Context(), rbac.PermLabelsPrint) || HasPermission(r.Context(), rbac.PermSettingsManage) || HasPermission(r.Context(), rbac.PermTemplatesManage) {
+		list, err := s.store.ListPrinters()
+		if err != nil {
+			writeServerError(w, err, "list printers")
+			return
+		}
+		suits := map[string][]SpoolChoice{}
+		for i := range templates {
+			t := &templates[i]
+			suits[t.ID] = []SpoolChoice{}
+			for j := range list {
+				if _, _, err := planFor(&list[j], t); err == nil {
+					suits[t.ID] = append(suits[t.ID], SpoolChoice{ID: list[j].ID, Name: list[j].Name})
+				}
+			}
+		}
+		resp["suits"] = suits
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleGetTemplate(w http.ResponseWriter, r *http.Request) {

@@ -253,6 +253,13 @@ export interface DriverMedia {
   custom?: boolean;
 }
 
+/** What changing a printer would leave without a printer, said before it is saved. */
+export interface PrinterChanges {
+  stranded: { template_id: string; template_name: string; destination: string; target: string; labels: number }[];
+  categories: { id: string; name: string }[];
+  pools: { id: string; name: string }[];
+}
+
 /** What custom stock a driver takes. */
 export interface CustomStockInfo {
   /** The widest label each model takes. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DriverInfo, LabelStockSize } from './models';
-import { describeStock, stockFor } from './stock';
+import { describeChanges, describeStock, stockFor } from './stock';
 
 const size = (name: string, width_mm: number, length_mm = 0, gap_mm = 0): LabelStockSize => ({ id: name, name, width_mm, length_mm, gap_mm });
 
@@ -28,5 +28,26 @@ describe('stockFor', () => {
     expect(stockFor(brother, 'QL-810W', stock)).toEqual([]);
     expect(stockFor(tspl, 'Rollo X9999', stock)).toEqual([]);
     expect(stockFor(undefined, 'Rollo X1038', stock)).toEqual([]);
+  });
+});
+
+describe('describeChanges', () => {
+  it('says what a change would affect, or nothing', () => {
+    expect(describeChanges({ stranded: [], categories: [], pools: [] })).toEqual([]);
+    expect(
+      describeChanges({
+        stranded: [
+          { template_id: 't', template_name: 'Bin tag', destination: 'printer:a', target: 'Front desk', labels: 2 },
+          { template_id: 't', template_name: 'Bin tag', destination: 'pool:b', target: 'Bench', labels: 1 },
+        ],
+        categories: [{ id: 'c1', name: 'Tools' }, { id: 'c2', name: 'Bins' }],
+        pools: [{ id: 'b', name: 'Bench' }],
+      }),
+    ).toEqual([
+      '2 labels waiting for Front desk with Bin tag would no longer fit.',
+      '1 label waiting for Bench with Bin tag would no longer fit.',
+      'No printer would suit the label template of the categories Tools, Bins.',
+      'The printers in Bench would no longer be loaded alike.',
+    ]);
   });
 });
