@@ -191,6 +191,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Label rendering and export
 	mux.Handle("GET /api/v1/assets/{id}/label", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetLabel)))
 	mux.Handle("POST /api/v1/templates/preview", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handlePreviewTemplate)))
+	mux.Handle("POST /api/v1/templates/adapt", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleAdaptTemplate)))
+	mux.Handle("POST /api/v1/templates/range", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleTemplateRange)))
 	mux.Handle("POST /api/v1/labels/export", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportLabels)))
 	mux.Handle("GET /api/v1/generators", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListGenerators))))
 
