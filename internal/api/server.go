@@ -36,6 +36,8 @@ type Server struct {
 	httpServer *http.Server
 	// routes are every API route, for the test that MCP reaches each (#33).
 	routes []string
+	// registrations limits OAuth clients registering (README §6.6).
+	registrations registrations
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -268,6 +270,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/notifiers/{id}/test", manage(s.handleTestChannel))
 
 	// The web interface: every other GET, including client-side routes
+	// Signing assistants in by OAuth (README §6.6).
+	s.oauthRoutes(mux, handle)
+
 	// MCP (README §6.6): the API again, as tools for assistants.
 	mcp := s.mcpHandler()
 	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {

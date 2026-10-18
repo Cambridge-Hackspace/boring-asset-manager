@@ -30,7 +30,9 @@
     ['', 'Never'],
   ];
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '');
-  const active = $derived(tokens.filter((t) => !t.revoked_at && !(t.expires_at && new Date(t.expires_at) <= new Date())));
+  // A grant from signing in renews while used, until its refresh expires.
+  const until = (t: APIToken) => t.refresh_expires_at ?? t.expires_at;
+  const active = $derived(tokens.filter((t) => !t.revoked_at && !(until(t) && new Date(until(t)!) <= new Date())));
   const setup = $derived(made ? assistantSetup(baseURL, made.secret) : []);
 
   async function load() {
@@ -153,8 +155,8 @@
           <span>
             <strong>{t.name}</strong>
             <span class="block text-xs text-zinc-600 dark:text-zinc-400">
-              Made {when(t.created_at)}; {t.last_used_at ? `last used ${when(t.last_used_at)}` : 'never used'};
-              {t.expires_at ? `expires ${when(t.expires_at)}` : 'never expires'}
+              {t.oauth_client ? 'Signed in' : 'Made'} {when(t.created_at)}; {t.last_used_at ? `last used ${when(t.last_used_at)}` : 'never used'};
+              {t.oauth_client ? `renews while used, until ${when(until(t))} at the latest` : t.expires_at ? `expires ${when(t.expires_at)}` : 'never expires'}
             </span>
           </span>
           <ConfirmButton label="Revoke" question="Revoke {t.name}? It stops working at once." onconfirm={() => revoke(t)} />

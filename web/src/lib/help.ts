@@ -44,7 +44,7 @@ export function helpFor(path: string): string {
     [/^\/(templates|images|printers)/, 'labels'],
     [/^\/notifications/, 'notifications'],
     [/^\/(users|roles|tokens)/, 'people'],
-    [/^\/account/, 'account'],
+    [/^\/(account|oauth)/, 'account'],
   ];
   return rules.find(([re]) => re.test(path))?.[1] ?? 'start';
 }

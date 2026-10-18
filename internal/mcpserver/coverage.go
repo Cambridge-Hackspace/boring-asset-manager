@@ -8,10 +8,12 @@ var Uncovered = map[string]string{}
 
 // Refused lists the API routes deliberately out of reach over MCP, and why.
 var Refused = map[string]string{
-	"POST /api/v1/auth/login":   "signing in with a password; an assistant signs in by OAuth (#44) or presents a token",
-	"POST /api/v1/auth/logout":  "an assistant has no session to end; revoke_token on its own token signs it out",
-	"PUT /api/v1/auth/password": "a person's password is theirs to change, signed in, so a misled assistant cannot lock them out (#43)",
-	"POST /api/v1/tokens":       "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
-	"POST /api/v1/auth/tokens":  "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
-	"GET /api/v1/events/live":   "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
+	"GET /api/v1/oauth/clients/{id}": "the consent page's, where a person signed in approves an assistant; never an assistant's own",
+	"POST /api/v1/oauth/authorize":   "the consent page's, where a person signed in approves an assistant; never an assistant's own",
+	"POST /api/v1/auth/login":        "signing in with a password; an assistant signs in by OAuth (#44) or presents a token",
+	"POST /api/v1/auth/logout":       "an assistant has no session to end; revoke_token on its own token signs it out",
+	"PUT /api/v1/auth/password":      "a person's password is theirs to change, signed in, so a misled assistant cannot lock them out (#43)",
+	"POST /api/v1/tokens":            "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
+	"POST /api/v1/auth/tokens":       "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
+	"GET /api/v1/events/live":        "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
 }

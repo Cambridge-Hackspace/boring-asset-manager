@@ -282,13 +282,25 @@ type APIToken struct {
 	RoleIDs []string `json:"role_ids"`
 	// UserID is set on a personal token: it holds no roles and acts as this
 	// user, named UserName.
-	UserID     string     `json:"user_id,omitempty"`
-	UserName   string     `json:"user_name,omitempty"`
-	CreatedBy  string     `json:"created_by,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-	ExpiresAt  *time.Time `json:"expires_at"`
-	LastUsedAt *time.Time `json:"last_used_at"`
-	RevokedAt  *time.Time `json:"revoked_at"`
+	UserID   string `json:"user_id,omitempty"`
+	UserName string `json:"user_name,omitempty"`
+	// OAuthClient names the assistant a grant signed in through OAuth
+	// went to; such a token renews until RefreshExpiresAt while used.
+	OAuthClient      string     `json:"oauth_client,omitempty"`
+	RefreshExpiresAt *time.Time `json:"refresh_expires_at,omitempty"`
+	CreatedBy        string     `json:"created_by,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ExpiresAt        *time.Time `json:"expires_at"`
+	LastUsedAt       *time.Time `json:"last_used_at"`
+	RevokedAt        *time.Time `json:"revoked_at"`
+}
+
+// OAuthClient is an assistant registered to sign people in (README §6.6).
+type OAuthClient struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	RedirectURIs []string  `json:"redirect_uris"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // Display is the actor's name, or their email when they have none.
