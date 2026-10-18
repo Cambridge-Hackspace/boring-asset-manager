@@ -486,6 +486,23 @@ func sanitizeForHeader(s string) string {
 }
 
 // handleListGenerators describes the barcode generators: GET /api/v1/generators
+// handleNextCode suggests the next code of a generator type, one more than
+// the highest ending in a number: GET /api/v1/generators/{type}/next-code.
+// The code is "" when none ends in a number.
+func (s *Server) handleNextCode(w http.ResponseWriter, r *http.Request) {
+	genType := r.PathValue("type")
+	if !generators.IsValidGeneratorType(genType) {
+		writeJSONError(w, http.StatusNotFound, "Unknown code type")
+		return
+	}
+	code, err := s.store.NextCode(genType)
+	if err != nil {
+		writeServerError(w, err, "suggest a code")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"code": code})
+}
+
 func (s *Server) handleListGenerators(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"generators": generators.Describe()})
 }

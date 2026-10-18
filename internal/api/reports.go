@@ -50,13 +50,14 @@ func (s *Server) parseSpecOf(kind string, raw json.RawMessage) (*reports.Spec, [
 // the request can read.
 func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, error) {
 	f := spec.Filter
-	assets, err := s.store.FilterAssets(store.AssetFilter{Search: f.Search, Archived: f.Archived, Condition: f.Condition, Loan: f.Loan})
+	assets, err := s.store.FilterAssets(store.AssetFilter{Archived: f.Archived, Condition: f.Condition, Loan: f.Loan})
 	if err == nil {
 		assets, err = s.readable(r, assets)
 	}
 	if err != nil {
 		return nil, err
 	}
+	assets = searched(assets, f.Search)
 	categories, err := s.store.ListCategories()
 	if err != nil {
 		return nil, err

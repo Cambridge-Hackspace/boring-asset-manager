@@ -128,7 +128,7 @@
 <form class="mb-4 flex flex-wrap items-end gap-3" role="search" onsubmit={applyFilters}>
   <div class="min-w-48 flex-1">
     <label class="label" for="asset-search">Search</label>
-    <input id="asset-search" class="input" type="search" placeholder="Name or code" bind:value={search} />
+    <input id="asset-search" class="input" type="search" placeholder="Name, code, or where it is" bind:value={search} />
   </div>
   <div>
     <label class="label" for="asset-category">Category</label>
@@ -196,6 +196,7 @@
             </th>
           {/if}
           <th scope="col" class="py-2 pr-4">Name</th>
+          <th scope="col" class="py-2 pr-4">Where</th>
           <th scope="col" class="py-2 pr-4">Categories</th>
           <th scope="col" class="py-2 pr-4">Stock</th>
           <th scope="col" class="py-2">{archived ? 'Archived' : 'Codes'}</th>
@@ -212,6 +213,12 @@
             <td class="py-2 pr-4 font-medium">
               {#if a.photos[0]}<img src={photoUrl(a.asset.id, a.photos[0].id, true)} alt="" class="mr-2 inline-block h-8 w-8 rounded object-cover align-middle" loading="lazy" />{/if}<a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
+            </td>
+            <td class="py-2 pr-4">
+              {#if a.location.length}
+                {@const place = a.location[a.location.length - 1]!}
+                <a class="hover:underline" href="/assets/{encodeURIComponent(place.id)}" title={a.location.map((p) => p.name).join(' › ')}>{place.name}</a>
+              {/if}
             </td>
             <td class="py-2 pr-4">
               <span class="flex flex-wrap gap-1">

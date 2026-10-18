@@ -351,7 +351,9 @@ Text behaves the same on every database, whatever the server's defaults:
 
 * **Rules:** text must be valid UTF-8 and may not contain a NUL character (PostgreSQL cannot store one). Names, labels, choices, codes and email addresses hold up to 255 characters, and field values up to 10,000; lengths count characters, not bytes. Text outside the rules is refused with `400` (or, in an import, a problem against its row and column), never cut short or altered. Uploaded image names are cleaned instead: control characters and invalid bytes are dropped, and the name is cut to 255 characters. A request with a NUL character or bytes that are not UTF-8 in its path, its query or any string of a JSON body is refused with `400` before it reaches a handler, since it cannot name anything stored.
 * **Comparison is exact:** `Drill` and `drill`, or `é` written as one character and as `e` with a combining accent, are different codes and different channel names on every database.
-* **Search** (`search` on the asset list and export) finds the term anywhere in an asset's name or codes, ignoring case for every letter, not just ASCII. `%`, `_` and `\` have no special meaning.
+* **Search** (`search` on the asset list, export and reports) finds the term anywhere in an asset's name or codes, or the name of a place it is in at any depth (so "shelf a" finds what is on Shelf A, and in the boxes on it), ignoring case for every letter, not just ASCII. `%`, `_` and `\` have no special meaning. Places count only as far as the requester may read them, so an asset is never found by the name of one hidden from them.
+* **Suggesting codes:** `GET /api/v1/generators/{type}/next-code` (`assets.write`) answers with `code`, one more than the highest code of that type ending in a number, keeping its prefix and zero-padding and skipping any taken (after `HS-105`, `HS-106`; after `BIN-0099`, `BIN-0100`), or `""` when none ends in a number. The asset form's **Assign the next code** uses it.
+* **Where things are** in the web app: the asset form's **Where is it?** finds the asset it is in and links it there when saved (moving it from wherever it was); its page always has a **Where** row, with **Move**; an asset that holds others lists them under **Contents**; and the asset list has a **Where** column, the place it is directly in.
 * **PostgreSQL** databases must use the `UTF8` encoding; BAM refuses to start on any other, including `SQL_ASCII`.
 * **MariaDB** needs nothing set up: BAM creates its tables in `utf8mb4` with the exact collation `utf8mb4_nopad_bin`, whatever the database's default, and sets each connection's character set, SQL mode (strict) and time zone (UTC) itself. Migration `008` converts tables created by earlier versions, which took the database's default (often `latin1` with a case-insensitive collation).
 
@@ -1059,6 +1061,7 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] The template editor checks against a printer as you design, shades what it does not print on the canvas, test-prints unsaved templates, and scales elements to a printer's label size (§4.4).
 * [x] Labels whose QR codes open the scan page, a Scan page that looks codes up by camera or typed, and a sign-in prompt for visitors (§6.4).
 * [x] Setting someone's password from Users and `bam admin password`, `bam admin create --name`, a setup checklist on the home page, and pages that say what someone may do and what a page needs (§3.4).
+* [x] Where things are: a place in the asset form, the list and asset pages, search by place, and the next code suggested (§3.5).
 
 ### Upcoming Features
 

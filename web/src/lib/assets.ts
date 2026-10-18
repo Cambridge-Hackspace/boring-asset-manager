@@ -1,6 +1,6 @@
 // Helpers for the asset form.
 
-import type { AssetChange, AssetEvent, AssetStock, Condition, EffectiveField, FieldType, GeneratorKey, RelationType } from './models';
+import type { AssetChange, AssetEvent, AssetLink, AssetStock, AssetWithDetails, Condition, EffectiveField, FieldType, GeneratorKey, LinkedAsset, RelationType } from './models';
 import { personName } from './people';
 
 /** The HTML input type for a field type (select fields use <select>). */
@@ -246,4 +246,22 @@ export function linkChoices(types: RelationType[], suggested: string[]): { key: 
     return t.is_symmetric ? [out] : [out, { key: `${t.id}:in`, typeId: t.id, outgoing: false, label: t.inverse_name, suggested: s }];
   });
   return [...choices.filter((c) => c.suggested), ...choices.filter((c) => !c.suggested)];
+}
+
+/** The asset something is directly in, or null when it is in nothing. */
+export function placeOf(a: Pick<AssetWithDetails, 'location'>): LinkedAsset | null {
+  return a.location.at(-1) ?? null;
+}
+
+/** The link putting an asset where it is: from the place, of a type that makes locations. */
+export function placeLink(a: Pick<AssetWithDetails, 'location' | 'links'>, types: RelationType[]): AssetLink | null {
+  const place = placeOf(a);
+  const located = new Set(types.filter((t) => t.is_location).map((t) => t.id));
+  return a.links.find((l) => !l.outgoing && located.has(l.type_id) && l.asset.id === place?.id) ?? null;
+}
+
+/** What an asset holds: the assets its location links lead to. */
+export function contentsOf(a: Pick<AssetWithDetails, 'links'>, types: RelationType[]): AssetLink[] {
+  const located = new Set(types.filter((t) => t.is_location).map((t) => t.id));
+  return a.links.filter((l) => l.outgoing && located.has(l.type_id));
 }

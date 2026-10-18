@@ -35,6 +35,8 @@ test('create an asset, preview and print its label, export a batch', async ({ si
   await page.getByLabel('Name', { exact: true }).fill(name);
   await page.getByRole('checkbox', { name: category }).check();
   // A required field the server enforces: leave it empty first.
+  // Codes are folded away until wanted.
+  await page.getByText('Codes (none yet)').click();
   await page.getByLabel('QR Code', { exact: true }).fill(code);
   await page.getByRole('button', { name: 'Create asset' }).click();
   await expect(page.getByRole('alert')).toContainText('required field');
@@ -122,6 +124,11 @@ test('the labels panel offers only the printers a template suits, and says why a
     elements: [{ type: 'generator', generator_type: 'qr', x: 2, y: 2, width: 25, height: 25 }],
   });
   const { template: shipping } = await api.call('POST', '/templates', { name: unique('Shipping'), units: 'in', width: 4, height: 6, dpi: 203, elements: [] });
+  // One that labels anything, on the QL.
+  await api.call('POST', '/templates', {
+    name: unique('Name only'), units: 'mm', width: 62, height: 29, dpi: 300,
+    elements: [{ type: 'text', x: 2, y: 2, width: 58, height: 10, font_size: 12, content_binding: '{{asset.name}}' }],
+  });
   const { category } = await api.call('POST', '/categories', { name: unique('Tagged') });
   await api.call('PUT', `/categories/${category.id}/label-template`, { label_template_ids: [tag.id] });
   const { asset } = await api.call('POST', '/assets', { name: unique('Drill'), category_ids: [category.id] });
@@ -141,4 +148,46 @@ test('the labels panel offers only the printers a template suits, and says why a
   await expect(page.getByText('No printer has labels loaded that this template fits.')).toBeVisible();
   await page.locator('summary', { hasText: printerName }).click();
   await expect(page.getByText(`${shipping.name} can't print on ${printerName}: it is laid out at 203 DPI, but Brother QL printers print at 300 DPI`)).toBeVisible();
+});
+
+test('say where an asset is as it is made, find it by its place, and move it', async ({ signedIn: page, api }) => {
+  const shelf = unique('Shelf');
+  const bench = unique('Bench');
+  const { asset: shelfAsset } = await api.call('POST', '/assets', { name: shelf });
+  await api.call('POST', '/assets', { name: bench });
+  await api.call('POST', '/assets', { name: unique('Numbered'), generator_keys: [{ generator_type: 'code128', assigned_code: `${unique('WH').toUpperCase()}-0041` }] });
+
+  // Made with where it is, and the next code.
+  const name = unique('Clamp');
+  await goTo(page, 'Assets');
+  await page.getByRole('link', { name: 'New asset' }).click();
+  await page.getByLabel('Name', { exact: true }).fill(name);
+  await page.getByLabel('Put it in').fill(shelf);
+  await page.getByRole('button', { name: 'Find' }).click();
+  await page.getByRole('list', { name: 'Places found' }).getByRole('button', { name: shelf }).click();
+  await expect(page.getByText(`In ${shelf}.`)).toBeVisible();
+  await page.getByText('Codes (none yet)').click();
+  const code128 = page.getByLabel('Code 128', { exact: true });
+  await page.getByRole('button', { name: 'Assign the next code' }).nth(2).click();
+  await expect(code128).toHaveValue(/[0-9]$/);
+  await page.getByRole('button', { name: 'Create asset' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+  const details = page.getByRole('region', { name: 'Details' });
+  await expect(details.getByRole('link', { name: shelf })).toBeVisible();
+
+  // The list says where, and searching the place finds it.
+  await page.goto(`/assets?search=${encodeURIComponent(shelf)}`);
+  const row = page.getByRole('row').filter({ hasText: name });
+  await expect(row.getByRole('link', { name: shelf })).toBeVisible();
+
+  // Moved to the bench; the shelf lists what it holds no more.
+  await row.getByRole('link', { name }).click();
+  await details.getByRole('button', { name: 'Move' }).click();
+  await page.getByLabel('Move it to').fill(bench);
+  await page.getByLabel('Move it to').press('Enter');
+  await page.getByRole('list', { name: 'Places found' }).getByRole('button', { name: bench }).click();
+  await expect(page.getByRole('status')).toHaveText(`Moved to ${bench}.`);
+  await expect(details.getByRole('link', { name: bench })).toBeVisible();
+  await page.goto(`/assets/${shelfAsset.asset.id}`);
+  await expect(page.getByRole('region', { name: 'Contents' })).toHaveCount(0);
 });

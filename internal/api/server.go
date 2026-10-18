@@ -197,6 +197,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/labels/export", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportLabels)))
 	mux.Handle("POST /api/v1/labels/options", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleLabelOptions)))
 	mux.Handle("GET /api/v1/generators", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListGenerators))))
+	mux.Handle("GET /api/v1/generators/{type}/next-code", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleNextCode)))
 
 	// Network printers
 	// Template designers read printers too, for their media size and DPI.
