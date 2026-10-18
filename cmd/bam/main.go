@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/cli"
@@ -25,6 +27,7 @@ Available Commands:
   serve         Start the HTTP daemon
   backup        Copy a SQLite database (requires --to); exits 3 for other databases
   restore       Replace a SQLite database with a backup (requires --from; stop BAM first)
+  mcp           Relay MCP between stdio and a server, for assistants (requires --url; API token in $BAM_TOKEN)
   version       Print version information
 
 Global Flags:
@@ -119,6 +122,20 @@ func main() {
 			if errors.Is(err, store.ErrBackupUnsupported) {
 				os.Exit(3)
 			}
+			os.Exit(1)
+		}
+
+	case "mcp":
+		mcpCmd := flag.NewFlagSet("mcp", flag.ExitOnError)
+		url := mcpCmd.String("url", "", "Address of the BAM! server, such as https://bam.example.org")
+		tokenEnv := mcpCmd.String("token-env", "BAM_TOKEN", "Environment variable holding the API token")
+		_ = mcpCmd.Parse(os.Args[2:])
+
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		err := cli.MCP(ctx, *url, os.Getenv(*tokenEnv), os.Stdin, os.Stdout)
+		stop()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 

@@ -1,7 +1,11 @@
 // The user help (README §6.5): Markdown topics bundled with the app, and
-// which topic each page's Help link opens.
+// which topic each page's Help link opens. The topics live in
+// internal/help/topics, where the Go server embeds them too, for assistants.
 
-const sources = import.meta.glob('../help/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+const sources = import.meta.glob('../../../internal/help/topics/*.md', { query: '?raw', import: 'default', eager: true }) as Record<
+  string,
+  string
+>;
 
 export interface HelpTopic {
   slug: string;

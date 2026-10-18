@@ -16,6 +16,7 @@ type Config struct {
 	Database DatabaseConfig `toml:"database"`
 	Storage  StorageConfig  `toml:"storage"`
 	Printers PrintersConfig `toml:"printers"`
+	MCP      MCPConfig      `toml:"mcp"`
 }
 
 // ServerConfig holds HTTP server listening configuration.
@@ -44,6 +45,13 @@ type PrintersConfig struct {
 	Devices []string `toml:"devices"`
 }
 
+// MCPConfig turns the MCP endpoint, for assistants, on or off (README §6.6).
+type MCPConfig struct {
+	// Enabled serves /api/v1/mcp. It is on unless turned off, so a config
+	// file written before it existed, which has no [mcp] table, keeps it on.
+	Enabled bool `toml:"enabled"`
+}
+
 // DefaultConfig returns safe default settings.
 func DefaultConfig() *Config {
 	return &Config{
@@ -59,6 +67,7 @@ func DefaultConfig() *Config {
 		Storage: StorageConfig{
 			LocalPath: "./data/uploads",
 		},
+		MCP: MCPConfig{Enabled: true},
 	}
 }
 
@@ -80,7 +89,9 @@ func Load(configPath string) (*Config, error) {
 		}
 	}
 
-	applyEnvOverrides(cfg)
+	if err := applyEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -89,7 +100,7 @@ func Load(configPath string) (*Config, error) {
 	return cfg, nil
 }
 
-func applyEnvOverrides(cfg *Config) {
+func applyEnvOverrides(cfg *Config) error {
 	if host := os.Getenv("BAM_SERVER_HOST"); host != "" {
 		cfg.Server.Host = host
 	}
@@ -124,6 +135,28 @@ func applyEnvOverrides(cfg *Config) {
 	if devices := os.Getenv("BAM_PRINTERS_DEVICES"); devices != "" {
 		cfg.Printers.Devices = strings.Split(devices, ",")
 	}
+
+	// Refused rather than ignored when not understood: a mistyped "off"
+	// must not leave the endpoint on.
+	if v := os.Getenv("BAM_MCP_ENABLED"); v != "" {
+		on, err := parseSwitch(v)
+		if err != nil {
+			return fmt.Errorf("BAM_MCP_ENABLED: %w", err)
+		}
+		cfg.MCP.Enabled = on
+	}
+	return nil
+}
+
+// parseSwitch reads an on or off setting from the environment.
+func parseSwitch(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	}
+	return false, fmt.Errorf("%q is neither true nor false", v)
 }
 
 // Validate checks that required fields are present and valid.

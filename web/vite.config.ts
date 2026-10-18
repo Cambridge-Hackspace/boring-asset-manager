@@ -1,3 +1,4 @@
+import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
@@ -13,6 +14,8 @@ export default defineConfig({
   server: {
     // During development, `bam serve` answers the API.
     proxy: { '/api': 'http://localhost:8080' },
+    // The help topics live beside the Go code that embeds them too.
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../internal/help/topics'] },
   },
   resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
   test: {
