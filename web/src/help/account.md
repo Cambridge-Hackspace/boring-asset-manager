@@ -2,4 +2,4 @@
 
 On **Your account** you can change the name others see, and your password. Changing your password signs you out everywhere else.
 
-What you can do depends on your roles, listed on the same page.
+What you can do depends on your roles, listed on the same page with what each permission lets you do. A page you may not open says what it needs. Forgot your password? Whoever manages users can set a new one for you.

@@ -48,6 +48,8 @@ export interface Me {
   /** Null for a signed-out visitor, who holds the public role's permissions. */
   user: User | null;
   permissions: PermissionKey[];
+  /** The names of the roles the user holds. */
+  roles?: string[];
 }
 
 export const fieldTypes = ['text', 'number', 'date', 'url', 'select'] as const;

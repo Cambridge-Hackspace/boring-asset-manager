@@ -20,7 +20,8 @@ Usage:
 Available Commands:
   init          Generate a default configuration file (config.toml)
   migrate       Execute pending database migrations and seed system roles
-  admin create  Provision an initial superuser account (requires --email and --password)
+  admin create  Provision an initial superuser account (requires --email and --password; --name optional)
+  admin password Set an account's password, signing it out everywhere (requires --email and --password)
   serve         Start the HTTP daemon
   backup        Copy a SQLite database (requires --to); exits 3 for other databases
   restore       Replace a SQLite database with a backup (requires --from; stop BAM first)
@@ -62,17 +63,28 @@ func main() {
 		}
 
 	case "admin":
-		if len(os.Args) < 3 || os.Args[2] != "create" {
-			fmt.Fprintf(os.Stderr, "Usage: bam admin create --email <email> --password <password> [--config <path>]\n")
+		if len(os.Args) < 3 || (os.Args[2] != "create" && os.Args[2] != "password") {
+			fmt.Fprintf(os.Stderr, "Usage: bam admin create --email <email> --password <password> [--name <name>] [--config <path>]\n")
+			fmt.Fprintf(os.Stderr, "       bam admin password --email <email> --password <password> [--config <path>]\n")
 			os.Exit(1)
 		}
-		adminCmd := flag.NewFlagSet("admin create", flag.ExitOnError)
-		email := adminCmd.String("email", "", "Admin email address")
-		password := adminCmd.String("password", "", "Admin password")
+		adminCmd := flag.NewFlagSet("admin "+os.Args[2], flag.ExitOnError)
+		email := adminCmd.String("email", "", "Account email address")
+		password := adminCmd.String("password", "", "Password")
 		configPath := adminCmd.String("config", "config.toml", "Path to configuration file")
+		var name *string
+		if os.Args[2] == "create" {
+			name = adminCmd.String("name", "", "Name shown in history and lists")
+		}
 		_ = adminCmd.Parse(os.Args[3:])
 
-		if err := cli.AdminCreate(*configPath, *email, *password); err != nil {
+		var err error
+		if os.Args[2] == "create" {
+			err = cli.AdminCreate(*configPath, *email, *password, *name)
+		} else {
+			err = cli.AdminPassword(*configPath, *email, *password)
+		}
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

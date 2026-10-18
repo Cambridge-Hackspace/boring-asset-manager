@@ -52,5 +52,20 @@ export function describeKey(key: string): string {
   return at < 0 ? permissionLabel(key) : `${permissionLabel(key.slice(at + 1))} in ${key.slice(0, at)}`;
 }
 
+/**
+ * What someone may do, in words, for their account page: each permission
+ * with what it allows, in the order role forms list them. One held in some
+ * scopes only says where; the public scope's are those everyone has.
+ */
+export function describeHeld(keys: readonly string[]): { label: string; description: string; where: string[] }[] {
+  return permissions
+    .map((p) => {
+      const where = heldIn(keys, p.key);
+      return { label: p.label, description: p.description, where: where === 'all' ? [] : where, held: where === 'all' || where.length > 0 };
+    })
+    .filter((p) => p.held)
+    .map(({ label, description, where }) => ({ label, description, where }));
+}
+
 /** What the public role, which everyone holds, may hold: looking, never changing. */
 export const publicAllowed: Permission[] = ['assets.read', 'assets.scan'];

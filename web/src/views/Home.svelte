@@ -12,6 +12,7 @@
   import CategoryBadge from '../components/CategoryBadge.svelte';
   import ConditionBadge from '../components/ConditionBadge.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
+  import SetupChecklist from '../components/SetupChecklist.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -49,6 +50,7 @@
 <p class="mt-1 text-zinc-600 dark:text-zinc-400">Signed in as {session.user ? displayName(session.user) : ''}.</p>
 
 <ErrorMessage {error} />
+{#if session.canAny('users.manage', 'settings.manage')}<SetupChecklist />{/if}
 {#if session.can('assets.scan')}
   <form class="mt-6 flex max-w-md flex-wrap items-end gap-2" role="search" onsubmit={lookUp}>
     <div class="grow">

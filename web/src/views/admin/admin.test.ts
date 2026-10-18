@@ -167,7 +167,7 @@ describe('UsersPage', () => {
     render(UsersPage, { params: {} });
 
     const bo = (await screen.findByRole('cell', { name: 'bo@hackspace.org' })).closest('tr')!;
-    await fireEvent.click(within(bo).getByRole('button', { name: 'Roles for bo@hackspace.org' }));
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Change roles for bo@hackspace.org' }));
     await fireEvent.click(within(bo).getByRole('checkbox', { name: 'viewer' }));
     await fireEvent.click(within(bo).getByRole('button', { name: 'Save roles' }));
     await vi.waitFor(() => expect(sent.some((r) => r.path === '/users/u2/roles')).toBe(true));
@@ -175,7 +175,7 @@ describe('UsersPage', () => {
     await screen.findByText('Roles updated for bo@hackspace.org.');
 
     const me = screen.getByRole('cell', { name: 'me@hackspace.org (you)' }).closest('tr')!;
-    await fireEvent.click(within(me).getByRole('button', { name: 'Roles for me@hackspace.org' }));
+    await fireEvent.click(within(me).getByRole('button', { name: 'Change roles for me@hackspace.org' }));
     await fireEvent.click(within(me).getByRole('checkbox', { name: 'admin' }));
     await fireEvent.click(within(me).getByRole('button', { name: 'Save roles' }));
     expect((await screen.findByRole('alert')).textContent).toContain('would remove the last one');

@@ -55,7 +55,7 @@
     {#if !match}
       <NotFound />
     {:else if !allowed}
-      <Forbidden />
+      <Forbidden route={match.route} />
     {:else}
       {#key router.path}
         <match.route.component params={match.params} />

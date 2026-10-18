@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,22 @@ func TestListRolesAndSetUserRoles(t *testing.T) {
 	}
 	if adminRoleID == "" {
 		t.Fatalf("no admin role in %+v", roles)
+	}
+
+	// Roles made here come first, by name regardless of case, then the
+	// built-in ones.
+	for _, name := range []string{"members", "Label printers", "Zebra"} {
+		if _, err := st.CreateRole(RoleInput{Name: name, Permissions: []string{"assets.read"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sorted, _ := st.ListRoles()
+	var names []string
+	for _, r := range sorted {
+		names = append(names, r.Name)
+	}
+	if strings.Join(names, ",") != "Label printers,members,Zebra,admin,public" {
+		t.Errorf("roles in order: %v", names)
 	}
 
 	user, err := st.CreateUser("user@hackspace.org", "Pass1234!", true)

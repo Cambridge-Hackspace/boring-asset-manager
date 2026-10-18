@@ -71,6 +71,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("PATCH /api/v1/users/{id}/status", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateUserStatus)))
 	mux.Handle("DELETE /api/v1/users/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteUser)))
 	mux.Handle("PUT /api/v1/users/{id}/name", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserName)))
+	mux.Handle("PUT /api/v1/users/{id}/password", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserPassword)))
 	mux.Handle("PUT /api/v1/users/{id}/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserRoles)))
 	mux.Handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 	mux.Handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))

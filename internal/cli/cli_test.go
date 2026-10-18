@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -46,7 +47,7 @@ func TestFullCLILifecycle(t *testing.T) {
 	}
 
 	// 3. Test AdminCreate
-	if err := AdminCreate(configPath, "superadmin@example.com", "SuperSecret123!"); err != nil {
+	if err := AdminCreate(configPath, "superadmin@example.com", "SuperSecret123!", "Ada Admin"); err != nil {
 		t.Fatalf("AdminCreate failed: %v", err)
 	}
 
@@ -67,6 +68,30 @@ func TestFullCLILifecycle(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("expected 1 active admin, got %d", count)
+	}
+	admin, err := st.GetUserByEmail("superadmin@example.com")
+	if err != nil || admin.Name != "Ada Admin" {
+		t.Errorf("the admin as created: %+v, %v", admin, err)
+	}
+
+	// 4a. A password set from the command line, for someone locked out,
+	// signs them out everywhere.
+	if _, err := st.CreateSession(admin.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := AdminPassword(configPath, "superadmin@example.com", "BrandNew456!"); err != nil {
+		t.Fatalf("AdminPassword: %v", err)
+	}
+	admin, _ = st.GetUserByEmail("superadmin@example.com")
+	if !auth.CheckPassword("BrandNew456!", admin.PasswordHash) {
+		t.Error("the new password does not sign in")
+	}
+	var sessions int
+	if err := st.QueryRow("SELECT COUNT(*) FROM sessions WHERE user_id = ?", admin.ID).Scan(&sessions); err != nil || sessions != 0 {
+		t.Errorf("sessions left after setting the password: %d, %v", sessions, err)
+	}
+	if err := AdminPassword(configPath, "nobody@example.com", "BrandNew456!"); err == nil {
+		t.Error("setting the password of nobody worked")
 	}
 
 	// 5. Test Server Lifecycle
@@ -114,10 +139,10 @@ func TestAdminCreateValidation(t *testing.T) {
 	configPath := filepath.Join(tempDir, "config.toml")
 	_ = Init(configPath)
 
-	if err := AdminCreate(configPath, "", "pwd"); err == nil {
+	if err := AdminCreate(configPath, "", "pwd", ""); err == nil {
 		t.Error("expected error for empty email")
 	}
-	if err := AdminCreate(configPath, "user@test.org", ""); err == nil {
+	if err := AdminCreate(configPath, "user@test.org", "", ""); err == nil {
 		t.Error("expected error for empty password")
 	}
 }

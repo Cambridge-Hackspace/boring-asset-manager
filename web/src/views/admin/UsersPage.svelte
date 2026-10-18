@@ -18,6 +18,9 @@
   let renaming = $state<string | null>(null);
   let nameDraft = $state('');
   let roleDraft = $state<string[]>([]);
+  // Setting someone's password, for one who has forgotten theirs.
+  let settingPassword = $state<string | null>(null);
+  let passwordDraft = $state('');
 
   // Creating a user.
   let creating = $state(false);
@@ -47,7 +50,7 @@
   function explain(err: unknown): string {
     const msg = messageOf(err);
     return msg.includes('anti-lockout')
-      ? 'Refused: at least one active user must keep the users.manage permission, and this change would remove the last one.'
+      ? 'Refused: at least one active user must keep the Manage users permission, and this change would remove the last one.'
       : msg;
   }
 
@@ -84,6 +87,15 @@
       await request('PUT', `/users/${encodeURIComponent(u.id)}/name`, { name: nameDraft });
       if (renaming === u.id) renaming = null;
     }, nameDraft.trim() ? `${u.email} is now shown as ${nameDraft.trim()}.` : `${u.email} is shown by email.`);
+  }
+
+  function savePassword(event: SubmitEvent, u: UserWithRoles) {
+    event.preventDefault();
+    void act(async () => {
+      await request('PUT', `/users/${encodeURIComponent(u.id)}/password`, { password: passwordDraft });
+      settingPassword = null;
+      passwordDraft = '';
+    }, `Password set for ${u.email}. They are signed out everywhere; give them the new one.`);
   }
 
   function startRoles(u: UserWithRoles) {
@@ -184,7 +196,10 @@
                   <button type="button" class="btn-secondary" aria-label="Rename {u.email}" onclick={() => startRename(u)}>Rename</button>
                 {/if}
                 {#if editingRoles !== u.id}
-                  <button type="button" class="btn-secondary" aria-label="Roles for {u.email}" onclick={() => startRoles(u)}>Roles</button>
+                  <button type="button" class="btn-secondary" aria-label="Change roles for {u.email}" onclick={() => startRoles(u)}>Change roles</button>
+                {/if}
+                {#if settingPassword !== u.id}
+                  <button type="button" class="btn-secondary" aria-label="Set password for {u.email}" onclick={() => { settingPassword = u.id; passwordDraft = ''; }}>Set password</button>
                 {/if}
                 <button
                   type="button"
@@ -200,6 +215,14 @@
                   onconfirm={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}`), `${u.email} archived.`)}
                 />
               </span>
+              {#if settingPassword === u.id}
+                <form class="mt-2 flex flex-wrap justify-end gap-2" onsubmit={(event) => savePassword(event, u)}>
+                  <label class="sr-only" for="password-{u.id}">New password for {u.email}</label>
+                  <input id="password-{u.id}" class="input w-48" type="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="8-72 characters" bind:value={passwordDraft} />
+                  <button type="submit" class="btn-primary">Save password</button>
+                  <button type="button" class="btn-secondary" onclick={() => (settingPassword = null)}>Cancel</button>
+                </form>
+              {/if}
             </td>
           </tr>
         {/each}
@@ -208,4 +231,7 @@
   </div>
 
   <p class="mt-6 text-sm">What each role allows is set on the <a class="underline" href="/roles">Roles</a> page.</p>
+  <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+    <strong>Disable</strong> stops someone signing in until they are enabled again. <strong>Archive</strong> removes them for good; what they did stays in history.
+  </p>
 {/if}

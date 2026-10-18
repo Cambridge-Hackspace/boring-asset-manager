@@ -5,6 +5,7 @@
   import { messageOf } from '../lib/errors';
   import type { Spool, SpoolAddResult, SpoolDestination, SpoolEntry, SpoolJob, SpoolPrintResult } from '../lib/models';
   import { actorName } from '../lib/people';
+  import { session } from '../lib/session.svelte';
   import { addedMessage, destinationName, entryWarnings, groupEntries, jobActive, jobStateName, poolsFor, printedMessage, printersFor, printing, shared, templateName, templatesFor } from '../lib/spool';
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
@@ -242,7 +243,7 @@
         <tbody>
           {#each jobs as j (j.id)}
             <tr class="border-b border-zinc-200 align-top dark:border-zinc-800">
-              <td class="py-2 pr-4 whitespace-nowrap">{when(j.created_at)}<span class="block text-xs text-zinc-600 dark:text-zinc-400">{actorName(j.created_by)}</span></td>
+              <td class="py-2 pr-4 whitespace-nowrap">{when(j.created_at)}<span class="block text-xs text-zinc-600 dark:text-zinc-400">{actorName(j.created_by, session.user?.id)}</span></td>
               <td class="py-2 pr-4">
                 {j.target}
                 {#if j.members?.length}
@@ -361,7 +362,7 @@
               <td class="py-2 pr-4">{e.printed_template}</td>
               <td class="py-2 pr-4">{e.printed_on}</td>
               <td class="py-2 pr-4">{e.copies}</td>
-              <td class="py-2">{e.printed_by ? actorName(e.printed_by) : ''}, {e.printed_at ? when(e.printed_at) : ''}</td>
+              <td class="py-2">{e.printed_by ? actorName(e.printed_by, session.user?.id) : ''}, {e.printed_at ? when(e.printed_at) : ''}</td>
             </tr>
           {/each}
         </tbody>
@@ -410,7 +411,7 @@
                   <td class="py-2 pr-2"><input type="checkbox" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} disabled={!!e.job} /></td>
                   <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
                   <td class="py-2 pr-4">{e.copies}</td>
-                  <td class="py-2 pr-4">{actorName(e.added_by)}, {when(e.added_at)}</td>
+                  <td class="py-2 pr-4">{actorName(e.added_by, session.user?.id)}, {when(e.added_at)}</td>
                   <td class="py-2">
                     {#if e.job}
                       <span class="text-zinc-700 dark:text-zinc-300">{jobOf(e)}…</span>

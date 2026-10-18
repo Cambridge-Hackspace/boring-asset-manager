@@ -79,6 +79,7 @@ func TestAuthLoginLogoutMeFlow(t *testing.T) {
 	var meResp struct {
 		User        models.User `json:"user"`
 		Permissions []string    `json:"permissions"`
+		Roles       []string    `json:"roles"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&meResp); err != nil {
 		t.Fatalf("decoding me response: %v", err)
@@ -88,6 +89,9 @@ func TestAuthLoginLogoutMeFlow(t *testing.T) {
 	}
 	if len(meResp.Permissions) == 0 {
 		t.Errorf("expected admin permissions to be populated")
+	}
+	if len(meResp.Roles) != 1 || meResp.Roles[0] != "admin" {
+		t.Errorf("the admin's roles: %v", meResp.Roles)
 	}
 
 	// 4. POST /api/v1/auth/logout

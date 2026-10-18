@@ -2,6 +2,7 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import type { User } from '../lib/models';
+  import { describeHeld } from '../lib/permissions';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
@@ -53,7 +54,25 @@
 </script>
 
 <h1 class="mb-4 text-2xl font-bold">Your account</h1>
-<p class="mb-6 text-sm">Signed in as <strong>{session.user?.email}</strong>. Permissions: {session.permissions.join(', ') || 'none'}.</p>
+<p class="mb-4 text-sm">Signed in as <strong>{session.user?.email}</strong>.</p>
+
+<section class="card mb-6 max-w-2xl space-y-3" aria-labelledby="allowed-heading">
+  <h2 id="allowed-heading" class="text-lg font-semibold">What you may do</h2>
+  <p class="text-sm">
+    {#if session.roles.length}Your roles: <strong>{session.roles.join(', ')}</strong>.{:else}You hold no roles yet.{/if}
+    Whoever manages users here can change them.
+  </p>
+  {#if describeHeld(session.permissions).length}
+    <ul class="space-y-1 text-sm">
+      {#each describeHeld(session.permissions) as p (p.label)}
+        <li>
+          <strong>{p.label}</strong>{#if p.where.length}{' '}<span class="text-zinc-600 dark:text-zinc-400">(in {p.where.map((w) => (w === 'public' ? 'what is public' : w)).join(', ')})</span>{/if}:
+          {p.description}
+        </li>
+      {/each}
+    </ul>
+  {/if}
+</section>
 
 <form class="card mb-6 max-w-md space-y-4" onsubmit={rename}>
   <h2 class="text-lg font-semibold">Name</h2>

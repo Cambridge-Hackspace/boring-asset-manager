@@ -97,9 +97,20 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(permsList)
 
+	// The roles they hold, by name, for their account page.
+	roles := []string{}
+	if user != nil {
+		names, err := s.store.RoleNamesOf(user.ID)
+		if err != nil {
+			writeServerError(w, err, "read the user's roles")
+			return
+		}
+		roles = names
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":        user,
 		"permissions": permsList,
+		"roles":       roles,
 	})
 }
 

@@ -49,8 +49,8 @@ test('count stock by quantity: use it up, see it run low, restock', async ({ sig
   // The edit is in the history with what it changed, and so is the creation.
   const edit = history.getByRole('listitem').filter({ hasText: /^Edited/ });
   await expect(edit).toContainText('Unit: pcs → screws');
-  // By name; the admin, made by the CLI, has none, and emails never show.
-  await expect(edit).toContainText('Unnamed user');
+  // Their own change reads "you"; emails never show.
+  await expect(edit).toContainText('· you');
   await expect(edit).not.toContainText(ADMIN_EMAIL);
   await expect(history.getByRole('listitem').filter({ hasText: /^Created/ })).toContainText(`Name: ${name}`);
 
