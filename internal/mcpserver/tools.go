@@ -52,6 +52,12 @@ func define[In, Out any](def *mcp.Tool, routes, needs []string, h func(context.C
 		mcp.AddTool(s, &d, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 			var zero Out
 			ctx = WithVia(ctx, clientName(req))
+			// What cannot be undone is confirmed first, where the client can ask.
+			if ask, err := confirmation(def, req); err != nil {
+				return nil, zero, err
+			} else if ask != nil {
+				return ask, zero, nil
+			}
 			if !def.Annotations.ReadOnlyHint {
 				if wait := e.changes.take(e.caller.key()); wait > 0 {
 					return nil, zero, fmt.Errorf("too many changes: at most %d a minute on this server. Try again in %d seconds",

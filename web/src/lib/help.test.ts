@@ -4,7 +4,7 @@ import { routes } from '../routes';
 
 describe('help', () => {
   it('has every topic, titled, in order', () => {
-    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'links', 'import', 'labels', 'spool', 'scanning', 'actions', 'reports', 'people', 'notifications', 'account']);
+    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'links', 'import', 'labels', 'spool', 'scanning', 'actions', 'reports', 'people', 'notifications', 'account', 'assistants']);
     for (const t of helpTopics) expect(t.title, t.slug).not.toBe('');
   });
 
@@ -14,6 +14,7 @@ describe('help', () => {
       expect(helpTopic(helpFor(path)), path).toBeTruthy();
     }
     expect(helpFor('/assets/import')).toBe('import');
+    expect(helpFor('/oauth/consent')).toBe('assistants');
     expect(helpFor('/assets/x/edit')).toBe('assets');
     expect(helpFor('/scan/BIN-A3')).toBe('scanning');
     expect(helpFor('/roles')).toBe('people');

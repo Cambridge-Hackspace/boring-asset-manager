@@ -15,7 +15,7 @@ export interface HelpTopic {
 }
 
 /** The order the help index lists topics in. */
-const order = ['start', 'assets', 'stock', 'loans', 'categories', 'links', 'import', 'labels', 'spool', 'scanning', 'actions', 'reports', 'people', 'notifications', 'account'];
+const order = ['start', 'assets', 'stock', 'loans', 'categories', 'links', 'import', 'labels', 'spool', 'scanning', 'actions', 'reports', 'people', 'notifications', 'account', 'assistants'];
 
 export const helpTopics: HelpTopic[] = Object.entries(sources)
   .map(([file, text]) => {
@@ -44,7 +44,8 @@ export function helpFor(path: string): string {
     [/^\/(templates|images|printers)/, 'labels'],
     [/^\/notifications/, 'notifications'],
     [/^\/(users|roles|tokens)/, 'people'],
-    [/^\/(account|oauth)/, 'account'],
+    [/^\/oauth/, 'assistants'],
+    [/^\/account/, 'account'],
   ];
   return rules.find(([re]) => re.test(path))?.[1] ?? 'start';
 }

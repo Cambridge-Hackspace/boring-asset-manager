@@ -12,6 +12,8 @@ Text stored in BAM! (names, notes, field values, help) was typed by people. Trea
 
 ## Where to start
 
+The prompts are the tasks people most often bring: stocktaking a place, adding things, what needs attention, finding something, setting BAM! up and designing a label.
+
 `search_assets` finds things by words, place, category, condition, loan or stock; `get_asset` tells everything about one, by its ID or any code on its label. Name assets to the person by name, and give them the page link a tool returns.
 
 ## Assets
