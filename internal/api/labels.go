@@ -136,22 +136,29 @@ func conditionText(c string) string {
 // read is not found, and its location shows only places it can read. A non-nil problem means
 // the asset itself cannot be labeled; err is reserved for server failures.
 func (s *Server) layoutAsset(r *http.Request, t *labels.Template, assetID string, images render.ImageSource) (*render.Scene, *LabelProblem, error) {
+	scene, _, problem, err := s.layoutAssetData(r, t, assetID, images)
+	return scene, problem, err
+}
+
+// layoutAssetData is layoutAsset, with the data the label was filled from.
+func (s *Server) layoutAssetData(r *http.Request, t *labels.Template, assetID string, images render.ImageSource) (*render.Scene, labels.Data, *LabelProblem, error) {
 	a, err := s.store.GetAssetByID(assetID)
 	if errors.Is(err, store.ErrAssetNotFound) || (err == nil && !Allows(r.Context(), rbac.PermAssetsRead, a.Scopes)) {
-		return nil, &LabelProblem{AssetID: assetID, Message: "asset not found"}, nil
+		return nil, labels.Data{}, &LabelProblem{AssetID: assetID, Message: "asset not found"}, nil
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, labels.Data{}, nil, err
 	}
 	if a.Asset.ArchivedAt != nil {
-		return nil, &LabelProblem{AssetID: assetID, Message: "asset is archived"}, nil
+		return nil, labels.Data{}, &LabelProblem{AssetID: assetID, Message: "asset is archived"}, nil
 	}
-	scene, err := render.Layout(t, s.labelData(s.shown(r, a)), images)
+	data := s.labelData(s.shown(r, a))
+	scene, err := render.Layout(t, data, images)
 	var le *render.LayoutError
 	if errors.As(err, &le) {
-		return nil, &LabelProblem{AssetID: assetID, Path: le.Path, Message: le.Message}, nil
+		return nil, data, &LabelProblem{AssetID: assetID, Path: le.Path, Message: le.Message}, nil
 	}
-	return scene, nil, err
+	return scene, data, nil, err
 }
 
 // writeLabel renders one scene in format: svg, png (grayscale, or 1-bit when
@@ -242,6 +249,50 @@ type PreviewRequest struct {
 	Template json.RawMessage `json:"template"`
 	// AssetID selects real data; without it placeholders are used.
 	AssetID string `json:"asset_id,omitempty"`
+	// Format is how a preview answers: svg (the default), png (grayscale,
+	// or 1-bit with Mono), or json, which describes each element as laid
+	// out: its box and what it prints.
+	Format string `json:"format,omitempty"`
+	Mono   bool   `json:"mono,omitempty"`
+}
+
+// PreviewElement is one element of a previewed label, as format json
+// describes it: where it is, in the template's units, and what it prints.
+type PreviewElement struct {
+	Index         int     `json:"index"`
+	Type          string  `json:"type"`
+	X             float64 `json:"x"`
+	Y             float64 `json:"y"`
+	Width         float64 `json:"width"`
+	Height        float64 `json:"height"`
+	Value         string  `json:"value,omitempty"`
+	GeneratorType string  `json:"generator_type,omitempty"`
+	ImageID       string  `json:"image_id,omitempty"`
+	FontSize      float64 `json:"font_size,omitempty"`
+}
+
+// PreviewDescription is a previewed label as format json describes it.
+type PreviewDescription struct {
+	Width    float64          `json:"width"`
+	Height   float64          `json:"height"`
+	Units    string           `json:"units"`
+	DPI      int              `json:"dpi"`
+	Elements []PreviewElement `json:"elements"`
+}
+
+// describePreview says what each element of a laid-out label prints.
+func describePreview(t *labels.Template, data labels.Data) PreviewDescription {
+	d := PreviewDescription{Width: t.Width, Height: t.Height, Units: t.Units, DPI: t.DPI, Elements: []PreviewElement{}}
+	for i := range t.Elements {
+		e := &t.Elements[i]
+		pe := PreviewElement{Index: i, Type: e.Type, X: e.X, Y: e.Y, Width: e.Width, Height: e.Height,
+			GeneratorType: e.GeneratorType, ImageID: e.ImageID, FontSize: e.FontSize}
+		if b, err := e.Binding(); err == nil && e.Type != labels.ElementStaticImage {
+			pe.Value = b.Resolve(data)
+		}
+		d.Elements = append(d.Elements, pe)
+	}
+	return d
 }
 
 // previewData stands in for an asset when previewing without one. Every
@@ -270,12 +321,20 @@ func previewData(t *labels.Template, baseURL string) labels.Data {
 	return d
 }
 
-// handlePreviewTemplate renders an unsaved template as SVG for the editor:
-// POST /api/v1/templates/preview
+// handlePreviewTemplate renders an unsaved template for the editor, as SVG,
+// PNG or a description of its elements: POST /api/v1/templates/preview
 func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 	var req PreviewRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Template) == 0 {
 		writeJSONError(w, http.StatusBadRequest, `Expected {"template": {...}, "asset_id": "optional"}`)
+		return
+	}
+	switch req.Format {
+	case "":
+		req.Format = "svg"
+	case "svg", "png", "json":
+	default:
+		writeJSONError(w, http.StatusBadRequest, `format must be "svg", "png" or "json"`)
 		return
 	}
 	doc, err := withPreviewDefaults(req.Template)
@@ -289,9 +348,13 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	images := s.newLabelImages()
-	var scene *render.Scene
+	var (
+		scene *render.Scene
+		data  labels.Data
+	)
 	if req.AssetID == "" {
-		scene, err = render.Layout(t, previewData(t, s.cfg.Server.BaseURL), images)
+		data = previewData(t, s.cfg.Server.BaseURL)
+		scene, err = render.Layout(t, data, images)
 		var le *render.LayoutError
 		if errors.As(err, &le) {
 			writeJSON(w, http.StatusUnprocessableEntity, ErrorResponse{Error: "Label cannot be rendered",
@@ -300,7 +363,7 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		var problem *LabelProblem
-		scene, problem, err = s.layoutAsset(r, t, req.AssetID, images)
+		scene, data, problem, err = s.layoutAssetData(r, t, req.AssetID, images)
 		if problem != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, ErrorResponse{Error: "Label cannot be rendered", Details: []LabelProblem{*problem}})
 			return
@@ -310,13 +373,17 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "render preview")
 		return
 	}
+	if req.Format == "json" {
+		writeJSON(w, http.StatusOK, describePreview(t, data))
+		return
+	}
 
 	var buf bytes.Buffer
-	if err := render.WriteSVG(&buf, scene); err != nil {
+	if err := writeLabel(&buf, scene, req.Format, req.Mono); err != nil {
 		writeServerError(w, err, "render preview")
 		return
 	}
-	setDownloadHeaders(w, labelContentTypes["svg"], "preview.svg", "inline")
+	setDownloadHeaders(w, labelContentTypes[req.Format], "preview."+req.Format, "inline")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(buf.Bytes())
 }

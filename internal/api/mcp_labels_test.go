@@ -1,0 +1,194 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"image/png"
+	"net/http"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// TestPreviewFormats renders an unsaved template as PNG, for assistants to
+// see, and as JSON, saying what each element prints.
+func TestPreviewFormats(t *testing.T) {
+	srv, cookie, tagged, _, _ := labelFixture(t)
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+labelTemplate+`,"asset_id":"`+tagged+`","format":"png"}`)
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("png: %d %s", rec.Code, rec.Header())
+	}
+	img, err := png.Decode(bytes.NewReader(rec.Body.Bytes()))
+	if err != nil || img.Bounds().Dx() != 472 { // 40 mm at 300 DPI
+		t.Errorf("png: %v %v", err, img.Bounds())
+	}
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+labelTemplate+`,"asset_id":"`+tagged+`","format":"json"}`)
+	var desc PreviewDescription
+	if err := json.Unmarshal(rec.Body.Bytes(), &desc); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("json: %d %s", rec.Code, rec.Body)
+	}
+	if desc.Width != 40 || desc.Units != "mm" || desc.DPI != 300 || len(desc.Elements) != 3 ||
+		desc.Elements[0].Value != "BAM-0042" || desc.Elements[1].Value != "Drill" || desc.Elements[2].Value != "Shelf B3" || desc.Elements[2].Y != 11 {
+		t.Errorf("json: %+v", desc)
+	}
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+labelTemplate+`,"format":"gif"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("gif: %d", rec.Code)
+	}
+	// SVG stays the default, for the editor.
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+labelTemplate+`}`)
+	if !strings.HasPrefix(rec.Body.String(), "<?xml") {
+		t.Errorf("default: %.40s", rec.Body)
+	}
+}
+
+func imagesIn(res *mcp.CallToolResult) []*mcp.ImageContent {
+	var out []*mcp.ImageContent
+	for _, c := range res.Content {
+		if ic, ok := c.(*mcp.ImageContent); ok {
+			out = append(out, ic)
+		}
+	}
+	return out
+}
+
+func TestMCPLabelTools(t *testing.T) {
+	srv, cookie, tagged, untagged, tag := labelFixture(t)
+	admin, _ := srv.store.GetUserByEmail("admin@test.org")
+	ql := newFakeQL(t)
+	printer := createPrinter(t, srv, cookie, ql.port(), "dk-22205")
+	cs := mcpSession(t, srv, tokenWith(t, srv, admin.ID, "Designer", rbac.PermAssetsRead, rbac.PermAssetsScan, rbac.PermTemplatesManage, rbac.PermLabelsPrint, rbac.PermSettingsManage))
+
+	// A template as wide as the printer's roll, to print on it.
+	wide := createTemplate(t, srv, cookie, strings.Replace(labelTemplate, `"width":40,"height":20`, `"width":62,"height":29`, 1))
+
+	// Seeing a template as it prints, and reading what it prints.
+	res := callTool(t, cs, "preview_template", map[string]any{"template_id": tag, "assets": []string{tagged, "BAM-0042"}})
+	var preview struct {
+		Width  float64
+		Labels []struct {
+			Elements []struct {
+				Value string
+			}
+		}
+		Fit   map[string]any
+		Scale int
+	}
+	structured(t, res, &preview)
+	images := imagesIn(res)
+	if len(images) != 2 || len(preview.Labels) != 2 || preview.Labels[1].Elements[1].Value != "Drill" || preview.Fit != nil {
+		t.Fatalf("preview: %+v, %d images: %s", preview, len(images), toolText(res))
+	}
+	// Small labels are shown larger, whole dots at a time.
+	img, err := png.Decode(bytes.NewReader(images[0].Data))
+	if err != nil || img.Bounds().Dx() != 472*preview.Scale || preview.Scale != 2 {
+		t.Errorf("enlarged: %v %v ×%d", err, img.Bounds(), preview.Scale)
+	}
+
+	// Checked against the printer: the narrow one does not fit its roll,
+	// the wide one does.
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag, "check_printer": printer}), &preview)
+	if preview.Fit["fits"] != false || !strings.Contains(preview.Fit["message"].(string), "62 mm") {
+		t.Errorf("the narrow one: %+v", preview.Fit)
+	}
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": wide, "check_printer": printer}), &preview)
+	if preview.Fit["fits"] != true {
+		t.Errorf("the wide one: %+v", preview.Fit)
+	}
+
+	// Changing an element, and seeing the change.
+	var saved map[string]any
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 2, "set": map[string]any{"content_binding": "Fragile"}}}}), &saved)
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &preview)
+	if got := preview.Labels[0].Elements[2].Value; got != "Fragile" {
+		t.Errorf("after the change: %q", got)
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "remove_elements": []int{2}}), &saved)
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &preview)
+	if len(preview.Labels[0].Elements) != 2 {
+		t.Errorf("after removing: %+v", preview)
+	}
+	// A draft never saved, too, and one that cannot be made for an asset says why.
+	draft := map[string]any{}
+	_ = json.Unmarshal([]byte(labelTemplate), &draft)
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template": draft, "assets": []string{untagged}}), &preview)
+	if res := callTool(t, cs, "preview_template", map[string]any{"template": draft, "assets": []string{untagged}}); !strings.Contains(toolText(res), "cannot be made") {
+		t.Errorf("an asset without a code: %s", toolText(res))
+	}
+
+	// A label for an asset, as an image and as a PDF.
+	if res := callTool(t, cs, "render_label", map[string]any{"asset": tagged, "template_id": tag}); len(imagesIn(res)) != 1 {
+		t.Errorf("render_label: %s", toolText(res))
+	}
+	res = callTool(t, cs, "export_labels", map[string]any{"template_id": tag, "assets": []string{tagged}, "format": "pdf"})
+	pdf := false
+	for _, c := range res.Content {
+		if er, ok := c.(*mcp.EmbeddedResource); ok && er.Resource.MIMEType == "application/pdf" && bytes.HasPrefix(er.Resource.Blob, []byte("%PDF")) {
+			pdf = true
+		}
+	}
+	if !pdf {
+		t.Errorf("export_labels: %s", toolText(res))
+	}
+
+	// Printing, now and through the queue.
+	if res := callTool(t, cs, "label_options", map[string]any{"assets": []string{tagged}}); res.IsError {
+		t.Errorf("label_options: %s", toolText(res))
+	}
+	if res := callTool(t, cs, "print_labels", map[string]any{"printer_id": printer, "template_id": wide, "assets": []string{tagged}}); res.IsError {
+		t.Fatalf("print_labels: %s", toolText(res))
+	}
+	if jobs := ql.waitForJobs(t, 1, 5*time.Second); len(jobs) != 1 {
+		t.Errorf("printed %d jobs", len(jobs))
+	}
+	draft["width"], draft["height"] = 62, 29
+	if res := callTool(t, cs, "test_print", map[string]any{"printer_id": printer, "template": draft}); res.IsError {
+		t.Errorf("test_print: %s", toolText(res))
+	}
+	if res := callTool(t, cs, "queue_labels", map[string]any{"assets": []string{tagged}, "template_id": wide, "destination": "printer:" + printer}); res.IsError {
+		t.Fatalf("queue_labels: %s", toolText(res))
+	}
+	var queue struct {
+		Entries []struct{ ID string }
+	}
+	structured(t, callTool(t, cs, "list_print_queue", nil), &queue)
+	if len(queue.Entries) != 1 {
+		t.Fatalf("queue: %+v", queue)
+	}
+	if res := callTool(t, cs, "update_print_queue", map[string]any{"entry_ids": []string{queue.Entries[0].ID}, "copies": 2}); res.IsError {
+		t.Errorf("update_print_queue: %s", toolText(res))
+	}
+	if res := callTool(t, cs, "print_queue", nil); res.IsError || !strings.Contains(toolText(res), "1 print jobs") {
+		t.Errorf("print_queue: %s", toolText(res))
+	}
+	for _, name := range []string{"list_print_jobs", "list_templates", "list_printers", "list_printer_drivers", "list_label_stock", "list_printer_pools", "list_images"} {
+		if res := callTool(t, cs, name, nil); res.IsError {
+			t.Errorf("%s: %s", name, toolText(res))
+		}
+	}
+
+	// Changing a printer says first what it would affect.
+	if res := callTool(t, cs, "save_printer", map[string]any{"id": printer, "name": "Front desk"}); res.IsError || !strings.Contains(toolText(res), "Saved") {
+		t.Errorf("renaming: %s", toolText(res))
+	}
+	var p struct{ Printer struct{ Name, Media string } }
+	_ = json.Unmarshal(doJSON(t, srv, cookie, http.MethodGet, "/api/v1/printers/"+printer, "").Body.Bytes(), &p)
+	if p.Printer.Name != "Front desk" || p.Printer.Media != "dk-22205" {
+		t.Errorf("saved printer: %+v", p)
+	}
+	var stock map[string]any
+	structured(t, callTool(t, cs, "save_label_stock", map[string]any{"name": "Bin labels", "width_mm": 60, "length_mm": 40, "gap_mm": 3}), &stock)
+	if res := callTool(t, cs, "save_label_stock", map[string]any{"id": stock["stock"].(map[string]any)["id"], "gap_mm": 2}); res.IsError {
+		t.Errorf("changing stock: %s", toolText(res))
+	}
+
+	// Only those who design see the design tools.
+	names := toolNames(t, mcpSession(t, srv, tokenWith(t, srv, admin.ID, "Printer", rbac.PermAssetsRead, rbac.PermLabelsPrint)))
+	if slices.Contains(names, "save_template") || slices.Contains(names, "test_print") || !slices.Contains(names, "print_labels") {
+		t.Errorf("a printer lists %v", names)
+	}
+}
