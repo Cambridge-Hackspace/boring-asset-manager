@@ -2,7 +2,7 @@
 
 Assets in a category marked **lendable** can be lent out.
 
-- With permission to borrow, choose **Borrow it myself** on the asset's page, saying when it is due back if you like. Bring it back with **Check in**.
+- With permission to borrow, choose **Borrow** on the asset's page or its scan page, saying when it is due back if you like. Bring it back with **Return**.
 - With permission to lend, you can lend to anyone, and check in any loan.
 - An asset counted by weight, such as a spool, can be checked in with how much is left.
 

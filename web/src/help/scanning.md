@@ -1,8 +1,10 @@
 # Scanning
 
-Scanning an asset's label opens its **scan page**: what it is, where it is, what it holds, and quick actions such as using some, borrowing it, or reporting a problem. You see only the actions you are allowed to take. Assets that are public can be scanned without signing in.
+Scanning an asset's label opens its **scan page**: what it is, where it is, what it holds, and quick actions such as using some, borrowing it, or reporting a problem. You see only the actions you are allowed to take, and details with nothing in them are left off. Assets that are public can be scanned without signing in; anything else asks you to sign in, and comes back to it after.
 
-Each asset's page links to its scan page, and `{{scan_url}}` puts it on labels as a QR code.
+A phone's camera opens a label whose QR code holds its scan link, `{{scan_url}}`. New QR codes in the template editor hold it already, and the editor warns about a QR code that does not hold a link: a phone scanning it sees only the code. Each asset's page links to its scan page too.
+
+The **Scan** page, in the menu, looks a code up: type or paste it (or its scan link), let a USB scanner type it, or, in browsers that can read codes, scan it with the camera. The home page has a box for it as well.
 
 ## Scan templates
 

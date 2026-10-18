@@ -165,6 +165,8 @@ export function newElement(type: ElementType, doc: TemplateDoc, generatorType = 
         width: generatorType === 'code128' ? snap(doc.width * 0.6, step, doc.units) : side,
         height: side,
         generator_type: generatorType,
+        // A QR code a phone scans opens the asset's scan page.
+        ...(generatorType === 'qr' ? { content_binding: SCAN_URL } : {}),
       };
     case 'static_image':
       return { type, x: at, y: at, width: side, height: side, image_id: '' };
@@ -234,6 +236,19 @@ export function resizeElement(doc: TemplateDoc, e: TemplateElement, handle: Hand
   if (handle.includes('n')) top = clamp(snap(top + dy, step, doc.units), 0, bottom - step);
   if (handle.includes('s')) bottom = clamp(snap(bottom + dy, step, doc.units), top + step, doc.height);
   return { ...e, x: tidy(left, doc.units), y: tidy(top, doc.units), width: tidy(right - left, doc.units), height: tidy(bottom - top, doc.units) };
+}
+
+/** The placeholder for an asset's scan page address (README §6.4). */
+export const SCAN_URL = '{{scan_url}}';
+
+/**
+ * Whether a phone scanning a code element opens a page: a QR code whose
+ * content is a link. Other symbologies are read by scanners, not phones.
+ */
+export function opensAPage(e: TemplateElement): boolean {
+  if (e.type !== 'generator' || e.generator_type !== 'qr') return true;
+  const c = (e.content_binding ?? '').trim();
+  return c.includes(SCAN_URL) || /^https?:\/\//i.test(c);
 }
 
 /** The element index a server problem path such as "elements[2].width" refers to. */

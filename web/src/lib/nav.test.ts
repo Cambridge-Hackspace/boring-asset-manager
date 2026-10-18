@@ -14,10 +14,10 @@ const labels = (held: Permission[]) =>
 describe('navSections', () => {
   it('lists everyday pages on their own, then each group', () => {
     const all: Permission[] = [
-      'assets.read', 'assets.track', 'labels.print', 'categories.manage', 'templates.manage', 'settings.manage', 'users.manage',
+      'assets.read', 'assets.scan', 'assets.track', 'labels.print', 'categories.manage', 'templates.manage', 'settings.manage', 'users.manage',
     ];
     expect(labels(all)).toEqual([
-      ['', ['Assets', 'Loans', 'Spool', 'Reports']],
+      ['', ['Assets', 'Scan', 'Loans', 'Spool', 'Reports']],
       ['Catalog', ['Categories', 'Fields', 'Relations', 'Actions']],
       ['Labels', ['Templates', 'Images', 'Printers']],
       ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications']],

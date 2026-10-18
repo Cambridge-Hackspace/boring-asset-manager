@@ -49,7 +49,7 @@
     error = status = '';
     try {
       await request('POST', `/assets/${encodeURIComponent(l.asset_id)}/checkin`);
-      status = `Checked in ${l.asset_name}.`;
+      status = `Returned ${l.asset_name}.`;
       await load();
     } catch (err) {
       error = messageOf(err);
@@ -111,7 +111,7 @@
             </td>
             <td class="py-2 text-right">
               {#if !l.checked_in_at}
-                <button type="button" class="btn-secondary" aria-label="Check in {l.asset_name}" onclick={() => checkIn(l)}>Check in</button>
+                <button type="button" class="btn-secondary" aria-label="Return {l.asset_name}" onclick={() => checkIn(l)}>Return</button>
               {/if}
             </td>
           </tr>

@@ -150,7 +150,7 @@ export function describeEvent(e: AssetEvent): string {
       return `Lent to ${p.borrower ? personName(p.borrower) : 'someone'}${due}`;
     }
     case 'asset.checked_in':
-      return `Checked in from ${p.borrower ? personName(p.borrower) : 'someone'}`;
+      return `Returned by ${p.borrower ? personName(p.borrower) : 'someone'}`;
     case 'asset.overdue':
       return `Overdue: ${p.borrower ? personName(p.borrower) : 'the borrower'} was due to bring it back ${p.due_at ? dueDate(p.due_at) : ''}`.trim();
     case 'asset.action':

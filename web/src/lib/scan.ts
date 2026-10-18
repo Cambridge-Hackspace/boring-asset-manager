@@ -6,8 +6,8 @@ const actionLabels: Record<ScanAction, string> = {
   open: 'Open its page',
   edit: 'Edit it',
   use: 'Use some',
-  borrow: 'Borrow it',
-  return: 'Give it back',
+  borrow: 'Borrow',
+  return: 'Return',
   report: 'Report a problem',
   actions: 'Its actions, such as Identify',
 };
@@ -56,4 +56,25 @@ export function cleanedScanSpec(spec: ReportSpec): ReportSpec {
       return out;
     }),
   };
+}
+
+/**
+ * Where a code read by a camera or scanner, or typed, leads: a scan link or
+ * an asset's address (from this or another of the server's addresses) to
+ * its page here, and anything else to the scan page for that code. Null
+ * for nothing.
+ */
+export function scanTarget(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  if (/^https?:\/\//i.test(t)) {
+    try {
+      const url = new URL(t);
+      const m = /^\/(scan|assets)\/([^/]+)\/?$/.exec(url.pathname);
+      if (m) return `/${m[1]}/${m[2]}`;
+    } catch {
+      // Not a link after all: look it up as a code.
+    }
+  }
+  return `/scan/${encodeURIComponent(t)}`;
 }

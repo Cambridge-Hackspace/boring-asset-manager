@@ -31,13 +31,13 @@ test('lend a tool; the borrower checks it in, then borrows it themselves', async
   await signIn(page, email, 'MemberPass123!');
   await page.getByRole('link', { name: 'Loans' }).first().click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your loans');
-  await page.getByRole('button', { name: `Check in ${name}` }).click();
-  await expect(page.getByRole('status')).toHaveText(`Checked in ${name}.`);
+  await page.getByRole('button', { name: `Return ${name}` }).click();
+  await expect(page.getByRole('status')).toHaveText(`Returned ${name}.`);
   await expect(page.getByRole('row', { name: new RegExp(name) })).toContainText('Returned');
 
   // Now they borrow it themselves.
   await page.getByRole('link', { name }).click();
-  await page.getByRole('region', { name: 'Loan' }).getByRole('button', { name: 'Borrow it myself' }).click();
+  await page.getByRole('region', { name: 'Loan' }).getByRole('button', { name: 'Borrow' }).click();
   await expect(page.getByRole('region', { name: 'Loan' })).toContainText('Lent to you since');
   await expect(history.getByRole('listitem').first()).toContainText(`Lent to ${member}`);
 });

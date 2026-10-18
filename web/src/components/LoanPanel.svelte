@@ -61,12 +61,12 @@
     if (to) body.borrower_id = to;
     if (due) body.due_at = endOfDay(due);
     const who = to ? (names.get(to) ?? 'them') : 'you';
-    void act(() => request('POST', `${path}/checkout`, body), `Lent to ${who}.`);
+    void act(() => request('POST', `${path}/checkout`, body), to ? `Lent to ${who}.` : 'Borrowed.');
   }
 
   function checkIn() {
     const body = asset.asset.stock && left !== null ? { left } : undefined;
-    void act(() => request('POST', `${path}/checkin`, body), 'Checked in.');
+    void act(() => request('POST', `${path}/checkin`, body), 'Returned.');
     left = null;
   }
 </script>
@@ -88,11 +88,11 @@
             <input id="loan-left" class="input w-32" type="number" min="0" step="1" bind:value={left} />
           </div>
         {/if}
-        <button type="button" class="btn-secondary" disabled={busy} onclick={checkIn}>Check in</button>
+        <button type="button" class="btn-secondary" disabled={busy} onclick={checkIn}>Return</button>
       </div>
     {/if}
   {:else if blocked}
-    <p class="text-sm">Available to borrow, but not now. {blocked}</p>
+    <p class="text-sm">{blocked}</p>
   {:else}
     <p class="text-sm">Available to borrow.</p>
     {#if canLend || canBorrow}
@@ -102,7 +102,7 @@
           <input id="loan-due" class="input" type="date" min={today} bind:value={due} />
         </div>
         {#if canBorrow}
-          <button type="button" class="btn-secondary" disabled={busy} onclick={() => checkOut()}>Borrow it myself</button>
+          <button type="button" class="btn-secondary" disabled={busy} onclick={() => checkOut()}>Borrow</button>
         {/if}
         {#if canLend}
           <div>

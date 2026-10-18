@@ -105,6 +105,7 @@ for (const scheme of ['light', 'dark'] as const) {
       [`/assets/${screws.asset.asset.id}`, ''],
       [`/assets/${screws.asset.asset.id}/edit`, 'Edit asset'],
       [`/scan/${screws.asset.asset.id}`, ''],
+      ['/scan', 'Scan'],
       ['/assets?archived=true', 'Assets'],
       ['/assets?condition=problem', 'Assets'],
       [`/assets/${archived.asset.asset.id}`, ''],

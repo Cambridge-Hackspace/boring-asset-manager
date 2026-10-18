@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('LoansPage', () => {
-  it('shows a member their own loans, past ones too, and checks one in', async () => {
+  it('shows a member their own loans, past ones too, and returns one', async () => {
     session.permissions = ['assets.read', 'assets.borrow'];
     let loans = [loan('1', 'Drill', 'me'), loan('2', 'Saw', 'me', { checked_in_at: '2026-10-05T10:00:00Z' })];
     const { fetchMock, sent } = fakeApi({
@@ -44,8 +44,8 @@ describe('LoansPage', () => {
     expect(saw.textContent).toContain('Returned');
     expect(within(saw).queryByRole('button')).toBeNull();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Check in Drill' }));
-    await screen.findByText('Checked in Drill.');
+    await fireEvent.click(screen.getByRole('button', { name: 'Return Drill' }));
+    await screen.findByText('Returned Drill.');
     expect(sent.some((r) => r.path === '/assets/a-1/checkin')).toBe(true);
   });
 

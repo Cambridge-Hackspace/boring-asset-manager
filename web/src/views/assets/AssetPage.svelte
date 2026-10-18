@@ -14,6 +14,8 @@
   import ConditionBadge from '../../components/ConditionBadge.svelte';
   import ConflictMark from '../../components/ConflictMark.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
+  import ReportProblemForm from '../../components/ReportProblemForm.svelte';
+  import SignInToSee from '../../components/SignInToSee.svelte';
   import ActionButtons from '../../components/ActionButtons.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
@@ -109,22 +111,13 @@
 
   // Reporting a problem, or clearing one.
   let reporting = $state(false);
-  let reportCondition = $state<Condition>('needs_maintenance');
-  let reportNote = $state('');
 
-  function startReport() {
-    reporting = true;
-    reportCondition = asset?.asset.condition === 'out_of_service' ? 'out_of_service' : 'needs_maintenance';
-    reportNote = asset?.asset.condition_note ?? '';
-  }
-
-  function report(event: SubmitEvent) {
-    event.preventDefault();
-    void stockAction(async () => {
-      const r = await request<{ asset: AssetWithDetails }>('PUT', `${path}/condition`, { condition: reportCondition, note: reportNote });
-      reporting = false;
-      return r;
-    }, `Reported: ${conditionLabel(reportCondition).toLowerCase()}.`);
+  async function report(condition: Condition, note: string) {
+    const r = await request<{ asset: AssetWithDetails }>('PUT', `${path}/condition`, { condition, note });
+    asset = r.asset;
+    reporting = false;
+    saved = `Reported: ${conditionLabel(condition).toLowerCase()}.`;
+    await loadHistory();
   }
 
   // After a loan or a link changes: show the asset as it is now.
@@ -167,7 +160,7 @@
 </script>
 
 <nav aria-label="Breadcrumb" class="mb-2 text-sm"><a class="underline" href="/assets">Assets</a></nav>
-<ErrorMessage {error} />
+{#if asset || session.user}<ErrorMessage {error} />{/if}
 {#if saved}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{saved}</p>{/if}
 
 {#if loading}
@@ -183,7 +176,7 @@
       {:else}
         {#if session.canOn(asset.scopes, 'assets.write')}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>{/if}
         {#if session.canAnyOn(asset.scopes, 'assets.report', 'assets.write') && !reporting}
-          <button type="button" class="btn-secondary" onclick={startReport}>Report a problem</button>
+          <button type="button" class="btn-secondary" onclick={() => (reporting = true)}>Report a problem</button>
         {/if}
         {#if asset.asset.condition !== 'ok' && session.canOn(asset.scopes, 'assets.write')}
           <button type="button" class="btn-secondary" disabled={busy} onclick={markWorking}>Mark as working</button>
@@ -212,26 +205,9 @@
     </p>
   {/if}
   {#if reporting}
-    <form class="card mb-4 max-w-xl space-y-3" onsubmit={report}>
-      <h2 class="text-lg font-semibold">Report a problem</h2>
-      <fieldset>
-        <legend class="label">How bad is it?</legend>
-        <label class="mr-4 inline-flex items-center gap-2 text-sm">
-          <input type="radio" name="condition" value="needs_maintenance" bind:group={reportCondition} /> Needs maintenance, still usable
-        </label>
-        <label class="inline-flex items-center gap-2 text-sm">
-          <input type="radio" name="condition" value="out_of_service" bind:group={reportCondition} /> Out of service, do not use
-        </label>
-      </fieldset>
-      <div>
-        <label class="label" for="condition-note">What is wrong?</label>
-        <input id="condition-note" class="input" maxlength="255" placeholder="The chuck slips" bind:value={reportNote} />
-      </div>
-      <div class="flex gap-2">
-        <button type="submit" class="btn-primary" disabled={busy}>Report</button>
-        <button type="button" class="btn-secondary" onclick={() => (reporting = false)}>Cancel</button>
-      </div>
-    </form>
+    <div class="mb-4">
+      <ReportProblemForm condition={asset.asset.condition} note={asset.asset.condition_note ?? ''} onreport={report} oncancel={() => (reporting = false)} />
+    </div>
   {/if}
 
   <div class="grid gap-6 lg:grid-cols-2">
@@ -366,4 +342,6 @@
       </section>
     {/if}
   </div>
+{:else if !session.user}
+  <SignInToSee />
 {/if}

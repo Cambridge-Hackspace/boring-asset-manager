@@ -56,9 +56,11 @@ test('signed-out visitors see public assets, and nothing else', async ({ signedI
   await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveCount(0);
 
-  // Not found, as if it did not exist; and the catalog asks to sign in.
+  // Asked to sign in, without saying whether it exists; and the catalog
+  // asks to sign in too.
   await page.goto(`/assets/${hidden.asset.id}`);
-  await expect(page.getByRole('alert')).toContainText('not found');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sign in to see this asset');
+  await expect(page.getByText(hidden.asset.name)).toHaveCount(0);
   await page.goto('/assets');
   await expect(page).toHaveURL(/\/sign-in\?next=%2Fassets$/);
 });

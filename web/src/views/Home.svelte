@@ -4,6 +4,8 @@
   import { messageOf } from '../lib/errors';
   import type { AssetWithDetails, Category } from '../lib/models';
   import { navSections, type NavLink } from '../lib/nav';
+  import { navigate } from '../lib/router.svelte';
+  import { scanTarget } from '../lib/scan';
   import { displayName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
@@ -19,6 +21,13 @@
   let lowAssets = $state<AssetWithDetails[]>([]);
   let attention = $state<AssetWithDetails[]>([]);
   let error = $state('');
+  let code = $state('');
+
+  function lookUp(event: SubmitEvent) {
+    event.preventDefault();
+    const to = scanTarget(code);
+    if (to) navigate(to);
+  }
 
   onMount(async () => {
     if (!session.can('assets.read')) return;
@@ -40,6 +49,16 @@
 <p class="mt-1 text-zinc-600 dark:text-zinc-400">Signed in as {session.user ? displayName(session.user) : ''}.</p>
 
 <ErrorMessage {error} />
+{#if session.can('assets.scan')}
+  <form class="mt-6 flex max-w-md flex-wrap items-end gap-2" role="search" onsubmit={lookUp}>
+    <div class="grow">
+      <label class="label" for="home-code">Look up a code</label>
+      <input id="home-code" class="input" autocomplete="off" placeholder="HS-100" bind:value={code} />
+    </div>
+    <button type="submit" class="btn-secondary" disabled={!code.trim()}>Look up</button>
+    <a class="btn-secondary" href="/scan">Scan with the camera</a>
+  </form>
+{/if}
 {#if low}
   <section class="mt-6" aria-labelledby="low-heading">
     <h2 id="low-heading" class="mb-2 text-lg font-semibold">Running low</h2>
