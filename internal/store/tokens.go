@@ -262,6 +262,14 @@ func (s *Store) AuthenticateToken(secret string) (*models.APIToken, map[string]b
 	return &t, perms, nil
 }
 
+// Via returns a view of the store whose changes record that they were made
+// through an assistant, by the name its MCP client gives (README §6.6).
+func (s *Store) Via(assistant string) *Store {
+	c := *s
+	c.via = assistant
+	return &c
+}
+
 // AsToken returns a view of the store whose changes are attributed to an
 // API token, as As attributes them to a user.
 func (s *Store) AsToken(tokenID string) *Store {

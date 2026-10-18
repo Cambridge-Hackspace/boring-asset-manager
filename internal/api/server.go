@@ -10,6 +10,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -340,8 +341,17 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 // actingStore is the store with changes attributed to the signed-in user, or
-// the API token, for the events they cause.
+// the API token, for the events they cause, and to the assistant they were
+// made through, if an MCP tool made them.
 func (s *Server) actingStore(r *http.Request) *store.Store {
+	acting := s.actor(r)
+	if via := mcpserver.ViaFrom(r.Context()); via != "" {
+		acting = acting.Via(via)
+	}
+	return acting
+}
+
+func (s *Server) actor(r *http.Request) *store.Store {
 	// A personal token acts as its user, so the user comes first.
 	if u := CurrentUser(r.Context()); u != nil {
 		return s.store.As(u.ID)

@@ -337,6 +337,10 @@ func (s *Store) insertEventID(tx *sql.Tx, kind string, categoryID, assetID *stri
 		payload.Actor = &actor
 	}
 
+	if payload.Actor != nil {
+		payload.Actor.Via = s.via
+	}
+
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("encoding event: %w", err)

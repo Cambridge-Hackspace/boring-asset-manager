@@ -42,6 +42,8 @@ type Store struct {
 	// actorToken is the API token changes are attributed to instead; see
 	// AsToken.
 	actorToken string
+	// via is the assistant changes are made through; see Via.
+	via string
 }
 
 // Open initializes and connects to the database based on configuration.

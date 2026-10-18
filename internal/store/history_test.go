@@ -261,3 +261,28 @@ func TestAssetEventsSince(t *testing.T) {
 		t.Errorf("two kinds: %d", len(list))
 	}
 }
+
+// TestHistoryRecordsTheAssistant notes the assistant a change came through
+// on its actor, and nothing otherwise.
+func TestHistoryRecordsTheAssistant(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	u, err := st.CreateUser("ada@hackspace.org", "a long enough password", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	via, err := st.As(u.ID).Via("Claude Desktop").CreateAsset("Drill", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := st.As(u.ID).CreateAsset("Saw", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := history(t, st, via.Asset.ID)[0].Payload.Actor; a == nil || a.ID != u.ID || a.Via != "Claude Desktop" {
+		t.Errorf("through an assistant: %+v", a)
+	}
+	if a := history(t, st, plain.Asset.ID)[0].Payload.Actor; a == nil || a.Via != "" {
+		t.Errorf("without one: %+v", a)
+	}
+}
