@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -42,10 +43,22 @@ func (t categoryTraits) chooseScan(categoryIDs []string, defaultID string) model
 	return t.choose(t.scan, categoryIDs, defaultID)
 }
 
-// chooseLabel picks the label template the spool queues an asset in these
-// categories with, by the same rules, with no default.
+// labelListSeparator joins a category's label templates into one choice.
+const labelListSeparator = "\x00"
+
+// chooseLabel picks the label templates the spool queues an asset in these
+// categories with, by the same rules, with no default: the list one
+// category names, in order of preference.
 func (t categoryTraits) chooseLabel(categoryIDs []string) models.TemplateChoice {
-	return t.choose(t.label, categoryIDs, "")
+	return splitLabelChoice(t.choose(t.label, categoryIDs, ""))
+}
+
+func splitLabelChoice(c models.TemplateChoice) models.TemplateChoice {
+	if c.TemplateID != "" {
+		c.TemplateIDs = strings.Split(c.TemplateID, labelListSeparator)
+		c.TemplateID = c.TemplateIDs[0]
+	}
+	return c
 }
 
 // choose picks the template, of those named maps categories to, for an
@@ -227,9 +240,15 @@ func (s *Store) ScanConflicts(categoryID string, templateID *string) (map[string
 }
 
 // LabelConflicts lists the categories involved in active assets' label
-// template conflicts, as ScanConflicts does for scan templates.
-func (s *Store) LabelConflicts(categoryID string, templateID *string) (map[string]int, error) {
-	return s.templateConflicts(func(t categoryTraits) map[string]string { return t.label }, categoryID, templateID)
+// template conflicts, as ScanConflicts does for scan templates; with a
+// category, as if it named templateIDs (none when empty).
+func (s *Store) LabelConflicts(categoryID string, templateIDs []string) (map[string]int, error) {
+	var list *string
+	if len(templateIDs) > 0 {
+		joined := strings.Join(templateIDs, labelListSeparator)
+		list = &joined
+	}
+	return s.templateConflicts(func(t categoryTraits) map[string]string { return t.label }, categoryID, list)
 }
 
 // templateConflicts lists the categories involved in active assets'

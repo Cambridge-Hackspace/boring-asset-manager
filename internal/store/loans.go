@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -72,10 +73,12 @@ type categoryTraits struct {
 	parents map[string]string
 	// scopes maps each category to the names of its own scopes.
 	scopes map[string][]string
-	// scan and label map each category naming a scan or label template to
-	// it; created holds when each category was made, for choosing between
-	// templates.
+	// scan and label map each category naming a scan template, or label
+	// templates, to them, label templates joined by labelListSeparator so
+	// the same list is the same choice; labels holds the lists. created
+	// holds when each category was made, for choosing between templates.
 	scan, label map[string]string
+	labels      map[string][]string
 	// actions holds the actions by ID, and offers those each category
 	// offers itself.
 	actions map[string]models.AssetAction
@@ -101,7 +104,7 @@ func (t categoryTraits) weighs(categoryIDs []string, unit string) bool {
 func (s *Store) categoryTraits(q interface {
 	Query(string, ...any) (*sql.Rows, error)
 }) (categoryTraits, error) {
-	rows, err := q.Query("SELECT id, parent_id, is_lendable, is_consumable, stock_unit, scan_template_id, label_template_id, created_at FROM categories")
+	rows, err := q.Query("SELECT id, parent_id, is_lendable, is_consumable, stock_unit, scan_template_id, created_at FROM categories")
 	if err != nil {
 		return categoryTraits{}, fmt.Errorf("reading categories: %w", err)
 	}
@@ -114,18 +117,15 @@ func (s *Store) categoryTraits(q interface {
 			parent              sql.NullString
 			canLend, consumable bool
 			u                   string
-			template, labelTmpl sql.NullString
+			template            sql.NullString
 			made                time.Time
 		)
-		if err := rows.Scan(&id, &parent, &canLend, &consumable, &u, &template, &labelTmpl, &made); err != nil {
+		if err := rows.Scan(&id, &parent, &canLend, &consumable, &u, &template, &made); err != nil {
 			return categoryTraits{}, fmt.Errorf("scanning category: %w", err)
 		}
 		parents[id], lendable[id], created[id] = parent.String, canLend, made
 		if template.String != "" {
 			scan[id] = template.String
-		}
-		if labelTmpl.String != "" {
-			label[id] = labelTmpl.String
 		}
 		if consumable {
 			unit[id] = u
@@ -133,6 +133,13 @@ func (s *Store) categoryTraits(q interface {
 	}
 	if err := rows.Err(); err != nil {
 		return categoryTraits{}, err
+	}
+	labels, err := labelTemplateLists(q)
+	if err != nil {
+		return categoryTraits{}, err
+	}
+	for id, list := range labels {
+		label[id] = strings.Join(list, labelListSeparator)
 	}
 	scopes, err := readCategoryScopes(q)
 	if err != nil {
@@ -142,7 +149,7 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, created: created, actions: actions, offers: offers}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, actions: actions, offers: offers}
 	t.depth, t.descendants = shape(parents)
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {

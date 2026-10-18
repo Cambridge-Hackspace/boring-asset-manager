@@ -39,7 +39,7 @@ func TestCategoriesNameLabelTemplates(t *testing.T) {
 	}
 
 	bin, _ := st.CreateAsset("Bin A1", []string{small1.ID}, nil, nil)
-	if !reflect.DeepEqual(bin.LabelTemplate, models.TemplateChoice{TemplateID: small.ID, SourceCategoryID: bins.ID}) {
+	if !reflect.DeepEqual(bin.LabelTemplate, models.TemplateChoice{TemplateID: small.ID, TemplateIDs: []string{small.ID}, SourceCategoryID: bins.ID}) {
 		t.Errorf("inherited label template: %+v", bin.LabelTemplate)
 	}
 	plain, _ := st.CreateCategory("Plain", nil, "", false, false)
@@ -55,7 +55,7 @@ func TestCategoriesNameLabelTemplates(t *testing.T) {
 		t.Errorf("label conflicts: %v, %v", conflicts, err)
 	}
 	// What naming the same template for tools would do: no conflict.
-	if after, err := st.LabelConflicts(tools.ID, &small.ID); err != nil || len(after) != 0 {
+	if after, err := st.LabelConflicts(tools.ID, []string{small.ID}); err != nil || len(after) != 0 {
 		t.Errorf("conflicts after settling: %v, %v", after, err)
 	}
 	// Scan template conflicts are a separate matter.

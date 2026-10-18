@@ -22,9 +22,10 @@ export function stockFor<T extends LabelStockSize>(driver: DriverInfo | undefine
 
 /** What changing a printer would affect, a sentence each; none when nothing. */
 export function describeChanges(c: PrinterChanges): string[] {
-  const out = c.stranded.map(
-    (s) => `${s.labels} ${s.labels === 1 ? 'label' : 'labels'} waiting for ${s.target} with ${s.template_name} would no longer fit.`,
-  );
+  const out = c.stranded.map((s) => {
+    const labels = `${s.labels} ${s.labels === 1 ? 'label' : 'labels'} waiting for ${s.target} with ${s.template_name}`;
+    return s.move_to_name ? `${labels} would move to ${s.move_to_name}, their category’s next template that fits.` : `${labels} would no longer fit.`;
+  });
   if (c.categories.length) {
     const names = c.categories.map((x) => x.name).join(', ');
     out.push(`No printer would suit the label template of ${c.categories.length === 1 ? 'the category' : 'the categories'} ${names}.`);

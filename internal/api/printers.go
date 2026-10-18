@@ -81,13 +81,17 @@ func (s *Server) handleUpdatePrinter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// What the change affects, said again in the answer for scripts.
-	changes, ok := s.changesFor(w, req.printer(r.PathValue("id")))
+	changes, moves, ok := s.changesFor(w, req.printer(r.PathValue("id")))
 	if !ok {
 		return
 	}
 	p, err := s.store.UpdatePrinter(req.printer(r.PathValue("id")))
 	if writePrinterError(w, err) {
 		return
+	}
+	// Labels whose categories offer a template that still fits move to it.
+	if _, err := s.store.MoveSpoolTemplates(moves); err != nil {
+		log.Printf("moving labels to templates that suit %s: %v", p.Name, err)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"printer": p, "changes": changes})
 }
@@ -100,7 +104,7 @@ func (s *Server) handlePrinterChanges(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	changes, ok := s.changesFor(w, req.printer(r.PathValue("id")))
+	changes, _, ok := s.changesFor(w, req.printer(r.PathValue("id")))
 	if !ok {
 		return
 	}
@@ -108,24 +112,25 @@ func (s *Server) handlePrinterChanges(w http.ResponseWriter, r *http.Request) {
 }
 
 // changesFor checks a printer as it would be saved and works out what that
-// would affect, writing the error when it cannot.
-func (s *Server) changesFor(w http.ResponseWriter, p models.Printer) (PrinterChanges, bool) {
+// would affect, and which labels would move, writing the error when it
+// cannot.
+func (s *Server) changesFor(w http.ResponseWriter, p models.Printer) (PrinterChanges, map[string]string, bool) {
 	if _, err := s.store.GetPrinter(p.ID); writePrinterError(w, err) {
-		return PrinterChanges{}, false
+		return PrinterChanges{}, nil, false
 	}
 	if writePrinterError(w, s.checkConnection(p.Connection)) {
-		return PrinterChanges{}, false
+		return PrinterChanges{}, nil, false
 	}
 	next, err := s.store.PreviewPrinter(p)
 	if writePrinterError(w, err) {
-		return PrinterChanges{}, false
+		return PrinterChanges{}, nil, false
 	}
-	changes, err := s.printerChanges(next)
+	changes, moves, err := s.printerChanges(next)
 	if err != nil {
 		writeServerError(w, err, "work out what the change affects")
-		return PrinterChanges{}, false
+		return PrinterChanges{}, nil, false
 	}
-	return changes, true
+	return changes, moves, true
 }
 
 func (s *Server) handleDeletePrinter(w http.ResponseWriter, r *http.Request) {

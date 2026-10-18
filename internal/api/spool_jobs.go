@@ -267,7 +267,7 @@ func (s *Server) handleResendSpoolJob(w http.ResponseWriter, r *http.Request) {
 			skipped = append(skipped, SpoolSkipped{AssetID: e.AssetID, Reason: "archived"})
 			continue
 		}
-		adds = append(adds, store.SpoolAdd{AssetID: e.AssetID, TemplateID: e.TemplateID, Destination: destination, Copies: e.Copies})
+		adds = append(adds, store.SpoolAdd{AssetID: e.AssetID, TemplateID: e.TemplateID, Destination: destination, Copies: e.Copies, FromCategory: e.TemplateFromCategory})
 	}
 	if len(adds) == 0 && len(skipped) == 0 {
 		writeJSONError(w, http.StatusConflict, "Nothing of this job was printed; its labels are waiting in the spool")

@@ -13,7 +13,7 @@ An asset's label already waiting with the same template is not added twice. Arch
 
 ## Templates and printers
 
-Each label takes the template its category names, under **Labels** on the category's page; a subcategory takes its parent's unless it names its own. When only one printer suits that template, the label goes to it; when only one pool does, and holds every printer that suits it, the label goes to the pool.
+Each label takes a template its category names, under **Labels** on the category's page; a subcategory takes its parent's unless it names its own. A category can name several, in order of preference, such as the same design for 29 mm and 62 mm tape: each label takes the first that suits the printer it goes to. If a printer's roll changes, waiting labels move to another of their category's templates that suits it; a template you chose by hand stays. When only one printer suits that template, the label goes to it; when only one pool does, and holds every printer that suits it, the label goes to the pool.
 
 On the spool, labels are grouped by printer and template. Tick some, or a whole group, then set their template, printer or copies together. Only printers and pools a template suits are offered, and only templates a printer or pool takes. **Download** stands in for a printer, for labels printed on sheets.
 

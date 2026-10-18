@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
 
@@ -102,5 +103,106 @@ func TestChangingARollSaysWhatItAffects(t *testing.T) {
 	reader := userWithPermissions(t, srv, "reader@test.org", rbac.PermAssetsRead)
 	if rec := doJSON(t, srv, reader, http.MethodGet, "/api/v1/templates", ""); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), `"suits"`) {
 		t.Errorf("listing templates as a reader: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// portraitTemplate is landscapeTemplate turned to suit 62 mm tape.
+const portraitTemplate = `{"name":"QL 62x40","units":"mm","width":62,"height":40,"dpi":300,"elements":[
+  {"type":"text","x":4,"y":4,"width":54,"height":10,"font_size":16,"content_binding":"{{asset.name}}"}]}`
+
+func TestLabelsTakeTheFirstOfTheirCategoriesTemplatesThatFits(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	a := namedPrinter(t, srv, cookie, "A", 9100, "dk-11201")
+	tape := namedPrinter(t, srv, cookie, "Tape", 9100, "dk-22205")
+	ql90 := createTemplate(t, srv, cookie, landscapeTemplate)
+	ql62 := createTemplate(t, srv, cookie, portraitTemplate)
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/categories", `{"name":"Tools","color_hex":"#1d4ed8"}`)
+	var cat struct{ Category struct{ ID string } }
+	_ = json.Unmarshal(rec.Body.Bytes(), &cat)
+	rec = doJSON(t, srv, cookie, http.MethodPut, "/api/v1/categories/"+cat.Category.ID+"/label-template", `{"label_template_ids":["`+ql90+`","`+ql62+`"]}`)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"label_template_ids":["`+ql90+`","`+ql62+`"]`) {
+		t.Fatalf("naming the templates: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/categories/"+cat.Category.ID+"/label-template", `{"label_template_ids":["`+ql90+`","`+ql90+`"]}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("naming one twice: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/categories/label-conflicts?category_id="+cat.Category.ID+"&label_template_ids="+ql62+","+ql90, ""); rec.Code != http.StatusOK {
+		t.Errorf("conflicts as if: %d %s", rec.Code, rec.Body)
+	}
+
+	drill, _ := srv.store.CreateAsset("Drill", []string{cat.Category.ID}, nil, nil)
+	saw, _ := srv.store.CreateAsset("Saw", []string{cat.Category.ID}, nil, nil)
+	plane, _ := srv.store.CreateAsset("Plane", []string{cat.Category.ID}, nil, nil)
+	add := func(asset, body string) models.SpoolEntry {
+		t.Helper()
+		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/spool", `{"asset_ids":["`+asset+`"]`+body+`}`)
+		var resp SpoolAddResponse
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if len(resp.Added) != 1 {
+			t.Fatalf("adding: %d %s", rec.Code, rec.Body)
+		}
+		return resp.Added[0]
+	}
+	// Going to the tape printer, the first that fits it; going nowhere yet,
+	// the first, and to A, which it alone suits.
+	toTape := add(drill.Asset.ID, `,"destination":"printer:`+tape+`"`)
+	if *toTape.TemplateID != ql62 || !toTape.TemplateFromCategory {
+		t.Errorf("for the tape printer: %+v", toTape)
+	}
+	first := add(saw.Asset.ID, ``)
+	if *first.TemplateID != ql90 || first.Destination != "printer:"+a || !first.TemplateFromCategory {
+		t.Errorf("going nowhere yet: %+v", first)
+	}
+	// A template chosen by hand stays chosen by hand.
+	byHand := add(plane.Asset.ID, `,"template_id":"`+ql90+`","destination":"printer:`+a+`"`)
+	if byHand.TemplateFromCategory {
+		t.Errorf("chosen by hand: %+v", byHand)
+	}
+
+	// Loading 62 mm tape in A moves the saw's label to the category's
+	// template that fits it; the plane's, chosen by hand, stays stranded.
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+a+"/changes", `{"name":"A","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"127.0.0.1:9100"},"media":"dk-22205"}`)
+	var resp struct{ Changes PrinterChanges }
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	var moving, staying *StrandedLabels
+	for i, s := range resp.Changes.Stranded {
+		if s.MoveTo != "" {
+			moving = &resp.Changes.Stranded[i]
+		} else {
+			staying = &resp.Changes.Stranded[i]
+		}
+	}
+	if len(resp.Changes.Stranded) != 2 || moving == nil || moving.MoveTo != ql62 || moving.MoveToName != "QL 62x40" || moving.Labels != 1 || staying == nil || staying.Labels != 1 {
+		t.Fatalf("changes: %s", rec.Body)
+	}
+	if len(resp.Changes.Categories) != 0 {
+		t.Errorf("the category still has a template a printer suits: %+v", resp.Changes.Categories)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/printers/"+a, `{"name":"A","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"127.0.0.1:9100"},"media":"dk-22205"}`); rec.Code != http.StatusOK {
+		t.Fatalf("saving: %d %s", rec.Code, rec.Body)
+	}
+	spool := spoolList(t, srv, cookie, "")
+	for _, e := range spool.Entries {
+		switch e.ID {
+		case first.ID:
+			if *e.TemplateID != ql62 || !e.TemplateFromCategory || len(e.Problems) != 0 {
+				t.Errorf("the saw's label after the change: %+v", e)
+			}
+		case byHand.ID:
+			if *e.TemplateID != ql90 || len(e.Problems) == 0 {
+				t.Errorf("the plane's label after the change: %+v", e)
+			}
+		}
+	}
+
+	// Choosing a template in the spool makes it chosen by hand.
+	if rec := doJSON(t, srv, cookie, http.MethodPatch, "/api/v1/spool", `{"entry_ids":["`+toTape.ID+`"],"template_id":"`+ql62+`"}`); rec.Code != http.StatusOK {
+		t.Fatalf("patching: %d %s", rec.Code, rec.Body)
+	}
+	for _, e := range spoolList(t, srv, cookie, "").Entries {
+		if e.ID == toTape.ID && e.TemplateFromCategory {
+			t.Errorf("after choosing it by hand: %+v", e)
+		}
 	}
 }

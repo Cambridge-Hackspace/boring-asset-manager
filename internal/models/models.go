@@ -98,11 +98,14 @@ type Category struct {
 	// ScanTemplateID names the scan template its assets, and those of its
 	// subcategories that name none, show when scanned (README §6.4).
 	ScanTemplateID *string `json:"scan_template_id"`
-	// LabelTemplateID names the label template its assets, and those of its
-	// subcategories that name none, join the spool with (README §6.2).
-	LabelTemplateID *string   `json:"label_template_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	// LabelTemplateIDs names the label templates its assets, and those of
+	// its subcategories that name none, join the spool with, in order of
+	// preference: each label takes the first that suits its printer
+	// (README §6.2). LabelTemplateID is the first, or nil for none.
+	LabelTemplateIDs []string  `json:"label_template_ids"`
+	LabelTemplateID  *string   `json:"label_template_id"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // Event kinds (README §5.1).
@@ -377,7 +380,10 @@ type AssetWithDetails struct {
 // subcategories they have or how old they are; Contenders are those
 // categories, for someone to settle.
 type TemplateChoice struct {
-	TemplateID       string   `json:"template_id"`
+	TemplateID string `json:"template_id"`
+	// TemplateIDs, for label templates, are all those the category names,
+	// in order of preference; TemplateID is the first.
+	TemplateIDs      []string `json:"template_ids,omitempty"`
 	SourceCategoryID string   `json:"source_category_id,omitempty"`
 	Conflict         bool     `json:"conflict,omitempty"`
 	Contenders       []string `json:"contenders,omitempty"`
@@ -589,6 +595,10 @@ type SpoolEntry struct {
 	AssetArchived bool   `json:"asset_archived"`
 	// AssetScopes are the asset's scopes, for checking who may see it.
 	AssetScopes []string `json:"-"`
+	// TemplateFromCategory is set when the template is the asset's
+	// categories' choice, so it may move to another of theirs when its
+	// printer's roll changes; one chosen by hand stays.
+	TemplateFromCategory bool `json:"template_from_category"`
 	// TemplateID is the label template, if one is chosen; Destination is
 	// where it prints, empty until chosen.
 	TemplateID  *string `json:"template_id"`
