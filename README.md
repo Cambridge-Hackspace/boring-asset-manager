@@ -783,6 +783,7 @@ Assistants such as Claude work with BAM! over the [Model Context Protocol](https
 * **`bam mcp`:** for assistants that start local programs rather than reach URLs, `bam mcp --url https://bam.example.org` relays MCP between its stdin and stdout and the server, with the API token in `$BAM_TOKEN` (or the variable `--token-env` names). It first asks `GET /api/v1/info`, to say plainly when the address is not a BAM! server or has MCP turned off.
 * **Reports and scan templates** (#40; reading with `assets.read`, changing with `reports.manage`): `list_reports` (or scan templates, with `kind`), `get_report`, `run_report` (each section's rows, groups or chart data), `report_csv` (a section as a CSV file), `preview_report` (a spec unsaved; a scan template for an asset), `save_report` (its name or spec; what is not given is kept), `delete_report` and `set_default_scan_template`.
 * **Administration** (#41; people, roles and scopes with `users.manage`, channels with `settings.manage`): `list_users`, `create_user`, `set_user_active`, `archive_user`, `set_user_name`, `set_user_password` (someone else's; the anti-lockout rule holds as anywhere), `set_user_roles`; `list_roles`, `save_role` (changing only what is given) and `delete_role`; `list_scopes` (or `categories.manage`), `save_scope`, `delete_scope` and `set_category_scopes`; `list_live_connections`; and `list_channel_drivers`, `list_channels`, `get_channel`, `save_channel`, `delete_channel`, `test_channel` and `list_deliveries`. A channel's secrets, such as a webhook URL, are written and never read back: they show as set or not, and a change that leaves one out keeps it.
+* **Live events** (#42): `GET /api/v1/events` (`events.read`) lists the events a live connection would be sent, oldest first, filtered and stripped of people as there: since an event (`?after=`, its ID) or over the last hour, narrowed by `?kinds=`, `?actions=` and `?categories=`, `?limit=` up to 500, with `more` when there are more; and `POST /api/v1/events/{id}/reply` (`events.read` in the asset's scopes) answers an action event as a device on a live connection does, once each, `409` again. Over MCP, `list_events` and `reply_to_action` use them, and the resources `bam://events{?after,kinds,actions,categories}` and `bam://asset/{id}` can be read and subscribed to: a subscription, on a `subscriptions/listen` request (protocol `2026-07-28`; a stateless server keeps no session for the older `resources/subscribe`), asks the API every second as its caller whether anything new happened, and tells the client which resource changed, for it to read; it ends with its request, or when the caller is revoked or loses the permission. A caller holds at most 5 at once on each server. The WebSocket itself is for devices and is not reached over MCP.
 * **Reaching every route:** a test lists every API route and fails for one that no tool reaches and that is not named, with the issue that will cover it, in `internal/mcpserver/coverage.go`, so a route added later cannot be left out.
 
 ---
@@ -1126,6 +1127,9 @@ An MCP server that does everything the API does (#33, §6.6).
 #### Sub-Phase 8.8: Administration Tools
 * [x] People, roles, scopes, live connections and notification channels, over MCP, secrets written and never read (#41).
 
+
+#### Sub-Phase 8.9: Live Events over MCP
+* [x] Events to poll and actions to answer without a WebSocket, and MCP subscriptions to events and assets (#42).
 
 ### Upcoming Features
 

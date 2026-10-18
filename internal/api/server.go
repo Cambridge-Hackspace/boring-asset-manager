@@ -144,6 +144,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/assets/{id}/actions/{key}", RequirePermission(rbac.PermAssetsAct)(http.HandlerFunc(s.handlePressAction)))
 	handle("GET /api/v1/assets/{id}/actions/replies", RequirePermission(rbac.PermAssetsAct)(http.HandlerFunc(s.handleActionReplies)))
 	handle("GET /api/v1/events/live", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleLiveEvents)))
+	// The same events, for those who poll, and answers to actions from them.
+	handle("GET /api/v1/events", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleListEvents)))
+	handle("POST /api/v1/events/{id}/reply", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleReplyToEvent)))
 
 	// Reports: anyone who reads assets runs them; reports.manage edits them.
 	handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))

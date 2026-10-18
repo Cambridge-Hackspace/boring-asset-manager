@@ -21,6 +21,16 @@ var ErrNotAnAction = errors.New("that event is not an action")
 // MaxReplyMessage bounds a device's answer.
 const MaxReplyMessage = 255
 
+// EventTime is when an event was recorded, or ErrEventNotFound.
+func (s *Store) EventTime(id string) (time.Time, error) {
+	var at time.Time
+	err := s.QueryRow("SELECT created_at FROM events WHERE id = ?", id).Scan(&at)
+	if err == sql.ErrNoRows {
+		return time.Time{}, ErrEventNotFound
+	}
+	return at, err
+}
+
 // EventsSince lists events recorded at or after since, oldest first, at
 // most limit of them.
 func (s *Store) EventsSince(since time.Time, limit int) ([]models.Event, error) {
@@ -221,7 +231,7 @@ func (s *Store) RecordActionReply(eventID string, ok bool, message string) (*mod
 
 // ActionReplies lists the answers to an action event, oldest first.
 func (s *Store) ActionReplies(eventID string) ([]models.ActionReply, error) {
-	rows, err := s.Query("SELECT id, event_id, name, token_id IS NOT NULL, ok, message, created_at FROM action_replies WHERE event_id = ? ORDER BY created_at, id", eventID)
+	rows, err := s.Query("SELECT id, event_id, name, token_id IS NOT NULL, COALESCE(token_id, user_id, ''), ok, message, created_at FROM action_replies WHERE event_id = ? ORDER BY created_at, id", eventID)
 	if err != nil {
 		return nil, fmt.Errorf("listing answers: %w", err)
 	}
@@ -229,7 +239,7 @@ func (s *Store) ActionReplies(eventID string) ([]models.ActionReply, error) {
 	out := []models.ActionReply{}
 	for rows.Next() {
 		var r models.ActionReply
-		if err := rows.Scan(&r.ID, &r.EventID, &r.Name, &r.Token, &r.OK, &r.Message, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.EventID, &r.Name, &r.Token, &r.ReplierID, &r.OK, &r.Message, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
