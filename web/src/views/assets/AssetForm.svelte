@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { ApiError, request } from '../../lib/api';
-  import { assetPayload, errorTarget, inputType, keptValues, stockDraft, type StockDraft } from '../../lib/assets';
+  import { assetPayload, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo } from '../../lib/models';
+  import { UNCATEGORIZED, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo, type RelationType } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
   import { flattenTree } from '../../lib/tree';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import LocationPicker from '../../components/LocationPicker.svelte';
 
   // /assets/new and /assets/:id/edit
   let { params }: { params: Record<string, string> } = $props();
@@ -30,6 +31,11 @@
   let codes = $state<Record<string, string>>({});
   let values = $state<Record<string, string>>({});
   let stock = $state<StockDraft>(stockDraft(null));
+  // Where it is: the asset it is in (README §5.3).
+  let relationTypes = $state<RelationType[]>([]);
+  let place = $state<{ id: string; name: string } | null>(null);
+  // Suggesting codes, and why one could not be.
+  let codeNotes = $state<Record<string, string>>({});
   // New assets' labels join the spool (README §6.2), as each person last chose.
   const canSpool = isNew && session.can('labels.print');
   let queueLabel = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
@@ -39,12 +45,14 @@
 
   onMount(async () => {
     try {
-      const [cats, gens] = await Promise.all([
+      const [cats, gens, types] = await Promise.all([
         request<{ categories: Category[] }>('GET', '/categories'),
         request<{ generators: GeneratorInfo[] }>('GET', '/generators'),
+        request<{ relation_types: RelationType[] }>('GET', '/relation-types'),
       ]);
       categories = cats.categories ?? [];
       generators = gens.generators ?? [];
+      relationTypes = types.relation_types ?? [];
       if (!isNew) {
         const a = (await request<{ asset: AssetWithDetails }>('GET', `/assets/${encodeURIComponent(id)}`)).asset;
         original = a;
@@ -53,6 +61,7 @@
         codes = Object.fromEntries(a.generator_keys.map((k) => [k.generator_type, k.assigned_code]));
         values = { ...a.field_values };
         stock = stockDraft(a.asset.stock);
+        place = placeOf(a);
       }
       await resolveFields();
     } catch (err) {
@@ -80,6 +89,33 @@
     void resolveFields();
   }
 
+  const locationType = $derived(relationTypes.find((t) => t.is_location));
+  const hasCodes = $derived(Object.values(codes).some((c) => c?.trim()));
+
+  async function nextCode(genType: string) {
+    codeNotes = { ...codeNotes, [genType]: '' };
+    try {
+      const { code } = await request<{ code: string }>('GET', `/generators/${encodeURIComponent(genType)}/next-code`);
+      if (code) codes[genType] = code;
+      else codeNotes = { ...codeNotes, [genType]: 'No code of this type ends in a number yet: type the first, such as HS-001, and the next follow it.' };
+    } catch (err) {
+      codeNotes = { ...codeNotes, [genType]: messageOf(err) };
+    }
+  }
+
+  // Puts the asset where it was said to be, if that changed.
+  async function placeIt(saved: AssetWithDetails) {
+    const was = placeOf(saved);
+    if ((was?.id ?? null) === (place?.id ?? null) || !locationType) return;
+    const path = `/assets/${encodeURIComponent(saved.asset.id)}/links`;
+    if (place) {
+      await request('POST', path, { type_id: locationType.id, asset_id: place.id, outgoing: false });
+    } else {
+      const link = placeLink(saved, relationTypes);
+      if (link) await request('DELETE', `${path}/${encodeURIComponent(link.id)}`);
+    }
+  }
+
   async function save(event: SubmitEvent) {
     event.preventDefault();
     error = '';
@@ -89,6 +125,8 @@
     try {
       if (isNew) {
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
+        // The asset is made; one that could not be placed says so on its page.
+        await placeIt(res.asset).catch(() => undefined);
         if (canSpool) {
           rememberQueueNewLabels(session.user?.id ?? '', queueLabel);
           // The asset is made either way; one the spool cannot take now can
@@ -97,7 +135,8 @@
         }
         navigate(`/assets/${encodeURIComponent(res.asset.asset.id)}`, true);
       } else {
-        await request('PUT', `/assets/${encodeURIComponent(id)}`, body);
+        const res = await request<{ asset: AssetWithDetails }>('PUT', `/assets/${encodeURIComponent(id)}`, body);
+        await placeIt(res.asset);
         navigate(`/assets/${encodeURIComponent(id)}`, true);
       }
     } catch (err) {
@@ -153,6 +192,12 @@
           </ul>
         {/if}
       </fieldset>
+      {#if locationType}
+        <fieldset>
+          <legend class="label">Where is it?</legend>
+          <LocationPicker value={place} exclude={id || undefined} onchange={(p) => (place = p)} />
+        </fieldset>
+      {/if}
     </div>
 
     <fieldset class="card space-y-4">
@@ -195,11 +240,9 @@
       {/if}
     </fieldset>
 
+    {#if effective.length || kept.length}
     <fieldset class="card space-y-4">
       <legend class="text-lg font-semibold">Fields</legend>
-      {#if effective.length === 0}
-        <p class="text-sm text-zinc-600 dark:text-zinc-400">The chosen categories record no fields.</p>
-      {/if}
       {#each effective as e (e.field.id)}
         {@const target = `field:${e.field.key}`}
         <div>
@@ -232,28 +275,35 @@
           Kept from former categories, unchanged: {kept.map(([k]) => k).join(', ')}.
         </p>
       {/if}
-      <p class="text-xs text-zinc-600 dark:text-zinc-400"><span aria-hidden="true">*</span> Required</p>
+      {#if effective.some((e) => e.is_required)}<p class="text-xs text-zinc-600 dark:text-zinc-400"><span aria-hidden="true">*</span> Required</p>{/if}
     </fieldset>
+    {/if}
 
-    <fieldset class="card space-y-4">
-      <legend class="text-lg font-semibold">Codes</legend>
-      <p class="text-sm text-zinc-600 dark:text-zinc-400">Short codes printed as barcodes. Leave blank for none; each code belongs to one asset at a time.</p>
+    <details class="card space-y-4" open={hasCodes || Boolean(errorFor?.startsWith('code:'))}>
+      <summary class="cursor-pointer text-lg font-semibold">Codes{hasCodes ? '' : ' (none yet)'}</summary>
+      <p class="mt-3 text-sm text-zinc-600 dark:text-zinc-400">The codes its labels print, such as HS-106, for scanning. Leave blank for none; each code belongs to one asset at a time.</p>
       {#each generators as g (g.type)}
         {@const target = `code:${g.type}`}
-        <div>
+        <div class="mt-3">
           <label class="label" for={target}>{g.name}</label>
-          <input
-            id={target}
-            class="input font-mono"
-            aria-invalid={errorFor === target}
-            aria-describedby={describedBy(target, `${target}-help`)}
-            bind:value={codes[g.type]}
-          />
+          <div class="flex gap-2">
+            <input
+              id={target}
+              class="input font-mono"
+              aria-invalid={errorFor === target}
+              aria-describedby={describedBy(target, `${target}-help`)}
+              bind:value={codes[g.type]}
+            />
+            {#if !codes[g.type]?.trim()}
+              <button type="button" class="btn-secondary whitespace-nowrap" onclick={() => nextCode(g.type)}>Assign the next code</button>
+            {/if}
+          </div>
           <p id="{target}-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{g.code_rules}</p>
+          {#if codeNotes[g.type]}<p class="mt-1 text-xs text-amber-900 dark:text-amber-200">{codeNotes[g.type]}</p>{/if}
           {#if errorFor === target}<p id="{target}-error" class="error-text mt-1" role="alert">{error}</p>{/if}
         </div>
       {/each}
-    </fieldset>
+    </details>
 
     {#if canSpool}
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabel} /> Add a label to the spool</label>

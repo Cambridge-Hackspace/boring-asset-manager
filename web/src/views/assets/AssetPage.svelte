@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
-  import { amount, conditionLabel, describeChange, describeEvent, isWebURL, keptValues } from '../../lib/assets';
+  import { amount, conditionLabel, contentsOf, describeChange, describeEvent, isWebURL, keptValues, placeLink } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { actorName } from '../../lib/people';
-  import type { AssetEvent, AssetWithDetails, Condition, GeneratorInfo, GeneratorKey } from '../../lib/models';
+  import type { AssetEvent, AssetWithDetails, Condition, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
@@ -18,6 +18,7 @@
   import SignInToSee from '../../components/SignInToSee.svelte';
   import ActionButtons from '../../components/ActionButtons.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
+  import LocationPicker from '../../components/LocationPicker.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
 
@@ -33,6 +34,9 @@
   let loading = $state(true);
   let busy = $state(false);
   let howMany = $state<number | null>(1);
+  // Where it is: the link types that make locations, and moving it.
+  let relationTypes = $state<RelationType[]>([]);
+  let moving = $state(false);
 
   const path = `/assets/${encodeURIComponent(id)}`;
 
@@ -48,7 +52,38 @@
     } finally {
       loading = false;
     }
+    // Signed out, the catalog is closed (README §3.3): where it is shows,
+    // but not what it holds.
+    if (!session.user) return;
+    try {
+      relationTypes = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
+    } catch {
+      // Without them, where it is shows, but not what it holds.
+    }
   });
+
+  const contents = $derived(asset ? contentsOf(asset, relationTypes) : []);
+  const locationType = $derived(relationTypes.find((t) => t.is_location));
+
+  // Moves it into a place, or out of the one it is in.
+  async function move(place: { id: string; name: string } | null) {
+    if (!asset) return;
+    error = '';
+    try {
+      let r: { asset: AssetWithDetails };
+      if (place && locationType) {
+        r = await request('POST', `${path}/links`, { type_id: locationType.id, asset_id: place.id, outgoing: false });
+      } else {
+        const link = placeLink(asset, relationTypes);
+        if (!link) return;
+        r = await request('DELETE', `${path}/links/${encodeURIComponent(link.id)}`);
+      }
+      moving = false;
+      assetChanged(r.asset, place ? `Moved to ${place.name}.` : 'No longer in anything.');
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
 
   // Loads the newest page of history, or with before, the page older than it.
   async function loadHistory(before?: string) {
@@ -243,9 +278,36 @@
       <LoanPanel {asset} onchange={assetChanged} />
     {/if}
 
+    {#if contents.length}
+      <section class="card" aria-labelledby="contents-heading">
+        <h2 id="contents-heading" class="mb-3 text-lg font-semibold">Contents</h2>
+        <ul class="space-y-1 text-sm">
+          {#each contents as l (l.id)}
+            <li><a class="underline" href="/assets/{encodeURIComponent(l.asset.id)}">{l.asset.name}</a>{#if l.asset.archived}<span class="text-xs text-zinc-600 dark:text-zinc-400"> (archived)</span>{/if}</li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
+
     <section class="card" aria-labelledby="details-heading">
       <h2 id="details-heading" class="mb-3 text-lg font-semibold">Details</h2>
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt class="font-medium">Where</dt>
+        <dd>
+          {#if asset.location.length}
+            {#each asset.location as place, i (place.id)}{#if i > 0}{' › '}{/if}<a class="underline" href="/assets/{encodeURIComponent(place.id)}">{place.name}</a>{/each}
+          {:else}
+            <span class="text-zinc-600 dark:text-zinc-400">Not set</span>
+          {/if}
+          {#if !archived && locationType && session.canOn(asset.scopes, 'assets.write')}
+            {' '}<button type="button" class="underline" aria-expanded={moving} onclick={() => (moving = !moving)}>{asset.location.length ? 'Move' : 'Set where it is'}</button>
+            {#if moving}
+              <div class="mt-2">
+                <LocationPicker id="move" value={asset.location.at(-1) ?? null} exclude={asset.asset.id} onchange={move} />
+              </div>
+            {/if}
+          {/if}
+        </dd>
         <dt class="font-medium">Categories</dt>
         <dd class="flex flex-wrap gap-1">
           {#each asset.categories as c (c.id)}<CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />{/each}

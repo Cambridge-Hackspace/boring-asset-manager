@@ -91,7 +91,10 @@ func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
 // takes it, keeping those the request may read. On a bad query or a
 // failure it answers the request itself.
 func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Values) ([]models.AssetWithDetails, bool) {
-	f := store.AssetFilter{CategoryID: q.Get("category_id"), Search: q.Get("search"), Condition: q.Get("condition"), Loan: q.Get("loan")}
+	// The search is matched once the assets are as the request may see
+	// them, so where they are counts only as far as it may read.
+	search := q.Get("search")
+	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan")}
 	switch q.Get("conflict") {
 	case "", "scan_template", "label_template":
 	default:
@@ -123,6 +126,7 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 		writeServerError(w, err, "read the assets' links")
 		return nil, false
 	}
+	assets = searched(assets, search)
 	// Those whose scan template (README §6.4) or label template (§6.2) was
 	// chosen by a tie.
 	if conflict := q.Get("conflict"); conflict != "" {
@@ -135,6 +139,22 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 		assets = kept
 	}
 	return assets, true
+}
+
+// searched keeps the assets a search matches by name, code, or where they
+// are, as the request may see them (readable has hidden the places it
+// cannot read). An empty search keeps them all.
+func searched(assets []models.AssetWithDetails, search string) []models.AssetWithDetails {
+	if search == "" {
+		return assets
+	}
+	kept := assets[:0]
+	for i := range assets {
+		if store.MatchesSearch(&assets[i], search) {
+			kept = append(kept, assets[i])
+		}
+	}
+	return kept
 }
 
 func (s *Server) handleGetAsset(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +275,7 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 // handleExportAssets writes the assets the list would show as CSV
 // (README §6.1): GET /api/v1/assets/export.csv?category_id=&search=
 func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
-	assets, err := s.store.ListAssets(r.URL.Query().Get("category_id"), r.URL.Query().Get("search"))
+	assets, err := s.store.ListAssets(r.URL.Query().Get("category_id"), "")
 	if err != nil {
 		writeServerError(w, err, "list assets")
 		return
@@ -264,6 +284,7 @@ func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the assets' links")
 		return
 	}
+	assets = searched(assets, r.URL.Query().Get("search"))
 	cats, err := s.store.ListAllCategories()
 	if err != nil {
 		writeServerError(w, err, "list categories")

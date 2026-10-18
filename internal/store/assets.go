@@ -464,23 +464,6 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 		assetIDs = append(assetIDs, id)
 	}
 
-	// The search is matched here rather than with LIKE, which treats % and _
-	// as wildcards and, on some databases, backslash as an escape, and whose
-	// LOWER() folds only ASCII letters on SQLite. Here every letter folds,
-	// the same way whatever the database.
-	term := strings.ToLower(search)
-	matches := func(a *models.AssetWithDetails) bool {
-		if strings.Contains(strings.ToLower(a.Asset.Name), term) {
-			return true
-		}
-		for _, gk := range a.GeneratorKeys {
-			if strings.Contains(strings.ToLower(gk.AssignedCode), term) {
-				return true
-			}
-		}
-		return false
-	}
-
 	var results []models.AssetWithDetails
 	ctx := &assetContext{list: true}
 	for _, id := range assetIDs {
@@ -488,13 +471,49 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 		if err != nil {
 			continue
 		}
-		if search != "" && !matches(detail) {
+		if search != "" && !matchesNameOrCode(detail, search) {
 			continue
 		}
 		results = append(results, *detail)
 	}
 
 	return results, nil
+}
+
+// MatchesSearch reports whether an asset's name, one of its codes, or the
+// name of a place it is in holds search, ignoring case. The search is
+// matched here rather than with LIKE, which treats % and _ as wildcards
+// and, on some databases, backslash as an escape, and whose LOWER() folds
+// only ASCII letters on SQLite. Here every letter folds, the same way
+// whatever the database.
+//
+// A store filter's Search matches names and codes only: where an asset is
+// may name assets the requester cannot read, so the API matches it once
+// those are hidden.
+func MatchesSearch(a *models.AssetWithDetails, search string) bool {
+	if matchesNameOrCode(a, search) {
+		return true
+	}
+	term := strings.ToLower(search)
+	for _, place := range a.Location {
+		if strings.Contains(strings.ToLower(place.Name), term) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesNameOrCode(a *models.AssetWithDetails, search string) bool {
+	term := strings.ToLower(search)
+	if strings.Contains(strings.ToLower(a.Asset.Name), term) {
+		return true
+	}
+	for _, gk := range a.GeneratorKeys {
+		if strings.Contains(strings.ToLower(gk.AssignedCode), term) {
+			return true
+		}
+	}
+	return false
 }
 
 // UpdateAsset updates an asset, synchronizing category bindings and upserting field values while

@@ -1,10 +1,10 @@
 # Assets
 
-An asset is anything you keep track of. Open **Assets** to list them; search by name or code, or filter by category, condition or loan.
+An asset is anything you keep track of. Open **Assets** to list them; search by name, code, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition or loan. The **Where** column says what each is in.
 
 ## Adding and editing
 
-Choose **New asset**, give it a name and its categories, and fill in the fields its categories ask for. Fields marked as required must be filled in. Codes for its labels can be given by hand or left for later.
+Choose **New asset**, give it a name and its categories, say where it is (find the shelf, box or room it is in), and fill in the fields its categories ask for. Fields marked as required must be filled in. Codes for its labels are under **Codes**: type one, choose **Assign the next code** to take the one after the highest of that kind (after HS-105, HS-106), or leave them for later.
 
 **Edit** changes any of this; every change is kept in the asset's **History**, with who made it.
 
@@ -14,7 +14,7 @@ Anyone allowed can **Report a problem**: that it needs maintenance, or is out of
 
 ## Photos and links
 
-Add photos on the asset's page; the first is shown in lists. **Links** join assets to each other: a bin *contains* screws, a drill is *used with* its bits. Where something is follows its links: a bin on a shelf, screws in the bin.
+Add photos on the asset's page; the first is shown in lists. **Links** join assets to each other: a bin *contains* screws, a drill is *used with* its bits. Where something is follows its links: a bin on a shelf, screws in the bin. Its page shows **Where** it is, with **Move** to put it somewhere else, and an asset that holds others lists them under **Contents**.
 
 ## Archiving
 

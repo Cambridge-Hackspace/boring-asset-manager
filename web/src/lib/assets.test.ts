@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amount, assetPayload, describeChange, describeEvent, dueDate, endOfDay, errorTarget, inputType, isWebURL, keptValues, linkChoices, stockDraft, stockPayload } from './assets';
+import { amount, assetPayload, contentsOf, placeLink, placeOf, describeChange, describeEvent, dueDate, endOfDay, errorTarget, inputType, isWebURL, keptValues, linkChoices, stockDraft, stockPayload } from './assets';
 import type { AssetChange, AssetEvent, AssetStock, EffectiveField, RelationType } from './models';
 
 const ef = (key: string, required = false): EffectiveField => ({
@@ -194,5 +194,23 @@ describe('photos in history', () => {
   it('names the photo added or removed', () => {
     expect(describeChange({ what: 'photo', key: 'p1', to: 'front.jpg' }, 'asset.edited')).toBe('Photo added: front.jpg');
     expect(describeChange({ what: 'photo', key: 'p1', from: 'front.jpg' }, 'asset.edited')).toBe('Photo removed: front.jpg');
+  });
+});
+
+describe('where things are', () => {
+  const contains = { id: 'c', is_location: true } as RelationType;
+  const usedWith = { id: 'u', is_location: false } as RelationType;
+  const link = (id: string, type_id: string, outgoing: boolean, asset: string) => ({ id, type_id, outgoing, label: '', asset: { id: asset, name: asset } });
+  const box = {
+    location: [{ id: 'room', name: 'Room' }, { id: 'shelf', name: 'Shelf A' }],
+    links: [link('l1', 'c', false, 'shelf'), link('l2', 'c', true, 'drill'), link('l3', 'u', true, 'saw'), link('l4', 'c', true, 'bits')],
+  };
+  it('finds the place it is directly in, and the link that puts it there', () => {
+    expect(placeOf(box)).toEqual({ id: 'shelf', name: 'Shelf A' });
+    expect(placeLink(box, [contains, usedWith])?.id).toBe('l1');
+    expect(placeOf({ location: [] })).toBeNull();
+  });
+  it('lists what it holds', () => {
+    expect(contentsOf(box, [contains, usedWith]).map((l) => l.asset.id)).toEqual(['drill', 'bits']);
   });
 });
