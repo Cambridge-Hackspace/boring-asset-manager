@@ -1,9 +1,10 @@
 package mcpserver
 
 // Uncovered lists the API routes no tool reaches yet, each with the issue
-// that will cover it. The coverage test fails for any route neither a tool
-// reaches nor this list names, so a route added later cannot be forgotten;
-// each part of #33 takes its routes off.
+// that will cover it. It is empty: MCP reaches every route but those
+// Refused names (#33). The coverage test fails for any route neither a tool
+// reaches nor this list or Refused names, so a route added later cannot be
+// forgotten.
 var Uncovered = map[string]string{}
 
 // Refused lists the API routes deliberately out of reach over MCP, and why.

@@ -216,7 +216,8 @@ func newServer(e *env, cache *mcp.SchemaCache, tools []tool) *mcp.Server {
 		// Stateless: there is no session to tell of changed lists. They are
 		// made afresh for every request instead. Resources can be
 		// subscribed to, on a request kept open for it.
-		Capabilities:       &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{Subscribe: true}},
+		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Prompts: &mcp.PromptCapabilities{},
+			Resources: &mcp.ResourceCapabilities{Subscribe: true}},
 		SubscribeHandler:   func(ctx context.Context, req *mcp.SubscribeRequest) error { return e.subscribe(s)(ctx, req) },
 		UnsubscribeHandler: func(context.Context, *mcp.UnsubscribeRequest) error { return nil },
 	})
@@ -230,6 +231,7 @@ func newServer(e *env, cache *mcp.SchemaCache, tools []tool) *mcp.Server {
 	}
 	addResources(s)
 	addEventResources(s, e)
+	addPrompts(s)
 	return s
 }
 
