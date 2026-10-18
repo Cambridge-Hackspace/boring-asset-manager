@@ -19,6 +19,9 @@ type tool struct {
 	// needs lists it for callers holding any one, in any scope; none lists
 	// it for everyone.
 	needs []string
+	// needsAll, when set, lists it only for callers holding every one, in
+	// any scope, as a route needing two permissions does.
+	needsAll []string
 	// person lists it only for a person: a personal token, acting as them.
 	person bool
 	add    func(*mcp.Server, *env)

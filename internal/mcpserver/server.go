@@ -34,6 +34,17 @@ type Caller struct {
 // key names the caller for the change limit.
 func (c Caller) key() string { return c.Kind + ":" + c.ID }
 
+// mayAll reports whether the caller holds every one of the permissions, in
+// any scope.
+func (c Caller) mayAll(perms []string) bool {
+	for _, p := range perms {
+		if !rbac.HasPermission(c.Permissions, p) {
+			return false
+		}
+	}
+	return true
+}
+
 // describe names the caller in a sentence.
 func (c Caller) describe() string {
 	if c.Kind == "person" {
@@ -176,7 +187,7 @@ func newServer(e *env, cache *mcp.SchemaCache, tools []tool) *mcp.Server {
 		if t.person && e.caller.Kind != "person" {
 			continue
 		}
-		if e.caller.may(t.needs) {
+		if e.caller.may(t.needs) && e.caller.mayAll(t.needsAll) {
 			t.add(s, e)
 		}
 	}
@@ -195,7 +206,7 @@ func instructions(c Caller) string {
 // allTools are every tool, in the order they are listed.
 var allTools = sync.OnceValue(func() []tool {
 	var out []tool
-	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools()} {
+	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools(), labelTools(), queueTools()} {
 		out = append(out, group...)
 	}
 	return out
