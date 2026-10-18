@@ -12,6 +12,7 @@
     newElement,
     placeholders,
     type ElementType,
+    type PrintArea,
     type TemplateDoc,
     type TemplateElement,
   } from '../../lib/template';
@@ -49,6 +50,9 @@
   let assetQuery = $state('');
   let assetResults = $state<AssetWithDetails[]>([]);
   let previewAsset = $state<{ id: string; name: string } | null>(null);
+
+  // Where the printer chosen in the label settings prints.
+  let printArea = $state<PrintArea | null>(null);
 
   const history = new History<TemplateDoc>();
   let canUndo = $state(false);
@@ -312,6 +316,7 @@
         {previewURL}
         {previewStale}
         {problemElements}
+        area={printArea}
         onselect={(s) => (selected = s)}
         onchange={(els) => (doc.elements = els)}
         onbegin={begin}
@@ -363,6 +368,8 @@
         {doc}
         {isNew}
         problems={canvasProblems}
+        assetId={previewAsset?.id}
+        onfit={(a) => (printArea = a)}
         onchange={(d, record = true) => {
           if (record) begin();
           doc = d;
@@ -406,7 +413,7 @@
           <LabelActions assetIds={[previewAsset.id]} templateId={doc.id} />
         {/key}
       {:else if previewAsset}
-        <p class="text-sm text-zinc-600 dark:text-zinc-400">Save the template to export or print this asset’s label.</p>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">Save the template to export this asset’s label, or print it for several assets; Test print, above, works as it is.</p>
       {/if}
     </div>
   </div>

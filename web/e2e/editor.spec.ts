@@ -23,7 +23,7 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
   await expect(page.locator('#tpl-width')).toHaveValue('90');
   await expect(page.locator('#tpl-height')).toHaveValue('29');
   await expect(page.locator('#tpl-dpi')).toHaveValue('300');
-  await expect(page.getByText('Fits this printer.')).toBeVisible();
+  await expect(page.getByText(`Fits ${printerName}.`)).toBeVisible();
   await page.locator('#tpl-height').fill('40');
   await page.locator('#tpl-height').press('Tab');
   await expect(page.getByText(/takes 29 × 90 mm/)).toBeVisible();
@@ -85,7 +85,7 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
   const printTo = page.locator('#label-printer');
   await printTo.selectOption({ label: printerName });
   await expect(printTo.locator('option:checked')).toHaveText(printerName);
-  await page.getByRole('button', { name: 'Print' }).click();
+  await page.getByRole('button', { name: 'Print', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Sent' })).toHaveText(`Sent 1 label to ${printerName}.`);
   expect((await printer.job()).length).toBeGreaterThan(1000);
 });
@@ -108,8 +108,17 @@ test('a template with content where the printer does not print warns, and still 
 
   await page.goto(`/templates/${template.id}/edit`);
   await page.getByLabel('Printer').selectOption({ label: printerName });
-  await expect(page.getByText('Fits this printer.')).toBeVisible();
+  await expect(page.getByText(`Fits ${printerName}, with 1 warning.`)).toBeVisible();
   await expect(page.getByRole('list', { name: 'Before printing' })).toContainText('where the printer does not print');
+  // The canvas shades what it does not print, and names the element in it.
+  await expect(page.locator('.unprinted')).toHaveCount(4);
+  await expect(page.getByText('In the shaded area, which it does not print: Text 1: {{asset.name}}.')).toBeVisible();
+
+  // A test label, without saving or choosing an asset.
+  await page.getByRole('button', { name: 'Test print' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Sent a test label' })).toHaveText(`Sent a test label to ${printerName}.`);
+  await expect(page.getByRole('list', { name: 'Printed, with warnings' })).toContainText('where the printer does not print');
+  await printer.job(1);
 
   await page.goto(`/assets/${asset.asset.id}`);
   await page.getByLabel('Template').selectOption(template.id);
@@ -119,7 +128,7 @@ test('a template with content where the printer does not print warns, and still 
   await page.getByRole('button', { name: 'Print' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Sent' })).toHaveText(`Sent 1 label to ${printerName}.`);
   await expect(page.getByRole('list', { name: 'Printed, with warnings' })).toContainText('where the printer does not print');
-  await printer.job();
+  await printer.job(2);
 });
 
 test('make a template adaptive, see it on each printer, and print it on two rolls', async ({ signedIn: page, api, printer }) => {

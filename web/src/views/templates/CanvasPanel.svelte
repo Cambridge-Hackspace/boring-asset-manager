@@ -3,30 +3,67 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, Printer } from '../../lib/models';
-  import { convertUnits, fromMM, makeAdaptive, makeFixed, toMM, type Adapt, type TemplateDoc, type Units } from '../../lib/template';
+  import { session } from '../../lib/session.svelte';
+  import {
+    convertUnits,
+    describeElement,
+    fromMM,
+    makeAdaptive,
+    makeFixed,
+    resizeLabel,
+    toMM,
+    type Adapt,
+    type PrintArea,
+    type TemplateDoc,
+    type Units,
+  } from '../../lib/template';
+  import ErrorMessage from '../../components/ErrorMessage.svelte';
   import FitWarnings from '../../components/FitWarnings.svelte';
 
   // The template's own settings: name, units, size and DPI, which can
   // be taken from a printer's loaded media; the printer's fit check runs as
-  // they change.
+  // they change, against the printer last used with this template or the
+  // first that takes it, and a test label prints there (README §4.4).
   let {
     doc,
     isNew,
     problems,
+    assetId,
     onchange,
+    onfit,
   }: {
     doc: TemplateDoc;
     isNew: boolean;
     problems: Record<string, string>;
+    /** The asset being previewed, for test prints. */
+    assetId?: string;
     // record is false for edits that are not undo steps (the name).
     onchange: (doc: TemplateDoc, record?: boolean) => void;
+    /** Where the chosen printer prints, for the canvas; null with none. */
+    onfit?: (area: PrintArea | null) => void;
   } = $props();
+
+  interface FitAnswer {
+    fits: boolean;
+    message?: string;
+    warnings?: string[];
+    printable?: { x: number; y: number; width: number; height: number };
+    edge_mm?: number;
+    outside?: number[];
+    near_edge?: number[];
+  }
 
   let printers = $state<Printer[]>([]);
   let drivers = $state<DriverInfo[]>([]);
   let printerId = $state('');
-  let fit = $state<{ fits: boolean; message?: string; warnings?: string[] } | null>(null);
+  let fit = $state<FitAnswer | null>(null);
   let fitError = $state('');
+  let testing = $state(false);
+  let testStatus = $state('');
+  let testWarnings = $state<string[]>([]);
+  let testError = $state('');
+
+  const rememberKey = () => `bam.editor-printer.${doc.id || 'new'}`;
 
   onMount(async () => {
     try {
@@ -34,12 +71,82 @@
       drivers = (await request<{ drivers: DriverInfo[] }>('GET', '/printers/drivers')).drivers ?? [];
     } catch {
       // Without access to printers, sizes are entered by hand.
+      return;
     }
+    printerId = await choosePrinter();
   });
+
+  /** The printer last used with this template, or else the first that takes it, or else the first. */
+  async function choosePrinter(): Promise<string> {
+    try {
+      const last = localStorage.getItem(rememberKey());
+      if (last !== null && (last === '' || printers.some((p) => p.id === last))) return last;
+    } catch {
+      // Storage unavailable: choose afresh.
+    }
+    const answers = await Promise.all(printers.map((p) => check(p.id).catch(() => null)));
+    const i = answers.findIndex((a) => a?.fits);
+    return printers[i >= 0 ? i : 0]?.id ?? '';
+  }
+
+  function choose(id: string) {
+    printerId = id;
+    testStatus = testError = '';
+    testWarnings = [];
+    try {
+      localStorage.setItem(rememberKey(), id);
+    } catch {
+      // Storage unavailable: it is chosen afresh next time.
+    }
+  }
+
+  /** The printer's fit check: a fixed template as it is, an adaptive one as laid out for its roll. */
+  async function check(id: string): Promise<FitAnswer> {
+    const snapshot = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
+    if (snapshot.sizing === 'adaptive') {
+      const r = await request<{ fits: boolean; template?: TemplateDoc; notices?: string[]; problem?: { message: string } }>('POST', '/templates/adapt', {
+        template: { ...snapshot, id: snapshot.id || 'preview' },
+        printer_id: id,
+      });
+      return r.fits
+        ? { fits: true, warnings: [`Laid out at ${r.template!.width} × ${r.template!.height} ${r.template!.units} there.`, ...(r.notices ?? [])] }
+        : { fits: false, message: r.problem?.message };
+    }
+    const mm = (v: number) => toMM(v, snapshot.units);
+    return request<FitAnswer>('POST', `/printers/${encodeURIComponent(id)}/fit`, {
+      width_mm: mm(snapshot.width),
+      height_mm: mm(snapshot.height),
+      dpi: snapshot.dpi,
+      // Where the template has content, for warnings about parts that will not print.
+      content: snapshot.elements.map((e) => ({ x: mm(e.x), y: mm(e.y), width: mm(e.width), height: mm(e.height) })),
+    });
+  }
+
+  async function testPrint() {
+    testing = true;
+    testStatus = testError = '';
+    testWarnings = [];
+    try {
+      const template = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
+      const res = await request<{ labels: number; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(printerId)}/test-print`, {
+        template,
+        ...(assetId ? { asset_id: assetId } : {}),
+      });
+      testStatus = `Sent a test label to ${chosenPrinter?.name ?? 'the printer'}.`;
+      testWarnings = res.warnings ?? [];
+    } catch (err) {
+      testError = messageOf(err);
+    } finally {
+      testing = false;
+    }
+  }
 
   function update(patch: Partial<TemplateDoc>, record = true) {
     onchange({ ...doc, ...patch }, record);
   }
+
+  const chosenPrinter = $derived(printers.find((p) => p.id === printerId));
+  const canTest = $derived(session.can('labels.print'));
 
   function setNumber(key: 'width' | 'height' | 'dpi', raw: string) {
     const n = Number(raw);
@@ -57,37 +164,51 @@
 
   // Takes the label size from the printer: the longer side across, so
   // labels read along the tape; continuous rolls keep the current length.
+  // The elements scale with it, so they stay on the label.
   function sizeFromPrinter() {
     if (!printerMedia) return;
     const { media, dpi } = printerMedia;
     const across = fromMM(media.width_mm, doc.units);
     const along = media.die_cut && media.length_mm ? fromMM(media.length_mm, doc.units) : Math.max(doc.width, across);
-    update({ width: Math.max(across, along), height: Math.min(across, along), ...(dpi ? { dpi } : {}) });
+    onchange({ ...resizeLabel(doc, Math.max(across, along), Math.min(across, along)), ...(dpi ? { dpi } : {}) });
   }
 
-  // The fit check, re-run (debounced) as the size changes.
+  // The fit check, re-run (debounced) as the template changes.
   $effect(() => {
     const id = printerId;
-    const mm = (v: number) => toMM(v, doc.units);
-    const body = {
-      width_mm: mm(doc.width),
-      height_mm: mm(doc.height),
-      dpi: doc.dpi,
-      // Where the template has content, for warnings about parts that will not print.
-      content: doc.elements.map((e) => ({ x: mm(e.x), y: mm(e.y), width: mm(e.width), height: mm(e.height) })),
-    };
+    JSON.stringify(doc);
     fit = null;
     fitError = '';
     if (!id) return;
     const timer = setTimeout(async () => {
       try {
-        fit = await request<{ fits: boolean; message?: string; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(id)}/fit`, body);
+        fit = await check(id);
       } catch (err) {
         fitError = messageOf(err);
       }
     }, 300);
     return () => clearTimeout(timer);
   });
+
+  // Where it prints, in the template's units, for the canvas.
+  $effect(() => {
+    const f = fit;
+    const units = doc.units;
+    if (!f?.fits || !f.printable) {
+      onfit?.(null);
+      return;
+    }
+    const u = (v: number) => fromMM(v, units);
+    onfit?.({
+      printable: { x: u(f.printable.x), y: u(f.printable.y), width: u(f.printable.width), height: u(f.printable.height) },
+      edge: u(f.edge_mm ?? 0),
+      outside: f.outside ?? [],
+      nearEdge: f.near_edge ?? [],
+    });
+  });
+
+  const named = (indices: number[] | undefined) =>
+    (indices ?? []).filter((i) => doc.elements[i]).map((i) => describeElement(doc.elements[i]!, i)).join(', ');
 
   const fieldError = (key: string) => problems[key];
 
@@ -182,25 +303,42 @@
     <div class="flex flex-wrap items-end gap-3">
       <div>
         <label class="label" for="tpl-printer">Printer</label>
-        <select id="tpl-printer" class="input" bind:value={printerId}>
+        <select id="tpl-printer" class="input" value={printerId} onchange={(e) => choose(e.currentTarget.value)}>
           <option value="">None</option>
           {#each printers as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
         </select>
       </div>
       <button type="button" class="btn-secondary" disabled={!printerMedia} onclick={sizeFromPrinter}>Use its label size</button>
+      {#if canTest}
+        <button type="button" class="btn-secondary" disabled={!printerId || testing || fit?.fits === false} onclick={testPrint}>Test print</button>
+      {/if}
     </div>
     {#if printerMedia}
       <p class="text-sm text-zinc-600 dark:text-zinc-400">Loaded: {printerMedia.media.name}{printerMedia.dpi ? `, ${printerMedia.dpi} DPI` : ''}.</p>
     {/if}
-    <div aria-live="polite">
-      {#if fit?.fits}
-        <p class="text-sm text-green-700 dark:text-green-400">Fits this printer.</p>
+    <div aria-live="polite" class="space-y-1">
+      {#if fit?.fits && fit.warnings?.length && doc.sizing !== 'adaptive'}
+        {@const n = fit.warnings.length}
+        <p class="text-sm text-amber-900 dark:text-amber-200">Fits {chosenPrinter?.name}, with {n} warning{n === 1 ? '' : 's'}.</p>
         <FitWarnings warnings={fit.warnings} />
+        {#if named(fit.outside)}<p class="text-sm text-amber-900 dark:text-amber-200">In the shaded area, which it does not print: {named(fit.outside)}.</p>{/if}
+        {#if named(fit.near_edge)}<p class="text-sm text-amber-900 dark:text-amber-200">Near the edge: {named(fit.near_edge)}.</p>{/if}
+      {:else if fit?.fits}
+        <p class="text-sm text-green-700 dark:text-green-400">Fits {chosenPrinter?.name}.</p>
+        <FitWarnings warnings={fit.warnings} label="Laid out there" />
       {:else if fit}
         <p class="error-text">{fit.message}</p>
       {:else if fitError}
         <p class="error-text">{fitError}</p>
       {/if}
+      {#if testStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{testStatus}</p>{/if}
+      <FitWarnings warnings={testWarnings} label="Printed, with warnings" />
+      <ErrorMessage error={testError} />
     </div>
+    {#if canTest}
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">
+        Test print prints one label as it is here, saved or not, {assetId ? 'for the asset being previewed' : 'with placeholder data'}.
+      </p>
+    {/if}
   {/if}
 </section>
