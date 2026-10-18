@@ -80,7 +80,6 @@ func TestPersonalTokensActAsTheirUser(t *testing.T) {
 	for _, r := range []struct{ method, path, body string }{
 		{http.MethodPut, "/api/v1/auth/password", `{"current_password":"UserSecret123!","new_password":"another-one"}`},
 		{http.MethodPost, "/api/v1/auth/tokens", `{"name":"Another"}`},
-		{http.MethodGet, "/api/v1/auth/tokens", ""},
 		{http.MethodPost, "/api/v1/auth/logout", ""},
 	} {
 		if rec := withBearer(t, srv, secret, r.method, r.path, r.body); rec.Code != http.StatusForbidden {

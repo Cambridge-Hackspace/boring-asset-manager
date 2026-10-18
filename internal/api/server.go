@@ -73,9 +73,11 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/auth/name", RequirePerson(http.HandlerFunc(s.handleSetOwnName)))
 	// Personal tokens, for assistants (README §3.4): made, listed and revoked
 	// by their own user, from a signed-in session.
-	handle("GET /api/v1/auth/tokens", RequireAuth(http.HandlerFunc(s.handleListOwnTokens)))
+	// A personal token lists and revokes its user's too (#43), but only a
+	// session makes them.
+	handle("GET /api/v1/auth/tokens", RequirePerson(http.HandlerFunc(s.handleListOwnTokens)))
 	handle("POST /api/v1/auth/tokens", RequireAuth(http.HandlerFunc(s.handleCreateOwnToken)))
-	handle("DELETE /api/v1/auth/tokens/{id}", RequireAuth(http.HandlerFunc(s.handleRevokeOwnToken)))
+	handle("DELETE /api/v1/auth/tokens/{id}", RequirePerson(http.HandlerFunc(s.handleRevokeOwnToken)))
 	handle("PUT /api/v1/auth/password", RequireAuth(http.HandlerFunc(s.handleChangePassword)))
 
 	// User administration endpoints (requires users.manage)
@@ -101,12 +103,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/categories/{id}/scopes", seeScopes(http.HandlerFunc(s.handleCategoryScopes)))
 	handle("PUT /api/v1/categories/{id}/scopes", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetCategoryScopes)))
 
-	// API tokens: managed only from a signed-in session, never by a token.
+	// API tokens: made only from a signed-in session, never by a token, so
+	// a token cannot leave itself a way back in; listed and revoked by
+	// anyone holding users.manage, tokens too (#43).
 	manageTokens := func(h http.HandlerFunc) http.Handler { return RequireAuth(RequirePermission(rbac.PermUsersManage)(h)) }
-	handle("GET /api/v1/tokens", manageTokens(s.handleListTokens))
+	seeTokens := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermUsersManage)(h) }
+	handle("GET /api/v1/tokens", seeTokens(s.handleListTokens))
 	handle("POST /api/v1/tokens", manageTokens(s.handleCreateToken))
-	handle("DELETE /api/v1/tokens/{id}", manageTokens(s.handleRevokeToken))
-	handle("GET /api/v1/tokens/connections", manageTokens(s.handleLiveConnections))
+	handle("DELETE /api/v1/tokens/{id}", seeTokens(s.handleRevokeToken))
+	handle("GET /api/v1/tokens/connections", seeTokens(s.handleLiveConnections))
 
 	// Field Corpus endpoints
 	handle("GET /api/v1/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListFields)))

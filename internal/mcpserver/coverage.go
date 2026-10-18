@@ -4,19 +4,14 @@ package mcpserver
 // that will cover it. The coverage test fails for any route neither a tool
 // reaches nor this list names, so a route added later cannot be forgotten;
 // each part of #33 takes its routes off.
-var Uncovered = map[string]string{
-	"POST /api/v1/auth/login":         "#43",
-	"POST /api/v1/auth/logout":        "#43",
-	"PUT /api/v1/auth/password":       "#43",
-	"GET /api/v1/tokens":              "#43",
-	"POST /api/v1/tokens":             "#43",
-	"DELETE /api/v1/tokens/{id}":      "#43",
-	"GET /api/v1/auth/tokens":         "#43",
-	"POST /api/v1/auth/tokens":        "#43",
-	"DELETE /api/v1/auth/tokens/{id}": "#43",
-}
+var Uncovered = map[string]string{}
 
 // Refused lists the API routes deliberately out of reach over MCP, and why.
 var Refused = map[string]string{
-	"GET /api/v1/events/live": "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
+	"POST /api/v1/auth/login":   "signing in with a password; an assistant signs in by OAuth (#44) or presents a token",
+	"POST /api/v1/auth/logout":  "an assistant has no session to end; revoke_token on its own token signs it out",
+	"PUT /api/v1/auth/password": "a person's password is theirs to change, signed in, so a misled assistant cannot lock them out (#43)",
+	"POST /api/v1/tokens":       "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
+	"POST /api/v1/auth/tokens":  "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
+	"GET /api/v1/events/live":   "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
 }
