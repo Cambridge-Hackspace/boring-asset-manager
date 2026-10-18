@@ -5,6 +5,7 @@
   import { describeHeld } from '../lib/permissions';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
+  import AssistantsSection from './AssistantsSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -73,6 +74,8 @@
     </ul>
   {/if}
 </section>
+
+<AssistantsSection />
 
 <form class="card mb-6 max-w-md space-y-4" onsubmit={rename}>
   <h2 class="text-lg font-semibold">Name</h2>

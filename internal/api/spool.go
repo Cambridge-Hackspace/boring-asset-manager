@@ -290,11 +290,12 @@ func (s *Server) handleListSpool(w http.ResponseWriter, r *http.Request) {
 
 // actorOf is the ID of the user or API token making the request.
 func actorOf(r *http.Request) string {
-	if t := CurrentToken(r.Context()); t != nil {
-		return t.ID
-	}
+	// A personal token acts as its user, so the user comes first.
 	if u := CurrentUser(r.Context()); u != nil {
 		return u.ID
+	}
+	if t := CurrentToken(r.Context()); t != nil {
+		return t.ID
 	}
 	return ""
 }

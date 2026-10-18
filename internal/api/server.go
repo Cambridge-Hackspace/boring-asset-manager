@@ -69,7 +69,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Authenticated session endpoints
 	handle("POST /api/v1/auth/logout", RequireAuth(http.HandlerFunc(s.handleLogout)))
 	handleFunc("GET /api/v1/auth/me", s.handleAuthMe)
-	handle("PUT /api/v1/auth/name", RequireAuth(http.HandlerFunc(s.handleSetOwnName)))
+	handle("PUT /api/v1/auth/name", RequirePerson(http.HandlerFunc(s.handleSetOwnName)))
+	// Personal tokens, for assistants (README §3.4): made, listed and revoked
+	// by their own user, from a signed-in session.
+	handle("GET /api/v1/auth/tokens", RequireAuth(http.HandlerFunc(s.handleListOwnTokens)))
+	handle("POST /api/v1/auth/tokens", RequireAuth(http.HandlerFunc(s.handleCreateOwnToken)))
+	handle("DELETE /api/v1/auth/tokens/{id}", RequireAuth(http.HandlerFunc(s.handleRevokeOwnToken)))
 	handle("PUT /api/v1/auth/password", RequireAuth(http.HandlerFunc(s.handleChangePassword)))
 
 	// User administration endpoints (requires users.manage)
@@ -337,11 +342,12 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 // actingStore is the store with changes attributed to the signed-in user, or
 // the API token, for the events they cause.
 func (s *Server) actingStore(r *http.Request) *store.Store {
-	if t := CurrentToken(r.Context()); t != nil {
-		return s.store.AsToken(t.ID)
-	}
+	// A personal token acts as its user, so the user comes first.
 	if u := CurrentUser(r.Context()); u != nil {
 		return s.store.As(u.ID)
+	}
+	if t := CurrentToken(r.Context()); t != nil {
+		return s.store.AsToken(t.ID)
 	}
 	return s.store
 }

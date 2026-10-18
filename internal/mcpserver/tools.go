@@ -19,7 +19,9 @@ type tool struct {
 	// needs lists it for callers holding any one, in any scope; none lists
 	// it for everyone.
 	needs []string
-	add   func(*mcp.Server, *env)
+	// person lists it only for a person: a personal token, acting as them.
+	person bool
+	add    func(*mcp.Server, *env)
 }
 
 // reply is what a tool answers: its structured result, and a short summary

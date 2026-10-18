@@ -209,6 +209,9 @@ func (s *Store) UpdateUserStatus(userID string, isActive bool) error {
 			if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
 				return fmt.Errorf("deleting user sessions: %w", err)
 			}
+			if err := revokePersonalTokens(s, tx, userID, now); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -229,8 +232,17 @@ func (s *Store) DeleteUser(userID string) error {
 		if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
 			return fmt.Errorf("deleting user sessions: %w", err)
 		}
-		return nil
+		return revokePersonalTokens(s, tx, userID, now)
 	})
+}
+
+// revokePersonalTokens revokes a user's personal tokens, as their sessions
+// end, so an assistant stops when its person does.
+func revokePersonalTokens(s *Store, tx *sql.Tx, userID string, now time.Time) error {
+	if _, err := s.TxExec(tx, "UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL", now, userID); err != nil {
+		return fmt.Errorf("revoking personal tokens: %w", err)
+	}
+	return nil
 }
 
 // AssignUserRole assigns a role to a user.

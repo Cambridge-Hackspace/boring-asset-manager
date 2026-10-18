@@ -15,9 +15,10 @@ import (
 type none struct{}
 
 type whoamiOut struct {
-	Kind        string   `json:"kind" jsonschema:"what the caller is: token, an API token holding roles"`
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
+	Kind        string   `json:"kind" jsonschema:"what the caller is: person, acting through their personal token; or token, an API token holding roles"`
+	ID          string   `json:"id" jsonschema:"the person's ID, or the token's"`
+	Name        string   `json:"name" jsonschema:"the person's name, or the token's"`
+	Token       string   `json:"token,omitempty" jsonschema:"a person's personal token, by name"`
 	Permissions []string `json:"permissions" jsonschema:"the permissions held: each key alone holds it in every scope, scope:key in that scope only"`
 }
 
@@ -29,6 +30,14 @@ type serverInfoOut struct {
 	Database string `json:"database" jsonschema:"the database in use: sqlite, postgres or mariadb"`
 	Healthy  bool   `json:"healthy" jsonschema:"whether the server can reach its database"`
 	Ready    bool   `json:"ready"`
+}
+
+type nameIn struct {
+	Name string `json:"name" jsonschema:"the new name, up to 255 characters"`
+}
+
+type nameOut struct {
+	Name string `json:"name"`
 }
 
 type generatorsOut struct {
@@ -47,9 +56,28 @@ func basicTools() []tool {
 				perms = append(perms, p)
 			}
 			slices.Sort(perms)
-			out := whoamiOut{Kind: e.caller.Kind, ID: e.caller.ID, Name: e.caller.Name, Permissions: perms}
-			return say(out, "Acting as the %s %q, holding %s.", e.caller.Kind, e.caller.Name, describePermissions(perms))
+			out := whoamiOut{Kind: e.caller.Kind, ID: e.caller.ID, Name: e.caller.Name, Token: e.caller.Token, Permissions: perms}
+			return say(out, "Acting as %s, holding %s.", e.caller.describe(), describePermissions(perms))
 		}),
+		func() tool {
+			t := define(&mcp.Tool{
+				Name:        "set_my_name",
+				Description: "Change the name of the person you act for: how others see them, in history, loans and lists. They still sign in with their email.",
+				Annotations: changes("Change my name", true),
+			}, []string{"PUT /api/v1/auth/name"}, nil, func(ctx context.Context, e *env, in nameIn) (reply[nameOut], error) {
+				var res struct {
+					User struct {
+						Name string `json:"name"`
+					} `json:"user"`
+				}
+				if err := e.call(ctx, http.MethodPut, "/api/v1/auth/name", in, &res); err != nil {
+					return reply[nameOut]{}, err
+				}
+				return say(nameOut{Name: res.User.Name}, "Now named %q.", res.User.Name)
+			})
+			t.person = true
+			return t
+		}(),
 		define(&mcp.Tool{
 			Name:        "server_info",
 			Description: "The BAM! server's version, the address people reach it at, its database, and whether it is healthy.",

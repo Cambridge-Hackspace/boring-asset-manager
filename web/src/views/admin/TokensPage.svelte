@@ -109,7 +109,8 @@
 </div>
 <p class="mb-4 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
   Tokens let scripts and dashboards use the API, sent as <code>Authorization: Bearer &lt;token&gt;</code>. A token may do what its
-  roles allow, and its changes are recorded under its name. Tokens cannot manage tokens or change anyone's account.
+  roles allow, and its changes are recorded under its name. Tokens cannot manage tokens or change anyone's account. Personal tokens,
+  which people make for their assistants on their account page, act as them instead.
 </p>
 <ErrorMessage {error} />
 {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
@@ -176,7 +177,7 @@
         {#each tokens as t (t.id)}
           <tr class="border-b border-zinc-200 dark:border-zinc-800">
             <td class="py-2 pr-4 font-medium">{t.name}</td>
-            <td class="py-2 pr-4">{t.role_ids.map(roleName).join(', ') || 'None'}</td>
+            <td class="py-2 pr-4">{t.user_id ? `Personal: acts as ${t.user_name || 'Unnamed user'}` : t.role_ids.map(roleName).join(', ') || 'None'}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{when(t.created_at)}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{when(t.last_used_at) || 'Never'}</td>
             <td class="py-2 pr-4 whitespace-nowrap">

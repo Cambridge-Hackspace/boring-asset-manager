@@ -53,6 +53,12 @@ func (s *Server) mcpCaller(w http.ResponseWriter, r *http.Request) (mcpserver.Ca
 		return mcpserver.Response{Status: rec.status, Header: rec.header, Body: rec.body.Bytes()}
 	}
 	caller := mcpserver.Caller{Kind: "token", ID: t.ID, Name: t.Name, Permissions: UserPermissions(r.Context())}
+	if u := CurrentUser(r.Context()); u != nil {
+		caller = mcpserver.Caller{Kind: "person", ID: u.ID, Name: u.Name, Token: t.Name, Permissions: UserPermissions(r.Context())}
+		if caller.Name == "" {
+			caller.Name = "Unnamed user"
+		}
+	}
 	return caller, api, true
 }
 

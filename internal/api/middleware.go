@@ -132,7 +132,17 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 					writeServerError(w, err, "read the API token")
 					return
 				}
-				next.ServeHTTP(w, r.WithContext(WithPermissions(WithToken(r.Context(), t), union(perms, public))))
+				ctx := WithPermissions(WithToken(r.Context(), t), union(perms, public))
+				// A personal token acts as its user.
+				if t.UserID != "" {
+					u, err := st.GetUserByID(t.UserID)
+					if err != nil {
+						writeServerError(w, err, "read the token's user")
+						return
+					}
+					ctx = WithUser(ctx, u)
+				}
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
 
@@ -171,9 +181,26 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireAuth is an HTTP middleware requiring a signed-in user. API tokens
-// are refused: what it guards belongs to a person's session, such as their
-// password, or must not be reachable from a script, such as minting tokens.
+// RequirePerson is an HTTP middleware requiring a person: a signed-in user,
+// or a personal token acting as one. Other API tokens are refused.
+func RequirePerson(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if CurrentUser(r.Context()) == nil {
+			if CurrentToken(r.Context()) != nil {
+				writeJSONError(w, http.StatusForbidden, "This needs a person: a signed-in session, or their personal token")
+				return
+			}
+			writeJSONError(w, http.StatusUnauthorized, "Authentication required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// RequireAuth is an HTTP middleware requiring a signed-in user. API tokens,
+// personal ones too, are refused: what it guards belongs to a person's
+// session, such as their password, or must not be reachable from a script or
+// an assistant, such as minting tokens.
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if CurrentToken(r.Context()) != nil {

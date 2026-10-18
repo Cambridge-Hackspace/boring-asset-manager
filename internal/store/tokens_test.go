@@ -117,3 +117,85 @@ func TestAPITokens(t *testing.T) {
 		t.Errorf("an expired token: %v", err)
 	}
 }
+
+func TestPersonalTokens(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	if err := st.SeedDefaultPermissionsAndRoles(); err != nil {
+		t.Fatal(err)
+	}
+	admin, err := st.CreateAdminUser("admin@hackspace.org", "a long enough password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.CreateUser("ada@hackspace.org", "a long enough password", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetUserName(ada.ID, "Ada"); err != nil {
+		t.Fatal(err)
+	}
+	lenders, err := st.CreateRole(RoleInput{Name: "Lenders", Permissions: []string{rbac.PermAssetsRead, rbac.PermAssetsBorrow}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetUserRoles(ada.ID, []string{lenders.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	tok, secret, err := st.CreatePersonalToken(ada.ID, "Claude", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok.UserID != ada.ID || tok.UserName != "Ada" || len(tok.RoleIDs) != 0 || tok.CreatedBy != ada.ID {
+		t.Fatalf("created %+v", tok)
+	}
+	if _, _, err := st.CreateToken("Script", nil, nil, admin.ID); err != nil {
+		t.Fatal(err)
+	}
+	own, err := st.ListPersonalTokens(ada.ID)
+	if err != nil || len(own) != 1 || own[0].ID != tok.ID {
+		t.Errorf("Ada's tokens: %v %+v", err, own)
+	}
+	if all, _ := st.ListTokens(); len(all) != 2 {
+		t.Errorf("all tokens: %+v", all)
+	}
+
+	// It holds its user's permissions, as they are each time.
+	got, perms, err := st.AuthenticateToken(secret)
+	if err != nil || got.UserID != ada.ID || !perms[rbac.PermAssetsBorrow] {
+		t.Fatalf("authenticated %v %+v %v", err, got, perms)
+	}
+	if err := st.SetUserRoles(ada.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, perms, _ := st.AuthenticateToken(secret); perms[rbac.PermAssetsBorrow] {
+		t.Errorf("a role taken away still counts: %v", perms)
+	}
+
+	// Deactivating the user revokes it, for good.
+	if err := st.UpdateUserStatus(ada.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpdateUserStatus(ada.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.AuthenticateToken(secret); !errors.Is(err, ErrTokenNotFound) {
+		t.Errorf("after deactivating: %v", err)
+	}
+	if own, _ := st.ListPersonalTokens(ada.ID); own[0].RevokedAt == nil {
+		t.Errorf("not revoked: %+v", own[0])
+	}
+
+	// Archiving them does too.
+	_, secret, err = st.CreatePersonalToken(ada.ID, "Second", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteUser(ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.AuthenticateToken(secret); !errors.Is(err, ErrTokenNotFound) {
+		t.Errorf("after archiving: %v", err)
+	}
+}

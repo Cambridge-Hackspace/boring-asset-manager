@@ -439,6 +439,9 @@ export interface APIToken {
   id: string;
   name: string;
   role_ids: string[];
+  /** Set on a personal token, which acts as this user, for an assistant. */
+  user_id?: string;
+  user_name?: string;
   created_by?: string;
   created_at: string;
   expires_at: string | null;

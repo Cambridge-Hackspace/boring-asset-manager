@@ -265,9 +265,13 @@ type EventActor struct {
 // APIToken is a token for scripts and dashboards. Its secret is shown once,
 // when it is created, and never stored.
 type APIToken struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	RoleIDs    []string   `json:"role_ids"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	RoleIDs []string `json:"role_ids"`
+	// UserID is set on a personal token: it holds no roles and acts as this
+	// user, named UserName.
+	UserID     string     `json:"user_id,omitempty"`
+	UserName   string     `json:"user_name,omitempty"`
 	CreatedBy  string     `json:"created_by,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ExpiresAt  *time.Time `json:"expires_at"`
