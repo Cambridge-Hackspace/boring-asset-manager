@@ -71,7 +71,7 @@ func TestValidate(t *testing.T) {
 
 func TestDriversDescribeEveryRoll(t *testing.T) {
 	d := Drivers()
-	if len(d) != 3 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != 3 || len(d[0].Options) != 1 {
+	if len(d) != 3 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != len(brotherql.MediaIDs()) || len(d[0].Options) != 1 || d[0].CustomStock != nil {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if d[1].Driver != DriverDymoLabelWriter || len(d[1].Media) != len(dymolw.MediaIDs()) || len(d[1].Options) != 2 || len(d[1].Options[0].Values) != 4 {
@@ -80,6 +80,129 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if d[2].Driver != DriverTSPL || len(d[2].Media) != len(tspl.MediaIDs()) || len(d[2].Options) != 2 {
 		t.Fatalf("TSPL driver info = %+v", d[2])
 	}
+	// The drivers that take custom stock say how wide, for every model.
+	for _, info := range d[1:] {
+		c := info.CustomStock
+		if c == nil || len(c.MaxWidthMM) != len(info.Models) || c.MinLengthMM <= 0 || c.MaxLengthMM <= c.MinLengthMM {
+			t.Errorf("%s custom stock = %+v", info.Driver, c)
+		}
+	}
+	if w := d[2].CustomStock.MaxWidthMM["Rollo X1038"]; w < 105 || w > 106.5 {
+		t.Errorf("Rollo takes custom stock up to %g mm", w)
+	}
+	if d[1].CustomStock.Note == "" {
+		t.Error("the DYMO driver says nothing of the 550 series and genuine labels")
+	}
+}
+
+func TestValidateStock(t *testing.T) {
+	good := []Stock{
+		{Name: "Shelf edge", WidthMM: 40, LengthMM: 12, GapMM: 3},
+		{Name: "Tape", WidthMM: 50},
+		{Name: "Gapless", WidthMM: 50, LengthMM: 25},
+	}
+	for _, s := range good {
+		if err := ValidateStock(s); err != nil {
+			t.Errorf("%+v: %v", s, err)
+		}
+	}
+	bad := []Stock{
+		{Name: " ", WidthMM: 40},
+		{Name: "Thin", WidthMM: 2},
+		{Name: "Wide", WidthMM: 400},
+		{Name: "Short", WidthMM: 40, LengthMM: 1},
+		{Name: "Gap on tape", WidthMM: 40, GapMM: 3},
+		{Name: "Big gap", WidthMM: 40, LengthMM: 20, GapMM: 40},
+		{Name: "Negative gap", WidthMM: 40, LengthMM: 20, GapMM: -1},
+	}
+	for _, s := range bad {
+		if err := ValidateStock(s); !errors.Is(err, ErrInvalidPrinter) {
+			t.Errorf("%+v: err = %v", s, err)
+		}
+	}
+}
+
+func TestCustomStockOnEachDriver(t *testing.T) {
+	stock := func(w, l, gap float64) *Stock {
+		return &Stock{ID: "11111111-2222-3333-4444-555555555555", Name: "Custom", WidthMM: w, LengthMM: l, GapMM: gap}
+	}
+	cases := []struct {
+		why, driver, model string
+		stock              *Stock
+		ok                 bool
+	}{
+		{"Brother takes only its rolls", DriverBrotherQL, "QL-810W", stock(62, 0, 0), false},
+		{"TSPL die-cut", DriverTSPL, "Rollo X1038", stock(60, 40, 2.5), true},
+		{"TSPL continuous", DriverTSPL, "Rollo X1038", stock(80, 0, 0), true},
+		{"TSPL wider than the head", DriverTSPL, "Rollo X1038", stock(120, 40, 3), false},
+		{"DYMO die-cut", DriverDymoLabelWriter, "LabelWriter 450", stock(50, 30, 0), true},
+		{"DYMO 550 too", DriverDymoLabelWriter, "LabelWriter 550", stock(50, 30, 0), true},
+		{"DYMO wide roll on a narrow head", DriverDymoLabelWriter, "LabelWriter 450", stock(80, 30, 0), false},
+		{"DYMO wide roll on the 4XL", DriverDymoLabelWriter, "LabelWriter 4XL", stock(100, 150, 0), true},
+		{"DYMO wider than the 4XL", DriverDymoLabelWriter, "LabelWriter 4XL", stock(120, 150, 0), false},
+	}
+	for _, c := range cases {
+		d, _ := Lookup(c.driver)
+		s := Settings{Model: c.model, Media: c.stock.ID, Stock: c.stock}
+		if err := d.Validate(s); (err == nil) != c.ok {
+			t.Errorf("%s: Validate = %v", c.why, err)
+		}
+		if _, err := d.Plan(s, LabelSpec{WidthMM: c.stock.WidthMM, HeightMM: max(c.stock.LengthMM, 30), DPI: d.Info().ModelDPI[c.model]}); (err == nil) != c.ok {
+			t.Errorf("%s: Plan = %v", c.why, err)
+		}
+	}
+}
+
+// TestCustomStockReachesThePrinter checks that a TSPL printer is told the
+// custom stock's size and gap, and a LabelWriter its label length.
+func TestCustomStockReachesThePrinter(t *testing.T) {
+	s := Settings{Model: "Rollo X1038", Media: "x", Stock: &Stock{ID: "x", Name: "Bin labels", WidthMM: 60, LengthMM: 40, GapMM: 2.5}}
+	d, _ := Lookup(DriverTSPL)
+	plan, err := d.Plan(s, LabelSpec{WidthMM: 60, HeightMM: 40, DPI: 203})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := plan.Encode([]*image.Gray{blankLabel(60, 40, 203)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := tspl.DecodeJob(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setup := strings.Join(job.Setup, "; ")
+	if !strings.Contains(setup, "SIZE 60 mm,40 mm") || !strings.Contains(setup, "GAP 2.5 mm,0 mm") {
+		t.Errorf("setup = %s", setup)
+	}
+
+	s = Settings{Model: "LabelWriter 450", Media: "y", Stock: &Stock{ID: "y", Name: "Tags", WidthMM: 50, LengthMM: 30}}
+	d, _ = Lookup(DriverDymoLabelWriter)
+	plan, err = d.Plan(s, LabelSpec{WidthMM: 50, HeightMM: 30, DPI: 300})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Marked on its last line, which would otherwise be left to the form feed.
+	tag := blankLabel(50, 30, 300)
+	tag.Pix[(tag.Rect.Dy()-1)*tag.Stride] = 0
+	stream, err = plan.Encode([]*image.Gray{tag})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dj, err := dymolw.DecodeJob(dymolw.ProtocolV1, stream, 672)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dj.Pages) != 1 || dj.Pages[0].Image.Bounds().Dy() != 354 {
+		t.Errorf("decoded %d pages, the first %v", len(dj.Pages), dj.Pages[0].Image.Bounds())
+	}
+}
+
+func blankLabel(wMM, hMM float64, dpi int) *image.Gray {
+	img := image.NewGray(image.Rect(0, 0, int(wMM/25.4*float64(dpi)+0.5), int(hMM/25.4*float64(dpi)+0.5)))
+	for i := range img.Pix {
+		img.Pix[i] = 0xFF
+	}
+	return img
 }
 
 type namedDriver struct {

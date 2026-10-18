@@ -50,7 +50,7 @@
     const p = printers.find((p) => p.id === printerId);
     if (!p) return null;
     const d = drivers.find((d) => d.driver === p.driver);
-    const media = d?.media.find((m) => m.id === p.media);
+    const media = p.loaded ?? d?.media.find((m) => m.id === p.media);
     return media ? { media, dpi: d?.model_dpi?.[p.model] } : null;
   });
 

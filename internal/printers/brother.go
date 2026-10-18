@@ -61,6 +61,11 @@ func (d brotherQL) Validate(s Settings) error {
 	if !contains(brotherql.Models(), s.Model) {
 		return fmt.Errorf("model must be one of %s", strings.Join(brotherql.Models(), ", "))
 	}
+	// The printer identifies the DK roll loaded, and placing a label on its
+	// head takes Brother's figures for that roll, so a size is not enough.
+	if s.Stock != nil {
+		return errNoCustomStock("Brother QL printers")
+	}
 	if _, ok := brotherql.LookupMedia(s.Media); !ok {
 		return fmt.Errorf("media must be one of %s", strings.Join(brotherql.MediaIDs(), ", "))
 	}
@@ -69,6 +74,9 @@ func (d brotherQL) Validate(s Settings) error {
 }
 
 func (d brotherQL) Plan(s Settings, label LabelSpec) (Plan, error) {
+	if s.Stock != nil {
+		return nil, errNoCustomStock("Brother QL printers")
+	}
 	media, ok := brotherql.LookupMedia(s.Media)
 	if !ok {
 		return nil, fmt.Errorf("unknown media %q", s.Media)

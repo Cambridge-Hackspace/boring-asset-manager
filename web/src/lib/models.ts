@@ -224,7 +224,12 @@ export interface Printer {
   driver: string;
   model: string;
   connection: PrinterConnection;
+  /** A built-in roll's ID, or custom stock's. */
   media: string;
+  /** The custom stock media names, if it names any. */
+  stock?: LabelStockSize;
+  /** What media names, built in or custom. */
+  loaded?: DriverMedia;
   options?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -244,6 +249,34 @@ export interface DriverMedia {
   width_mm: number;
   length_mm?: number;
   die_cut: boolean;
+  /** Set for custom stock. */
+  custom?: boolean;
+}
+
+/** What custom stock a driver takes. */
+export interface CustomStockInfo {
+  /** The widest label each model takes. */
+  max_width_mm: Record<string, number>;
+  /** Labels from a continuous roll are this long. */
+  min_length_mm: number;
+  max_length_mm: number;
+  note?: string;
+}
+
+/** A roll known by its size alone. A length of 0 is a continuous roll. */
+export interface LabelStockSize {
+  id: string;
+  name: string;
+  width_mm: number;
+  length_mm: number;
+  gap_mm: number;
+}
+
+export interface LabelStock extends LabelStockSize {
+  /** The printers with it loaded, by name. */
+  printers: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DriverInfo {
@@ -251,6 +284,8 @@ export interface DriverInfo {
   models: string[];
   model_dpi?: Record<string, number>;
   media: DriverMedia[];
+  /** Set when the driver takes custom stock too. */
+  custom_stock?: CustomStockInfo;
   options?: DriverOption[];
 }
 

@@ -118,16 +118,20 @@ func MediaIDs() []string {
 
 // Suits reports whether the roll fits in the model.
 func (mo Model) Suits(m Media) error {
-	if m.WidthMM > mo.HeadMM()+2 {
+	if m.WidthMM > mo.MaxLabelMM() {
 		return fmt.Errorf("%s labels are wider than the %s head (%.0f mm)", m.Name, mo.Name, mo.HeadMM())
 	}
 	return nil
 }
 
+// MaxLabelMM is the widest roll the model takes: a little wider than its
+// head, which prints all it can reach.
+func (mo Model) MaxLabelMM() float64 { return mo.HeadMM() + 2 }
+
 // Continuous labels must be between these lengths, in millimeters.
 const (
-	minContinuousMM = 10
-	maxContinuousMM = 1000
+	MinContinuousMM = 10
+	MaxContinuousMM = 1000
 )
 
 // lengthTolerance absorbs rounding when matching template sizes to media, in
@@ -167,9 +171,9 @@ func (m Media) Fit(mo Model, widthMM, heightMM float64, dpi int) (Placement, err
 			}
 			continue
 		}
-		if along < minContinuousMM || along > maxContinuousMM {
+		if along < MinContinuousMM || along > MaxContinuousMM {
 			return Placement{}, fmt.Errorf("%w: continuous labels must be %d-%d mm long (got %.1f mm)",
-				ErrDoesNotFit, minContinuousMM, maxContinuousMM, along)
+				ErrDoesNotFit, MinContinuousMM, MaxContinuousMM, along)
 		}
 		return p, nil
 	}

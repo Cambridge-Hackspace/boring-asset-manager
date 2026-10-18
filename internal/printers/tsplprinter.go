@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"math"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
@@ -40,6 +41,12 @@ func (tsplDriver) Info() DriverInfo {
 		m, _ := tspl.LookupMedia(id)
 		info.Media = append(info.Media, MediaInfo{ID: m.ID, Name: m.Name, WidthMM: m.WidthMM, LengthMM: m.LengthMM, DieCut: m.DieCut()})
 	}
+	custom := &CustomStockInfo{MaxWidthMM: map[string]float64{}, MinLengthMM: tspl.MinContinuousMM, MaxLengthMM: tspl.MaxContinuousMM}
+	for _, name := range tspl.Models() {
+		m, _ := tspl.LookupModel(name)
+		custom.MaxWidthMM[name] = math.Floor(m.MaxLabelMM()*10) / 10
+	}
+	info.CustomStock = custom
 	return info
 }
 
@@ -49,8 +56,13 @@ func (tsplDriver) settings(s Settings) (tspl.Model, tspl.Media, tspl.JobOptions,
 		return model, tspl.Media{}, tspl.JobOptions{}, fmt.Errorf("model must be one of %s", strings.Join(tspl.Models(), ", "))
 	}
 	media, ok := tspl.LookupMedia(s.Media)
+	if s.Stock != nil {
+		// TSPL printers measure nothing themselves: the size and gap they
+		// are sent are all they know, so any roll the head spans will do.
+		media, ok = tspl.Media{ID: s.Stock.ID, Name: s.Stock.Name, WidthMM: s.Stock.WidthMM, LengthMM: s.Stock.LengthMM, GapMM: s.Stock.GapMM}, true
+	}
 	if !ok {
-		return model, media, tspl.JobOptions{}, fmt.Errorf("media must be one of %s", strings.Join(tspl.MediaIDs(), ", "))
+		return model, media, tspl.JobOptions{}, fmt.Errorf("media must be one of %s, or custom stock", strings.Join(tspl.MediaIDs(), ", "))
 	}
 	if err := model.Suits(media); err != nil {
 		return model, media, tspl.JobOptions{}, err

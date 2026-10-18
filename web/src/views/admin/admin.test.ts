@@ -20,6 +20,7 @@ const drivers: DriverInfo[] = [
     models: ['Rollo X1038'],
     model_dpi: { 'Rollo X1038': 203 },
     media: [{ id: '4x6', name: '4 × 6 in', width_mm: 101.6, length_mm: 152.4, die_cut: true }],
+    custom_stock: { max_width_mm: { 'Rollo X1038': 105.6 }, min_length_mm: 10, max_length_mm: 1000 },
     options: [
       { name: 'density', type: 'int', default: null, description: 'Darkness.' },
       { name: 'rotate_180', type: 'bool', default: false, description: 'Flip.' },
@@ -64,6 +65,35 @@ describe('PrinterForm', () => {
       connection: { type: 'device', address: '/dev/usb/lp0' },
       options: { density: 10 },
     });
+  });
+});
+
+describe('PrinterForm with custom stock', () => {
+  const stock = [
+    { id: 's1', name: 'Bin labels', width_mm: 60, length_mm: 40, gap_mm: 3, printers: [], created_at: '', updated_at: '' },
+    { id: 's2', name: 'Banner', width_mm: 150, length_mm: 0, gap_mm: 0, printers: [], created_at: '', updated_at: '' },
+  ];
+
+  it('offers the custom stock a model takes, and none to a Brother', async () => {
+    const { sent } = fakeApi({ 'POST /printers': () => ({ status: 201, body: {} }) });
+    const onsaved = vi.fn();
+    render(PrinterForm, { drivers, stock, onsaved, oncancel: () => {} });
+
+    expect(screen.queryByRole('option', { name: /Bin labels/ })).toBeNull();
+    expect(screen.getByText('This driver takes only its own rolls.')).toBeTruthy();
+
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Rollo' } });
+    await fireEvent.change(screen.getByLabelText('Driver'), { target: { value: 'tspl' } });
+    expect(screen.getByRole('option', { name: 'Bin labels (60 × 40 mm, 3 mm gap)' })).toBeTruthy();
+    // Too wide for the Rollo's head.
+    expect(screen.queryByRole('option', { name: /Banner/ })).toBeNull();
+    expect(screen.getByText(/custom stock up to 105.6 mm wide/)).toBeTruthy();
+
+    await fireEvent.change(screen.getByLabelText('Loaded media'), { target: { value: 's1' } });
+    await fireEvent.input(screen.getByLabelText('Address'), { target: { value: 'rollo.lan' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Add printer' }));
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect((sent[0]!.body as { media: string }).media).toBe('s1');
   });
 });
 

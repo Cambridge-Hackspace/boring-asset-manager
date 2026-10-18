@@ -25,7 +25,7 @@ test('printers: add one through the generated form and test-print', async ({ sig
   await page.getByLabel('density').fill('12');
   await page.getByRole('button', { name: 'Add printer' }).click();
   const card = page.getByRole('article', { name });
-  await expect(card).toContainText('Rollo X1038 (tspl), 2x1');
+  await expect(card).toContainText('Rollo X1038 (tspl), 2 × 1 in');
 
   await card.getByRole('button', { name: 'Test print' }).click();
   await card.getByLabel('Template').selectOption({ index: 0 });
@@ -41,6 +41,48 @@ test('printers: add one through the generated form and test-print', async ({ sig
   expect(job).toMatch(/^SIZE 50.8 mm,25.4 mm\r\n/);
   expect(job).toContain('DENSITY 12\r\n');
   expect(job).toMatch(/PRINT 1,1\r\n$/);
+});
+
+test('label stock: add a custom size, load it in a Rollo, and print on it', async ({ signedIn: page, api, printer }) => {
+  const stockName = unique('Bin labels');
+  const name = unique('Bin Rollo');
+  await goTo(page, 'Printers');
+  await page.getByRole('button', { name: 'Add stock' }).click();
+  const form = page.getByRole('form', { name: 'New label stock' });
+  await form.getByLabel('Name').fill(stockName);
+  await form.getByLabel('Width (mm)').fill('60');
+  await form.getByLabel('Length (mm)').fill('40');
+  await form.getByLabel('Gap (mm)').fill('2.5');
+  await form.getByRole('button', { name: 'Save stock' }).click();
+  await expect(page.getByRole('article', { name: stockName })).toContainText('60 × 40 mm, 2.5 mm gap');
+
+  await page.getByRole('button', { name: 'Add printer' }).click();
+  await page.getByLabel('Name', { exact: true }).fill(name);
+  await page.getByLabel('Driver').selectOption('tspl');
+  await page.getByLabel('Model').selectOption('Rollo X1038');
+  await page.getByLabel('Loaded media').selectOption({ label: `${stockName} (60 × 40 mm, 2.5 mm gap)` });
+  await page.getByLabel('Address').fill(`127.0.0.1:${printer.port}`);
+  await page.getByRole('button', { name: 'Add printer' }).click();
+  await expect(page.getByRole('article', { name })).toContainText(`Rollo X1038 (tspl), ${stockName}`);
+  await expect(page.getByRole('article', { name: stockName })).toContainText(`Loaded in ${name}`);
+
+  // Loaded stock is not deleted.
+  const stockCard = page.getByRole('article', { name: stockName });
+  await stockCard.getByRole('button', { name: 'Delete' }).click();
+  await stockCard.getByRole('button', { name: `Delete ${stockName}` }).click();
+  await expect(page.getByRole('alert')).toContainText(`loaded in a printer: ${name}`);
+
+  // A label printed on it is sent at its size and gap.
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Bin tag'), units: 'mm', width: 60, height: 40, dpi: 203,
+    elements: [{ type: 'text', x: 2, y: 2, width: 56, height: 10, font_size: 14, content_binding: '{{asset.name}}' }],
+  });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Resistors') });
+  const { printers } = await api.call('GET', '/printers');
+  const rollo = (printers as { id: string; name: string }[]).find((p) => p.name === name)!;
+  await api.call('POST', `/printers/${rollo.id}/print`, { template_id: template.id, asset_ids: [asset.asset.id], copies: 1 });
+  const job = (await printer.job()).toString('latin1');
+  expect(job).toMatch(/^SIZE 60 mm,40 mm\r\nGAP 2.5 mm,0 mm\r\n/);
 });
 
 test('users: roles, disabling, and the anti-lockout refusal', async ({ signedIn: page }) => {

@@ -21,6 +21,10 @@ var (
 
 const printerColumns = `id, name, driver, model, connection_type, address, media, options, created_at, updated_at`
 
+// selectPrinters reads printers with the custom stock they name, if any.
+const selectPrinters = `SELECT p.id, p.name, p.driver, p.model, p.connection_type, p.address, p.media, p.options, p.created_at, p.updated_at,
+	s.id, s.name, s.width_mm, s.length_mm, s.gap_mm FROM printers p LEFT JOIN label_stock s ON s.id = p.media`
+
 // preparePrinter normalizes and validates a printer before it is written,
 // returning the options column value (NULL for driver defaults).
 func preparePrinter(p *models.Printer) (*string, error) {
@@ -33,8 +37,7 @@ func preparePrinter(p *models.Printer) (*string, error) {
 	if trimmed := bytes.TrimSpace(p.Options); len(trimmed) == 0 || string(trimmed) == "null" {
 		p.Options = nil
 	}
-	settings := printers.Settings{Model: p.Model, Media: p.Media, Options: p.Options}
-	if err := printers.Validate(p.Name, p.Driver, p.Connection, settings); err != nil {
+	if err := printers.Validate(p.Name, p.Driver, p.Connection, PrinterSettings(p)); err != nil {
 		return nil, err
 	}
 	if p.Options == nil {
@@ -51,11 +54,24 @@ func preparePrinter(p *models.Printer) (*string, error) {
 
 // PrinterSettings returns the driver-specific part of a printer.
 func PrinterSettings(p *models.Printer) printers.Settings {
-	return printers.Settings{Model: p.Model, Media: p.Media, Options: p.Options}
+	return printers.Settings{Model: p.Model, Media: p.Media, Stock: p.Stock, Options: p.Options}
+}
+
+// loadStock sets the custom stock a printer's media names, if any.
+func (s *Store) loadStock(p *models.Printer) error {
+	st, err := s.stockForMedia(p.Media)
+	if err != nil {
+		return err
+	}
+	p.Stock = st
+	return nil
 }
 
 // CreatePrinter validates and stores a printer.
 func (s *Store) CreatePrinter(p models.Printer) (*models.Printer, error) {
+	if err := s.loadStock(&p); err != nil {
+		return nil, err
+	}
 	options, err := preparePrinter(&p)
 	if err != nil {
 		return nil, err
@@ -68,12 +84,13 @@ func (s *Store) CreatePrinter(p models.Printer) (*models.Printer, error) {
 	if err != nil {
 		return nil, printerWriteError(err)
 	}
+	p.Loaded = printers.Loaded(p.Driver, PrinterSettings(&p))
 	return &p, nil
 }
 
 // GetPrinter retrieves a printer by ID.
 func (s *Store) GetPrinter(id string) (*models.Printer, error) {
-	p, err := scanPrinter(s.QueryRow(`SELECT `+printerColumns+` FROM printers WHERE id = ?`, id))
+	p, err := scanPrinter(s.QueryRow(selectPrinters+` WHERE p.id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrPrinterNotFound
 	}
@@ -82,7 +99,7 @@ func (s *Store) GetPrinter(id string) (*models.Printer, error) {
 
 // ListPrinters returns every printer ordered by name.
 func (s *Store) ListPrinters() ([]models.Printer, error) {
-	rows, err := s.Query(`SELECT ` + printerColumns + ` FROM printers ORDER BY name ASC`)
+	rows, err := s.Query(selectPrinters + ` ORDER BY p.name ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("querying printers: %w", err)
 	}
@@ -104,6 +121,9 @@ func (s *Store) UpdatePrinter(p models.Printer) (*models.Printer, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := s.loadStock(&p); err != nil {
+		return nil, err
+	}
 	options, err := preparePrinter(&p)
 	if err != nil {
 		return nil, err
@@ -114,6 +134,7 @@ func (s *Store) UpdatePrinter(p models.Printer) (*models.Printer, error) {
 	if err != nil {
 		return nil, printerWriteError(err)
 	}
+	p.Loaded = printers.Loaded(p.Driver, PrinterSettings(&p))
 	return &p, nil
 }
 
@@ -138,10 +159,13 @@ func printerWriteError(err error) error {
 
 func scanPrinter(row rowScanner) (*models.Printer, error) {
 	var (
-		p       models.Printer
-		options sql.NullString
+		p                  models.Printer
+		options            sql.NullString
+		stockID, stockName sql.NullString
+		width, length, gap sql.NullFloat64
 	)
-	err := row.Scan(&p.ID, &p.Name, &p.Driver, &p.Model, &p.Connection.Type, &p.Connection.Address, &p.Media, &options, &p.CreatedAt, &p.UpdatedAt)
+	err := row.Scan(&p.ID, &p.Name, &p.Driver, &p.Model, &p.Connection.Type, &p.Connection.Address, &p.Media, &options, &p.CreatedAt, &p.UpdatedAt,
+		&stockID, &stockName, &width, &length, &gap)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, err
@@ -151,5 +175,9 @@ func scanPrinter(row rowScanner) (*models.Printer, error) {
 	if options.Valid && options.String != "" {
 		p.Options = json.RawMessage(options.String)
 	}
+	if stockID.Valid {
+		p.Stock = &printers.Stock{ID: stockID.String, Name: stockName.String, WidthMM: width.Float64, LengthMM: length.Float64, GapMM: gap.Float64}
+	}
+	p.Loaded = printers.Loaded(p.Driver, PrinterSettings(&p))
 	return &p, nil
 }

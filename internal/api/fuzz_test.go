@@ -157,6 +157,11 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/printers", body: `{"name":"Front desk {n}","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"10.0.0.9"},"media":"dk-22205"}`},
 	{method: "PUT", path: "/api/v1/printers/{printer}", body: `{"name":"Back desk {n}","driver":"tspl","model":"Rollo X1038","connection":{"type":"ipp","address":"ipp://cups.lan/printers/x"},"media":"4x6"}`},
 	{method: "DELETE", path: "/api/v1/printers/{printer}"},
+	{method: "GET", path: "/api/v1/label-stock"},
+	{method: "POST", path: "/api/v1/label-stock", body: `{"name":"Bin labels {n}","width_mm":60,"length_mm":40,"gap_mm":3}`},
+	{method: "PUT", path: "/api/v1/label-stock/{stock}", body: `{"name":"Tape {n}","width_mm":50}`},
+	{method: "PUT", path: "/api/v1/printers/{printer}", body: `{"name":"Bin printer {n}","driver":"tspl","model":"Rollo X1038","connection":{"type":"tcp","address":"10.0.0.8"},"media":"{stock}"}`},
+	{method: "DELETE", path: "/api/v1/label-stock/{stock}"},
 	{method: "GET", path: "/api/v1/printer-pools"},
 	{method: "POST", path: "/api/v1/printer-pools", body: `{"name":"Pool {n}","batch_size":5,"members":[{"printer_id":"{printer}","share":2}]}`},
 	{method: "GET", path: "/api/v1/printer-pools/{pool}"},
@@ -315,6 +320,8 @@ func kindOf(path string) string {
 		return "job"
 	case "/api/v1/printer-pools":
 		return "pool"
+	case "/api/v1/label-stock":
+		return "stock"
 	case "/api/v1/actions":
 		return "action"
 	}
@@ -362,7 +369,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job", "pool", "action"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job", "pool", "action", "stock"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {

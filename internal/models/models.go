@@ -403,11 +403,27 @@ type Printer struct {
 	Model  string `json:"model"`
 	// Connection says how BAM reaches the printer.
 	Connection printers.Connection `json:"connection"`
-	Media      string              `json:"media"`
+	// Media names the roll loaded: one the driver has built in, or custom
+	// stock by its ID.
+	Media string `json:"media"`
+	// Stock is the custom stock Media names, if it names one.
+	Stock *printers.Stock `json:"stock,omitempty"`
+	// Loaded describes the roll Media names, built in or custom.
+	Loaded *printers.MediaInfo `json:"loaded,omitempty"`
 	// Options are driver options as a JSON object; absent means defaults.
 	Options   json.RawMessage `json:"options,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+// LabelStock is custom stock as stored: its size, and the printers that
+// have it loaded.
+type LabelStock struct {
+	printers.Stock
+	// Printers names the printers with it loaded.
+	Printers  []string  `json:"printers"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // NotificationChannel sends events to one destination through a notifier

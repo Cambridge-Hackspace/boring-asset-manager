@@ -30,6 +30,9 @@ var ErrInvalidPrinter = errors.New("invalid printer")
 type Settings struct {
 	Model string
 	Media string
+	// Stock is the custom stock Media names, when it names one rather than
+	// a built-in roll.
+	Stock *Stock
 	// Options holds driver options as a JSON object; empty means defaults.
 	Options json.RawMessage
 }

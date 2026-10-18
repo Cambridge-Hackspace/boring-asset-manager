@@ -46,7 +46,9 @@ type DriverInfo struct {
 	// ModelDPI is each model's print resolution, which templates must use.
 	ModelDPI map[string]int `json:"model_dpi"`
 	Media    []MediaInfo    `json:"media"`
-	Options  []OptionInfo   `json:"options,omitempty"`
+	// CustomStock is set when the driver takes custom stock as well.
+	CustomStock *CustomStockInfo `json:"custom_stock,omitempty"`
+	Options     []OptionInfo     `json:"options,omitempty"`
 }
 
 // MediaInfo describes a roll for clients choosing what is loaded.
@@ -56,6 +58,8 @@ type MediaInfo struct {
 	WidthMM  float64 `json:"width_mm"`
 	LengthMM float64 `json:"length_mm,omitempty"`
 	DieCut   bool    `json:"die_cut"`
+	// Custom is set for custom stock rather than a built-in roll.
+	Custom bool `json:"custom,omitempty"`
 }
 
 // OptionInfo describes one driver option.
