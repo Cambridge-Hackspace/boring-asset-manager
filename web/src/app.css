@@ -54,3 +54,41 @@
 @utility error-text {
   @apply text-sm text-red-700 dark:text-red-400;
 }
+
+/* Tables that become cards on a phone (lib/stack.ts): each row a card,
+   each cell under its column's heading. Unlayered, so it wins over the
+   cells' padding utilities. */
+@media (width < 40rem) {
+  table.stack-table,
+  .stack-table > tbody,
+  .stack-table > tbody > tr,
+  .stack-table > tbody > tr > td {
+    display: block;
+    width: 100%;
+  }
+  .stack-table > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .stack-table > tbody > tr {
+    padding: 0.75rem 0;
+  }
+  .stack-table > tbody > tr > td {
+    padding: 0.25rem 0;
+    text-align: left;
+    white-space: normal;
+  }
+  .stack-table > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-zinc-500);
+  }
+  .stack-table > tbody > tr > td:empty {
+    display: none;
+  }
+}

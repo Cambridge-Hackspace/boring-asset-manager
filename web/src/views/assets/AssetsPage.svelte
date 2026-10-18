@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { stack } from '../../lib/stack';
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
@@ -112,6 +113,10 @@
   function toggleAll() {
     selected = allSelected ? [] : assets.map((a) => a.asset.id);
   }
+
+  // On a phone, the filters beyond search fold away until wanted.
+  let filtersOpen = $state(false);
+  const activeFilters = $derived([categoryId, condition, loan].filter(Boolean).length + (archived ? 1 : 0));
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -130,6 +135,10 @@
     <label class="label" for="asset-search">Search</label>
     <input id="asset-search" class="input" type="search" placeholder="Name, code, or where it is" bind:value={search} />
   </div>
+  <button type="button" class="btn-secondary sm:hidden" aria-expanded={filtersOpen} aria-controls="asset-filters" onclick={() => (filtersOpen = !filtersOpen)}>
+    Filters{activeFilters ? ` (${activeFilters})` : ''}
+  </button>
+  <div id="asset-filters" class="{filtersOpen ? 'flex' : 'hidden'} w-full flex-wrap items-end gap-3 sm:contents">
   <div>
     <label class="label" for="asset-category">Category</label>
     <select id="asset-category" class="input" bind:value={categoryId} onchange={() => applyFilters()}>
@@ -165,6 +174,7 @@
       <option value="overdue">Overdue</option>
     </select>
   </div>
+  </div>
   <button type="submit" class="btn-secondary">Search</button>
 </form>
 
@@ -187,7 +197,7 @@
     <p class="mb-3"><AddToSpool what={() => ({ filter: shownFilter })} label="Add all {assets.length} to the spool" /></p>
   {/if}
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm">
+    <table class="w-full text-left text-sm" use:stack>
       <thead class="border-b border-zinc-300 dark:border-zinc-700">
         <tr>
           {#if !archived}

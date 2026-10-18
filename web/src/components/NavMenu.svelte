@@ -7,6 +7,8 @@
   let { label, links, itemClass }: { label: string; links: NavLink[]; itemClass: string } = $props();
 
   let open = $state(false);
+  // Opening toward the left when there is no room to the right.
+  let alignRight = $state(false);
   let root: HTMLElement | undefined = $state();
   let button: HTMLButtonElement | undefined = $state();
   const id = $derived(`nav-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
@@ -43,14 +45,17 @@
     aria-controls={id}
     data-current={holdsCurrent || undefined}
     class="{itemClass} data-[current]:bg-zinc-900 data-[current]:text-white dark:data-[current]:bg-zinc-100 dark:data-[current]:text-zinc-900"
-    onclick={() => (open = !open)}
+    onclick={() => {
+      if (!open && root) alignRight = root.getBoundingClientRect().left + 192 > window.innerWidth;
+      open = !open;
+    }}
   >
     {label} <span aria-hidden="true">▾</span>
   </button>
   {#if open}
     <ul
       {id}
-      class="absolute left-0 z-20 mt-1 min-w-44 rounded-md border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+      class="absolute {alignRight ? 'right-0' : 'left-0'} z-20 mt-1 min-w-44 rounded-md border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
     >
       {#each links as link (link.href)}
         <li>

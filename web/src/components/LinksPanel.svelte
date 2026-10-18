@@ -84,7 +84,7 @@
           <a class="underline" href="/assets/{encodeURIComponent(l.asset.id)}">{l.asset.name}</a>
           {#if l.asset.archived}<span class="text-xs text-zinc-600 dark:text-zinc-400">(archived)</span>{/if}
           {#if canEdit}
-            <button type="button" class="btn-secondary px-2 py-0.5 text-xs" disabled={busy} aria-label="Unlink {l.asset.name}" onclick={() => remove(l.id, l.label, l.asset.name)}>
+            <button type="button" class="btn-secondary min-h-8 px-2 py-1 text-xs" disabled={busy} aria-label="Unlink {l.asset.name}" onclick={() => remove(l.id, l.label, l.asset.name)}>
               Unlink
             </button>
           {/if}
