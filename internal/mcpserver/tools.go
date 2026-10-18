@@ -24,7 +24,9 @@ type tool struct {
 	needsAll []string
 	// person lists it only for a person: a personal token, acting as them.
 	person bool
-	add    func(*mcp.Server, *env)
+	// personToo lists it for any person as well as those holding needs.
+	personToo bool
+	add       func(*mcp.Server, *env)
 }
 
 // reply is what a tool answers: its structured result, a short summary for

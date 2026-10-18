@@ -109,7 +109,7 @@
 </div>
 <p class="mb-4 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
   Tokens let scripts and dashboards use the API, sent as <code>Authorization: Bearer &lt;token&gt;</code>. A token may do what its
-  roles allow, and its changes are recorded under its name. Tokens cannot manage tokens or change anyone's account. Personal tokens,
+  roles allow, and its changes are recorded under its name. A token cannot make tokens or change anyone's account; one with users.manage can list and revoke them. Personal tokens,
   which people make for their assistants on their account page, act as them instead.
 </p>
 <ErrorMessage {error} />

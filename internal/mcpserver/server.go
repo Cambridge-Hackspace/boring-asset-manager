@@ -224,7 +224,7 @@ func newServer(e *env, cache *mcp.SchemaCache, tools []tool) *mcp.Server {
 		if t.person && e.caller.Kind != "person" {
 			continue
 		}
-		if e.caller.may(t.needs) && e.caller.mayAll(t.needsAll) {
+		if (e.caller.may(t.needs) || t.personToo && e.caller.Kind == "person") && e.caller.mayAll(t.needsAll) {
 			t.add(s, e)
 		}
 	}
@@ -244,7 +244,7 @@ func instructions(c Caller) string {
 // allTools are every tool, in the order they are listed.
 var allTools = sync.OnceValue(func() []tool {
 	var out []tool
-	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools(), labelTools(), queueTools(), reportTools(), adminTools(), eventTools()} {
+	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools(), labelTools(), queueTools(), reportTools(), adminTools(), eventTools(), credentialTools()} {
 		out = append(out, group...)
 	}
 	return out
