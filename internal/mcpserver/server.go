@@ -114,6 +114,7 @@ type env struct {
 	api     Backend
 	changes *changeLimiter
 	version string
+	cache   cache
 }
 
 // call asks the API: in, if not nil, is sent as JSON, and a successful
@@ -194,7 +195,7 @@ func instructions(c Caller) string {
 // allTools are every tool, in the order they are listed.
 var allTools = sync.OnceValue(func() []tool {
 	var out []tool
-	for _, group := range [][]tool{basicTools()} {
+	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools()} {
 		out = append(out, group...)
 	}
 	return out

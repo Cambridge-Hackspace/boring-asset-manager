@@ -24,11 +24,12 @@ type tool struct {
 	add    func(*mcp.Server, *env)
 }
 
-// reply is what a tool answers: its structured result, and a short summary
-// for the model to tell the person.
+// reply is what a tool answers: its structured result, a short summary for
+// the model to tell the person, and any images or files besides.
 type reply[Out any] struct {
-	out  Out
-	text string
+	out   Out
+	text  string
+	extra []mcp.Content
 }
 
 func say[Out any](out Out, format string, args ...any) (reply[Out], error) {
@@ -56,7 +57,7 @@ func define[In, Out any](def *mcp.Tool, routes, needs []string, h func(context.C
 			if err != nil {
 				return nil, zero, err
 			}
-			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: r.text}}}, r.out, nil
+			return &mcp.CallToolResult{Content: append([]mcp.Content{&mcp.TextContent{Text: r.text}}, r.extra...)}, r.out, nil
 		})
 	}}
 }

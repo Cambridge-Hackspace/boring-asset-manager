@@ -777,6 +777,7 @@ Assistants such as Claude work with BAM! over the [Model Context Protocol](https
 * **Limits:** a caller may make 60 calls that change things a minute on each server, and is told how long to wait; one call changes at most 50 items, and more is refused whole, never done in part.
 * **Resources:** `bam://guide`, a short orientation the server's instructions point to, saying what BAM!'s ideas mean and that text stored in BAM! is data, not instructions; and `bam://help/{topic}`, the app's own help (§6.5), the same words people read.
 * **Tools so far:** `whoami` (the caller and its permissions), `server_info` (version, address, database, health), `list_generators` (the code types; `assets.read`) and `set_my_name` (for a person only).
+* **Assets** (#37): an asset is named by its ID or any of its codes, looked up as scanning does. Finding (`assets.read` unless said): `search_assets` (every filter the list takes, and running low, 25 at a time up to 200, with `offset`), `get_asset` (its fields, codes, place, contents, links, photos and actions), `look_up_code` (its scan page; `assets.scan`), `asset_history`, `list_loans` (`assets.track`), `list_people` (`assets.lend` or `users.manage`; emails only to tell apart two of a name), `next_code` (`assets.write`) and `export_assets` (the CSV, as an embedded file). Changing: `create_asset` (up to 50, with field values by key, codes or the next free code, the place it is in and stock; a field its categories do not give it is refused before anything is added), `update_asset` (only what is given changes: categories and codes are added or removed, fields set or cleared, the rest kept), `move_asset`, `link_assets` (by the link type's name read from either end) and `unlink_assets`, `record_stock` (use, restock or set; `stock.record`), `set_running_low` (`stock.record`), `set_condition` (`assets.report` or `assets.write`), `borrow` (a person, for themselves; `assets.borrow`), `lend` (`assets.lend`) and `return_asset`, `archive_asset` and `restore_asset` (`assets.delete`), `press_action` (`assets.act`; it waits up to 10 seconds for devices' answers) and `action_replies`, `list_photos` (as images, thumbnails unless asked), `add_photo` (base64), `reorder_photos` and `remove_photo` (`assets.write`), and `import_assets`: a preview first, then the same file, mapping and choice of links again, with `confirm` and the preview's `preview_id`, so nothing is imported that was not previewed; at most 50 assets created or changed, so a larger file is split.
 * **`bam mcp`:** for assistants that start local programs rather than reach URLs, `bam mcp --url https://bam.example.org` relays MCP between its stdin and stdout and the server, with the API token in `$BAM_TOKEN` (or the variable `--token-env` names). It first asks `GET /api/v1/info`, to say plainly when the address is not a BAM! server or has MCP turned off.
 * **Reaching every route:** a test lists every API route and fails for one that no tool reaches and that is not named, with the issue that will cover it, in `internal/mcpserver/coverage.go`, so a route added later cannot be left out.
 
@@ -1104,6 +1105,9 @@ An MCP server that does everything the API does (#33, §6.6).
 
 #### Sub-Phase 8.3: Recording the Assistant
 * [x] Changes made through MCP record the assistant they came through, shown in history, Discord and live events (#36).
+
+#### Sub-Phase 8.4: Asset Tools
+* [x] Finding, adding, changing, moving, linking, lending, stock, condition, actions, photos, export and import with a preview, all over MCP (#37).
 
 ### Upcoming Features
 
