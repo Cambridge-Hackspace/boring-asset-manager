@@ -2,7 +2,8 @@
   import { untrack } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { DriverInfo, Printer, PrinterConnection } from '../../lib/models';
+  import type { DriverInfo, LabelStock, Printer, PrinterConnection } from '../../lib/models';
+  import { describeStock, stockFor } from '../../lib/stock';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Creates a printer, or edits one when printer is given. The form is
@@ -10,9 +11,10 @@
   let {
     printer,
     drivers,
+    stock = [],
     onsaved,
     oncancel,
-  }: { printer?: Printer; drivers: DriverInfo[]; onsaved: () => void; oncancel: () => void } = $props();
+  }: { printer?: Printer; drivers: DriverInfo[]; stock?: LabelStock[]; onsaved: () => void; oncancel: () => void } = $props();
 
   const connectionHelp: Record<PrinterConnection['type'], string> = {
     tcp: 'host or host:port (port 9100 if omitted): a network printer, or a print server such as p910nd.',
@@ -36,12 +38,15 @@
   let busy = $state(false);
 
   const info = $derived(drivers.find((d) => d.driver === driver));
+  // Custom stock this model takes, if its driver takes any.
+  const customStock = $derived(stockFor(info, model, stock));
+  const customChosen = $derived(customStock.some((s) => s.id === media));
 
   // Keep model and media valid for the chosen driver.
   $effect(() => {
     if (!info) return;
     if (!info.models.includes(model)) model = info.models[0] ?? '';
-    if (!info.media.some((m) => m.id === media)) media = info.media[0]?.id ?? '';
+    if (!info.media.some((m) => m.id === media) && !customStock.some((s) => s.id === media)) media = info.media[0]?.id ?? '';
   });
 
   function optionPayload(): Record<string, unknown> | null {
@@ -100,9 +105,27 @@
     </div>
     <div>
       <label class="label" for="{pid}-media">Loaded media</label>
-      <select id="{pid}-media" class="input" bind:value={media}>
-        {#each info?.media ?? [] as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+      <select id="{pid}-media" class="input" aria-describedby="{pid}-media-help" bind:value={media}>
+        {#if customStock.length}
+          <optgroup label="Built-in rolls">
+            {#each info?.media ?? [] as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+          </optgroup>
+          <optgroup label="Custom stock">
+            {#each customStock as s (s.id)}<option value={s.id}>{s.name} ({describeStock(s)})</option>{/each}
+          </optgroup>
+        {:else}
+          {#each info?.media ?? [] as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+        {/if}
       </select>
+      <p id="{pid}-media-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        {#if !info?.custom_stock}
+          This driver takes only its own rolls.
+        {:else if customChosen && info.custom_stock.note}
+          {info.custom_stock.note}
+        {:else}
+          Or custom stock up to {info.custom_stock.max_width_mm[model] ?? '?'} mm wide, added under Label stock.
+        {/if}
+      </p>
     </div>
   </div>
 

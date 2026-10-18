@@ -53,6 +53,8 @@ func TestFit(t *testing.T) {
 	dk22210, _ := LookupMedia("dk-22210")
 	dk11201, _ := LookupMedia("dk-11201")
 	dk22205, _ := LookupMedia("dk-22205")
+	dk11207, _ := LookupMedia("dk-11207")
+	dk22214, _ := LookupMedia("dk-22214")
 
 	cases := []struct {
 		name          string
@@ -72,6 +74,8 @@ func TestFit(t *testing.T) {
 		{"continuous too long", dk22210, 29, 1100, 300, false, false},
 		{"wrong width", dk22205, 50, 29, 300, false, false},
 		{"wrong dpi", dk22210, 29, 50, 203, false, false},
+		{"round", dk11207, 58, 58, 300, false, true},
+		{"narrow tape", dk22214, 12, 40, 300, false, true},
 	}
 	for _, c := range cases {
 		p, err := c.media.Fit(c.width, c.height, c.dpi)
@@ -84,6 +88,42 @@ func TestFit(t *testing.T) {
 		}
 		if err == nil && p.Rotate != c.rotate {
 			t.Errorf("%s: rotate = %v, want %v", c.name, p.Rotate, c.rotate)
+		}
+	}
+}
+
+// TestCatalogFillsTheHead checks the catalog against the column of Brother's
+// pin tables (Raster Command Reference, section 2.3.5) it does not store:
+// the pins left of the tape. With the printable and right-hand pins, they
+// must make up the 720 pins of the head.
+func TestCatalogFillsTheHead(t *testing.T) {
+	left := map[string]int{
+		"dk-22214": 585, "dk-22210": 408, "dk-22225": 295, "dk-22223": 154, "dk-n55224": 130, "dk-22205": 12,
+		"dk-11204": 555, "dk-11203": 555, "dk-11221": 442, "brother-29x42": 408, "dk-11201": 408,
+		"dk-11208": 295, "brother-39x48": 289, "brother-52x29": 142, "brother-54x29": 59, "brother-60x86": 24,
+		"brother-62x29": 12, "brother-62x60": 12, "brother-62x75": 12, "dk-11202": 12,
+		"dk-11219": 513, "dk-11218": 442, "dk-11207": 51,
+	}
+	if len(left) != len(MediaIDs()) {
+		t.Errorf("the catalog has %d rolls, the table %d", len(MediaIDs()), len(left))
+	}
+	for id, l := range left {
+		m, ok := LookupMedia(id)
+		if !ok {
+			t.Errorf("%s is missing", id)
+			continue
+		}
+		if sum := l + m.PrintableDots + m.RightMarginDots; sum != headPins {
+			t.Errorf("%s: %d + %d + %d pins = %d, not %d", id, l, m.PrintableDots, m.RightMarginDots, sum, headPins)
+		}
+		if m.DieCut() != (m.PrintableLines > 0) || m.DieCut() == (m.FeedMarginDots > 0) {
+			t.Errorf("%s: die-cut %v with %d printable lines and a %d-dot feed", id, m.DieCut(), m.PrintableLines, m.FeedMarginDots)
+		}
+	}
+	// Printers saved before the catalog grew name these.
+	for _, id := range []string{"dk-22210", "dk-22205", "dk-11201"} {
+		if _, ok := LookupMedia(id); !ok {
+			t.Errorf("%s, which printers may already name, is missing", id)
 		}
 	}
 }

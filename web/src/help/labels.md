@@ -8,4 +8,6 @@
 
 On an asset's page, or for several assets ticked on the list, choose a template to download labels as SVG, PNG or PDF, or send them to a printer set up on the **Printers** page. **Images** holds logos and pictures for templates.
 
+Each printer has a roll loaded. Brother QL printers take Brother's own rolls, all of which are listed; TSPL printers such as the Rollo, and DYMO LabelWriters, also take rolls of any size, added under **Label stock** on the **Printers** page with their width, and for die-cut labels their length and the gap between them.
+
 To gather labels over time and print them together, sorted onto several printers, use the [spool](/help/spool).

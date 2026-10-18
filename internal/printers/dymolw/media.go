@@ -105,6 +105,11 @@ type Media struct {
 // DieCut reports whether the roll holds pre-cut labels.
 func (m Media) DieCut() bool { return m.LengthMM > 0 }
 
+// CustomMedia is a roll known only by its label size, for custom stock.
+func CustomMedia(id, name string, widthMM, lengthMM float64) Media {
+	return media(id, name, widthMM, lengthMM)
+}
+
 // media builds a roll from its nominal label size.
 func media(id, name string, widthMM, lengthMM float64) Media {
 	return Media{ID: id, Name: name, WidthMM: widthMM, LengthMM: lengthMM,
@@ -158,8 +163,26 @@ func (mo Model) Suits(m Media) error {
 	if m.WidthMM > 70 && mo.HeadDots < wideHead {
 		return fmt.Errorf("%s labels need an extra-wide model such as the 4XL or 5XL", m.Name)
 	}
+	if m.WidthMM > mo.MaxLabelMM() {
+		return fmt.Errorf("%s labels are wider than the %s takes (%.0f mm)", m.Name, mo.Name, mo.MaxLabelMM())
+	}
 	return nil
 }
+
+// MaxLabelMM is the widest roll the model takes: a few millimeters wider
+// than its head, as DYMO's own 59 mm labels on a 56 mm head are.
+func (mo Model) MaxLabelMM() float64 {
+	if mo.HeadDots < wideHead {
+		return 70
+	}
+	return float64(wideHead)/DPI*25.4 + 4
+}
+
+// Continuous labels must be between these lengths, in millimeters.
+var (
+	MinContinuousMM = float64(minContinuousLines) / DPI * 25.4
+	MaxContinuousMM = float64(maxContinuousLines) / DPI * 25.4
+)
 
 // ErrDoesNotFit is wrapped by every fit check failure.
 var ErrDoesNotFit = errors.New("template does not fit the loaded media")

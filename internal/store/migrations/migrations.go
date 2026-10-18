@@ -80,6 +80,24 @@ type codeMigration struct {
 
 var codeMigrations = []codeMigration{
 	{8, "mariadb_text", convertMariaDBText},
+	{29, "printer_media_width", widenPrinterMedia},
+}
+
+// widenPrinterMedia makes printers.media wide enough for a custom label
+// stock's ID (migration 028), a UUID, where it held only the short IDs of
+// drivers' built-in rolls. SQLite does not enforce the width.
+func widenPrinterMedia(db *sql.DB, dialect, collation string) error {
+	var stmt string
+	switch dialect {
+	case "postgres":
+		stmt = `ALTER TABLE printers ALTER COLUMN media TYPE VARCHAR(64)`
+	case "mariadb", "mysql":
+		stmt = `ALTER TABLE printers MODIFY COLUMN media VARCHAR(64) CHARACTER SET utf8mb4 COLLATE ` + collation + ` NOT NULL`
+	default:
+		return nil
+	}
+	_, err := db.Exec(stmt)
+	return err
 }
 
 // convertMariaDBText brings tables created before adaptDDL set their

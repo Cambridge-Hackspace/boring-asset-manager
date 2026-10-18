@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"math"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
@@ -44,6 +45,16 @@ func (dymoLabelWriter) Info() DriverInfo {
 		m, _ := dymolw.LookupMedia(id)
 		info.Media = append(info.Media, MediaInfo{ID: m.ID, Name: m.Name, WidthMM: m.WidthMM, LengthMM: m.LengthMM, DieCut: m.DieCut()})
 	}
+	custom := &CustomStockInfo{
+		MaxWidthMM:  map[string]float64{},
+		MinLengthMM: math.Ceil(dymolw.MinContinuousMM), MaxLengthMM: math.Floor(dymolw.MaxContinuousMM),
+		Note: "The 550 series, the 5XL and the LabelWriter Wireless print only on genuine DYMO labels they can identify.",
+	}
+	for _, name := range dymolw.Models() {
+		m, _ := dymolw.LookupModel(name)
+		custom.MaxWidthMM[name] = math.Floor(m.MaxLabelMM()*10) / 10
+	}
+	info.CustomStock = custom
 	return info
 }
 
@@ -94,8 +105,13 @@ func (d dymoLabelWriter) settings(s Settings) (dymolw.Model, dymolw.Media, dymol
 		return model, dymolw.Media{}, dymolw.JobOptions{}, fmt.Errorf("model must be one of %s", strings.Join(dymolw.Models(), ", "))
 	}
 	media, ok := dymolw.LookupMedia(s.Media)
+	if s.Stock != nil {
+		// The label size is all the first-generation printers are told; the
+		// others identify genuine DYMO rolls and refuse the rest themselves.
+		media, ok = dymolw.CustomMedia(s.Stock.ID, s.Stock.Name, s.Stock.WidthMM, s.Stock.LengthMM), true
+	}
 	if !ok {
-		return model, media, dymolw.JobOptions{}, fmt.Errorf("media must be one of %s", strings.Join(dymolw.MediaIDs(), ", "))
+		return model, media, dymolw.JobOptions{}, fmt.Errorf("media must be one of %s, or custom stock", strings.Join(dymolw.MediaIDs(), ", "))
 	}
 	if err := model.Suits(media); err != nil {
 		return model, media, dymolw.JobOptions{}, err

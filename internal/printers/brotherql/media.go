@@ -54,10 +54,49 @@ type Media struct {
 // DieCut reports whether the roll holds pre-cut labels.
 func (m Media) DieCut() bool { return m.LengthMM > 0 }
 
-var catalog = map[string]Media{
-	"dk-22210": {ID: "dk-22210", Name: "DK-22210 29 mm continuous", WidthMM: 29, PrintableDots: 306, RightMarginDots: 6, FeedMarginDots: 35},
-	"dk-22205": {ID: "dk-22205", Name: "DK-22205 62 mm continuous", WidthMM: 62, PrintableDots: 696, RightMarginDots: 12, FeedMarginDots: 35},
-	"dk-11201": {ID: "dk-11201", Name: "DK-11201 29 × 90 mm die-cut", WidthMM: 29, LengthMM: 90, PrintableDots: 306, RightMarginDots: 6, PrintableLines: 991},
+// catalog is every roll the QL-800 series takes, from Brother's Software
+// Developer's Manual, Raster Command Reference QL-800/810W/820NWB, version
+// 1.01: section 2.3.2 (page size) for the printable lines, and section
+// 2.3.5's tables of pins for the printable dots and the pins beside the
+// tape. Sizes are Brother's nominal ones, which the printer is also sent.
+// Part numbers are given where Brother sells the roll under one.
+var catalog = map[string]Media{}
+
+func init() {
+	continuous := func(id, name string, width float64, printable, right int) Media {
+		return Media{ID: id, Name: name, WidthMM: width, PrintableDots: printable, RightMarginDots: right, FeedMarginDots: 35}
+	}
+	dieCut := func(id, name string, width, length float64, printable, right, lines int) Media {
+		return Media{ID: id, Name: name, WidthMM: width, LengthMM: length, PrintableDots: printable, RightMarginDots: right, PrintableLines: lines}
+	}
+	for _, m := range []Media{
+		continuous("dk-22214", "DK-22214 12 mm continuous", 12, 106, 29),
+		continuous("dk-22210", "DK-22210 29 mm continuous", 29, 306, 6),
+		continuous("dk-22225", "DK-22225 38 mm continuous", 38, 413, 12),
+		continuous("dk-22223", "DK-22223 50 mm continuous", 50, 554, 12),
+		continuous("dk-n55224", "DK-N55224 54 mm continuous", 54, 590, 0),
+		continuous("dk-22205", "DK-22205 62 mm continuous", 62, 696, 12),
+
+		dieCut("dk-11204", "DK-11204 17 × 54 mm die-cut", 17, 54, 165, 0, 566),
+		dieCut("dk-11203", "DK-11203 17 × 87 mm die-cut", 17, 87, 165, 0, 956),
+		dieCut("dk-11221", "DK-11221 23 × 23 mm die-cut", 23, 23, 236, 42, 202),
+		dieCut("brother-29x42", "29 × 42 mm die-cut", 29, 42, 306, 6, 425),
+		dieCut("dk-11201", "DK-11201 29 × 90 mm die-cut", 29, 90, 306, 6, 991),
+		dieCut("dk-11208", "DK-11208 38 × 90 mm die-cut", 38, 90, 413, 12, 991),
+		dieCut("brother-39x48", "39 × 48 mm die-cut", 39, 48, 425, 6, 495),
+		dieCut("brother-52x29", "52 × 29 mm die-cut", 52, 29, 578, 0, 271),
+		dieCut("brother-54x29", "54 × 29 mm die-cut", 54, 29, 602, 59, 271),
+		dieCut("brother-60x86", "60 × 86 mm die-cut", 60, 86, 672, 24, 954),
+		dieCut("brother-62x29", "62 × 29 mm die-cut", 62, 29, 696, 12, 271),
+		dieCut("brother-62x60", "62 × 60 mm die-cut", 62, 60, 696, 12, 645),
+		dieCut("brother-62x75", "62 × 75 mm die-cut", 62, 75, 696, 12, 820),
+		dieCut("dk-11202", "DK-11202 62 × 100 mm die-cut", 62, 100, 696, 12, 1109),
+		dieCut("dk-11219", "DK-11219 12 mm round", 12, 12, 94, 113, 94),
+		dieCut("dk-11218", "DK-11218 24 mm round", 24, 24, 236, 42, 236),
+		dieCut("dk-11207", "DK-11207 58 mm round", 58, 58, 618, 51, 618),
+	} {
+		catalog[m.ID] = m
+	}
 }
 
 // LookupMedia returns a roll by ID.

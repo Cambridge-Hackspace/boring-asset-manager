@@ -511,7 +511,9 @@ type Plan interface {
 }
 ```
 
-The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` for the printer's connection (see Delivery below). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models (and each model's DPI), media and options.
+The print endpoint only renders labels, asks the printer's driver to plan and encode them, and hands the job to a `Transport` for the printer's connection (see Delivery below). Adding a printer family means registering a driver; the API does not change. `GET /api/v1/printers/drivers` lists every registered driver with its models (and each model's DPI), media and options, and for drivers that take custom stock, how wide each model's labels may be and how long continuous ones (`custom_stock`).
+
+* **Custom label stock** (migrations `028` and `029`, which widens `printers.media` to hold its ID): a roll known by its size alone, a name, width, and the length of die-cut labels with the gap between them (none for a continuous roll), managed with the printers through `/api/v1/label-stock` (`settings.manage`; listed to those who may see printers, with the printers that have each loaded). A printer's `media` names either one of its driver's built-in rolls or custom stock by ID; printers answer with the stock (`stock`) and a description of whatever is loaded (`loaded`), so clients need not look either up. Drivers take custom stock only where a size is all the printer needs: TSPL printers and DYMO LabelWriters do, up to their head's width; Brother QL printers, which identify the DK roll loaded and need Brother's figures to place a label on it, take only their built-in rolls. Changing stock checks every printer with it loaded, and is refused, naming the printer, if one would no longer take it; stock loaded in a printer cannot be deleted (`409`).
 
 Three drivers ship today: `brother_ql`, `dymo_labelwriter` and `tspl`. Option values are listed by the drivers endpoint, and unknown options are refused.
 
@@ -519,7 +521,7 @@ Three drivers ship today: `brother_ql`, `dymo_labelwriter` and `tspl`. Option va
 
 For the QL-810W and QL-820NWB. Its only option is `cut` (default `true`): cut each label off as it finishes, or let the tape feed on uncut.
 
-* **Media catalog:** each supported roll records its width, whether it is die-cut (and if so its label length), its printable width in head dots and how many pins sit beside the tape. Phase 3 covers DK-22210 (29 mm continuous), DK-22205 (62 mm continuous) and DK-11201 (29 × 90 mm die-cut). Two-color black/red media (DK-22251) is out of scope.
+* **Media catalog:** each supported roll records its width, whether it is die-cut (and if so its label length), its printable width in head dots and how many pins sit beside the tape. It covers every roll the QL-800 series takes, with the figures from Brother's *Raster Command Reference QL-800/810W/820NWB* (version 1.01, sections 2.3.2 and 2.3.5): continuous tape 12, 29, 38, 50, 54 and 62 mm wide; die-cut labels 17 × 54, 17 × 87, 23 × 23, 29 × 42, 29 × 90, 38 × 90, 39 × 48, 52 × 29, 54 × 29, 60 × 86, 62 × 29, 62 × 60, 62 × 75 and 62 × 100 mm; and round labels 12, 24 and 58 mm across. Rolls are named by their DK part number where Brother sells them under one. Two-color black/red media (DK-22251) is out of scope.
 * **Fit check:** before any asset is laid out, the template must suit the loaded media, or the request fails with `422`. Its DPI must be 300 and one side must be the tape width (±0.5 mm). A template whose height is the tape width is rotated 90° counterclockwise. On die-cut media the other side must be the label length; continuous labels must be 25–1000 mm long.
 * **Printable area:** the printer cannot reach the tape edges, so the rendered label is cropped to the printable area around its center: 306 of the 343 dots across 29 mm tape (about 1.5 mm lost on each side), 696 across 62 mm, and on DK-11201 991 of 1063 dots along the label (about 3 mm at each end). Keep elements clear of those margins.
 * **Raster stream:** each label is rendered 1-bit at 300 DPI and encoded as described in Brother's QL-800 series raster command reference: invalidate, initialize, then per label raster mode, print information, auto-cut, margins and TIFF compression, PackBits-compressed raster lines (90 bytes for each line of the 720-pin head, mirrored because the first pin sits at the right of the tape) and a print command. With `cut` on, every label is cut off as it finishes.
@@ -543,7 +545,7 @@ For printers that speak TSPL, the label language of TSC printers that many inexp
 
 Options: `density` (0–15; unset keeps the printer's own setting) and `rotate_180` (default `false`) to print labels the other way up.
 
-* **Media catalog:** these printers take any label size up to their head width, so the catalog lists common sizes rather than part numbers: 4 × 6, 4 × 4, 4 × 3, 4 × 2, 3 × 2, 3 × 1, 2.25 × 1.25, 2 × 1, 1.5 × 1 and 1 × 1 in die-cut labels with a 1/8 in gap, and 4 in and 2 in continuous.
+* **Media catalog:** these printers take any label size up to their head width, so the catalog lists common sizes rather than part numbers: 4 × 6, 4 × 4, 4 × 3, 4 × 2, 3 × 2, 3 × 1, 2.25 × 1.25, 2 × 1, 1.5 × 1 and 1 × 1 in die-cut labels with a 1/8 in gap, and 4 in and 2 in continuous. Any other size is added as custom stock.
 * **Fit check:** the template's DPI must match the model (203 for the Rollo), one side must be the label width (±0.5 mm) and, on die-cut rolls, the other the label length; continuous labels must be 10–1000 mm. A template whose height is the label width is rotated 90° counterclockwise.
 * **Program:** `SIZE`, `GAP`, `DIRECTION`, `REFERENCE` and optionally `DENSITY`, then for each distinct label `CLS`, one `BITMAP` holding the whole label (a 0 bit prints a dot) centered across the label, and `PRINT 1,n` with `n` the copies. None of the printer's own fonts or barcode commands are used, so output matches the SVG and PDF exports.
 * **Connection:** the X1038 has only a USB port (see Delivery); the X1040 is reached over the network.
@@ -1031,6 +1033,13 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Actions on assets, such as Identify, offered by categories with cascading, pressed from asset and scan pages, and recorded with what a device needs to find the thing (§5.4).
 * [x] Live connections devices open with an API token, sent the events they may see across servers sharing a database, with answers to actions (§5.4).
 * [x] An MQTT notifier, with user names and passwords, TLS with a CA of its own, and client certificates (§5.2).
+
+#### Sub-Phase 7.24: Label Stock and Adaptive Templates
+* [x] Custom label stock for printers that take any size, and every roll the Brother QL-800 series takes (§4.4).
+* [ ] One fit check for every driver, with warnings as well as refusals.
+* [ ] Warnings when a printer's roll changes, and which printers each template suits.
+* [ ] Several label templates per category, by preference.
+* [ ] Templates that adapt to the label and printer they print on, with limits on their elements.
 
 ### Upcoming Features
 

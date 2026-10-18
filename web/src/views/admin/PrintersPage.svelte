@@ -2,17 +2,19 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { AssetWithDetails, DriverInfo, Printer, TemplateSummary } from '../../lib/models';
+  import type { AssetWithDetails, DriverInfo, LabelStock, Printer, TemplateSummary } from '../../lib/models';
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PrinterForm from './PrinterForm.svelte';
   import PoolsSection from './PoolsSection.svelte';
+  import StockSection from './StockSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let printers = $state<Printer[]>([]);
   let drivers = $state<DriverInfo[]>([]);
+  let stock = $state<LabelStock[]>([]);
   let loading = $state(true);
   let error = $state('');
   let editing = $state<string | null>(null);
@@ -31,9 +33,10 @@
 
   async function load() {
     try {
-      [printers, drivers] = await Promise.all([
+      [printers, drivers, stock] = await Promise.all([
         request<{ printers: Printer[] }>('GET', '/printers').then((r) => r.printers ?? []),
         request<{ drivers: DriverInfo[] }>('GET', '/printers/drivers').then((r) => r.drivers ?? []),
+        request<{ stock: LabelStock[] }>('GET', '/label-stock').then((r) => r.stock ?? []),
       ]);
     } catch (err) {
       error = messageOf(err);
@@ -102,7 +105,7 @@
 <ErrorMessage {error} />
 
 {#if editing === 'new'}
-  <div class="mb-4"><PrinterForm {drivers} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} /></div>
+  <div class="mb-4"><PrinterForm {drivers} {stock} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} /></div>
 {/if}
 
 {#if loading}
@@ -114,13 +117,13 @@
     {#each printers as p (p.id)}
       <li>
         {#if editing === p.id}
-          <PrinterForm printer={p} {drivers} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} />
+          <PrinterForm printer={p} {drivers} {stock} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} />
         {:else}
           <article class="card space-y-3" aria-labelledby="printer-{p.id}">
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 id="printer-{p.id}" class="font-semibold">{p.name}</h2>
-                <p class="text-sm text-zinc-600 dark:text-zinc-400">{p.model} ({p.driver}), {p.media}</p>
+                <p class="text-sm text-zinc-600 dark:text-zinc-400">{p.model} ({p.driver}), {p.loaded?.name ?? p.media}</p>
                 <p class="font-mono text-xs text-zinc-600 dark:text-zinc-400">{connLabel(p)}</p>
               </div>
               <div class="flex flex-wrap gap-2">
@@ -168,4 +171,7 @@
   </ul>
 {/if}
 
-{#if !loading}<PoolsSection {printers} />{/if}
+{#if !loading}
+  <PoolsSection {printers} />
+  <StockSection {stock} onchange={load} />
+{/if}
