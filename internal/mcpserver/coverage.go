@@ -14,8 +14,9 @@ var Uncovered = map[string]string{
 	"GET /api/v1/auth/tokens":         "#43",
 	"POST /api/v1/auth/tokens":        "#43",
 	"DELETE /api/v1/auth/tokens/{id}": "#43",
-	"GET /api/v1/events/live":         "#42",
 }
 
 // Refused lists the API routes deliberately out of reach over MCP, and why.
-var Refused = map[string]string{}
+var Refused = map[string]string{
+	"GET /api/v1/events/live": "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
+}

@@ -771,10 +771,12 @@ type LiveConnection struct {
 // ActionReply is a device's answer to an action pressed: done or failed,
 // with a message, and who answered as they were named then.
 type ActionReply struct {
-	ID        string    `json:"id"`
-	EventID   string    `json:"event_id"`
-	Name      string    `json:"name"`
-	Token     bool      `json:"token"`
+	ID      string `json:"id"`
+	EventID string `json:"event_id"`
+	Name    string `json:"name"`
+	Token   bool   `json:"token"`
+	// ReplierID is the token or user that answered, so each answers once.
+	ReplierID string    `json:"-"`
 	OK        bool      `json:"ok"`
 	Message   string    `json:"message"`
 	CreatedAt time.Time `json:"created_at"`

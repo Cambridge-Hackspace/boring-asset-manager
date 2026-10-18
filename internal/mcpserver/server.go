@@ -5,13 +5,16 @@
 package mcpserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -95,6 +98,7 @@ type envKey struct{}
 func Handler(o Options) http.Handler {
 	cache := mcp.NewSchemaCache()
 	changes := newChangeLimiter()
+	subs := newSubscriptions()
 	stream := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		e, _ := r.Context().Value(envKey{}).(*env)
 		if e == nil {
@@ -114,8 +118,17 @@ func Handler(o Options) http.Handler {
 		if !ok {
 			return
 		}
-		e := &env{caller: caller, api: api, changes: changes, version: o.Version}
-		stream.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), envKey{}, e)))
+		ctx, cancel := context.WithCancel(r.Context())
+		defer cancel()
+		if listening(r) {
+			// A subscription is a request kept open; the server's timeouts
+			// would end it.
+			rc := http.NewResponseController(w)
+			_ = rc.SetWriteDeadline(time.Time{})
+			_ = rc.SetReadDeadline(time.Time{})
+		}
+		e := &env{caller: caller, api: api, changes: changes, subs: subs, cancel: cancel, version: o.Version}
+		stream.ServeHTTP(w, r.WithContext(context.WithValue(ctx, envKey{}, e)))
 	})
 }
 
@@ -126,6 +139,26 @@ type env struct {
 	changes *changeLimiter
 	version string
 	cache   cache
+	subs    *subscriptions
+	// cancel ends the request, as when a subscription's caller is revoked.
+	cancel context.CancelFunc
+}
+
+// listening reports whether a request opens a subscription: a JSON-RPC
+// subscriptions/listen. Its body is read and put back.
+func listening(r *http.Request) bool {
+	if r.Method != http.MethodPost || r.Body == nil {
+		return false
+	}
+	body, err := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if err != nil {
+		return false
+	}
+	var msg struct {
+		Method string `json:"method"`
+	}
+	return json.Unmarshal(body, &msg) == nil && msg.Method == "subscriptions/listen"
 }
 
 // call asks the API: in, if not nil, is sent as JSON, and a successful
@@ -176,12 +209,16 @@ func apiError(res Response) error {
 
 // newServer is a server holding the tools the caller may use.
 func newServer(e *env, cache *mcp.SchemaCache, tools []tool) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "bam", Title: "BAM! (Boring Asset Manager)", Version: e.version}, &mcp.ServerOptions{
+	var s *mcp.Server
+	s = mcp.NewServer(&mcp.Implementation{Name: "bam", Title: "BAM! (Boring Asset Manager)", Version: e.version}, &mcp.ServerOptions{
 		Instructions: instructions(e.caller),
 		SchemaCache:  cache,
-		// Stateless: there is no session to tell of changes. The lists are
-		// made afresh for every request instead.
-		Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{}},
+		// Stateless: there is no session to tell of changed lists. They are
+		// made afresh for every request instead. Resources can be
+		// subscribed to, on a request kept open for it.
+		Capabilities:       &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{Subscribe: true}},
+		SubscribeHandler:   func(ctx context.Context, req *mcp.SubscribeRequest) error { return e.subscribe(s)(ctx, req) },
+		UnsubscribeHandler: func(context.Context, *mcp.UnsubscribeRequest) error { return nil },
 	})
 	for _, t := range tools {
 		if t.person && e.caller.Kind != "person" {
@@ -192,6 +229,7 @@ func newServer(e *env, cache *mcp.SchemaCache, tools []tool) *mcp.Server {
 		}
 	}
 	addResources(s)
+	addEventResources(s, e)
 	return s
 }
 
@@ -206,7 +244,7 @@ func instructions(c Caller) string {
 // allTools are every tool, in the order they are listed.
 var allTools = sync.OnceValue(func() []tool {
 	var out []tool
-	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools(), labelTools(), queueTools(), reportTools(), adminTools()} {
+	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools(), labelTools(), queueTools(), reportTools(), adminTools(), eventTools()} {
 		out = append(out, group...)
 	}
 	return out
