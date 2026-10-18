@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -123,5 +124,45 @@ func TestOldConfigWithSessionSecretStillLoads(t *testing.T) {
 	}
 	if cfg.Server.Port != 9090 {
 		t.Errorf("port = %d, want 9090", cfg.Server.Port)
+	}
+}
+
+func TestMCPSetting(t *testing.T) {
+	dir := t.TempDir()
+	load := func(toml string) (*Config, error) {
+		path := filepath.Join(dir, "config.toml")
+		if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+
+	// A file from before the setting existed keeps the endpoint on.
+	cfg, err := load("[server]\nport = 8080\n")
+	if err != nil || !cfg.MCP.Enabled {
+		t.Fatalf("older file: %v %+v", err, cfg)
+	}
+	if cfg, err = load("[mcp]\nenabled = false\n"); err != nil || cfg.MCP.Enabled {
+		t.Errorf("turned off: %v %+v", err, cfg.MCP)
+	}
+
+	for v, want := range map[string]bool{"false": false, "off": false, "0": false, "TRUE": true, "on": true} {
+		t.Setenv("BAM_MCP_ENABLED", v)
+		if cfg, err = load(""); err != nil || cfg.MCP.Enabled != want {
+			t.Errorf("BAM_MCP_ENABLED=%s: %v %v", v, err, cfg)
+		}
+	}
+	t.Setenv("BAM_MCP_ENABLED", "nope")
+	if _, err = load(""); err == nil {
+		t.Error("BAM_MCP_ENABLED=nope was accepted")
+	}
+
+	// bam init writes the table out, so people see it.
+	path := filepath.Join(dir, "written.toml")
+	if err := DefaultConfig().SaveTOML(path); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "[mcp]") || !strings.Contains(string(data), "enabled = true") {
+		t.Errorf("written config:\n%s", data)
 	}
 }

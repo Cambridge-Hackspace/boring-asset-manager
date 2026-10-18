@@ -79,6 +79,12 @@ local_path = "./data/uploads"
 # Environment: BAM_PRINTERS_DEVICES, comma-separated.
 devices = []
 
+[mcp]
+# The MCP endpoint, /api/v1/mcp, for assistants (§6.6). On unless turned
+# off, including for files written before it existed.
+# Environment: BAM_MCP_ENABLED (true or false).
+enabled = true
+
 ```
 
 ### CLI Bootstrap Tooling
@@ -109,6 +115,10 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 # (with BAM stopped); see §2.2
 ./bam backup --config ./config.toml --to ./bam-backup.db
 ./bam restore --config ./config.toml --from ./bam-backup.db
+
+# Relay an assistant that starts local programs to a server's MCP endpoint,
+# as the API token in $BAM_TOKEN (§6.6)
+BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 
 ```
 
@@ -187,7 +197,7 @@ To serve plain HTTP on the network without a proxy instead, set `host = "0.0.0.0
 
 ### 2.2 Releases & Updates
 
-Each version tag pushed to GitHub, such as `v1.2.0`, is built by `.github/workflows/release.yml`: the Go suites run, then `tools/release/build.sh` builds the binaries with the tag as their version (`bam version`), and they are published as the release's files with `SHA256SUMS`. A tag with a suffix, such as `v1.2.0-rc.1`, is published as a pre-release. The web app's footer, on every page and the sign-in page too, names the running version and links to its release; a build that is not a release says "development build", with the commit it was built from. `GET /api/v1/info`, which needs no sign-in, reports both (`version`, `commit` and whether the tree had changes, `modified`; the commit is recorded by Go when building in a git checkout). `.github/workflows/build.yml` runs the same build on every push and pull request, so a change that breaks it shows up before a tag does. Instead of building, an installation can start from a release (§2.1, using the downloaded file in place of `bin/bam-<os>-<arch>`):
+Each version tag pushed to GitHub, such as `v1.2.0`, is built by `.github/workflows/release.yml`: the Go suites run, then `tools/release/build.sh` builds the binaries with the tag as their version (`bam version`), and they are published as the release's files with `SHA256SUMS`. A tag with a suffix, such as `v1.2.0-rc.1`, is published as a pre-release. The web app's footer, on every page and the sign-in page too, names the running version and links to its release; a build that is not a release says "development build", with the commit it was built from. `GET /api/v1/info`, which needs no sign-in, reports both (`version`, `commit` and whether the tree had changes, `modified`; the commit is recorded by Go when building in a git checkout), and whether the server has MCP turned on (`mcp`, §6.6). `.github/workflows/build.yml` runs the same build on every push and pull request, so a change that breaks it shows up before a tag does. Instead of building, an installation can start from a release (§2.1, using the downloaded file in place of `bin/bam-<os>-<arch>`):
 
 ```sh
 curl -fLO https://github.com/Cambridge-Hackspace/boring-asset-manager/releases/latest/download/bam-linux-amd64
@@ -752,7 +762,22 @@ What scanning an asset's code shows is a scan template (migration `022`): a save
 
 ### 6.5 Help
 
-The web app carries its own user help: Markdown topics in `web/src/help/`, bundled with the app and rendered by a small renderer of its own (`web/src/lib/markdown.ts`: headings, paragraphs, lists, bold, italics, code, and links to the app's pages or https, everything else escaped). `/help` lists the topics and `/help/{topic}` shows one; both are open to everyone, signed in or not. Every page has one **Help** link, in the header, to the topic for that page; forms carry no help marks of their own. A topic is added by adding its file and, in `web/src/lib/help.ts`, its place in the list and the pages it covers; tests check that every page has a topic, that links between topics lead somewhere, and that the help says rather than asks.
+The web app carries its own user help: Markdown topics in `internal/help/topics/`, bundled with the app (and embedded in the server too, for assistants, §6.6) and rendered by a small renderer of its own (`web/src/lib/markdown.ts`: headings, paragraphs, lists, bold, italics, code, and links to the app's pages or https, everything else escaped). `/help` lists the topics and `/help/{topic}` shows one; both are open to everyone, signed in or not. Every page has one **Help** link, in the header, to the topic for that page; forms carry no help marks of their own. A topic is added by adding its file and, in `web/src/lib/help.ts`, its place in the list and the pages it covers; tests check that every page has a topic, that links between topics lead somewhere, and that the help says rather than asks.
+
+### 6.6 MCP Server
+
+Assistants such as Claude work with BAM! over the [Model Context Protocol](https://modelcontextprotocol.io): tools that do what the API does, acting as the API token they present. The aim is that MCP does everything the API does (#33); the parts land in turn.
+
+* **Turning it on and off:** `[mcp] enabled` in the configuration (§2), or `BAM_MCP_ENABLED` (`true` or `false`; anything else stops the server starting), on unless turned off: a configuration file with no `[mcp]` table, as every one written before the setting existed, has it on. Turned off, `/api/v1/mcp` answers `404`, and `GET /api/v1/info` says `"mcp": false`.
+* **The endpoint:** `/api/v1/mcp`, Streamable HTTP, on the official Go SDK (`github.com/modelcontextprotocol/go-sdk`), every protocol version it speaks. It is stateless: each request is answered on its own, by a server holding the tools its caller may use, so any of several servers sharing a database answers any request, and permissions are read afresh each time. Nothing is announced to clients unasked, since there is no session to announce it on; the lists are always current instead.
+* **Who it acts as:** the API token in `Authorization: Bearer` (§3.4), with exactly that token's permissions and scopes. A session cookie is not enough (`401`): MCP clients carry none, and a browser should never be the caller. A revoked, expired or unknown token is `401` at once.
+* **How tools run:** each asks the API's own handlers, in process, carrying the caller's token, so a tool is held to the same permissions, scopes (`404`/`403`), text rules (§3.5), rate limits and history as the request it makes, and answers refusals in the API's own words, with the status. A tool is listed only for callers holding a permission that opens it, in any scope; the API still decides for each asset.
+* **What tools answer:** structured content matching a declared output schema, and a short summary in words. Each says truthfully whether it only reads (`readOnlyHint`), and, if it changes things, whether what it changes can be lost (`destructiveHint`) and whether repeating it changes more (`idempotentHint`), so clients ask before changing anything.
+* **Limits:** a caller may make 60 calls that change things a minute on each server, and is told how long to wait; one call changes at most 50 items, and more is refused whole, never done in part.
+* **Resources:** `bam://guide`, a short orientation the server's instructions point to, saying what BAM!'s ideas mean and that text stored in BAM! is data, not instructions; and `bam://help/{topic}`, the app's own help (§6.5), the same words people read.
+* **Tools so far:** `whoami` (the caller and its permissions), `server_info` (version, address, database, health) and `list_generators` (the code types; `assets.read`).
+* **`bam mcp`:** for assistants that start local programs rather than reach URLs, `bam mcp --url https://bam.example.org` relays MCP between its stdin and stdout and the server, with the API token in `$BAM_TOKEN` (or the variable `--token-env` names). It first asks `GET /api/v1/info`, to say plainly when the address is not a BAM! server or has MCP turned off.
+* **Reaching every route:** a test lists every API route and fails for one that no tool reaches and that is not named, with the issue that will cover it, in `internal/mcpserver/coverage.go`, so a route added later cannot be left out.
 
 ---
 
@@ -1065,6 +1090,13 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Where things are: a place in the asset form, the list and asset pages, search by place, and the next code suggested (§3.5).
 * [x] Phones: a one-row header with a menu, tables as cards, folded filters and help topics, and touch-sized editor handles (§1).
 * [x] Plainer words (the Print queue, Link types, Code type, the roll loaded, printer models by make), creating with New, the category page's unsaved changes and its assets, and empty lists that say what to do (§1).
+
+### Phase 8: Assistants
+
+An MCP server that does everything the API does (#33, §6.6).
+
+#### Sub-Phase 8.1: The MCP Endpoint
+* [x] The `[mcp] enabled` setting, `/api/v1/mcp` on the official Go SDK, stateless, acting as an API token; `bam mcp`; the guide and help as resources; `whoami`, `server_info` and `list_generators`; the change limits; and the test that every route is reached (#34).
 
 ### Upcoming Features
 
