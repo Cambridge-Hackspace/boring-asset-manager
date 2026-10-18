@@ -29,6 +29,7 @@ import AccountPage from './views/AccountPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
 import SpoolPage from './views/SpoolPage.svelte';
 import ScanPage from './views/ScanPage.svelte';
+import ScanLookupPage from './views/ScanLookupPage.svelte';
 import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
 import ActionsPage from './views/ActionsPage.svelte';
@@ -53,6 +54,7 @@ export const routes: Route[] = [
   { pattern: '/assets/new', component: AssetForm, title: 'New asset', permissions: ['assets.write'] },
   { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets.write'] },
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'], public: true },
+  { pattern: '/scan', component: ScanLookupPage, title: 'Scan', permissions: ['assets.scan'], nav: 'Scan', public: true },
   { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },

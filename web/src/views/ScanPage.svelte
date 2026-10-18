@@ -2,13 +2,16 @@
   import { onMount, untrack } from 'svelte';
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
+  import { endOfDay } from '../lib/assets';
   import type { Condition, OfferedAction, ReportResult } from '../lib/models';
   import { scanActionLabel } from '../lib/scan';
   import { session } from '../lib/session.svelte';
   import AddToSpool from '../components/AddToSpool.svelte';
   import ActionButtons from '../components/ActionButtons.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
+  import ReportProblemForm from '../components/ReportProblemForm.svelte';
   import ScanResult from '../components/ScanResult.svelte';
+  import SignInToSee from '../components/SignInToSee.svelte';
 
   // /scan/:code: what scanning an asset's code shows (README §6.4), with the
   // quick actions its template offers that the viewer may take now. Signed
@@ -29,8 +32,8 @@
   let busy = $state(false);
   let amount = $state<number | null>(1);
   let reporting = $state(false);
-  let condition = $state<Condition>('needs_maintenance');
-  let note = $state('');
+  let due = $state('');
+  const today = new Date().toISOString().slice(0, 10);
 
   const path = $derived(scan ? `/assets/${encodeURIComponent(scan.asset.id)}` : '');
 
@@ -69,11 +72,19 @@
     void act(() => request('POST', `${path}/quantity`, { adjust: -n }), `Used ${n}${scan?.asset.unit ? ` ${scan.asset.unit}` : ''}.`);
   }
 
-  function report(event: SubmitEvent) {
-    event.preventDefault();
-    void act(() => request('PUT', `${path}/condition`, { condition, note }), 'Thank you; the problem is reported.');
+  // The form stays open, with what was typed, if the report fails.
+  async function report(condition: Condition, note: string) {
+    await request('PUT', `${path}/condition`, { condition, note });
     reporting = false;
-    note = '';
+    status = 'Thank you; the problem is reported.';
+    error = '';
+    await load();
+  }
+
+  function borrow() {
+    const body = due ? { due_at: endOfDay(due) } : undefined;
+    void act(() => request('POST', `${path}/checkout`, body), due ? `Borrowed, due back ${new Date(endOfDay(due)).toLocaleDateString()}.` : 'Borrowed.');
+    due = '';
   }
 </script>
 
@@ -101,11 +112,15 @@
                 <button type="submit" class="btn-primary" disabled={busy}>Use</button>
               </form>
             {:else if action === 'borrow'}
-              <button type="button" class="btn-primary" disabled={busy} onclick={() => act(() => request('POST', `${path}/checkout`), 'Borrowed; it is yours until you give it back.')}>
-                Borrow it
-              </button>
+              <div class="flex items-end gap-2">
+                <div>
+                  <label class="label" for="scan-due">Due back (optional)</label>
+                  <input id="scan-due" class="input" type="date" min={today} bind:value={due} />
+                </div>
+                <button type="button" class="btn-primary" disabled={busy} onclick={borrow}>Borrow</button>
+              </div>
             {:else if action === 'return'}
-              <button type="button" class="btn-primary" disabled={busy} onclick={() => act(() => request('POST', `${path}/checkin`), 'Given back.')}>Give it back</button>
+              <button type="button" class="btn-primary" disabled={busy} onclick={() => act(() => request('POST', `${path}/checkin`), 'Returned.')}>Return</button>
             {:else if action === 'actions' && scan!.asset.actions?.length}
               <ActionButtons assetId={scan!.asset.id} actions={scan!.asset.actions} />
             {:else if action === 'report'}
@@ -114,20 +129,7 @@
           {/each}
         </div>
         {#if reporting}
-          <form class="card mt-3 max-w-md space-y-3" onsubmit={report}>
-            <div>
-              <label class="label" for="scan-condition">What is wrong</label>
-              <select id="scan-condition" class="input" bind:value={condition}>
-                <option value="needs_maintenance">It needs maintenance</option>
-                <option value="out_of_service">It is out of service</option>
-              </select>
-            </div>
-            <div>
-              <label class="label" for="scan-note">Note (optional)</label>
-              <input id="scan-note" class="input" maxlength="255" bind:value={note} />
-            </div>
-            <button type="submit" class="btn-primary" disabled={busy}>Report it</button>
-          </form>
+          <div class="mt-3"><ReportProblemForm onreport={report} oncancel={() => (reporting = false)} /></div>
         {/if}
       {/if}
     {/snippet}
@@ -136,7 +138,10 @@
     {@const assetId = scan.asset.id}
     <p class="mt-4"><AddToSpool what={() => ({ asset_ids: [assetId] })} label="Add its label to the spool" /></p>
   {/if}
+{:else if !session.user}
+  <SignInToSee />
 {:else}
   <h1 class="mb-4 text-2xl font-bold">Not found</h1>
   <ErrorMessage {error} />
+  <p class="mt-3 text-sm"><a class="underline" href="/scan">Look up another code</a></p>
 {/if}

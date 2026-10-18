@@ -8,6 +8,7 @@ import {
   makeFixed,
   moveElements,
   newElement,
+  opensAPage,
   placeholders,
   resizeElement,
   resizeLabel,
@@ -175,5 +176,20 @@ describe('resizeLabel', () => {
     expect(r.elements[1]).toMatchObject({ x: 20.67, y: 4, width: 39.96, height: 10, font_size: 9.5, min_font_size: 4 });
     // Every element stays on the label.
     for (const e of r.elements) expect(e.x + e.width).toBeLessThanOrEqual(62);
+  });
+});
+
+describe('codes phones open', () => {
+  it('fills in the scan link for a new QR code, not for other codes', () => {
+    expect(newElement('generator', doc(), 'qr').content_binding).toBe('{{scan_url}}');
+    expect(newElement('generator', doc(), 'code128').content_binding).toBeUndefined();
+  });
+  it('knows a QR code that is not a link', () => {
+    const qr = (content_binding?: string) => ({ type: 'generator' as const, generator_type: 'qr', x: 0, y: 0, width: 10, height: 10, content_binding });
+    expect(opensAPage(qr('{{scan_url}}'))).toBe(true);
+    expect(opensAPage(qr('https://wiki.example.org/{{asset.id}}'))).toBe(true);
+    expect(opensAPage(qr())).toBe(false);
+    expect(opensAPage(qr('{{asset.code.qr}}'))).toBe(false);
+    expect(opensAPage({ ...qr(), generator_type: 'code128' })).toBe(true);
   });
 });

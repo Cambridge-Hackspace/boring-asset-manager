@@ -30,3 +30,30 @@ test('scanning a bin: anyone sees what is in it, and those allowed use some', as
   await page.getByRole('link', { name: 'Open its page' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(screws);
 });
+
+test('a label scanned signed out asks to sign in, and the Scan page looks codes up', async ({ signedIn: page, api }) => {
+  const code = unique('DRILL').toUpperCase();
+  const name = unique('Drill');
+  await api.call('POST', '/assets', { name, generator_keys: [{ generator_type: 'qr', assigned_code: code }] });
+
+  // Not public: signing in, from the page, comes back to it.
+  await page.context().clearCookies();
+  await page.goto(`/scan/${code}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sign in to see this asset');
+  await page.getByRole('main').getByRole('link', { name: 'Sign in' }).click();
+  await page.getByLabel('Email').fill(ADMIN_EMAIL);
+  await page.getByLabel('Password').fill(ADMIN_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+
+  // The Scan page, from the menu: a code typed, or a scan link pasted.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Scan', exact: true }).click();
+  await page.getByLabel('Code').fill(code);
+  await page.getByRole('button', { name: 'Look up' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+  await page.goto('/scan');
+  await page.getByLabel('Code').fill(`https://bam.example.org/scan/${code}`);
+  await page.getByLabel('Code').press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/scan/${code}$`));
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
+});

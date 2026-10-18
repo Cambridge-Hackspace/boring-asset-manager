@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanedScanSpec, newScanSpec, scanActionLabel } from './scan';
+import { cleanedScanSpec, newScanSpec, scanActionLabel, scanTarget } from './scan';
 
 describe('scan templates', () => {
   it('starts with details, contents and a way to the page', () => {
@@ -23,6 +23,20 @@ describe('scan templates', () => {
   });
 
   it('names actions', () => {
-    expect(scanActionLabel('return')).toBe('Give it back');
+    expect(scanActionLabel('return')).toBe('Return');
+  });
+});
+
+describe('scanTarget', () => {
+  it('opens a scan link or an asset address here, wherever it was printed from', () => {
+    expect(scanTarget('https://bam.example.org/scan/HS-100')).toBe('/scan/HS-100');
+    expect(scanTarget(' http://10.0.0.5:8080/assets/0b5e2c1a-1111-4222-8333-444455556666 ')).toBe('/assets/0b5e2c1a-1111-4222-8333-444455556666');
+    expect(scanTarget('https://bam.example.org/scan/a%2Fb')).toBe('/scan/a%2Fb');
+  });
+  it('looks anything else up as a code', () => {
+    expect(scanTarget('HS-100')).toBe('/scan/HS-100');
+    expect(scanTarget('BIN 4/A')).toBe('/scan/BIN%204%2FA');
+    expect(scanTarget('https://example.org/elsewhere')).toBe('/scan/https%3A%2F%2Fexample.org%2Felsewhere');
+    expect(scanTarget('   ')).toBeNull();
   });
 });

@@ -56,16 +56,16 @@ describe('LoanPanel', () => {
     const { rerender } = render(LoanPanel, { asset: drill, onchange: (_a: AssetWithDetails, done: string) => changes.push(done) });
     expect(screen.queryByLabelText('Lend to')).toBeNull();
     await fireEvent.input(screen.getByLabelText('Due back (optional)'), { target: { value: '2026-10-20' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Borrow it myself' }));
-    await vi.waitFor(() => expect(changes).toEqual(['Lent to you.']));
+    await fireEvent.click(screen.getByRole('button', { name: 'Borrow' }));
+    await vi.waitFor(() => expect(changes).toEqual(['Borrowed.']));
     const body = sent[0]!.body as { due_at: string; borrower_id?: string };
     expect(body.borrower_id).toBeUndefined();
     expect(new Date(body.due_at).getHours()).toBe(23);
 
     await rerender({ asset: lentTo('me', 'Me') });
     expect(screen.getByText(/Lent to/).textContent).toContain('you');
-    await fireEvent.click(screen.getByRole('button', { name: 'Check in' }));
-    await vi.waitFor(() => expect(changes).toEqual(['Lent to you.', 'Checked in.']));
+    await fireEvent.click(screen.getByRole('button', { name: 'Return' }));
+    await vi.waitFor(() => expect(changes).toEqual(['Borrowed.', 'Returned.']));
   });
 
   it('does not let a member check in someone else’s loan', async () => {
@@ -74,7 +74,7 @@ describe('LoanPanel', () => {
     render(LoanPanel, { asset: lentTo('bo', 'Bo', true), onchange: () => {} });
     expect(screen.getByText(/Lent to/).textContent).toContain('Bo');
     expect(screen.getByText('Overdue')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Check in' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Return' })).toBeNull();
   });
 
   it('lets a lender lend to someone they choose', async () => {
@@ -85,7 +85,7 @@ describe('LoanPanel', () => {
     });
     const changes: string[] = [];
     render(LoanPanel, { asset: drill, onchange: (_a: AssetWithDetails, done: string) => changes.push(done) });
-    expect(screen.queryByRole('button', { name: 'Borrow it myself' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Borrow' })).toBeNull();
     // By name; emails show only to tell apart two people of one name.
     await screen.findByRole('option', { name: 'Bo' });
     await fireEvent.change(screen.getByLabelText('Lend to'), { target: { value: 'bo' } });
@@ -118,8 +118,8 @@ describe('LoanPanel, weighed', () => {
 
     await rerender({ asset: { ...lentTo('bo', 'Bo'), weighed: true, asset: { ...drill.asset, stock } } });
     await fireEvent.input(screen.getByLabelText('Left now (g), if weighed'), { target: { value: '250' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Check in' }));
-    await vi.waitFor(() => expect(done).toEqual(['Checked in.']));
+    await fireEvent.click(screen.getByRole('button', { name: 'Return' }));
+    await vi.waitFor(() => expect(done).toEqual(['Returned.']));
     expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ left: 250 });
   });
 

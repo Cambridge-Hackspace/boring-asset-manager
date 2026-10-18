@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { GeneratorInfo } from '../../lib/models';
-  import { describeElement, withProp, type TemplateDoc, type TemplateElement } from '../../lib/template';
+  import { describeElement, opensAPage, SCAN_URL, withProp, type TemplateDoc, type TemplateElement } from '../../lib/template';
   import ImagePicker from './ImagePicker.svelte';
   import AdaptiveElementPanel from './AdaptiveElementPanel.svelte';
 
@@ -96,6 +96,13 @@
       <p id={id('binding-help')} class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
         Text with placeholders such as {'{{asset.name}}'} or {'{{field.serial}}'}.{#if e.type === 'generator'}{' '}Empty encodes the asset’s {e.generator_type} code.{/if}
       </p>
+      {#if !opensAPage(e)}
+        <p class="mt-2 text-sm text-amber-900 dark:text-amber-200">
+          <span aria-hidden="true">⚠ </span>A phone that scans this sees {e.content_binding ? 'its text' : 'the code'}, not a page.
+          <button type="button" class="underline" onclick={() => set('content_binding', SCAN_URL)}>Use the scan link</button>
+          to open the asset’s scan page.
+        </p>
+      {/if}
     </div>
   {/if}
 

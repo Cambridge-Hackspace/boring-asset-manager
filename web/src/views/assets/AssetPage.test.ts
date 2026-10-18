@@ -261,3 +261,17 @@ describe('AssetPage scopes', () => {
     expect(screen.queryByText('Scopes')).toBeNull();
   });
 });
+
+describe('AssetPage, signed out', () => {
+  it('asks a visitor to sign in to see an asset that is not public, rather than saying it does not exist', async () => {
+    session.user = null;
+    fakeApi({
+      'GET /assets/a1': () => ({ status: 404, body: { error: 'Asset not found' } }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ status: 404, body: { error: 'Asset not found' } }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    expect(await screen.findByRole('heading', { name: 'Sign in to see this asset', level: 1 })).toBeTruthy();
+    expect(screen.queryByText('Asset not found')).toBeNull();
+  });
+});
