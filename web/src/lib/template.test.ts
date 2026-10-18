@@ -4,11 +4,15 @@ import {
   blankTemplate,
   convertUnits,
   elementIndex,
+  makeAdaptive,
+  makeFixed,
   moveElements,
   newElement,
   placeholders,
   resizeElement,
   snap,
+  tooSmall,
+  withProp,
   type TemplateDoc,
 } from './template';
 
@@ -129,5 +133,27 @@ describe('History', () => {
     expect(h.undo(4)).toBe(3);
     expect(h.undo(3)).toBe(2);
     expect(h.undo(2)).toBeNull();
+  });
+});
+
+describe('adaptive templates', () => {
+  it('makes a template adaptive, taking half to twice its size, and fixed again', () => {
+    const d = { ...doc(), elements: [{ type: 'text' as const, x: 1, y: 1, width: 10, height: 5, anchor_x: 'both' as const, min_size: 3, when_too_small: 'hide' as const }] };
+    const adaptive = makeAdaptive(d);
+    expect(adaptive.sizing).toBe('adaptive');
+    expect(adaptive.adapt).toEqual({ min_width: d.width / 2, max_width: d.width * 2, min_height: d.height / 2, max_height: d.height * 2, continuous_length: 'proportional' });
+    const fixed = makeFixed(adaptive);
+    expect(fixed.sizing).toBeUndefined();
+    expect(fixed.adapt).toBeUndefined();
+    expect(fixed.elements[0]).toEqual({ type: 'text', x: 1, y: 1, width: 10, height: 5 });
+  });
+
+  it('sets and removes element properties, and knows what gives way by default', () => {
+    const e = { type: 'generator' as const, x: 0, y: 0, width: 5, height: 5 };
+    expect(withProp(e, 'min_size', 3)).toMatchObject({ min_size: 3 });
+    expect('min_size' in withProp({ ...e, min_size: 3 }, 'min_size', undefined)).toBe(false);
+    expect(tooSmall(e)).toBe('refuse');
+    expect(tooSmall({ ...e, type: 'static_image' })).toBe('hide');
+    expect(tooSmall({ ...e, when_too_small: 'alternative' })).toBe('alternative');
   });
 });

@@ -158,6 +158,19 @@ func TestAdaptiveTemplatesSayWhatGaveWay(t *testing.T) {
 		t.Errorf("too wide: %s", rec.Body)
 	}
 
+	// For a printer, as printing there would lay it out.
+	tape12 := createPrinter(t, srv, cookie, 9100, "dk-22214")
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/adapt", body(`,"printer_id":"`+tape12+`"`))
+	adapted.Notices = nil
+	_ = json.Unmarshal(rec.Body.Bytes(), &adapted)
+	// What gave way, and that the printer does not reach the tape's edges.
+	if !adapted.Fits || len(adapted.Notices) != 3 || adapted.Template.Elements[0]["type"] != "text" || !strings.Contains(adapted.Notices[0], "gives way to its alternative (text) on a") {
+		t.Errorf("for the 12 mm printer: %s", rec.Body)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/adapt", body(`,"printer_id":"nope"`)); rec.Code != http.StatusNotFound {
+		t.Errorf("for a missing printer: %d", rec.Code)
+	}
+
 	// The worked-out range: the alternative and the hidden note never
 	// refuse, so only its declared range stops it.
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/range", body(``))
@@ -177,7 +190,11 @@ func TestAdaptiveTemplatesSayWhatGaveWay(t *testing.T) {
 	// Printing on 12 mm tape says what gave way.
 	tag := createTemplate(t, srv, cookie, alternativeTemplate)
 	ql := newFakeQL(t)
-	tape := createPrinter(t, srv, cookie, ql.port(), "dk-22214")
+	rec = doJSON(t, srv, cookie, http.MethodPut, "/api/v1/printers/"+tape12, `{"name":"QL dk-22214","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"127.0.0.1:`+strconv.Itoa(ql.port())+`"},"media":"dk-22214"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatal(rec.Body)
+	}
+	tape := tape12
 	asset, _ := srv.store.CreateAsset("Drill", nil, []models.AssetGeneratorKey{{GeneratorType: "qr", AssignedCode: "D1"}}, nil)
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+tape+"/print", `{"template_id":"`+tag+`","asset_ids":["`+asset.Asset.ID+`"]}`)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "gives way to its alternative") || !strings.Contains(rec.Body.String(), "is left off") {

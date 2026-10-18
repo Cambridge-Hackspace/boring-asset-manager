@@ -118,3 +118,46 @@ test('a template with content where the printer does not print warns, and still 
   await expect(page.getByRole('status').filter({ hasText: 'Sent' })).toContainText(`Sent 1 label to ${printerName}. Part of the template is where the printer does not print`);
   await printer.job();
 });
+
+test('make a template adaptive, see it on each printer, and print it on two rolls', async ({ signedIn: page, api, printer }) => {
+  const dieCut = unique('QL 29x90');
+  const tape = unique('QL tape');
+  await api.call('POST', '/printers', { name: dieCut, driver: 'brother_ql', model: 'QL-810W', connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` }, media: 'dk-11201' });
+  await api.call('POST', '/printers', { name: tape, driver: 'brother_ql', model: 'QL-810W', connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` }, media: 'dk-22205' });
+  const name = unique('Any tag');
+  const { template } = await api.call('POST', '/templates', {
+    name, units: 'mm', width: 62, height: 29, dpi: 300,
+    elements: [
+      { type: 'generator', generator_type: 'qr', x: 3, y: 3, width: 23, height: 23 },
+      { type: 'text', x: 28, y: 4, width: 31, height: 10, font_size: 12, content_binding: '{{asset.name}}' },
+    ],
+  });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Drill'), generator_keys: [{ generator_type: 'qr', assigned_code: unique('AD').toUpperCase() }] });
+
+  await page.goto(`/templates/${template.id}/edit`);
+  await page.getByRole('radio', { name: /Adaptive/ }).check();
+  await page.getByLabel('Narrowest (mm)').fill('25');
+  await page.getByLabel('Narrowest (mm)').press('Tab');
+  // The code pinned to the top left, the name stretching beside it.
+  const elements = page.getByRole('list', { name: 'Elements' });
+  await elements.getByRole('button', { name: /^Barcode 1/ }).click();
+  await page.getByLabel('Across').selectOption('start');
+  await page.getByLabel('Down').selectOption('start');
+  await elements.getByRole('button', { name: /^Text 2/ }).click();
+  await page.getByLabel('Across').selectOption('both');
+  await page.getByLabel('Down').selectOption('start');
+
+  const onPrinters = page.getByRole('list', { name: 'On each printer' });
+  await expect(onPrinters.getByRole('img', { name: new RegExp(`Preview at ${dieCut}`) })).toBeVisible();
+  await expect(onPrinters.getByRole('img', { name: new RegExp(`Preview at ${tape}`) })).toBeVisible();
+  await expect(page.getByText(/In its shape it fits labels from/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved' })).toBeVisible();
+
+  const { printers } = await api.call('GET', '/printers');
+  for (const n of [dieCut, tape]) {
+    const p = (printers as { id: string; name: string }[]).find((x) => x.name === n)!;
+    await api.call('POST', `/printers/${p.id}/print`, { template_id: template.id, asset_ids: [asset.asset.id], copies: 1 });
+  }
+  await printer.job(2);
+});

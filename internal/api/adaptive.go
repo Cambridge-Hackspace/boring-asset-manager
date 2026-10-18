@@ -133,6 +133,9 @@ type AdaptRequest struct {
 	Width    float64         `json:"width"`
 	Height   float64         `json:"height"`
 	DPI      int             `json:"dpi"`
+	// PrinterID, in place of a size and DPI, lays it out for that printer's
+	// roll, as printing there would.
+	PrinterID string `json:"printer_id,omitempty"`
 }
 
 // readAdaptRequest reads an adapt request's template, which must be valid
@@ -172,6 +175,22 @@ func readAdaptRequest(w http.ResponseWriter, r *http.Request) (*labels.Template,
 func (s *Server) handleAdaptTemplate(w http.ResponseWriter, r *http.Request) {
 	t, req, ok := readAdaptRequest(w, r)
 	if !ok {
+		return
+	}
+	if req.PrinterID != "" {
+		p, ok := s.loadPrinter(w, req.PrinterID)
+		if !ok {
+			return
+		}
+		_, laid, warnings, err := s.planFor(p, t)
+		switch {
+		case errors.Is(err, printers.ErrDoesNotFit):
+			writeJSON(w, http.StatusOK, map[string]any{"fits": false, "problem": LabelProblem{Message: err.Error()}})
+		case err != nil:
+			writeServerError(w, err, "lay the template out")
+		default:
+			writeJSON(w, http.StatusOK, map[string]any{"fits": true, "template": laid, "notices": nonNil(warnings)})
+		}
 		return
 	}
 	laid, notices, err := render.Adapt(t, req.Width, req.Height, req.DPI, s.labelSample())
