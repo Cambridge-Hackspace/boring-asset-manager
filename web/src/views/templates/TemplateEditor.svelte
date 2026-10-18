@@ -20,6 +20,7 @@
   import CanvasPanel from './CanvasPanel.svelte';
   import EditorCanvas from './EditorCanvas.svelte';
   import ElementPanel from './ElementPanel.svelte';
+  import AdaptivePreview from './AdaptivePreview.svelte';
 
   // /templates/new and /templates/:id/edit
   let { params }: { params: Record<string, string> } = $props();
@@ -367,6 +368,10 @@
           doc = d;
         }}
       />
+
+      {#if doc.sizing === 'adaptive'}
+        <AdaptivePreview {doc} />
+      {/if}
 
       <section class="card space-y-3" aria-labelledby="preview-heading">
         <h2 id="preview-heading" class="text-lg font-semibold">Preview data</h2>

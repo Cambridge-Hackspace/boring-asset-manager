@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { GeneratorInfo } from '../../lib/models';
-  import { describeElement, type TemplateDoc, type TemplateElement } from '../../lib/template';
+  import { describeElement, withProp, type TemplateDoc, type TemplateElement } from '../../lib/template';
   import ImagePicker from './ImagePicker.svelte';
+  import AdaptiveElementPanel from './AdaptiveElementPanel.svelte';
 
   // Edits one element. Each change goes through onupdate with the new
   // element, and is one undoable step.
@@ -155,8 +156,31 @@
         <label class="label" for={id('quiet')}>Quiet zone (modules)</label>
         <input id={id('quiet')} class="input" type="number" min="0" step="1" placeholder="Standard" value={e.quiet_zone ?? ''} onchange={(ev) => setNumber('quiet_zone', ev.currentTarget.value)} />
       </div>
+      <div>
+        <label class="label" for={id('module')}>Smallest module (mm)</label>
+        <input
+          id={id('module')}
+          class="input"
+          type="number"
+          min="0"
+          max="5"
+          step="0.05"
+          placeholder="Two dots"
+          aria-describedby={id('module-help')}
+          value={e.min_module_mm ?? ''}
+          onchange={(ev) => {
+            const n = Number(ev.currentTarget.value);
+            onupdate(withProp(e, 'min_module_mm', ev.currentTarget.value === '' || !(n > 0) ? undefined : n));
+          }}
+        />
+        <p id={id('module-help')} class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">For the scanners in use; 0.3 mm suits most phones.</p>
+      </div>
     </div>
   {:else}
     <ImagePicker value={e.image_id ?? ''} onpick={(imageId) => set('image_id', imageId)} />
+  {/if}
+
+  {#if doc.sizing === 'adaptive'}
+    <AdaptiveElementPanel {doc} {e} {index} {generators} {onupdate} />
   {/if}
 </section>

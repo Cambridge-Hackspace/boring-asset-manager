@@ -95,7 +95,7 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 				if altWhy := fits(&out, &alt, &alt, sample); altWhy != "" {
 					return refuse(path, "%s, nor does its alternative: %s", why, altWhy)
 				}
-				notices = append(notices, fmt.Sprintf("%s (%s) gives way to its alternative (%s) %s: %s.", path, kind(&design), kind(&alt), on, why))
+				notices = append(notices, fmt.Sprintf("%s (%s) gives way to its alternative (%s) on %s: %s.", path, kind(&design), kind(&alt), on, why))
 				e = alt
 			default:
 				return refuse(path, "%s on %s", why, on)

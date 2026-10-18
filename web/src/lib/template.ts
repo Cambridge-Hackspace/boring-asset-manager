@@ -235,3 +235,43 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
 export function blankTemplate(): TemplateDoc {
   return { id: '', name: '', units: 'mm', width: 62, height: 29, dpi: 300, elements: [] };
 }
+
+/** An adaptive copy of a fixed template, taking half to twice its size. */
+export function makeAdaptive(doc: TemplateDoc): TemplateDoc {
+  return {
+    ...doc,
+    sizing: 'adaptive',
+    adapt: doc.adapt ?? {
+      min_width: tidy(doc.width / 2, doc.units),
+      max_width: tidy(doc.width * 2, doc.units),
+      min_height: tidy(doc.height / 2, doc.units),
+      max_height: tidy(doc.height * 2, doc.units),
+      continuous_length: 'proportional',
+    },
+  };
+}
+
+/** A fixed copy of a template: its size range and its elements' adaptive settings go. */
+export function makeFixed(doc: TemplateDoc): TemplateDoc {
+  const { sizing: _s, adapt: _a, ...rest } = doc;
+  return {
+    ...rest,
+    elements: doc.elements.map((e) => {
+      const { anchor_x: _x, anchor_y: _y, min_size: _min, max_size: _max, when_too_small: _w, alternative: _alt, ...kept } = e;
+      return kept;
+    }),
+  };
+}
+
+/** An element with a property set, or removed when the value is undefined. */
+export function withProp<K extends keyof TemplateElement>(e: TemplateElement, key: K, value: TemplateElement[K] | undefined): TemplateElement {
+  const next = { ...e };
+  if (value === undefined) delete next[key];
+  else next[key] = value;
+  return next;
+}
+
+/** What an element does where it does not fit, by default: images are left off, the rest refuse. */
+export function tooSmall(e: TemplateElement): 'refuse' | 'hide' | 'alternative' {
+  return e.when_too_small ?? (e.type === 'static_image' ? 'hide' : 'refuse');
+}

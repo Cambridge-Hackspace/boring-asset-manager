@@ -86,6 +86,31 @@ describe('TemplateEditor', () => {
     expect(sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ name: 'Any tag', sizing: 'adaptive', adapt: adaptive.adapt, elements: [{ anchor_x: 'both' }] });
   });
 
+  it('makes a template adaptive, and sets how its elements follow the label', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }), 'POST /templates/range': () => ({ fits: false, units: 'mm' }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await screen.findByDisplayValue('QL 90x29');
+    await fireEvent.click(screen.getByRole('radio', { name: /Adaptive/ }));
+    expect((screen.getByLabelText('Narrowest (mm)') as HTMLInputElement).value).toBe('45');
+    await fireEvent.change(screen.getByLabelText('Narrowest (mm)'), { target: { value: '25' } });
+
+    await fireEvent.click(within(screen.getByRole('list', { name: 'Elements' })).getByRole('button', { name: /^Text 1/ }));
+    await fireEvent.change(screen.getByLabelText('Across'), { target: { value: 'both' } });
+    await fireEvent.change(screen.getByLabelText('Where it does not fit'), { target: { value: 'alternative' } });
+    await fireEvent.change(screen.getByLabelText('In its place'), { target: { value: 'generator' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    expect(body.sizing).toBe('adaptive');
+    expect(body.adapt).toMatchObject({ min_width: 25, max_width: 180, continuous_length: 'proportional' });
+    expect(body.elements[0]).toMatchObject({ anchor_x: 'both', when_too_small: 'alternative', alternative: { type: 'generator' } });
+
+    // Fixed again, the adaptive settings go.
+    await fireEvent.click(screen.getByRole('radio', { name: /Fixed/ }));
+    expect(screen.queryByLabelText('Narrowest (mm)')).toBeNull();
+    expect(screen.queryByLabelText('Across')).toBeNull();
+  });
+
   it('undoes a field edit even after focus moves on', async () => {
     api();
     render(TemplateEditor, { params: { id: 'ql90' } });

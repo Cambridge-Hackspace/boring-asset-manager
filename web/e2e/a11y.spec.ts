@@ -74,6 +74,17 @@ for (const scheme of ['light', 'dark'] as const) {
       name: unique('A11y edge'), units: 'mm', width: 62, height: 29, dpi: 300,
       elements: [{ type: 'text', x: 0, y: 2, width: 50, height: 10, font_size: 12, content_binding: '{{asset.name}}' }],
     });
+    // An adaptive template whose code gives way to its name, for the
+    // editor's adaptive settings and previews.
+    const adaptive = await post('/templates', {
+      name: unique('A11y adaptive'), units: 'mm', width: 62, height: 29, dpi: 300, sizing: 'adaptive',
+      adapt: { min_width: 25, max_width: 102, min_height: 12, max_height: 60, continuous_length: 'proportional' },
+      elements: [
+        { type: 'generator', generator_type: 'qr', x: 2, y: 2, width: 25, height: 25, anchor_x: 'start', min_size: 15, when_too_small: 'alternative',
+          alternative: { type: 'text', content_binding: '{{asset.name}}', font_size: 8 } },
+        { type: 'text', x: 30, y: 2, width: 30, height: 10, font_size: 12, anchor_x: 'both', content_binding: '{{asset.name}}' },
+      ],
+    });
     const clamp = await post('/assets', { name: unique('Clamp') });
     await post('/spool', { asset_ids: [clamp.asset.asset.id], template_id: edge.template.id, destination: `printer:${a11yPrinter.printer.id}` });
     // Labels waiting in the spool, one ready and one with problems.
@@ -104,6 +115,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/templates', 'Label templates'],
       ['/templates/new', 'New template'],
       [`/templates/${template.id}/edit`, ''],
+      [`/templates/${adaptive.template.id}/edit`, ''],
       ['/images', 'Images'],
       ['/printers', 'Printers'],
       ['/notifications', 'Notifications'],

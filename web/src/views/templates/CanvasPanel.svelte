@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, Printer } from '../../lib/models';
-  import { convertUnits, fromMM, toMM, type TemplateDoc, type Units } from '../../lib/template';
+  import { convertUnits, fromMM, makeAdaptive, makeFixed, toMM, type Adapt, type TemplateDoc, type Units } from '../../lib/template';
   import FitWarnings from '../../components/FitWarnings.svelte';
 
   // The template's own settings: name, units, size and DPI, which can
@@ -90,6 +90,11 @@
   });
 
   const fieldError = (key: string) => problems[key];
+
+  function setRange(key: 'min_width' | 'max_width' | 'min_height' | 'max_height', raw: string) {
+    const n = Number(raw);
+    if (doc.adapt && Number.isFinite(n) && n > 0) update({ adapt: { ...doc.adapt, [key]: n } });
+  }
 </script>
 
 <section class="card space-y-4" aria-labelledby="canvas-heading">
@@ -133,6 +138,45 @@
   {#each ['width', 'height', 'dpi', 'units'] as key (key)}
     {#if fieldError(key)}<p class="error-text">{fieldError(key)}</p>{/if}
   {/each}
+
+  <fieldset class="space-y-3">
+    <legend class="label">Sizing</legend>
+    <div class="flex flex-wrap gap-4 text-sm">
+      <label class="flex items-center gap-2">
+        <input type="radio" name="tpl-sizing" checked={doc.sizing !== 'adaptive'} onchange={() => onchange(makeFixed(doc))} />
+        Fixed: prints only at this size and DPI
+      </label>
+      <label class="flex items-center gap-2">
+        <input type="radio" name="tpl-sizing" checked={doc.sizing === 'adaptive'} onchange={() => onchange(makeAdaptive(doc))} />
+        Adaptive: laid out again for each label it prints on
+      </label>
+    </div>
+    {#if doc.sizing === 'adaptive' && doc.adapt}
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {#each [['min_width', 'Narrowest'], ['max_width', 'Widest'], ['min_height', 'Shortest'], ['max_height', 'Tallest']] as const as [key, label] (key)}
+          <div>
+            <label class="text-xs" for="tpl-{key}">{label} ({doc.units})</label>
+            <input id="tpl-{key}" class="input" type="number" min="0" step="any" value={doc.adapt[key]} onchange={(e) => setRange(key, e.currentTarget.value)} />
+          </div>
+        {/each}
+      </div>
+      <div>
+        <label class="text-xs" for="tpl-length">On a continuous roll</label>
+        <select
+          id="tpl-length"
+          class="input"
+          value={doc.adapt.continuous_length}
+          onchange={(e) => update({ adapt: { ...doc.adapt!, continuous_length: e.currentTarget.value as Adapt['continuous_length'] } })}
+        >
+          <option value="proportional">Its length in proportion to the roll's width</option>
+          <option value="fixed">Its length as designed</option>
+        </select>
+      </div>
+      {#each Object.entries(problems).filter(([k]) => k.startsWith('adapt') || k === 'sizing') as [k, message] (k)}
+        <p class="error-text">{message}</p>
+      {/each}
+    {/if}
+  </fieldset>
 
   {#if printers.length}
     <div class="flex flex-wrap items-end gap-3">
