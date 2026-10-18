@@ -127,7 +127,7 @@ describe('RolesPage', () => {
     expect(within(defaultCard).queryByRole('button')).toBeNull();
     expect(screen.getByRole('heading', { name: 'tools' }).closest('li')!.textContent).toContain('On 1 category; used by 1 role.');
     await fireEvent.input(screen.getByLabelText('New scope'), { target: { value: 'kitchen' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Add scope' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Create scope' }));
     await screen.findByText('Created the scope kitchen.');
     expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ name: 'kitchen' });
 

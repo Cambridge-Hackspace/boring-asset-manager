@@ -37,7 +37,7 @@
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
-  // The filters the list shows, which adding them all to the spool follows.
+  // The filters the list shows, which adding them all to the print queue follows.
   let shownFilter = $state<Record<string, string>>({});
   const canSpool = session.can('labels.print');
 
@@ -194,7 +194,7 @@
 {:else}
   <p class="sr-only" role="status">{assets.length} assets, {selected.length} selected.</p>
   {#if canSpool && !archived}
-    <p class="mb-3"><AddToSpool what={() => ({ filter: shownFilter })} label="Add all {assets.length} to the spool" /></p>
+    <p class="mb-3"><AddToSpool what={() => ({ filter: shownFilter })} label="Add all {assets.length} to the print queue" /></p>
   {/if}
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm" use:stack>
@@ -255,7 +255,7 @@
   {#if selected.length && !archived}
     <div class="mt-6">
       <p class="mb-2 text-sm font-medium">{selected.length} selected</p>
-      {#if canSpool}<p class="mb-3"><AddToSpool what={() => ({ asset_ids: selected })} label="Add {selected.length} to the spool" /></p>{/if}
+      {#if canSpool}<p class="mb-3"><AddToSpool what={() => ({ asset_ids: selected })} label="Add {selected.length} to the print queue" /></p>{/if}
       {#key selected.join(',')}
         <LabelActions assetIds={selected} />
       {/key}

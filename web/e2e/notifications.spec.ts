@@ -18,11 +18,11 @@ test('thresholds, running-low actions and notification channels', async ({ signe
 
   // A channel, subscribed to both events.
   await goTo(page, 'Notifications');
-  await page.getByRole('button', { name: 'Add channel' }).click();
+  await page.getByRole('button', { name: 'New channel' }).click();
   const form = page.getByRole('form', { name: 'New channel' });
   await form.getByLabel('Name', { exact: true }).fill(`Stores ${tag}`);
   await form.getByLabel('Webhook URL').fill('https://discord.com/api/webhooks/123/e2e-token');
-  await form.getByRole('button', { name: 'Add channel' }).click();
+  await form.getByRole('button', { name: 'Create channel' }).click();
   await expect(page.getByText('Channel saved.')).toBeVisible();
   await expect(page.getByText('Discord, enabled. A category is running low; A category is restocked; An asset counted by quantity is running low; An asset counted by quantity is restocked; An asset needs maintenance, is out of service, or is working again; A loan is overdue; An action, such as Identify, is pressed on an asset.')).toBeVisible();
   await expect(page.getByText('e2e-token')).toHaveCount(0);

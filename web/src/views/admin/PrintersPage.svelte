@@ -7,6 +7,7 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import FitWarnings from '../../components/FitWarnings.svelte';
+  import { driverName } from '../../lib/stock';
   import PrinterForm from './PrinterForm.svelte';
   import PoolsSection from './PoolsSection.svelte';
   import StockSection from './StockSection.svelte';
@@ -109,7 +110,7 @@
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
   <h1 class="text-2xl font-bold">Printers</h1>
   {#if canManage && editing !== 'new'}
-    <button type="button" class="btn-primary" onclick={() => (editing = 'new')} disabled={!drivers.length}>Add printer</button>
+    <button type="button" class="btn-primary" onclick={() => (editing = 'new')} disabled={!drivers.length}>New printer</button>
   {/if}
 </div>
 <ErrorMessage {error} />
@@ -133,7 +134,7 @@
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 id="printer-{p.id}" class="font-semibold">{p.name}</h2>
-                <p class="text-sm text-zinc-600 dark:text-zinc-400">{p.model} ({p.driver}), {p.loaded?.name ?? p.media}</p>
+                <p class="text-sm text-zinc-600 dark:text-zinc-400">{p.model} ({driverName(p.driver)}), {p.loaded?.name ?? p.media}</p>
                 <p class="font-mono text-xs text-zinc-600 dark:text-zinc-400">{connLabel(p)}</p>
               </div>
               <div class="flex flex-wrap gap-2">

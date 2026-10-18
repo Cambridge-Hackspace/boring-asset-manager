@@ -87,7 +87,7 @@ for (const scheme of ['light', 'dark'] as const) {
     });
     const clamp = await post('/assets', { name: unique('Clamp') });
     await post('/spool', { asset_ids: [clamp.asset.asset.id], template_id: edge.template.id, destination: `printer:${a11yPrinter.printer.id}` });
-    // Labels waiting in the spool, one ready and one with problems.
+    // Labels waiting in the print queue, one ready and one with problems.
     await post('/spool', { asset_ids: [asset.asset.asset.id], template_id: template.id, destination: 'download' });
     await post('/spool', { asset_ids: [box.asset.asset.id] });
     // And one downloaded, for the Jobs and Printed views.
@@ -124,8 +124,8 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/roles', 'Roles'],
       ['/tokens', 'API tokens'],
       ['/loans', 'Loans'],
-      ['/spool', 'Spool'],
-      ['/relations', 'Relations'],
+      ['/spool', 'Print queue'],
+      ['/relations', 'Link types'],
       ['/actions', 'Actions'],
       ['/reports', 'Reports'],
       ['/reports/new', 'New report'],
@@ -134,7 +134,7 @@ for (const scheme of ['light', 'dark'] as const) {
       [`/reports/${charts.report.id}`, ''],
       ['/account', 'Your account'],
       ['/help/scanning', 'Scanning'],
-      ['/help/spool', 'The spool'],
+      ['/help/spool', 'The print queue'],
       ['/help/actions', 'Actions'],
       ['/no-such-page', 'Page not found'],
     ];
@@ -256,7 +256,7 @@ test('the home page lists the same pages, in the same groups', async ({ signedIn
   await page.goto('/');
   const main = page.locator('#main');
   for (const [group, links] of [
-    ['Catalog', ['Categories', 'Fields', 'Relations', 'Actions']],
+    ['Catalog', ['Categories', 'Fields', 'Link types', 'Actions']],
     ['Labels', ['Templates', 'Images', 'Printers']],
     ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications']],
   ] as const) {

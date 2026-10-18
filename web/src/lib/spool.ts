@@ -21,9 +21,9 @@ export function addToSpool(req: SpoolAddRequest): Promise<SpoolAddResult> {
 
 const labels = (n: number) => (n === 1 ? '1 label' : `${n} labels`);
 
-/** Says what adding to the spool did. */
+/** Says what adding to the print queue did. */
 export function addedMessage(r: SpoolAddResult): string {
-  const parts = [r.added.length ? `Added ${labels(r.added.length)} to the spool` : 'Nothing new added to the spool'];
+  const parts = [r.added.length ? `Added ${labels(r.added.length)} to the print queue` : 'Nothing new added to the print queue'];
   if (r.already_waiting.length) parts.push(`${labels(r.already_waiting.length)} already waiting`);
   const archived = r.skipped.filter((s) => s.reason === 'archived').length;
   if (archived) parts.push(`${archived} archived, never labeled`);
@@ -114,7 +114,7 @@ export function shared<T, V>(items: T[], value: (item: T) => V): V | undefined {
 
 const queueKey = (userId: string) => `bam.spool.queue-new.${userId}`;
 
-/** Whether this person last chose to add new assets' labels to the spool: yes until they say otherwise. */
+/** Whether this person last chose to add new assets' labels to the print queue: yes until they say otherwise. */
 export function queueNewLabels(userId: string): boolean {
   try {
     return localStorage.getItem(queueKey(userId)) !== 'false';

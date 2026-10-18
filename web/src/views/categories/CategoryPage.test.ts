@@ -46,6 +46,18 @@ function api(extra: Record<string, (b: unknown) => unknown> = {}) {
 }
 
 describe('CategoryPage', () => {
+  it('links to its assets, and says which parts have changes not saved', async () => {
+    api({ 'GET /assets': () => ({ assets: [{}, {}, {}] }) });
+    render(CategoryPage, { params: { id: 'power' } });
+    const link = await screen.findByRole('link', { name: 'See its 3 assets' });
+    expect(link.getAttribute('href')).toBe('/assets?category=power');
+    expect(screen.queryByText(/Not saved yet/)).toBeNull();
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Big tools' } });
+    expect(await screen.findByText(/Not saved yet: its details\./)).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Power tools' } });
+    await vi.waitFor(() => expect(screen.queryByText(/Not saved yet/)).toBeNull());
+  });
+
   it('shows own and inherited fields, and only offers to remove its own', async () => {
     api();
     render(CategoryPage, { params: { id: 'power' } });
@@ -156,7 +168,7 @@ describe('CategoryPage', () => {
     // A category manager sees them, but cannot change them.
     scopeApi();
     render(CategoryPage, { params: { id: 'power' } });
-    const section = (await screen.findByRole('heading', { name: 'Scopes' })).closest('section')!;
+    const section = (await screen.findByRole('heading', { name: 'Who can see its assets' })).closest('section')!;
     const boxes = within(section).getAllByRole('checkbox') as HTMLInputElement[];
     // The default scope is not offered: it is where assets in no other are.
     expect(boxes.map((b) => b.parentElement!.textContent!.trim())).toEqual(['workshop', 'kitchen']);
@@ -265,7 +277,7 @@ describe('CategoryPage', () => {
     expect(within(note).getByRole('link', { name: 'See which' }).getAttribute('href')).toBe('/assets?conflict=label_template');
   });
 
-  it('adds its assets to the spool, with or without its subcategories’', async () => {
+  it('adds its assets to the print queue, with or without its subcategories’', async () => {
     session.permissions = ['assets.read', 'labels.print'];
     const { sent } = api({
       'GET /categories/label-conflicts': () => ({ categories: {} }),
@@ -273,10 +285,10 @@ describe('CategoryPage', () => {
     });
     render(CategoryPage, { params: { id: 'power' } });
     // Without categories.manage there is no template to choose, only the spool.
-    const add = await screen.findByRole('button', { name: 'Add its assets to the spool' });
+    const add = await screen.findByRole('button', { name: 'Add its assets to the print queue' });
     expect(screen.queryByLabelText('Add a template')).toBeNull();
     await fireEvent.click(add);
-    expect(await screen.findByText('Added 2 labels to the spool; 1 label already waiting.')).toBeTruthy();
+    expect(await screen.findByText('Added 2 labels to the print queue; 1 label already waiting.')).toBeTruthy();
     await fireEvent.click(screen.getByRole('checkbox', { name: /With its subcategories/ }));
     await fireEvent.click(add);
     await vi.waitFor(() => expect(sent.filter((r) => r.method === 'POST').length).toBe(2));

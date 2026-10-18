@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, LabelStock, Printer, PrinterChanges, PrinterConnection } from '../../lib/models';
-  import { describeChanges, describeStock, stockFor } from '../../lib/stock';
+  import { describeChanges, describeStock, driverName, optionLabel, stockFor } from '../../lib/stock';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Creates a printer, or edits one when printer is given. The form is
@@ -17,7 +17,7 @@
   }: { printer?: Printer; drivers: DriverInfo[]; stock?: LabelStock[]; onsaved: () => void; oncancel: () => void } = $props();
 
   const connectionHelp: Record<PrinterConnection['type'], string> = {
-    tcp: 'host or host:port (port 9100 if omitted): a network printer, or a print server such as p910nd.',
+    tcp: 'The printer’s IP address or host name (port 9100 if none is given): a network printer, or a print server such as p910nd.',
     device: 'A device path on the BAM server, such as /dev/usb/lp0. It must be allowed in the server’s [printers] devices setting.',
     ipp: 'An IPP queue URI, such as ipp://cups.lan/printers/labels. The queue must be raw.',
     windows: 'A Windows printer name or \\\\host\\share. Only when BAM runs on Windows.',
@@ -46,6 +46,13 @@
   });
 
   const info = $derived(drivers.find((d) => d.driver === driver));
+
+  // The model, chosen from every driver's, sets the driver behind it.
+  function chooseModel(key: string) {
+    const at = key.indexOf('|');
+    driver = key.slice(0, at);
+    model = key.slice(at + 1);
+  }
   // Custom stock this model takes, if its driver takes any.
   const customStock = $derived(stockFor(info, model, stock));
   const customChosen = $derived(customStock.some((s) => s.id === media));
@@ -109,19 +116,17 @@
       <input id="{pid}-name" class="input" required bind:value={name} />
     </div>
     <div>
-      <label class="label" for="{pid}-driver">Driver</label>
-      <select id="{pid}-driver" class="input" bind:value={driver}>
-        {#each drivers as d (d.driver)}<option value={d.driver}>{d.driver}</option>{/each}
+      <label class="label" for="{pid}-model">Printer model</label>
+      <select id="{pid}-model" class="input" value="{driver}|{model}" onchange={(e) => chooseModel(e.currentTarget.value)}>
+        {#each drivers as d (d.driver)}
+          <optgroup label={driverName(d.driver)}>
+            {#each d.models as m (m)}<option value="{d.driver}|{m}">{m}{d.model_dpi?.[m] ? ` (${d.model_dpi[m]} DPI)` : ''}</option>{/each}
+          </optgroup>
+        {/each}
       </select>
     </div>
     <div>
-      <label class="label" for="{pid}-model">Model</label>
-      <select id="{pid}-model" class="input" bind:value={model}>
-        {#each info?.models ?? [] as m (m)}<option value={m}>{m}{info?.model_dpi?.[m] ? ` (${info.model_dpi[m]} DPI)` : ''}</option>{/each}
-      </select>
-    </div>
-    <div>
-      <label class="label" for="{pid}-media">Loaded media</label>
+      <label class="label" for="{pid}-media">Roll loaded</label>
       <select id="{pid}-media" class="input" aria-describedby="{pid}-media-help" bind:value={media}>
         {#if customStock.length}
           <optgroup label="Built-in rolls">
@@ -135,6 +140,7 @@
         {/if}
       </select>
       <p id="{pid}-media-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        The labels in it now: die-cut rolls hold pre-cut labels, continuous ones are cut to length.
         {#if !info?.custom_stock}
           This driver takes only its own rolls.
         {:else if customChosen && info.custom_stock.note}
@@ -151,7 +157,7 @@
     <div>
       <label class="text-xs" for="{pid}-conn">Type</label>
       <select id="{pid}-conn" class="input" bind:value={connType}>
-        <option value="tcp">Network (raw TCP)</option>
+        <option value="tcp">Network (most label printers)</option>
         <option value="device">Device on the BAM server</option>
         <option value="ipp">IPP / CUPS queue</option>
         <option value="windows">Windows printer</option>
@@ -178,10 +184,10 @@
                 onchange={(e) => (options[opt.name] = e.currentTarget.checked)}
                 aria-describedby="{oid}-help"
               />
-              {opt.name}
+              {optionLabel(opt.name)}
             </label>
           {:else}
-            <label class="text-xs" for={oid}>{opt.name}</label>
+            <label class="text-xs" for={oid}>{optionLabel(opt.name)}</label>
             {#if opt.values?.length}
               <select id={oid} class="input" aria-describedby="{oid}-help" value={String(options[opt.name] ?? opt.default ?? '')} onchange={(e) => (options[opt.name] = e.currentTarget.value)}>
                 {#each opt.values as v (v)}<option value={v}>{v}{v === opt.default ? ' (default)' : ''}</option>{/each}
@@ -214,7 +220,7 @@
     </div>
   {/if}
   <div class="flex gap-2">
-    <button type="submit" class="btn-primary" disabled={busy}>{initial ? (affects.length ? 'Save anyway' : 'Save') : 'Add printer'}</button>
+    <button type="submit" class="btn-primary" disabled={busy}>{initial ? (affects.length ? 'Save anyway' : 'Save') : 'Create printer'}</button>
     {#if affects.length}
       <button type="button" class="btn-secondary" onclick={() => (affects = [])}>Keep editing</button>
     {/if}

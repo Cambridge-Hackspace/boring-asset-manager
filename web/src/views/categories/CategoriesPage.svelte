@@ -16,6 +16,8 @@
   let conflicts = $state<Record<string, number>>({});
   // And in label template ties (§6.2).
   let labelConflicts = $state<Record<string, number>>({});
+  // How many of the assets one may read each category holds directly.
+  let counts = $state<Record<string, number>>({});
   let loading = $state(true);
   let error = $state('');
 
@@ -28,6 +30,10 @@
       labelConflicts = await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')
         .then((r) => r.categories ?? {})
         .catch(() => ({}));
+      const assets = (await request<{ assets: { categories: { id: string }[] }[] }>('GET', '/assets')).assets ?? [];
+      const n: Record<string, number> = {};
+      for (const a of assets) for (const c of a.categories) n[c.id] = (n[c.id] ?? 0) + 1;
+      counts = n;
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -59,6 +65,10 @@
       <li class="flex flex-wrap items-center gap-2" style="padding-left: {row.depth * 1.5}rem">
         {#if row.depth > 0}<span aria-hidden="true" class="text-zinc-400">└</span>{/if}
         <CategoryBadge category={row.category} href="/categories/{encodeURIComponent(row.category.id)}" />
+        {#if counts[row.category.id]}
+          {@const n = counts[row.category.id]!}
+          <a class="text-xs text-zinc-600 underline dark:text-zinc-400" href="/assets?category={encodeURIComponent(row.category.id)}">{n} asset{n === 1 ? '' : 's'}</a>
+        {/if}
         {#if row.category.is_running_low}
           <span class="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Running low</span>
         {:else if row.category.is_consumable}

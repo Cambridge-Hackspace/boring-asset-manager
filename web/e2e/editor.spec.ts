@@ -147,7 +147,7 @@ test('make a template adaptive, see it on each printer, and print it on two roll
   const { asset } = await api.call('POST', '/assets', { name: unique('Drill'), generator_keys: [{ generator_type: 'qr', assigned_code: unique('AD').toUpperCase() }] });
 
   await page.goto(`/templates/${template.id}/edit`);
-  await page.getByRole('radio', { name: /Adaptive/ }).check();
+  await page.getByRole('radio', { name: /Fits several label sizes/ }).check();
   await page.getByLabel('Narrowest (mm)').fill('25');
   await page.getByLabel('Narrowest (mm)').press('Tab');
   // The code pinned to the top left, the name stretching beside it.

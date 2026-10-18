@@ -44,7 +44,7 @@
       ? Object.keys(afterSaving).filter((c) => (afterSaving![c] ?? 0) > (conflicts[c] ?? 0))
       : [],
   );
-  // Label templates (README §6.2): those its assets join the spool with, in
+  // Label templates (README §6.2): those its assets join the print queue with, in
   // order of preference, and the ties between categories that choose them.
   let labelTemplates = $state<TemplateSummary[]>([]);
   let labelList = $state<string[]>([]);
@@ -100,7 +100,41 @@
   const direct = $derived(effective.filter((e) => e.source_category_id === id));
   const unassigned = $derived(allFields.filter((f) => !direct.some((d) => d.field.id === f.id)));
 
-  onMount(load);
+  onMount(() => {
+    void load();
+    window.addEventListener('beforeunload', warnUnsaved);
+    return () => window.removeEventListener('beforeunload', warnUnsaved);
+  });
+
+  // The page saves in several places; what each held when loaded or last
+  // saved, to say which have changes not saved, and warn before leaving.
+  const sectionNames: Record<string, string> = {
+    details: 'its details',
+    suggestions: 'suggested links',
+    scan: 'scan template',
+    labels: 'label templates',
+    actions: 'actions',
+    scopes: 'who can see its assets',
+  };
+  let savedAs = $state<Record<string, string>>({});
+  const sectionState = $derived<Record<string, string>>({
+    details: JSON.stringify([name, parentId, color, consumable, lendable, runningLow, threshold, unit]),
+    suggestions: JSON.stringify([...suggested].sort()),
+    scan: scanTemplate,
+    labels: JSON.stringify(labelList),
+    actions: JSON.stringify(offered),
+    scopes: JSON.stringify([...scopeIds].sort()),
+  });
+  const unsaved = $derived(isNew ? [] : Object.keys(savedAs).filter((k) => savedAs[k] !== sectionState[k]));
+  function markSaved(...keys: string[]) {
+    for (const k of keys) savedAs[k] = sectionState[k]!;
+  }
+  function warnUnsaved(event: BeforeUnloadEvent) {
+    if (unsaved.length) event.preventDefault();
+  }
+
+  // How many assets are in it, for a way to them.
+  let assetCount = $state<number | null>(null);
 
   async function load() {
     error = '';
@@ -122,6 +156,9 @@
         runningLow = c.is_running_low;
         threshold = c.low_stock_threshold ?? null;
         unit = c.unit;
+        assetCount = await request<{ assets: unknown[] }>('GET', `/assets?category_id=${encodeURIComponent(id)}`)
+          .then((r) => (r.assets ?? []).length)
+          .catch(() => null);
         const level = await request<{ active_count: number; total?: number }>('GET', `/categories/${encodeURIComponent(id)}`);
         activeCount = level.active_count;
         total = level.total ?? null;
@@ -162,6 +199,8 @@
       error = messageOf(err);
     } finally {
       loading = false;
+      // As loaded, each part is as saved.
+      if (!isNew) markSaved(...Object.keys(sectionNames));
     }
   }
 
@@ -170,6 +209,7 @@
     error = saved = '';
     try {
       suggested = (await request<{ relation_type_ids: string[] }>('PUT', `/categories/${encodeURIComponent(id)}/relation-types`, { relation_type_ids: suggested })).relation_type_ids ?? [];
+      markSaved('suggestions');
       saved = 'Suggestions saved.';
     } catch (err) {
       error = messageOf(err);
@@ -194,6 +234,7 @@
     try {
       await request('PUT', `/categories/${encodeURIComponent(id)}/scan-template`, { scan_template_id: scanTemplate || null });
       savedScanTemplate = scanTemplate;
+      markSaved('scan');
       afterSaving = null;
       conflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/scan-conflicts')).categories ?? {};
       saved = 'Scan template saved.';
@@ -232,6 +273,7 @@
     try {
       await request('PUT', `/categories/${encodeURIComponent(id)}/label-template`, { label_template_ids: labelList });
       savedLabelList = [...labelList];
+      markSaved('labels');
       labelAfterSaving = null;
       labelConflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')).categories ?? {};
       saved = 'Label templates saved.';
@@ -246,6 +288,7 @@
     const chosen = actions.filter((a) => offered[a.id]?.on).map((a) => ({ action_id: a.id, cascades: offered[a.id]!.cascades }));
     try {
       await request('PUT', `/categories/${encodeURIComponent(id)}/actions`, { actions: chosen });
+      markSaved('actions');
       saved = 'Actions saved.';
     } catch (err) {
       error = messageOf(err);
@@ -257,6 +300,7 @@
     error = saved = '';
     try {
       scopeIds = (await request<{ scope_ids: string[] }>('PUT', `/categories/${encodeURIComponent(id)}/scopes`, { scope_ids: scopeIds })).scope_ids ?? [];
+      markSaved('scopes');
       saved = 'Scopes saved.';
     } catch (err) {
       error = messageOf(err);
@@ -356,8 +400,18 @@
   {#if isNew}New category{:else if category}<span aria-hidden="true" class="inline-block h-5 w-5 rounded-full border border-zinc-300 dark:border-zinc-600" style="background-color: {category.color_hex}"></span>{category.name}{:else}Category{/if}
 </h1>
 
+{#if category && assetCount !== null}
+  <p class="-mt-2 mb-4 text-sm">
+    <a class="underline" href="/assets?category={encodeURIComponent(id)}">{assetCount === 0 ? 'No assets in it yet' : `See its ${assetCount} asset${assetCount === 1 ? '' : 's'}`}</a>
+  </p>
+{/if}
 <ErrorMessage {error} />
 {#if saved}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{saved}</p>{/if}
+{#if unsaved.length}
+  <p class="mb-2 text-sm text-amber-900 dark:text-amber-200">
+    <span aria-hidden="true">⚠ </span>Not saved yet: {unsaved.map((k) => sectionNames[k]).join(', ')}. Each part of this page saves with its own button.
+  </p>
+{/if}
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
@@ -454,7 +508,7 @@
       <div class="flex flex-wrap gap-2">
         <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create category' : 'Save'}</button>
         {#if !isNew}
-          <a class="btn-secondary" href="/categories/new?parent={encodeURIComponent(id)}">Add subcategory</a>
+          <a class="btn-secondary" href="/categories/new?parent={encodeURIComponent(id)}">New subcategory</a>
           <ConfirmButton label="Delete" question="Delete this category? Its subcategories move to the top level." onconfirm={remove} />
         {/if}
       </div>
@@ -467,7 +521,9 @@
     <section aria-labelledby="fields-heading">
       <h2 id="fields-heading" class="mb-2 text-lg font-semibold">Fields</h2>
       {#if effective.length === 0}
-        <p class="text-sm text-zinc-600 dark:text-zinc-400">Assets in this category record no fields yet.</p>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">
+          Assets in this category record no fields yet.{#if canManage && !allFields.length}{' '}Make fields, such as a serial number, on the <a class="underline" href="/fields">Fields</a> page first.{/if}
+        </p>
       {:else}
         <table class="mb-4 w-full max-w-3xl text-left text-sm">
           <thead class="border-b border-zinc-300 dark:border-zinc-700">
@@ -573,7 +629,7 @@
         <h2 id="labels-heading" class="mb-1 text-lg font-semibold">Labels</h2>
         {#if canManage && labelTemplates.length}
           <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
-            The templates its assets, and those of its subcategories, join the spool with, unless they choose their own. Each
+            The templates its assets, and those of its subcategories, join the print queue with, unless they choose their own. Each
             label takes the first that suits the printer it goes to, so the same label can come in several sizes.
           </p>
           <form class="mb-4 space-y-2" aria-label="Label templates" onsubmit={saveLabelTemplates}>
@@ -613,7 +669,7 @@
         {/if}
         {#if canSpool}
           <div class="flex flex-wrap items-center gap-3">
-            <AddToSpool what={() => ({ category_id: id, subcategories: withSubcategories })} label="Add its assets to the spool" />
+            <AddToSpool what={() => ({ category_id: id, subcategories: withSubcategories })} label="Add its assets to the print queue" />
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={withSubcategories} /> With its subcategories’</label>
           </div>
         {/if}
@@ -638,15 +694,16 @@
     {/if}
     {#if canSeeScopes && scopes.length}
       <section class="mt-6 max-w-2xl" aria-labelledby="scopes-heading">
-        <h2 id="scopes-heading" class="mb-1 text-lg font-semibold">Scopes</h2>
+        <h2 id="scopes-heading" class="mb-1 text-lg font-semibold">Who can see its assets</h2>
         <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Its assets, and those of its subcategories, are in these scopes, and roles holding permissions in them act on
-          those assets. Assets in no scope are in <span class="font-mono">default</span>.
+          Its assets, and those of its subcategories, are in the scopes ticked, and roles holding permissions in them act on
+          those assets. Ticking <strong>public</strong> lets anyone see them, even signed out, as by scanning a label. Assets in no
+          scope are in <span class="font-mono">default</span>.
         </p>
         <form class="space-y-2" onsubmit={saveScopes}>
           {#each scopes as s (s.id)}
             <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" value={s.id} bind:group={scopeIds} disabled={!canScope} /> <span class="font-mono">{s.name}</span>
+              <input type="checkbox" value={s.id} bind:group={scopeIds} disabled={!canScope} /> <span class="font-mono">{s.name}</span>{#if s.name === 'public'}<span class="text-zinc-600 dark:text-zinc-400">: anyone, even signed out</span>{/if}
             </label>
           {/each}
           {#if canScope}<button type="submit" class="btn-secondary">Save scopes</button>{/if}

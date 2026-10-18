@@ -93,7 +93,7 @@ export interface Category {
   low_stock_threshold?: number | null;
   /** The scan template its assets, and its subcategories' that name none, show. */
   scan_template_id?: string | null;
-  /** The label template its assets, and its subcategories' that name none, join the spool with. */
+  /** The label template its assets, and its subcategories' that name none, join the print queue with. */
   label_template_id?: string | null;
   /** Its label templates, in order of preference; the first is label_template_id. */
   label_template_ids?: string[];
@@ -605,7 +605,7 @@ export interface SpoolActor {
   token?: boolean;
 }
 
-/** One asset's label in the spool: waiting, or printed once printed_at is set. */
+/** One asset's label in the print queue: waiting, or printed once printed_at is set. */
 export interface SpoolEntry {
   id: string;
   asset_id: string;
@@ -643,7 +643,7 @@ export interface Spool {
   fit_warnings?: Record<string, Record<string, string[]>>;
 }
 
-/** What adding to the spool did. */
+/** What adding to the print queue did. */
 export interface SpoolAddResult {
   added: SpoolEntry[];
   already_waiting: string[];

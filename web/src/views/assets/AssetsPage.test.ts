@@ -85,7 +85,7 @@ describe('AssetsPage', () => {
     expect(marks[0]!.closest('tr')!.textContent).toContain('Kettle');
   });
 
-  it('adds the selection, or everything the filters match, to the spool', async () => {
+  it('adds the selection, or everything the filters match, to the print queue', async () => {
     navigate('/assets', true);
     session.permissions = ['assets.read', 'labels.print'];
     const { sent } = fakeApi({
@@ -96,10 +96,10 @@ describe('AssetsPage', () => {
     render(AssetsPage, { params: {} });
     expect(await screen.findByRole('img', { name: 'Label template chosen by a tie between categories' })).toBeTruthy();
     await fireEvent.change(screen.getByLabelText('Condition'), { target: { value: 'problem' } });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Add all 2 to the spool' }));
-    expect(await screen.findByText('Added 1 label to the spool.')).toBeTruthy();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add all 2 to the print queue' }));
+    expect(await screen.findByText('Added 1 label to the print queue.')).toBeTruthy();
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Select Saw' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Add 1 to the spool' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add 1 to the print queue' }));
     const spooled = () => sent.filter((r) => r.method === 'POST' && r.path === '/spool');
     await vi.waitFor(() => expect(spooled().length).toBe(2));
     expect(spooled().map((r) => r.body)).toEqual([{ filter: { condition: 'problem' } }, { asset_ids: ['a2'] }]);
@@ -109,6 +109,6 @@ describe('AssetsPage', () => {
     fakeApi({ 'GET /categories': () => ({ categories: [category] }), 'GET /assets': () => ({ assets: [asset('a1', 'Drill')] }) });
     render(AssetsPage, { params: {} });
     await screen.findByRole('link', { name: 'Drill' });
-    expect(screen.queryByRole('button', { name: /to the spool/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /to the print queue/ })).toBeNull();
   });
 });

@@ -117,7 +117,7 @@
   <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={enabled} /> Enabled</label>
 
   <div class="flex flex-wrap gap-2">
-    <button type="submit" class="btn-primary" disabled={busy}>{start ? 'Save channel' : 'Add channel'}</button>
+    <button type="submit" class="btn-primary" disabled={busy}>{start ? 'Save channel' : 'Create channel'}</button>
     <button type="button" class="btn-secondary" onclick={oncancel}>Cancel</button>
   </div>
 </form>

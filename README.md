@@ -704,7 +704,7 @@ Spreadsheet formula injection is defused: on export a cell beginning with `=`, `
 
 #### The Spool
 
-The spool (migration `023`) is a print queue that labels gather in over time, to be sorted onto templates and printers in bulk and printed together. There is one, shared by everyone with `labels.print`, which every spool endpoint needs; each entry also needs its asset readable in its scopes (§3.3), and entries for assets a requester cannot read are neither listed nor changed for them.
+The spool (migration `023`), the **Print queue** in the web app, is a print queue that labels gather in over time, to be sorted onto templates and printers in bulk and printed together. There is one, shared by everyone with `labels.print`, which every spool endpoint needs; each entry also needs its asset readable in its scopes (§3.3), and entries for assets a requester cannot read are neither listed nor changed for them.
 
 * **Label templates on categories** (migration `030`): a category names the label templates its assets join the spool with, in order of preference, up to 10 (`PUT /api/v1/categories/{id}/label-template` with `{"label_template_ids": [...]}`, or `{"label_template_id"}` for one, an empty list or null for none; `categories.manage`), and its subcategories take them unless they name their own. A category answers with `label_template_ids` and the first as `label_template_id`; the one template a category named before migration `030` becomes its first. The list is chosen as scan templates are (§6.4): the closest category, ties settled by depth, size and age, with no default; categories naming the same list in the same order agree. An asset's `label_template` gives the choice, with the list as `template_ids`; ties are marked as for scan templates, listed by `GET /api/v1/assets?conflict=label_template` and `GET /api/v1/categories/label-conflicts` (which takes `label_template_ids=a,b` to ask as if a category named them). A template a category names cannot be deleted (`409`).
 * **Entries:** each is one asset's label: a template, a destination (`printer:<id>`, `pool:<id>`, `download`, or none yet), copies (1–20), who added it and when. An asset may wait more than once with different templates, but adding one already waiting with the same template adds nothing. Deleting a printer or a template leaves its entries without one. At most 5,000 labels wait at once; an add that would pass that adds nothing (`422`).
@@ -1064,6 +1064,7 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Setting someone's password from Users and `bam admin password`, `bam admin create --name`, a setup checklist on the home page, and pages that say what someone may do and what a page needs (§3.4).
 * [x] Where things are: a place in the asset form, the list and asset pages, search by place, and the next code suggested (§3.5).
 * [x] Phones: a one-row header with a menu, tables as cards, folded filters and help topics, and touch-sized editor handles (§1).
+* [x] Plainer words (the Print queue, Link types, Code type, the roll loaded, printer models by make), creating with New, the category page's unsaved changes and its assets, and empty lists that say what to do (§1).
 
 ### Upcoming Features
 

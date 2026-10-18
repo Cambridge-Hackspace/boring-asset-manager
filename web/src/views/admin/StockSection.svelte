@@ -65,7 +65,7 @@
   <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
     <h2 id="stock-heading" class="text-xl font-semibold">Label stock</h2>
     {#if canManage && editing === null}
-      <button type="button" class="btn-secondary" onclick={() => edit()}>Add stock</button>
+      <button type="button" class="btn-secondary" onclick={() => edit()}>New label stock</button>
     {/if}
   </div>
   <p class="mb-3 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">

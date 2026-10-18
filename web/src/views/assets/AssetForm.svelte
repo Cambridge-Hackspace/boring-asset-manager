@@ -36,7 +36,7 @@
   let place = $state<{ id: string; name: string } | null>(null);
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
-  // New assets' labels join the spool (README §6.2), as each person last chose.
+  // New assets' labels join the print queue (README §6.2), as each person last chose.
   const canSpool = isNew && session.can('labels.print');
   let queueLabel = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
 
@@ -306,7 +306,7 @@
     </details>
 
     {#if canSpool}
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabel} /> Add a label to the spool</label>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabel} /> Add a label to the print queue</label>
     {/if}
     <div class="flex gap-2">
       <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create asset' : 'Save'}</button>

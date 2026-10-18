@@ -211,7 +211,7 @@
       {:else}
         {#if session.canOn(asset.scopes, 'assets.write')}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>{/if}
         {#if session.canAnyOn(asset.scopes, 'assets.report', 'assets.write') && !reporting}
-          <button type="button" class="btn-secondary" onclick={() => (reporting = true)}>Report a problem</button>
+          <button type="button" class="btn-secondary" onclick={() => (reporting = true)}>{asset.asset.condition === 'ok' ? 'Report a problem' : 'Update the problem'}</button>
         {/if}
         {#if asset.asset.condition !== 'ok' && session.canOn(asset.scopes, 'assets.write')}
           <button type="button" class="btn-secondary" disabled={busy} onclick={markWorking}>Mark as working</button>

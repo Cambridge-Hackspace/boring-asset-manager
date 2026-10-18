@@ -113,7 +113,7 @@
         <input id={id('size')} class="input" type="number" min="1" step="0.5" value={e.font_size} onchange={(ev) => setNumber('font_size', ev.currentTarget.value)} />
       </div>
       <div>
-        <label class="label" for={id('min')}>Shrink to (pt)</label>
+        <label class="label" for={id('min')}>Smallest, if it must shrink (pt)</label>
         <input id={id('min')} class="input" type="number" min="1" step="0.5" value={e.min_font_size ?? ''} onchange={(ev) => setNumber('min_font_size', ev.currentTarget.value)} />
       </div>
       <div>
@@ -145,11 +145,15 @@
   {:else if e.type === 'generator'}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
       <div>
-        <label class="label" for={id('gen')}>Symbology</label>
+        <label class="label" for={id('gen')}>Code type</label>
         <select id={id('gen')} class="input" value={e.generator_type} onchange={(ev) => setGeneratorType(ev.currentTarget.value)}>
           {#each generators as g (g.type)}<option value={g.type}>{g.name}</option>{/each}
         </select>
       </div>
+    </div>
+    <details class="text-sm">
+      <summary class="cursor-pointer">More settings</summary>
+      <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
       {#if generator?.error_correction_levels.length}
         <div>
           <label class="label" for={id('ecc')}>Error correction</label>
@@ -182,7 +186,8 @@
         />
         <p id={id('module-help')} class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">For the scanners in use; 0.3 mm suits most phones.</p>
       </div>
-    </div>
+      </div>
+    </details>
   {:else}
     <ImagePicker value={e.image_id ?? ''} onpick={(imageId) => set('image_id', imageId)} />
   {/if}

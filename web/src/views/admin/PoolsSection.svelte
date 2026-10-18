@@ -8,7 +8,7 @@
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Printer pools (README §6.2): printers loaded alike that share print
-  // jobs from the spool. Managed with the printers.
+  // jobs from the print queue. Managed with the printers.
   let { printers }: { printers: Printer[] } = $props();
 
   let pools = $state<PrinterPool[]>([]);
@@ -84,11 +84,11 @@
   <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
     <h2 id="pools-heading" class="text-xl font-semibold">Pools</h2>
     {#if canManage && editing === null}
-      <button type="button" class="btn-secondary" onclick={() => edit()} disabled={!printers.length}>Add pool</button>
+      <button type="button" class="btn-secondary" onclick={() => edit()} disabled={!printers.length}>New pool</button>
     {/if}
   </div>
   <p class="mb-3 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
-    Printers loaded alike share the spool's jobs sent to their pool: each takes the next batch of labels when it has sent
+    Printers loaded alike share the print queue's jobs sent to their pool: each takes the next batch of labels when it has sent
     its last, so a faster printer prints more. Printers behind a spooler (IPP or Windows) take a fixed share instead, as
     every printer does when the pool says so.
   </p>

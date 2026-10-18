@@ -121,7 +121,7 @@
 
   function remove() {
     const n = selected.length;
-    return act(`Removed ${count(n)} from the spool.`, async () => {
+    return act(`Removed ${count(n)} from the print queue.`, async () => {
       await request('POST', '/spool/remove', { entry_ids: selected });
       selected = [];
     });
@@ -154,7 +154,7 @@
   }
 
   function cancel(j: SpoolJob) {
-    return act(`Canceled; its ${count(j.labels)} wait in the spool again.`, () => request('POST', `/spool/jobs/${encodeURIComponent(j.id)}/cancel`));
+    return act(`Canceled; its ${count(j.labels)} wait in the print queue again.`, () => request('POST', `/spool/jobs/${encodeURIComponent(j.id)}/cancel`));
   }
 
   async function resend(j: SpoolJob) {
@@ -189,7 +189,7 @@
       saveBlob(blob, filename);
       await load();
       const left = spool.entries.filter((e) => entries.some((d) => d.id === e.id)).length;
-      status = `Downloaded ${count(entries.length - left)}.` + (left ? ` ${count(left)} could not be produced and stayed in the spool.` : '');
+      status = `Downloaded ${count(entries.length - left)}.` + (left ? ` ${count(left)} could not be produced and stayed in the print queue.` : '');
     } catch (err) {
       error = messageOf(err);
     }
@@ -200,7 +200,7 @@
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Spool</h1>
+  <h1 class="text-2xl font-bold">Print queue</h1>
   <div class="flex gap-1" role="group" aria-label="Show">
     {#each [['waiting', 'Waiting'], ['jobs', 'Jobs'], ['printed', 'Printed']] as [key, label] (key)}
       <button type="button" class={view === key ? 'btn-primary' : 'btn-secondary'} aria-pressed={view === key} onclick={() => show(key as View)}>{label}</button>
@@ -224,7 +224,7 @@
 {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading the spool…</p>
+  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading the print queue…</p>
 {:else if view === 'jobs'}
   {#if jobs.length === 0}
     <p class="text-sm text-zinc-600 dark:text-zinc-400">No print jobs{older ? '' : ' in the last 30 days'}.</p>
@@ -285,7 +285,7 @@
   {/if}
 {:else if spool.entries.length === 0}
   <p class="text-sm text-zinc-600 dark:text-zinc-400">
-    {#if view === 'printed'}Nothing printed{older ? '' : ' in the last 30 days'}.{:else}The spool is empty. Add labels from the asset list, a category, or an asset's page.{/if}
+    {#if view === 'printed'}Nothing printed{older ? '' : ' in the last 30 days'}.{:else}The print queue is empty. Add labels from the asset list, a category, or an asset's page.{/if}
   </p>
 {:else}
   <p class="sr-only" role="status">{count(spool.entries.length)}, {selected.length} selected.</p>
@@ -295,7 +295,7 @@
     <section class="sticky top-0 z-10 mb-4 rounded border border-zinc-300 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900" aria-label="Change the selected labels">
       <p class="mb-2 text-sm font-medium">{count(selected.length)} selected</p>
       {#if view === 'printed'}
-        <button type="button" class="btn-primary" onclick={printAgain}>Print again</button>
+        <button type="button" class="btn-primary" onclick={printAgain}>Put back in the queue</button>
       {:else}
         <div class="flex flex-wrap items-end gap-3">
           <button type="button" class="btn-primary" onclick={() => print(selected)}>Print</button>
