@@ -358,3 +358,18 @@ func TestDiscordActionEmbed(t *testing.T) {
 		t.Errorf("an action: %+v", e)
 	}
 }
+
+func TestDiscordNamesTheAssistant(t *testing.T) {
+	n := Notification{BaseURL: "https://bam.example", Event: models.Event{
+		Kind: models.EventAssetAction,
+		Payload: models.EventPayload{
+			Asset:   &models.EventAsset{ID: "a1", Name: "Drawer A3"},
+			Trigger: models.TriggerManual,
+			Actor:   &models.EventActor{ID: "u1", Name: "Ada", Via: "Claude_Desktop"},
+			Action:  &models.EventAction{Key: "identify", Label: "Identify"},
+		},
+	}}
+	if e := discordPayload(n).Embeds[0]; e.Description != `Pressed by Ada, via Claude\_Desktop.` {
+		t.Errorf("through an assistant: %+v", e)
+	}
+}

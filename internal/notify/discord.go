@@ -163,7 +163,7 @@ func discordPayload(n Notification) discordMessage {
 	}
 	by := ""
 	if p.Actor != nil && p.Actor.Display() != "" {
-		by = escapeMarkdown(p.Actor.Display())
+		by = escapeMarkdown(p.Actor.Signature())
 	}
 
 	switch {

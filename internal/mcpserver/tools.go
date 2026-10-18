@@ -43,8 +43,9 @@ func define[In, Out any](def *mcp.Tool, routes, needs []string, h func(context.C
 	}
 	return tool{def: def, routes: routes, needs: needs, add: func(s *mcp.Server, e *env) {
 		d := *def // AddTool fills in schemas; each server gets its own copy
-		mcp.AddTool(s, &d, func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		mcp.AddTool(s, &d, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 			var zero Out
+			ctx = WithVia(ctx, clientName(req))
 			if !def.Annotations.ReadOnlyHint {
 				if wait := e.changes.take(e.caller.key()); wait > 0 {
 					return nil, zero, fmt.Errorf("too many changes: at most %d a minute on this server. Try again in %d seconds",

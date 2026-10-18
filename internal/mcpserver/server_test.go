@@ -216,3 +216,35 @@ func FuzzToolArguments(f *testing.F) {
 		}
 	})
 }
+
+// TestToolsCarryTheClientsName passes the MCP client's name to the API, for
+// history to record, cleaned, or "MCP" when there is none.
+func TestToolsCarryTheClientsName(t *testing.T) {
+	var got []string
+	e := &env{caller: Caller{Kind: "token", ID: "t", Name: "T", Permissions: map[string]bool{"assets.write": true}}, changes: newChangeLimiter(),
+		api: func(ctx context.Context, _, _ string, _ []byte, _ string) Response {
+			got = append(got, ViaFrom(ctx))
+			return Response{Status: 200, Body: []byte("{}")}
+		}}
+	for _, name := range []string{"Claude Desktop", "Bad\x00\nName", ""} {
+		s := newServer(e, mcp.NewSchemaCache(), fakeTools())
+		st, ct := mcp.NewInMemoryTransports()
+		if _, err := s.Connect(context.Background(), st, nil); err != nil {
+			t.Fatal(err)
+		}
+		cs, err := mcp.NewClient(&mcp.Implementation{Name: name, Version: "1"}, nil).Connect(context.Background(), ct, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "change", Arguments: map[string]any{"items": []string{"a"}}}); err != nil {
+			t.Fatal(err)
+		}
+		cs.Close()
+	}
+	if want := []string{"Claude Desktop", "BadName", "MCP"}; !slices.Equal(got, want) {
+		t.Errorf("via %q, want %q", got, want)
+	}
+	if ViaFrom(context.Background()) != "" {
+		t.Error("a plain context names an assistant")
+	}
+}

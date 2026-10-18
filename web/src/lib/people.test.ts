@@ -21,6 +21,9 @@ describe('actorName', () => {
   it('names API tokens as such, and people by name', () => {
     expect(actorName({ name: 'Dashboard', token: true })).toBe('API token “Dashboard”');
     expect(actorName({ name: 'Ada' })).toBe('Ada');
+    expect(actorName({ name: 'Ada', via: 'Claude Desktop' })).toBe('Ada, via Claude Desktop');
+    expect(actorName({ id: 'u1', name: 'Ada', via: 'MCP' }, 'u1')).toBe('you, via MCP');
+    expect(actorName({ name: 'Front desk', token: true, via: 'Claude Code' })).toBe('API token “Front desk”, via Claude Code');
     expect(actorName({})).toBe('Unnamed user');
   });
 });

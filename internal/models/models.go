@@ -260,6 +260,18 @@ type EventActor struct {
 	Name  string `json:"name,omitempty"`
 	// Token is set when an API token acted; ID and Name are then the token's.
 	Token bool `json:"token,omitempty"`
+	// Via names the assistant the change was made through, by the name its
+	// MCP client gives, or "MCP" when it gives none (README §6.6).
+	Via string `json:"via,omitempty"`
+}
+
+// Signature is who acted, as messages name them: the name, and the
+// assistant they acted through, if any ("Ada, via Claude Desktop").
+func (a *EventActor) Signature() string {
+	if a.Via == "" {
+		return a.Display()
+	}
+	return a.Display() + ", via " + a.Via
 }
 
 // APIToken is a token for scripts and dashboards. Its secret is shown once,
