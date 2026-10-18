@@ -159,7 +159,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 	if err != nil {
 		return store.SpoolOutcome{Failure: b.TemplateName + " could not be read: it may have been deleted"}
 	}
-	plan, _, err := planFor(p, t)
+	plan, t, _, err := s.planFor(p, t)
 	if err != nil {
 		// In a pool, the rest take it.
 		return store.SpoolOutcome{Failure: fmt.Sprintf("%s does not suit %s: %v", t.Name, p.Name, err), HandBack: b.PoolID != ""}

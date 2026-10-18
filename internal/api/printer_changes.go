@@ -73,11 +73,11 @@ func (s *Server) printerChanges(next *models.Printer) (PrinterChanges, map[strin
 		t := &templates[i]
 		templateByID[t.ID] = t
 		for _, p := range all {
-			_, _, err := planFor(&p, t)
+			_, _, _, err := s.planFor(&p, t)
 			before[key{t.ID, p.ID}] = err == nil
 			after[key{t.ID, p.ID}] = err == nil
 		}
-		_, _, err := planFor(next, t)
+		_, _, _, err := s.planFor(next, t)
 		after[key{t.ID, next.ID}] = err == nil
 	}
 	anyFits := func(fits map[key]bool, templateID string, printerIDs []string) bool {
