@@ -169,7 +169,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check the template against the printer before laying out assets.
-	plan, err := planFor(p, t)
+	plan, warnings, err := planFor(p, t)
 	if errors.Is(err, printers.ErrDoesNotFit) {
 		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -214,29 +214,39 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		"printer_id": p.ID,
 		"labels":     len(rendered),
 		"bytes":      len(job),
+		"warnings":   nonNil(warnings),
 	})
 }
 
 // planFor plans printing labels of template t on printer p: its driver's
-// plan, or an error wrapping printers.ErrDoesNotFit when they do not suit
-// the media loaded.
-func planFor(p *models.Printer, t *labels.Template) (printers.Plan, error) {
-	driver, err := printers.Lookup(p.Driver)
-	if err != nil {
-		return nil, fmt.Errorf("finding the printer's driver: %w", err)
-	}
-	label := printers.LabelSpec{WidthMM: t.Width, HeightMM: t.Height, DPI: t.DPI}
-	if t.Units == labels.UnitsIn {
-		label.WidthMM, label.HeightMM = t.Width*25.4, t.Height*25.4
-	}
-	return driver.Plan(store.PrinterSettings(p), label)
+// plan and warnings for the person printing, or an error wrapping
+// printers.ErrDoesNotFit when they do not suit the media loaded.
+func planFor(p *models.Printer, t *labels.Template) (printers.Plan, []string, error) {
+	plan, fit, err := printers.PlanLabel(p.Driver, store.PrinterSettings(p), labelSpec(t))
+	return plan, fit.Warnings, err
 }
 
-// FitRequest asks whether labels of a physical size suit a printer.
+// labelSpec is a template's size in millimeters, with its elements' boxes
+// as its content.
+func labelSpec(t *labels.Template) printers.LabelSpec {
+	mm := 1.0
+	if t.Units == labels.UnitsIn {
+		mm = 25.4
+	}
+	label := printers.LabelSpec{WidthMM: t.Width * mm, HeightMM: t.Height * mm, DPI: t.DPI}
+	for _, e := range t.Elements {
+		label.Content = append(label.Content, printers.RectMM{X: e.X * mm, Y: e.Y * mm, Width: e.Width * mm, Height: e.Height * mm})
+	}
+	return label
+}
+
+// FitRequest asks whether labels of a physical size suit a printer, and
+// optionally where they have content, for warnings.
 type FitRequest struct {
-	WidthMM  float64 `json:"width_mm"`
-	HeightMM float64 `json:"height_mm"`
-	DPI      int     `json:"dpi"`
+	WidthMM  float64           `json:"width_mm"`
+	HeightMM float64           `json:"height_mm"`
+	DPI      int               `json:"dpi"`
+	Content  []printers.RectMM `json:"content,omitempty"`
 }
 
 // handlePrinterFit runs a printer's fit check without printing, for the
@@ -251,18 +261,22 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "width_mm, height_mm and dpi must be positive")
 		return
 	}
-	driver, err := printers.Lookup(p.Driver)
-	if err != nil {
-		writeServerError(w, err, "find the printer's driver")
-		return
-	}
-	_, err = driver.Plan(store.PrinterSettings(p), printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI})
+	label := printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI, Content: req.Content}
+	_, fit, err := printers.PlanLabel(p.Driver, store.PrinterSettings(p), label)
 	switch {
 	case errors.Is(err, printers.ErrDoesNotFit):
-		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "message": err.Error()})
+		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "message": err.Error(), "warnings": []string{}})
 	case err != nil:
 		writeServerError(w, err, "check the fit")
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"fits": true})
+		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "warnings": nonNil(fit.Warnings)})
 	}
+}
+
+// nonNil is list, or an empty one, so it is written as [] rather than null.
+func nonNil(list []string) []string {
+	if list == nil {
+		return []string{}
+	}
+	return list
 }

@@ -1,0 +1,73 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+// edgeTemplate is landscapeTemplate with its name at the very top of the
+// label, where a QL does not print on 29 mm tape.
+const edgeTemplate = `{"name":"Edge","units":"mm","width":90,"height":29,"dpi":300,"elements":[
+  {"type":"generator","generator_type":"qr","x":3,"y":3,"width":23,"height":23,"content_binding":"{{base_url}}/a/{{asset.id}}"},
+  {"type":"text","x":28,"y":0,"width":58,"height":10,"font_size":16,"content_binding":"{{asset.name}}"}]}`
+
+func TestFitWarningsReachThePersonPrinting(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ql := newFakeQL(t)
+	printerID := createPrinter(t, srv, cookie, ql.port(), "dk-11201")
+	edge := createTemplate(t, srv, cookie, edgeTemplate)
+	clean := createTemplate(t, srv, cookie, landscapeTemplate)
+	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+
+	// The editor's fit check, with and without content where it does not print.
+	var fit struct {
+		Fits     bool
+		Warnings []string
+	}
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/fit", `{"width_mm":90,"height_mm":29,"dpi":300,"content":[{"x":28,"y":0,"width":58,"height":10}]}`)
+	_ = json.Unmarshal(rec.Body.Bytes(), &fit)
+	if !fit.Fits || len(fit.Warnings) != 1 || !strings.Contains(fit.Warnings[0], "does not print") {
+		t.Errorf("fit check with content at the edge: %s", rec.Body)
+	}
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/fit", `{"width_mm":90,"height_mm":29,"dpi":300}`)
+	if !strings.Contains(rec.Body.String(), `"warnings":[]`) {
+		t.Errorf("fit check without content: %s", rec.Body)
+	}
+
+	// Printing says so too, and prints.
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+edge+`","asset_ids":["`+asset.Asset.ID+`"],"copies":1}`)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "does not print") {
+		t.Errorf("printing: %d %s", rec.Code, rec.Body)
+	}
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+clean+`","asset_ids":["`+asset.Asset.ID+`"],"copies":1}`)
+	if !strings.Contains(rec.Body.String(), `"warnings":[]`) {
+		t.Errorf("printing a template that fits cleanly: %s", rec.Body)
+	}
+
+	// The spool lists them by template and printer, and printing from it
+	// repeats them, naming the printer.
+	entries := spoolTo(t, srv, cookie, printerID, edge, 1, asset.Asset.ID)
+	spool := spoolList(t, srv, cookie, "")
+	if w := spool.FitWarnings[edge]["printer:"+printerID]; len(w) != 1 || len(spool.FitWarnings[clean]) != 0 {
+		t.Errorf("the spool's warnings: %+v", spool.FitWarnings)
+	}
+	if len(spool.Entries) != 1 || len(spool.Entries[0].Problems) != 0 {
+		t.Errorf("a warning made a problem: %+v", spool.Entries)
+	}
+	// A pool's warnings name the printer each is about.
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printer-pools", `{"name":"Bench","members":[{"printer_id":"`+printerID+`"}]}`)
+	var pool struct{ Pool struct{ ID string } }
+	_ = json.Unmarshal(rec.Body.Bytes(), &pool)
+	spool = spoolList(t, srv, cookie, "")
+	if w := spool.FitWarnings[edge]["pool:"+pool.Pool.ID]; len(w) != 1 || !strings.HasPrefix(w[0], "QL dk-11201: ") {
+		t.Errorf("the pool's warnings: %+v", spool.FitWarnings)
+	}
+
+	resp := printSpool(t, srv, cookie, `{"entry_ids":["`+entries[0].ID+`"]}`, http.StatusCreated)
+	if len(resp.Jobs) != 1 || len(resp.Warnings) != 1 || !strings.HasPrefix(resp.Warnings[0], "QL dk-11201: ") {
+		t.Errorf("printing from the spool: %+v", resp)
+	}
+}

@@ -45,6 +45,19 @@ afterEach(() => {
 });
 
 describe('SpoolPage', () => {
+  it('shows what to know before printing beside labels that are ready', async () => {
+    fakeApi({
+      'GET /spool/jobs': () => ({ jobs: [] }),
+      'GET /spool': () => ({
+        ...spoolOf([entry('1', 'Bin 1', 'printer:p1', 'shelf'), entry('2', 'Bin 2', 'printer:p2', 'tag')]),
+        fit_warnings: { shelf: { 'printer:p1': ['Part of the template is where the printer does not print.'] } },
+      }),
+    });
+    render(SpoolPage, { params: {} });
+    expect((await screen.findByRole('list', { name: 'Before printing Bin 1' })).textContent).toContain('where the printer does not print');
+    expect(screen.queryByRole('list', { name: 'Before printing Bin 2' })).toBeNull();
+  });
+
   it('groups waiting labels by printer and template, with what keeps them from printing', async () => {
     fakeApi({
       'GET /spool/jobs': () => ({ jobs: [] }),

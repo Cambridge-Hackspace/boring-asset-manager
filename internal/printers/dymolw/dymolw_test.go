@@ -2,7 +2,6 @@ package dymolw
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"image"
@@ -144,41 +143,6 @@ func TestModelsAndMedia(t *testing.T) {
 	for _, name := range Models() {
 		if mo, _ := LookupModel(name); mo.Protocol != ProtocolV1 && mo.Protocol != ProtocolV2 {
 			t.Errorf("%s has no protocol", name)
-		}
-	}
-}
-
-func TestFit(t *testing.T) {
-	address, _ := LookupMedia("30252")
-	continuous, _ := LookupMedia("30270")
-	cases := []struct {
-		name          string
-		media         Media
-		width, height float64
-		dpi           int
-		rotate, fits  bool
-	}{
-		{"portrait", address, 28, 89, 300, false, true},
-		{"landscape rotates", address, 89, 28, 300, true, true},
-		{"within tolerance", address, 28.4, 88.6, 300, false, true},
-		{"wrong length", address, 28, 60, 300, false, false},
-		{"continuous", continuous, 57, 40, 300, false, true},
-		{"continuous landscape", continuous, 100, 57, 300, true, true},
-		{"continuous too short", continuous, 57, 5, 300, false, false},
-		{"wrong width", continuous, 62, 40, 300, false, false},
-		{"wrong dpi", address, 28, 89, 203, false, false},
-	}
-	for _, c := range cases {
-		p, err := c.media.Fit(c.width, c.height, c.dpi)
-		if c.fits != (err == nil) {
-			t.Errorf("%s: err = %v, want fits=%v", c.name, err, c.fits)
-			continue
-		}
-		if err != nil && !errors.Is(err, ErrDoesNotFit) {
-			t.Errorf("%s: error does not wrap ErrDoesNotFit: %v", c.name, err)
-		}
-		if err == nil && p.Rotate != c.rotate {
-			t.Errorf("%s: rotate = %v, want %v", c.name, p.Rotate, c.rotate)
 		}
 	}
 }

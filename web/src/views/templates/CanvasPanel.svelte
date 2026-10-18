@@ -4,6 +4,7 @@
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, Printer } from '../../lib/models';
   import { convertUnits, fromMM, toMM, type TemplateDoc, type Units } from '../../lib/template';
+  import FitWarnings from '../../components/FitWarnings.svelte';
 
   // The template's own settings: name, units, size and DPI, which can
   // be taken from a printer's loaded media; the printer's fit check runs as
@@ -24,7 +25,7 @@
   let printers = $state<Printer[]>([]);
   let drivers = $state<DriverInfo[]>([]);
   let printerId = $state('');
-  let fit = $state<{ fits: boolean; message?: string } | null>(null);
+  let fit = $state<{ fits: boolean; message?: string; warnings?: string[] } | null>(null);
   let fitError = $state('');
 
   onMount(async () => {
@@ -67,13 +68,20 @@
   // The fit check, re-run (debounced) as the size changes.
   $effect(() => {
     const id = printerId;
-    const body = { width_mm: toMM(doc.width, doc.units), height_mm: toMM(doc.height, doc.units), dpi: doc.dpi };
+    const mm = (v: number) => toMM(v, doc.units);
+    const body = {
+      width_mm: mm(doc.width),
+      height_mm: mm(doc.height),
+      dpi: doc.dpi,
+      // Where the template has content, for warnings about parts that will not print.
+      content: doc.elements.map((e) => ({ x: mm(e.x), y: mm(e.y), width: mm(e.width), height: mm(e.height) })),
+    };
     fit = null;
     fitError = '';
     if (!id) return;
     const timer = setTimeout(async () => {
       try {
-        fit = await request<{ fits: boolean; message?: string }>('POST', `/printers/${encodeURIComponent(id)}/fit`, body);
+        fit = await request<{ fits: boolean; message?: string; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(id)}/fit`, body);
       } catch (err) {
         fitError = messageOf(err);
       }
@@ -143,6 +151,7 @@
     <div aria-live="polite">
       {#if fit?.fits}
         <p class="text-sm text-green-700 dark:text-green-400">Fits this printer.</p>
+        <FitWarnings warnings={fit.warnings} />
       {:else if fit}
         <p class="error-text">{fit.message}</p>
       {:else if fitError}

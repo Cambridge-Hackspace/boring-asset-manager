@@ -7,10 +7,7 @@
 package brotherql
 
 import (
-	"errors"
-	"fmt"
 	"image"
-	"math"
 	"sort"
 )
 
@@ -25,13 +22,9 @@ const (
 
 // Continuous labels must be between these lengths, in raster lines.
 const (
-	minContinuousLines = 295
-	maxContinuousLines = 11811
+	MinContinuousLines = 295
+	MaxContinuousLines = 11811
 )
-
-// lengthTolerance absorbs rounding when matching template sizes to media, in
-// millimeters.
-const lengthTolerance = 0.5
 
 // Media is a Brother DK roll.
 type Media struct {
@@ -120,52 +113,11 @@ func Models() []string {
 	return []string{"QL-810W", "QL-820NWB"}
 }
 
-// ErrDoesNotFit is wrapped by every fit check failure.
-var ErrDoesNotFit = errors.New("template does not fit the loaded media")
-
 // Placement says how a label image maps onto the tape.
 type Placement struct {
 	// Rotate turns the image 90° counterclockwise so its height runs across
 	// the tape.
 	Rotate bool
-}
-
-// Fit checks that a label of the given physical size at dpi suits the media.
-// One side must equal the tape width; on die-cut media the other must equal
-// the label length. A label whose height matches the tape width is rotated.
-func (m Media) Fit(widthMM, heightMM float64, dpi int) (Placement, error) {
-	if dpi != DPI {
-		return Placement{}, fmt.Errorf("%w: Brother QL printers print at %d DPI, not %d", ErrDoesNotFit, DPI, dpi)
-	}
-	matches := func(a, b float64) bool { return math.Abs(a-b) <= lengthTolerance }
-
-	for _, p := range []Placement{{Rotate: false}, {Rotate: true}} {
-		across, along := widthMM, heightMM
-		if p.Rotate {
-			across, along = heightMM, widthMM
-		}
-		if !matches(across, m.WidthMM) {
-			continue
-		}
-		if m.DieCut() {
-			if matches(along, m.LengthMM) {
-				return p, nil
-			}
-			continue
-		}
-		lines := int(math.Round(along / 25.4 * DPI))
-		if lines < minContinuousLines || lines > maxContinuousLines {
-			return Placement{}, fmt.Errorf("%w: continuous labels must be %.1f-%.0f mm long (got %.1f mm)",
-				ErrDoesNotFit, float64(minContinuousLines)/DPI*25.4, float64(maxContinuousLines)/DPI*25.4, along)
-		}
-		return p, nil
-	}
-	if m.DieCut() {
-		return Placement{}, fmt.Errorf("%w: %s needs a %g × %g mm template (got %g × %g mm)",
-			ErrDoesNotFit, m.Name, m.WidthMM, m.LengthMM, widthMM, heightMM)
-	}
-	return Placement{}, fmt.Errorf("%w: %s needs one side of the template to be %g mm (got %g × %g mm)",
-		ErrDoesNotFit, m.Name, m.WidthMM, widthMM, heightMM)
 }
 
 // Prepare turns a rendered label into a page for the printer: rotated if

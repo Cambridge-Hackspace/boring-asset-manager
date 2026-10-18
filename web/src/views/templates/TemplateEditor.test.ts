@@ -57,6 +57,23 @@ describe('TemplateEditor', () => {
     expect((screen.getByLabelText('Top') as HTMLInputElement).value).toBe('5');
   });
 
+  it('checks the fit with the template content, and shows what to know before printing', async () => {
+    const { sent } = api({
+      'GET /printers': () => ({
+        printers: [{ id: 'p1', name: 'QL', driver: 'brother_ql', model: 'QL-810W', media: 'dk-11201', connection: { type: 'tcp', address: 'ql' }, created_at: '', updated_at: '',
+          loaded: { id: 'dk-11201', name: 'DK-11201 29 × 90 mm die-cut', width_mm: 29, length_mm: 90, die_cut: true } }],
+      }),
+      'POST /printers/p1/fit': () => ({ fits: true, warnings: ['Part of the template is where the printer does not print.'] }),
+    });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await fireEvent.change(await screen.findByLabelText('Printer'), { target: { value: 'p1' } });
+    expect(await screen.findByText('Fits this printer.', {}, { timeout: 2000 })).toBeTruthy();
+    expect(within(screen.getByRole('list', { name: 'Before printing' })).getByText(/does not print/)).toBeTruthy();
+    expect(screen.getByText('Loaded: DK-11201 29 × 90 mm die-cut.')).toBeTruthy();
+    const fit = sent.find((r) => r.path === '/printers/p1/fit')!;
+    expect(fit.body).toEqual({ width_mm: 90, height_mm: 29, dpi: 300, content: [{ x: 10, y: 5, width: 40, height: 10 }] });
+  });
+
   it('undoes a field edit even after focus moves on', async () => {
     api();
     render(TemplateEditor, { params: { id: 'ql90' } });

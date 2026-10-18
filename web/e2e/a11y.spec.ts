@@ -68,6 +68,14 @@ for (const scheme of ['light', 'dark'] as const) {
     // Custom stock loaded in a Rollo, for the printers page's stock.
     const bins = await post('/label-stock', { name: unique('A11y bins'), width_mm: 60, length_mm: 40, gap_mm: 3 });
     await post('/printers', { name: unique('A11y Rollo'), driver: 'tspl', model: 'Rollo X1038', media: bins.stock.id, connection: { type: 'tcp', address: '127.0.0.1:9' } });
+    // One waiting for the QL with its name where the QL does not print, so
+    // the spool shows a warning.
+    const edge = await post('/templates', {
+      name: unique('A11y edge'), units: 'mm', width: 62, height: 29, dpi: 300,
+      elements: [{ type: 'text', x: 0, y: 2, width: 50, height: 10, font_size: 12, content_binding: '{{asset.name}}' }],
+    });
+    const clamp = await post('/assets', { name: unique('Clamp') });
+    await post('/spool', { asset_ids: [clamp.asset.asset.id], template_id: edge.template.id, destination: `printer:${a11yPrinter.printer.id}` });
     // Labels waiting in the spool, one ready and one with problems.
     await post('/spool', { asset_ids: [asset.asset.asset.id], template_id: template.id, destination: 'download' });
     await post('/spool', { asset_ids: [box.asset.asset.id] });

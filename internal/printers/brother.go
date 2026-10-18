@@ -3,7 +3,6 @@ package printers
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"strings"
@@ -73,26 +72,47 @@ func (d brotherQL) Validate(s Settings) error {
 	return err
 }
 
-func (d brotherQL) Plan(s Settings, label LabelSpec) (Plan, error) {
+func (d brotherQL) media(s Settings) (brotherql.Media, error) {
 	if s.Stock != nil {
-		return nil, errNoCustomStock("Brother QL printers")
+		return brotherql.Media{}, errNoCustomStock("Brother QL printers")
 	}
 	media, ok := brotherql.LookupMedia(s.Media)
 	if !ok {
-		return nil, fmt.Errorf("unknown media %q", s.Media)
+		return media, fmt.Errorf("unknown media %q", s.Media)
+	}
+	return media, nil
+}
+
+func (d brotherQL) Geometry(s Settings) (Geometry, error) {
+	media, err := d.media(s)
+	if err != nil {
+		return Geometry{}, err
+	}
+	dots := func(n int) float64 { return float64(n) / brotherql.DPI * 25.4 }
+	g := Geometry{
+		DPI: brotherql.DPI, Prints: "Brother QL printers print", Roll: media.Name,
+		WidthMM: media.WidthMM, LengthMM: media.LengthMM,
+		MinLengthMM: dots(brotherql.MinContinuousLines), MaxLengthMM: dots(brotherql.MaxContinuousLines),
+		// The page is cropped to the printable pins around its center, and a
+		// die-cut label to its printable lines.
+		ReachMM: dots(media.PrintableDots),
+	}
+	if media.DieCut() {
+		g.ReachAlongMM = dots(media.PrintableLines)
+	}
+	return g, nil
+}
+
+func (d brotherQL) Plan(s Settings, f Fit) (Plan, error) {
+	media, err := d.media(s)
+	if err != nil {
+		return nil, err
 	}
 	opts, err := d.options(s.Options)
 	if err != nil {
 		return nil, err
 	}
-	placement, err := media.Fit(label.WidthMM, label.HeightMM, label.DPI)
-	if err != nil {
-		if errors.Is(err, brotherql.ErrDoesNotFit) {
-			return nil, fmt.Errorf("%w: %v", ErrDoesNotFit, strings.TrimPrefix(err.Error(), brotherql.ErrDoesNotFit.Error()+": "))
-		}
-		return nil, err
-	}
-	return brotherPlan{media: media, placement: placement, opts: opts}, nil
+	return brotherPlan{media: media, placement: brotherql.Placement{Rotate: f.Rotate}, opts: opts}, nil
 }
 
 type brotherPlan struct {

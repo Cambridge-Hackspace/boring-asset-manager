@@ -9,7 +9,6 @@ package tspl
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"image"
 	"math"
@@ -134,55 +133,11 @@ const (
 	MaxContinuousMM = 1000
 )
 
-// lengthTolerance absorbs rounding when matching template sizes to media, in
-// millimeters.
-const lengthTolerance = 0.5
-
-// ErrDoesNotFit is wrapped by every fit check failure.
-var ErrDoesNotFit = errors.New("template does not fit the loaded media")
-
 // Placement says how a label image maps onto the roll.
 type Placement struct {
 	// Rotate turns the image 90° counterclockwise so its height runs across
 	// the roll.
 	Rotate bool
-}
-
-// Fit checks that a label of the given physical size at dpi suits the model
-// and media. One side must equal the label width; on die-cut media the other
-// must equal the label length. A label whose height matches the label width
-// is rotated.
-func (m Media) Fit(mo Model, widthMM, heightMM float64, dpi int) (Placement, error) {
-	if dpi != mo.DPI {
-		return Placement{}, fmt.Errorf("%w: the %s prints at %d DPI, not %d", ErrDoesNotFit, mo.Name, mo.DPI, dpi)
-	}
-	matches := func(a, b float64) bool { return math.Abs(a-b) <= lengthTolerance }
-	for _, p := range []Placement{{Rotate: false}, {Rotate: true}} {
-		across, along := widthMM, heightMM
-		if p.Rotate {
-			across, along = heightMM, widthMM
-		}
-		if !matches(across, m.WidthMM) {
-			continue
-		}
-		if m.DieCut() {
-			if matches(along, m.LengthMM) {
-				return p, nil
-			}
-			continue
-		}
-		if along < MinContinuousMM || along > MaxContinuousMM {
-			return Placement{}, fmt.Errorf("%w: continuous labels must be %d-%d mm long (got %.1f mm)",
-				ErrDoesNotFit, MinContinuousMM, MaxContinuousMM, along)
-		}
-		return p, nil
-	}
-	if m.DieCut() {
-		return Placement{}, fmt.Errorf("%w: %s needs a %.4g × %.4g mm template (got %g × %g mm)",
-			ErrDoesNotFit, m.Name, m.WidthMM, m.LengthMM, widthMM, heightMM)
-	}
-	return Placement{}, fmt.Errorf("%w: %s needs one side of the template to be %.4g mm (got %g × %g mm)",
-		ErrDoesNotFit, m.Name, m.WidthMM, widthMM, heightMM)
 }
 
 // Prepare turns a rendered label into a page: rotated if the placement says

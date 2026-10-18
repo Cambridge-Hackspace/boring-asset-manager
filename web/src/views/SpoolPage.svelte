@@ -5,9 +5,10 @@
   import { messageOf } from '../lib/errors';
   import type { Spool, SpoolAddResult, SpoolDestination, SpoolEntry, SpoolJob, SpoolPrintResult } from '../lib/models';
   import { actorName } from '../lib/people';
-  import { addedMessage, destinationName, groupEntries, jobActive, jobStateName, poolsFor, printedMessage, printersFor, printing, shared, templateName, templatesFor } from '../lib/spool';
+  import { addedMessage, destinationName, entryWarnings, groupEntries, jobActive, jobStateName, poolsFor, printedMessage, printersFor, printing, shared, templateName, templatesFor } from '../lib/spool';
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
+  import FitWarnings from '../components/FitWarnings.svelte';
 
   // The spool (README §6.2): labels waiting to print, sorted onto templates
   // and printers in bulk and printed in the background; the jobs printing
@@ -419,6 +420,7 @@
                       </ul>
                     {:else}
                       <span class="text-zinc-600 dark:text-zinc-400">Ready</span>
+                      <FitWarnings warnings={entryWarnings(spool, e)} label="Before printing {e.asset_name}" />
                     {/if}
                   </td>
                 </tr>

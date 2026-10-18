@@ -82,12 +82,12 @@
     if (!testAsset) return;
     testStatus = '';
     try {
-      const res = await request<{ labels: number }>('POST', `/printers/${encodeURIComponent(p.id)}/print`, {
+      const res = await request<{ labels: number; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(p.id)}/print`, {
         template_id: testTemplate,
         asset_ids: [testAsset.asset.id],
         copies: 1,
       });
-      testStatus = `Sent ${res.labels} label to ${p.name}.`;
+      testStatus = [`Sent ${res.labels} label to ${p.name}.`, ...(res.warnings ?? [])].join(' ');
     } catch (err) {
       testStatus = messageOf(err);
     }

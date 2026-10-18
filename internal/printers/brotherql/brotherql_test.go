@@ -2,7 +2,6 @@ package brotherql
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"image"
 	"math/rand"
@@ -46,49 +45,6 @@ func TestPackBitsRoundTrip(t *testing.T) {
 	// A blank raster line compresses to two bytes.
 	if got := packBits(make([]byte, bytesPerLine)); len(got) != 2 {
 		t.Errorf("blank line packed to % X", got)
-	}
-}
-
-func TestFit(t *testing.T) {
-	dk22210, _ := LookupMedia("dk-22210")
-	dk11201, _ := LookupMedia("dk-11201")
-	dk22205, _ := LookupMedia("dk-22205")
-	dk11207, _ := LookupMedia("dk-11207")
-	dk22214, _ := LookupMedia("dk-22214")
-
-	cases := []struct {
-		name          string
-		media         Media
-		width, height float64
-		dpi           int
-		rotate        bool
-		fits          bool
-	}{
-		{"die-cut portrait", dk11201, 29, 90, 300, false, true},
-		{"die-cut landscape rotates", dk11201, 90, 29, 300, true, true},
-		{"die-cut within tolerance", dk11201, 29.2, 89.7, 300, false, true},
-		{"die-cut wrong length", dk11201, 29, 60, 300, false, false},
-		{"continuous portrait", dk22210, 29, 50, 300, false, true},
-		{"continuous landscape rotates", dk22205, 100, 62, 300, true, true},
-		{"continuous too short", dk22210, 29, 20, 300, false, false},
-		{"continuous too long", dk22210, 29, 1100, 300, false, false},
-		{"wrong width", dk22205, 50, 29, 300, false, false},
-		{"wrong dpi", dk22210, 29, 50, 203, false, false},
-		{"round", dk11207, 58, 58, 300, false, true},
-		{"narrow tape", dk22214, 12, 40, 300, false, true},
-	}
-	for _, c := range cases {
-		p, err := c.media.Fit(c.width, c.height, c.dpi)
-		if c.fits != (err == nil) {
-			t.Errorf("%s: err = %v, want fits=%v", c.name, err, c.fits)
-			continue
-		}
-		if err != nil && !errors.Is(err, ErrDoesNotFit) {
-			t.Errorf("%s: error does not wrap ErrDoesNotFit: %v", c.name, err)
-		}
-		if err == nil && p.Rotate != c.rotate {
-			t.Errorf("%s: rotate = %v, want %v", c.name, p.Rotate, c.rotate)
-		}
 	}
 }
 

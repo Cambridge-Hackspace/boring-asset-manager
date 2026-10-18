@@ -17,7 +17,7 @@ Each label takes the template its category names, under **Labels** on the catego
 
 On the spool, labels are grouped by printer and template. Tick some, or a whole group, then set their template, printer or copies together. Only printers and pools a template suits are offered, and only templates a printer or pool takes. **Download** stands in for a printer, for labels printed on sheets.
 
-Anything that keeps a label from printing is marked beside it: no template or printer, a template the printer does not suit, or an archived asset. So is why it failed last time, such as a printer that could not be reached; that does not stop it printing again, and changing the label clears it.
+Anything that keeps a label from printing is marked beside it: no template or printer, a template the printer does not suit, or an archived asset. So is why it failed last time, such as a printer that could not be reached; that does not stop it printing again, and changing the label clears it. Warnings, such as part of the template where its printer does not print, are shown beside labels that are ready; they never stop them printing.
 
 ## Printing
 

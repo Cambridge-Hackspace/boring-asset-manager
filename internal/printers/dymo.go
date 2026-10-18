@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"math"
@@ -125,19 +124,31 @@ func (d dymoLabelWriter) Validate(s Settings) error {
 	return err
 }
 
-func (d dymoLabelWriter) Plan(s Settings, label LabelSpec) (Plan, error) {
+func (d dymoLabelWriter) Geometry(s Settings) (Geometry, error) {
+	model, media, _, err := d.settings(s)
+	if err != nil {
+		return Geometry{}, err
+	}
+	g := Geometry{
+		DPI: dymolw.DPI, Prints: "LabelWriter printers print", Roll: media.Name,
+		WidthMM: media.WidthMM, LengthMM: media.LengthMM,
+		MinLengthMM: dymolw.MinContinuousMM, MaxLengthMM: dymolw.MaxContinuousMM,
+		// Labels sit against the guide at the head's first dot; the first
+		// generation is sent what its head reaches, from that edge.
+		ReachMM: float64(media.PageDots(model)) / dymolw.DPI * 25.4, FromNearEdge: true,
+	}
+	if s.Stock != nil && model.Protocol == dymolw.ProtocolV2 {
+		g.Warnings = append(g.Warnings, fmt.Sprintf("The %s prints only on genuine DYMO labels it can identify, which custom stock may not be.", model.Name))
+	}
+	return g, nil
+}
+
+func (d dymoLabelWriter) Plan(s Settings, f Fit) (Plan, error) {
 	model, media, opts, err := d.settings(s)
 	if err != nil {
 		return nil, err
 	}
-	placement, err := media.Fit(label.WidthMM, label.HeightMM, label.DPI)
-	if err != nil {
-		if errors.Is(err, dymolw.ErrDoesNotFit) {
-			return nil, fmt.Errorf("%w: %v", ErrDoesNotFit, strings.TrimPrefix(err.Error(), dymolw.ErrDoesNotFit.Error()+": "))
-		}
-		return nil, err
-	}
-	return dymoPlan{model: model, media: media, placement: placement, opts: opts}, nil
+	return dymoPlan{model: model, media: media, placement: dymolw.Placement{Rotate: f.Rotate}, opts: opts}, nil
 }
 
 type dymoPlan struct {

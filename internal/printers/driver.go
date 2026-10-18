@@ -17,16 +17,39 @@ type Driver interface {
 	Info() DriverInfo
 	// Validate checks the model, media and options of a printer definition.
 	Validate(s Settings) error
-	// Plan checks that labels of the given size suit the printer as
-	// configured, and returns how to encode them. Errors wrap ErrDoesNotFit
-	// when the label and the loaded media disagree.
-	Plan(s Settings, label LabelSpec) (Plan, error)
+	// Geometry describes the printer as configured, for FitLabel.
+	Geometry(s Settings) (Geometry, error)
+	// Plan returns how to encode labels that FitLabel found suit the
+	// printer as configured.
+	Plan(s Settings, f Fit) (Plan, error)
 }
 
-// LabelSpec is the physical size of a rendered label.
+// LabelSpec is the physical size of a rendered label, and where it has
+// content, for warnings about parts that will not print.
 type LabelSpec struct {
 	WidthMM, HeightMM float64
 	DPI               int
+	Content           []RectMM
+}
+
+// PlanLabel checks labels against a printer and plans printing them: the
+// driver's plan and the fit, whose warnings are for the person printing.
+// Errors wrap ErrDoesNotFit when the labels do not suit the roll loaded.
+func PlanLabel(driver string, s Settings, label LabelSpec) (Plan, Fit, error) {
+	d, err := Lookup(driver)
+	if err != nil {
+		return nil, Fit{}, err
+	}
+	g, err := d.Geometry(s)
+	if err != nil {
+		return nil, Fit{}, err
+	}
+	f, err := FitLabel(g, label)
+	if err != nil {
+		return nil, Fit{}, err
+	}
+	plan, err := d.Plan(s, f)
+	return plan, f, err
 }
 
 // Plan encodes labels for one printer.
