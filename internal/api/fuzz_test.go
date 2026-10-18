@@ -148,6 +148,8 @@ var fuzzRoutes = []route{
 	{method: "DELETE", path: "/api/v1/images/{image}"},
 	{method: "GET", path: "/api/v1/assets/{asset}/label", query: map[string][]string{"template_id": {"{template}"}, "format": {"svg", "pdf", "png"}, "mono": {"true"}}},
 	{method: "POST", path: "/api/v1/templates/preview", body: `{"template":` + fuzzTemplate + `,"asset_id":"{asset}"}`},
+	{method: "POST", path: "/api/v1/templates/adapt", body: `{"template":` + fuzzAdaptive + `,"width":40,"height":20,"dpi":203}`},
+	{method: "POST", path: "/api/v1/templates/range", body: `{"template":` + fuzzAdaptive + `}`},
 	{method: "POST", path: "/api/v1/labels/export", body: `{"template_id":"{template}","asset_ids":["{asset}"],"format":"zip","mono":true}`},
 	{method: "GET", path: "/api/v1/generators"},
 	{method: "GET", path: "/api/v1/printers/drivers"},
@@ -197,6 +199,13 @@ const fuzzTemplate = `{"id":"tag{n}","name":"Tag","units":"mm","width":62,"heigh
 	`{"type":"generator","generator_type":"qr","x":1,"y":1,"width":20,"height":20,"content_binding":"{{asset.code.qr}}"},` +
 	`{"type":"text","x":23,"y":1,"width":38,"height":10,"font_size":12,"wrap":true,"min_font_size":6,"content_binding":"{{asset.name}} {{field.size}}"},` +
 	`{"type":"static_image","image_id":"{image}","x":23,"y":15,"width":5,"height":5}]}`
+
+// fuzzAdaptive is an adaptive template whose code gives way to its name.
+const fuzzAdaptive = `{"name":"Any tag","units":"mm","width":62,"height":29,"dpi":300,"sizing":"adaptive",` +
+	`"adapt":{"min_width":20,"max_width":100,"min_height":10,"max_height":60},"elements":[` +
+	`{"type":"generator","generator_type":"qr","x":1,"y":1,"width":20,"height":20,"anchor_x":"start","min_size":12,"when_too_small":"alternative",` +
+	`"alternative":{"type":"text","font_size":8,"content_binding":"{{asset.name}}"}},` +
+	`{"type":"text","x":23,"y":1,"width":38,"height":10,"font_size":12,"anchor_x":"both","content_binding":"{{asset.name}}"}]}`
 
 // fuzzer sends requests to a server and checks every response.
 type fuzzer struct {

@@ -41,6 +41,8 @@ describe('snapping and units', () => {
     const d = { ...doc(), sizing: 'adaptive' as const, adapt: { min_width: 25.4, max_width: 101.6, min_height: 12.7, max_height: 50.8, continuous_length: 'fixed' as const } };
     expect(convertUnits(d, 'in').adapt).toEqual({ min_width: 1, max_width: 4, min_height: 0.5, max_height: 2, continuous_length: 'fixed' });
     expect(convertUnits(doc(), 'in').adapt).toBeUndefined();
+    const limited = { ...doc(), elements: [{ type: 'generator' as const, x: 0, y: 0, width: 25.4, height: 25.4, min_size: 12.7, max_size: 50.8, min_module_mm: 0.3 }] };
+    expect(convertUnits(limited, 'in').elements[0]).toMatchObject({ min_size: 0.5, max_size: 2, min_module_mm: 0.3 });
   });
 });
 

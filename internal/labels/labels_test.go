@@ -299,6 +299,16 @@ func TestValidateAdaptiveTemplates(t *testing.T) {
 		tpl.Normalize()
 		return tpl
 	}
+	withAlternative := adaptive()
+	withAlternative.Elements = []Element{{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, MinModuleMM: 0.3,
+		WhenTooSmall: TooSmallAlternative, Alternative: &Element{Type: ElementText, ContentBinding: "{{field.serial}}", FontSize: 8}}}
+	withAlternative.Normalize()
+	if err := withAlternative.Validate(); err != nil || withAlternative.Elements[0].Alternative.FontWeight != WeightNormal {
+		t.Errorf("an alternative: %v, %+v", err, withAlternative.Elements[0].Alternative)
+	}
+	if keys := withAlternative.FieldKeys(); !reflect.DeepEqual(keys, []string{"serial"}) {
+		t.Errorf("an alternative's fields: %v", keys)
+	}
 	if tpl := adaptive(); tpl.Validate() != nil || tpl.Adapt.ContinuousLength != LengthProportional {
 		t.Errorf("a valid adaptive template: %v, %+v", tpl.Validate(), tpl.Adapt)
 	}
@@ -322,6 +332,21 @@ func TestValidateAdaptiveTemplates(t *testing.T) {
 		{"anchors", func(t *Template) {
 			t.Elements = []Element{{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, AnchorX: "left", AnchorY: AnchorEnd}}
 		}, []string{"elements[0].anchor_x"}},
+		{"limits", func(t *Template) {
+			t.Elements = []Element{
+				{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, MinSize: 4, MaxSize: 3, MinModuleMM: 9},
+				{Type: ElementText, ContentBinding: "x", FontSize: 9, MinFontSize: 6, FontWeight: "normal", FontFamily: "sans", Align: "left", Width: 5, Height: 5, MinModuleMM: 1, MinSize: -1},
+			}
+		}, []string{"elements[0].max_size", "elements[0].min_module_mm", "elements[1].min_module_mm", "elements[1].min_size"}},
+		{"alternatives", func(t *Template) {
+			t.Elements = []Element{
+				{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, WhenTooSmall: TooSmallAlternative},
+				{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, WhenTooSmall: "shrink"},
+				{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, Alternative: &Element{Type: ElementGenerator, GeneratorType: "micro_qr"}},
+				{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, WhenTooSmall: TooSmallAlternative, Alternative: &Element{Type: ElementStaticImage}},
+				{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, WhenTooSmall: TooSmallAlternative, Alternative: &Element{Type: ElementGenerator, GeneratorType: "ean"}},
+			}
+		}, []string{"elements[0].alternative", "elements[1].when_too_small", "elements[2].alternative", "elements[3].alternative.type", "elements[4].alternative.generator_type"}},
 	}
 	for _, c := range cases {
 		tpl := adaptive()

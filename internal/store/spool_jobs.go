@@ -358,6 +358,9 @@ type SpoolOutcome struct {
 	// HandBack, with Failure, gives a pool batch back to the rest of the
 	// pool, the printer dropping out of the job, rather than failing it.
 	HandBack bool
+	// Moves give entries that could not be produced another template, by
+	// entry ID, with their problem saying so.
+	Moves map[string]string
 }
 
 // FinishSpoolBatch records how sending a batch went, with the labels
@@ -391,15 +394,29 @@ func (s *Store) FinishSpoolBatch(b *SpoolBatch, o SpoolOutcome) error {
 	return tx.Commit()
 }
 
+// recordProblemsTx records why entries could not be produced, and moves
+// those the outcome moves to their other templates.
+func (s *Store) recordProblemsTx(tx *sql.Tx, o SpoolOutcome) error {
+	for id, problem := range o.Problems {
+		if _, err := s.TxExec(tx, "UPDATE spool_entries SET problem = ? WHERE id = ? AND printed_at IS NULL", clip(problem), id); err != nil {
+			return fmt.Errorf("recording a spool problem: %w", err)
+		}
+	}
+	for id, template := range o.Moves {
+		if _, err := s.TxExec(tx, "UPDATE spool_entries SET template_id = ? WHERE id = ? AND printed_at IS NULL AND template_from_category = ?", template, id, true); err != nil {
+			return fmt.Errorf("moving a label to another template: %w", err)
+		}
+	}
+	return nil
+}
+
 // handBackTx gives a pool batch its printer could not print back to the
 // rest of the pool, with any other batches that printer was given, and
 // drops the printer from the job. With no member left, the job's waiting
 // batches fail with why the last could not print them.
 func (s *Store) handBackTx(tx *sql.Tx, b *SpoolBatch, o SpoolOutcome) error {
-	for id, problem := range o.Problems {
-		if _, err := s.TxExec(tx, "UPDATE spool_entries SET problem = ? WHERE id = ? AND printed_at IS NULL", clip(problem), id); err != nil {
-			return fmt.Errorf("recording a spool problem: %w", err)
-		}
+	if err := s.recordProblemsTx(tx, o); err != nil {
+		return err
 	}
 	if _, err := s.TxExec(tx, "UPDATE spool_job_members SET dropped = TRUE WHERE job_id = ? AND printer_id = ?", b.JobID, b.PrinterID); err != nil {
 		return fmt.Errorf("dropping a printer from a job: %w", err)
@@ -451,10 +468,8 @@ func (s *Store) finishBatchTx(tx *sql.Tx, batchID, jobID, template string, o Spo
 			return err
 		}
 	}
-	for id, problem := range o.Problems {
-		if _, err := s.TxExec(tx, "UPDATE spool_entries SET problem = ? WHERE id = ? AND printed_at IS NULL", clip(problem), id); err != nil {
-			return fmt.Errorf("recording a spool problem: %w", err)
-		}
+	if err := s.recordProblemsTx(tx, o); err != nil {
+		return err
 	}
 	state := models.SpoolDone
 	if o.Failure != "" {

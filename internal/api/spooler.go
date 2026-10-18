@@ -10,6 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -169,7 +172,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 		return store.SpoolOutcome{Failure: "Whoever printed these can no longer: " + err.Error()}
 	}
 
-	out := store.SpoolOutcome{Printer: p.Name, Problems: map[string]string{}}
+	out := store.SpoolOutcome{Printer: p.Name, Problems: map[string]string{}, Moves: map[string]string{}}
 	images := s.newLabelImages()
 	var rendered []*image.Gray
 	for _, e := range b.Entries {
@@ -183,6 +186,12 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 				msg = problem.Path + ": " + msg
 			}
 			out.Problems[e.ID] = "Could not be produced: " + msg
+			// One whose categories offer another template that suits the
+			// printer and holds it moves to that, to print next time.
+			if next, ok := s.nextTemplate(r, p, t, e, images); ok {
+				out.Moves[e.ID] = next.ID
+				out.Problems[e.ID] = fmt.Sprintf("Could not be produced with %s (%s), so it moved to %s; print it again", t.Name, msg, next.Name)
+			}
 			continue
 		}
 		img := scene.Raster(true)
@@ -257,4 +266,36 @@ func (s *Server) requestAs(ctx context.Context, id string, token bool) (*http.Re
 		ctx = WithPermissions(WithUser(ctx, u), union(perms, public))
 	}
 	return http.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+}
+
+// nextTemplate is the template a label that could not be produced with t
+// moves to: when its template came from its categories, the first of
+// theirs after t that suits the printer and holds its asset.
+func (s *Server) nextTemplate(r *http.Request, p *models.Printer, t *labels.Template, e store.SpoolBatchEntry, images render.ImageSource) (*labels.Template, bool) {
+	entries, err := s.store.ListSpool(store.SpoolFilter{IDs: []string{e.ID}})
+	if err != nil || len(entries) != 1 || !entries[0].TemplateFromCategory {
+		return nil, false
+	}
+	a, err := s.store.GetAssetByID(e.AssetID)
+	if err != nil {
+		return nil, false
+	}
+	list := a.LabelTemplate.TemplateIDs
+	for i, id := range list {
+		if id != t.ID {
+			continue
+		}
+		for _, nextID := range list[i+1:] {
+			next, err := s.store.GetTemplate(nextID)
+			if err != nil {
+				continue
+			}
+			if _, laid, _, err := s.planFor(p, next); err == nil {
+				if _, problem, err := s.layoutAsset(r, laid, e.AssetID, images); err == nil && problem == nil {
+					return next, true
+				}
+			}
+		}
+	}
+	return nil, false
 }

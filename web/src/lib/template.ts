@@ -23,11 +23,20 @@ export interface TemplateElement {
   height: number;
   anchor_x?: Anchor;
   anchor_y?: Anchor;
+  /** Bounds on each side of its box as an adaptive template is laid out, in the template's units. */
+  min_size?: number;
+  max_size?: number;
+  /** What it does where it does not fit; absent: images are left off, the rest refuse. */
+  when_too_small?: 'refuse' | 'hide' | 'alternative';
+  /** Laid out in its box in its place, when when_too_small is alternative. */
+  alternative?: TemplateElement;
   content_binding?: string;
   // generator
   generator_type?: string;
   error_correction?: string;
   quiet_zone?: number;
+  /** The smallest module drawn, in millimeters. */
+  min_module_mm?: number;
   // text
   font_size?: number;
   font_weight?: 'normal' | 'bold';
@@ -91,7 +100,11 @@ export function convertUnits(doc: TemplateDoc, to: Units): TemplateDoc {
     ...(doc.adapt
       ? { adapt: { ...doc.adapt, min_width: conv(doc.adapt.min_width), max_width: conv(doc.adapt.max_width), min_height: conv(doc.adapt.min_height), max_height: conv(doc.adapt.max_height) } }
       : {}),
-    elements: doc.elements.map((e) => ({ ...e, x: conv(e.x), y: conv(e.y), width: conv(e.width), height: conv(e.height) })),
+    elements: doc.elements.map((e) => ({
+      ...e, x: conv(e.x), y: conv(e.y), width: conv(e.width), height: conv(e.height),
+      ...(e.min_size ? { min_size: conv(e.min_size) } : {}),
+      ...(e.max_size ? { max_size: conv(e.max_size) } : {}),
+    })),
   };
 }
 

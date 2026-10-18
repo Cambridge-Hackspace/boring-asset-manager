@@ -49,6 +49,7 @@ const (
 	MaxFontSize       = 200.0 // points
 	DefaultMinFont    = 6.0   // points
 	MaxQuietZone      = 20    // modules
+	MaxModuleMM       = 5.0
 	maxBindingLength  = 1024
 	geometryTolerance = 1e-9
 )
@@ -85,6 +86,18 @@ type Element struct {
 	// across and down; empty is AnchorScale.
 	AnchorX string `json:"anchor_x,omitempty"`
 	AnchorY string `json:"anchor_y,omitempty"`
+	// MinSize and MaxSize bound each side of its box, in the template's
+	// units, as an adaptive template is laid out; 0 is no bound. Laid out
+	// smaller, it does as WhenTooSmall says; larger, it is centered in its
+	// box at MaxSize.
+	MinSize float64 `json:"min_size,omitempty"`
+	MaxSize float64 `json:"max_size,omitempty"`
+	// WhenTooSmall is what an element of an adaptive template does on a
+	// label where it does not fit: TooSmallRefuse (codes' and text's
+	// default), TooSmallHide (images' default), or TooSmallAlternative,
+	// giving way to Alternative laid out in its box.
+	WhenTooSmall string   `json:"when_too_small,omitempty"`
+	Alternative  *Element `json:"alternative,omitempty"`
 
 	// generator and text
 	ContentBinding string `json:"content_binding,omitempty"`
@@ -93,6 +106,9 @@ type Element struct {
 	GeneratorType   string `json:"generator_type,omitempty"`
 	ErrorCorrection string `json:"error_correction,omitempty"`
 	QuietZone       *int   `json:"quiet_zone,omitempty"`
+	// MinModuleMM is the smallest module the code is drawn with, for the
+	// scanners in use; two dots at the printer's DPI is always the least.
+	MinModuleMM float64 `json:"min_module_mm,omitempty"`
 
 	// text
 	FontSize    float64 `json:"font_size,omitempty"`
@@ -138,22 +154,29 @@ func (t *Template) Normalize() {
 		t.Adapt.ContinuousLength = LengthProportional
 	}
 	for i := range t.Elements {
-		e := &t.Elements[i]
-		if e.Type != ElementText {
-			continue
+		normalizeElement(&t.Elements[i])
+		if alt := t.Elements[i].Alternative; alt != nil {
+			normalizeElement(alt)
 		}
-		if e.FontWeight == "" {
-			e.FontWeight = WeightNormal
-		}
-		if e.FontFamily == "" {
-			e.FontFamily = FamilySans
-		}
-		if e.Align == "" {
-			e.Align = AlignLeft
-		}
-		if e.MinFontSize == 0 && e.FontSize > 0 {
-			e.MinFontSize = math.Min(DefaultMinFont, e.FontSize)
-		}
+	}
+}
+
+// normalizeElement fills in a text element's defaulted properties.
+func normalizeElement(e *Element) {
+	if e.Type != ElementText {
+		return
+	}
+	if e.FontWeight == "" {
+		e.FontWeight = WeightNormal
+	}
+	if e.FontFamily == "" {
+		e.FontFamily = FamilySans
+	}
+	if e.Align == "" {
+		e.Align = AlignLeft
+	}
+	if e.MinFontSize == 0 && e.FontSize > 0 {
+		e.MinFontSize = math.Min(DefaultMinFont, e.FontSize)
 	}
 }
 
@@ -247,6 +270,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	if !anchors[e.AnchorY] {
 		v.add(at("anchor_y"), `must be "scale", "start", "end", "both" or "center"`)
 	}
+	t.validateLimits(v, path, e, canvasOK)
 
 	// unset reports properties that do not apply to this element type.
 	unset := func(props map[string]bool) {
@@ -260,6 +284,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"generator_type":   e.GeneratorType != "",
 		"error_correction": e.ErrorCorrection != "",
 		"quiet_zone":       e.QuietZone != nil,
+		"min_module_mm":    e.MinModuleMM != 0,
 	}
 	textProps := map[string]bool{
 		"font_size":     e.FontSize != 0,
@@ -283,6 +308,9 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 			} else {
 				v.add(at("error_correction"), fmt.Sprintf("must be one of %s for %s", strings.Join(levels, ", "), e.GeneratorType))
 			}
+		}
+		if math.IsNaN(e.MinModuleMM) || e.MinModuleMM < 0 || e.MinModuleMM > MaxModuleMM {
+			v.add(at("min_module_mm"), fmt.Sprintf("must be between 0 and %g mm", MaxModuleMM))
 		}
 		if e.QuietZone != nil && (*e.QuietZone < 0 || *e.QuietZone > MaxQuietZone) {
 			v.add(at("quiet_zone"), fmt.Sprintf("must be between 0 and %d modules", MaxQuietZone))
@@ -349,16 +377,22 @@ func (e *Element) Binding() (Binding, error) {
 func (t *Template) FieldKeys() []string {
 	seen := map[string]bool{}
 	var keys []string
-	for i := range t.Elements {
-		b, err := t.Elements[i].Binding()
+	add := func(e *Element) {
+		b, err := e.Binding()
 		if err != nil {
-			continue
+			return
 		}
 		for _, ref := range b.Refs() {
 			if ref.Kind == RefField && !seen[ref.Arg] {
 				seen[ref.Arg] = true
 				keys = append(keys, ref.Arg)
 			}
+		}
+	}
+	for i := range t.Elements {
+		add(&t.Elements[i])
+		if alt := t.Elements[i].Alternative; alt != nil {
+			add(alt)
 		}
 	}
 	return keys

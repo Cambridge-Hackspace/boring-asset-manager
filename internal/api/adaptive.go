@@ -1,9 +1,11 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -63,7 +65,7 @@ func (s *Server) planFor(p *models.Printer, t *labels.Template) (printers.Plan, 
 	}
 	var reasons []string
 	for _, size := range adaptiveSizes(t, g) {
-		laid, err := render.Adapt(t, size.width, size.height, g.DPI, s.labelSample())
+		laid, notices, err := render.Adapt(t, size.width, size.height, g.DPI, s.labelSample())
 		if err != nil {
 			if !errors.Is(err, render.ErrDoesNotAdapt) {
 				return nil, nil, nil, err
@@ -76,7 +78,7 @@ func (s *Server) planFor(p *models.Printer, t *labels.Template) (printers.Plan, 
 			reasons = append(reasons, strings.TrimPrefix(err.Error(), printers.ErrDoesNotFit.Error()+": "))
 			continue
 		}
-		return plan, laid, fit.Warnings, err
+		return plan, laid, append(notices, fit.Warnings...), err
 	}
 	return nil, nil, nil, fmt.Errorf("%w: %s does not adapt to %s: %s", printers.ErrDoesNotFit, t.Name, g.Roll, strings.Join(dedupe(reasons), "; "))
 }
@@ -122,3 +124,93 @@ func dedupe(list []string) []string {
 	}
 	return out
 }
+
+// AdaptRequest asks how an adaptive template lays out: at a size and DPI
+// (POST /api/v1/templates/adapt), or across the sizes it takes, at a DPI
+// (POST /api/v1/templates/range; DPI defaults to the template's).
+type AdaptRequest struct {
+	Template json.RawMessage `json:"template"`
+	Width    float64         `json:"width"`
+	Height   float64         `json:"height"`
+	DPI      int             `json:"dpi"`
+}
+
+// readAdaptRequest reads an adapt request's template, which must be valid
+// and adaptive.
+func readAdaptRequest(w http.ResponseWriter, r *http.Request) (*labels.Template, AdaptRequest, bool) {
+	var req AdaptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Template) == 0 {
+		writeJSONError(w, http.StatusBadRequest, `Expected {"template": {...}}`)
+		return nil, req, false
+	}
+	doc, err := withPreviewDefaults(req.Template)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "template must be a JSON object")
+		return nil, req, false
+	}
+	t, err := labels.Parse(doc)
+	if writeTemplateError(w, err) {
+		return nil, req, false
+	}
+	if !t.Adaptive() {
+		writeJSONError(w, http.StatusBadRequest, "The template is not adaptive")
+		return nil, req, false
+	}
+	if req.DPI == 0 {
+		req.DPI = t.DPI
+	}
+	if req.DPI < labels.MinDPI || req.DPI > labels.MaxDPI {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("dpi must be between %d and %d", labels.MinDPI, labels.MaxDPI))
+		return nil, req, false
+	}
+	return t, req, true
+}
+
+// handleAdaptTemplate lays an adaptive template out at a size and DPI, with
+// the longest codes assigned, answering with the template laid out and its
+// notices, or why it does not fit: POST /api/v1/templates/adapt
+func (s *Server) handleAdaptTemplate(w http.ResponseWriter, r *http.Request) {
+	t, req, ok := readAdaptRequest(w, r)
+	if !ok {
+		return
+	}
+	laid, notices, err := render.Adapt(t, req.Width, req.Height, req.DPI, s.labelSample())
+	var ae *render.AdaptError
+	switch {
+	case errors.As(err, &ae):
+		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "problem": LabelProblem{Path: ae.Path, Message: ae.Message}})
+	case err != nil:
+		writeServerError(w, err, "lay the template out")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "template": laid, "notices": nonNil(notices)})
+	}
+}
+
+// handleTemplateRange works out the sizes an adaptive template takes, in
+// its own shape, with the longest codes assigned: POST /api/v1/templates/range
+func (s *Server) handleTemplateRange(w http.ResponseWriter, r *http.Request) {
+	t, req, ok := readAdaptRequest(w, r)
+	if !ok {
+		return
+	}
+	span, err := render.Range(t, req.DPI, s.labelSample())
+	var ae *render.AdaptError
+	switch {
+	case errors.As(err, &ae):
+		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "problem": LabelProblem{Path: ae.Path, Message: ae.Message}})
+	case err != nil:
+		writeServerError(w, err, "work out the template's sizes")
+	default:
+		size := func(scale float64) map[string]float64 {
+			return map[string]float64{"width": tidy(t.Width * scale), "height": tidy(t.Height * scale)}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"fits": true, "units": t.Units, "dpi": req.DPI,
+			"smallest": size(span.MinScale), "largest": size(span.MaxScale),
+			"smaller": span.Smaller, "larger": span.Larger,
+		})
+	}
+}
+
+// tidy rounds a length to a hundredth.
+func tidy(v float64) float64 { return math.Round(v*100) / 100 }

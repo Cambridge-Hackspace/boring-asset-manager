@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"image"
+	"math"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
@@ -114,12 +115,17 @@ func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectang
 	if !linear {
 		module = min(module, bh/(sym.Rows+2*quiet))
 	}
-	if module < MinModuleDots {
-		needW := (sym.Cols + 2*quiet) * MinModuleDots
+	// The least module: two dots, or its own minimum at the scene's DPI.
+	least := MinModuleDots
+	if e.MinModuleMM > 0 && s.DPI > 0 {
+		least = max(least, int(math.Ceil(e.MinModuleMM*float64(s.DPI)/25.4-1e-9)))
+	}
+	if module < least {
+		needW := (sym.Cols + 2*quiet) * least
 		if linear {
 			return fmt.Errorf("a %d-module symbol needs a box at least %d dots wide (got %d)", sym.Cols, needW, bw)
 		}
-		needH := (sym.Rows + 2*quiet) * MinModuleDots
+		needH := (sym.Rows + 2*quiet) * least
 		return fmt.Errorf("a %d×%d-module symbol needs a box of at least %d×%d dots (got %d×%d)",
 			sym.Cols, sym.Rows, needW, needH, bw, bh)
 	}

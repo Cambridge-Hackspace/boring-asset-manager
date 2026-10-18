@@ -53,6 +53,68 @@ func (t *Template) Takes(width, height float64) bool {
 	return a != nil && width >= a.MinWidth-eps && width <= a.MaxWidth+eps && height >= a.MinHeight-eps && height <= a.MaxHeight+eps
 }
 
+// What an element of an adaptive template does on a label where it does
+// not fit.
+const (
+	TooSmallRefuse      = "refuse"
+	TooSmallHide        = "hide"
+	TooSmallAlternative = "alternative"
+)
+
+// TooSmall is what the element does where it does not fit: as it says, or
+// by default, an image is left off and anything else refuses the label.
+func (e *Element) TooSmall() string {
+	switch {
+	case e.WhenTooSmall != "":
+		return e.WhenTooSmall
+	case e.Type == ElementStaticImage:
+		return TooSmallHide
+	}
+	return TooSmallRefuse
+}
+
+var tooSmall = map[string]bool{"": true, TooSmallRefuse: true, TooSmallHide: true, TooSmallAlternative: true}
+
+// validateLimits checks an element's limits and its alternative, which is
+// checked as if it had the element's box.
+func (t *Template) validateLimits(v *validator, path string, e *Element, canvasOK bool) {
+	at := func(prop string) string { return path + "." + prop }
+	bad := func(x float64) bool { return math.IsNaN(x) || math.IsInf(x, 0) || x < 0 }
+	if bad(e.MinSize) {
+		v.add(at("min_size"), "must be zero or a positive number")
+	}
+	if bad(e.MaxSize) {
+		v.add(at("max_size"), "must be zero or a positive number")
+	} else if e.MaxSize > 0 && e.MinSize > e.MaxSize {
+		v.add(at("max_size"), "must be at least min_size")
+	}
+	if !tooSmall[e.WhenTooSmall] {
+		v.add(at("when_too_small"), `must be "refuse", "hide" or "alternative"`)
+	}
+	alt := e.Alternative
+	switch {
+	case e.WhenTooSmall == TooSmallAlternative && alt == nil:
+		v.add(at("alternative"), "is required when it gives way to an alternative")
+	case alt != nil && e.WhenTooSmall != TooSmallAlternative:
+		v.add(at("alternative"), `applies only when when_too_small is "alternative"`)
+	}
+	if alt == nil {
+		return
+	}
+	if alt.Type != ElementGenerator && alt.Type != ElementText {
+		v.add(at("alternative.type"), `must be "generator" or "text"`)
+		return
+	}
+	if alt.Alternative != nil || alt.WhenTooSmall != "" {
+		v.add(at("alternative"), "cannot have an alternative of its own")
+		return
+	}
+	placed := *alt
+	placed.X, placed.Y, placed.Width, placed.Height = e.X, e.Y, e.Width, e.Height
+	placed.AnchorX, placed.AnchorY = "", ""
+	t.validateElement(v, at("alternative"), &placed, canvasOK)
+}
+
 var anchors = map[string]bool{"": true, AnchorScale: true, AnchorStart: true, AnchorEnd: true, AnchorBoth: true, AnchorCenter: true}
 
 // validateSizing checks the template's sizing and, for an adaptive one,
