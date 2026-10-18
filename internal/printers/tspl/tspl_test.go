@@ -2,7 +2,6 @@ package tspl
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"image"
 	"os"
@@ -23,45 +22,6 @@ func TestModelsAndMedia(t *testing.T) {
 	}
 	if wide := (Media{Name: "6 in", WidthMM: 152.4}); rollo.Suits(wide) == nil {
 		t.Error("6 in labels accepted on a 4.1 in head")
-	}
-}
-
-func TestFit(t *testing.T) {
-	rollo, _ := LookupModel("Rollo X1038")
-	generic300, _ := LookupModel("Generic TSPL 300 DPI")
-	shipping, _ := LookupMedia("4x6")
-	small, _ := LookupMedia("2x1")
-	continuous, _ := LookupMedia("continuous-4")
-	cases := []struct {
-		name          string
-		model         Model
-		media         Media
-		width, height float64
-		dpi           int
-		rotate, fits  bool
-	}{
-		{"portrait", rollo, shipping, 101.6, 152.4, 203, false, true},
-		{"landscape rotates", rollo, shipping, 152.4, 101.6, 203, true, true},
-		{"small", rollo, small, 50.8, 25.4, 203, false, true},
-		{"within tolerance", rollo, small, 51, 25, 203, false, true},
-		{"wrong size", rollo, small, 40, 25.4, 203, false, false},
-		{"continuous", rollo, continuous, 101.6, 30, 203, false, true},
-		{"continuous too long", rollo, continuous, 101.6, 1200, 203, false, false},
-		{"300 DPI template on a 203 DPI printer", rollo, shipping, 101.6, 152.4, 300, false, false},
-		{"300 DPI printer", generic300, shipping, 101.6, 152.4, 300, false, true},
-	}
-	for _, c := range cases {
-		p, err := c.media.Fit(c.model, c.width, c.height, c.dpi)
-		if c.fits != (err == nil) {
-			t.Errorf("%s: err = %v, want fits=%v", c.name, err, c.fits)
-			continue
-		}
-		if err != nil && !errors.Is(err, ErrDoesNotFit) {
-			t.Errorf("%s: error does not wrap ErrDoesNotFit: %v", c.name, err)
-		}
-		if err == nil && p.Rotate != c.rotate {
-			t.Errorf("%s: rotate = %v, want %v", c.name, p.Rotate, c.rotate)
-		}
 	}
 }
 

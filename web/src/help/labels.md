@@ -10,4 +10,6 @@ On an asset's page, or for several assets ticked on the list, choose a template 
 
 Each printer has a roll loaded. Brother QL printers take Brother's own rolls, all of which are listed; TSPL printers such as the Rollo, and DYMO LabelWriters, also take rolls of any size, added under **Label stock** on the **Printers** page with their width, and for die-cut labels their length and the gap between them.
 
+A template prints on a printer when its size and DPI suit the roll loaded; the template editor checks as you choose a printer. Printers do not reach every edge of every label, so it also warns when part of the template is where the printer does not print, or so near a die-cut label's edge that it may be cut off. Warnings never stop printing.
+
 To gather labels over time and print them together, sorted onto several printers, use the [spool](/help/spool).

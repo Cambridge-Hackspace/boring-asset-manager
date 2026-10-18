@@ -320,7 +320,7 @@ func TestPrintToAnUnreachablePrinter(t *testing.T) {
 type stubDriver struct{}
 
 func (stubDriver) Info() printers.DriverInfo {
-	return printers.DriverInfo{Driver: "stub", Models: []string{"Stub 1"}, Media: []printers.MediaInfo{{ID: "any", Name: "Any size"}}}
+	return printers.DriverInfo{Driver: "stub", Models: []string{"Stub 1"}, Media: []printers.MediaInfo{{ID: "any", Name: "40 mm continuous", WidthMM: 40}}}
 }
 
 func (stubDriver) Validate(s printers.Settings) error {
@@ -330,7 +330,11 @@ func (stubDriver) Validate(s printers.Settings) error {
 	return nil
 }
 
-func (stubDriver) Plan(s printers.Settings, label printers.LabelSpec) (printers.Plan, error) {
+func (stubDriver) Geometry(s printers.Settings) (printers.Geometry, error) {
+	return printers.Geometry{DPI: 300, Prints: "the stub prints", Roll: "40 mm continuous", WidthMM: 40, MinLengthMM: 10, MaxLengthMM: 1000}, nil
+}
+
+func (stubDriver) Plan(s printers.Settings, f printers.Fit) (printers.Plan, error) {
 	return stubPlan{}, nil
 }
 
@@ -380,7 +384,7 @@ func TestPrintThroughAnotherDriver(t *testing.T) {
 		t.Errorf("stub driver validation not applied: got %d", rec.Code)
 	}
 
-	// Any template size suits the stub, including one no Brother roll takes.
+	// The stub's roll takes a template no Brother roll does.
 	small := `{"id":"small","name":"Small","units":"mm","width":40,"height":20,"dpi":300,"elements":[
 	  {"type":"text","x":1,"y":1,"width":38,"height":18,"font_size":20,"content_binding":"{{asset.name}}"}]}`
 	smallID := createTemplate(t, srv, cookie, small)

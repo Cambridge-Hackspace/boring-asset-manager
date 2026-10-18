@@ -52,6 +52,10 @@ type SpoolResponse struct {
 	Pools     []SpoolChoice       `json:"pools"`
 	Fits      map[string][]string `json:"fits"`
 	PoolFits  map[string][]string `json:"pool_fits"`
+	// FitWarnings maps a template and a destination it suits, printer:<id>
+	// or pool:<id>, to what to know before printing it there, when there is
+	// anything; a pool's name the printer each is about.
+	FitWarnings map[string]map[string][]string `json:"fit_warnings"`
 }
 
 // spoolOptions are the templates and printers spool entries can take, and
@@ -82,7 +86,7 @@ func (s *Server) loadSpoolOptions() (*spoolOptions, error) {
 		return nil, err
 	}
 	o := &spoolOptions{templates: map[string]*labels.Template{}, printers: map[string]*models.Printer{}, pools: map[string]*models.PrinterPool{}, unfit: map[string]map[string]string{},
-		resp: SpoolResponse{Templates: []SpoolChoice{}, Printers: []SpoolChoice{}, Pools: []SpoolChoice{}, Fits: map[string][]string{}, PoolFits: map[string][]string{}}}
+		resp: SpoolResponse{Templates: []SpoolChoice{}, Printers: []SpoolChoice{}, Pools: []SpoolChoice{}, Fits: map[string][]string{}, PoolFits: map[string][]string{}, FitWarnings: map[string]map[string][]string{}}}
 	for i := range pools {
 		p := &pools[i]
 		o.pools[p.ID] = p
@@ -100,20 +104,39 @@ func (s *Server) loadSpoolOptions() (*spoolOptions, error) {
 		o.unfit[t.ID] = map[string]string{}
 		o.resp.Fits[t.ID] = []string{}
 		for _, p := range printerList {
-			if _, err := planFor(&p, t); err != nil {
+			_, warnings, err := planFor(&p, t)
+			if err != nil {
 				o.unfit[t.ID][p.ID] = err.Error()
-			} else {
-				o.resp.Fits[t.ID] = append(o.resp.Fits[t.ID], p.ID)
+				continue
 			}
+			o.resp.Fits[t.ID] = append(o.resp.Fits[t.ID], p.ID)
+			o.warn(t.ID, models.DestinationPrinterPrefix+p.ID, warnings...)
 		}
 		o.resp.PoolFits[t.ID] = []string{}
 		for _, p := range pools {
-			if len(o.poolMembersFor(&p, t.ID)) > 0 {
+			members := o.poolMembersFor(&p, t.ID)
+			if len(members) > 0 {
 				o.resp.PoolFits[t.ID] = append(o.resp.PoolFits[t.ID], p.ID)
+			}
+			for _, m := range members {
+				for _, w := range o.resp.FitWarnings[t.ID][models.DestinationPrinterPrefix+m.PrinterID] {
+					o.warn(t.ID, models.DestinationPoolPrefix+p.ID, o.printers[m.PrinterID].Name+": "+w)
+				}
 			}
 		}
 	}
 	return o, nil
+}
+
+// warn records warnings about printing a template at a destination.
+func (o *spoolOptions) warn(templateID, destination string, warnings ...string) {
+	if len(warnings) == 0 {
+		return
+	}
+	if o.resp.FitWarnings[templateID] == nil {
+		o.resp.FitWarnings[templateID] = map[string][]string{}
+	}
+	o.resp.FitWarnings[templateID][destination] = append(o.resp.FitWarnings[templateID][destination], warnings...)
 }
 
 // poolMembersFor lists a pool's printers that a template's labels suit.

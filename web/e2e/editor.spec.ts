@@ -89,3 +89,32 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
   await expect(page.getByRole('status').filter({ hasText: 'Sent' })).toHaveText(`Sent 1 label to ${printerName}.`);
   expect((await printer.job()).length).toBeGreaterThan(1000);
 });
+
+test('a template with content where the printer does not print warns, and still prints', async ({ signedIn: page, api, printer }) => {
+  const printerName = unique('QL');
+  await api.call('POST', '/printers', {
+    name: printerName,
+    driver: 'brother_ql',
+    model: 'QL-810W',
+    connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` },
+    media: 'dk-11201',
+  });
+  // Its name runs to the top edge, where a QL does not print on 29 mm labels.
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Edge'), units: 'mm', width: 90, height: 29, dpi: 300,
+    elements: [{ type: 'text', x: 28, y: 0, width: 58, height: 10, font_size: 14, content_binding: '{{asset.name}}' }],
+  });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Drill') });
+
+  await page.goto(`/templates/${template.id}/edit`);
+  await page.getByLabel('Printer').selectOption({ label: printerName });
+  await expect(page.getByText('Fits this printer.')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Before printing' })).toContainText('where the printer does not print');
+
+  await page.goto(`/assets/${asset.asset.id}`);
+  await page.getByLabel('Template').selectOption(template.id);
+  await page.getByLabel('Printer').selectOption({ label: printerName });
+  await page.getByRole('button', { name: 'Print' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Sent' })).toContainText(`Sent 1 label to ${printerName}. Part of the template is where the printer does not print`);
+  await printer.job();
+});

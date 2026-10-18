@@ -11,7 +11,6 @@
 package dymolw
 
 import (
-	"errors"
 	"fmt"
 	"image"
 	"math"
@@ -85,10 +84,6 @@ const (
 	minContinuousLines = 118   // 10 mm
 	maxContinuousLines = 32000 // 2.7 m
 )
-
-// lengthTolerance absorbs rounding when matching template sizes to media, in
-// millimeters.
-const lengthTolerance = 0.5
 
 // Media is a LabelWriter roll. Labels sit against the guide at the first dot
 // of the head, so a label narrower than the head prints from dot 0.
@@ -184,52 +179,11 @@ var (
 	MaxContinuousMM = float64(maxContinuousLines) / DPI * 25.4
 )
 
-// ErrDoesNotFit is wrapped by every fit check failure.
-var ErrDoesNotFit = errors.New("template does not fit the loaded media")
-
 // Placement says how a label image maps onto the roll.
 type Placement struct {
 	// Rotate turns the image 90° counterclockwise so its height runs across
 	// the roll.
 	Rotate bool
-}
-
-// Fit checks that a label of the given physical size at dpi suits the media.
-// One side must equal the label width; on die-cut media the other must equal
-// the label length. A label whose height matches the label width is rotated.
-func (m Media) Fit(widthMM, heightMM float64, dpi int) (Placement, error) {
-	if dpi != DPI {
-		return Placement{}, fmt.Errorf("%w: LabelWriter printers print at %d DPI, not %d", ErrDoesNotFit, DPI, dpi)
-	}
-	matches := func(a, b float64) bool { return math.Abs(a-b) <= lengthTolerance }
-
-	for _, p := range []Placement{{Rotate: false}, {Rotate: true}} {
-		across, along := widthMM, heightMM
-		if p.Rotate {
-			across, along = heightMM, widthMM
-		}
-		if !matches(across, m.WidthMM) {
-			continue
-		}
-		if m.DieCut() {
-			if matches(along, m.LengthMM) {
-				return p, nil
-			}
-			continue
-		}
-		lines := int(math.Round(along / 25.4 * DPI))
-		if lines < minContinuousLines || lines > maxContinuousLines {
-			return Placement{}, fmt.Errorf("%w: continuous labels must be %.0f-%.0f mm long (got %.1f mm)",
-				ErrDoesNotFit, float64(minContinuousLines)/DPI*25.4, float64(maxContinuousLines)/DPI*25.4, along)
-		}
-		return p, nil
-	}
-	if m.DieCut() {
-		return Placement{}, fmt.Errorf("%w: %s needs a %g × %g mm template (got %g × %g mm)",
-			ErrDoesNotFit, m.Name, m.WidthMM, m.LengthMM, widthMM, heightMM)
-	}
-	return Placement{}, fmt.Errorf("%w: %s needs one side of the template to be %g mm (got %g × %g mm)",
-		ErrDoesNotFit, m.Name, m.WidthMM, widthMM, heightMM)
 }
 
 // Prepare turns a rendered label into a page for the model: rotated if the

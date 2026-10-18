@@ -68,13 +68,13 @@
     error = status = '';
     busy = true;
     try {
-      const res = await request<{ labels: number }>('POST', `/printers/${encodeURIComponent(printerId)}/print`, {
+      const res = await request<{ labels: number; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(printerId)}/print`, {
         template_id: templateId,
         asset_ids: assetIds,
         copies,
       });
       const name = printers.find((p) => p.id === printerId)?.name ?? 'the printer';
-      status = `Sent ${res.labels} label${res.labels === 1 ? '' : 's'} to ${name}.`;
+      status = [`Sent ${res.labels} label${res.labels === 1 ? '' : 's'} to ${name}.`, ...(res.warnings ?? [])].join(' ');
     } catch (err) {
       error = messageOf(err);
     } finally {

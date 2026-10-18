@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addedMessage, destinationName, groupEntries, jobStateName, poolsFor, printedMessage, printersFor, queueNewLabels, rememberQueueNewLabels, shared, templatesFor } from './spool';
+import { addedMessage, destinationName, entryWarnings, groupEntries, jobStateName, poolsFor, printedMessage, printersFor, queueNewLabels, rememberQueueNewLabels, shared, templatesFor } from './spool';
 import type { Spool, SpoolEntry } from './models';
 
 const entry = (id: string, destination: SpoolEntry['destination'], template: string | null): SpoolEntry => ({
@@ -121,5 +121,21 @@ describe('the spool', () => {
     // Pools print, so they come with the printers.
     expect(groupEntries(s).map((g) => g.destination)).toEqual(['pool:bench', 'printer:p1']);
     expect(printedMessage({ jobs: [], skipped: [], warnings: ['Wide sits out Bench'] })).toBe('Nothing was ready to print. Wide sits out Bench.');
+  });
+});
+
+describe('entryWarnings', () => {
+  const spool = { fit_warnings: { t1: { 'printer:p1': ['Content at the edge does not print.'], 'pool:b1': ['QL: Content at the edge does not print.'] } } };
+
+  it('gives the warnings for where an entry is going', () => {
+    expect(entryWarnings(spool, { template_id: 't1', destination: 'printer:p1' })).toEqual(['Content at the edge does not print.']);
+    expect(entryWarnings(spool, { template_id: 't1', destination: 'pool:b1' })).toEqual(['QL: Content at the edge does not print.']);
+  });
+
+  it('gives none elsewhere, or without a template or destination', () => {
+    expect(entryWarnings(spool, { template_id: 't1', destination: 'printer:p2' })).toEqual([]);
+    expect(entryWarnings(spool, { template_id: null, destination: 'printer:p1' })).toEqual([]);
+    expect(entryWarnings(spool, { template_id: 't1', destination: '' })).toEqual([]);
+    expect(entryWarnings({}, { template_id: 't1', destination: 'printer:p1' })).toEqual([]);
   });
 });

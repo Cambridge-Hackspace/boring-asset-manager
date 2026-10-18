@@ -142,6 +142,17 @@ func (o *spoolOptions) plan(entries []models.SpoolEntry, listed bool) ([]store.S
 			groups[key] = list
 		}
 		g := list[len(list)-1]
+		// What to know of printing its template where it goes; a pool's
+		// warnings already name their printers.
+		for _, w := range o.resp.FitWarnings[*e.TemplateID][e.Destination] {
+			if g.job.PoolID == "" {
+				w = g.job.PrinterName + ": " + w
+			}
+			if !warned[w] {
+				warned[w] = true
+				warnings = append(warnings, w)
+			}
+		}
 		g.job.EntryIDs = append(g.job.EntryIDs, e.ID)
 		g.labels += e.Copies
 	}

@@ -147,7 +147,7 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 		if err := d.Validate(s); (err == nil) != c.ok {
 			t.Errorf("%s: Validate = %v", c.why, err)
 		}
-		if _, err := d.Plan(s, LabelSpec{WidthMM: c.stock.WidthMM, HeightMM: max(c.stock.LengthMM, 30), DPI: d.Info().ModelDPI[c.model]}); (err == nil) != c.ok {
+		if _, err := planWith(d, s, LabelSpec{WidthMM: c.stock.WidthMM, HeightMM: max(c.stock.LengthMM, 30), DPI: d.Info().ModelDPI[c.model]}); (err == nil) != c.ok {
 			t.Errorf("%s: Plan = %v", c.why, err)
 		}
 	}
@@ -158,7 +158,7 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 func TestCustomStockReachesThePrinter(t *testing.T) {
 	s := Settings{Model: "Rollo X1038", Media: "x", Stock: &Stock{ID: "x", Name: "Bin labels", WidthMM: 60, LengthMM: 40, GapMM: 2.5}}
 	d, _ := Lookup(DriverTSPL)
-	plan, err := d.Plan(s, LabelSpec{WidthMM: 60, HeightMM: 40, DPI: 203})
+	plan, err := planWith(d, s, LabelSpec{WidthMM: 60, HeightMM: 40, DPI: 203})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestCustomStockReachesThePrinter(t *testing.T) {
 
 	s = Settings{Model: "LabelWriter 450", Media: "y", Stock: &Stock{ID: "y", Name: "Tags", WidthMM: 50, LengthMM: 30}}
 	d, _ = Lookup(DriverDymoLabelWriter)
-	plan, err = d.Plan(s, LabelSpec{WidthMM: 50, HeightMM: 30, DPI: 300})
+	plan, err = planWith(d, s, LabelSpec{WidthMM: 50, HeightMM: 30, DPI: 300})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,14 +228,14 @@ func TestBrotherPlan(t *testing.T) {
 	}
 	settings := Settings{Model: "QL-810W", Media: "dk-11201"}
 
-	if _, err := d.Plan(settings, LabelSpec{WidthMM: 40, HeightMM: 20, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
+	if _, err := planWith(d, settings, LabelSpec{WidthMM: 40, HeightMM: 20, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
 		t.Errorf("wrong size: got %v, want ErrDoesNotFit", err)
 	}
 
 	label := image.NewGray(image.Rect(0, 0, 1063, 343)) // 90 × 29 mm, all black
 	for _, cut := range []bool{true, false} {
 		settings.Options = json.RawMessage(`{"cut":` + strconv.FormatBool(cut) + `}`)
-		plan, err := d.Plan(settings, LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300})
+		plan, err := planWith(d, settings, LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -411,7 +411,7 @@ func TestDymoPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Plan(Settings{Model: "LabelWriter 450", Media: "30252"}, LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
+	if _, err := planWith(d, Settings{Model: "LabelWriter 450", Media: "30252"}, LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
 		t.Errorf("Brother-sized label: got %v, want ErrDoesNotFit", err)
 	}
 
@@ -429,7 +429,7 @@ func TestDymoPlan(t *testing.T) {
 		{"LabelWriter 450 Twin Turbo", `{"roll":"right","density":"light"}`, dymolw.ProtocolV1, 'c', '2', 0},
 		{"LabelWriter 550", `{"density":"medium"}`, dymolw.ProtocolV2, 'd', 0, 42},
 	} {
-		plan, err := d.Plan(Settings{Model: c.model, Media: "30252", Options: json.RawMessage(c.options)}, LabelSpec{WidthMM: 89, HeightMM: 28, DPI: 300})
+		plan, err := planWith(d, Settings{Model: c.model, Media: "30252", Options: json.RawMessage(c.options)}, LabelSpec{WidthMM: 89, HeightMM: 28, DPI: 300})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -453,10 +453,10 @@ func TestTSPLPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := Settings{Model: "Rollo X1038", Media: "4x6", Options: json.RawMessage(`{"density":11}`)}
-	if _, err := d.Plan(settings, LabelSpec{WidthMM: 101.6, HeightMM: 152.4, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
+	if _, err := planWith(d, settings, LabelSpec{WidthMM: 101.6, HeightMM: 152.4, DPI: 300}); !errors.Is(err, ErrDoesNotFit) {
 		t.Errorf("300 DPI template on a 203 DPI printer: got %v, want ErrDoesNotFit", err)
 	}
-	plan, err := d.Plan(settings, LabelSpec{WidthMM: 152.4, HeightMM: 101.6, DPI: 203})
+	plan, err := planWith(d, settings, LabelSpec{WidthMM: 152.4, HeightMM: 101.6, DPI: 203})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,3 +488,17 @@ func tcp(host string, port int) Connection {
 
 // local is a normalized TCP connection to this machine.
 func local(port int) Connection { return tcp("127.0.0.1", port) }
+
+// planWith checks labels against a driver's printer and plans them, as
+// PlanLabel does by the driver's name.
+func planWith(d Driver, s Settings, label LabelSpec) (Plan, error) {
+	g, err := d.Geometry(s)
+	if err != nil {
+		return nil, err
+	}
+	f, err := FitLabel(g, label)
+	if err != nil {
+		return nil, err
+	}
+	return d.Plan(s, f)
+}

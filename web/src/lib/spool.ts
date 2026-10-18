@@ -69,6 +69,12 @@ export function destinationName(spool: Pick<Spool, 'printers' | 'pools'>, destin
   return spool.printers.find((p) => p.id === id)?.name ?? 'A deleted printer';
 }
 
+/** What to know before an entry prints where it is going: warnings, which never stop it. */
+export function entryWarnings(spool: Pick<Spool, 'fit_warnings'>, e: Pick<SpoolEntry, 'template_id' | 'destination'>): string[] {
+  if (!e.template_id || !e.destination) return [];
+  return spool.fit_warnings?.[e.template_id]?.[e.destination] ?? [];
+}
+
 export function templateName(spool: Pick<Spool, 'templates'>, templateId: string | null): string {
   if (!templateId) return 'No template chosen';
   return spool.templates.find((t) => t.id === templateId)?.name ?? 'A deleted template';

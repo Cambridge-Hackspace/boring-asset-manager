@@ -627,6 +627,8 @@ export interface Spool {
   fits: Record<string, string[]>;
   /** For each template, the pools with a printer its labels suit. */
   pool_fits: Record<string, string[]>;
+  /** For a template and a destination it suits, what to know before printing it there. */
+  fit_warnings?: Record<string, Record<string, string[]>>;
 }
 
 /** What adding to the spool did. */

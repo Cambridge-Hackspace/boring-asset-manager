@@ -3,7 +3,6 @@ package printers
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"image"
 	"math"
@@ -90,19 +89,26 @@ func (d tsplDriver) Validate(s Settings) error {
 	return err
 }
 
-func (d tsplDriver) Plan(s Settings, label LabelSpec) (Plan, error) {
+func (d tsplDriver) Geometry(s Settings) (Geometry, error) {
+	model, media, _, err := d.settings(s)
+	if err != nil {
+		return Geometry{}, err
+	}
+	return Geometry{
+		DPI: model.DPI, Prints: "the " + model.Name + " prints", Roll: media.Name,
+		WidthMM: media.WidthMM, LengthMM: media.LengthMM,
+		MinLengthMM: tspl.MinContinuousMM, MaxLengthMM: tspl.MaxContinuousMM,
+		// A label wider than the head is cut to it around its center.
+		ReachMM: model.HeadMM(),
+	}, nil
+}
+
+func (d tsplDriver) Plan(s Settings, f Fit) (Plan, error) {
 	model, media, opts, err := d.settings(s)
 	if err != nil {
 		return nil, err
 	}
-	placement, err := media.Fit(model, label.WidthMM, label.HeightMM, label.DPI)
-	if err != nil {
-		if errors.Is(err, tspl.ErrDoesNotFit) {
-			return nil, fmt.Errorf("%w: %v", ErrDoesNotFit, strings.TrimPrefix(err.Error(), tspl.ErrDoesNotFit.Error()+": "))
-		}
-		return nil, err
-	}
-	return tsplPlan{model: model, media: media, placement: placement, opts: opts}, nil
+	return tsplPlan{model: model, media: media, placement: tspl.Placement{Rotate: f.Rotate}, opts: opts}, nil
 }
 
 type tsplPlan struct {
