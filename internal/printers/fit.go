@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 )
 
 // Geometry is what a printer as configured offers a label: its resolution,
@@ -80,8 +81,10 @@ const DriftMM = 1.0
 // The label's content, when given, is checked against what the head
 // reaches and against die-cut labels' edges, for warnings.
 func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
+	// Every reason it does not fit, so they can all be put right at once.
+	var reasons []string
 	if label.DPI != g.DPI {
-		return Fit{}, fmt.Errorf("%w: %s at %d DPI, not %d", ErrDoesNotFit, g.Prints, g.DPI, label.DPI)
+		reasons = append(reasons, fmt.Sprintf("it is laid out at %d DPI, but %s at %d DPI", label.DPI, g.Prints, g.DPI))
 	}
 	matches := func(a, b float64) bool { return math.Abs(a-b) <= SizeTolerance }
 	for _, rotate := range []bool{false, true} {
@@ -98,19 +101,33 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 			}
 		} else if halfDot := 12.7 / float64(g.DPI); along < g.MinLengthMM-halfDot || along > g.MaxLengthMM+halfDot {
 			// Within half a dot, the label rounds to a length in range.
-			return Fit{}, fmt.Errorf("%w: continuous labels must be %s-%s mm long (got %s mm)",
-				ErrDoesNotFit, mm(g.MinLengthMM), mm(g.MaxLengthMM), mm(along))
+			return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s mm long, but continuous labels must be %s-%s mm long",
+				mm(along), mm(g.MinLengthMM), mm(g.MaxLengthMM))))
+		}
+		if len(reasons) > 0 {
+			return Fit{}, doesNotFit(reasons)
 		}
 		f := Fit{Rotate: rotate, Warnings: append([]string{}, g.Warnings...)}
 		f.Warnings = append(f.Warnings, contentWarnings(g, label, rotate, across, along)...)
 		return f, nil
 	}
 	if g.DieCut() {
-		return Fit{}, fmt.Errorf("%w: %s needs a %s × %s mm template (got %s × %s mm)",
-			ErrDoesNotFit, g.Roll, mm(g.WidthMM), mm(g.LengthMM), mm(label.WidthMM), mm(label.HeightMM))
+		return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm, but the roll loaded, %s, takes %s × %s mm",
+			mm(label.WidthMM), mm(label.HeightMM), g.Roll, mm(g.WidthMM), mm(g.LengthMM))))
 	}
-	return Fit{}, fmt.Errorf("%w: %s needs one side of the template to be %s mm (got %s × %s mm)",
-		ErrDoesNotFit, g.Roll, mm(g.WidthMM), mm(label.WidthMM), mm(label.HeightMM))
+	return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm, but the roll loaded, %s, needs one side to be %s mm",
+		mm(label.WidthMM), mm(label.HeightMM), g.Roll, mm(g.WidthMM))))
+}
+
+// doesNotFit is an error wrapping ErrDoesNotFit that gives its reasons.
+func doesNotFit(reasons []string) error {
+	return fmt.Errorf("%w: %s", ErrDoesNotFit, strings.Join(reasons, "; "))
+}
+
+// Why is what an error wrapping ErrDoesNotFit says after it: the reasons a
+// template does not fit, as a clause ("it is laid out at 203 DPI, …").
+func Why(err error) string {
+	return strings.TrimPrefix(err.Error(), ErrDoesNotFit.Error()+": ")
 }
 
 // contentWarnings says when the label has content where it will not print,

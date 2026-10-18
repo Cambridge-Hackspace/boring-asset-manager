@@ -100,8 +100,9 @@ describe('AssetsPage', () => {
     expect(await screen.findByText('Added 1 label to the spool.')).toBeTruthy();
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Select Saw' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Add 1 to the spool' }));
-    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'POST').length).toBe(2));
-    expect(sent.filter((r) => r.method === 'POST').map((r) => r.body)).toEqual([{ filter: { condition: 'problem' } }, { asset_ids: ['a2'] }]);
+    const spooled = () => sent.filter((r) => r.method === 'POST' && r.path === '/spool');
+    await vi.waitFor(() => expect(spooled().length).toBe(2));
+    expect(spooled().map((r) => r.body)).toEqual([{ filter: { condition: 'problem' } }, { asset_ids: ['a2'] }]);
   });
 
   it('offers the spool only to those who print labels', async () => {

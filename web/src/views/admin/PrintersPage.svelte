@@ -6,6 +6,7 @@
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import FitWarnings from '../../components/FitWarnings.svelte';
   import PrinterForm from './PrinterForm.svelte';
   import PoolsSection from './PoolsSection.svelte';
   import StockSection from './StockSection.svelte';
@@ -19,14 +20,18 @@
   let error = $state('');
   let editing = $state<string | null>(null);
 
-  // Test printing: a template and an asset to print it for.
+  // Test printing: a template and an asset to print it for. Only the
+  // templates a printer takes are offered (suits, from the template list).
   let testing = $state<string | null>(null);
   let templates = $state<TemplateSummary[]>([]);
+  let suits = $state<Record<string, { id: string }[]>>({});
   let testTemplate = $state('');
   let assetQuery = $state('');
   let assetResults = $state<AssetWithDetails[]>([]);
   let testAsset = $state<AssetWithDetails | null>(null);
   let testStatus = $state('');
+  let testError = $state('');
+  let testWarnings = $state<string[]>([]);
 
   const canManage = $derived(session.can('settings.manage'));
   const canPrint = $derived(session.can('labels.print'));
@@ -56,16 +61,19 @@
     }
   }
 
+  const takes = (p: Printer, t: TemplateSummary) => (suits[t.id] ?? []).some((s) => s.id === p.id);
+
   async function startTest(p: Printer) {
     testing = p.id;
-    testStatus = '';
-    if (!templates.length) {
-      try {
-        templates = (await request<{ templates: TemplateSummary[] }>('GET', '/templates')).templates ?? [];
-        testTemplate = templates[0]?.id ?? '';
-      } catch (err) {
-        testStatus = messageOf(err);
-      }
+    testStatus = testError = '';
+    testWarnings = [];
+    try {
+      const r = await request<{ templates: TemplateSummary[]; suits?: Record<string, { id: string }[]> }>('GET', '/templates');
+      templates = r.templates ?? [];
+      suits = r.suits ?? {};
+      testTemplate = templates.find((t) => takes(p, t))?.id ?? '';
+    } catch (err) {
+      testError = messageOf(err);
     }
   }
 
@@ -74,22 +82,24 @@
     try {
       assetResults = ((await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${new URLSearchParams({ search: assetQuery })}`)).assets ?? []).slice(0, 8);
     } catch (err) {
-      testStatus = messageOf(err);
+      testError = messageOf(err);
     }
   }
 
   async function testPrint(p: Printer) {
     if (!testAsset) return;
-    testStatus = '';
+    testStatus = testError = '';
+    testWarnings = [];
     try {
       const res = await request<{ labels: number; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(p.id)}/print`, {
         template_id: testTemplate,
         asset_ids: [testAsset.asset.id],
         copies: 1,
       });
-      testStatus = [`Sent ${res.labels} label to ${p.name}.`, ...(res.warnings ?? [])].join(' ');
+      testStatus = `Sent ${res.labels} label to ${p.name}.`;
+      testWarnings = res.warnings ?? [];
     } catch (err) {
-      testStatus = messageOf(err);
+      testError = messageOf(err);
     }
   }
 
@@ -141,7 +151,9 @@
                   <div>
                     <label class="label" for="test-template-{p.id}">Template</label>
                     <select id="test-template-{p.id}" class="input" bind:value={testTemplate}>
-                      {#each templates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+                      {#each templates as t (t.id)}
+                        <option value={t.id} disabled={!takes(p, t)}>{t.name}{takes(p, t) ? '' : ' (does not fit its roll)'}</option>
+                      {/each}
                     </select>
                   </div>
                   <form class="flex items-end gap-2" role="search" onsubmit={findAssets}>
@@ -161,7 +173,12 @@
                 {/if}
                 {#if testAsset}<p class="text-sm">Printing the label for <strong>{testAsset.asset.name}</strong>.</p>{/if}
                 <button type="button" class="btn-primary" disabled={!testAsset || !testTemplate} onclick={() => testPrint(p)}>Print test label</button>
-                {#if testStatus}<p class="text-sm" role="status">{testStatus}</p>{/if}
+                {#if templates.length && !templates.some((t) => takes(p, t))}
+                  <p class="text-sm text-amber-900 dark:text-amber-200">No template fits the roll loaded in {p.name}.</p>
+                {/if}
+                {#if testStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{testStatus}</p>{/if}
+                <FitWarnings warnings={testWarnings} label="Printed, with warnings" />
+                <ErrorMessage error={testError} />
               </div>
             {/if}
           </article>

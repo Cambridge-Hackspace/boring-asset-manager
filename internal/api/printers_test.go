@@ -258,7 +258,7 @@ func TestPrintRefusesBeforeSendingAnything(t *testing.T) {
 		want       int
 		contains   string
 	}{
-		{"wrong size for the roll", `{"template_id":"` + smallID + `","asset_ids":[` + id + `]}`, http.StatusUnprocessableEntity, "needs a 29 × 90 mm template"},
+		{"wrong size for the roll", `{"template_id":"` + smallID + `","asset_ids":[` + id + `]}`, http.StatusUnprocessableEntity, "takes 29 × 90 mm"},
 		{"too many copies", `{"template_id":"` + ql90 + `","copies":21,"asset_ids":[` + id + `]}`, http.StatusBadRequest, "copies must be"},
 		{"unknown template", `{"template_id":"nope","asset_ids":[` + id + `]}`, http.StatusNotFound, "Template not found"},
 		{"no assets", `{"template_id":"` + ql90 + `","asset_ids":[]}`, http.StatusBadRequest, "asset_ids must list"},

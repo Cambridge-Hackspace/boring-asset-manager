@@ -70,16 +70,19 @@ func TestFitLabelSaysWhy(t *testing.T) {
 		label                LabelSpec
 		want                 string
 	}{
-		{DriverBrotherQL, "QL-810W", "dk-11201", LabelSpec{WidthMM: 29, HeightMM: 60, DPI: 300}, "DK-11201 29 × 90 mm die-cut needs a 29 × 90 mm template (got 29 × 60 mm)"},
-		{DriverBrotherQL, "QL-810W", "dk-22205", LabelSpec{WidthMM: 50, HeightMM: 29, DPI: 300}, "DK-22205 62 mm continuous needs one side of the template to be 62 mm (got 50 × 29 mm)"},
-		{DriverBrotherQL, "QL-810W", "dk-22210", LabelSpec{WidthMM: 29, HeightMM: 20, DPI: 300}, "continuous labels must be 25-1000 mm long (got 20 mm)"},
-		{DriverBrotherQL, "QL-810W", "dk-22210", LabelSpec{WidthMM: 29, HeightMM: 50, DPI: 203}, "Brother QL printers print at 300 DPI, not 203"},
-		{DriverTSPL, "Rollo X1038", "4x6", LabelSpec{WidthMM: 101.6, HeightMM: 152.4, DPI: 300}, "the Rollo X1038 prints at 203 DPI, not 300"},
+		{DriverBrotherQL, "QL-810W", "dk-11201", LabelSpec{WidthMM: 29, HeightMM: 60, DPI: 300}, "it is 29 × 60 mm, but the roll loaded, DK-11201 29 × 90 mm die-cut, takes 29 × 90 mm"},
+		{DriverBrotherQL, "QL-810W", "dk-22205", LabelSpec{WidthMM: 50, HeightMM: 29, DPI: 300}, "it is 50 × 29 mm, but the roll loaded, DK-22205 62 mm continuous, needs one side to be 62 mm"},
+		{DriverBrotherQL, "QL-810W", "dk-22210", LabelSpec{WidthMM: 29, HeightMM: 20, DPI: 300}, "it is 20 mm long, but continuous labels must be 25-1000 mm long"},
+		{DriverBrotherQL, "QL-810W", "dk-22210", LabelSpec{WidthMM: 29, HeightMM: 50, DPI: 203}, "it is laid out at 203 DPI, but Brother QL printers print at 300 DPI"},
+		{DriverTSPL, "Rollo X1038", "4x6", LabelSpec{WidthMM: 101.6, HeightMM: 152.4, DPI: 300}, "it is laid out at 300 DPI, but the Rollo X1038 prints at 203 DPI"},
+		// Every reason at once: the resolution and the size.
+		{DriverBrotherQL, "QL-810W", "dk-22205", LabelSpec{WidthMM: 101.6, HeightMM: 152.4, DPI: 203},
+			"it is laid out at 203 DPI, but Brother QL printers print at 300 DPI; it is 101.6 × 152.4 mm, but the roll loaded, DK-22205 62 mm continuous, needs one side to be 62 mm"},
 	}
 	for _, c := range cases {
 		_, _, err := PlanLabel(c.driver, Settings{Model: c.model, Media: c.media}, c.label)
-		if err == nil || !strings.HasSuffix(err.Error(), c.want) {
-			t.Errorf("%s %s: err = %v, want it to end %q", c.driver, c.media, err, c.want)
+		if err == nil || !errors.Is(err, ErrDoesNotFit) || Why(err) != c.want {
+			t.Errorf("%s %s: err = %v, want %q", c.driver, c.media, err, c.want)
 		}
 	}
 }

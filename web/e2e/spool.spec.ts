@@ -22,7 +22,7 @@ test('gather labels in the spool, sort them, and download them', async ({ signed
   await page.getByRole('button', { name: 'Add its assets to the spool' }).click();
   await expect(page.getByText('Added 2 labels to the spool.')).toBeVisible();
   await page.goto(`/assets/${loose.asset.asset.id}`);
-  await page.getByRole('button', { name: 'Add its label to the spool' }).click();
+  await page.getByRole('button', { name: 'Add to the spool' }).click();
   await expect(page.getByText('Added 1 label to the spool.')).toBeVisible();
 
   await goTo(page, 'Spool');

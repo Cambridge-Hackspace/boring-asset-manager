@@ -51,8 +51,8 @@ func (s *Server) labelSample() *labels.Data {
 // planFor plans printing labels of template t on printer p: its driver's
 // plan, the template as printed there, and warnings for the person
 // printing; or an error wrapping printers.ErrDoesNotFit when they do not
-// suit the media loaded. A fixed template prints as it is; an adaptive one
-// is laid out for the printer's label and DPI.
+// suit the media loaded, with t as it is. A fixed template prints as it
+// is; an adaptive one is laid out for the printer's label and DPI.
 func (s *Server) planFor(p *models.Printer, t *labels.Template) (printers.Plan, *labels.Template, []string, error) {
 	settings := store.PrinterSettings(p)
 	if !t.Adaptive() {
@@ -61,26 +61,33 @@ func (s *Server) planFor(p *models.Printer, t *labels.Template) (printers.Plan, 
 	}
 	g, err := printers.GeometryOf(p.Driver, settings)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, t, nil, err
 	}
 	var reasons []string
 	for _, size := range adaptiveSizes(t, g) {
 		laid, notices, err := render.Adapt(t, size.width, size.height, g.DPI, s.labelSample())
 		if err != nil {
 			if !errors.Is(err, render.ErrDoesNotAdapt) {
-				return nil, nil, nil, err
+				return nil, t, nil, err
 			}
 			reasons = append(reasons, err.Error())
 			continue
 		}
 		plan, fit, err := printers.PlanLabel(p.Driver, settings, labelSpec(laid))
 		if errors.Is(err, printers.ErrDoesNotFit) {
-			reasons = append(reasons, strings.TrimPrefix(err.Error(), printers.ErrDoesNotFit.Error()+": "))
+			reasons = append(reasons, printers.Why(err))
 			continue
 		}
 		return plan, laid, append(notices, fit.Warnings...), err
 	}
-	return nil, nil, nil, fmt.Errorf("%w: %s does not adapt to %s: %s", printers.ErrDoesNotFit, t.Name, g.Roll, strings.Join(dedupe(reasons), "; "))
+	return nil, t, nil, fmt.Errorf("%w: it does not adapt to %s: %s", printers.ErrDoesNotFit, g.Roll, strings.Join(dedupe(reasons), "; "))
+}
+
+// unfitMessage says why template t's labels cannot print on printer p, from
+// the error planFor gave: "Shipping can't print on Front desk QL: it is
+// laid out at 203 DPI, but Brother QL printers print at 300 DPI."
+func unfitMessage(t *labels.Template, p *models.Printer, err error) string {
+	return fmt.Sprintf("%s can't print on %s: %s.", t.Name, p.Name, strings.TrimSuffix(printers.Why(err), "."))
 }
 
 type labelSize struct{ width, height float64 }

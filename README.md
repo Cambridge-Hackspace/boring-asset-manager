@@ -691,6 +691,7 @@ Spreadsheet formula injection is defused: on export a cell beginning with `=`, `
 
 * **Export Mode:** `POST /api/v1/labels/export` takes a template ID, up to 500 distinct asset IDs and a format (`pdf` or `zip`, with `"mono": true` for 1-bit PNGs), and streams back a multi-page PDF or a ZIP of PNGs named `<asset_id>.png`.
 * **Network Dispatch Mode:** `POST /api/v1/printers/{id}/print` (`labels.print`) takes a template ID, asset IDs and a copy count (1–20, at most 500 labels in all), checks the template against the printer's media (§4.4), and streams the job to the printer over TCP port 9100.
+* **What can print:** `POST /api/v1/labels/options` (`assets.read`) takes up to 500 asset IDs and answers with the templates that can label them: their categories' templates first, in order of preference (marked `preferred`), then the rest, each with the `problems` of up to 50 of the assets it cannot label (an asset with no code of a type it prints, in a sentence), and `template_id`, the one to start with: the first of their categories' that labels them all and prints somewhere. For those with `labels.print` it adds the `printers`, and `fits`, by template and printer, whether its labels print there (`fits`), why not (`reason`, every reason at once, naming the template and printer), and `warnings`. The web app's Labels panel offers only the printers a template fits, listing the others with why not, and puts a template's problems in place of its preview.
 * **All or nothing:** every asset is bound and validated before any output is produced, so a batch either renders completely or fails with `422` and a list of `{asset_id, path, message}` for the assets that could not be rendered. Archived assets are never labeled.
 * **History:** labels sent to a printer record `asset.label_printed` in each asset's history, with the template and printer as they were named then and the copies. Exports are not recorded, since they may never be printed. Channels cannot subscribe to it.
 
@@ -1047,6 +1048,9 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Warnings when a printer's roll changes, and which printers each template suits (§4.4).
 * [x] Several label templates per category, by preference, that waiting labels move between when a roll changes (§6.2).
 * [x] Templates that adapt to the label and printer they print on, with limits on their elements and alternatives, and the editor's sizing, anchors and previews on each printer (§4.1).
+
+#### Sub-Phase 7.25: Interface Review
+* [x] Printing offers only the printers a template fits, starts with the asset's category's templates, and says why a label cannot print or be made, in sentences (§6.2).
 
 ### Upcoming Features
 

@@ -165,7 +165,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 	plan, t, _, err := s.planFor(p, t)
 	if err != nil {
 		// In a pool, the rest take it.
-		return store.SpoolOutcome{Failure: fmt.Sprintf("%s does not suit %s: %v", t.Name, p.Name, err), HandBack: b.PoolID != ""}
+		return store.SpoolOutcome{Failure: unfitMessage(t, p, err), HandBack: b.PoolID != ""}
 	}
 	r, err := s.requestAs(ctx, b.CreatedBy, b.CreatedByToken)
 	if err != nil {

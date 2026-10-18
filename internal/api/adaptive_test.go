@@ -78,7 +78,7 @@ func TestAnAdaptiveTemplatePrintsOnEveryRollItTakes(t *testing.T) {
 	// 12 mm tape is narrower than it takes; saying why.
 	narrow := createPrinter(t, srv, cookie, 9100, "dk-22214")
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+narrow+"/print", `{"template_id":"`+tag+`","asset_ids":["`+asset.Asset.ID+`"]}`)
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "Any tag does not adapt to DK-22214 12 mm continuous") || !strings.Contains(rec.Body.String(), "it takes labels 25-102") {
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "Any tag can't print on QL dk-22214: it does not adapt to DK-22214 12 mm continuous") || !strings.Contains(rec.Body.String(), "it takes labels 25-102") {
 		t.Errorf("on 12 mm tape: %d %s", rec.Code, rec.Body)
 	}
 
@@ -111,7 +111,7 @@ func TestAFixedTemplateStaysAtItsOwnDPI(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &created)
 	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
 	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+created.Printer.ID+"/print", `{"template_id":"`+fixed+`","asset_ids":["`+asset.Asset.ID+`"]}`)
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "prints at 203 DPI, not 300") {
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "it is laid out at 300 DPI, but the Rollo X1038 prints at 203 DPI") {
 		t.Errorf("a 300 DPI fixed template on a 203 DPI printer: %d %s", rec.Code, rec.Body)
 	}
 }

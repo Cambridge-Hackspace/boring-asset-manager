@@ -118,7 +118,7 @@ func TestSpoolThroughTheAPI(t *testing.T) {
 	if e := entryFor(spool, loose.Asset.ID); e.Destination != "printer:"+wide || len(e.Problems) != 0 {
 		t.Errorf("after choosing a template: %+v", e)
 	}
-	if p := entryFor(spool, bin2.Asset.ID).Problems; len(p) != 1 || !strings.Contains(p[0], "Shelf does not suit QL dk-11201") {
+	if p := entryFor(spool, bin2.Asset.ID).Problems; len(p) != 1 || !strings.Contains(p[0], "Shelf can't print on QL dk-11201") {
 		t.Errorf("an unsuited printer: %v", p)
 	}
 	expect("a bad destination", http.MethodPatch, "/api/v1/spool", `{"entry_ids":["`+bin2ID+`"],"destination":"fax"}`, http.StatusBadRequest)

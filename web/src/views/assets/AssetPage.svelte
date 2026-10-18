@@ -14,7 +14,6 @@
   import ConditionBadge from '../../components/ConditionBadge.svelte';
   import ConflictMark from '../../components/ConflictMark.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
-  import AddToSpool from '../../components/AddToSpool.svelte';
   import ActionButtons from '../../components/ActionButtons.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
@@ -341,10 +340,7 @@
       </section>
     {/if}
 
-    {#if !archived && session.user}<LabelActions assetIds={[id]} />{/if}
-    {#if !archived && session.can('labels.print')}
-      <p><AddToSpool what={() => ({ asset_ids: [id] })} label="Add its label to the spool" /></p>
-    {/if}
+    {#if !archived && session.user}<LabelActions assetIds={[id]} spool />{/if}
 
     {#if history.length}
       <section class="card" aria-labelledby="history-heading">
