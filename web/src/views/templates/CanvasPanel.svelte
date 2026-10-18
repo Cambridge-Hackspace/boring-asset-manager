@@ -73,7 +73,9 @@
       // Without access to printers, sizes are entered by hand.
       return;
     }
-    printerId = await choosePrinter();
+    const chosen = await choosePrinter();
+    // Someone who chose while it was looking keeps their choice.
+    if (!choseOwn) printerId = chosen;
   });
 
   /** The printer last used with this template, or else the first that takes it, or else the first. */
@@ -89,7 +91,12 @@
     return printers[i >= 0 ? i : 0]?.id ?? '';
   }
 
+  // Set once a printer is chosen by hand, so the first choice made for
+  // them, which can take a moment, does not replace it.
+  let choseOwn = false;
+
   function choose(id: string) {
+    choseOwn = true;
     printerId = id;
     testStatus = testError = '';
     testWarnings = [];
@@ -173,18 +180,22 @@
     onchange({ ...resizeLabel(doc, Math.max(across, along), Math.min(across, along)), ...(dpi ? { dpi } : {}) });
   }
 
-  // The fit check, re-run (debounced) as the template changes.
+  // The fit check, re-run (debounced) as the template changes; an answer
+  // for an earlier printer or template, arriving late, is dropped.
+  let checking = 0;
   $effect(() => {
     const id = printerId;
     JSON.stringify(doc);
+    const mine = ++checking;
     fit = null;
     fitError = '';
     if (!id) return;
     const timer = setTimeout(async () => {
       try {
-        fit = await check(id);
+        const answer = await check(id);
+        if (mine === checking) fit = answer;
       } catch (err) {
-        fitError = messageOf(err);
+        if (mine === checking) fitError = messageOf(err);
       }
     }, 300);
     return () => clearTimeout(timer);
