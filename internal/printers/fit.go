@@ -63,6 +63,15 @@ type Fit struct {
 	Rotate bool
 	// Warnings never stop printing.
 	Warnings []string
+	// Printable is the part of the label the printer prints, in the
+	// label's own millimeters from its top left corner.
+	Printable RectMM
+	// EdgeMM is how near a die-cut label's edges content may be cut off;
+	// 0 on a continuous roll.
+	EdgeMM float64
+	// Outside and NearEdge index the label's content that reaches outside
+	// Printable, or within EdgeMM of the label's edges.
+	Outside, NearEdge []int
 }
 
 // SizeTolerance absorbs rounding when matching template sizes to labels, in
@@ -108,7 +117,7 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 			return Fit{}, doesNotFit(reasons)
 		}
 		f := Fit{Rotate: rotate, Warnings: append([]string{}, g.Warnings...)}
-		f.Warnings = append(f.Warnings, contentWarnings(g, label, rotate, across, along)...)
+		checkContent(&f, g, label, across, along)
 		return f, nil
 	}
 	if g.DieCut() {
@@ -130,12 +139,10 @@ func Why(err error) string {
 	return strings.TrimPrefix(err.Error(), ErrDoesNotFit.Error()+": ")
 }
 
-// contentWarnings says when the label has content where it will not print,
-// or so near a die-cut label's edge that it may be cut off.
-func contentWarnings(g Geometry, label LabelSpec, rotate bool, across, along float64) []string {
-	if len(label.Content) == 0 {
-		return nil
-	}
+// checkContent finds the part of the label the printer prints, and says
+// when the label has content outside it, or so near a die-cut label's edge
+// that it may be cut off.
+func checkContent(f *Fit, g Geometry, label LabelSpec, across, along float64) {
 	// The printed part of the label, across and along the roll.
 	acrossFrom, acrossTo := 0.0, across
 	if g.ReachMM > 0 && g.ReachMM < across {
@@ -151,32 +158,36 @@ func contentWarnings(g Geometry, label LabelSpec, rotate bool, across, along flo
 		alongFrom = (along - g.ReachAlongMM) / 2
 		alongTo = alongFrom + g.ReachAlongMM
 	}
+	// Rotated, the label's height runs across the roll.
+	f.Printable = RectMM{X: acrossFrom, Y: alongFrom, Width: acrossTo - acrossFrom, Height: alongTo - alongFrom}
+	if f.Rotate {
+		f.Printable = RectMM{X: alongFrom, Y: acrossFrom, Width: alongTo - alongFrom, Height: acrossTo - acrossFrom}
+	}
+	if g.DieCut() {
+		f.EdgeMM = DriftMM
+	}
 
 	const eps = 0.05
-	var unprinted, nearEdge bool
-	for _, r := range label.Content {
-		// Rotated, the label's height runs across the roll.
+	for i, r := range label.Content {
 		a0, a1, l0, l1 := r.X, r.X+r.Width, r.Y, r.Y+r.Height
-		if rotate {
+		if f.Rotate {
 			a0, a1, l0, l1 = r.Y, r.Y+r.Height, r.X, r.X+r.Width
 		}
 		if a0 < acrossFrom-eps || a1 > acrossTo+eps || l0 < alongFrom-eps || l1 > alongTo+eps {
-			unprinted = true
+			f.Outside = append(f.Outside, i)
 			continue
 		}
 		if g.DieCut() && (a0 < DriftMM-eps || a1 > across-DriftMM+eps || l0 < DriftMM-eps || l1 > along-DriftMM+eps) {
-			nearEdge = true
+			f.NearEdge = append(f.NearEdge, i)
 		}
 	}
-	var out []string
-	if unprinted {
-		out = append(out, fmt.Sprintf("Part of the template is where the printer does not print: it reaches %s of the label's %s mm width%s.",
+	if len(f.Outside) > 0 {
+		f.Warnings = append(f.Warnings, fmt.Sprintf("Part of the template is where the printer does not print: it prints only %s of the label's %s mm width%s.",
 			reachDescription(g, across), mm(across), alongDescription(g, along)))
 	}
-	if nearEdge {
-		out = append(out, fmt.Sprintf("Part of the template is within %s mm of the label's edge, which may be cut off as die-cut labels shift a little.", mm(DriftMM)))
+	if len(f.NearEdge) > 0 {
+		f.Warnings = append(f.Warnings, fmt.Sprintf("Part of the template is within %s mm of the label's edge, which may be cut off as die-cut labels shift a little.", mm(DriftMM)))
 	}
-	return out
 }
 
 func reachDescription(g Geometry, across float64) string {

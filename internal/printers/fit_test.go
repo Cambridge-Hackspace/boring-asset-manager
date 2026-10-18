@@ -2,6 +2,8 @@ package printers
 
 import (
 	"errors"
+	"math"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -106,7 +108,7 @@ func TestFitWarnings(t *testing.T) {
 		// edge of a rotated label's height is outside it.
 		{"Brother's unprinted edge", DriverBrotherQL, "QL-810W", "dk-11201", nil,
 			LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300, Content: []RectMM{box(10, 0.5, 20, 10)}},
-			[]string{"it reaches the middle 25.9 mm of the label's 29 mm width and the middle 83.9 mm of its 90 mm length"}},
+			[]string{"it prints only the middle 25.9 mm of the label's 29 mm width and the middle 83.9 mm of its 90 mm length"}},
 		{"Brother's unprinted length", DriverBrotherQL, "QL-810W", "dk-11201", nil,
 			LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300, Content: []RectMM{box(1, 10, 10, 10)}},
 			[]string{"does not print"}},
@@ -116,7 +118,7 @@ func TestFitWarnings(t *testing.T) {
 		// from the guide.
 		{"DYMO's far edge", DriverDymoLabelWriter, "LabelWriter 450", "30256", nil,
 			LabelSpec{WidthMM: 59, HeightMM: 102, DPI: 300, Content: []RectMM{box(50, 10, 8, 10)}},
-			[]string{"it reaches the first 56.9 mm of the label's 59 mm width"}},
+			[]string{"it prints only the first 56.9 mm of the label's 59 mm width"}},
 		{"DYMO's near edge prints", DriverDymoLabelWriter, "LabelWriter 450", "30256", nil,
 			LabelSpec{WidthMM: 59, HeightMM: 102, DPI: 300, Content: []RectMM{box(2, 10, 8, 10)}}, nil},
 		{"second-generation DYMO receives it all", DriverDymoLabelWriter, "LabelWriter 550", "30256", nil,
@@ -150,5 +152,50 @@ func TestFitWarnings(t *testing.T) {
 				t.Errorf("%s: warning %q, want it to say %q", c.name, f.Warnings[i], w)
 			}
 		}
+	}
+}
+
+func TestFitSaysWhereThePrinterPrints(t *testing.T) {
+	box := func(x, y, w, h float64) RectMM { return RectMM{X: x, Y: y, Width: w, Height: h} }
+	near := func(a, b RectMM) bool {
+		return math.Abs(a.X-b.X) < 0.01 && math.Abs(a.Y-b.Y) < 0.01 && math.Abs(a.Width-b.Width) < 0.01 && math.Abs(a.Height-b.Height) < 0.01
+	}
+	// 90 × 29 mm on 29 mm die-cut labels, turned: the label's height runs
+	// across the roll, where the QL prints the middle 25.9 mm, and its
+	// width along it, where it prints the middle 83.9 mm.
+	_, f, err := PlanLabel(DriverBrotherQL, Settings{Model: "QL-810W", Media: "dk-11201"}, LabelSpec{WidthMM: 90, HeightMM: 29, DPI: 300,
+		Content: []RectMM{box(10, 0.5, 20, 10), box(5, 5, 20, 19), box(1, 10, 10, 10)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !near(f.Printable, box(3.05, 1.55, 83.9, 25.9)) || f.EdgeMM != DriftMM {
+		t.Errorf("on die-cut labels: printable %+v, edge %v", f.Printable, f.EdgeMM)
+	}
+	if !slices.Equal(f.Outside, []int{0, 2}) || len(f.NearEdge) != 0 {
+		t.Errorf("on die-cut labels: outside %v, near the edge %v", f.Outside, f.NearEdge)
+	}
+
+	// 62 mm tape, as designed: its width across the roll, and no edges along it.
+	_, f, err = PlanLabel(DriverBrotherQL, Settings{Model: "QL-810W", Media: "dk-22205"}, LabelSpec{WidthMM: 62, HeightMM: 40, DPI: 300,
+		Content: []RectMM{box(0, 0, 10, 10), box(5, 0, 50, 40)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Printable.Y != 0 || f.Printable.Height != 40 || f.Printable.X < 1 || f.Printable.Width > 60 || f.EdgeMM != 0 {
+		t.Errorf("on tape: printable %+v, edge %v", f.Printable, f.EdgeMM)
+	}
+	if !slices.Equal(f.Outside, []int{0}) || len(f.NearEdge) != 0 {
+		t.Errorf("on tape: outside %v, near the edge %v", f.Outside, f.NearEdge)
+	}
+
+	// A Rollo prints all of a 2 × 1 in label, but may cut off what is
+	// within a millimeter of its edges.
+	_, f, err = PlanLabel(DriverTSPL, Settings{Model: "Rollo X1038", Media: "2x1"}, LabelSpec{WidthMM: 50.8, HeightMM: 25.4, DPI: 203,
+		Content: []RectMM{box(5, 5, 20, 10), box(0.5, 5, 20, 10)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !near(f.Printable, box(0, 0, 50.8, 25.4)) || f.EdgeMM != DriftMM || len(f.Outside) != 0 || !slices.Equal(f.NearEdge, []int{1}) {
+		t.Errorf("on a Rollo: %+v", f)
 	}
 }

@@ -10,6 +10,7 @@ import {
   newElement,
   placeholders,
   resizeElement,
+  resizeLabel,
   snap,
   tooSmall,
   withProp,
@@ -155,5 +156,24 @@ describe('adaptive templates', () => {
     expect(tooSmall(e)).toBe('refuse');
     expect(tooSmall({ ...e, type: 'static_image' })).toBe('hide');
     expect(tooSmall({ ...e, when_too_small: 'alternative' })).toBe('alternative');
+  });
+});
+
+describe('resizeLabel', () => {
+  it('scales elements with the label, keeping codes square and text in proportion', () => {
+    const d: TemplateDoc = {
+      ...blankTemplate(), units: 'mm', width: 90, height: 29,
+      elements: [
+        { type: 'generator', generator_type: 'qr', x: 2, y: 2, width: 25, height: 25 },
+        { type: 'text', x: 30, y: 4, width: 58, height: 10, font_size: 14, min_font_size: 6 },
+      ],
+    };
+    const r = resizeLabel(d, 62, 29);
+    expect([r.width, r.height]).toEqual([62, 29]);
+    // Across by 62/90; down unchanged.
+    expect(r.elements[0]).toMatchObject({ x: 1.38, y: 2, width: 17.22, height: 17.22 });
+    expect(r.elements[1]).toMatchObject({ x: 20.67, y: 4, width: 39.96, height: 10, font_size: 9.5, min_font_size: 4 });
+    // Every element stays on the label.
+    for (const e of r.elements) expect(e.x + e.width).toBeLessThanOrEqual(62);
   });
 });

@@ -6,19 +6,23 @@
     moveElements,
     resizeElement,
     type Handle,
+    type PrintArea,
     type TemplateDoc,
     type TemplateElement,
   } from '../../lib/template';
 
   // The label as the server renders it, with an interactive outline over
   // each element. Changes are reported through onchange; onbegin marks the
-  // start of one undoable gesture.
+  // start of one undoable gesture. With a printer chosen, what it does not
+  // print is shaded, and elements reaching into it are outlined in amber.
+
   let {
     doc,
     selected,
     previewURL,
     previewStale,
     problemElements,
+    area = null,
     onselect,
     onchange,
     onbegin,
@@ -29,6 +33,7 @@
     previewURL: string;
     previewStale: boolean;
     problemElements: Set<number>;
+    area?: PrintArea | null;
     onselect: (indices: number[]) => void;
     onchange: (elements: TemplateElement[]) => void;
     onbegin: () => void;
@@ -40,6 +45,23 @@
   const pct = (v: number, total: number) => `${(v / total) * 100}%`;
   const boxStyle = (e: TemplateElement) =>
     `left:${pct(e.x, doc.width)};top:${pct(e.y, doc.height)};width:${pct(e.width, doc.width)};height:${pct(e.height, doc.height)}`;
+
+  const warned = $derived(new Set([...(area?.outside ?? []), ...(area?.nearEdge ?? [])]));
+
+  /** The strips of the label outside what the printer prints. */
+  const unprinted = $derived.by(() => {
+    if (!area) return [];
+    const { x, y, width, height } = area.printable;
+    const W = doc.width;
+    const H = doc.height;
+    const eps = 0.001;
+    return [
+      { left: 0, top: 0, width: W, height: y },
+      { left: 0, top: y + height, width: W, height: H - y - height },
+      { left: 0, top: y, width: x, height },
+      { left: x + width, top: y, width: W - x - width, height },
+    ].filter((r) => r.width > eps && r.height > eps);
+  });
 
   /** Template units per screen pixel. */
   function unitsPerPixel(): number {
@@ -143,6 +165,20 @@
         draggable="false"
       />
     {/if}
+    {#each unprinted as r, i (i)}
+      <div
+        aria-hidden="true"
+        class="unprinted pointer-events-none absolute"
+        style="left:{pct(r.left, doc.width)};top:{pct(r.top, doc.height)};width:{pct(r.width, doc.width)};height:{pct(r.height, doc.height)}"
+      ></div>
+    {/each}
+    {#if area && area.edge > 0}
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute border border-dashed border-amber-500/70"
+        style="left:{pct(area.edge, doc.width)};top:{pct(area.edge, doc.height)};right:{pct(area.edge, doc.width)};bottom:{pct(area.edge, doc.height)}"
+      ></div>
+    {/if}
     {#each doc.elements as e, i (i)}
       {@const isSelected = selected.includes(i)}
       <div
@@ -152,7 +188,11 @@
         aria-label={describeElement(e, i)}
         class="absolute cursor-move outline-offset-0 {isSelected
           ? 'outline-2 outline-blue-600'
-          : 'outline-1 outline-dashed outline-zinc-400 hover:outline-blue-400'} {problemElements.has(i) ? 'bg-red-500/15 outline-red-600' : ''}"
+          : 'outline-1 outline-dashed outline-zinc-400 hover:outline-blue-400'} {problemElements.has(i)
+          ? 'bg-red-500/15 outline-red-600'
+          : warned.has(i)
+            ? 'bg-amber-400/15 outline-amber-500'
+            : ''}"
         style={boxStyle(e)}
         onpointerdown={(ev) => pointerDownOnElement(ev, i)}
         onkeydown={keydown}
@@ -177,8 +217,20 @@
       </div>
     {/each}
   </div>
+  {#if unprinted.length || (area && area.edge > 0)}
+    <p class="text-xs text-zinc-600 dark:text-zinc-400">
+      {#if unprinted.length}Shaded: where the printer does not print.{/if}
+      {#if area && area.edge > 0}Dashed: within {area.edge} {doc.units} of the edge, which may be cut off.{/if}
+    </p>
+  {/if}
   <p class="text-xs text-zinc-600 dark:text-zinc-400">
     Drag to move, drag a corner to resize, Shift+click to select several. With an element focused: arrow keys move it by {gridStep(doc.units)}
     {doc.units} (Shift for ten times that), Delete removes it, Escape deselects. Hold Alt while dragging to leave the grid.
   </p>
 </div>
+
+<style>
+  .unprinted {
+    background: repeating-linear-gradient(45deg, rgb(113 113 122 / 0.35) 0 4px, rgb(113 113 122 / 0.12) 4px 8px);
+  }
+</style>

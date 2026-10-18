@@ -12,6 +12,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -307,8 +308,86 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeServerError(w, err, "check the fit")
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "warnings": nonNil(fit.Warnings)})
+		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "warnings": nonNil(fit.Warnings),
+			"printable": fit.Printable, "edge_mm": fit.EdgeMM, "outside": nonNilInts(fit.Outside), "near_edge": nonNilInts(fit.NearEdge)})
 	}
+}
+
+// nonNilInts is list, or an empty one, so it is written as [] rather than null.
+func nonNilInts(list []int) []int {
+	if list == nil {
+		return []int{}
+	}
+	return list
+}
+
+// handleTestPrint prints one label of a template that need not be saved,
+// for an asset or with placeholders, for the template editor:
+// POST /api/v1/printers/{id}/test-print. Its labels are not recorded in
+// the asset's history.
+func (s *Server) handleTestPrint(w http.ResponseWriter, r *http.Request) {
+	var req PreviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Template) == 0 {
+		writeJSONError(w, http.StatusBadRequest, `Expected {"template": {...}, "asset_id": "optional"}`)
+		return
+	}
+	doc, err := withPreviewDefaults(req.Template)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "template must be a JSON object")
+		return
+	}
+	t, err := labels.Parse(doc)
+	if writeTemplateError(w, err) {
+		return
+	}
+	p, ok := s.loadPrinter(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	plan, laid, warnings, err := s.planFor(p, t)
+	if errors.Is(err, printers.ErrDoesNotFit) {
+		writeJSONError(w, http.StatusUnprocessableEntity, unfitMessage(t, p, err))
+		return
+	}
+	if err != nil {
+		writeServerError(w, err, "plan the test print")
+		return
+	}
+
+	images := s.newLabelImages()
+	var scene *render.Scene
+	var problem *LabelProblem
+	if req.AssetID == "" {
+		scene, err = render.Layout(laid, previewData(laid, s.cfg.Server.BaseURL), images)
+		var le *render.LayoutError
+		if errors.As(err, &le) {
+			problem, err = &LabelProblem{Path: le.Path, Message: le.Message}, nil
+		}
+	} else {
+		scene, problem, err = s.layoutAsset(r, laid, req.AssetID, images)
+	}
+	if problem != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, ErrorResponse{Error: "Label cannot be rendered", Details: []LabelProblem{*problem}})
+		return
+	}
+	if err != nil {
+		writeServerError(w, err, "render the test print")
+		return
+	}
+	job, err := plan.Encode([]*image.Gray{scene.Raster(true)})
+	if err != nil {
+		writeServerError(w, err, "encode the test print")
+		return
+	}
+	turn := s.printerTurn(p.ID)
+	turn.Lock()
+	err = s.transport.Send(r.Context(), p.Connection, job)
+	turn.Unlock()
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"printer_id": p.ID, "labels": 1, "bytes": len(job), "warnings": nonNil(warnings)})
 }
 
 // nonNil is list, or an empty one, so it is written as [] rather than null.

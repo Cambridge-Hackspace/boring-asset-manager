@@ -108,6 +108,49 @@ export function convertUnits(doc: TemplateDoc, to: Units): TemplateDoc {
   };
 }
 
+/** Where a printer prints on a template, in its units, from the fit check (README §4.4). */
+export interface PrintArea {
+  /** The part of the label it prints. */
+  printable: { x: number; y: number; width: number; height: number };
+  /** How near a die-cut label's edges content may be cut off; 0 on a continuous roll. */
+  edge: number;
+  /** Elements reaching outside what it prints, or near the edge. */
+  outside: number[];
+  nearEdge: number[];
+}
+
+/**
+ * Gives a template a new size, scaling its elements with it so they stay on
+ * the label: positions and boxes in proportion across and down, codes kept
+ * square, and text by the smaller of the two.
+ */
+export function resizeLabel(doc: TemplateDoc, width: number, height: number): TemplateDoc {
+  const sx = width / doc.width;
+  const sy = height / doc.height;
+  const s = Math.min(sx, sy);
+  const t = (v: number) => tidy(v, doc.units);
+  const pt = (v: number) => Math.max(1, Math.round(v * s * 2) / 2);
+  return {
+    ...doc,
+    width,
+    height,
+    elements: doc.elements.map((e) => {
+      const square = e.type === 'generator';
+      const w = square ? e.width * s : e.width * sx;
+      const h = square ? e.height * s : e.height * sy;
+      return {
+        ...e,
+        x: t(e.x * sx),
+        y: t(e.y * sy),
+        width: t(w),
+        height: t(h),
+        ...(e.font_size ? { font_size: pt(e.font_size) } : {}),
+        ...(e.min_font_size ? { min_font_size: pt(e.min_font_size) } : {}),
+      };
+    }),
+  };
+}
+
 /** A new element of a type, sized to suit the canvas, near its top-left, on the grid. */
 export function newElement(type: ElementType, doc: TemplateDoc, generatorType = 'qr'): TemplateElement {
   const step = gridStep(doc.units);

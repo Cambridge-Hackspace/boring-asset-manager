@@ -209,6 +209,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/printers/{id}/changes", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handlePrinterChanges)))
 	mux.Handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
 	mux.Handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
+	mux.Handle("POST /api/v1/printers/{id}/test-print", RequirePermission(rbac.PermLabelsPrint)(RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleTestPrint))))
 	mux.Handle("GET /api/v1/label-stock", canSeePrinters(http.HandlerFunc(s.handleListLabelStock)))
 	mux.Handle("POST /api/v1/label-stock", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleCreateLabelStock)))
 	mux.Handle("PUT /api/v1/label-stock/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUpdateLabelStock)))

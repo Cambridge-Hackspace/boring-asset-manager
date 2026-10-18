@@ -57,21 +57,72 @@ describe('TemplateEditor', () => {
     expect((screen.getByLabelText('Top') as HTMLInputElement).value).toBe('5');
   });
 
-  it('checks the fit with the template content, and shows what to know before printing', async () => {
+  const printers = () => ({
+    printers: [
+      { id: 'p0', name: 'Rollo', driver: 'tspl', model: 'Rollo X1038', media: '4x6', connection: { type: 'tcp', address: 'rollo' }, created_at: '', updated_at: '' },
+      { id: 'p1', name: 'QL', driver: 'brother_ql', model: 'QL-810W', media: 'dk-11201', connection: { type: 'tcp', address: 'ql' }, created_at: '', updated_at: '',
+        loaded: { id: 'dk-11201', name: 'DK-11201 29 × 90 mm die-cut', width_mm: 29, length_mm: 90, die_cut: true } },
+    ],
+  });
+
+  it('checks the fit on the first printer that takes it, and shades what it does not print', async () => {
     const { sent } = api({
-      'GET /printers': () => ({
-        printers: [{ id: 'p1', name: 'QL', driver: 'brother_ql', model: 'QL-810W', media: 'dk-11201', connection: { type: 'tcp', address: 'ql' }, created_at: '', updated_at: '',
-          loaded: { id: 'dk-11201', name: 'DK-11201 29 × 90 mm die-cut', width_mm: 29, length_mm: 90, die_cut: true } }],
+      'GET /printers': printers,
+      'POST /printers/p0/fit': () => ({ fits: false, message: "This template can't print on Rollo: it is laid out at 300 DPI, but the Rollo X1038 prints at 203 DPI." }),
+      'POST /printers/p1/fit': () => ({
+        fits: true, warnings: ['Part of the template is where the printer does not print.'],
+        printable: { x: 3.05, y: 1.55, width: 83.9, height: 25.9 }, edge_mm: 1, outside: [0], near_edge: [],
       }),
-      'POST /printers/p1/fit': () => ({ fits: true, warnings: ['Part of the template is where the printer does not print.'] }),
     });
-    render(TemplateEditor, { params: { id: 'ql90' } });
-    await fireEvent.change(await screen.findByLabelText('Printer'), { target: { value: 'p1' } });
-    expect(await screen.findByText('Fits this printer.', {}, { timeout: 2000 })).toBeTruthy();
+    const { container } = render(TemplateEditor, { params: { id: 'ql90' } });
+    // The Rollo does not take it, so the QL is chosen.
+    expect(await screen.findByText('Fits QL, with 1 warning.', {}, { timeout: 2000 })).toBeTruthy();
+    expect((screen.getByLabelText('Printer') as HTMLSelectElement).value).toBe('p1');
     expect(within(screen.getByRole('list', { name: 'Before printing' })).getByText(/does not print/)).toBeTruthy();
+    expect(screen.getByText('In the shaded area, which it does not print: Text 1: {{asset.name}}.')).toBeTruthy();
     expect(screen.getByText('Loaded: DK-11201 29 × 90 mm die-cut.')).toBeTruthy();
+    // Four strips around what it prints, and the line a die-cut label may be cut at.
+    expect(container.querySelectorAll('.unprinted')).toHaveLength(4);
+    expect(screen.getByText(/Dashed: within 1 mm of the edge/)).toBeTruthy();
     const fit = sent.find((r) => r.path === '/printers/p1/fit')!;
     expect(fit.body).toEqual({ width_mm: 90, height_mm: 29, dpi: 300, content: [{ x: 10, y: 5, width: 40, height: 10 }] });
+
+    // Choosing None turns the check off, and is remembered.
+    await fireEvent.change(screen.getByLabelText('Printer'), { target: { value: '' } });
+    await vi.waitFor(() => expect(container.querySelectorAll('.unprinted')).toHaveLength(0));
+    expect(localStorage.getItem('bam.editor-printer.ql90')).toBe('');
+  });
+
+  it('test-prints the template as it is, saved or not', async () => {
+    session.permissions = ['templates.manage', 'labels.print'];
+    localStorage.setItem('bam.editor-printer.ql90', 'p1');
+    const { sent } = api({
+      'GET /printers': printers,
+      'POST /printers/p1/fit': () => ({ fits: true, warnings: [], printable: { x: 0, y: 0, width: 90, height: 29 }, edge_mm: 1, outside: [], near_edge: [] }),
+      'POST /printers/p1/test-print': () => ({ labels: 1, warnings: ['Part of the template is within 1 mm of the label\'s edge.'] }),
+    });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    expect(await screen.findByText('Fits QL.', {}, { timeout: 2000 })).toBeTruthy();
+    // An unsaved change prints too.
+    await fireEvent.change(screen.getByLabelText('Height'), { target: { value: '30' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Test print' }));
+    expect(await screen.findByText('Sent a test label to QL.')).toBeTruthy();
+    expect(within(screen.getByRole('list', { name: 'Printed, with warnings' })).getByText(/within 1 mm/)).toBeTruthy();
+    const printed = sent.find((r) => r.path === '/printers/p1/test-print')!.body as { template: TemplateDoc; asset_id?: string };
+    expect(printed.template.height).toBe(30);
+    expect(printed.asset_id).toBeUndefined();
+  });
+
+  it('scales the elements when taking the label size from a printer', async () => {
+    api({ 'GET /printers': printers, 'GET /printers/drivers': () => ({ drivers: [] }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await fireEvent.change(await screen.findByLabelText('Printer'), { target: { value: 'p1' } });
+    await fireEvent.change(screen.getByLabelText('Width'), { target: { value: '180' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Use its label size' }));
+    expect((screen.getByLabelText('Width') as HTMLInputElement).value).toBe('90');
+    await fireEvent.focus(await screen.findByRole('button', { name: 'Text 1: {{asset.name}}', pressed: false }));
+    // Halved across, as the label was.
+    expect((screen.getByLabelText('Left') as HTMLInputElement).value).toBe('5');
   });
 
   it('keeps an adaptive template adaptive when saving it', async () => {
