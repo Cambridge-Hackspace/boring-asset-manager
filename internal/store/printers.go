@@ -67,6 +67,19 @@ func (s *Store) loadStock(p *models.Printer) error {
 	return nil
 }
 
+// PreviewPrinter checks a printer as CreatePrinter or UpdatePrinter would,
+// and returns it as they would, without saving it.
+func (s *Store) PreviewPrinter(p models.Printer) (*models.Printer, error) {
+	if err := s.loadStock(&p); err != nil {
+		return nil, err
+	}
+	if _, err := preparePrinter(&p); err != nil {
+		return nil, err
+	}
+	p.Loaded = printers.Loaded(p.Driver, PrinterSettings(&p))
+	return &p, nil
+}
+
 // CreatePrinter validates and stores a printer.
 func (s *Store) CreatePrinter(p models.Printer) (*models.Printer, error) {
 	if err := s.loadStock(&p); err != nil {

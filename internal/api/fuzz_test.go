@@ -156,6 +156,7 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/printers/{printer}/fit", body: `{"width_mm":62,"height_mm":29,"dpi":300}`},
 	{method: "POST", path: "/api/v1/printers", body: `{"name":"Front desk {n}","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"10.0.0.9"},"media":"dk-22205"}`},
 	{method: "PUT", path: "/api/v1/printers/{printer}", body: `{"name":"Back desk {n}","driver":"tspl","model":"Rollo X1038","connection":{"type":"ipp","address":"ipp://cups.lan/printers/x"},"media":"4x6"}`},
+	{method: "POST", path: "/api/v1/printers/{printer}/changes", body: `{"name":"Bench {n}","driver":"brother_ql","model":"QL-810W","connection":{"type":"tcp","address":"10.0.0.9"},"media":"dk-11201"}`},
 	{method: "DELETE", path: "/api/v1/printers/{printer}"},
 	{method: "GET", path: "/api/v1/label-stock"},
 	{method: "POST", path: "/api/v1/label-stock", body: `{"name":"Bin labels {n}","width_mm":60,"length_mm":40,"gap_mm":3}`},

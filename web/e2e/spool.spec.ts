@@ -140,3 +140,31 @@ test('share a job between the printers of a pool', async ({ signedIn: page, api,
     await second.stop();
   }
 });
+
+test('changing a printer’s roll says which waiting labels it strands, and templates say where they print', async ({ signedIn: page, api, printer }) => {
+  const name = unique('Front QL');
+  const { printer: ql } = await api.call('POST', '/printers', {
+    name, driver: 'brother_ql', model: 'QL-810W', connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` }, media: 'dk-11201',
+  });
+  const tagName = unique('Bin tag');
+  const { template } = await api.call('POST', '/templates', {
+    name: tagName, units: 'mm', width: 90, height: 29, dpi: 300,
+    elements: [{ type: 'text', x: 28, y: 4, width: 58, height: 10, font_size: 14, content_binding: '{{asset.name}}' }],
+  });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Drill') });
+  await api.call('POST', '/spool', { asset_ids: [asset.asset.id], template_id: template.id, destination: `printer:${ql.id}`, copies: 2 });
+
+  await goTo(page, 'Templates');
+  await expect(page.getByRole('row', { name: new RegExp(tagName) })).toContainText(name);
+
+  await goTo(page, 'Printers');
+  await page.getByRole('button', { name: `Edit ${name}` }).click();
+  await page.getByLabel('Loaded media').selectOption('dk-22205');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Saving this change would affect:' })).toContainText(`2 labels waiting for ${name} with ${tagName} would no longer fit.`);
+  await page.getByRole('button', { name: 'Save anyway' }).click();
+  await expect(page.getByRole('article', { name })).toContainText('DK-22205 62 mm continuous');
+
+  await goTo(page, 'Templates');
+  await expect(page.getByRole('row', { name: new RegExp(tagName) })).not.toContainText(name);
+});

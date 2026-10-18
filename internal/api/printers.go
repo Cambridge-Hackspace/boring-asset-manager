@@ -80,11 +80,52 @@ func (s *Server) handleUpdatePrinter(w http.ResponseWriter, r *http.Request) {
 	if writePrinterError(w, s.checkConnection(req.Connection)) {
 		return
 	}
+	// What the change affects, said again in the answer for scripts.
+	changes, ok := s.changesFor(w, req.printer(r.PathValue("id")))
+	if !ok {
+		return
+	}
 	p, err := s.store.UpdatePrinter(req.printer(r.PathValue("id")))
 	if writePrinterError(w, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"printer": p})
+	writeJSON(w, http.StatusOK, map[string]any{"printer": p, "changes": changes})
+}
+
+// handlePrinterChanges says what saving a printer as given would affect,
+// without saving it: POST /api/v1/printers/{id}/changes
+func (s *Server) handlePrinterChanges(w http.ResponseWriter, r *http.Request) {
+	var req PrinterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	changes, ok := s.changesFor(w, req.printer(r.PathValue("id")))
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"changes": changes})
+}
+
+// changesFor checks a printer as it would be saved and works out what that
+// would affect, writing the error when it cannot.
+func (s *Server) changesFor(w http.ResponseWriter, p models.Printer) (PrinterChanges, bool) {
+	if _, err := s.store.GetPrinter(p.ID); writePrinterError(w, err) {
+		return PrinterChanges{}, false
+	}
+	if writePrinterError(w, s.checkConnection(p.Connection)) {
+		return PrinterChanges{}, false
+	}
+	next, err := s.store.PreviewPrinter(p)
+	if writePrinterError(w, err) {
+		return PrinterChanges{}, false
+	}
+	changes, err := s.printerChanges(next)
+	if err != nil {
+		writeServerError(w, err, "work out what the change affects")
+		return PrinterChanges{}, false
+	}
+	return changes, true
 }
 
 func (s *Server) handleDeletePrinter(w http.ResponseWriter, r *http.Request) {
