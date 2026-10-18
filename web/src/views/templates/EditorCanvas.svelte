@@ -204,12 +204,12 @@
           {#each handles as h (h)}
             <span
               aria-hidden="true"
-              class="absolute h-2.5 w-2.5 border border-white bg-blue-600"
-              style="cursor:{h}-resize;{h.includes('n') ? 'top:-5px' : h.includes('s') ? 'bottom:-5px' : 'top:calc(50% - 5px)'};{h.includes('w')
-                ? 'left:-5px'
+              class="handle absolute border border-white bg-blue-600"
+              style="cursor:{h}-resize;{h.includes('n') ? 'top:calc(var(--h) / -2)' : h.includes('s') ? 'bottom:calc(var(--h) / -2)' : 'top:calc(50% - var(--h) / 2)'};{h.includes('w')
+                ? 'left:calc(var(--h) / -2)'
                 : h.includes('e')
-                  ? 'right:-5px'
-                  : 'left:calc(50% - 5px)'}"
+                  ? 'right:calc(var(--h) / -2)'
+                  : 'left:calc(50% - var(--h) / 2)'}"
               onpointerdown={(ev) => pointerDownOnHandle(ev, i, h)}
             ></span>
           {/each}
@@ -223,13 +223,27 @@
       {#if area && area.edge > 0}Dashed: within {area.edge} {doc.units} of the edge, which may be cut off.{/if}
     </p>
   {/if}
-  <p class="text-xs text-zinc-600 dark:text-zinc-400">
+  <p class="hidden text-xs text-zinc-600 pointer-coarse:block dark:text-zinc-400">
+    Drag to move, and drag a corner to resize; or set an element's position and size exactly in its settings.
+  </p>
+  <p class="text-xs text-zinc-600 pointer-coarse:hidden dark:text-zinc-400">
     Drag to move, drag a corner to resize, Shift+click to select several. With an element focused: arrow keys move it by {gridStep(doc.units)}
     {doc.units} (Shift for ten times that), Delete removes it, Escape deselects. Hold Alt while dragging to leave the grid.
   </p>
 </div>
 
 <style>
+  /* Resize handles: larger where a finger, not a mouse, takes them. */
+  .handle {
+    --h: 10px;
+    width: var(--h);
+    height: var(--h);
+  }
+  @media (pointer: coarse) {
+    .handle {
+      --h: 22px;
+    }
+  }
   .unprinted {
     background: repeating-linear-gradient(45deg, rgb(113 113 122 / 0.35) 0 4px, rgb(113 113 122 / 0.12) 4px 8px);
   }

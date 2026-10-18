@@ -7,12 +7,18 @@
   let { params }: { params: Record<string, string> } = $props();
   const slug = untrack(() => params.topic ?? '');
   const topic = slug ? helpTopic(slug) : undefined;
+
+  // On a phone, the topics fold away so the article comes first.
+  let topicsOpen = $state(false);
 </script>
 
 <div class="flex flex-col gap-8 md:flex-row">
   <nav aria-label="Help topics" class="md:w-56 md:shrink-0">
-    <p class="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-400">Help</p>
-    <ul class="space-y-1 text-sm">
+    <p class="mb-2 hidden text-sm font-semibold text-zinc-600 md:block dark:text-zinc-400">Help</p>
+    <button type="button" class="btn-secondary md:hidden" aria-expanded={topicsOpen} aria-controls="help-topics" onclick={() => (topicsOpen = !topicsOpen)}>
+      All help topics <span aria-hidden="true">{topicsOpen ? '▴' : '▾'}</span>
+    </button>
+    <ul id="help-topics" class="mt-2 space-y-1 text-sm md:mt-0 md:block {topicsOpen ? '' : 'hidden'}">
       {#each helpTopics as t (t.slug)}
         <li>
           <a class="hover:underline aria-[current=page]:font-semibold" href="/help/{t.slug}" aria-current={t.slug === slug ? 'page' : undefined}>{t.title}</a>

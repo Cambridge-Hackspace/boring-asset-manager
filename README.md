@@ -35,6 +35,7 @@ The web interface is a Svelte 5 single-page application written in TypeScript, b
 * **Sessions:** the app uses the existing `bam_session` cookie (`HttpOnly`, `SameSite=Lax`). On load it asks `GET /api/v1/auth/me` for the user, their permissions, and the names of their roles (`roles`), which **Your account** lists with what each permission allows, in words. Any `401` returns to the sign-in page and then back to where the user was.
 * **Permissions:** actions the user lacks are hidden or disabled, using the permission list from `/auth/me`. The server still checks every request.
 * **Errors:** validation errors from the API are shown beside the field or template element they name (template errors carry a `path`).
+* **Phones:** below 640 px the header is one row, with a **Menu** button opening every section, Help and the account; menus near the right edge open inward. Tables of users, loans, assets and the spool become a card per row, each cell under its column's heading (`lib/stack.ts`); the asset list's filters fold behind **Filters**, and help's topics behind **All help topics**, so the article comes first. On touch screens the template editor's handles are larger and its keyboard help gives way to touch's, and small buttons beside text are at least 32 px tall. The phone browser tests check that no page scrolls sideways at 390 px.
 * **Accessibility:** the target is WCAG 2.1 AA.
   * Everything works from the keyboard, including the template editor: arrow keys nudge, Shift+arrow moves by a larger step, and Tab moves between elements.
   * Focus is always visible, and every input has a label.
@@ -1062,6 +1063,7 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Labels whose QR codes open the scan page, a Scan page that looks codes up by camera or typed, and a sign-in prompt for visitors (§6.4).
 * [x] Setting someone's password from Users and `bam admin password`, `bam admin create --name`, a setup checklist on the home page, and pages that say what someone may do and what a page needs (§3.4).
 * [x] Where things are: a place in the asset form, the list and asset pages, search by place, and the next code suggested (§3.5).
+* [x] Phones: a one-row header with a menu, tables as cards, folded filters and help topics, and touch-sized editor handles (§1).
 
 ### Upcoming Features
 
