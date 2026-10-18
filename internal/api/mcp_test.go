@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -73,6 +74,8 @@ func structured(t *testing.T, res *mcp.CallToolResult, out any) {
 	if res.IsError {
 		t.Fatalf("tool error: %s", toolText(res))
 	}
+	// Fields an answer leaves out must not keep an earlier answer's values.
+	reflect.ValueOf(out).Elem().SetZero()
 	raw, _ := json.Marshal(res.StructuredContent)
 	if err := json.Unmarshal(raw, out); err != nil {
 		t.Fatal(err)
