@@ -93,6 +93,32 @@ describe('TemplateEditor', () => {
     expect(localStorage.getItem('bam.editor-printer.ql90')).toBe('');
   });
 
+  it('keeps a printer chosen by hand while it is still choosing one, and drops late answers', async () => {
+    // The Rollo, first, takes it but answers slowly; the person chooses the
+    // QL meanwhile, which does not.
+    let release: () => void = () => {};
+    const slow = new Promise<void>((r) => (release = r));
+    let rolloChecks = 0;
+    const { sent } = api({
+      'GET /printers': printers,
+      'POST /printers/p0/fit': async () => {
+        if (++rolloChecks === 1) await slow;
+        return { fits: true, warnings: [], printable: { x: 0, y: 0, width: 90, height: 29 }, edge_mm: 1, outside: [], near_edge: [] };
+      },
+      'POST /printers/p1/fit': () => ({ fits: false, message: "This template can't print on QL: wrong size." }),
+    });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    const select = (await screen.findByLabelText('Printer')) as HTMLSelectElement;
+    await vi.waitFor(() => expect(sent.some((r) => r.path === '/printers/p0/fit')).toBe(true));
+    await fireEvent.change(select, { target: { value: 'p1' } });
+    expect(await screen.findByText(/can't print on QL/, {}, { timeout: 2000 })).toBeTruthy();
+    release();
+    await new Promise((r) => setTimeout(r, 400));
+    expect(select.value).toBe('p1');
+    expect(screen.queryByText('Fits Rollo.')).toBeNull();
+    expect(screen.getByText(/can't print on QL/)).toBeTruthy();
+  });
+
   it('test-prints the template as it is, saved or not', async () => {
     session.permissions = ['templates.manage', 'labels.print'];
     localStorage.setItem('bam.editor-printer.ql90', 'p1');
