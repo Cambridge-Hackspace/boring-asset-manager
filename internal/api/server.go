@@ -31,6 +31,7 @@ type Server struct {
 	spool      *spooler
 	presses    *pressLimiter
 	live       *liveHub
+	sample     sampleCache
 	httpServer *http.Server
 }
 

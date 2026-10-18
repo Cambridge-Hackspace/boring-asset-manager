@@ -18,6 +18,8 @@ const templateColumns = `id, name, units, width, height, dpi, layout_json, creat
 // templateLayout is the JSON stored in templates.layout_json.
 type templateLayout struct {
 	Elements []labels.Element `json:"elements"`
+	Sizing   string           `json:"sizing,omitempty"`
+	Adapt    *labels.Adapt    `json:"adapt,omitempty"`
 }
 
 // CreateTemplate validates and stores a new template under a new ID; any ID
@@ -30,7 +32,7 @@ func (s *Store) CreateTemplate(t *labels.Template) (*labels.Template, error) {
 		return nil, err
 	}
 
-	layout, err := json.Marshal(templateLayout{Elements: created.Elements})
+	layout, err := json.Marshal(templateLayout{Elements: created.Elements, Sizing: created.Sizing, Adapt: created.Adapt})
 	if err != nil {
 		return nil, fmt.Errorf("encoding template layout: %w", err)
 	}
@@ -83,7 +85,7 @@ func (s *Store) UpdateTemplate(t *labels.Template) (*labels.Template, error) {
 		return nil, err
 	}
 
-	layout, err := json.Marshal(templateLayout{Elements: t.Elements})
+	layout, err := json.Marshal(templateLayout{Elements: t.Elements, Sizing: t.Sizing, Adapt: t.Adapt})
 	if err != nil {
 		return nil, fmt.Errorf("encoding template layout: %w", err)
 	}
@@ -138,7 +140,7 @@ func scanTemplate(row rowScanner) (*labels.Template, error) {
 	if err := json.Unmarshal([]byte(layout), &l); err != nil {
 		return nil, fmt.Errorf("decoding layout of template %s: %w", t.ID, err)
 	}
-	t.Elements = l.Elements
+	t.Elements, t.Sizing, t.Adapt = l.Elements, l.Sizing, l.Adapt
 	if t.Elements == nil {
 		t.Elements = []labels.Element{}
 	}
@@ -197,4 +199,37 @@ func (s *Store) validateTemplate(t *labels.Template) error {
 		return &labels.ValidationError{Problems: problems}
 	}
 	return nil
+}
+
+// LongestLabelValues finds, among active assets, the longest code assigned
+// with each generator and the longest value of each field, by key: what
+// adaptive templates' codes are checked against (README §4.1).
+func (s *Store) LongestLabelValues() (codes, fields map[string]string, err error) {
+	codes, fields = map[string]string{}, map[string]string{}
+	longest := func(into map[string]string, query string) error {
+		rows, err := s.Query(query)
+		if err != nil {
+			return fmt.Errorf("finding the longest values: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var key, value string
+			if err := rows.Scan(&key, &value); err != nil {
+				return fmt.Errorf("scanning a value: %w", err)
+			}
+			if len(value) > len(into[key]) {
+				into[key] = value
+			}
+		}
+		return rows.Err()
+	}
+	if err := longest(codes, `SELECT k.generator_type, k.assigned_code FROM asset_generator_keys k
+		JOIN assets a ON a.id = k.asset_id WHERE a.archived_at IS NULL`); err != nil {
+		return nil, nil, err
+	}
+	if err := longest(fields, `SELECT f.field_key, v.value FROM asset_field_values v
+		JOIN fields f ON f.id = v.field_id JOIN assets a ON a.id = v.asset_id WHERE a.archived_at IS NULL`); err != nil {
+		return nil, nil, err
+	}
+	return codes, fields, nil
 }

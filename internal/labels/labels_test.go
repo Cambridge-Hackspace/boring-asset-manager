@@ -3,6 +3,7 @@ package labels
 import (
 	"errors"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -287,5 +288,48 @@ func TestScanURL(t *testing.T) {
 	}
 	if got := b.Resolve(Data{AssetID: "1234", BaseURL: "https://bam.example/"}); got != "https://bam.example/scan/1234" {
 		t.Errorf("scan_url = %q", got)
+	}
+}
+
+func TestValidateAdaptiveTemplates(t *testing.T) {
+	adaptive := func() *Template {
+		tpl := validTemplate()
+		tpl.Sizing = SizingAdaptive
+		tpl.Adapt = &Adapt{MinWidth: 25, MaxWidth: 100, MinHeight: 10, MaxHeight: 40}
+		tpl.Normalize()
+		return tpl
+	}
+	if tpl := adaptive(); tpl.Validate() != nil || tpl.Adapt.ContinuousLength != LengthProportional {
+		t.Errorf("a valid adaptive template: %v, %+v", tpl.Validate(), tpl.Adapt)
+	}
+	fixed := validTemplate()
+	fixed.Sizing = SizingFixed
+	if fixed.Normalize(); fixed.Sizing != "" || fixed.Validate() != nil {
+		t.Errorf("a template fixed by name: %q, %v", fixed.Sizing, fixed.Validate())
+	}
+	cases := []struct {
+		name   string
+		mutate func(*Template)
+		paths  []string
+	}{
+		{"unknown sizing", func(t *Template) { t.Sizing = "stretchy" }, []string{"sizing"}},
+		{"no range", func(t *Template) { t.Adapt = nil }, []string{"adapt"}},
+		{"a range on a fixed template", func(t *Template) { t.Sizing = "" }, []string{"adapt"}},
+		{"a range without its own size", func(t *Template) { t.Adapt.MinWidth = 60 }, []string{"adapt.min_width"}},
+		{"a bad range", func(t *Template) { t.Adapt.MinHeight = 0 }, []string{"adapt.min_height"}},
+		{"too wide", func(t *Template) { t.Adapt.MaxWidth = 2000 }, []string{"adapt.max_width"}},
+		{"continuous length", func(t *Template) { t.Adapt.ContinuousLength = "stretch" }, []string{"adapt.continuous_length"}},
+		{"anchors", func(t *Template) {
+			t.Elements = []Element{{Type: ElementGenerator, GeneratorType: "qr", Width: 5, Height: 5, AnchorX: "left", AnchorY: AnchorEnd}}
+		}, []string{"elements[0].anchor_x"}},
+	}
+	for _, c := range cases {
+		tpl := adaptive()
+		c.mutate(tpl)
+		paths := problemPaths(t, tpl.Validate())
+		sort.Strings(paths)
+		if !reflect.DeepEqual(paths, c.paths) {
+			t.Errorf("%s: problems at %v, want %v", c.name, paths, c.paths)
+		}
 	}
 }

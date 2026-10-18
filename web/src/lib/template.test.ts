@@ -36,6 +36,12 @@ describe('snapping and units', () => {
     expect(inches.elements[0]).toMatchObject({ x: 1, y: 0.5, width: 2, height: 0.25, font_size: 12 });
     expect(convertUnits(inches, 'mm').elements[0]).toMatchObject({ x: 25.4, y: 12.7, width: 50.8 });
   });
+
+  it('converts an adaptive template range too', () => {
+    const d = { ...doc(), sizing: 'adaptive' as const, adapt: { min_width: 25.4, max_width: 101.6, min_height: 12.7, max_height: 50.8, continuous_length: 'fixed' as const } };
+    expect(convertUnits(d, 'in').adapt).toEqual({ min_width: 1, max_width: 4, min_height: 0.5, max_height: 2, continuous_length: 'fixed' });
+    expect(convertUnits(doc(), 'in').adapt).toBeUndefined();
+  });
 });
 
 describe('moving', () => {

@@ -36,7 +36,7 @@ func (s *Server) handleListTemplates(w http.ResponseWriter, r *http.Request) {
 			t := &templates[i]
 			suits[t.ID] = []SpoolChoice{}
 			for j := range list {
-				if _, _, err := planFor(&list[j], t); err == nil {
+				if _, _, _, err := s.planFor(&list[j], t); err == nil {
 					suits[t.ID] = append(suits[t.ID], SpoolChoice{ID: list[j].ID, Name: list[j].Name})
 				}
 			}

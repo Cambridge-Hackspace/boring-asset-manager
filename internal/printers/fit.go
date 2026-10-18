@@ -37,6 +37,15 @@ type Geometry struct {
 // DieCut reports whether the roll holds pre-cut labels.
 func (g Geometry) DieCut() bool { return g.LengthMM > 0 }
 
+// GeometryOf is the geometry a driver reports for a printer.
+func GeometryOf(driver string, s Settings) (Geometry, error) {
+	d, err := Lookup(driver)
+	if err != nil {
+		return Geometry{}, err
+	}
+	return d.Geometry(s)
+}
+
 // RectMM is a box on a label, in millimeters from its top left corner.
 type RectMM struct {
 	X      float64 `json:"x"`

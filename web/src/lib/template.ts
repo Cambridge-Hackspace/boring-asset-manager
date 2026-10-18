@@ -3,6 +3,17 @@
 
 export type Units = 'mm' | 'in';
 export type ElementType = 'text' | 'generator' | 'static_image';
+/** How an element of an adaptive template follows the label; absent is scale. */
+export type Anchor = 'scale' | 'start' | 'end' | 'both' | 'center';
+
+/** The label sizes an adaptive template takes, in its units. */
+export interface Adapt {
+  min_width: number;
+  max_width: number;
+  min_height: number;
+  max_height: number;
+  continuous_length: 'proportional' | 'fixed';
+}
 
 export interface TemplateElement {
   type: ElementType;
@@ -10,6 +21,8 @@ export interface TemplateElement {
   y: number;
   width: number;
   height: number;
+  anchor_x?: Anchor;
+  anchor_y?: Anchor;
   content_binding?: string;
   // generator
   generator_type?: string;
@@ -33,6 +46,9 @@ export interface TemplateDoc {
   width: number;
   height: number;
   dpi: number;
+  /** Absent for a fixed template. */
+  sizing?: 'adaptive';
+  adapt?: Adapt;
   elements: TemplateElement[];
 }
 
@@ -72,6 +88,9 @@ export function convertUnits(doc: TemplateDoc, to: Units): TemplateDoc {
     units: to,
     width: conv(doc.width),
     height: conv(doc.height),
+    ...(doc.adapt
+      ? { adapt: { ...doc.adapt, min_width: conv(doc.adapt.min_width), max_width: conv(doc.adapt.max_width), min_height: conv(doc.adapt.min_height), max_height: conv(doc.adapt.max_height) } }
+      : {}),
     elements: doc.elements.map((e) => ({ ...e, x: conv(e.x), y: conv(e.y), width: conv(e.width), height: conv(e.height) })),
   };
 }

@@ -215,7 +215,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check the template against the printer before laying out assets.
-	plan, warnings, err := planFor(p, t)
+	plan, t, warnings, err := s.planFor(p, t)
 	if errors.Is(err, printers.ErrDoesNotFit) {
 		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -262,14 +262,6 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		"bytes":      len(job),
 		"warnings":   nonNil(warnings),
 	})
-}
-
-// planFor plans printing labels of template t on printer p: its driver's
-// plan and warnings for the person printing, or an error wrapping
-// printers.ErrDoesNotFit when they do not suit the media loaded.
-func planFor(p *models.Printer, t *labels.Template) (printers.Plan, []string, error) {
-	plan, fit, err := printers.PlanLabel(p.Driver, store.PrinterSettings(p), labelSpec(t))
-	return plan, fit.Warnings, err
 }
 
 // labelSpec is a template's size in millimeters, with its elements' boxes

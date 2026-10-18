@@ -104,7 +104,7 @@ func (s *Server) loadSpoolOptions() (*spoolOptions, error) {
 		o.unfit[t.ID] = map[string]string{}
 		o.resp.Fits[t.ID] = []string{}
 		for _, p := range printerList {
-			_, warnings, err := planFor(&p, t)
+			_, _, warnings, err := s.planFor(&p, t)
 			if err != nil {
 				o.unfit[t.ID][p.ID] = err.Error()
 				continue

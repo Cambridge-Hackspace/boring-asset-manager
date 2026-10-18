@@ -70,7 +70,11 @@
       ]);
       if (!isNew) {
         const t = (await request<{ template: TemplateDoc }>('GET', `/templates/${encodeURIComponent(routeId)}`)).template;
-        doc = { id: t.id, name: t.name, units: t.units, width: t.width, height: t.height, dpi: t.dpi, elements: t.elements ?? [] };
+        doc = {
+          id: t.id, name: t.name, units: t.units, width: t.width, height: t.height, dpi: t.dpi,
+          ...(t.sizing === 'adaptive' ? { sizing: t.sizing, adapt: t.adapt } : {}),
+          elements: t.elements ?? [],
+        };
       }
       saved = JSON.stringify(doc);
       draft = readDraft();

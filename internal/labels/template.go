@@ -58,12 +58,16 @@ var idRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 // Template is a label layout. The ID is a UUID assigned when it is first
 // saved. Templates from earlier versions keep the slugs their authors chose.
 type Template struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Units     string    `json:"units"`
-	Width     float64   `json:"width"`
-	Height    float64   `json:"height"`
-	DPI       int       `json:"dpi"`
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Units  string  `json:"units"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+	DPI    int     `json:"dpi"`
+	// Sizing is "" (or "fixed") for a fixed template, or "adaptive" for one
+	// laid out again for each label it prints on, within Adapt.
+	Sizing    string    `json:"sizing,omitempty"`
+	Adapt     *Adapt    `json:"adapt,omitempty"`
 	Elements  []Element `json:"elements"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -77,6 +81,10 @@ type Element struct {
 	Y      float64 `json:"y"`
 	Width  float64 `json:"width"`
 	Height float64 `json:"height"`
+	// AnchorX and AnchorY say how it follows an adaptive template's label
+	// across and down; empty is AnchorScale.
+	AnchorX string `json:"anchor_x,omitempty"`
+	AnchorY string `json:"anchor_y,omitempty"`
 
 	// generator and text
 	ContentBinding string `json:"content_binding,omitempty"`
@@ -122,6 +130,12 @@ func Parse(data []byte) (*Template, error) {
 func (t *Template) Normalize() {
 	if t.Elements == nil {
 		t.Elements = []Element{}
+	}
+	if t.Sizing == SizingFixed {
+		t.Sizing = ""
+	}
+	if t.Adaptive() && t.Adapt != nil && t.Adapt.ContinuousLength == "" {
+		t.Adapt.ContinuousLength = LengthProportional
 	}
 	for i := range t.Elements {
 		e := &t.Elements[i]
@@ -188,6 +202,8 @@ func (t *Template) Validate() error {
 		}
 	}
 
+	t.validateSizing(&v, canvasOK && unitsOK)
+
 	if len(t.Elements) > MaxElements {
 		v.add("elements", fmt.Sprintf("at most %d elements are allowed", MaxElements))
 	}
@@ -223,6 +239,13 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		if e.Y+e.Height > t.Height+geometryTolerance {
 			v.add(at("height"), "extends past the bottom edge of the canvas")
 		}
+	}
+
+	if !anchors[e.AnchorX] {
+		v.add(at("anchor_x"), `must be "scale", "start", "end", "both" or "center"`)
+	}
+	if !anchors[e.AnchorY] {
+		v.add(at("anchor_y"), `must be "scale", "start", "end", "both" or "center"`)
 	}
 
 	// unset reports properties that do not apply to this element type.

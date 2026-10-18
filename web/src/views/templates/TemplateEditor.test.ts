@@ -74,6 +74,18 @@ describe('TemplateEditor', () => {
     expect(fit.body).toEqual({ width_mm: 90, height_mm: 29, dpi: 300, content: [{ x: 10, y: 5, width: 40, height: 10 }] });
   });
 
+  it('keeps an adaptive template adaptive when saving it', async () => {
+    const adaptive = { ...template, sizing: 'adaptive', adapt: { min_width: 25, max_width: 102, min_height: 20, max_height: 60, continuous_length: 'proportional' },
+      elements: [{ ...template.elements[0]!, anchor_x: 'both' }] };
+    const { sent } = api({ 'GET /templates/ql90': () => ({ template: adaptive }), 'PUT /templates/ql90': () => ({ template: adaptive }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await screen.findByDisplayValue('QL 90x29');
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Any tag' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    expect(sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ name: 'Any tag', sizing: 'adaptive', adapt: adaptive.adapt, elements: [{ anchor_x: 'both' }] });
+  });
+
   it('undoes a field edit even after focus moves on', async () => {
     api();
     render(TemplateEditor, { params: { id: 'ql90' } });
