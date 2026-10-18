@@ -7,7 +7,7 @@
 #   tools/release/build.sh linux/amd64 freebsd/arm64   just these
 set -eu
 
-GO_IMAGE="docker.io/library/golang@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db"
+GO_IMAGE="docker.io/library/golang@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61"
 CONTAINER="${CONTAINER:-podman}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TARGETS="${*:-linux/amd64 linux/arm64 freebsd/amd64 windows/amd64}"

@@ -16,7 +16,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 - **Strict Configuration Separation:** On-disk TOML handles bootstrap infrastructure (listening ports, database connection strings, storage paths, the printer device allowlist). All operational settings, network printer definitions, notification channels, and layouts live inside the database.
 
 ### Technology Choices
-- **Backend:** Go 1.23+ (Standard library `net/http` or router such as `chi`).
+- **Backend:** Go 1.26+ (Standard library `net/http` or router such as `chi`).
 - **Database Abstraction:** Dialect-agnostic SQL driver supporting **SQLite3** (via pure-Go `modernc.org/sqlite` with WAL mode for seamless cross-compilation without C toolchains), **PostgreSQL 14+**, and **MariaDB 10.6+**. Migrations managed via embedded SQL scripts (`golang-migrate` or custom embedded schema runner).
 - **Frontend:** TypeScript + Svelte 5, built with Vite and styled with Tailwind CSS, embedded in the binary (see Frontend Architecture below). The template editor draws over the server's own SVG preview, so there is one layout engine, not two.
 - **Label Generation & Printing:**
