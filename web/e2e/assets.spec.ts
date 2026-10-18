@@ -110,3 +110,35 @@ test('archive an asset, find it among the archived, and restore it', async ({ si
   await expect(history.getByRole('listitem').first()).toContainText(`Not given back QR Code ${code}: another asset has it`);
   await expect(history.getByRole('listitem').filter({ hasText: /^Archived/ })).toContainText(`Released QR Code ${code}`);
 });
+
+test('the labels panel offers only the printers a template suits, and says why a label cannot be made', async ({ signedIn: page, api, printer }) => {
+  const printerName = unique('QL');
+  await api.call('POST', '/printers', {
+    name: printerName, driver: 'brother_ql', model: 'QL-810W', media: 'dk-22205',
+    connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` },
+  });
+  const { template: tag } = await api.call('POST', '/templates', {
+    name: unique('Code tag'), units: 'mm', width: 62, height: 29, dpi: 300,
+    elements: [{ type: 'generator', generator_type: 'qr', x: 2, y: 2, width: 25, height: 25 }],
+  });
+  const { template: shipping } = await api.call('POST', '/templates', { name: unique('Shipping'), units: 'in', width: 4, height: 6, dpi: 203, elements: [] });
+  const { category } = await api.call('POST', '/categories', { name: unique('Tagged') });
+  await api.call('PUT', `/categories/${category.id}/label-template`, { label_template_ids: [tag.id] });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Drill'), category_ids: [category.id] });
+
+  // Its category's template is listed first, but the drill has no code
+  // yet, so it starts with another; the tag says why it cannot label it.
+  await page.goto(`/assets/${asset.asset.id}`);
+  const template = page.getByLabel('Template');
+  await expect(template.locator(`optgroup[label="Its category's"] option`)).toHaveText([new RegExp(`^${tag.name}`)]);
+  await expect(template).not.toHaveValue(tag.id);
+  await template.selectOption(tag.id);
+  await expect(page.getByRole('list', { name: 'Why it cannot label these' })).toContainText(`This template prints a QR Code, and ${asset.asset.name} has none.`);
+  await expect(page.getByRole('button', { name: 'Print' })).toBeDisabled();
+
+  // Shipping labels fit no printer: said before anything is tried.
+  await template.selectOption(shipping.id);
+  await expect(page.getByText('No printer has labels loaded that this template fits.')).toBeVisible();
+  await page.locator('summary', { hasText: printerName }).click();
+  await expect(page.getByText(`${shipping.name} can't print on ${printerName}: it is laid out at 203 DPI, but Brother QL printers print at 300 DPI`)).toBeVisible();
+});

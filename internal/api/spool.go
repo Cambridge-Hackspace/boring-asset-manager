@@ -13,6 +13,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -106,7 +107,7 @@ func (s *Server) loadSpoolOptions() (*spoolOptions, error) {
 		for _, p := range printerList {
 			_, _, warnings, err := s.planFor(&p, t)
 			if err != nil {
-				o.unfit[t.ID][p.ID] = err.Error()
+				o.unfit[t.ID][p.ID] = strings.TrimSuffix(printers.Why(err), ".")
 				continue
 			}
 			o.resp.Fits[t.ID] = append(o.resp.Fits[t.ID], p.ID)
@@ -231,7 +232,7 @@ func (o *spoolOptions) blockers(e models.SpoolEntry) []string {
 	case strings.HasPrefix(e.Destination, models.DestinationPrinterPrefix) && t != nil:
 		id := strings.TrimPrefix(e.Destination, models.DestinationPrinterPrefix)
 		if why, ok := o.unfit[t.ID][id]; ok {
-			out = append(out, fmt.Sprintf("%s does not suit %s: %s", t.Name, o.printers[id].Name, why))
+			out = append(out, fmt.Sprintf("%s can't print on %s: %s", t.Name, o.printers[id].Name, why))
 		}
 	case strings.HasPrefix(e.Destination, models.DestinationPoolPrefix) && t != nil:
 		if p := o.pools[strings.TrimPrefix(e.Destination, models.DestinationPoolPrefix)]; p != nil && len(o.poolMembersFor(p, t.ID)) == 0 {

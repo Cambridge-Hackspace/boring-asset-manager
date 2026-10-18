@@ -55,7 +55,7 @@ func TestLabelStockThroughTheAPI(t *testing.T) {
 	if got := fit(`{"width_mm":60,"height_mm":40,"dpi":203}`); !strings.Contains(got, `"fits":true`) {
 		t.Errorf("the fit check: %s", got)
 	}
-	if got := fit(`{"width_mm":62,"height_mm":29,"dpi":203}`); !strings.Contains(got, `"fits":false`) || !strings.Contains(got, "Bin labels needs a 60 × 40 mm template") {
+	if got := fit(`{"width_mm":62,"height_mm":29,"dpi":203}`); !strings.Contains(got, `"fits":false`) || !strings.Contains(got, "takes 60 × 40 mm") {
 		t.Errorf("a size it does not take: %s", got)
 	}
 

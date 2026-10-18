@@ -194,6 +194,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("POST /api/v1/templates/adapt", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleAdaptTemplate)))
 	mux.Handle("POST /api/v1/templates/range", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleTemplateRange)))
 	mux.Handle("POST /api/v1/labels/export", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportLabels)))
+	mux.Handle("POST /api/v1/labels/options", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleLabelOptions)))
 	mux.Handle("GET /api/v1/generators", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListGenerators))))
 
 	// Network printers

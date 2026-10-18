@@ -11,6 +11,8 @@ test('printers: add one through the generated form and test-print', async ({ sig
     dpi: 203,
     elements: [{ type: 'text', x: 0.1, y: 0.2, width: 1.8, height: 0.5, font_size: 12, content_binding: '{{asset.name}}' }],
   });
+  // And one for another roll.
+  await api.call('POST', '/templates', { name: unique('Tape 62'), units: 'mm', width: 62, height: 29, dpi: 300, elements: [] });
   const assetName = unique('Box');
   await api.call('POST', '/assets', { name: assetName });
 
@@ -28,10 +30,12 @@ test('printers: add one through the generated form and test-print', async ({ sig
   await expect(card).toContainText('Rollo X1038 (tspl), 2 × 1 in');
 
   await card.getByRole('button', { name: 'Test print' }).click();
-  await card.getByLabel('Template').selectOption({ index: 0 });
-  // Pick the 2 × 1 in template made above.
-  const options = await card.getByLabel('Template').locator('option').allTextContents();
-  await card.getByLabel('Template').selectOption({ label: options.find((o) => o.startsWith('Rollo 2x1'))! });
+  // Pick the 2 × 1 in template made above. Templates for other rolls are
+  // listed, but cannot be chosen.
+  const template = card.getByLabel('Template');
+  const options = await template.locator('option:not(:disabled)').allTextContents();
+  await template.selectOption({ label: options.find((o) => o.startsWith('Rollo 2x1'))! });
+  await expect(template.locator('option:disabled', { hasText: 'does not fit its roll' }).first()).toBeAttached();
   await card.getByLabel('Asset').fill(assetName);
   await card.getByRole('button', { name: 'Find' }).click();
   await card.getByRole('button', { name: assetName }).click();

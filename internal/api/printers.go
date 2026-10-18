@@ -217,7 +217,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	// Check the template against the printer before laying out assets.
 	plan, t, warnings, err := s.planFor(p, t)
 	if errors.Is(err, printers.ErrDoesNotFit) {
-		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+		writeJSONError(w, http.StatusUnprocessableEntity, unfitMessage(t, p, err))
 		return
 	}
 	if err != nil {
@@ -303,7 +303,7 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 	_, fit, err := printers.PlanLabel(p.Driver, store.PrinterSettings(p), label)
 	switch {
 	case errors.Is(err, printers.ErrDoesNotFit):
-		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "message": err.Error(), "warnings": []string{}})
+		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "message": fmt.Sprintf("This template can't print on %s: %s.", p.Name, printers.Why(err)), "warnings": []string{}})
 	case err != nil:
 		writeServerError(w, err, "check the fit")
 	default:
