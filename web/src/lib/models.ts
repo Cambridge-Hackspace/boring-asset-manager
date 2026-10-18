@@ -442,6 +442,9 @@ export interface APIToken {
   /** Set on a personal token, which acts as this user, for an assistant. */
   user_id?: string;
   user_name?: string;
+  /** The assistant a grant signed in through OAuth went to. */
+  oauth_client?: string;
+  refresh_expires_at?: string | null;
   created_by?: string;
   created_at: string;
   expires_at: string | null;

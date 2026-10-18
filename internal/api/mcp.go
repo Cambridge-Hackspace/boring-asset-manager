@@ -27,7 +27,8 @@ func (s *Server) mcpHandler() http.Handler {
 func (s *Server) mcpCaller(w http.ResponseWriter, r *http.Request) (mcpserver.Caller, mcpserver.Backend, bool) {
 	t := CurrentToken(r.Context())
 	if t == nil {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="BAM!"`)
+		// Where to sign in, for an assistant that can (README §6.6).
+		w.Header().Set("WWW-Authenticate", `Bearer realm="BAM!", resource_metadata="`+s.resourceMetadataURL()+`"`)
 		writeJSONError(w, http.StatusUnauthorized, "MCP needs an API token, sent as Authorization: Bearer bam_…")
 		return mcpserver.Caller{}, nil, false
 	}

@@ -33,17 +33,18 @@ const tokenUseInterval = time.Minute
 // tokenColumns and tokenTables read a token, with the name of the user a
 // personal token belongs to.
 const (
-	tokenColumns = "t.id, t.name, t.created_by, t.created_at, t.expires_at, t.last_used_at, t.revoked_at, t.user_id, u.name"
-	tokenTables  = "api_tokens t LEFT JOIN users u ON u.id = t.user_id"
+	tokenColumns = "t.id, t.name, t.created_by, t.created_at, t.expires_at, t.last_used_at, t.revoked_at, t.user_id, u.name, c.name, t.refresh_expires_at"
+	tokenTables  = "api_tokens t LEFT JOIN users u ON u.id = t.user_id LEFT JOIN oauth_clients c ON c.id = t.oauth_client_id"
 )
 
 func scanToken(row interface{ Scan(...any) error }) (models.APIToken, error) {
 	var (
 		t                         models.APIToken
 		createdBy, userID, userNm sql.NullString
+		client                    sql.NullString
 	)
-	err := row.Scan(&t.ID, &t.Name, &createdBy, &t.CreatedAt, &t.ExpiresAt, &t.LastUsedAt, &t.RevokedAt, &userID, &userNm)
-	t.CreatedBy, t.UserID, t.UserName = createdBy.String, userID.String, userNm.String
+	err := row.Scan(&t.ID, &t.Name, &createdBy, &t.CreatedAt, &t.ExpiresAt, &t.LastUsedAt, &t.RevokedAt, &userID, &userNm, &client, &t.RefreshExpiresAt)
+	t.CreatedBy, t.UserID, t.UserName, t.OAuthClient = createdBy.String, userID.String, userNm.String, client.String
 	t.RoleIDs = []string{}
 	return t, err
 }
