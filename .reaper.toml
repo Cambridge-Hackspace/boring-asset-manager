@@ -15,8 +15,8 @@ guests = ["ubuntu-26.04"]
 exec = "container"
 
 [build]
-# golang:1.23-bookworm (digest-pinned; tags are forbidden by reaper schema)
-image = "docker.io/library/golang@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db"
+# golang:1.27-bookworm, Go 1.27.2 (digest-pinned; tags are forbidden by reaper schema)
+image = "docker.io/library/golang@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61"
 cmd = """
 GOCACHE=$REAPER_CACHE_GOCACHE \
 GOPATH=$REAPER_CACHE_GOPATH \
@@ -34,7 +34,7 @@ exec = "host"
 cmd = "tools/reaper/run.sh"
 # Every image tools/reaper/run.sh and the scripts it calls use, pulled first.
 images = [
-  "docker.io/library/golang@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db",
+  "docker.io/library/golang@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
   "docker.io/library/node@sha256:2c752226d477b4a886378baa95b9af252be59301b725fdb0b7e15208131505a8",
   "mcr.microsoft.com/playwright@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462",
 ]

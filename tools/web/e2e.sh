@@ -8,7 +8,7 @@
 #   tools/web/e2e.sh editor a11y     run the specs whose names match
 set -eu
 
-GO_IMAGE="docker.io/library/golang@sha256:167053a2bb901972bf2c1611f8f52c44d5fe7e762e5cab213708d82c421614db"
+GO_IMAGE="docker.io/library/golang@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61"
 # playwright:v1.64.0-noble, by digest alone (reaper refuses a tag beside a digest)
 PLAYWRIGHT_IMAGE="mcr.microsoft.com/playwright@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462"
 CONTAINER="${CONTAINER:-podman}"
