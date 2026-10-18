@@ -167,7 +167,7 @@ describe('TemplateEditor', () => {
     const { sent } = api({ 'PUT /templates/ql90': () => ({ template }), 'POST /templates/range': () => ({ fits: false, units: 'mm' }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
     await screen.findByDisplayValue('QL 90x29');
-    await fireEvent.click(screen.getByRole('radio', { name: /Adaptive/ }));
+    await fireEvent.click(screen.getByRole('radio', { name: /Fits several label sizes/ }));
     expect((screen.getByLabelText('Narrowest (mm)') as HTMLInputElement).value).toBe('45');
     await fireEvent.change(screen.getByLabelText('Narrowest (mm)'), { target: { value: '25' } });
 
@@ -183,7 +183,7 @@ describe('TemplateEditor', () => {
     expect(body.elements[0]).toMatchObject({ anchor_x: 'both', when_too_small: 'alternative', alternative: { type: 'generator' } });
 
     // Fixed again, the adaptive settings go.
-    await fireEvent.click(screen.getByRole('radio', { name: /Fixed/ }));
+    await fireEvent.click(screen.getByRole('radio', { name: /One label size/ }));
     expect(screen.queryByLabelText('Narrowest (mm)')).toBeNull();
     expect(screen.queryByLabelText('Across')).toBeNull();
   });

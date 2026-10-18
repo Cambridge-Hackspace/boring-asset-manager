@@ -33,3 +33,28 @@ export function describeChanges(c: PrinterChanges): string[] {
   for (const p of c.pools) out.push(`The printers in ${p.name} would no longer be loaded alike.`);
   return out;
 }
+
+const driverNames: Record<string, string> = {
+  brother_ql: 'Brother QL',
+  dymo_labelwriter: 'DYMO LabelWriter',
+  tspl: 'TSPL',
+};
+
+/** A printer driver as people know it: "Brother QL" rather than brother_ql. */
+export function driverName(driver: string): string {
+  return driverNames[driver] ?? driver;
+}
+
+const optionLabels: Record<string, string> = {
+  cut: 'Cut after each label',
+  density: 'Darkness',
+  roll: 'Roll (twin-roll models)',
+  rotate_180: 'Turn labels upside down',
+};
+
+/** A driver option as a form labels it: "Cut after each label" rather than cut. */
+export function optionLabel(name: string): string {
+  if (optionLabels[name]) return optionLabels[name];
+  const words = name.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

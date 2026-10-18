@@ -13,12 +13,20 @@
   }: { doc: TemplateDoc; e: TemplateElement; index: number; generators: GeneratorInfo[]; onupdate: (e: TemplateElement) => void } = $props();
 
   const id = (name: string) => `el-${index}-adapt-${name}`;
-  const anchors: [Anchor, string][] = [
+  // Across, start and end are the left and right; down, the top and bottom.
+  const anchorsAcross: [Anchor, string][] = [
     ['scale', 'In proportion'],
-    ['start', 'Pinned to the start'],
-    ['end', 'Pinned to the end'],
-    ['both', 'Pinned to both (stretching)'],
-    ['center', 'Pinned to the middle'],
+    ['start', 'Kept to the left'],
+    ['end', 'Kept to the right'],
+    ['both', 'Stretched from left to right'],
+    ['center', 'Kept in the middle'],
+  ];
+  const anchorsDown: [Anchor, string][] = [
+    ['scale', 'In proportion'],
+    ['start', 'Kept to the top'],
+    ['end', 'Kept to the bottom'],
+    ['both', 'Stretched from top to bottom'],
+    ['center', 'Kept in the middle'],
   ];
   const when = $derived(tooSmall(e));
 
@@ -59,13 +67,13 @@
     <div>
       <label class="text-xs" for={id('x')}>Across</label>
       <select id={id('x')} class="input" value={e.anchor_x ?? 'scale'} onchange={(ev) => setAnchor('anchor_x', ev.currentTarget.value)}>
-        {#each anchors as [value, label] (value)}<option {value}>{label}</option>{/each}
+        {#each anchorsAcross as [value, label] (value)}<option {value}>{label}</option>{/each}
       </select>
     </div>
     <div>
       <label class="text-xs" for={id('y')}>Down</label>
       <select id={id('y')} class="input" value={e.anchor_y ?? 'scale'} onchange={(ev) => setAnchor('anchor_y', ev.currentTarget.value)}>
-        {#each anchors as [value, label] (value)}<option {value}>{label}</option>{/each}
+        {#each anchorsDown as [value, label] (value)}<option {value}>{label}</option>{/each}
       </select>
     </div>
     <div>
@@ -97,7 +105,7 @@
       </div>
       {#if alt.type === 'generator'}
         <div>
-          <label class="text-xs" for={id('alt-gen')}>Symbology</label>
+          <label class="text-xs" for={id('alt-gen')}>Code type</label>
           <select id={id('alt-gen')} class="input" value={alt.generator_type} onchange={(ev) => setAlternative({ ...alt, generator_type: ev.currentTarget.value })}>
             {#each generators as g (g.type)}<option value={g.type}>{g.name}</option>{/each}
           </select>

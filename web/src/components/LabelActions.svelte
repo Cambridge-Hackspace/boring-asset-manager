@@ -197,8 +197,8 @@
       {/if}
       {#if spool}
         <p class="flex flex-wrap items-center gap-2">
-          <AddToSpool what={() => ({ asset_ids: assetIds, ...(templateId !== options?.template_id ? { template_id: templateId } : {}) })} label="Add to the spool" />
-          <span class="text-xs text-zinc-600 dark:text-zinc-400">to print later, with others</span>
+          <AddToSpool what={() => ({ asset_ids: assetIds, ...(templateId !== options?.template_id ? { template_id: templateId } : {}) })} label="Add to the queue" />
+          <span class="text-xs text-zinc-600 dark:text-zinc-400">to print later with others, from the print queue</span>
         </p>
       {/if}
     {/if}

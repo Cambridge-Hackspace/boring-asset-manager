@@ -37,7 +37,7 @@ describe('PoolsSection', () => {
       },
     });
     render(PoolsSection, { printers });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Add pool' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'New pool' }));
     const form = screen.getByRole('form', { name: 'New pool' });
     await fireEvent.input(within(form).getByLabelText('Name'), { target: { value: 'Bench' } });
     await fireEvent.input(within(form).getByLabelText('Labels in a batch'), { target: { value: '5' } });
@@ -94,6 +94,6 @@ describe('PoolsSection', () => {
     fakeApi({ 'GET /printer-pools': () => ({ pools }) });
     render(PoolsSection, { printers });
     await screen.findByRole('heading', { name: 'Bench' });
-    expect(screen.queryByRole('button', { name: /Add pool|Edit|Delete/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /New pool|Edit|Delete/ })).toBeNull();
   });
 });

@@ -18,16 +18,15 @@ test('printers: add one through the generated form and test-print', async ({ sig
 
   const name = unique('Rollo');
   await goTo(page, 'Printers');
-  await page.getByRole('button', { name: 'Add printer' }).click();
+  await page.getByRole('button', { name: 'New printer' }).click();
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Driver').selectOption('tspl');
-  await page.getByLabel('Model').selectOption('Rollo X1038');
-  await page.getByLabel('Loaded media').selectOption('2x1');
+  await page.getByLabel('Printer model').selectOption('tspl|Rollo X1038');
+  await page.getByLabel('Roll loaded').selectOption('2x1');
   await page.getByLabel('Address').fill(`127.0.0.1:${printer.port}`);
-  await page.getByLabel('density').fill('12');
-  await page.getByRole('button', { name: 'Add printer' }).click();
+  await page.getByLabel('Darkness').fill('12');
+  await page.getByRole('button', { name: 'Create printer' }).click();
   const card = page.getByRole('article', { name });
-  await expect(card).toContainText('Rollo X1038 (tspl), 2 × 1 in');
+  await expect(card).toContainText('Rollo X1038 (TSPL), 2 × 1 in');
 
   await card.getByRole('button', { name: 'Test print' }).click();
   // Pick the 2 × 1 in template made above. Templates for other rolls are
@@ -51,7 +50,7 @@ test('label stock: add a custom size, load it in a Rollo, and print on it', asyn
   const stockName = unique('Bin labels');
   const name = unique('Bin Rollo');
   await goTo(page, 'Printers');
-  await page.getByRole('button', { name: 'Add stock' }).click();
+  await page.getByRole('button', { name: 'New label stock' }).click();
   const form = page.getByRole('form', { name: 'New label stock' });
   await form.getByLabel('Name').fill(stockName);
   await form.getByLabel('Width (mm)').fill('60');
@@ -60,14 +59,13 @@ test('label stock: add a custom size, load it in a Rollo, and print on it', asyn
   await form.getByRole('button', { name: 'Save stock' }).click();
   await expect(page.getByRole('article', { name: stockName })).toContainText('60 × 40 mm, 2.5 mm gap');
 
-  await page.getByRole('button', { name: 'Add printer' }).click();
+  await page.getByRole('button', { name: 'New printer' }).click();
   await page.getByLabel('Name', { exact: true }).fill(name);
-  await page.getByLabel('Driver').selectOption('tspl');
-  await page.getByLabel('Model').selectOption('Rollo X1038');
-  await page.getByLabel('Loaded media').selectOption({ label: `${stockName} (60 × 40 mm, 2.5 mm gap)` });
+  await page.getByLabel('Printer model').selectOption('tspl|Rollo X1038');
+  await page.getByLabel('Roll loaded').selectOption({ label: `${stockName} (60 × 40 mm, 2.5 mm gap)` });
   await page.getByLabel('Address').fill(`127.0.0.1:${printer.port}`);
-  await page.getByRole('button', { name: 'Add printer' }).click();
-  await expect(page.getByRole('article', { name })).toContainText(`Rollo X1038 (tspl), ${stockName}`);
+  await page.getByRole('button', { name: 'Create printer' }).click();
+  await expect(page.getByRole('article', { name })).toContainText(`Rollo X1038 (TSPL), ${stockName}`);
   await expect(page.getByRole('article', { name: stockName })).toContainText(`Loaded in ${name}`);
 
   // Loaded stock is not deleted.
@@ -282,7 +280,7 @@ test('scopes: a keeper of the tools edits the tools and nothing else', async ({ 
   // The scope, and the category it labels.
   await goTo(page, 'Roles');
   await page.getByLabel('New scope').fill(scope);
-  await page.getByRole('button', { name: 'Add scope' }).click();
+  await page.getByRole('button', { name: 'Create scope' }).click();
   await expect(page.getByRole('status')).toHaveText(`Created the scope ${scope}.`);
   await page.goto(`/categories/${category.id}`);
   await page.getByRole('checkbox', { name: scope }).check();

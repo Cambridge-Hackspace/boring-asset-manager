@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DriverInfo, LabelStockSize } from './models';
-import { describeChanges, describeStock, stockFor } from './stock';
+import { describeChanges, describeStock, driverName, optionLabel, stockFor } from './stock';
 
 const size = (name: string, width_mm: number, length_mm = 0, gap_mm = 0): LabelStockSize => ({ id: name, name, width_mm, length_mm, gap_mm });
 
@@ -51,5 +51,16 @@ describe('describeChanges', () => {
       'No printer would suit the label template of the categories Tools, Bins.',
       'The printers in Bench would no longer be loaded alike.',
     ]);
+  });
+});
+
+describe('printer words', () => {
+  it('names drivers and their options as people know them', () => {
+    expect(driverName('brother_ql')).toBe('Brother QL');
+    expect(driverName('tspl')).toBe('TSPL');
+    expect(driverName('someday_driver')).toBe('someday_driver');
+    expect(optionLabel('cut')).toBe('Cut after each label');
+    expect(optionLabel('density')).toBe('Darkness');
+    expect(optionLabel('print_speed')).toBe('Print speed');
   });
 });

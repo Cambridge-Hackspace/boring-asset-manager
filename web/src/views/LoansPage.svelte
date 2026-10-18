@@ -86,7 +86,10 @@
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading loans…</p>
 {:else if loans.length === 0}
-  <p class="text-sm text-zinc-600 dark:text-zinc-400">No loans.</p>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">
+    No loans. To borrow or lend something, open it from <a class="underline" href="/assets">Assets</a>, or scan its label, and choose
+    Borrow or Lend.
+  </p>
 {:else}
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm" use:stack>

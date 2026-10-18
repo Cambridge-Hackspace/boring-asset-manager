@@ -82,7 +82,7 @@
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Relations</h1>
+  <h1 class="text-2xl font-bold">Link types</h1>
   {#if editing === null}<button type="button" class="btn-primary" onclick={() => start()}>New relation</button>{/if}
 </div>
 <p class="mb-4 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">

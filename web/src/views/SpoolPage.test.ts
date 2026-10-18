@@ -113,7 +113,7 @@ describe('SpoolPage', () => {
     expect([...(screen.getByLabelText('Template') as HTMLSelectElement).options].map((o) => o.textContent)).toEqual(['None', 'Tag']);
     await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Remove 1 label' }));
-    expect(await screen.findByText('Removed 1 label from the spool.')).toBeTruthy();
+    expect(await screen.findByText('Removed 1 label from the print queue.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/spool/remove')!.body).toEqual({ entry_ids: ['3'] });
     await vi.waitFor(() => expect(screen.queryByText('Tag me')).toBeNull());
   });
@@ -135,7 +135,7 @@ describe('SpoolPage', () => {
     URL.revokeObjectURL = vi.fn();
     render(SpoolPage, { params: {} });
     await fireEvent.click(await screen.findByRole('button', { name: 'Download PDF' }));
-    expect(await screen.findByText('Downloaded 1 label. 1 label could not be produced and stayed in the spool.')).toBeTruthy();
+    expect(await screen.findByText('Downloaded 1 label. 1 label could not be produced and stayed in the print queue.')).toBeTruthy();
     // Only those ready went, and the list was read again.
     expect(sent.filter((r) => r.path === '/spool').length).toBe(2);
   });
@@ -150,14 +150,14 @@ describe('SpoolPage', () => {
       'POST /spool/requeue': () => ({ status: 201, body: { added: [{ id: 'new' }], already_waiting: [], skipped: [] } }),
     });
     render(SpoolPage, { params: {} });
-    expect(await screen.findByText(/The spool is empty/)).toBeTruthy();
+    expect(await screen.findByText(/The print queue is empty/)).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Printed' }));
     const row = (await screen.findByRole('link', { name: 'Bin 1' })).closest('tr')!;
     expect(row.textContent).toContain('Download');
     expect(row.textContent).toContain('you');
     await fireEvent.click(within(row).getByRole('checkbox'));
-    await fireEvent.click(screen.getByRole('button', { name: 'Print again' }));
-    expect(await screen.findByText('Added 1 label to the spool.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Put back in the queue' }));
+    expect(await screen.findByText('Added 1 label to the print queue.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/spool/requeue')!.body).toEqual({ entry_ids: ['9'] });
 
     await fireEvent.click(screen.getByRole('checkbox', { name: /Include those over 30 days old/ }));
@@ -230,10 +230,10 @@ describe('SpoolPage', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Jobs' }));
     const rows = await screen.findAllByRole('row');
     expect(rows[3]!.textContent).toContain('Could not deliver these to Back room');
-    // Only what printed can be sent again; a failed job's labels wait in the spool.
+    // Only what printed can be sent again; a failed job's labels wait in the print queue.
     expect(within(rows[3]!).queryByRole('button', { name: 'Send again' })).toBeNull();
     await fireEvent.click(within(rows[1]!).getByRole('button', { name: 'Cancel the job printing 2 labels on Back room' }));
-    expect(await screen.findByText('Canceled; its 2 labels wait in the spool again.')).toBeTruthy();
+    expect(await screen.findByText('Canceled; its 2 labels wait in the print queue again.')).toBeTruthy();
     expect(await screen.findByText('Canceled')).toBeTruthy();
 
     // Tag labels suit both printers; the job went to the back room.
@@ -241,7 +241,7 @@ describe('SpoolPage', () => {
     expect([...to.options].map((o) => o.textContent)).toEqual(['Back room', 'Front desk', 'Bench (pool)', 'Download']);
     await fireEvent.change(to, { target: { value: 'printer:p1' } });
     await fireEvent.click(within(rows[2]!).getByRole('button', { name: 'Send again' }));
-    expect(await screen.findByText('Added 1 label to the spool, and sent to print.')).toBeTruthy();
+    expect(await screen.findByText('Added 1 label to the print queue, and sent to print.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/spool/jobs/j1/resend')!.body).toEqual({ destination: 'printer:p1' });
   });
 

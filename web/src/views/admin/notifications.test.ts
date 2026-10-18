@@ -62,7 +62,7 @@ describe('NotificationsPage', () => {
   it('adds a channel from the driver description', async () => {
     const { sent } = api([], { 'POST /notifiers': () => ({ status: 201, body: { channel } }) });
     render(NotificationsPage, { params: {} });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Add channel' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'New channel' }));
     const form = screen.getByRole('form', { name: 'New channel' });
     await fireEvent.input(within(form).getByLabelText('Name'), { target: { value: 'Stores' } });
     const url = within(form).getByLabelText('Webhook URL') as HTMLInputElement;
@@ -71,7 +71,7 @@ describe('NotificationsPage', () => {
     await fireEvent.input(url, { target: { value: ' https://discord.com/api/webhooks/1/x ' } });
     // Every event is on to start with; turn one off.
     await fireEvent.click(within(form).getByLabelText('A category is restocked'));
-    await fireEvent.submit(within(form).getByRole('button', { name: 'Add channel' }));
+    await fireEvent.submit(within(form).getByRole('button', { name: 'Create channel' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
     expect(sent.find((r) => r.method === 'POST')!.body).toEqual({
       name: 'Stores', driver: 'discord', options: { webhook_url: 'https://discord.com/api/webhooks/1/x' }, enabled: true,
@@ -132,7 +132,7 @@ describe('ChannelForm', () => {
   it('takes a certificate over several lines for an MQTT channel', async () => {
     const { sent } = api([], { 'POST /notifiers': () => ({ status: 201, body: { channel: { ...channel, driver: 'mqtt' } } }) });
     render(NotificationsPage, { params: {} });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Add channel' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'New channel' }));
     const form = screen.getByRole('form', { name: 'New channel' });
     await fireEvent.input(within(form).getByLabelText('Name'), { target: { value: 'Broker' } });
     await fireEvent.change(within(form).getByLabelText('Service'), { target: { value: 'mqtt' } });
@@ -141,7 +141,7 @@ describe('ChannelForm', () => {
     expect(ca.tagName).toBe('TEXTAREA');
     const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----';
     await fireEvent.input(ca, { target: { value: pem } });
-    await fireEvent.submit(within(form).getByRole('button', { name: 'Add channel' }));
+    await fireEvent.submit(within(form).getByRole('button', { name: 'Create channel' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
     expect((sent.find((r) => r.method === 'POST')!.body as { options: Record<string, string> }).options.ca_cert).toBe(pem);
   });

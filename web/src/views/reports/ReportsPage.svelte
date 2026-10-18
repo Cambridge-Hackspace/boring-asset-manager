@@ -92,7 +92,7 @@
   </ul>
 {/if}
 
-{#if !loading && (canManage || scanTemplates.length)}
+{#if !loading && canManage}
   <section class="mt-8" aria-labelledby="scan-templates-heading">
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
       <h2 id="scan-templates-heading" class="text-xl font-semibold">Scan templates</h2>

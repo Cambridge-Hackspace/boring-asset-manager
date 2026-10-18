@@ -28,7 +28,7 @@ test('fields and categories, with inheritance', async ({ signedIn: page }) => {
   await page.getByRole('button', { name: 'Add field' }).click();
   await expect(page.getByRole('cell', { name: 'This category', exact: true })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Add subcategory' }).click();
+  await page.getByRole('link', { name: 'New subcategory' }).click();
   await expect(page.getByLabel('Parent')).toHaveValue(/[0-9a-f-]{36}/);
   await page.getByLabel('Name', { exact: true }).fill('Drills');
   await page.getByRole('button', { name: 'Create category' }).click();

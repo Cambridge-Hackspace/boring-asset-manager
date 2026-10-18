@@ -136,7 +136,7 @@
   </ScanResult>
   {#if session.can('labels.print')}
     {@const assetId = scan.asset.id}
-    <p class="mt-4"><AddToSpool what={() => ({ asset_ids: [assetId] })} label="Add its label to the spool" /></p>
+    <p class="mt-4"><AddToSpool what={() => ({ asset_ids: [assetId] })} label="Add its label to the print queue" /></p>
   {/if}
 {:else if !session.user}
   <SignInToSee />

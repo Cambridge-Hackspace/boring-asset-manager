@@ -130,7 +130,7 @@ describe('ImportPage', () => {
     expect(screen.queryByText('Columns')).toBeNull();
   });
 
-  it('adds the new assets’ labels to the spool, for those who print them', async () => {
+  it('adds the new assets’ labels to the print queue, for those who print them', async () => {
     session.permissions = ['assets.read', 'assets.write', 'labels.print'];
     session.user = { id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '' };
     localStorage.clear();
@@ -143,10 +143,10 @@ describe('ImportPage', () => {
     });
     render(ImportPage, { params: {} });
     await chooseFile();
-    const box = (await screen.findByRole('checkbox', { name: 'Add the new assets’ labels to the spool' })) as HTMLInputElement;
+    const box = (await screen.findByRole('checkbox', { name: 'Add the new assets’ labels to the print queue' })) as HTMLInputElement;
     expect(box.checked).toBe(true);
     await fireEvent.click(screen.getByRole('button', { name: 'Import 2 assets' }));
-    expect(await screen.findByText('Added 2 labels to the spool.')).toBeTruthy();
+    expect(await screen.findByText('Added 2 labels to the print queue.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/spool')!.body).toEqual({ asset_ids: ['a', 'b'] });
     session.permissions = [];
   });

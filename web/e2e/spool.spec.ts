@@ -4,7 +4,7 @@ import { FakePrinter, expect, goTo, test, unique } from './fixtures';
 // The spool (README §6.2): labels gathered from a category and an asset's
 // page, sorted onto a download, downloaded, then found in the Printed list
 // and the assets' histories.
-test('gather labels in the spool, sort them, and download them', async ({ signedIn: page, api }) => {
+test('gather labels in the print queue, sort them, and download them', async ({ signedIn: page, api }) => {
   // A size no test printer takes, so nothing is sent to one by itself.
   const templateName = unique('Bin tag');
   const { template } = await api.call('POST', '/templates', {
@@ -19,13 +19,13 @@ test('gather labels in the spool, sort them, and download them', async ({ signed
   const loose = await api.call('POST', '/assets', { name: looseName });
 
   await page.goto(`/categories/${cat.category.id}`);
-  await page.getByRole('button', { name: 'Add its assets to the spool' }).click();
-  await expect(page.getByText('Added 2 labels to the spool.')).toBeVisible();
+  await page.getByRole('button', { name: 'Add its assets to the print queue' }).click();
+  await expect(page.getByText('Added 2 labels to the print queue.')).toBeVisible();
   await page.goto(`/assets/${loose.asset.asset.id}`);
-  await page.getByRole('button', { name: 'Add to the spool' }).click();
-  await expect(page.getByText('Added 1 label to the spool.')).toBeVisible();
+  await page.getByRole('button', { name: 'Add to the queue' }).click();
+  await expect(page.getByText('Added 1 label to the print queue.')).toBeVisible();
 
-  await goTo(page, 'Spool');
+  await goTo(page, 'Print queue');
   const looseRow = page.getByRole('row').filter({ hasText: looseName });
   await expect(looseRow).toContainText('No template chosen');
   await expect(looseRow).toContainText('No printer chosen');
@@ -46,7 +46,7 @@ test('gather labels in the spool, sort them, and download them', async ({ signed
   await page.getByRole('checkbox', { name: `Select ${looseName}` }).check();
   await page.getByRole('button', { name: 'Remove', exact: true }).click();
   await page.getByRole('button', { name: 'Remove 1 label' }).click();
-  await expect(page.getByText('Removed 1 label from the spool.')).toBeVisible();
+  await expect(page.getByText('Removed 1 label from the print queue.')).toBeVisible();
   await expect(page.getByRole('link', { name: looseName })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Printed' }).click();
@@ -55,9 +55,9 @@ test('gather labels in the spool, sort them, and download them', async ({ signed
   await expect(page.getByText(`Downloaded its label (${templateName})`)).toBeVisible();
 });
 
-// Printing from the spool goes out in the background, a job per printer
+// Printing from the print queue goes out in the background, a job per printer
 // and template, and the Jobs list follows it to the end.
-test('print a group from the spool to a printer', async ({ signedIn: page, api, printer }) => {
+test('print a group from the print queue to a printer', async ({ signedIn: page, api, printer }) => {
   const templateName = unique('Rollo 2x1');
   const { template } = await api.call('POST', '/templates', {
     name: templateName, units: 'in', width: 2, height: 1, dpi: 203,
@@ -72,7 +72,7 @@ test('print a group from the spool to a printer', async ({ signedIn: page, api, 
   for (const name of names) ids.push((await api.call('POST', '/assets', { name })).asset.asset.id);
   await api.call('POST', '/spool', { asset_ids: ids, template_id: template.id, destination: `printer:${created.printer.id}`, copies: 2 });
 
-  await goTo(page, 'Spool');
+  await goTo(page, 'Print queue');
   const group = page.getByRole('region', { name: new RegExp(`${printerName} · ${templateName} · 2 labels`) });
   await group.getByRole('button', { name: 'Print 4 labels' }).click();
   await expect(page.getByText('Sent 4 labels to print in 1 job.')).toBeVisible();
@@ -107,7 +107,7 @@ test('share a job between the printers of a pool', async ({ signedIn: page, api,
 
     const poolName = unique('Bench');
     await goTo(page, 'Printers');
-    await page.getByRole('button', { name: 'Add pool' }).click();
+    await page.getByRole('button', { name: 'New pool' }).click();
     const form = page.getByRole('form', { name: 'New pool' });
     await form.getByLabel('Name').fill(poolName);
     await form.getByLabel('Labels in a batch').fill('1');
@@ -121,7 +121,7 @@ test('share a job between the printers of a pool', async ({ signedIn: page, api,
     for (let i = 0; i < 4; i++) ids.push((await api.call('POST', '/assets', { name: unique('Washer') })).asset.asset.id);
     await api.call('POST', '/spool', { asset_ids: ids, template_id: template.id, destination: `pool:${pool.id}` });
 
-    await goTo(page, 'Spool');
+    await goTo(page, 'Print queue');
     const group = page.getByRole('region', { name: new RegExp(`${poolName} · ${templateName} · 4 labels`) });
     await group.getByRole('button', { name: 'Print 4 labels' }).click();
     await expect(page.getByText('Sent 4 labels to print in 1 job.')).toBeVisible();
@@ -159,7 +159,7 @@ test('changing a printer’s roll says which waiting labels it strands, and temp
 
   await goTo(page, 'Printers');
   await page.getByRole('button', { name: `Edit ${name}` }).click();
-  await page.getByLabel('Loaded media').selectOption('dk-22205');
+  await page.getByLabel('Roll loaded').selectOption('dk-22205');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Saving this change would affect:' })).toContainText(`2 labels waiting for ${name} with ${tagName} would no longer fit.`);
   await page.getByRole('button', { name: 'Save anyway' }).click();
@@ -206,12 +206,12 @@ test('a category’s labels take the first of its templates that fits, and move 
   // Loading 62 mm tape moves it to the wide one, as the form says first.
   await goTo(page, 'Printers');
   await page.getByRole('button', { name: `Edit ${name}` }).click();
-  await page.getByLabel('Loaded media').selectOption('dk-22205');
+  await page.getByLabel('Roll loaded').selectOption('dk-22205');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Saving this change would affect:' })).toContainText(`1 label waiting for ${name} with ${narrow} would move to ${wide}`);
   await page.getByRole('button', { name: 'Save anyway' }).click();
   await expect(page.getByRole('article', { name })).toContainText('DK-22205 62 mm continuous');
 
-  await goTo(page, 'Spool');
+  await goTo(page, 'Print queue');
   await expect(page.getByRole('heading', { name: new RegExp(`${name} · ${wide}`) })).toBeVisible();
 });

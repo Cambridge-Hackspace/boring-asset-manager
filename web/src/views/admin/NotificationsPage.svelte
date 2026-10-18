@@ -65,6 +65,7 @@
     notice = '';
     try {
       await request('DELETE', `/notifiers/${encodeURIComponent(c.id)}`);
+      notice = `Deleted ${c.name}.`;
       await load();
     } catch (err) {
       error = messageOf(err);
@@ -75,10 +76,10 @@
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
   <div>
     <h1 class="text-2xl font-bold">Notifications</h1>
-    <p class="text-sm text-zinc-600 dark:text-zinc-400">Where BAM! announces consumables running low and restocked.</p>
+    <p class="text-sm text-zinc-600 dark:text-zinc-400">Where BAM! sends news, such as consumables running low, overdue loans and problems reported, each channel the events it chooses.</p>
   </div>
   {#if editing === null && drivers.length}
-    <button type="button" class="btn-primary" onclick={() => (editing = 'new')}>Add channel</button>
+    <button type="button" class="btn-primary" onclick={() => (editing = 'new')}>New channel</button>
   {/if}
 </div>
 <ErrorMessage {error} />

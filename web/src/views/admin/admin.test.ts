@@ -44,17 +44,18 @@ describe('PrinterForm', () => {
     render(PrinterForm, { drivers, onsaved, oncancel: () => {} });
 
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Rollo' } });
-    await fireEvent.change(screen.getByLabelText('Driver'), { target: { value: 'tspl' } });
-    expect((screen.getByLabelText('Model') as HTMLSelectElement).value).toBe('Rollo X1038');
+    // One list of models, grouped by make, chooses the driver too.
+    await fireEvent.change(screen.getByLabelText('Printer model'), { target: { value: 'tspl|Rollo X1038' } });
+    expect(screen.getByRole('group', { name: 'TSPL' })).toBeTruthy();
     expect(screen.getByRole('option', { name: 'Rollo X1038 (203 DPI)' })).toBeTruthy();
-    expect((screen.getByLabelText('Loaded media') as HTMLSelectElement).value).toBe('4x6');
+    expect((screen.getByLabelText('Roll loaded') as HTMLSelectElement).value).toBe('4x6');
     expect(screen.queryByLabelText('cut')).toBeNull();
 
     await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'device' } });
     expect(screen.getByText(/\[printers\] devices setting/)).toBeTruthy();
     await fireEvent.input(screen.getByLabelText('Address'), { target: { value: '/dev/usb/lp0' } });
-    await fireEvent.input(screen.getByLabelText('density'), { target: { value: '10' } });
-    await fireEvent.submit(screen.getByRole('button', { name: 'Add printer' }));
+    await fireEvent.input(screen.getByLabelText('Darkness'), { target: { value: '10' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create printer' }));
 
     await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
     expect(sent[0]!.body).toEqual({
@@ -80,18 +81,18 @@ describe('PrinterForm with custom stock', () => {
     render(PrinterForm, { drivers, stock, onsaved, oncancel: () => {} });
 
     expect(screen.queryByRole('option', { name: /Bin labels/ })).toBeNull();
-    expect(screen.getByText('This driver takes only its own rolls.')).toBeTruthy();
+    expect(screen.getByText(/This driver takes only its own rolls\./)).toBeTruthy();
 
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Rollo' } });
-    await fireEvent.change(screen.getByLabelText('Driver'), { target: { value: 'tspl' } });
+    await fireEvent.change(screen.getByLabelText('Printer model'), { target: { value: 'tspl|Rollo X1038' } });
     expect(screen.getByRole('option', { name: 'Bin labels (60 × 40 mm, 3 mm gap)' })).toBeTruthy();
     // Too wide for the Rollo's head.
     expect(screen.queryByRole('option', { name: /Banner/ })).toBeNull();
     expect(screen.getByText(/custom stock up to 105.6 mm wide/)).toBeTruthy();
 
-    await fireEvent.change(screen.getByLabelText('Loaded media'), { target: { value: 's1' } });
+    await fireEvent.change(screen.getByLabelText('Roll loaded'), { target: { value: 's1' } });
     await fireEvent.input(screen.getByLabelText('Address'), { target: { value: 'rollo.lan' } });
-    await fireEvent.submit(screen.getByRole('button', { name: 'Add printer' }));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create printer' }));
     await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
     expect((sent[0]!.body as { media: string }).media).toBe('s1');
   });
@@ -116,7 +117,7 @@ describe('PrinterForm changing a roll', () => {
     });
     const onsaved = vi.fn();
     render(PrinterForm, { printer, drivers: twoRolls, onsaved, oncancel: () => {} });
-    await fireEvent.change(screen.getByLabelText('Loaded media'), { target: { value: 'dk-22205' } });
+    await fireEvent.change(screen.getByLabelText('Roll loaded'), { target: { value: 'dk-22205' } });
     await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
 
     const group = await screen.findByRole('group', { name: 'Saving this change would affect:' });

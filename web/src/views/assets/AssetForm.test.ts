@@ -150,7 +150,7 @@ describe('AssetForm', () => {
     expect((edit.sent.find((r) => r.method === 'PUT')!.body as { stock: object }).stock).not.toHaveProperty('quantity');
   });
 
-  it('adds a new asset’s label to the spool, remembering whether to next time', async () => {
+  it('adds a new asset’s label to the print queue, remembering whether to next time', async () => {
     session.permissions = ['assets.read', 'assets.write', 'labels.print'];
     session.user = { id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '' };
     localStorage.clear();
@@ -164,7 +164,7 @@ describe('AssetForm', () => {
     };
     let { sent } = fakeApi(routes);
     render(AssetForm, { params: {} });
-    const box = (await screen.findByRole('checkbox', { name: 'Add a label to the spool' })) as HTMLInputElement;
+    const box = (await screen.findByRole('checkbox', { name: 'Add a label to the print queue' })) as HTMLInputElement;
     expect(box.checked).toBe(true);
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Drill' } });
     await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
@@ -175,7 +175,7 @@ describe('AssetForm', () => {
     // Unticked once, it stays unticked, and nothing is queued.
     ({ sent } = fakeApi(routes));
     render(AssetForm, { params: {} });
-    await fireEvent.click(await screen.findByRole('checkbox', { name: 'Add a label to the spool' }));
+    await fireEvent.click(await screen.findByRole('checkbox', { name: 'Add a label to the print queue' }));
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Saw' } });
     await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
     await vi.waitFor(() => expect(sent.some((r) => r.path === '/assets' && r.method === 'POST')).toBe(true));
@@ -184,13 +184,13 @@ describe('AssetForm', () => {
     cleanup();
     fakeApi(routes);
     render(AssetForm, { params: {} });
-    expect(((await screen.findByRole('checkbox', { name: 'Add a label to the spool' })) as HTMLInputElement).checked).toBe(false);
+    expect(((await screen.findByRole('checkbox', { name: 'Add a label to the print queue' })) as HTMLInputElement).checked).toBe(false);
   });
 
   it('offers the spool only to those who print labels, and only for new assets', async () => {
     fakeApi({ 'GET /categories': () => ({ categories: [] }), 'GET /generators': () => ({ generators: [] }), 'POST /categories/effective-fields': () => ({ fields: [] }) });
     render(AssetForm, { params: {} });
     await screen.findByLabelText('Name');
-    expect(screen.queryByRole('checkbox', { name: 'Add a label to the spool' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Add a label to the print queue' })).toBeNull();
   });
 });

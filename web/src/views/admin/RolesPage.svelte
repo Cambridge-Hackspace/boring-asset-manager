@@ -268,7 +268,7 @@
       <label class="label" for="new-scope">New scope</label>
       <input id="new-scope" class="input" required maxlength="64" placeholder="such as workshop" bind:value={newScope} />
     </div>
-    <button type="submit" class="btn-secondary">Add scope</button>
+    <button type="submit" class="btn-secondary">Create scope</button>
   </form>
   <ul class="space-y-2">
     {#each scopes as s (s.id)}

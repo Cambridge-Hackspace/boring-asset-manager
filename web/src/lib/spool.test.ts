@@ -37,7 +37,7 @@ afterEach(() => {
 
 describe('the spool', () => {
   it('says what adding did', () => {
-    expect(addedMessage({ added: [entry('1', '', null)], already_waiting: [], skipped: [] })).toBe('Added 1 label to the spool.');
+    expect(addedMessage({ added: [entry('1', '', null)], already_waiting: [], skipped: [] })).toBe('Added 1 label to the print queue.');
     expect(
       addedMessage({
         added: [],
@@ -47,7 +47,7 @@ describe('the spool', () => {
           { asset_id: 'd', reason: 'not found' },
         ],
       }),
-    ).toBe('Nothing new added to the spool; 2 labels already waiting; 1 archived, never labeled; 1 not found.');
+    ).toBe('Nothing new added to the print queue; 2 labels already waiting; 1 archived, never labeled; 1 not found.');
   });
 
   it('groups entries by printer and template, printers first and nowhere last', () => {

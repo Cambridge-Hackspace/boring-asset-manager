@@ -17,8 +17,8 @@ describe('navSections', () => {
       'assets.read', 'assets.scan', 'assets.track', 'labels.print', 'categories.manage', 'templates.manage', 'settings.manage', 'users.manage',
     ];
     expect(labels(all)).toEqual([
-      ['', ['Assets', 'Scan', 'Loans', 'Spool', 'Reports']],
-      ['Catalog', ['Categories', 'Fields', 'Relations', 'Actions']],
+      ['', ['Assets', 'Scan', 'Loans', 'Print queue', 'Reports']],
+      ['Catalog', ['Categories', 'Fields', 'Link types', 'Actions']],
       ['Labels', ['Templates', 'Images', 'Printers']],
       ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications']],
     ]);
@@ -30,7 +30,7 @@ describe('navSections', () => {
       ['Catalog', ['Categories']],
     ]);
     expect(labels(['labels.print'])).toEqual([
-      ['', ['Spool']],
+      ['', ['Print queue']],
       ['Labels', ['Printers']],
     ]);
     expect(labels([])).toEqual([]);

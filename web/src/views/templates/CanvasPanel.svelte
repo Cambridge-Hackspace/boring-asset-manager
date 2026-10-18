@@ -263,10 +263,11 @@
       <input id="tpl-height" class="input" type="number" min="0" step="any" value={doc.height} onchange={(e) => setNumber('height', e.currentTarget.value)} />
     </div>
     <div>
-      <label class="label" for="tpl-dpi">DPI</label>
+      <label class="label" for="tpl-dpi" title="Dots per inch: the printer's resolution">DPI</label>
       <input id="tpl-dpi" class="input" type="number" min="150" max="600" step="1" value={doc.dpi} onchange={(e) => setNumber('dpi', e.currentTarget.value)} />
     </div>
   </div>
+  <p class="-mt-2 text-xs text-zinc-600 dark:text-zinc-400">DPI is the printer's resolution, in dots per inch; <strong>Use its label size</strong>, below, sets it from a printer.</p>
   {#each ['width', 'height', 'dpi', 'units'] as key (key)}
     {#if fieldError(key)}<p class="error-text">{fieldError(key)}</p>{/if}
   {/each}
@@ -276,11 +277,11 @@
     <div class="flex flex-wrap gap-4 text-sm">
       <label class="flex items-center gap-2">
         <input type="radio" name="tpl-sizing" checked={doc.sizing !== 'adaptive'} onchange={() => onchange(makeFixed(doc))} />
-        Fixed: prints only at this size and DPI
+        One label size: prints only at this size and DPI
       </label>
       <label class="flex items-center gap-2">
         <input type="radio" name="tpl-sizing" checked={doc.sizing === 'adaptive'} onchange={() => onchange(makeAdaptive(doc))} />
-        Adaptive: laid out again for each label it prints on
+        Fits several label sizes: laid out again for each label it prints on
       </label>
     </div>
     {#if doc.sizing === 'adaptive' && doc.adapt}

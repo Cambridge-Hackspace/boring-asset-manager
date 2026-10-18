@@ -204,6 +204,8 @@ describe('AssetPage condition', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Report' }));
 
     expect(await screen.findByText('Reported: out of service.')).toBeTruthy();
+    // Reported, it offers to update the problem rather than report one.
+    expect(screen.getByRole('button', { name: 'Update the problem' })).toBeTruthy();
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ condition: 'out_of_service', note: 'Chuck slips' });
     expect(screen.getByText('Out of service')).toBeTruthy();
     expect(screen.getByText('Chuck slips')).toBeTruthy();
