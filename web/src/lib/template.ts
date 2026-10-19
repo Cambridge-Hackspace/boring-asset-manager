@@ -36,13 +36,21 @@ export interface TemplateElement {
   // generator
   generator_type?: string;
   error_correction?: string;
+  /** The same margin on every side, in modules, from before margins; margin replaces it. */
   quiet_zone?: number;
   /** The smallest module drawn, in millimeters. */
   min_module_mm?: number;
+  /** The space kept clear around a code; a side left out takes its standard quiet zone. */
+  margin?: Margin;
+  /** What margin is counted in: modules (the default) or the template's units. */
+  margin_unit?: 'modules' | 'length';
+  /** Where a code sits down its box; absent is the middle. */
+  vertical_align?: 'top' | 'middle' | 'bottom';
   // text
   font_size?: number;
   font_weight?: 'normal' | 'bold';
   font_family?: 'sans' | 'mono';
+  /** How text lines up in its box, or where a code sits across it (absent for a code: the center). */
   align?: 'left' | 'center' | 'right';
   wrap?: boolean;
   min_font_size?: number;
@@ -112,8 +120,14 @@ export function convertUnits(doc: TemplateDoc, to: Units): TemplateDoc {
       ...e, x: conv(e.x), y: conv(e.y), width: conv(e.width), height: conv(e.height),
       ...(e.min_size ? { min_size: conv(e.min_size) } : {}),
       ...(e.max_size ? { max_size: conv(e.max_size) } : {}),
+      ...(e.margin && e.margin_unit === 'length' ? { margin: mapMargin(e.margin, conv) } : {}),
     })),
   };
+}
+
+/** A margin with each side given changed by f. */
+function mapMargin(m: Margin, f: (v: number) => number): Margin {
+  return Object.fromEntries(Object.entries(m).map(([side, v]) => [side, f(v)]));
 }
 
 /** Where a printer prints on a template, in its units, from the fit check (README §4.4). */
@@ -154,6 +168,7 @@ export function resizeLabel(doc: TemplateDoc, width: number, height: number): Te
         height: t(h),
         ...(e.font_size ? { font_size: pt(e.font_size) } : {}),
         ...(e.min_font_size ? { min_font_size: pt(e.min_font_size) } : {}),
+        ...(e.margin && e.margin_unit === 'length' ? { margin: mapMargin(e.margin, (v) => t(v * s)) } : {}),
       };
     }),
   };
@@ -519,4 +534,44 @@ export function withProp<K extends keyof TemplateElement>(e: TemplateElement, ke
 /** What an element does where it does not fit, by default: images are left off, the rest refuse. */
 export function tooSmall(e: TemplateElement): 'refuse' | 'hide' | 'alternative' {
   return e.when_too_small ?? (e.type === 'static_image' ? 'hide' : 'refuse');
+}
+
+export type Side = 'top' | 'right' | 'bottom' | 'left';
+export const sides: Side[] = ['top', 'right', 'bottom', 'left'];
+export type Margin = Partial<Record<Side, number>>;
+
+/** How the server laid a code out in its box, from the JSON preview, in the template's units. */
+export interface CodeLayout {
+  module: number;
+  module_dots: number;
+  /** The space between the code and each side of its box, as drawn. */
+  margin: Record<Side, number>;
+  /** Sides narrower than its standard quiet zone. */
+  narrow?: Side[];
+}
+
+/**
+ * A code with its margin on some sides set, or put back to standard where a
+ * value is undefined. A quiet_zone from before margins becomes the margin
+ * on every side it gave, first.
+ */
+export function withMargin(e: TemplateElement, set: Side[], value: number | undefined): TemplateElement {
+  const margin: Margin = { ...(e.margin ?? {}) };
+  if (e.quiet_zone !== undefined) {
+    // Codes 128 have no quiet zone above and below.
+    for (const side of sides) if (e.generator_type !== 'code128' || side === 'left' || side === 'right') margin[side] = e.quiet_zone;
+  }
+  for (const side of set) {
+    if (value === undefined) delete margin[side];
+    else margin[side] = value;
+  }
+  const { quiet_zone: _q, margin: _m, ...rest } = e;
+  return Object.keys(margin).length ? { ...rest, margin } : rest;
+}
+
+/** The margin given for one side, in its unit, or undefined for the standard. */
+export function marginOf(e: TemplateElement, side: Side): number | undefined {
+  if (e.margin) return e.margin[side];
+  if (e.quiet_zone === undefined || (e.generator_type === 'code128' && (side === 'top' || side === 'bottom'))) return undefined;
+  return e.quiet_zone;
 }

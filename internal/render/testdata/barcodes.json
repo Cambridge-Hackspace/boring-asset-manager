@@ -16,6 +16,20 @@
   "payloads": []
  },
  {
+  "file": "margins.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ]
+ },
+ {
+  "file": "margins.mono.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ]
+ },
+ {
   "file": "micro_code128.png",
   "payloads": [
    "BAM-0042",

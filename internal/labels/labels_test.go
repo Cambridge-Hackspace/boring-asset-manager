@@ -436,3 +436,43 @@ func TestRotation(t *testing.T) {
 		}
 	}
 }
+
+// TestMargins checks a code's margins and alignment, and that only codes
+// take them.
+func TestMargins(t *testing.T) {
+	doc := func(element string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[` + element + `]}`
+	}
+	code := func(props string) string {
+		return `{"type":"generator","generator_type":"qr","x":0,"y":0,"width":20,"height":10,` + props + `}`
+	}
+	for _, ok := range []string{
+		code(`"margin":{"top":0,"left":20}`),
+		code(`"margin":{"left":10,"right":10,"top":5},"margin_unit":"length","align":"right","vertical_align":"bottom"`),
+		code(`"margin_unit":"modules","align":"left"`),
+	} {
+		if _, err := Parse([]byte(doc(ok))); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, tc := range []struct {
+		element string
+		want    []string
+	}{
+		{code(`"margin":{"left":21,"top":-1}`), []string{"elements[0].margin.left", "elements[0].margin.top"}},
+		{code(`"margin":{"left":10.5,"bottom":5.5},"margin_unit":"length"`), []string{"elements[0].margin.bottom", "elements[0].margin.left"}},
+		{code(`"margin":{"left":1},"quiet_zone":2`), []string{"elements[0].margin"}},
+		{code(`"margin_unit":"inches"`), []string{"elements[0].margin_unit"}},
+		{code(`"align":"justify","vertical_align":"center"`), []string{"elements[0].align", "elements[0].vertical_align"}},
+		{`{"type":"text","x":0,"y":0,"width":20,"height":10,"font_size":8,"content_binding":"A","margin":{"left":1},"vertical_align":"top"}`,
+			[]string{"elements[0].margin", "elements[0].vertical_align"}},
+		{`{"type":"static_image","x":0,"y":0,"width":20,"height":10,"image_id":"7c9e6679-7425-40de-944b-e07fc1f90ae7","align":"left"}`, []string{"elements[0].align"}},
+	} {
+		_, err := Parse([]byte(doc(tc.element)))
+		got := problemPaths(t, err)
+		sort.Strings(got)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.element, got, tc.want)
+		}
+	}
+}

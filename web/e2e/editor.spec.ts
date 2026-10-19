@@ -155,11 +155,11 @@ test('make a template adaptive, see it on each printer, and print it on two roll
   // Written without layering, it is stored as it was drawn: text, then the code.
   const layers = page.getByRole('list', { name: 'Layers' });
   await layers.getByRole('button', { name: 'QR code' }).click();
-  await page.getByLabel('Across').selectOption('start');
-  await page.getByLabel('Down').selectOption('start');
+  await page.getByLabel('Across', { exact: true }).selectOption('start');
+  await page.getByLabel('Down', { exact: true }).selectOption('start');
   await layers.getByRole('button', { name: 'Text: {{asset.name}}' }).click();
-  await page.getByLabel('Across').selectOption('both');
-  await page.getByLabel('Down').selectOption('start');
+  await page.getByLabel('Across', { exact: true }).selectOption('both');
+  await page.getByLabel('Down', { exact: true }).selectOption('start');
 
   const onPrinters = page.getByRole('list', { name: 'On each printer' });
   await expect(onPrinters.getByRole('img', { name: new RegExp(`Preview at ${dieCut}`) })).toBeVisible();
@@ -269,4 +269,44 @@ test('turn an element with its handle, snapping to 45°, and from its settings',
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
   const saved = await api.call('GET', `/templates/${template.id}`);
   expect(saved.template.elements[0].rotation).toBe(120);
+});
+
+test('set a code’s margins in its settings and on the canvas, and where it sits', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Margins'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [{ type: 'generator', generator_type: 'qr', x: 2, y: 2, width: 25, height: 25, content_binding: 'HELLO' }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  await page.getByRole('button', { name: /^Barcode 1/ }).click();
+  const top = page.getByRole('slider', { name: 'Top margin' });
+  await expect(top).toHaveAttribute('aria-valuenow', '4');
+
+  // No margin on the left, in its settings: the editor warns, and still saves.
+  await page.getByRole('checkbox', { name: 'Each side on its own' }).check();
+  await page.getByLabel('Left side').fill('0');
+  await page.getByLabel('Left side').press('Tab');
+  await expect(page.getByRole('status').filter({ hasText: 'Less space than the code’s standard quiet zone on its left side' })).toBeVisible();
+
+  // The top margin's handle, with the keyboard and dragged.
+  await top.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByLabel('Top side')).toHaveValue('5');
+  const handle = (await top.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + 15, { steps: 5 });
+  await page.mouse.up();
+  expect(Number(await page.getByLabel('Top side').inputValue())).toBeGreaterThan(5);
+
+  await page.getByRole('group', { name: 'Where it sits across its box' }).getByRole('button', { name: 'Left' }).click();
+  await page.getByRole('group', { name: 'Where it sits down its box' }).getByRole('button', { name: 'Bottom' }).click();
+
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements[0]).toMatchObject({ margin: { left: 0 }, align: 'left', vertical_align: 'bottom' });
+  expect(saved.template.elements[0].margin.top).toBeGreaterThan(5);
 });

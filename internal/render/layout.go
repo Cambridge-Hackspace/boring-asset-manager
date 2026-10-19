@@ -65,9 +65,14 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 				}
 				return nil, fail("content binding resolved to an empty payload")
 			}
-			if err := s.placeSymbol(e, payload, box); err != nil {
+			placed, err := s.placeSymbol(e, payload, box)
+			if err != nil {
 				return nil, fail("%v", err)
 			}
+			if s.Codes == nil {
+				s.Codes = map[int]CodePlacement{}
+			}
+			s.Codes[i] = placed
 
 		case labels.ElementText:
 			binding, err := e.Binding()
@@ -101,27 +106,81 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 	return s, nil
 }
 
-// placeSymbol encodes payload and draws it centered in box at the largest
-// whole number of dots per module that fits, quiet zone included.
-func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectangle) error {
+// CodePlacement is how a code was laid out in its box, in dots: its module,
+// the space between it and each side of its box as drawn, and its
+// standard quiet zone there. Sides run top, right, bottom, left.
+type CodePlacement struct {
+	Module   int
+	Margin   [4]int
+	Standard [4]int
+}
+
+// Narrow names the sides with less space than the code's standard quiet
+// zone.
+func (c CodePlacement) Narrow() []string {
+	var sides []string
+	for i, m := range c.Margin {
+		if m < c.Standard[i] {
+			sides = append(sides, labels.SideNames[i])
+		}
+	}
+	return sides
+}
+
+// placeSymbol encodes payload and draws it in box at the largest whole
+// number of dots per module that fits with its margins, placed as its
+// alignment says, centered by default. A side's margin is its standard
+// quiet zone unless the element gives it, in modules or in length; margins
+// are whole dots.
+func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectangle) (CodePlacement, error) {
 	g, err := generators.Lookup(e.GeneratorType)
 	if err != nil {
-		return err
+		return CodePlacement{}, err
 	}
 	sym, err := g.Encode(payload, e.ErrorCorrection)
 	if err != nil {
-		return err
+		return CodePlacement{}, err
 	}
-	quiet := sym.QuietZone
+	linear := sym.Rows == 1
+
+	// The code's standard quiet zone; bars fill a linear code's height,
+	// with none above or below.
+	q := float64(sym.QuietZone)
+	standard := [4]float64{q, q, q, q}
+	if linear {
+		standard[0], standard[2] = 0, 0
+	}
+	// Each side's margin: modules, growing with the module, or fixed dots.
+	// quiet_zone, from before margins, sets every side the standard has.
+	mods := standard
 	if e.QuietZone != nil {
-		quiet = *e.QuietZone
+		for i := range mods {
+			if standard[i] > 0 {
+				mods[i] = float64(*e.QuietZone)
+			}
+		}
+	}
+	var fixed [4]int
+	for i, side := range e.Margin.Sides() {
+		switch {
+		case side == nil:
+		case e.MarginUnit == labels.MarginLength:
+			mods[i], fixed[i] = 0, round(*side*s.dotsPerUnit())
+		default:
+			mods[i] = *side
+		}
 	}
 
 	bw, bh := box.Dx(), box.Dy()
-	linear := sym.Rows == 1
-	module := bw / (sym.Cols + 2*quiet)
+	fit := func(room int, modules float64) int {
+		if room <= 0 {
+			return 0
+		}
+		return int(math.Floor(float64(room)/modules + 1e-9))
+	}
+	module := fit(bw-fixed[1]-fixed[3], float64(sym.Cols)+mods[1]+mods[3])
 	if !linear {
-		module = min(module, bh/(sym.Rows+2*quiet))
+		module = min(module, fit(bh-fixed[0]-fixed[2], float64(sym.Rows)+mods[0]+mods[2]))
 	}
 	// The least module: two dots, or its own minimum at the scene's DPI.
 	least := MinModuleDots
@@ -129,22 +188,41 @@ func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectang
 		least = max(least, int(math.Ceil(e.MinModuleMM*float64(s.DPI)/25.4-1e-9)))
 	}
 	if module < least {
-		needW := (sym.Cols + 2*quiet) * least
+		needW := int(math.Ceil((float64(sym.Cols)+mods[1]+mods[3])*float64(least)-1e-9)) + fixed[1] + fixed[3]
 		if linear {
-			return fmt.Errorf("a %d-module symbol needs a box at least %d dots wide (got %d)", sym.Cols, needW, bw)
+			return CodePlacement{}, fmt.Errorf("a %d-module symbol needs a box at least %d dots wide (got %d)", sym.Cols, needW, bw)
 		}
-		needH := (sym.Rows + 2*quiet) * least
-		return fmt.Errorf("a %d×%d-module symbol needs a box of at least %d×%d dots (got %d×%d)",
+		needH := int(math.Ceil((float64(sym.Rows)+mods[0]+mods[2])*float64(least)-1e-9)) + fixed[0] + fixed[2]
+		return CodePlacement{}, fmt.Errorf("a %d×%d-module symbol needs a box of at least %d×%d dots (got %d×%d)",
 			sym.Cols, sym.Rows, needW, needH, bw, bh)
+	}
+	var margin [4]int
+	for i := range margin {
+		margin[i] = fixed[i] + round(mods[i]*float64(module))
+	}
+
+	// What is left over goes before the code as its alignment says.
+	place := func(left int, align string) int {
+		left = max(0, left)
+		switch align {
+		case labels.AlignLeft, labels.AlignTop:
+			return 0
+		case labels.AlignRight, labels.AlignBottom:
+			return left
+		}
+		return left / 2
+	}
+	rowHeight := module
+	x0 := box.Min.X + margin[3] + place(bw-margin[1]-margin[3]-sym.Cols*module, e.Align)
+	y0 := box.Min.Y + margin[0] + place(bh-margin[0]-margin[2]-sym.Rows*module, e.VerticalAlign)
+	if linear {
+		rowHeight, y0 = bh-margin[0]-margin[2], box.Min.Y+margin[0]
+		if rowHeight < 1 {
+			return CodePlacement{}, fmt.Errorf("its top and bottom margins leave no room for the bars in a box %d dots high", bh)
+		}
 	}
 
 	var rects []Rect
-	rowHeight := module
-	x0 := box.Min.X + (bw-sym.Cols*module)/2
-	y0 := box.Min.Y + (bh-sym.Rows*module)/2
-	if linear {
-		rowHeight, y0 = bh, box.Min.Y
-	}
 	for r := 0; r < sym.Rows; r++ {
 		for c := 0; c < sym.Cols; {
 			if !sym.Dark[r*sym.Cols+c] {
@@ -161,7 +239,25 @@ func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectang
 	if len(rects) > 0 {
 		s.Items = append(s.Items, Item{Rects: rects})
 	}
-	return nil
+
+	placed := CodePlacement{Module: module}
+	height := sym.Rows * module
+	if linear {
+		height = rowHeight
+	}
+	placed.Margin = [4]int{y0 - box.Min.Y, box.Max.X - x0 - sym.Cols*module, box.Max.Y - y0 - height, x0 - box.Min.X}
+	for i := range standard {
+		placed.Standard[i] = round(standard[i] * float64(module))
+	}
+	return placed, nil
+}
+
+// dotsPerUnit is how many dots make one of the template's units.
+func (s *Scene) dotsPerUnit() float64 {
+	if s.Units == labels.UnitsIn {
+		return float64(s.DPI)
+	}
+	return float64(s.DPI) / 25.4
 }
 
 // fitImage scales img to fit box with its aspect ratio kept, centered.

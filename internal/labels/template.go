@@ -39,7 +39,39 @@ const (
 	AlignLeft    = "left"
 	AlignCenter  = "center"
 	AlignRight   = "right"
+	// A code's vertical alignment in its box.
+	AlignTop    = "top"
+	AlignMiddle = "middle"
+	AlignBottom = "bottom"
 )
+
+// What a code's margin is counted in: its modules, growing and shrinking
+// with the code, or the template's units.
+const (
+	MarginModules = "modules"
+	MarginLength  = "length"
+)
+
+// Margin is the space kept clear around a code, side by side. A side left
+// out takes the code's standard quiet zone.
+type Margin struct {
+	Top    *float64 `json:"top,omitempty"`
+	Right  *float64 `json:"right,omitempty"`
+	Bottom *float64 `json:"bottom,omitempty"`
+	Left   *float64 `json:"left,omitempty"`
+}
+
+// Sides are the margin's sides, top, right, bottom and left, nil where left
+// out.
+func (m *Margin) Sides() [4]*float64 {
+	if m == nil {
+		return [4]*float64{}
+	}
+	return [4]*float64{m.Top, m.Right, m.Bottom, m.Left}
+}
+
+// SideNames name a margin's sides in the order Sides gives them.
+var SideNames = [4]string{"top", "right", "bottom", "left"}
 
 // LayeringList is the only layering: elements are drawn in the order they
 // are listed, each over those before it. Documents without it were written
@@ -124,11 +156,19 @@ type Element struct {
 	// MinModuleMM is the smallest module the code is drawn with, for the
 	// scanners in use; two dots at the printer's DPI is always the least.
 	MinModuleMM float64 `json:"min_module_mm,omitempty"`
+	// Margin, counted as MarginUnit says (modules when empty), replaces
+	// QuietZone side by side. The code sits in its box as Align (left,
+	// center or right) and VerticalAlign (top, middle or bottom) say,
+	// centered when they are empty.
+	Margin        *Margin `json:"margin,omitempty"`
+	MarginUnit    string  `json:"margin_unit,omitempty"`
+	VerticalAlign string  `json:"vertical_align,omitempty"`
 
 	// text
-	FontSize    float64 `json:"font_size,omitempty"`
-	FontWeight  string  `json:"font_weight,omitempty"`
-	FontFamily  string  `json:"font_family,omitempty"`
+	FontSize   float64 `json:"font_size,omitempty"`
+	FontWeight string  `json:"font_weight,omitempty"`
+	FontFamily string  `json:"font_family,omitempty"`
+	// Align is how text lines up in its box, and where a code sits in it.
 	Align       string  `json:"align,omitempty"`
 	Wrap        bool    `json:"wrap,omitempty"`
 	MinFontSize float64 `json:"min_font_size,omitempty"`
@@ -355,12 +395,14 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"error_correction": e.ErrorCorrection != "",
 		"quiet_zone":       e.QuietZone != nil,
 		"min_module_mm":    e.MinModuleMM != 0,
+		"margin":           e.Margin != nil,
+		"margin_unit":      e.MarginUnit != "",
+		"vertical_align":   e.VerticalAlign != "",
 	}
 	textProps := map[string]bool{
 		"font_size":     e.FontSize != 0,
 		"font_weight":   e.FontWeight != "",
 		"font_family":   e.FontFamily != "",
-		"align":         e.Align != "",
 		"wrap":          e.Wrap,
 		"min_font_size": e.MinFontSize != 0,
 	}
@@ -384,6 +426,13 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		}
 		if e.QuietZone != nil && (*e.QuietZone < 0 || *e.QuietZone > MaxQuietZone) {
 			v.add(at("quiet_zone"), fmt.Sprintf("must be between 0 and %d modules", MaxQuietZone))
+		}
+		validateMargin(v, path, e)
+		if e.Align != "" && e.Align != AlignLeft && e.Align != AlignCenter && e.Align != AlignRight {
+			v.add(at("align"), `must be "left", "center" or "right"`)
+		}
+		if e.VerticalAlign != "" && e.VerticalAlign != AlignTop && e.VerticalAlign != AlignMiddle && e.VerticalAlign != AlignBottom {
+			v.add(at("vertical_align"), `must be "top", "middle" or "bottom"`)
 		}
 		validateBinding(v, at("content_binding"), e.ContentBinding, false)
 
@@ -409,13 +458,50 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	case ElementStaticImage:
 		unset(generatorProps)
 		unset(textProps)
-		unset(map[string]bool{"content_binding": e.ContentBinding != ""})
+		unset(map[string]bool{"content_binding": e.ContentBinding != "", "align": e.Align != ""})
 		if _, err := uuid.Parse(e.ImageID); err != nil {
 			v.add(at("image_id"), "must be the ID of an uploaded image")
 		}
 
 	default:
 		v.add(at("type"), `must be "generator", "text" or "static_image"`)
+	}
+}
+
+// validateMargin checks a code's margin: in modules, each side up to
+// MaxQuietZone; in length, up to half the box across or down; never with
+// quiet_zone, which it replaces.
+func validateMargin(v *validator, path string, e *Element) {
+	at := func(prop string) string { return path + "." + prop }
+	if e.MarginUnit != "" && e.MarginUnit != MarginModules && e.MarginUnit != MarginLength {
+		v.add(at("margin_unit"), `must be "modules" or "length"`)
+		return
+	}
+	if e.Margin == nil {
+		return
+	}
+	if e.QuietZone != nil {
+		v.add(at("margin"), "cannot be set with quiet_zone, which it replaces")
+	}
+	for i, side := range e.Margin.Sides() {
+		if side == nil {
+			continue
+		}
+		m := *side
+		bound, unit := float64(MaxQuietZone), "modules"
+		if e.MarginUnit == MarginLength {
+			bound, unit = e.Width/2, "half the box's width"
+			if i%2 == 0 {
+				bound, unit = e.Height/2, "half the box's height"
+			}
+			if math.IsNaN(m) || m < 0 || m > bound+geometryTolerance {
+				v.add(at("margin."+SideNames[i]), "must be from 0 to "+unit)
+			}
+			continue
+		}
+		if math.IsNaN(m) || m < 0 || m > bound {
+			v.add(at("margin."+SideNames[i]), fmt.Sprintf("must be from 0 to %g %s", bound, unit))
+		}
 	}
 }
 

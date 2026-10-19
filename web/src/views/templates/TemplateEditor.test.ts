@@ -313,4 +313,42 @@ describe('TemplateEditor', () => {
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
     expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements[0]!.rotation).toBe(40);
   });
+
+  it('sets the margins of a code and where it sits, and warns of a narrow one', async () => {
+    const code = { ...template, elements: [{ type: 'generator' as const, generator_type: 'qr', x: 1, y: 1, width: 20, height: 20 }] };
+    const { sent } = api({
+      'GET /templates/ql90': () => ({ template: code }),
+      'PUT /templates/ql90': () => ({ template: code }),
+      'POST /templates/preview': (b) => {
+        const body = b as { format?: string; template: TemplateDoc };
+        if (body.format !== 'json') return '<svg/>';
+        const left = body.template.elements[0]!.margin?.left === 0 ? 0 : 1;
+        return {
+          elements: [{ index: 0, code: { module: 0.5, module_dots: 6, margin: { top: 2, right: 2, bottom: 2, left: left }, ...(left ? {} : { narrow: ['left'] }) } }],
+          warnings: [],
+        };
+      },
+    });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'QR code' }));
+    expect(await screen.findByRole('slider', { name: 'Left margin' })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Each side on its own' }));
+    await fireEvent.change(screen.getByLabelText('Left side'), { target: { value: '0' } });
+    expect(await screen.findByText(/Less space than the code’s standard quiet zone on its left side/)).toBeTruthy();
+    // The slider moves the top margin a module at a time.
+    await fireEvent.keyDown(screen.getByRole('slider', { name: 'Top margin' }), { key: 'ArrowUp' });
+    expect((screen.getByLabelText('Top side') as HTMLInputElement).value).toBe('5');
+
+    const across = screen.getByRole('group', { name: 'Where it sits across its box' });
+    await fireEvent.click(within(across).getByRole('button', { name: 'Left' }));
+    await fireEvent.click(within(screen.getByRole('group', { name: 'Where it sits down its box' })).getByRole('button', { name: 'Top' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements[0]).toMatchObject({
+      margin: { left: 0, top: 5 },
+      align: 'left',
+      vertical_align: 'top',
+    });
+  });
 });
