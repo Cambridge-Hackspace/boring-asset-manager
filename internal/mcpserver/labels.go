@@ -208,7 +208,7 @@ func labelTools() []tool {
 				Name     string         `json:"name,omitempty"`
 				Change   []struct {
 					Index int            `json:"index"`
-					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, and for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align"`
+					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, and for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align; a shape has shape (rectangle, ellipse, line or polygon), stroke and fill (black, white or none), stroke_width, corner_radius, flip, and points (fractions of its box) and closed"`
 				} `json:"change_elements,omitempty"`
 				Move   []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
 				Remove []int            `json:"remove_elements,omitempty"`

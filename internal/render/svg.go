@@ -28,9 +28,9 @@ func WriteSVG(w io.Writer, s *Scene) error {
 				return err
 			}
 		case it.Rects != nil:
-			// The modules of codes drawn one after another are one path.
-			bw.WriteString(`<path fill="#000" shape-rendering="crispEdges" d="`)
-			for ; i < len(s.Items) && s.Items[i].Rects != nil; i++ {
+			// Rectangles drawn one after another in one paint are one path.
+			fmt.Fprintf(bw, `<path fill="%s" shape-rendering="crispEdges" d="`, svgColor(it.Paint))
+			for ; i < len(s.Items) && s.Items[i].Rects != nil && s.Items[i].Paint == it.Paint; i++ {
 				for _, r := range s.Items[i].Rects {
 					fmt.Fprintf(bw, "M%d %dh%dv%dh-%dz", r.X, r.Y, r.W, r.H, r.W)
 				}
@@ -38,7 +38,7 @@ func WriteSVG(w io.Writer, s *Scene) error {
 			i--
 			bw.WriteString(`"/>` + "\n")
 		default:
-			svgPath(bw, it.Path)
+			svgPath(bw, it.Path, it.Paint)
 		}
 	}
 
@@ -61,9 +61,17 @@ func svgImage(bw *bufio.Writer, pi *PlacedImage) error {
 	return nil
 }
 
-// svgPath writes a path filled in black.
-func svgPath(bw *bufio.Writer, p Path) {
-	bw.WriteString(`<path fill="#000" d="`)
+// svgColor is a paint's color.
+func svgColor(p Paint) string {
+	if p == White {
+		return "#fff"
+	}
+	return "#000"
+}
+
+// svgPath writes a filled path.
+func svgPath(bw *bufio.Writer, p Path, paint Paint) {
+	fmt.Fprintf(bw, `<path fill="%s" d="`, svgColor(paint))
 	for _, seg := range p {
 		a, b, c := seg.Pts[0], seg.Pts[1], seg.Pts[2]
 		switch seg.Op {

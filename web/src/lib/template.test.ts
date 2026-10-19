@@ -9,6 +9,10 @@ import {
   inListOrder,
   layerName,
   marginOf,
+  hairline,
+  newShape,
+  polygonPoints,
+  polygonThrough,
   makeAdaptive,
   makeFixed,
   moveElements,
@@ -336,5 +340,44 @@ describe('code margins', () => {
     const inches = convertUnits(d, 'in');
     expect(inches.elements[0]!.margin).toEqual({ left: 0.1 });
     expect(inches.elements[1]!.margin).toEqual({ left: 3 });
+  });
+});
+
+describe('shapes', () => {
+  it('makes shapes outlined in black, in the middle of the label by default', () => {
+    const d = { ...blankTemplate(), width: 60, height: 30 };
+    expect(newShape('rectangle', d)).toMatchObject({ type: 'shape', shape: 'rectangle', x: 22.5, y: 7.5, width: 15, height: 15, stroke: 'black', stroke_width: 0.25, fill: 'none' });
+    expect(newShape('line', d)).toMatchObject({ height: 0, y: 15 });
+    expect(newShape('polygon', d, { x: 1, y: 1, width: 4, height: 4 }).points).toEqual([[0.5, 0], [1, 1], [0, 1]]);
+    expect(layerName(newShape('ellipse', d))).toBe('Ellipse');
+  });
+
+  it('knows a stroke thinner than one dot', () => {
+    const d = { ...blankTemplate(), dpi: 300 };
+    expect(hairline({ ...newShape('line', d), stroke_width: 0.05 }, d)).toBe(true);
+    expect(hairline({ ...newShape('line', d), stroke_width: 0.1 }, d)).toBe(false);
+    expect(hairline({ ...newShape('line', d), stroke: 'none' }, d)).toBe(false);
+  });
+
+  it('fits the box of a polygon round its points, leaving them where they lie, turned', () => {
+    const d = { ...blankTemplate(), width: 100, height: 100 };
+    const tri: TemplateElement = { ...newShape('polygon', d, { x: 10, y: 10, width: 20, height: 10 }), rotation: 90 };
+    const before = polygonPoints(tri);
+    // Point 2 (the bottom left) moves 10 further left: the box widens.
+    const moved = polygonThrough(d, tri, [before[0]!, before[1]!, [before[2]![0] - 10, before[2]![1]]]);
+    expect(moved).toMatchObject({ width: 30, height: 10, rotation: 90 });
+    expect(moved.points).toEqual([[0.6667, 0], [1, 1], [0, 1]]);
+    // The points that did not move are where they were on the label, turned.
+    const onLabel = (e: TemplateElement, k: number) => {
+      const [u, v] = polygonPoints(e)[k]!;
+      const cx = e.x + e.width / 2;
+      const cy = e.y + e.height / 2;
+      // A quarter turn clockwise: (u, v) from the center goes to (-v, u).
+      return [cx - (v - e.height / 2), cy + (u - e.width / 2)];
+    };
+    for (const k of [0, 1]) {
+      expect(onLabel(moved, k)[0]).toBeCloseTo(onLabel(tri, k)[0]!, 2);
+      expect(onLabel(moved, k)[1]).toBeCloseTo(onLabel(tri, k)[1]!, 2);
+    }
   });
 });

@@ -351,4 +351,29 @@ describe('TemplateEditor', () => {
       vertical_align: 'top',
     });
   });
+
+  it('adds a shape from the keyboard, and sets its paint', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await screen.findByDisplayValue('QL 90x29');
+    // A click from the keyboard has no detail: the shape goes in the middle.
+    await fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }), { detail: 0 });
+    expect(screen.getByRole('heading', { name: 'Shape 2 (rectangle)' })).toBeTruthy();
+    await fireEvent.change(screen.getByLabelText('Fill'), { target: { value: 'black' } });
+    await fireEvent.change(screen.getByLabelText('Corner radius (mm)'), { target: { value: '2' } });
+    await fireEvent.change(screen.getByLabelText('Stroke width (mm)'), { target: { value: '0.05' } });
+    expect(await screen.findByText(/thinner than one printer dot at 300 DPI/)).toBeTruthy();
+    await fireEvent.change(screen.getByLabelText('Stroke'), { target: { value: 'none' } });
+    // A mouse click chooses the tool, to draw on the label; again puts it down.
+    const ellipse = screen.getByRole('button', { name: 'Ellipse' });
+    await fireEvent.click(ellipse, { detail: 1 });
+    expect(ellipse.getAttribute('aria-pressed')).toBe('true');
+    await fireEvent.click(ellipse, { detail: 1 });
+    expect(ellipse.getAttribute('aria-pressed')).toBe('false');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    expect(body.elements[1]).toEqual({ type: 'shape', shape: 'rectangle', x: 37.75, y: 7.25, width: 14.5, height: 14.5, stroke: 'none', fill: 'black', corner_radius: 2 });
+  });
 });

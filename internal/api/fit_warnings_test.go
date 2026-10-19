@@ -131,3 +131,24 @@ func TestPreviewDescribesCodes(t *testing.T) {
 		t.Errorf("warnings: %v", desc.Warnings)
 	}
 }
+
+// TestPreviewDescribesShapes says what each shape is and how it is drawn,
+// and warns of a stroke thinner than a dot.
+func TestPreviewDescribesShapes(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	const doc = `{"name":"Shapes","units":"mm","width":40,"height":20,"dpi":203,"layering":"list","elements":[
+	  {"type":"shape","shape":"polygon","x":0,"y":0,"width":10,"height":10,"fill":"white","points":[[0,0],[1,0],[0.5,1]]},
+	  {"type":"shape","shape":"line","x":12,"y":5,"width":20,"height":0,"stroke_width":0.1}]}`
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+doc+`,"format":"json"}`)
+	var desc PreviewDescription
+	if err := json.Unmarshal(rec.Body.Bytes(), &desc); err != nil || len(desc.Elements) != 2 {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+	if p := desc.Elements[0]; p.Shape != "polygon" || p.Fill != "white" || p.Stroke != "black" || len(p.Points) != 3 || p.Closed == nil || !*p.Closed {
+		t.Errorf("the polygon: %+v", p)
+	}
+	if len(desc.Warnings) != 1 || !strings.Contains(desc.Warnings[0], "elements[1] (line) has a stroke thinner than one dot at 203 DPI") {
+		t.Errorf("warnings: %v", desc.Warnings)
+	}
+}

@@ -11,12 +11,14 @@
     inListOrder,
     moveLayer,
     newElement,
+    newShape,
     placeholders,
     restack,
     rotateElements,
     type CodeLayout,
     type ElementType,
     type Restack,
+    type ShapeKind,
     type PrintArea,
     type TemplateDoc,
     type TemplateElement,
@@ -210,6 +212,32 @@
     syncHistory();
   }
 
+  // The shape being drawn on the canvas, if any.
+  let tool = $state<ShapeKind | null>(null);
+  const tools: [ShapeKind, string][] = [
+    ['rectangle', 'Rectangle'],
+    ['ellipse', 'Ellipse'],
+    ['line', 'Line'],
+    ['polygon', 'Polygon'],
+  ];
+
+  /** Chooses a shape to draw; from the keyboard, adds one in the middle of the label instead. */
+  function chooseTool(event: MouseEvent, kind: ShapeKind) {
+    if (event.detail === 0) {
+      tool = null;
+      addDrawn(newShape(kind, doc));
+      return;
+    }
+    tool = tool === kind ? null : kind;
+  }
+
+  function addDrawn(e: TemplateElement) {
+    begin();
+    doc.elements.push(e);
+    selected = [doc.elements.length - 1];
+    tool = null;
+  }
+
   function addElement(type: ElementType) {
     begin();
     doc.elements.push(newElement(type, doc, generators[0]?.type ?? 'qr'));
@@ -338,6 +366,20 @@
         <button type="button" class="btn-secondary" onclick={() => addElement('generator')}>Add barcode</button>
         <button type="button" class="btn-secondary" onclick={() => addElement('static_image')}>Add image</button>
       </div>
+      <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Draw a shape">
+        {#each tools as [kind, label] (kind)}
+          <button type="button" class="btn-secondary" aria-pressed={tool === kind} onclick={(ev) => chooseTool(ev, kind)}>{label}</button>
+        {/each}
+      </div>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400" role="status">
+        {#if tool === 'polygon'}
+          Click to place each point; double-click, press Enter or click the first point to finish. Escape stops.
+        {:else if tool}
+          Drag on the label to draw it, with Shift to keep it {tool === 'line' ? 'at 45°' : tool === 'ellipse' ? 'round' : 'square'}, or click to place one. Escape stops.
+        {:else}
+          Choose a shape, then drag on the label to draw it; from the keyboard, the shape is added in the middle of the label.
+        {/if}
+      </p>
 
       <EditorCanvas
         {doc}
@@ -352,6 +394,9 @@
         ondelete={removeSelected}
         onrestack={restackSelected}
         {codeLayouts}
+        {tool}
+        ondraw={addDrawn}
+        ontoolcancel={() => (tool = null)}
       />
 
       {#if generalProblems.length || (previewProblems.length && !problemElements.size && !Object.keys(canvasProblems).length)}

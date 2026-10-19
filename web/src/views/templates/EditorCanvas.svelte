@@ -16,9 +16,12 @@
     type Side,
     type PrintArea,
     type Restack,
+    type ShapeKind,
     type TemplateDoc,
     type TemplateElement,
   } from '../../lib/template';
+  import PolygonPoints from './PolygonPoints.svelte';
+  import ShapeTool from './ShapeTool.svelte';
 
   // The label as the server renders it, with an interactive outline over
   // each element. Changes are reported through onchange; onbegin marks the
@@ -42,6 +45,9 @@
     ondelete,
     onrestack,
     codeLayouts = {},
+    tool = null,
+    ondraw,
+    ontoolcancel,
   }: {
     doc: TemplateDoc;
     selected: number[];
@@ -56,6 +62,10 @@
     onrestack: (how: Restack) => void;
     /** How the server laid out each code, by element index, for its margins. */
     codeLayouts?: Record<number, CodeLayout>;
+    /** The shape being drawn, if any. */
+    tool?: ShapeKind | null;
+    ondraw?: (e: TemplateElement) => void;
+    ontoolcancel?: () => void;
   } = $props();
 
   let surface: HTMLDivElement | undefined = $state();
@@ -83,6 +93,10 @@
   const boxStyle = (e: TemplateElement) =>
     `left:${pct(e.x, doc.width)};top:${pct(e.y, doc.height)};width:${pct(e.width, doc.width)};height:${pct(e.height, doc.height)}` +
     (e.rotation ? `;transform:rotate(${e.rotation}deg)` : '');
+  // A level or upright line's box has no height or width: its outline is
+  // given some, to be seen and taken.
+  const outlineStyle = (e: TemplateElement) =>
+    boxStyle(e) + (e.type === 'shape' && e.shape === 'line' && (!e.width || !e.height) ? ';padding:4px;margin:-4px;box-sizing:content-box' : '');
 
   const warned = $derived(new Set([...(area?.outside ?? []), ...(area?.nearEdge ?? [])]));
 
@@ -337,7 +351,8 @@
           : warned.has(i)
             ? 'bg-amber-400/15 outline-amber-500'
             : ''}"
-        style={boxStyle(e)}
+        style={outlineStyle(e)}
+        class:pointer-events-none={tool}
         onpointerdown={(ev) => pointerDownOnElement(ev, i)}
         onkeydown={keydown}
         onfocus={() => {
@@ -396,6 +411,19 @@
           ></span>
         {/each}
       </div>
+    {/if}
+    {#if !tool && selected.length === 1 && doc.elements[selected[0]!]?.type === 'shape' && doc.elements[selected[0]!]?.shape === 'polygon'}
+      {@const i = selected[0]!}
+      <PolygonPoints
+        {doc}
+        e={doc.elements[i]!}
+        style={boxStyle(doc.elements[i]!)}
+        {onbegin}
+        onupdate={(e) => onchange(doc.elements.map((x, k) => (k === i ? e : x)))}
+      />
+    {/if}
+    {#if tool && ondraw}
+      <ShapeTool {doc} {tool} {ondraw} oncancel={() => ontoolcancel?.()} />
     {/if}
   </div>
   <label class="flex items-center gap-2 text-sm">

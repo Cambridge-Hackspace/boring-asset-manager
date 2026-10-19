@@ -70,7 +70,9 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 		e.Y, e.Height = follow(e.AnchorY, e.Y, e.Height, t.Height, height, sy)
 		const eps = 1e-6
 		// Its box is placed, then turned.
-		if bx, by, bw, bh := e.Bounds(); e.Width > eps && e.Height > eps && (bx < -eps || by < -eps || bx+bw > width+eps || by+bh > height+eps) {
+		line := e.Type == labels.ElementShape && e.Shape == labels.ShapeLine
+		room := e.Width > eps && e.Height > eps || line && (e.Width > eps || e.Height > eps)
+		if bx, by, bw, bh := e.Bounds(); room && (bx < -eps || by < -eps || bx+bw > width+eps || by+bh > height+eps) {
 			return refuse(path, "would run off %s", on)
 		}
 		if e.Rotation == 0 {
@@ -128,13 +130,20 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 // designed, for its font.
 func fits(t *labels.Template, e, design *labels.Element, sample *labels.Data) string {
 	const eps = 1e-6
-	if e.Width <= eps || e.Height <= eps {
+	// A line may be level or upright; anything else needs both sides.
+	if line := e.Type == labels.ElementShape && e.Shape == labels.ShapeLine; line && e.Width <= eps && e.Height <= eps ||
+		!line && (e.Width <= eps || e.Height <= eps) {
 		return "it would have no room"
 	}
 	if e.MinSize > 0 && (e.Width < e.MinSize-eps || e.Height < e.MinSize-eps) {
 		return fmt.Sprintf("its box would be %s × %s %s, under its minimum of %s", length(e.Width), length(e.Height), t.Units, length(e.MinSize))
 	}
 	switch e.Type {
+	case labels.ElementShape:
+		// Corners round in proportion to the box; strokes stay as wide.
+		if design.CornerRadius > 0 && design != e {
+			e.CornerRadius = math.Min(design.CornerRadius*math.Min(e.Width/design.Width, e.Height/design.Height), math.Min(e.Width, e.Height)/2)
+		}
 	case labels.ElementText:
 		if design.Width > 0 && design.Height > 0 && design != e {
 			e.FontSize = math.Min(design.FontSize*math.Min(e.Width/design.Width, e.Height/design.Height), labels.MaxFontSize)
@@ -170,6 +179,8 @@ func kind(e *labels.Element) string {
 		return e.GeneratorType + " code"
 	case labels.ElementText:
 		return "text"
+	case labels.ElementShape:
+		return e.Shape
 	}
 	return "image"
 }

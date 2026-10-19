@@ -82,6 +82,18 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 	fmt.Fprintf(&content, "%s 0 0 %s 0 %s cm\n0 g\n", num(scale), num(-scale), num(float64(s.Height)*scale))
 
 	var xobjects []string
+	// The page starts painting black; white is set as needed.
+	paint := Black
+	setPaint := func(p Paint) {
+		if p != paint {
+			if p == White {
+				content.WriteString("1 g\n")
+			} else {
+				content.WriteString("0 g\n")
+			}
+			paint = p
+		}
+	}
 	for i := 0; i < len(s.Items); i++ {
 		it := &s.Items[i]
 		switch {
@@ -105,8 +117,9 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 			// The image's unit square has its first row at the top (v = 1).
 			fmt.Fprintf(&content, "%d 0 0 %d %d %d cm /%s Do Q\n", pi.W, -pi.H, pi.X, pi.Y+pi.H, name)
 		case it.Rects != nil:
-			// The modules of codes drawn one after another are filled at once.
-			for ; i < len(s.Items) && s.Items[i].Rects != nil; i++ {
+			// Rectangles drawn one after another in one paint are filled at once.
+			setPaint(it.Paint)
+			for ; i < len(s.Items) && s.Items[i].Rects != nil && s.Items[i].Paint == it.Paint; i++ {
 				for _, r := range s.Items[i].Rects {
 					fmt.Fprintf(&content, "%d %d %d %d re\n", r.X, r.Y, r.W, r.H)
 				}
@@ -114,6 +127,7 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 			i--
 			content.WriteString("f\n")
 		default:
+			setPaint(it.Paint)
 			pdfPath(&content, it.Path)
 			content.WriteString("f\n")
 		}

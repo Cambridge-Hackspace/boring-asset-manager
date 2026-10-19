@@ -68,6 +68,14 @@
   ]
  },
  {
+  "file": "shapes.png",
+  "payloads": []
+ },
+ {
+  "file": "shapes.mono.png",
+  "payloads": []
+ },
+ {
   "file": "turned.png",
   "payloads": [
    "BAM-QR-0042",

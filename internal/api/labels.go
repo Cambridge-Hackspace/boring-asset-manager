@@ -277,6 +277,15 @@ type PreviewElement struct {
 	Bounds   *PreviewBox `json:"bounds,omitempty"`
 	// Code is how a code is laid out in its box, before it is turned.
 	Code *PreviewCode `json:"code,omitempty"`
+	// A shape: what it is, how it is drawn, and its paint.
+	Shape        string       `json:"shape,omitempty"`
+	Stroke       string       `json:"stroke,omitempty"`
+	StrokeWidth  float64      `json:"stroke_width,omitempty"`
+	Fill         string       `json:"fill,omitempty"`
+	CornerRadius float64      `json:"corner_radius,omitempty"`
+	Flip         bool         `json:"flip,omitempty"`
+	Points       [][2]float64 `json:"points,omitempty"`
+	Closed       *bool        `json:"closed,omitempty"`
 }
 
 // PreviewCode is how a code is laid out in its box: the size of its
@@ -328,7 +337,11 @@ func describePreview(t *labels.Template, data labels.Data, scene *render.Scene) 
 	for i := range t.Elements {
 		e := &t.Elements[i]
 		pe := PreviewElement{Index: i, Type: e.Type, X: e.X, Y: e.Y, Width: e.Width, Height: e.Height,
-			GeneratorType: e.GeneratorType, ImageID: e.ImageID, FontSize: e.FontSize, Rotation: e.Rotation}
+			GeneratorType: e.GeneratorType, ImageID: e.ImageID, FontSize: e.FontSize, Rotation: e.Rotation,
+			Shape: e.Shape, Stroke: e.Stroke, StrokeWidth: e.StrokeWidth, Fill: e.Fill, CornerRadius: e.CornerRadius, Flip: e.Flip, Points: e.Points, Closed: e.Closed}
+		if e.Type == labels.ElementShape && e.Stroke != labels.PaintNone && e.StrokeWidth*dotsPerUnit < 1 {
+			d.Warnings = append(d.Warnings, fmt.Sprintf("elements[%d] (%s) has a stroke thinner than one dot at %d DPI: it is drawn one dot wide.", i, e.Shape, t.DPI))
+		}
 		if e.Rotation != 0 {
 			x, y, w, h := e.Bounds()
 			pe.Bounds = &PreviewBox{X: x, Y: y, Width: w, Height: h}

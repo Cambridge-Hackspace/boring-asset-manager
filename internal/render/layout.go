@@ -43,11 +43,13 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 			round((e.X+e.Width)*dotsPerUnit), round((e.Y+e.Height)*dotsPerUnit),
 		)
 		// A turned element's box may reach off the canvas before it is
-		// turned; what it draws is clipped as it is drawn.
-		if e.Rotation == 0 {
+		// turned, and a level or upright line's box has no height or no
+		// width; what they draw is clipped as it is drawn.
+		line := e.Type == labels.ElementShape && e.Shape == labels.ShapeLine
+		if e.Rotation == 0 && !line {
 			box = box.Intersect(canvas)
 		}
-		if box.Empty() {
+		if box.Empty() && !(line && (box.Dx() > 0 || box.Dy() > 0)) {
 			return nil, fail("box is smaller than one dot at %d DPI", t.DPI)
 		}
 		first := len(s.Items)
@@ -84,7 +86,7 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 				return nil, fail("%v", err)
 			}
 			if len(p) > 0 {
-				s.Items = append(s.Items, Item{Path: p})
+				s.Items = append(s.Items, Item{Path: p, Paint: paintOf(e.Fill)})
 			}
 
 		case labels.ElementStaticImage:
@@ -97,6 +99,9 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 			}
 			placed := fitImage(img, box)
 			s.Items = append(s.Items, Item{Image: &placed})
+
+		case labels.ElementShape:
+			s.placeShape(e, box)
 
 		default:
 			return nil, fail("unknown element type %q", e.Type)

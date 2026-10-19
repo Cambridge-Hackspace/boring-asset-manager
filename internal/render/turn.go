@@ -53,7 +53,7 @@ func (s *Scene) turn(items []Item, box image.Rectangle, degrees float64) {
 					Segment{Op: LineTo, Pts: [3]Point{at(Point{x1, y1})}},
 					Segment{Op: LineTo, Pts: [3]Point{at(Point{x0, y1})}})
 			}
-			*it = Item{Path: p}
+			*it = Item{Path: p, Paint: it.Paint}
 		default:
 			it.Path.transform(at)
 		}

@@ -30,24 +30,25 @@ func (s *Scene) Raster(mono bool) *image.Gray {
 			drawImage(img, *it.Image, mono)
 			i++
 		case it.Rects != nil:
-			fillRects(img, it.Rects)
+			fillRects(img, it.Rects, it.Paint)
 			i++
 		default:
-			// Paths next to each other are filled together, so where their
-			// edges meet, their coverage adds up as one shape's would.
+			// Paths next to each other in one paint are filled together, so
+			// where their edges meet, their coverage adds up as one shape's
+			// would.
 			j := i + 1
-			for j < len(s.Items) && s.Items[j].isPath() {
+			for j < len(s.Items) && s.Items[j].isPath() && s.Items[j].Paint == it.Paint {
 				j++
 			}
-			fillPaths(img, s.Items[i:j], mono)
+			fillPaths(img, s.Items[i:j], mono, it.Paint)
 			i = j
 		}
 	}
 	return img
 }
 
-// fillPaths fills the items' paths in black.
-func fillPaths(img *image.Gray, items []Item, mono bool) {
+// fillPaths fills the items' paths in paint.
+func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 	bounds := img.Bounds()
 	z := vector.NewRasterizer(bounds.Dx(), bounds.Dy())
 	for _, it := range items {
@@ -55,27 +56,37 @@ func fillPaths(img *image.Gray, items []Item, mono bool) {
 	}
 	coverage := image.NewAlpha(bounds)
 	z.Draw(coverage, bounds, image.Opaque, image.Point{})
+	ink := uint8(0)
+	if paint == White {
+		ink = 0xFF
+	}
 	for i, a := range coverage.Pix {
 		switch {
 		case a == 0:
 		case mono:
 			if a >= 0x80 {
-				img.Pix[i] = 0
+				img.Pix[i] = ink
 			}
+		case paint == White:
+			img.Pix[i] += uint8((0xFF - uint32(img.Pix[i])) * uint32(a) / 0xFF)
 		default:
 			img.Pix[i] = uint8(uint32(img.Pix[i]) * uint32(0xFF-a) / 0xFF)
 		}
 	}
 }
 
-// fillRects fills whole-dot rectangles in black.
-func fillRects(img *image.Gray, rects []Rect) {
+// fillRects fills whole-dot rectangles in paint.
+func fillRects(img *image.Gray, rects []Rect, paint Paint) {
+	v := uint8(0)
+	if paint == White {
+		v = 0xFF
+	}
 	for _, r := range rects {
 		rect := image.Rect(r.X, r.Y, r.X+r.W, r.Y+r.H).Intersect(img.Bounds())
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {
 			row := img.Pix[y*img.Stride:]
 			for x := rect.Min.X; x < rect.Max.X; x++ {
-				row[x] = 0
+				row[x] = v
 			}
 		}
 	}

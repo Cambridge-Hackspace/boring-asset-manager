@@ -137,6 +137,25 @@ var goldenTemplates = map[string]string{
 	"margins": `{"id":"margins","name":"Margins","units":"mm","width":50,"height":25,"dpi":300,"layering":"list","elements":[
 		{"type":"generator","generator_type":"qr","x":2,"y":2,"width":21,"height":21,"content_binding":"{{asset.code.qr}}","margin":{"top":0,"left":0},"align":"left","vertical_align":"top"},
 		{"type":"generator","generator_type":"code128","x":25,"y":2,"width":24,"height":21,"content_binding":"1234","margin":{"top":3,"bottom":3,"left":2,"right":2},"margin_unit":"length"}]}`,
+	// Each shape and paint: a square-cornered frame on whole dots, a
+	// rounded black block with a white ellipse knocked out of it, an
+	// ellipse's outline, white text reversed out of a black band, an arrow,
+	// a diagonal line, a hairline widened to a dot, a turned rounded frame
+	// and an open zigzag.
+	"shapes": `{"id":"shapes","name":"Shapes","units":"mm","width":80,"height":40,"dpi":300,"layering":"list","elements":[
+		{"type":"shape","shape":"rectangle","x":2,"y":2,"width":30,"height":12,"stroke_width":0.5},
+		{"type":"shape","shape":"rectangle","x":35,"y":2,"width":20,"height":12,"corner_radius":3,"stroke":"none","fill":"black"},
+		{"type":"shape","shape":"ellipse","x":40,"y":4,"width":10,"height":8,"stroke":"none","fill":"white"},
+		{"type":"shape","shape":"ellipse","x":58,"y":2,"width":20,"height":12,"stroke_width":0.8},
+		{"type":"shape","shape":"rectangle","x":2,"y":16,"width":50,"height":10,"stroke":"none","fill":"black"},
+		{"type":"text","x":4,"y":17,"width":46,"height":8,"font_size":16,"font_weight":"bold","align":"center","fill":"white","content_binding":"REVERSED"},
+		{"type":"shape","shape":"polygon","x":56,"y":16,"width":22,"height":10,"stroke":"none","fill":"black",
+		 "points":[[0,0.3],[0.6,0.3],[0.6,0],[1,0.5],[0.6,1],[0.6,0.7],[0,0.7]]},
+		{"type":"shape","shape":"line","x":2,"y":29,"width":20,"height":9,"stroke_width":0.4},
+		{"type":"shape","shape":"line","x":25,"y":31,"width":25,"height":0,"stroke_width":0.05},
+		{"type":"shape","shape":"rectangle","x":55,"y":28,"width":16,"height":7,"corner_radius":2,"stroke_width":0.5,"rotation":30},
+		{"type":"shape","shape":"polygon","x":25,"y":34,"width":25,"height":5,"closed":false,"stroke_width":0.4,
+		 "points":[[0,1],[0.25,0],[0.5,1],[0.75,0],[1,1]]}]}`,
 	// A QR Code at 45°, which phones still read.
 	"qr45": `{"id":"qr45","name":"QR 45","units":"mm","width":40,"height":40,"dpi":300,"layering":"list","elements":[
 		{"type":"generator","generator_type":"qr","x":7.5,"y":7.5,"width":25,"height":25,"rotation":45,"content_binding":"{{base_url}}/a/{{asset.id}}"}]}`,
@@ -152,6 +171,7 @@ var goldenPayloads = map[string][]string{
 	"turned":        {"BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "1234", "1234"},
 	"qr45":          {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
 	"margins":       {"BAM-QR-0042", "1234"},
+	"shapes":        {},
 }
 
 func renderAll(t *testing.T, s *Scene) map[string][]byte {
@@ -191,7 +211,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"image_inches", "layers", "margins", "micro_code128", "qr45", "qr_label", "turned"} {
+	for _, name := range []string{"image_inches", "layers", "margins", "micro_code128", "qr45", "qr_label", "shapes", "turned"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -657,5 +677,57 @@ func TestCodeMargins(t *testing.T) {
 		{"type":"generator","generator_type":"qr","x":0,"y":0,"width":10,"height":10,"content_binding":"HELLO","margin":{"left":20,"right":20}}]}`)
 	if _, err := Layout(tpl, labels.Data{}, nil); err == nil || !strings.Contains(err.Error(), "needs a box") {
 		t.Errorf("no room: %v", err)
+	}
+}
+
+// TestShapes draws square-cornered rectangles and level lines on whole
+// dots, a stroke inside its box at least one dot wide, and white over
+// black in every backend.
+func TestShapes(t *testing.T) {
+	tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[
+		{"type":"shape","shape":"rectangle","x":1,"y":1,"width":10,"height":10,"stroke_width":0.5,"fill":"black"},
+		{"type":"shape","shape":"rectangle","x":3,"y":3,"width":6,"height":6,"stroke":"none","fill":"white"},
+		{"type":"shape","shape":"line","x":15,"y":5,"width":20,"height":0,"stroke_width":0.01}]}`)
+	s, err := Layout(tpl, labels.Data{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The frame's fill and stroke, the white square, and the line: all whole dots.
+	if len(s.Items) != 4 || s.Items[0].Rects == nil || s.Items[1].Rects == nil || s.Items[2].Paint != White || s.Items[3].Rects == nil {
+		t.Fatalf("items: %+v", s.Items)
+	}
+	// The stroke, 6 dots wide, lies inside the 118-dot box from dot 12.
+	if top := s.Items[1].Rects[0]; top != (Rect{X: 12, Y: 12, W: 118, H: 6}) {
+		t.Errorf("the stroke's top: %+v", top)
+	}
+	// The hairline, a tenth of a dot, is drawn one dot high.
+	if line := s.Items[3].Rects[0]; line.H != 1 || line.W != 236 {
+		t.Errorf("the hairline: %+v", line)
+	}
+	for _, mono := range []bool{false, true} {
+		img := s.Raster(mono)
+		if img.GrayAt(70, 70).Y != 0xFF || img.GrayAt(25, 25).Y != 0 || img.GrayAt(13, 13).Y != 0 {
+			t.Errorf("mono %v: white over black at %d, black at %d", mono, img.GrayAt(70, 70).Y, img.GrayAt(25, 25).Y)
+		}
+	}
+	var svg, pdf bytes.Buffer
+	if err := WriteSVG(&svg, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePDF(&pdf, s); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(svg.String(), `fill="#fff" shape-rendering="crispEdges"`) || !strings.Contains(pdfContent(t, pdf.Bytes()), "1 g\n") {
+		t.Errorf("white in SVG and PDF: %s", svg.String())
+	}
+
+	// A turned rectangle's rectangles become a turned outline, still white.
+	tpl = mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[
+		{"type":"shape","shape":"rectangle","x":10,"y":5,"width":10,"height":5,"stroke":"none","fill":"white","rotation":30}]}`)
+	if s, err = Layout(tpl, labels.Data{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if it := s.Items[0]; it.Rects != nil || len(it.Path) != 4 || it.Paint != White {
+		t.Errorf("turned: %+v", it)
 	}
 }

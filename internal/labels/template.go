@@ -28,7 +28,26 @@ const (
 	ElementGenerator   = "generator"
 	ElementText        = "text"
 	ElementStaticImage = "static_image"
+	ElementShape       = "shape"
 )
+
+// Shapes, and the paints they are drawn in. Labels print black and white;
+// white paints over whatever is beneath it.
+const (
+	ShapeRectangle = "rectangle"
+	ShapeEllipse   = "ellipse"
+	ShapeLine      = "line"
+	ShapePolygon   = "polygon"
+	PaintBlack     = "black"
+	PaintWhite     = "white"
+	PaintNone      = "none"
+	// MaxPolygonPoints bounds a polygon.
+	MaxPolygonPoints = 256
+)
+
+// DefaultStrokeMM is a shape's stroke width when it gives none: four dots
+// at 406 DPI, three at 300 and two at 203.
+const DefaultStrokeMM = 0.25
 
 // Text styling values.
 const (
@@ -175,6 +194,22 @@ type Element struct {
 
 	// static_image
 	ImageID string `json:"image_id,omitempty"`
+
+	// shape, and Fill for text too: what it is, how it is drawn, and its
+	// paint. A rectangle may
+	// round its corners; a line runs from its box's top left to its bottom
+	// right, or from its bottom left to its top right when flipped; a
+	// polygon's points are fractions of its box across and down, closed
+	// unless Closed says otherwise. A rectangle's or ellipse's stroke lies
+	// inside its box; a line's or polygon's is centered on it.
+	Shape        string       `json:"shape,omitempty"`
+	CornerRadius float64      `json:"corner_radius,omitempty"`
+	Flip         bool         `json:"flip,omitempty"`
+	Points       [][2]float64 `json:"points,omitempty"`
+	Closed       *bool        `json:"closed,omitempty"`
+	Stroke       string       `json:"stroke,omitempty"`
+	StrokeWidth  float64      `json:"stroke_width,omitempty"`
+	Fill         string       `json:"fill,omitempty"`
 }
 
 // Parse decodes a template document, rejecting unknown properties, applies
@@ -240,15 +275,35 @@ func (t *Template) Normalize() {
 		t.Adapt.ContinuousLength = LengthProportional
 	}
 	for i := range t.Elements {
-		normalizeElement(&t.Elements[i])
+		normalizeElement(&t.Elements[i], t.Units)
 		if alt := t.Elements[i].Alternative; alt != nil {
-			normalizeElement(alt)
+			normalizeElement(alt, t.Units)
 		}
 	}
 }
 
-// normalizeElement fills in a text element's defaulted properties.
-func normalizeElement(e *Element) {
+// normalizeElement fills in a text element's or shape's defaulted
+// properties.
+func normalizeElement(e *Element, units string) {
+	if e.Type == ElementShape {
+		if e.Stroke == "" {
+			e.Stroke = PaintBlack
+		}
+		if e.Fill == "" {
+			e.Fill = PaintNone
+		}
+		if e.Stroke != PaintNone && e.StrokeWidth == 0 {
+			e.StrokeWidth = DefaultStrokeMM
+			if units == UnitsIn {
+				e.StrokeWidth = math.Round(DefaultStrokeMM/25.4*1000) / 1000
+			}
+		}
+		if e.Shape == ShapePolygon && e.Closed == nil {
+			closed := true
+			e.Closed = &closed
+		}
+		return
+	}
 	if e.Type != ElementText {
 		return
 	}
@@ -334,14 +389,16 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		v.add(at("rotation"), "must be at least 0 degrees and less than 360")
 		geometryOK, turned = false, false
 	}
+	// A line may be level or upright: its box no height, or no width.
+	line := e.Type == ElementShape && e.Shape == ShapeLine
 	for _, g := range []struct {
 		prop     string
 		value    float64
 		positive bool
-	}{{"x", e.X, false}, {"y", e.Y, false}, {"width", e.Width, true}, {"height", e.Height, true}} {
+	}{{"x", e.X, false}, {"y", e.Y, false}, {"width", e.Width, !line}, {"height", e.Height, !line}} {
 		// A turned element's box may start before the canvas, as long as
 		// the element, turned, lies on it.
-		ok := !math.IsNaN(g.value) && !math.IsInf(g.value, 0) && (turned && !g.positive || g.value >= 0) && (!g.positive || g.value > 0)
+		ok := !math.IsNaN(g.value) && !math.IsInf(g.value, 0) && (turned && !g.positive && g.prop[0] != 'w' && g.prop[0] != 'h' || g.value >= 0) && (!g.positive || g.value > 0)
 		if !ok {
 			geometryOK = false
 			switch {
@@ -353,6 +410,10 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 				v.add(at(g.prop), "must be zero or a positive number")
 			}
 		}
+	}
+	if line && geometryOK && e.Width == 0 && e.Height == 0 {
+		v.add(at("width"), "a line needs a length: a width, a height or both")
+		geometryOK = false
 	}
 	if geometryOK && canvasOK && !turned {
 		if e.X+e.Width > t.Width+geometryTolerance {
@@ -399,6 +460,16 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"margin_unit":      e.MarginUnit != "",
 		"vertical_align":   e.VerticalAlign != "",
 	}
+	shapeProps := map[string]bool{
+		"shape":         e.Shape != "",
+		"corner_radius": e.CornerRadius != 0,
+		"flip":          e.Flip,
+		"points":        e.Points != nil,
+		"closed":        e.Closed != nil,
+		"stroke":        e.Stroke != "",
+		"stroke_width":  e.StrokeWidth != 0,
+		"fill":          e.Fill != "",
+	}
 	textProps := map[string]bool{
 		"font_size":     e.FontSize != 0,
 		"font_weight":   e.FontWeight != "",
@@ -410,6 +481,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	switch e.Type {
 	case ElementGenerator:
 		unset(textProps)
+		unset(shapeProps)
 		unset(map[string]bool{"image_id": e.ImageID != ""})
 		g, err := generators.Lookup(e.GeneratorType)
 		if err != nil {
@@ -438,7 +510,14 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 
 	case ElementText:
 		unset(generatorProps)
+		// Text takes a fill: black, or white for text reversed out of black.
+		textFill := e.Fill
+		delete(shapeProps, "fill")
+		unset(shapeProps)
 		unset(map[string]bool{"image_id": e.ImageID != ""})
+		if textFill != "" && textFill != PaintBlack && textFill != PaintWhite {
+			v.add(at("fill"), `must be "black" or "white"`)
+		}
 		if !(e.FontSize > 0 && e.FontSize <= MaxFontSize) {
 			v.add(at("font_size"), fmt.Sprintf("must be greater than 0 and at most %g points", MaxFontSize))
 		} else if !(e.MinFontSize > 0 && e.MinFontSize <= e.FontSize) {
@@ -458,13 +537,82 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	case ElementStaticImage:
 		unset(generatorProps)
 		unset(textProps)
+		unset(shapeProps)
 		unset(map[string]bool{"content_binding": e.ContentBinding != "", "align": e.Align != ""})
 		if _, err := uuid.Parse(e.ImageID); err != nil {
 			v.add(at("image_id"), "must be the ID of an uploaded image")
 		}
 
+	case ElementShape:
+		unset(generatorProps)
+		unset(textProps)
+		unset(map[string]bool{"image_id": e.ImageID != "", "content_binding": e.ContentBinding != "", "align": e.Align != ""})
+		validateShape(v, path, e)
+
 	default:
-		v.add(at("type"), `must be "generator", "text" or "static_image"`)
+		v.add(at("type"), `must be "generator", "text", "static_image" or "shape"`)
+	}
+}
+
+// validateShape checks a shape's own properties: its kind and what applies
+// to it, and its paint, which must draw something.
+func validateShape(v *validator, path string, e *Element) {
+	at := func(prop string) string { return path + "." + prop }
+	paints := map[string]bool{PaintBlack: true, PaintWhite: true, PaintNone: true}
+	if !paints[e.Stroke] {
+		v.add(at("stroke"), `must be "black", "white" or "none"`)
+	}
+	if !paints[e.Fill] {
+		v.add(at("fill"), `must be "black", "white" or "none"`)
+	}
+	if e.Stroke == PaintNone && e.Fill == PaintNone {
+		v.add(at("stroke"), "draws nothing with fill none: give it a stroke or a fill")
+	}
+	if math.IsNaN(e.StrokeWidth) || math.IsInf(e.StrokeWidth, 0) || e.StrokeWidth < 0 {
+		v.add(at("stroke_width"), "must be zero or a positive number")
+	} else if e.Stroke != PaintNone && e.StrokeWidth == 0 {
+		v.add(at("stroke_width"), "must be positive for a stroke")
+	}
+
+	only := func(prop string, set bool, shape string) {
+		if set && e.Shape != shape {
+			v.add(at(prop), fmt.Sprintf("applies only to %ss", shape))
+		}
+	}
+	only("corner_radius", e.CornerRadius != 0, ShapeRectangle)
+	only("flip", e.Flip, ShapeLine)
+	only("points", e.Points != nil, ShapePolygon)
+	only("closed", e.Closed != nil, ShapePolygon)
+
+	switch e.Shape {
+	case ShapeRectangle:
+		if math.IsNaN(e.CornerRadius) || e.CornerRadius < 0 || e.CornerRadius > math.Min(e.Width, e.Height)/2+geometryTolerance {
+			v.add(at("corner_radius"), "must be from 0 to half the box's shorter side")
+		}
+	case ShapeEllipse:
+	case ShapeLine:
+		if e.Fill != PaintNone {
+			v.add(at("fill"), "does not apply: a line has no inside to fill")
+		}
+	case ShapePolygon:
+		least := 3
+		if e.Closed != nil && !*e.Closed {
+			least = 2
+		}
+		if len(e.Points) < least || len(e.Points) > MaxPolygonPoints {
+			v.add(at("points"), fmt.Sprintf("must be %d to %d points", least, MaxPolygonPoints))
+		}
+		for i, p := range e.Points {
+			if !(p[0] >= 0 && p[0] <= 1 && p[1] >= 0 && p[1] <= 1) {
+				v.add(fmt.Sprintf("%s[%d]", at("points"), i), "must be fractions of the box, each from 0 to 1")
+				break
+			}
+		}
+		if e.Closed != nil && !*e.Closed && e.Fill != PaintNone {
+			v.add(at("fill"), "does not apply: an open polygon has no inside to fill")
+		}
+	default:
+		v.add(at("shape"), `must be "rectangle", "ellipse", "line" or "polygon"`)
 	}
 }
 
