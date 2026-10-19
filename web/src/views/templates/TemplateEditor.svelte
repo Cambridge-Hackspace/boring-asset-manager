@@ -166,10 +166,14 @@
   }
 
   // The server renders the preview; ask again shortly after each change.
+  // A later change wins: an answer for an earlier one, arriving after it,
+  // is dropped rather than shown over the newer preview.
+  let previewRound = 0;
   $effect(() => {
     const body = { template: JSON.parse(JSON.stringify(doc)) as TemplateDoc, asset_id: previewAsset?.id };
     if (loading) return;
     if (!body.template.id) body.template.id = 'preview';
+    const mine = ++previewRound;
     previewStale = true;
     const timer = setTimeout(async () => {
       try {
@@ -180,16 +184,18 @@
             ? request<{ elements: { index: number; code?: CodeLayout }[] }>('POST', '/templates/preview', { ...body, format: 'json' })
             : Promise.resolve({ elements: [] }),
         ]);
+        if (mine !== previewRound) return;
         const url = URL.createObjectURL(blob);
         if (previewURL) URL.revokeObjectURL(previewURL);
         previewURL = url;
         previewProblems = [];
         codeLayouts = Object.fromEntries((described.elements ?? []).flatMap((d) => (d.code ? [[d.index, d.code]] : [])));
       } catch (err) {
+        if (mine !== previewRound) return;
         previewProblems =
           err instanceof ApiError && err.details.length ? err.details : [{ path: '', message: messageOf(err) }];
       } finally {
-        previewStale = false;
+        if (mine === previewRound) previewStale = false;
       }
     }, 250);
     return () => clearTimeout(timer);
