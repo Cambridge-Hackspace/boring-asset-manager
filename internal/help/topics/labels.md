@@ -4,6 +4,8 @@
 
 `{{scan_url}}` is the address of an asset's scan page: a QR code of it takes whoever scans the label there. See [Scanning](/help/scanning).
 
+Elements are drawn in order, each over those before it, so text can sit on an image. The **Layers** list beside the canvas shows them with the top one first. Drag a layer, or use **Bring forward**, **Send backward**, **Bring to front** and **Send to back**, to change what is drawn over what. On a layer or a selected element, Page Up and Page Down move it one step, and Home and End to the top and bottom. Where elements overlap, a click selects the top one, and Alt+click the one beneath it.
+
 ## Printing
 
 On an asset's page, or for several assets ticked on the list, choose a template to download labels as SVG, PNG or PDF, or send them to a printer set up on the **Printers** page. **Images** holds logos and pictures for templates.

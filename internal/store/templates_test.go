@@ -14,7 +14,7 @@ import (
 
 func sampleTemplate(id string) *labels.Template {
 	return &labels.Template{
-		ID: id, Name: "Shelf label", Units: labels.UnitsMM, Width: 62, Height: 29, DPI: 300,
+		ID: id, Name: "Shelf label", Units: labels.UnitsMM, Width: 62, Height: 29, DPI: 300, Layering: labels.LayeringList,
 		Elements: []labels.Element{
 			{Type: labels.ElementGenerator, GeneratorType: "qr", X: 2, Y: 2, Width: 25, Height: 25,
 				ContentBinding: "{{base_url}}/a/{{asset.id}}"},
@@ -226,5 +226,49 @@ func TestTemplatesWithChosenIDs(t *testing.T) {
 	}
 	if err := st.DeleteTemplate("shelf-tag"); err != nil {
 		t.Errorf("DeleteTemplate: %v", err)
+	}
+}
+
+// TestStoredTemplatesAreLayered runs migration 033 again on a template
+// stored before elements were drawn in list order: they are put in the
+// order they were drawn then, and running it once more changes nothing.
+func TestStoredTemplatesAreLayered(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	// Given without layering, a template is stored in the order it was drawn.
+	legacyTemplate := sampleTemplate("")
+	legacyTemplate.Layering = ""
+	created, err := st.CreateTemplate(legacyTemplate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Layering != labels.LayeringList || created.Elements[0].Type != labels.ElementText {
+		t.Fatalf("created: %+v", created)
+	}
+	const legacy = `{"elements":[{"type":"generator","x":1,"y":1,"width":5,"height":5,"generator_type":"qr"},` +
+		`{"type":"text","x":7,"y":1,"width":5,"height":5,"font_size":8,"content_binding":"A"},` +
+		`{"type":"static_image","x":13,"y":1,"width":5,"height":5,"image_id":"7c9e6679-7425-40de-944b-e07fc1f90ae7"},` +
+		`{"type":"text","x":19,"y":1,"width":5,"height":5,"font_size":8,"content_binding":"B"}],"sizing":"adaptive"}`
+	if _, err := st.Exec("UPDATE templates SET layout_json = ? WHERE id = ?", legacy, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := st.Exec("DELETE FROM schema_migrations WHERE version = 33"); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.Migrate(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := st.GetTemplate(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, e := range got.Elements {
+		order = append(order, e.Type+":"+e.ContentBinding)
+	}
+	if want := []string{"static_image:", "text:A", "text:B", "generator:"}; !reflect.DeepEqual(order, want) || got.Sizing != "adaptive" || got.Layering != labels.LayeringList {
+		t.Errorf("after migrating: %v, sizing %q, layering %q", order, got.Sizing, got.Layering)
 	}
 }

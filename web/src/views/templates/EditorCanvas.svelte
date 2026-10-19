@@ -1,12 +1,14 @@
 <script lang="ts">
   import {
     describeElement,
+    elementsAt,
     gridStep,
     handles,
     moveElements,
     resizeElement,
     type Handle,
     type PrintArea,
+    type Restack,
     type TemplateDoc,
     type TemplateElement,
   } from '../../lib/template';
@@ -15,6 +17,8 @@
   // each element. Changes are reported through onchange; onbegin marks the
   // start of one undoable gesture. With a printer chosen, what it does not
   // print is shaded, and elements reaching into it are outlined in amber.
+  // Outlines are stacked as the elements are drawn, so a click takes the top
+  // one; Alt+click takes the one beneath the selected one there.
 
   let {
     doc,
@@ -27,6 +31,7 @@
     onchange,
     onbegin,
     ondelete,
+    onrestack,
   }: {
     doc: TemplateDoc;
     selected: number[];
@@ -38,6 +43,7 @@
     onchange: (elements: TemplateElement[]) => void;
     onbegin: () => void;
     ondelete: () => void;
+    onrestack: (how: Restack) => void;
   } = $props();
 
   let surface: HTMLDivElement | undefined = $state();
@@ -76,14 +82,25 @@
   function pointerDownOnElement(event: PointerEvent, i: number) {
     if (event.button !== 0) return;
     event.preventDefault();
-    (event.currentTarget as HTMLElement).focus();
     let next = selected;
+    if (event.altKey && surface) {
+      // The next element down under the pointer, round to the top again.
+      const r = surface.getBoundingClientRect();
+      const stack = elementsAt(doc, ((event.clientX - r.left) / r.width) * doc.width, ((event.clientY - r.top) / r.height) * doc.height);
+      const from = selected.length === 1 && stack.includes(selected[0]!) ? selected[0]! : i;
+      i = stack[(stack.indexOf(from) + 1) % stack.length] ?? i;
+      next = [i];
+      onselect(next);
+      surface.querySelector<HTMLElement>(`[data-element="${i}"]`)?.focus();
+    } else {
+      (event.currentTarget as HTMLElement).focus();
+    }
     if (event.shiftKey) {
       next = selected.includes(i) ? selected.filter((s) => s !== i) : [...selected, i];
       onselect(next);
       return;
     }
-    if (!selected.includes(i)) {
+    if (!next.includes(i)) {
       next = [i];
       onselect(next);
     }
@@ -127,6 +144,8 @@
     if (event.target === event.currentTarget || (event.target as Element).tagName === 'IMG') onselect([]);
   }
 
+  const stackKeys: Record<string, Restack> = { PageUp: 'forward', PageDown: 'backward', Home: 'front', End: 'back' };
+
   function keydown(event: KeyboardEvent) {
     if (!selected.length) return;
     const step = gridStep(doc.units) * (event.shiftKey ? 10 : 1);
@@ -136,6 +155,9 @@
       event.preventDefault();
       onbegin();
       onchange(moveElements(doc, selected, $state.snapshot(doc.elements) as TemplateElement[], move[0], move[1], gridStep(doc.units)));
+    } else if (stackKeys[event.key]) {
+      event.preventDefault();
+      onrestack(stackKeys[event.key]!);
     } else if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
       ondelete();
@@ -186,6 +208,7 @@
         tabindex="0"
         aria-pressed={isSelected}
         aria-label={describeElement(e, i)}
+        data-element={i}
         class="absolute cursor-move outline-offset-0 {isSelected
           ? 'outline-2 outline-blue-600'
           : 'outline-1 outline-dashed outline-zinc-400 hover:outline-blue-400'} {problemElements.has(i)
@@ -227,8 +250,9 @@
     Drag to move, and drag a corner to resize; or set an element's position and size exactly in its settings.
   </p>
   <p class="text-xs text-zinc-600 pointer-coarse:hidden dark:text-zinc-400">
-    Drag to move, drag a corner to resize, Shift+click to select several. With an element focused: arrow keys move it by {gridStep(doc.units)}
-    {doc.units} (Shift for ten times that), Delete removes it, Escape deselects. Hold Alt while dragging to leave the grid.
+    Drag to move, drag a corner to resize, Shift+click to select several, Alt+click to select what is beneath. With an element focused: arrow keys
+    move it by {gridStep(doc.units)} {doc.units} (Shift for ten times that), Page Up and Page Down bring it forward and send it backward, Home and End
+    to the front and back, Delete removes it, Escape deselects. Hold Alt while dragging to leave the grid.
   </p>
 </div>
 

@@ -48,7 +48,7 @@ func doJSON(t *testing.T, srv *Server, cookie *http.Cookie, method, path, body s
 }
 
 const shelfTemplate = `{
-  "id": "shelf", "name": "Shelf", "units": "mm", "width": 62, "height": 29, "dpi": 300,
+  "id": "shelf", "name": "Shelf", "units": "mm", "width": 62, "height": 29, "dpi": 300, "layering": "list",
   "elements": [
     {"type": "generator", "generator_type": "micro_qr", "x": 2, "y": 2, "width": 25, "height": 25},
     {"type": "text", "x": 29, "y": 2, "width": 31, "height": 8, "font_size": 12,

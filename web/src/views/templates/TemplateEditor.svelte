@@ -7,11 +7,14 @@
   import { navigate } from '../../lib/router.svelte';
   import {
     blankTemplate,
-    describeElement,
     elementIndex,
+    inListOrder,
+    moveLayer,
     newElement,
     placeholders,
+    restack,
     type ElementType,
+    type Restack,
     type PrintArea,
     type TemplateDoc,
     type TemplateElement,
@@ -22,6 +25,8 @@
   import EditorCanvas from './EditorCanvas.svelte';
   import ElementPanel from './ElementPanel.svelte';
   import AdaptivePreview from './AdaptivePreview.svelte';
+  import LayersPanel from './LayersPanel.svelte';
+  import StackButtons from './StackButtons.svelte';
 
   // /templates/new and /templates/:id/edit
   let { params }: { params: Record<string, string> } = $props();
@@ -75,11 +80,12 @@
       ]);
       if (!isNew) {
         const t = (await request<{ template: TemplateDoc }>('GET', `/templates/${encodeURIComponent(routeId)}`)).template;
-        doc = {
+        doc = inListOrder({
           id: t.id, name: t.name, units: t.units, width: t.width, height: t.height, dpi: t.dpi,
           ...(t.sizing === 'adaptive' ? { sizing: t.sizing, adapt: t.adapt } : {}),
+          ...(t.layering ? { layering: t.layering } : {}),
           elements: t.elements ?? [],
-        };
+        });
       }
       saved = JSON.stringify(doc);
       draft = readDraft();
@@ -125,7 +131,8 @@
   function restoreDraft() {
     if (!draft) return;
     history.record($state.snapshot(doc));
-    doc = draft.doc;
+    // Kept before layering, it is listed as it was drawn.
+    doc = inListOrder(draft.doc);
     draft = null;
     syncHistory();
   }
@@ -205,16 +212,21 @@
     selected = [];
   }
 
-  function reorder(delta: number) {
-    const [i] = selected;
-    if (i === undefined) return;
-    const j = i + delta;
-    if (j < 0 || j >= doc.elements.length) return;
+  /** Moves the selected elements over or under the others. */
+  function restackSelected(how: Restack) {
+    if (!selected.length) return;
+    const next = restack($state.snapshot(doc.elements) as TemplateElement[], selected, how);
+    if (JSON.stringify(next.elements) === JSON.stringify(doc.elements)) return;
     begin();
-    const els = [...doc.elements];
-    [els[i], els[j]] = [els[j]!, els[i]!];
-    doc.elements = els;
-    selected = [j];
+    doc.elements = next.elements;
+    selected = next.selected;
+  }
+
+  function moveSelectedLayer(from: number, to: number) {
+    begin();
+    const next = moveLayer($state.snapshot(doc.elements) as TemplateElement[], selected, from, to);
+    doc.elements = next.elements;
+    selected = next.selected;
   }
 
   function keydown(event: KeyboardEvent) {
@@ -321,6 +333,7 @@
         onchange={(els) => (doc.elements = els)}
         onbegin={begin}
         ondelete={removeSelected}
+        onrestack={restackSelected}
       />
 
       {#if generalProblems.length || (previewProblems.length && !problemElements.size && !Object.keys(canvasProblems).length)}
@@ -330,15 +343,14 @@
       {/if}
 
       {#if doc.elements.length}
-        <ul class="text-sm" aria-label="Elements">
-          {#each doc.elements as e, i (i)}
-            <li>
-              <button type="button" class="hover:underline {selected.includes(i) ? 'font-semibold' : ''} {problemElements.has(i) ? 'text-red-700 dark:text-red-400' : ''}" onclick={() => (selected = [i])}>
-                {describeElement(e, i)}
-              </button>
-            </li>
-          {/each}
-        </ul>
+        <LayersPanel
+          elements={doc.elements}
+          {selected}
+          {problemElements}
+          onselect={(s) => (selected = s)}
+          onrestack={restackSelected}
+          onmove={moveSelectedLayer}
+        />
       {/if}
     </div>
 
@@ -355,12 +367,13 @@
             doc.elements[selected[0]!] = e;
           }}
           onremove={removeSelected}
-          onorder={reorder}
+          onrestack={restackSelected}
         />
       {:else if selected.length > 1}
-        <section class="card">
+        <section class="card space-y-2">
           <p class="text-sm">{selected.length} elements selected. Drag or use the arrow keys to move them together.</p>
-          <button type="button" class="btn-secondary mt-2 text-red-700 dark:text-red-400" onclick={removeSelected}>Remove them</button>
+          <StackButtons elements={doc.elements} {selected} onrestack={restackSelected} />
+          <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={removeSelected}>Remove them</button>
         </section>
       {/if}
 

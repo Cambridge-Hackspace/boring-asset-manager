@@ -171,7 +171,7 @@ describe('TemplateEditor', () => {
     expect((screen.getByLabelText('Narrowest (mm)') as HTMLInputElement).value).toBe('45');
     await fireEvent.change(screen.getByLabelText('Narrowest (mm)'), { target: { value: '25' } });
 
-    await fireEvent.click(within(screen.getByRole('list', { name: 'Elements' })).getByRole('button', { name: /^Text 1/ }));
+    await fireEvent.click(within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: 'Text: {{asset.name}}' }));
     await fireEvent.change(screen.getByLabelText('Across'), { target: { value: 'both' } });
     await fireEvent.change(screen.getByLabelText('Where it does not fit'), { target: { value: 'alternative' } });
     await fireEvent.change(screen.getByLabelText('In its place'), { target: { value: 'generator' } });
@@ -250,6 +250,40 @@ describe('TemplateEditor', () => {
 
     render(TemplateEditor, { params: { id: 'ql90' } });
     await fireEvent.click(await screen.findByRole('button', { name: 'Restore them' }));
-    expect(within(screen.getByRole('list', { name: 'Elements' })).getAllByRole('button')).toHaveLength(2);
+    expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button')).toHaveLength(2);
+  });
+
+  it('lists layers top first, and moves them over and under each other', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add barcode' }));
+    const layers = () => within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').map((b) => b.textContent?.trim());
+    expect(layers()).toEqual(['QR code: {{scan_url}}', 'Text: {{asset.name}}']);
+    expect((screen.getByRole('button', { name: 'Bring to front' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Send to back' }));
+    expect(layers()).toEqual(['Text: {{asset.name}}', 'QR code: {{scan_url}}']);
+    // Page Up on a layer brings it forward.
+    await fireEvent.keyDown(within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: 'QR code: {{scan_url}}' }), { key: 'PageUp' });
+    expect(layers()).toEqual(['QR code: {{scan_url}}', 'Text: {{asset.name}}']);
+    await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(layers()).toEqual(['Text: {{asset.name}}', 'QR code: {{scan_url}}']);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    expect(body.layering).toBe('list');
+    expect(body.elements.map((e) => e.type)).toEqual(['generator', 'text']);
+  });
+
+  it('lists a template from before layering as it was drawn', async () => {
+    api({
+      'GET /templates/old': () => ({
+        template: { ...template, id: 'old', elements: [{ type: 'generator', generator_type: 'qr', x: 1, y: 1, width: 9, height: 9 }, ...template.elements] },
+      }),
+    });
+    render(TemplateEditor, { params: { id: 'old' } });
+    await screen.findByDisplayValue('QL 90x29');
+    expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['QR code', 'Text: {{asset.name}}']);
   });
 });

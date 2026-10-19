@@ -79,47 +79,34 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 	fmt.Fprintf(&content, "%s 0 0 %s 0 %s cm\n0 g\n", num(scale), num(-scale), num(float64(s.Height)*scale))
 
 	var xobjects []string
-	for i, pi := range s.Images {
-		id, err := pw.writeImage(pi.Image)
-		if err != nil {
-			return 0, err
-		}
-		name := fmt.Sprintf("Im%d", i)
-		xobjects = append(xobjects, fmt.Sprintf("/%s %d 0 R", name, id))
-		// The image's unit square has its first row at the top (v = 1).
-		fmt.Fprintf(&content, "q %d 0 0 %d %d %d cm /%s Do Q\n", pi.W, -pi.H, pi.X, pi.Y+pi.H, name)
-	}
-
-	for _, p := range s.Paths {
-		var cur Point
-		for _, seg := range p {
-			a, b, c := seg.Pts[0], seg.Pts[1], seg.Pts[2]
-			switch seg.Op {
-			case MoveTo:
-				fmt.Fprintf(&content, "%s %s m\n", num(a.X), num(a.Y))
-				cur = a
-			case LineTo:
-				fmt.Fprintf(&content, "%s %s l\n", num(a.X), num(a.Y))
-				cur = a
-			case QuadTo:
-				// PDF has only cubic curves; raise the quadratic's degree.
-				c1 := Point{cur.X + 2.0/3*(a.X-cur.X), cur.Y + 2.0/3*(a.Y-cur.Y)}
-				c2 := Point{b.X + 2.0/3*(a.X-b.X), b.Y + 2.0/3*(a.Y-b.Y)}
-				fmt.Fprintf(&content, "%s %s %s %s %s %s c\n", num(c1.X), num(c1.Y), num(c2.X), num(c2.Y), num(b.X), num(b.Y))
-				cur = b
-			case CubeTo:
-				fmt.Fprintf(&content, "%s %s %s %s %s %s c\n", num(a.X), num(a.Y), num(b.X), num(b.Y), num(c.X), num(c.Y))
-				cur = c
+	for i := 0; i < len(s.Items); i++ {
+		it := &s.Items[i]
+		switch {
+		case it.Image != nil:
+			pi := it.Image
+			// Over nothing but the white label, an image is composited over
+			// white; over what is drawn before it, its transparency is kept.
+			id, err := pw.writeImage(pi.Image, i > 0)
+			if err != nil {
+				return 0, err
 			}
+			name := fmt.Sprintf("Im%d", len(xobjects))
+			xobjects = append(xobjects, fmt.Sprintf("/%s %d 0 R", name, id))
+			// The image's unit square has its first row at the top (v = 1).
+			fmt.Fprintf(&content, "q %d 0 0 %d %d %d cm /%s Do Q\n", pi.W, -pi.H, pi.X, pi.Y+pi.H, name)
+		case it.Rects != nil:
+			// The modules of codes drawn one after another are filled at once.
+			for ; i < len(s.Items) && s.Items[i].Rects != nil; i++ {
+				for _, r := range s.Items[i].Rects {
+					fmt.Fprintf(&content, "%d %d %d %d re\n", r.X, r.Y, r.W, r.H)
+				}
+			}
+			i--
+			content.WriteString("f\n")
+		default:
+			pdfPath(&content, it.Path)
+			content.WriteString("f\n")
 		}
-		content.WriteString("f\n")
-	}
-
-	if len(s.Rects) > 0 {
-		for _, r := range s.Rects {
-			fmt.Fprintf(&content, "%d %d %d %d re\n", r.X, r.Y, r.W, r.H)
-		}
-		content.WriteString("f\n")
 	}
 
 	contentID := pw.writeStream("", deflate(content.Bytes()))
@@ -133,9 +120,50 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 	return pageID, nil
 }
 
-// writeImage embeds img as 8-bit RGB, composited over white.
-func (pw *pdfWriter) writeImage(img image.Image) (int, error) {
+// pdfPath writes a path's construction operators, without painting it.
+func pdfPath(content *bytes.Buffer, p Path) {
+	var cur Point
+	for _, seg := range p {
+		a, b, c := seg.Pts[0], seg.Pts[1], seg.Pts[2]
+		switch seg.Op {
+		case MoveTo:
+			fmt.Fprintf(content, "%s %s m\n", num(a.X), num(a.Y))
+			cur = a
+		case LineTo:
+			fmt.Fprintf(content, "%s %s l\n", num(a.X), num(a.Y))
+			cur = a
+		case QuadTo:
+			// PDF has only cubic curves; raise the quadratic's degree.
+			c1 := Point{cur.X + 2.0/3*(a.X-cur.X), cur.Y + 2.0/3*(a.Y-cur.Y)}
+			c2 := Point{b.X + 2.0/3*(a.X-b.X), b.Y + 2.0/3*(a.Y-b.Y)}
+			fmt.Fprintf(content, "%s %s %s %s %s %s c\n", num(c1.X), num(c1.Y), num(c2.X), num(c2.Y), num(b.X), num(b.Y))
+			cur = b
+		case CubeTo:
+			fmt.Fprintf(content, "%s %s %s %s %s %s c\n", num(a.X), num(a.Y), num(b.X), num(b.Y), num(c.X), num(c.Y))
+			cur = c
+		}
+	}
+}
+
+// writeImage embeds img as 8-bit RGB. Composited over white, it is opaque;
+// otherwise, when it has any transparency, its alpha is a soft mask, so
+// what is drawn before it shows through.
+func (pw *pdfWriter) writeImage(img image.Image, keepAlpha bool) (int, error) {
 	b := img.Bounds()
+	if keepAlpha && !opaque(img) {
+		nrgba := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+		draw.Draw(nrgba, nrgba.Bounds(), img, b.Min, draw.Src)
+		raw := make([]byte, 0, b.Dx()*b.Dy()*3)
+		alpha := make([]byte, 0, b.Dx()*b.Dy())
+		for i := 0; i < len(nrgba.Pix); i += 4 {
+			raw = append(raw, nrgba.Pix[i], nrgba.Pix[i+1], nrgba.Pix[i+2])
+			alpha = append(alpha, nrgba.Pix[i+3])
+		}
+		mask := pw.writeStream(fmt.Sprintf("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceGray /BitsPerComponent 8", b.Dx(), b.Dy()), deflate(alpha))
+		dict := fmt.Sprintf("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask %d 0 R", b.Dx(), b.Dy(), mask)
+		return pw.writeStream(dict, deflate(raw)), nil
+	}
+
 	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(rgba, rgba.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
 	draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Over)
@@ -146,6 +174,22 @@ func (pw *pdfWriter) writeImage(img image.Image) (int, error) {
 	}
 	dict := fmt.Sprintf("/Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8", b.Dx(), b.Dy())
 	return pw.writeStream(dict, deflate(raw)), nil
+}
+
+// opaque reports whether every pixel of img is fully opaque.
+func opaque(img image.Image) bool {
+	if o, ok := img.(interface{ Opaque() bool }); ok {
+		return o.Opaque()
+	}
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if _, _, _, a := img.At(x, y).RGBA(); a != 0xFFFF {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func deflate(data []byte) []byte {

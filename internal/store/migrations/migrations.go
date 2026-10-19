@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -81,6 +82,87 @@ type codeMigration struct {
 var codeMigrations = []codeMigration{
 	{8, "mariadb_text", convertMariaDBText},
 	{29, "printer_media_width", widenPrinterMedia},
+	{33, "template_layering", layerTemplates},
+}
+
+// layerTemplates puts each template's elements in the order they were drawn
+// before elements were drawn in list order: images, then text, then codes,
+// each type keeping its own order. Run again, it changes nothing.
+func layerTemplates(db *sql.DB, dialect, _ string) error {
+	rows, err := db.Query("SELECT id, layout_json FROM templates")
+	if err != nil {
+		return fmt.Errorf("reading templates: %w", err)
+	}
+	updated := map[string]string{}
+	for rows.Next() {
+		var id, layout string
+		if err := rows.Scan(&id, &layout); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("reading templates: %w", err)
+		}
+		if next, changed, err := layeredLayout(layout); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("template %s: %w", id, err)
+		} else if changed {
+			updated[id] = next
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for id, layout := range updated {
+		if _, err := db.Exec(rebind("UPDATE templates SET layout_json = ? WHERE id = ?", dialect), layout, id); err != nil {
+			return fmt.Errorf("updating template %s: %w", id, err)
+		}
+	}
+	return nil
+}
+
+// layeredLayout is a stored layout with its elements in drawing order, and
+// whether that moved any.
+func layeredLayout(layout string) (string, bool, error) {
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(layout), &doc); err != nil {
+		return "", false, err
+	}
+	var elements []json.RawMessage
+	if raw, ok := doc["elements"]; ok && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &elements); err != nil {
+			return "", false, err
+		}
+	}
+	rank := make([]int, len(elements))
+	for i, raw := range elements {
+		var e struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(raw, &e); err != nil {
+			return "", false, err
+		}
+		rank[i] = map[string]int{"static_image": 0, "text": 1, "generator": 2}[e.Type]
+	}
+	order := make([]int, len(elements))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return rank[order[a]] < rank[order[b]] })
+	if sort.IntsAreSorted(order) {
+		return layout, false, nil
+	}
+	sorted := make([]json.RawMessage, len(elements))
+	for i, j := range order {
+		sorted[i] = elements[j]
+	}
+	raw, err := json.Marshal(sorted)
+	if err != nil {
+		return "", false, err
+	}
+	doc["elements"] = raw
+	next, err := json.Marshal(doc)
+	return string(next), true, err
 }
 
 // widenPrinterMedia makes printers.media wide enough for a custom label

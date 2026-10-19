@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -40,6 +41,12 @@ const (
 	AlignRight   = "right"
 )
 
+// LayeringList is the only layering: elements are drawn in the order they
+// are listed, each over those before it. Documents without it were written
+// when images were always drawn first, then text, then codes, and are drawn
+// so until they are saved, when they are put in that order.
+const LayeringList = "list"
+
 // Limits that keep rendering bounded.
 const (
 	MinDPI            = 150
@@ -67,8 +74,12 @@ type Template struct {
 	DPI    int     `json:"dpi"`
 	// Sizing is "" (or "fixed") for a fixed template, or "adaptive" for one
 	// laid out again for each label it prints on, within Adapt.
-	Sizing    string    `json:"sizing,omitempty"`
-	Adapt     *Adapt    `json:"adapt,omitempty"`
+	Sizing string `json:"sizing,omitempty"`
+	Adapt  *Adapt `json:"adapt,omitempty"`
+	// Layering is LayeringList, or empty in a document written before it;
+	// see DrawingOrder.
+	Layering string `json:"layering,omitempty"`
+	// Elements are drawn in this order: the first at the back.
 	Elements  []Element `json:"elements"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -139,6 +150,37 @@ func Parse(data []byte) (*Template, error) {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// layer is where an element of each type was drawn before templates were
+// drawn in list order.
+var layer = map[string]int{ElementStaticImage: 0, ElementText: 1, ElementGenerator: 2}
+
+// DrawingOrder is the order the elements are drawn in, by index: as listed,
+// or, in a document written before layering, images, then text, then codes,
+// each type in its own order.
+func (t *Template) DrawingOrder() []int {
+	order := make([]int, len(t.Elements))
+	for i := range order {
+		order[i] = i
+	}
+	if t.Layering != LayeringList {
+		sort.SliceStable(order, func(a, b int) bool {
+			return layer[t.Elements[order[a]].Type] < layer[t.Elements[order[b]].Type]
+		})
+	}
+	return order
+}
+
+// ListOrder lists the elements in the order they are drawn, so that a
+// document written before layering is drawn the same in list order.
+func (t *Template) ListOrder() {
+	order := t.DrawingOrder()
+	listed := make([]Element, len(order))
+	for k, i := range order {
+		listed[k] = t.Elements[i]
+	}
+	t.Elements, t.Layering = listed, LayeringList
 }
 
 // Normalize fills in defaulted text properties so stored templates are
@@ -226,6 +268,9 @@ func (t *Template) Validate() error {
 	}
 
 	t.validateSizing(&v, canvasOK && unitsOK)
+	if t.Layering != "" && t.Layering != LayeringList {
+		v.add("layering", `must be "list"`)
+	}
 
 	if len(t.Elements) > MaxElements {
 		v.add("elements", fmt.Sprintf("at most %d elements are allowed", MaxElements))

@@ -8,6 +8,14 @@
   "payloads": []
  },
  {
+  "file": "layers.png",
+  "payloads": []
+ },
+ {
+  "file": "layers.mono.png",
+  "payloads": []
+ },
+ {
   "file": "micro_code128.png",
   "payloads": [
    "BAM-0042",

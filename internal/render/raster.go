@@ -10,10 +10,10 @@ import (
 	"golang.org/x/image/vector"
 )
 
-// Raster draws the scene at its DPI on a white background. In mono mode every
-// pixel is pure black or white, ready for a thermal print head: text is
-// thresholded at 50% coverage and images are dithered. Barcode modules are
-// whole dots in both modes, so they are never anti-aliased.
+// Raster draws the scene at its DPI on a white background, item by item. In
+// mono mode every pixel is pure black or white, ready for a thermal print
+// head: text is thresholded at 50% coverage and images are dithered. Barcode
+// modules are whole dots in both modes, so they are never anti-aliased.
 func (s *Scene) Raster(mono bool) *image.Gray {
 	bounds := image.Rect(0, 0, s.Width, s.Height)
 	img := image.NewGray(bounds)
@@ -21,32 +21,55 @@ func (s *Scene) Raster(mono bool) *image.Gray {
 		img.Pix[i] = 0xFF
 	}
 
-	for _, pi := range s.Images {
-		drawImage(img, pi, mono)
-	}
-
-	if len(s.Paths) > 0 {
-		z := vector.NewRasterizer(s.Width, s.Height)
-		for _, p := range s.Paths {
-			tracePath(z, p)
-		}
-		coverage := image.NewAlpha(bounds)
-		z.Draw(coverage, bounds, image.Opaque, image.Point{})
-		for i, a := range coverage.Pix {
-			switch {
-			case a == 0:
-			case mono:
-				if a >= 0x80 {
-					img.Pix[i] = 0
-				}
-			default:
-				img.Pix[i] = uint8(uint32(img.Pix[i]) * uint32(0xFF-a) / 0xFF)
+	for i := 0; i < len(s.Items); {
+		it := &s.Items[i]
+		switch {
+		case it.Image != nil:
+			drawImage(img, *it.Image, mono)
+			i++
+		case it.Rects != nil:
+			fillRects(img, it.Rects)
+			i++
+		default:
+			// Paths next to each other are filled together, so where their
+			// edges meet, their coverage adds up as one shape's would.
+			j := i + 1
+			for j < len(s.Items) && s.Items[j].isPath() {
+				j++
 			}
+			fillPaths(img, s.Items[i:j], mono)
+			i = j
 		}
 	}
+	return img
+}
 
-	for _, r := range s.Rects {
-		rect := image.Rect(r.X, r.Y, r.X+r.W, r.Y+r.H).Intersect(bounds)
+// fillPaths fills the items' paths in black.
+func fillPaths(img *image.Gray, items []Item, mono bool) {
+	bounds := img.Bounds()
+	z := vector.NewRasterizer(bounds.Dx(), bounds.Dy())
+	for _, it := range items {
+		tracePath(z, it.Path)
+	}
+	coverage := image.NewAlpha(bounds)
+	z.Draw(coverage, bounds, image.Opaque, image.Point{})
+	for i, a := range coverage.Pix {
+		switch {
+		case a == 0:
+		case mono:
+			if a >= 0x80 {
+				img.Pix[i] = 0
+			}
+		default:
+			img.Pix[i] = uint8(uint32(img.Pix[i]) * uint32(0xFF-a) / 0xFF)
+		}
+	}
+}
+
+// fillRects fills whole-dot rectangles in black.
+func fillRects(img *image.Gray, rects []Rect) {
+	for _, r := range rects {
+		rect := image.Rect(r.X, r.Y, r.X+r.W, r.Y+r.H).Intersect(img.Bounds())
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {
 			row := img.Pix[y*img.Stride:]
 			for x := rect.Min.X; x < rect.Max.X; x++ {
@@ -54,7 +77,6 @@ func (s *Scene) Raster(mono bool) *image.Gray {
 			}
 		}
 	}
-	return img
 }
 
 func tracePath(z *vector.Rasterizer, p Path) {
@@ -81,13 +103,21 @@ func tracePath(z *vector.Rasterizer, p Path) {
 	}
 }
 
-// drawImage scales pi onto dst, compositing transparency over white. In mono
-// mode the result is Floyd–Steinberg dithered.
+// drawImage scales pi onto dst over what is already drawn, which shows
+// through where the image is transparent. In mono mode the image's box is
+// then Floyd–Steinberg dithered; what is already drawn there is pure black
+// and white, which dithering leaves as it is.
 func drawImage(dst *image.Gray, pi PlacedImage, mono bool) {
 	rect := image.Rect(pi.X, pi.Y, pi.X+pi.W, pi.Y+pi.H)
 	scaled := image.NewGray(image.Rect(0, 0, pi.W, pi.H))
-	for i := range scaled.Pix {
-		scaled.Pix[i] = 0xFF
+	for y := 0; y < pi.H; y++ {
+		for x := 0; x < pi.W; x++ {
+			v := uint8(0xFF)
+			if p := (image.Point{X: x + pi.X, Y: y + pi.Y}); p.In(dst.Bounds()) {
+				v = dst.GrayAt(p.X, p.Y).Y
+			}
+			scaled.Pix[y*scaled.Stride+x] = v
+		}
 	}
 	draw.CatmullRom.Scale(scaled, scaled.Bounds(), pi.Image, pi.Image.Bounds(), draw.Over, nil)
 
@@ -97,11 +127,7 @@ func drawImage(dst *image.Gray, pi PlacedImage, mono bool) {
 	clip := rect.Intersect(dst.Bounds())
 	for y := clip.Min.Y; y < clip.Max.Y; y++ {
 		for x := clip.Min.X; x < clip.Max.X; x++ {
-			v := scaled.GrayAt(x-pi.X, y-pi.Y).Y
-			// Darken only, so overlapping images never lighten what is below.
-			if v < dst.GrayAt(x, y).Y {
-				dst.SetGray(x, y, color.Gray{Y: v})
-			}
+			dst.SetGray(x, y, scaled.GrayAt(x-pi.X, y-pi.Y))
 		}
 	}
 }

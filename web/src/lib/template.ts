@@ -58,6 +58,12 @@ export interface TemplateDoc {
   /** Absent for a fixed template. */
   sizing?: 'adaptive';
   adapt?: Adapt;
+  /**
+   * Elements are drawn in the order they are listed, the first at the back.
+   * Absent in documents written before that, which drew images, then text,
+   * then codes.
+   */
+  layering?: 'list';
   elements: TemplateElement[];
 }
 
@@ -291,7 +297,86 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
 
 /** A starting template. */
 export function blankTemplate(): TemplateDoc {
-  return { id: '', name: '', units: 'mm', width: 62, height: 29, dpi: 300, elements: [] };
+  return { id: '', name: '', units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list', elements: [] };
+}
+
+const layerOfType: Record<ElementType, number> = { static_image: 0, text: 1, generator: 2 };
+
+/**
+ * A template in list order: one written before layering has its elements
+ * listed as they were drawn then, images, then text, then codes, so it
+ * looks the same.
+ */
+export function inListOrder(doc: TemplateDoc): TemplateDoc {
+  if (doc.layering === 'list') return doc;
+  const elements = doc.elements.map((e, i) => ({ e, i }));
+  elements.sort((a, b) => layerOfType[a.e.type] - layerOfType[b.e.type] || a.i - b.i);
+  return { ...doc, layering: 'list', elements: elements.map((x) => x.e) };
+}
+
+/** How the selected elements move in the drawing order. */
+export type Restack = 'front' | 'forward' | 'backward' | 'back';
+
+/**
+ * Moves the selected elements in the drawing order, where later elements
+ * are drawn over earlier ones: one step forward or backward past the next
+ * element not selected, or all the way to the front or back, keeping their
+ * own order. Returns the elements and where the selected ones are now.
+ */
+export function restack(elements: TemplateElement[], selected: number[], how: Restack): { elements: TemplateElement[]; selected: number[] } {
+  const items = elements.map((e, i) => ({ e, picked: selected.includes(i) }));
+  switch (how) {
+    case 'front':
+      items.sort((a, b) => Number(a.picked) - Number(b.picked));
+      break;
+    case 'back':
+      items.sort((a, b) => Number(b.picked) - Number(a.picked));
+      break;
+    case 'forward':
+      for (let k = items.length - 2; k >= 0; k--) {
+        if (items[k]!.picked && !items[k + 1]!.picked) [items[k], items[k + 1]] = [items[k + 1]!, items[k]!];
+      }
+      break;
+    case 'backward':
+      for (let k = 1; k < items.length; k++) {
+        if (items[k]!.picked && !items[k - 1]!.picked) [items[k], items[k - 1]] = [items[k - 1]!, items[k]!];
+      }
+      break;
+  }
+  return { elements: items.map((x) => x.e), selected: items.flatMap((x, k) => (x.picked ? [k] : [])) };
+}
+
+/** Moves one element to another place in the drawing order; the selection follows the elements. */
+export function moveLayer(elements: TemplateElement[], selected: number[], from: number, to: number): { elements: TemplateElement[]; selected: number[] } {
+  const items = elements.map((e, i) => ({ e, picked: selected.includes(i) }));
+  const [moved] = items.splice(from, 1);
+  items.splice(Math.min(Math.max(to, 0), items.length), 0, moved!);
+  return { elements: items.map((x) => x.e), selected: items.flatMap((x, k) => (x.picked ? [k] : [])) };
+}
+
+/** The elements whose boxes take in a point, in the template's units, the top one first. */
+export function elementsAt(doc: TemplateDoc, x: number, y: number): number[] {
+  const hits: number[] = [];
+  doc.elements.forEach((e, i) => {
+    if (x >= e.x && x <= e.x + e.width && y >= e.y && y <= e.y + e.height) hits.unshift(i);
+  });
+  return hits;
+}
+
+const codeNames: Record<string, string> = { qr: 'QR code', micro_qr: 'Micro QR code', code128: 'Code 128' };
+
+/** An element's name in the layers list: what it is and what it shows. */
+export function layerName(e: TemplateElement): string {
+  switch (e.type) {
+    case 'generator': {
+      const kind = codeNames[e.generator_type ?? ''] ?? `${e.generator_type} code`;
+      return e.content_binding ? `${kind}: ${e.content_binding}` : kind;
+    }
+    case 'static_image':
+      return 'Image';
+    default:
+      return `Text: ${e.content_binding || 'empty'}`;
+  }
 }
 
 /** An adaptive copy of a fixed template, taking half to twice its size. */

@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
@@ -50,7 +51,7 @@ type templateRef struct {
 // spec is the template a reference names, as JSON.
 func (e *env) spec(ctx context.Context, in templateRef) (map[string]any, error) {
 	if in.Template != nil {
-		return in.Template, nil
+		return inListOrder(in.Template), nil
 	}
 	if in.TemplateID == "" {
 		return nil, fmt.Errorf("give template_id, or a template")
@@ -62,6 +63,44 @@ func (e *env) spec(ctx context.Context, in templateRef) (map[string]any, error) 
 		return nil, err
 	}
 	return got.Template, nil
+}
+
+// inListOrder marks a template an assistant gives as drawn in list order, as
+// these tools describe it, unless it says otherwise.
+func inListOrder(spec map[string]any) map[string]any {
+	if _, ok := spec["layering"]; !ok {
+		spec["layering"] = "list"
+	}
+	return spec
+}
+
+// moveElements moves elements to new places in the drawing order, in turn;
+// each index is one in elements as given.
+func moveElements(elements []any, moves []elementMove) ([]any, []int, error) {
+	// order[k] is the index, as given, of the element now at k.
+	order := make([]int, len(elements))
+	for i := range order {
+		order[i] = i
+	}
+	for _, m := range moves {
+		if m.Index < 0 || m.Index >= len(elements) {
+			return nil, nil, fmt.Errorf("no element %d: there are %d", m.Index, len(elements))
+		}
+		at := slices.Index(order, m.Index)
+		order = slices.Delete(order, at, at+1)
+		to := min(max(m.To, 0), len(order))
+		order = slices.Insert(order, to, m.Index)
+	}
+	moved := make([]any, len(elements))
+	for k, i := range order {
+		moved[k] = elements[i]
+	}
+	return moved, order, nil
+}
+
+type elementMove struct {
+	Index int `json:"index" jsonschema:"the element, numbered as the template is now"`
+	To    int `json:"to" jsonschema:"where it goes in the drawing order: 0 is at the back, under everything; a number past the last element puts it in front"`
 }
 
 type previewIn struct {
@@ -159,7 +198,8 @@ func labelTools() []tool {
 			},
 			func(_ idIn, out map[string]any) string { return fmt.Sprintf("%q.", nameOf(out, "template")) }),
 		define(&mcp.Tool{Name: "save_template", Description: "Make a label template, or change one: give the whole template, or only changes: a new name, elements to change (by index, " +
-			"each with the properties to set), elements to remove (by index) and elements to add. Then preview_template shows the result.",
+			"each with the properties to set), elements to move in the drawing order, elements to remove (by index) and elements to add, in front. Elements are drawn in the order " +
+			"they are listed, each over those before it. Every index is the element's number as the template is now. Then preview_template shows the result.",
 			Annotations: changes("Save a template", true)}, []string{"POST /api/v1/templates", "PUT /api/v1/templates/{id}"}, design,
 			func(ctx context.Context, e *env, in struct {
 				ID       string         `json:"id,omitempty" jsonschema:"the template to change; empty to make one"`
@@ -169,6 +209,7 @@ func labelTools() []tool {
 					Index int            `json:"index"`
 					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, content_binding, font_size"`
 				} `json:"change_elements,omitempty"`
+				Move   []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
 				Remove []int            `json:"remove_elements,omitempty"`
 				Add    []map[string]any `json:"add_elements,omitempty"`
 			}) (reply[map[string]any], error) {
@@ -177,7 +218,7 @@ func labelTools() []tool {
 					if in.Template == nil {
 						return reply[map[string]any]{}, fmt.Errorf("a new template needs the whole template")
 					}
-					if err := e.call(ctx, http.MethodPost, "/api/v1/templates", in.Template, &out); err != nil {
+					if err := e.call(ctx, http.MethodPost, "/api/v1/templates", inListOrder(in.Template), &out); err != nil {
 						return reply[map[string]any]{}, err
 					}
 					return say(out, "Made the template %q.", nameOf(out, "template"))
@@ -205,9 +246,13 @@ func labelTools() []tool {
 						}
 						remove[i] = true
 					}
+					moved, order, err := moveElements(elements, in.Move)
+					if err != nil {
+						return reply[map[string]any]{}, err
+					}
 					kept := []any{}
-					for i, el := range elements {
-						if !remove[i] {
+					for k, el := range moved {
+						if !remove[order[k]] {
 							kept = append(kept, el)
 						}
 					}
@@ -220,6 +265,7 @@ func labelTools() []tool {
 					}
 				}
 				spec["id"] = in.ID
+				inListOrder(spec)
 				if err := e.call(ctx, http.MethodPut, pathOf("/api/v1/templates/{id}", in.ID), spec, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}

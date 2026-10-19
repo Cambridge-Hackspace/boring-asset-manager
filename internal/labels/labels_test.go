@@ -358,3 +358,42 @@ func TestValidateAdaptiveTemplates(t *testing.T) {
 		}
 	}
 }
+
+// TestListOrder draws a document written before layering in the order its
+// elements were drawn then, and lists them so when it is saved; one in list
+// order is drawn as listed.
+func TestListOrder(t *testing.T) {
+	const legacy = `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"elements":[
+		{"type":"generator","generator_type":"qr","x":0,"y":0,"width":10,"height":10},
+		{"type":"text","x":10,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"first"},
+		{"type":"static_image","x":20,"y":0,"width":10,"height":10,"image_id":"7c9e6679-7425-40de-944b-e07fc1f90ae7"},
+		{"type":"text","x":10,"y":5,"width":10,"height":5,"font_size":8,"content_binding":"second"}]}`
+	tpl, err := Parse([]byte(legacy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tpl.DrawingOrder(); !reflect.DeepEqual(got, []int{2, 1, 3, 0}) || tpl.Layering != "" {
+		t.Errorf("legacy drawing order: %v, layering %q", got, tpl.Layering)
+	}
+	tpl.ListOrder()
+	var got []string
+	for _, e := range tpl.Elements {
+		got = append(got, e.Type+":"+e.ContentBinding)
+	}
+	want := []string{"static_image:", "text:first", "text:second", "generator:"}
+	if !reflect.DeepEqual(got, want) || tpl.Layering != LayeringList || !reflect.DeepEqual(tpl.DrawingOrder(), []int{0, 1, 2, 3}) {
+		t.Errorf("listed: %v, layering %q", got, tpl.Layering)
+	}
+
+	listed := strings.Replace(legacy, `"elements"`, `"layering":"list","elements"`, 1)
+	if tpl, err = Parse([]byte(listed)); err != nil {
+		t.Fatal(err)
+	}
+	if got := tpl.DrawingOrder(); !reflect.DeepEqual(got, []int{0, 1, 2, 3}) {
+		t.Errorf("list drawing order: %v", got)
+	}
+	var ve *ValidationError
+	if _, err := Parse([]byte(strings.Replace(listed, `"list"`, `"type"`, 1))); !errors.As(err, &ve) || ve.Problems[0].Path != "layering" {
+		t.Errorf("unknown layering: %v", err)
+	}
+}

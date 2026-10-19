@@ -17,7 +17,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-const labelTemplate = `{"id":"tag","name":"Tag","units":"mm","width":40,"height":20,"dpi":300,"elements":[
+const labelTemplate = `{"id":"tag","name":"Tag","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[
   {"type":"generator","generator_type":"micro_qr","x":1,"y":1,"width":18,"height":18},
   {"type":"text","x":20,"y":2,"width":19,"height":8,"font_size":10,"content_binding":"{{asset.name}}"},
   {"type":"text","x":20,"y":11,"width":19,"height":7,"font_size":8,"content_binding":"{{field.location}}"}]}`
