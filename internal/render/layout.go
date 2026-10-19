@@ -97,6 +97,9 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 			if err != nil {
 				return nil, fail("loading image %s: %v", e.ImageID, err)
 			}
+			if e.Mirror != "" {
+				img = mirrored(img, e.Mirror != labels.MirrorDown, e.Mirror != labels.MirrorAcross)
+			}
 			placed := fitImage(img, box)
 			s.Items = append(s.Items, Item{Image: &placed})
 
@@ -263,6 +266,25 @@ func (s *Scene) dotsPerUnit() float64 {
 		return float64(s.DPI)
 	}
 	return float64(s.DPI) / 25.4
+}
+
+// mirrored is an image flipped across, down, or both, dot for dot.
+func mirrored(img image.Image, across, down bool) image.Image {
+	b := img.Bounds()
+	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			tx, ty := x, y
+			if across {
+				tx = b.Dx() - 1 - x
+			}
+			if down {
+				ty = b.Dy() - 1 - y
+			}
+			out.Set(tx, ty, img.At(b.Min.X+x, b.Min.Y+y))
+		}
+	}
+	return out
 }
 
 // fitImage scales img to fit box with its aspect ratio kept, centered.

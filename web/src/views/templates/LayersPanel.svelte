@@ -11,6 +11,7 @@
     onselect,
     onrestack,
     onmove,
+    onlock,
   }: {
     elements: TemplateElement[];
     selected: number[];
@@ -19,6 +20,8 @@
     onrestack: (how: Restack) => void;
     /** Moves the element at from to to, both indices in the drawing order. */
     onmove: (from: number, to: number) => void;
+    /** Locks an element, or unlocks it. */
+    onlock: (index: number) => void;
   } = $props();
 
   // Rows run top first: the last element listed is drawn on top.
@@ -78,8 +81,16 @@
           onclick={(ev) => choose(ev, i)}
           onkeydown={(ev) => keydown(ev, i)}
         >
-          {layerName(e)}
+          {layerName(e)}{#if e.group}<span class="text-xs text-zinc-600 dark:text-zinc-400"> · {e.group}</span>{/if}
         </button>
+        <button
+          type="button"
+          class="rounded px-1 text-xs {e.locked ? 'bg-zinc-200 dark:bg-zinc-700' : 'text-zinc-600 dark:text-zinc-400'}"
+          aria-pressed={e.locked ?? false}
+          aria-label="Lock {layerName(e)}"
+          title={e.locked ? 'Locked: not selected on the label by accident' : 'Lock it, so it is not selected on the label by accident'}
+          onclick={() => onlock(i)}>{e.locked ? 'Locked' : 'Lock'}</button
+        >
       </li>
     {/each}
   </ol>

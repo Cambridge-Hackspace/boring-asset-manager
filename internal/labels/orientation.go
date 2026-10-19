@@ -31,6 +31,25 @@ func (t *Template) Turned(clockwise bool) *Template {
 		a.MinWidth, a.MaxWidth, a.MinHeight, a.MaxHeight = t.Adapt.MinHeight, t.Adapt.MaxHeight, t.Adapt.MinWidth, t.Adapt.MaxWidth
 		out.Adapt = &a
 	}
+	if t.Guides != nil {
+		// Guides across become guides down, and the other way.
+		g := Guides{}
+		for _, y := range t.Guides.Y {
+			if clockwise {
+				g.X = append(g.X, tidy(t.Height-y))
+			} else {
+				g.X = append(g.X, y)
+			}
+		}
+		for _, x := range t.Guides.X {
+			if clockwise {
+				g.Y = append(g.Y, x)
+			} else {
+				g.Y = append(g.Y, tidy(t.Width-x))
+			}
+		}
+		out.Guides = &g
+	}
 	out.Elements = make([]Element, len(t.Elements))
 	for i, e := range t.Elements {
 		cx, cy := e.X+e.Width/2, e.Y+e.Height/2

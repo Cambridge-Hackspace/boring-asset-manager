@@ -11,6 +11,14 @@ import {
   marginOf,
   hairline,
   newShape,
+  arrange,
+  clip,
+  flipElements,
+  rulerStep,
+  scaleElements,
+  smartSnap,
+  unclip,
+  withGroups,
   orientation,
   turnTemplate,
   polygonPoints,
@@ -408,5 +416,77 @@ describe('turning a template', () => {
     for (let i = 0; i < 4; i++) t = turnTemplate(t, true);
     expect(t).toEqual(tpl());
     expect(turnTemplate(turnTemplate(tpl(), false), true)).toEqual(tpl());
+  });
+});
+
+describe('the workspace', () => {
+  const three = (): TemplateDoc => ({
+    ...blankTemplate(),
+    width: 100,
+    height: 50,
+    elements: [
+      { type: 'text', x: 10, y: 5, width: 10, height: 10 },
+      { type: 'text', x: 40, y: 20, width: 20, height: 10 },
+      { type: 'text', x: 80, y: 30, width: 5, height: 5 },
+    ],
+  });
+  const at = (els: TemplateElement[]) => els.map((e) => [e.x, e.y]);
+
+  it('lines elements up and spreads them out, as the server does', () => {
+    expect(at(arrange(three(), [0, 1, 2], { align: 'left' }))).toEqual([[10, 5], [10, 20], [10, 30]]);
+    expect(at(arrange(three(), [0, 1, 2], { align: 'right', toLabel: true }))).toEqual([[90, 5], [80, 20], [95, 30]]);
+    expect(at(arrange(three(), [0, 1, 2], { align: 'middle', toLabel: true }))).toEqual([[10, 20], [40, 20], [80, 22.5]]);
+    expect(at(arrange(three(), [0, 1, 2], { distribute: 'down' }))).toEqual([[10, 5], [40, 17.5], [80, 30]]);
+  });
+
+  it('flips across and down, mirroring what can be and turning the rest', () => {
+    const d = three();
+    d.elements[1] = { type: 'shape', shape: 'polygon', x: 40, y: 20, width: 20, height: 10, points: [[0, 0], [1, 0.25], [0.5, 1]], rotation: 30 };
+    d.elements[2] = { type: 'static_image', x: 80, y: 30, width: 5, height: 5, image_id: 'i' };
+    const flipped = flipElements(d, [0, 1, 2], true);
+    // Mirrored about the middle of all three, from 10 to 85: 47.5.
+    expect(at(flipped)).toEqual([[75, 5], [35, 20], [10, 30]]);
+    expect(flipped[1]).toMatchObject({ rotation: 330, points: [[1, 0], [0, 0.25], [0.5, 1]] });
+    expect(flipped[2]!.mirror).toBe('across');
+    expect(flipElements({ ...d, elements: flipped }, [2], false)[2]!.mirror).toBe('both');
+  });
+
+  it('snaps a moving box to the edges and middles near it, and the guides', () => {
+    const d = { ...three(), guides: { x: [33] } };
+    // The first box, moved 15 across, has its right edge 2 from the guide.
+    expect(smartSnap(d, [0], { x: 10, y: 5, width: 10, height: 10 }, 15, 0, 3)).toMatchObject({ dx: 13, x: 33, dy: 0 });
+    // Its middle near the second's top, at 20: snapped to it.
+    expect(smartSnap(d, [0], { x: 10, y: 5, width: 10, height: 10 }, 0, 4, 3)).toMatchObject({ dy: 5, y: 20 });
+    expect(smartSnap(d, [0], { x: 10, y: 5, width: 10, height: 10 }, 11, 0.5, 0.1)).toEqual({ dx: 11, dy: 0.5 });
+  });
+
+  it('scales elements with the box round them', () => {
+    const d = three();
+    const scaled = scaleElements(d, [0, 1], d.elements, { x: 10, y: 5, width: 50, height: 25 }, { x: 10, y: 5, width: 100, height: 25 });
+    // Twice as wide: centers at 15 and 50 go to 20 and 90.
+    expect(scaled[0]).toMatchObject({ x: 10, width: 20, height: 10 });
+    expect(scaled[1]).toMatchObject({ x: 70, width: 40 });
+    expect(scaled[2]).toEqual(d.elements[2]);
+  });
+
+  it('takes whole groups, and copies and pastes elements between templates', () => {
+    const d = three();
+    d.elements[0]!.group = 'a';
+    d.elements[2]!.group = 'a';
+    expect(withGroups(d.elements, [2])).toEqual([0, 2]);
+    expect(withGroups(d.elements, [1])).toEqual([1]);
+    const text = clip(d, [0, 2]);
+    const inches = { ...blankTemplate(), units: 'in' as const, elements: [{ type: 'text' as const, x: 0, y: 0, width: 1, height: 1, group: 'group-1' }] };
+    const pasted = unclip(inches, text, 0.1)!;
+    expect(pasted).toHaveLength(2);
+    expect(pasted[0]).toMatchObject({ x: 0.494, y: 0.297, group: 'group-2' });
+    expect(pasted[1]!.group).toBe('group-2');
+    expect(unclip(inches, 'plain words', 0.1)).toBeNull();
+  });
+
+  it('marks rulers in steps of 1, 2 or 5 times a power of ten', () => {
+    expect(rulerStep(10)).toBe(1);
+    expect(rulerStep(3)).toBe(5);
+    expect(rulerStep(30)).toBe(0.5);
   });
 });

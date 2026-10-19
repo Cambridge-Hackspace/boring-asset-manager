@@ -274,19 +274,20 @@ func TestStoredTemplatesAreLayered(t *testing.T) {
 }
 
 // TestTemplateFeedAndTurnable keeps which way a template's labels are fed,
-// and whether an adaptive one takes turned labels.
+// whether an adaptive one takes turned labels, and its guides.
 func TestTemplateFeedAndTurnable(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 	tmpl := sampleTemplate("")
 	tmpl.Feed, tmpl.Turnable, tmpl.Sizing = labels.FeedAlong, true, labels.SizingAdaptive
+	tmpl.Guides = &labels.Guides{X: []float64{10, 31}, Y: []float64{14.5}}
 	tmpl.Adapt = &labels.Adapt{MinWidth: 30, MaxWidth: 100, MinHeight: 20, MaxHeight: 50, ContinuousLength: labels.LengthFixed}
 	created, err := st.CreateTemplate(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetTemplate(created.ID)
-	if err != nil || got.Feed != labels.FeedAlong || !got.Turnable {
+	if err != nil || got.Feed != labels.FeedAlong || !got.Turnable || !reflect.DeepEqual(got.Guides, tmpl.Guides) {
 		t.Fatalf("stored: %+v %v", got, err)
 	}
 	got.Feed, got.Turnable = "", false

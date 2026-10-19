@@ -18,6 +18,7 @@
     onupdate,
     onremove,
     onrestack,
+    onflip,
     codeLayout,
   }: {
     doc: TemplateDoc;
@@ -28,6 +29,8 @@
     onupdate: (e: TemplateElement) => void;
     onremove: () => void;
     onrestack: (how: Restack) => void;
+    /** Flips it across, or down. */
+    onflip: (across: boolean) => void;
     /** How the server laid the code out, when it is one. */
     codeLayout?: CodeLayout;
   } = $props();
@@ -90,6 +93,10 @@
     </div>
     <button type="button" class="btn-secondary" onclick={() => setRotation((e.rotation ?? 0) - 90)}>Turn 90° left</button>
     <button type="button" class="btn-secondary" onclick={() => setRotation((e.rotation ?? 0) + 90)}>Turn 90° right</button>
+    {#if e.type === 'static_image' || (e.type === 'shape' && e.shape !== 'rectangle' && e.shape !== 'ellipse')}
+      <button type="button" class="btn-secondary" onclick={() => onflip(true)}>Flip across</button>
+      <button type="button" class="btn-secondary" onclick={() => onflip(false)}>Flip down</button>
+    {/if}
   </div>
 
   {#if e.type === 'text' || e.type === 'generator'}

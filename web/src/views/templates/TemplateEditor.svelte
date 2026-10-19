@@ -15,6 +15,15 @@
     placeholders,
     restack,
     rotateElements,
+    arrange,
+    clip,
+    flipElements,
+    newGroupName,
+    unclip,
+    withGroups,
+    gridStep,
+    type Alignment,
+    type Guides,
     type CodeLayout,
     type ElementType,
     type Restack,
@@ -31,6 +40,7 @@
   import AdaptivePreview from './AdaptivePreview.svelte';
   import LayersPanel from './LayersPanel.svelte';
   import StackButtons from './StackButtons.svelte';
+  import ShortcutsDialog from './ShortcutsDialog.svelte';
 
   // /templates/new and /templates/:id/edit
   let { params }: { params: Record<string, string> } = $props();
@@ -91,6 +101,7 @@
           ...(t.sizing === 'adaptive' ? { sizing: t.sizing, adapt: t.adapt } : {}),
           ...(t.layering ? { layering: t.layering } : {}),
           ...(t.feed ? { feed: t.feed } : {}),
+          ...(t.guides ? { guides: t.guides } : {}),
           ...(t.turnable ? { turnable: true } : {}),
           elements: t.elements ?? [],
         });
@@ -304,19 +315,108 @@
     selected = next.selected;
   }
 
+  let shortcuts = $state(false);
+
   function keydown(event: KeyboardEvent) {
-    const target = event.target as HTMLElement;
-    if (target.closest('input, textarea, select')) return;
+    if (event.target instanceof Element && event.target.closest('input, textarea, select, dialog')) return;
     const mod = event.ctrlKey || event.metaKey;
-    if (mod && event.key.toLowerCase() === 'z') {
+    const key = event.key.toLowerCase();
+    if (mod && key === 'z') {
       event.preventDefault();
       if (event.shiftKey) redo();
       else undo();
-    } else if (mod && event.key.toLowerCase() === 'y') {
+    } else if (mod && key === 'y') {
       event.preventDefault();
       redo();
+    } else if (mod && key === 'a') {
+      event.preventDefault();
+      selected = doc.elements.flatMap((e, i) => (e.locked ? [] : [i]));
+    } else if (mod && key === 'd' && selected.length) {
+      event.preventDefault();
+      paste(clip(doc, selected));
+    } else if (mod && key === 'g' && selected.length) {
+      event.preventDefault();
+      if (event.shiftKey) ungroup();
+      else group();
+    } else if (event.key === '?') {
+      event.preventDefault();
+      shortcuts = true;
     }
   }
+
+  // The clipboard: elements, as the editor writes them, or SVG artwork.
+  function copying(event: ClipboardEvent, cut: boolean) {
+    if ((event.target instanceof Element && event.target.closest('input, textarea, select')) || !selected.length || !event.clipboardData) return;
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', clip(doc, selected));
+    if (cut) removeSelected();
+  }
+
+  function pasting(event: ClipboardEvent) {
+    if (event.target instanceof Element && event.target.closest('input, textarea, select')) return;
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (!text) return;
+    event.preventDefault();
+    if (/<svg[\s>]/.test(text)) {
+      void importSVG(new File([text], 'the clipboard', { type: 'image/svg+xml' }));
+      return;
+    }
+    paste(text);
+  }
+
+  /** Adds elements from the clipboard's text, a little way from where they were, selected. */
+  function paste(text: string) {
+    const elements = unclip(doc, text, gridStep(doc.units) * 4);
+    if (!elements?.length) return;
+    begin();
+    const first = doc.elements.length;
+    doc.elements.push(...elements);
+    selected = elements.map((_, k) => first + k);
+  }
+
+  /** The selection made one group, moved, resized and turned as one. */
+  function group() {
+    if (selected.length < 2) return;
+    begin();
+    const name = newGroupName(doc.elements);
+    doc.elements = doc.elements.map((e, i) => (selected.includes(i) ? { ...e, group: name } : e));
+  }
+
+  function ungroup() {
+    begin();
+    doc.elements = doc.elements.map((e, i) => {
+      if (!selected.includes(i) || !e.group) return e;
+      const { group: _g, ...rest } = e;
+      return rest;
+    });
+  }
+
+  function arrangeSelected(how: { align?: Alignment; distribute?: 'across' | 'down' }) {
+    begin();
+    doc.elements = arrange(doc, selected, { ...how, toLabel: toLabel || selected.length === 1 });
+  }
+
+  function flipSelected(across: boolean) {
+    begin();
+    doc.elements = flipElements(doc, selected, across);
+  }
+
+  function setGuides(guides: Guides) {
+    doc.guides = guides.x?.length || guides.y?.length ? { ...(guides.x?.length ? { x: guides.x } : {}), ...(guides.y?.length ? { y: guides.y } : {}) } : undefined;
+    if (!doc.guides) delete doc.guides;
+  }
+
+  // Aligning with the label, rather than with each other.
+  let toLabel = $state(false);
+  const alignments: [Alignment, string][] = [
+    ['left', 'Left edges'],
+    ['center', 'Centers'],
+    ['right', 'Right edges'],
+    ['top', 'Tops'],
+    ['middle', 'Middles'],
+    ['bottom', 'Bottoms'],
+  ];
+  const grouped = $derived(selected.length > 1 && selected.every((i) => doc.elements[i]?.group && doc.elements[i]?.group === doc.elements[selected[0]!]?.group));
 
   async function save() {
     error = status = '';
@@ -362,7 +462,9 @@
   const problemsFor = (i: number) => allProblems.filter((p) => elementIndex(p.path) === i).map((p) => p.message);
 </script>
 
-<svelte:window onkeydown={keydown} />
+<svelte:window onkeydown={keydown} oncopy={(ev) => copying(ev, false)} oncut={(ev) => copying(ev, true)} onpaste={pasting} />
+
+<ShortcutsDialog open={shortcuts} onclose={() => (shortcuts = false)} />
 
 <nav aria-label="Breadcrumb" class="mb-2 text-sm"><a class="underline" href="/templates">Templates</a></nav>
 
@@ -372,6 +474,7 @@
   <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
     <h1 class="text-2xl font-bold">{isNew ? 'New template' : doc.name || routeId}{#if dirty}<span class="ml-2 text-sm font-normal text-zinc-600 dark:text-zinc-400">Unsaved changes</span>{/if}</h1>
     <div class="flex flex-wrap gap-2">
+      <button type="button" class="btn-secondary" onclick={() => (shortcuts = true)}>Keyboard shortcuts</button>
       <button type="button" class="btn-secondary" onclick={undo} disabled={!canUndo}>Undo</button>
       <button type="button" class="btn-secondary" onclick={redo} disabled={!canRedo}>Redo</button>
       <button type="button" class="btn-primary" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
@@ -441,6 +544,7 @@
         {tool}
         ondraw={addDrawn}
         onfile={importSVG}
+        onguides={setGuides}
         ontoolcancel={() => (tool = null)}
       />
 
@@ -458,6 +562,11 @@
           onselect={(s) => (selected = s)}
           onrestack={restackSelected}
           onmove={moveSelectedLayer}
+          onlock={(i) => {
+            begin();
+            const e = doc.elements[i]!;
+            doc.elements[i] = e.locked ? (({ locked: _l, ...rest }) => rest)(e) : { ...e, locked: true };
+          }}
         />
       {/if}
     </div>
@@ -476,15 +585,37 @@
           }}
           onremove={removeSelected}
           onrestack={restackSelected}
+          onflip={flipSelected}
           codeLayout={codeLayouts[selected[0]!]}
         />
       {:else if selected.length > 1}
-        <section class="card space-y-2">
-          <p class="text-sm">{selected.length} elements selected. Drag or use the arrow keys to move them together.</p>
+        <section class="card space-y-3" aria-labelledby="several-heading">
+          <h2 id="several-heading" class="text-lg font-semibold">{grouped ? `Group ${doc.elements[selected[0]!]!.group}` : `${selected.length} elements`}</h2>
+          <p class="text-sm">Drag or use the arrow keys to move them together; the box round them scales and turns them as one.</p>
           <StackButtons elements={doc.elements} {selected} onrestack={restackSelected} />
           <div class="flex flex-wrap gap-1">
+            {#if grouped}
+              <button type="button" class="btn-secondary" onclick={ungroup}>Ungroup</button>
+            {:else}
+              <button type="button" class="btn-secondary" onclick={group}>Group</button>
+            {/if}
             <button type="button" class="btn-secondary" onclick={() => turnSelected(-90)}>Turn them 90° left</button>
             <button type="button" class="btn-secondary" onclick={() => turnSelected(90)}>Turn them 90° right</button>
+            <button type="button" class="btn-secondary" onclick={() => flipSelected(true)}>Flip across</button>
+            <button type="button" class="btn-secondary" onclick={() => flipSelected(false)}>Flip down</button>
+          </div>
+          <div class="space-y-1" role="group" aria-label="Line up">
+            <p class="label" aria-hidden="true">Line up</p>
+            <div class="flex flex-wrap gap-1">
+              {#each alignments as [how, label] (how)}
+                <button type="button" class="btn-secondary" onclick={() => arrangeSelected({ align: how })}>{label}</button>
+              {/each}
+            </div>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={toLabel} /> With the label, not each other</label>
+          </div>
+          <div class="flex flex-wrap gap-1" role="group" aria-label="Spread out evenly">
+            <button type="button" class="btn-secondary" disabled={selected.length < 3} onclick={() => arrangeSelected({ distribute: 'across' })}>Spread out across</button>
+            <button type="button" class="btn-secondary" disabled={selected.length < 3} onclick={() => arrangeSelected({ distribute: 'down' })}>Spread out down</button>
           </div>
           <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={removeSelected}>Remove them</button>
         </section>
