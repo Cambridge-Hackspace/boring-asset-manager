@@ -4,6 +4,7 @@
   import ImagePicker from './ImagePicker.svelte';
   import StackButtons from './StackButtons.svelte';
   import CodeMargins from './CodeMargins.svelte';
+  import ShapeSettings from './ShapeSettings.svelte';
   import AdaptiveElementPanel from './AdaptiveElementPanel.svelte';
 
   // Edits one element. Each change goes through onupdate with the new
@@ -151,6 +152,13 @@
           <option value="right">Right</option>
         </select>
       </div>
+      <div>
+        <label class="label" for={id('color')}>Color</label>
+        <select id={id('color')} class="input" value={e.fill ?? 'black'} onchange={(ev) => onupdate(withProp(e, 'fill', ev.currentTarget.value === 'white' ? 'white' : undefined))}>
+          <option value="black">Black</option>
+          <option value="white">White, over black</option>
+        </select>
+      </div>
       <label class="flex items-center gap-2 self-end pb-2 text-sm">
         <input type="checkbox" checked={e.wrap ?? false} onchange={(ev) => set('wrap', ev.currentTarget.checked)} /> Wrap lines
       </label>
@@ -198,6 +206,8 @@
       </div>
       </div>
     </details>
+  {:else if e.type === 'shape'}
+    <ShapeSettings {doc} {e} {index} {onupdate} />
   {:else}
     <ImagePicker value={e.image_id ?? ''} onpick={(imageId) => set('image_id', imageId)} />
   {/if}

@@ -310,3 +310,57 @@ test('set a code’s margins in its settings and on the canvas, and where it sit
   expect(saved.template.elements[0]).toMatchObject({ margin: { left: 0 }, align: 'left', vertical_align: 'bottom' });
   expect(saved.template.elements[0].margin.top).toBeGreaterThan(5);
 });
+
+test('draw shapes with the mouse and the keyboard, and edit a polygon’s points', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Shapes'), units: 'mm', width: 60, height: 40, dpi: 300, layering: 'list', elements: [],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const canvas = page.getByRole('img', { name: 'Label preview' });
+  await expect(canvas).toBeVisible();
+  const c = (await canvas.boundingBox())!;
+  const at = (x: number, y: number) => [c.x + (x / 60) * c.width, c.y + (y / 40) * c.height] as const;
+
+  // A square, dragged out with Shift.
+  await page.getByRole('button', { name: 'Rectangle' }).click();
+  await expect(page.getByRole('button', { name: 'Rectangle' })).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(...at(5, 5));
+  await page.mouse.down();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(...at(20, 12), { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  await expect(page.getByRole('heading', { name: 'Shape 1 (rectangle)' })).toBeVisible();
+  await expect(page.locator('#el-0-width')).toHaveValue('15');
+  await expect(page.locator('#el-0-height')).toHaveValue('15');
+  await page.getByLabel('Fill').selectOption('black');
+
+  // A triangle, a click at each point and Enter.
+  await page.getByRole('button', { name: 'Polygon' }).click();
+  for (const [x, y] of [[40, 5], [55, 30], [30, 30]] as const) await page.mouse.click(...at(x, y));
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Shape 2 (polygon)' })).toBeVisible();
+  // Its points: a fourth added on its first side, then moved with the keyboard.
+  await page.getByRole('button', { name: 'Add a point between points 1 and 2' }).click();
+  await expect(page.getByRole('button', { name: /^Point \d of 4$/ })).toHaveCount(4);
+  await page.getByRole('button', { name: 'Point 2 of 4' }).focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('Delete');
+  await expect(page.getByRole('button', { name: /^Point \d of 3$/ })).toHaveCount(3);
+
+  // From the keyboard, a line in the middle of the label.
+  await page.getByRole('button', { name: 'Line' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Shape 3 (line)' })).toBeVisible();
+
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements.map((e: { shape: string }) => e.shape)).toEqual(['rectangle', 'polygon', 'line']);
+  expect(saved.template.elements[0]).toMatchObject({ width: 15, height: 15, fill: 'black' });
+  expect(saved.template.elements[1].points).toHaveLength(3);
+  expect(saved.template.elements[2]).toMatchObject({ height: 0 });
+});

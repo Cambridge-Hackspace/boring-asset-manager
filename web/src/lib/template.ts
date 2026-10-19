@@ -2,7 +2,10 @@
 // geometry the editor applies to them.
 
 export type Units = 'mm' | 'in';
-export type ElementType = 'text' | 'generator' | 'static_image';
+export type ElementType = 'text' | 'generator' | 'static_image' | 'shape';
+export type ShapeKind = 'rectangle' | 'ellipse' | 'line' | 'polygon';
+/** Labels print black and white; white paints over what is beneath it. */
+export type Paint = 'black' | 'white' | 'none';
 /** How an element of an adaptive template follows the label; absent is scale. */
 export type Anchor = 'scale' | 'start' | 'end' | 'both' | 'center';
 
@@ -56,6 +59,20 @@ export interface TemplateElement {
   min_font_size?: number;
   // static_image
   image_id?: string;
+  // shape, and fill for text too (black, or white reversed out of black)
+  shape?: ShapeKind;
+  /** A rectangle's corners, in the template's units. */
+  corner_radius?: number;
+  /** A line from the box's bottom left to its top right, not top left to bottom right. */
+  flip?: boolean;
+  /** A polygon's points, as fractions of its box across and down. */
+  points?: [number, number][];
+  /** Whether a polygon is closed; absent is closed. */
+  closed?: boolean;
+  stroke?: Paint;
+  /** In the template's units. */
+  stroke_width?: number;
+  fill?: Paint;
 }
 
 export interface TemplateDoc {
@@ -121,6 +138,8 @@ export function convertUnits(doc: TemplateDoc, to: Units): TemplateDoc {
       ...(e.min_size ? { min_size: conv(e.min_size) } : {}),
       ...(e.max_size ? { max_size: conv(e.max_size) } : {}),
       ...(e.margin && e.margin_unit === 'length' ? { margin: mapMargin(e.margin, conv) } : {}),
+      ...(e.stroke_width ? { stroke_width: Math.max(conv(e.stroke_width), to === 'in' ? 0.001 : 0.01) } : {}),
+      ...(e.corner_radius ? { corner_radius: conv(e.corner_radius) } : {}),
     })),
   };
 }
@@ -169,6 +188,7 @@ export function resizeLabel(doc: TemplateDoc, width: number, height: number): Te
         ...(e.font_size ? { font_size: pt(e.font_size) } : {}),
         ...(e.min_font_size ? { min_font_size: pt(e.min_font_size) } : {}),
         ...(e.margin && e.margin_unit === 'length' ? { margin: mapMargin(e.margin, (v) => t(v * s)) } : {}),
+        ...(e.corner_radius ? { corner_radius: t(e.corner_radius * s) } : {}),
       };
     }),
   };
@@ -381,6 +401,8 @@ export function describeElement(e: TemplateElement, i: number): string {
       return `Barcode ${i + 1} (${e.generator_type})`;
     case 'static_image':
       return `Image ${i + 1}`;
+    case 'shape':
+      return `Shape ${i + 1} (${e.shape})`;
     default:
       return `Text ${i + 1}: ${e.content_binding || 'empty'}`;
   }
@@ -411,7 +433,7 @@ export function blankTemplate(): TemplateDoc {
   return { id: '', name: '', units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list', elements: [] };
 }
 
-const layerOfType: Record<ElementType, number> = { static_image: 0, text: 1, generator: 2 };
+const layerOfType: Record<ElementType, number> = { static_image: 0, text: 1, generator: 2, shape: 3 };
 
 /**
  * A template in list order: one written before layering has its elements
@@ -491,9 +513,82 @@ export function layerName(e: TemplateElement): string {
     }
     case 'static_image':
       return 'Image';
+    case 'shape':
+      return shapeNames[e.shape ?? 'rectangle'];
     default:
       return `Text: ${e.content_binding || 'empty'}`;
   }
+}
+
+export const shapeNames: Record<ShapeKind, string> = { rectangle: 'Rectangle', ellipse: 'Ellipse', line: 'Line', polygon: 'Polygon' };
+
+/** A shape's stroke width when it is drawn: 0.25 mm. */
+export function defaultStroke(units: Units): number {
+  return units === 'mm' ? 0.25 : 0.01;
+}
+
+/**
+ * A new shape in a box, in the template's units: outlined in black, a
+ * polygon a triangle unless its points are given.
+ */
+export function newShape(kind: ShapeKind, doc: TemplateDoc, box?: { x: number; y: number; width: number; height: number }): TemplateElement {
+  const step = gridStep(doc.units);
+  const side = Math.max(step, snap(Math.min(doc.width, doc.height) * 0.5, step, doc.units));
+  const b = box ?? {
+    x: tidy((doc.width - side) / 2, doc.units),
+    y: tidy((doc.height - (kind === 'line' ? 0 : side)) / 2, doc.units),
+    width: side,
+    height: kind === 'line' ? 0 : side,
+  };
+  return {
+    type: 'shape',
+    shape: kind,
+    ...b,
+    stroke: 'black',
+    stroke_width: defaultStroke(doc.units),
+    fill: 'none',
+    ...(kind === 'polygon' ? { points: [[0.5, 0], [1, 1], [0, 1]] as [number, number][] } : {}),
+  };
+}
+
+/** Whether a shape's stroke is thinner than one printer dot, and so printed one dot wide. */
+export function hairline(e: TemplateElement, doc: TemplateDoc): boolean {
+  return e.type === 'shape' && e.stroke !== 'none' && toMM(e.stroke_width ?? 0, doc.units) * (doc.dpi / MM_PER_INCH) < 1;
+}
+
+/**
+ * A polygon through points given in the template's units in its own box's
+ * frame, before it is turned: its box fitted round them, moved so that the
+ * points stay where they lie on the label, turned, and the points as
+ * fractions of it.
+ */
+export function polygonThrough(doc: TemplateDoc, e: TemplateElement, pts: [number, number][]): TemplateElement {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const w = Math.max(Math.max(...xs) - minX, gridStep(doc.units));
+  const h = Math.max(Math.max(...ys) - minY, gridStep(doc.units));
+  // Where the new box's center lies, turned about the old one's.
+  const [sin, cos] = sinCos(e.rotation ?? 0);
+  const ox = minX + w / 2 - e.width / 2;
+  const oy = minY + h / 2 - e.height / 2;
+  const cx = e.x + e.width / 2 + ox * cos - oy * sin;
+  const cy = e.y + e.height / 2 + ox * sin + oy * cos;
+  const frac = (v: number) => Math.round(v * 10000) / 10000;
+  return {
+    ...e,
+    x: tidy(cx - w / 2, doc.units),
+    y: tidy(cy - h / 2, doc.units),
+    width: tidy(w, doc.units),
+    height: tidy(h, doc.units),
+    points: pts.map(([x, y]) => [frac((x - minX) / w), frac((y - minY) / h)]),
+  };
+}
+
+/** A polygon's points in the template's units, in its own box's frame. */
+export function polygonPoints(e: TemplateElement): [number, number][] {
+  return (e.points ?? []).map(([u, v]) => [u * e.width, v * e.height]);
 }
 
 /** An adaptive copy of a fixed template, taking half to twice its size. */
@@ -533,7 +628,7 @@ export function withProp<K extends keyof TemplateElement>(e: TemplateElement, ke
 
 /** What an element does where it does not fit, by default: images are left off, the rest refuse. */
 export function tooSmall(e: TemplateElement): 'refuse' | 'hide' | 'alternative' {
-  return e.when_too_small ?? (e.type === 'static_image' ? 'hide' : 'refuse');
+  return e.when_too_small ?? (e.type === 'static_image' || e.type === 'shape' ? 'hide' : 'refuse');
 }
 
 export type Side = 'top' | 'right' | 'bottom' | 'left';

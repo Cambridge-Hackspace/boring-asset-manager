@@ -28,20 +28,32 @@ type Scene struct {
 	Codes map[int]CodePlacement
 }
 
-// Item is one thing drawn: exactly one of an image, a path or barcode
-// modules.
+// Item is one thing drawn: exactly one of an image, a path or rectangles of
+// whole dots, such as barcode modules.
 type Item struct {
 	Image *PlacedImage
-	// Path is glyph outlines, filled with the nonzero winding rule.
+	// Path is outlines, such as glyphs, filled with the nonzero winding
+	// rule.
 	Path Path
-	// Rects are dark barcode modules, merged into runs.
+	// Rects are rectangles of whole dots, such as barcode modules merged
+	// into runs.
 	Rects []Rect
+	// Paint is what a path or rectangles are filled with.
+	Paint Paint
 }
+
+// Paint is black, or white, which paints over what is beneath it.
+type Paint uint8
+
+const (
+	Black Paint = iota
+	White
+)
 
 // isPath reports whether the item is a filled path.
 func (it *Item) isPath() bool { return it.Image == nil && it.Rects == nil }
 
-// Rect is a dark rectangle in dots.
+// Rect is a rectangle in dots.
 type Rect struct {
 	X, Y, W, H int
 }

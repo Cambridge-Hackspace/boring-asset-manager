@@ -135,6 +135,24 @@ func TestMCPLabelTools(t *testing.T) {
 	if e := turned.Labels[0].Elements[1]; e.Rotation != 180 || e.Bounds == nil || e.Bounds.Width != 18 {
 		t.Errorf("turned: %+v", turned.Labels[0].Elements)
 	}
+	// Drawing a frame round the label, behind the rest, and reading it back.
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag,
+		"add_elements": []any{map[string]any{"type": "shape", "shape": "rectangle", "x": 0, "y": 0, "width": 40, "height": 20, "corner_radius": 2}}}), &saved)
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "move_elements": []any{map[string]any{"index": 2, "to": 0}}}), &saved)
+	var framed struct {
+		Labels []struct {
+			Elements []struct {
+				Type, Shape, Stroke string
+				CornerRadius        float64 `json:"corner_radius"`
+			}
+		}
+	}
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &framed)
+	if e := framed.Labels[0].Elements; len(e) != 3 || e[0].Shape != "rectangle" || e[0].Stroke != "black" || e[0].CornerRadius != 2 {
+		t.Errorf("framed: %+v", e)
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "remove_elements": []int{0}}), &saved)
+
 	// No margin on the code's left, and where that leaves it.
 	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 1,
 		"set": map[string]any{"margin": map[string]any{"left": 0}, "align": "left"}}}}), &saved)

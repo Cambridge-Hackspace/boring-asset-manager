@@ -476,3 +476,51 @@ func TestMargins(t *testing.T) {
 		}
 	}
 }
+
+// TestShapes checks shapes, what applies to each, and their paint, and
+// fills in their defaults.
+func TestShapes(t *testing.T) {
+	doc := func(element string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[` + element + `]}`
+	}
+	tpl, err := Parse([]byte(doc(`{"type":"shape","shape":"polygon","x":0,"y":0,"width":10,"height":10,"points":[[0,0],[1,0],[0.5,1]]},
+		{"type":"shape","shape":"line","x":0,"y":5,"width":20,"height":0},
+		{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","fill":"white"}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := tpl.Elements[0]; p.Stroke != PaintBlack || p.Fill != PaintNone || p.StrokeWidth != DefaultStrokeMM || p.Closed == nil || !*p.Closed {
+		t.Errorf("defaults: %+v", p)
+	}
+
+	shape := func(props string) string {
+		return `{"type":"shape","x":0,"y":0,"width":10,"height":10,` + props + `}`
+	}
+	for _, tc := range []struct {
+		element string
+		want    []string
+	}{
+		{shape(`"shape":"star"`), []string{"elements[0].shape"}},
+		{shape(`"shape":"ellipse","stroke":"none"`), []string{"elements[0].stroke"}},
+		{shape(`"shape":"ellipse","fill":"red","stroke_width":-1`), []string{"elements[0].fill", "elements[0].stroke_width"}},
+		{shape(`"shape":"rectangle","corner_radius":6,"flip":true`), []string{"elements[0].corner_radius", "elements[0].flip"}},
+		{shape(`"shape":"line","fill":"black","points":[[0,0],[1,1]]`), []string{"elements[0].fill", "elements[0].points"}},
+		{`{"type":"shape","shape":"line","x":0,"y":0,"width":0,"height":0}`, []string{"elements[0].width"}},
+		{shape(`"shape":"polygon","points":[[0,0],[1,1]]`), []string{"elements[0].points"}},
+		{shape(`"shape":"polygon","closed":false,"fill":"black","points":[[0,0],[1,2]]`), []string{"elements[0].fill", "elements[0].points[1]"}},
+		{`{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","fill":"none","stroke":"black"}`, []string{"elements[0].fill", "elements[0].stroke"}},
+		{`{"type":"generator","generator_type":"qr","x":0,"y":0,"width":10,"height":10,"fill":"white"}`, []string{"elements[0].fill"}},
+	} {
+		_, err := Parse([]byte(doc(tc.element)))
+		got := problemPaths(t, err)
+		sort.Strings(got)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.element, got, tc.want)
+		}
+	}
+	// Too many points.
+	pts := strings.Repeat("[0,0],", MaxPolygonPoints) + "[1,1]"
+	if _, err := Parse([]byte(doc(shape(`"shape":"polygon","points":[` + pts + `]`)))); err == nil {
+		t.Error("a polygon of too many points")
+	}
+}

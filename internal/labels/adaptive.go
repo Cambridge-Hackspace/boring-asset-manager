@@ -67,7 +67,7 @@ func (e *Element) TooSmall() string {
 	switch {
 	case e.WhenTooSmall != "":
 		return e.WhenTooSmall
-	case e.Type == ElementStaticImage:
+	case e.Type == ElementStaticImage, e.Type == ElementShape:
 		return TooSmallHide
 	}
 	return TooSmallRefuse
