@@ -140,7 +140,8 @@ func scanTemplate(row rowScanner) (*labels.Template, error) {
 	if err := json.Unmarshal([]byte(layout), &l); err != nil {
 		return nil, fmt.Errorf("decoding layout of template %s: %w", t.ID, err)
 	}
-	t.Elements, t.Sizing, t.Adapt = l.Elements, l.Sizing, l.Adapt
+	// Migration 033 put every stored template in list order.
+	t.Elements, t.Sizing, t.Adapt, t.Layering = l.Elements, l.Sizing, l.Adapt, labels.LayeringList
 	if t.Elements == nil {
 		t.Elements = []labels.Element{}
 	}
@@ -198,6 +199,8 @@ func (s *Store) validateTemplate(t *labels.Template) error {
 	if len(problems) > 0 {
 		return &labels.ValidationError{Problems: problems}
 	}
+	// Problems name elements as given; they are stored in drawing order.
+	t.ListOrder()
 	return nil
 }
 

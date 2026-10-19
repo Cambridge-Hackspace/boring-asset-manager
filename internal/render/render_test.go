@@ -86,6 +86,13 @@ var goldenTemplates = map[string]string{
 		{"type":"static_image","x":0.05,"y":0.05,"width":0.6,"height":0.9,"image_id":"` + logoID + `"},
 		{"type":"text","x":0.7,"y":0.05,"width":1.25,"height":0.4,"font_size":30,"min_font_size":8,"align":"right","content_binding":"{{asset.name}}"},
 		{"type":"text","x":0.7,"y":0.5,"width":1.25,"height":0.2,"font_size":8,"min_font_size":7,"content_binding":"{{field.notes}}"}]}`,
+	// Drawn in list order: the logo over text on the left, text over the
+	// logo on the right.
+	"layers": `{"id":"layers","name":"Layers","units":"mm","width":50,"height":20,"dpi":203,"layering":"list","elements":[
+		{"type":"text","x":1,"y":2,"width":23,"height":16,"font_size":40,"font_weight":"bold","content_binding":"BAM"},
+		{"type":"static_image","x":4,"y":2,"width":18,"height":16,"image_id":"` + logoID + `"},
+		{"type":"static_image","x":27,"y":2,"width":22,"height":16,"image_id":"` + logoID + `"},
+		{"type":"text","x":26,"y":2,"width":23,"height":16,"font_size":40,"font_weight":"bold","content_binding":"BAM"}]}`,
 }
 
 // goldenPayloads lists what each golden's barcodes must decode to; see
@@ -94,6 +101,7 @@ var goldenPayloads = map[string][]string{
 	"qr_label":      {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
 	"micro_code128": {"BAM-0042", "TOOL-0042"},
 	"image_inches":  {},
+	"layers":        {},
 }
 
 func renderAll(t *testing.T, s *Scene) map[string][]byte {
@@ -133,7 +141,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"image_inches", "micro_code128", "qr_label"} {
+	for _, name := range []string{"image_inches", "layers", "micro_code128", "qr_label"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -252,7 +260,7 @@ func TestModulesSnapToWholeDots(t *testing.T) {
 		t.Fatal(err)
 	}
 	minX, minY, maxX, maxY := math.MaxInt, math.MaxInt, 0, 0
-	for _, r := range s.Rects {
+	for _, r := range s.Items[0].Rects {
 		if r.H != 8 || r.W%8 != 0 {
 			t.Fatalf("rect %+v is not a whole number of 8-dot modules", r)
 		}
@@ -372,5 +380,68 @@ func TestMonoRasterIsPureBlackAndWhite(t *testing.T) {
 	}
 	if !sawGray {
 		t.Error("grayscale raster has no anti-aliasing or image tones")
+	}
+}
+
+// TestDrawsInListOrder draws an opaque white image over a code, and the code
+// over the image: each backend shows whichever is listed last.
+func TestDrawsInListOrder(t *testing.T) {
+	white := image.NewNRGBA(image.Rect(0, 0, 4, 4))
+	for i := range white.Pix {
+		white.Pix[i] = 0xFF
+	}
+	images := memImages{logoID: white, "11111111-2222-4333-8444-555555555555": testLogo()}
+	code := `{"type":"generator","generator_type":"qr","x":0,"y":0,"width":20,"height":20,"quiet_zone":0,"content_binding":"HELLO"}`
+	cover := `{"type":"static_image","x":0,"y":0,"width":20,"height":20,"image_id":"` + logoID + `"}`
+	for _, tc := range []struct {
+		name     string
+		elements string
+		dark     bool
+	}{
+		{"image over code", code + "," + cover, false},
+		{"code over image", cover + "," + code, true},
+	} {
+		tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":20,"height":20,"dpi":300,"layering":"list","elements":[`+tc.elements+`]}`)
+		s, err := Layout(tpl, labels.Data{}, images)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The QR Code's top-left finder pattern is dark at its corner.
+		for _, mono := range []bool{false, true} {
+			if v := s.Raster(mono).GrayAt(2, 2).Y; (v == 0) != tc.dark {
+				t.Errorf("%s, mono %v: the corner is %d", tc.name, mono, v)
+			}
+		}
+		var svg bytes.Buffer
+		if err := WriteSVG(&svg, s); err != nil {
+			t.Fatal(err)
+		}
+		if imageFirst := strings.Index(svg.String(), "<image") < strings.Index(svg.String(), "crispEdges"); imageFirst != tc.dark {
+			t.Errorf("%s: the SVG draws them in the wrong order", tc.name)
+		}
+	}
+
+	// An image with transparency keeps it, as a soft mask, over what is
+	// drawn before it, and only then.
+	for _, tc := range []struct {
+		elements string
+		mask     bool
+	}{
+		{`{"type":"static_image","x":0,"y":0,"width":20,"height":20,"image_id":"11111111-2222-4333-8444-555555555555"},` + code, false},
+		{code + `,{"type":"static_image","x":0,"y":0,"width":20,"height":20,"image_id":"11111111-2222-4333-8444-555555555555"}`, true},
+		{code + "," + cover, false},
+	} {
+		tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":20,"height":20,"dpi":300,"layering":"list","elements":[`+tc.elements+`]}`)
+		s, err := Layout(tpl, labels.Data{}, images)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var pdf bytes.Buffer
+		if err := WritePDF(&pdf, s); err != nil {
+			t.Fatal(err)
+		}
+		if got := bytes.Contains(pdf.Bytes(), []byte("/SMask")); got != tc.mask {
+			t.Errorf("%.80s...: soft mask %v, want %v", tc.elements, got, tc.mask)
+		}
 	}
 }

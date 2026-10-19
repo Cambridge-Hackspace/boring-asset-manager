@@ -1,9 +1,10 @@
 // Package render lays out a label template for one asset on a grid of whole
 // printer dots, then draws that scene as SVG, PNG or PDF (README §4).
 //
-// Every backend draws the same scene, in the same order: images, then text,
-// then barcode modules. Text is drawn as glyph outlines, so output never
-// depends on the fonts installed where it is viewed.
+// Every backend draws the same scene, item by item, in the order the
+// template lists its elements, each over those before it. Text is drawn as
+// glyph outlines, so output never depends on the fonts installed where it is
+// viewed.
 package render
 
 import (
@@ -20,12 +21,22 @@ type Scene struct {
 	// written into SVG output.
 	Units string
 
-	Images []PlacedImage
-	// Paths are glyph outlines, filled with the nonzero winding rule.
-	Paths []Path
+	// Items are drawn in order, the first at the back.
+	Items []Item
+}
+
+// Item is one thing drawn: exactly one of an image, a path or barcode
+// modules.
+type Item struct {
+	Image *PlacedImage
+	// Path is glyph outlines, filled with the nonzero winding rule.
+	Path Path
 	// Rects are dark barcode modules, merged into runs.
 	Rects []Rect
 }
+
+// isPath reports whether the item is a filled path.
+func (it *Item) isPath() bool { return it.Image == nil && it.Rects == nil }
 
 // Rect is a dark rectangle in dots.
 type Rect struct {
@@ -91,9 +102,12 @@ func round(v float64) int {
 // Parts counts what the scene holds: path segments, barcode rectangles and
 // images. Memory and the time to write the scene out grow with it.
 func (s *Scene) Parts() int {
-	n := len(s.Rects) + len(s.Images)
-	for _, p := range s.Paths {
-		n += len(p)
+	n := 0
+	for _, it := range s.Items {
+		n += len(it.Rects) + len(it.Path)
+		if it.Image != nil {
+			n++
+		}
 	}
 	return n
 }

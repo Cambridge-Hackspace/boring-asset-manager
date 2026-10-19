@@ -112,6 +112,15 @@ func TestMCPLabelTools(t *testing.T) {
 	if len(preview.Labels[0].Elements) != 2 {
 		t.Errorf("after removing: %+v", preview)
 	}
+	// Bringing the code to the front: elements are drawn as listed.
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "move_elements": []any{map[string]any{"index": 0, "to": 9}}}), &saved)
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &preview)
+	if got := preview.Labels[0].Elements; len(got) != 2 || got[0].Value != "Sample asset" || got[1].Value == "Sample asset" {
+		t.Errorf("after moving: %+v", got)
+	}
+	if res := callTool(t, cs, "save_template", map[string]any{"id": tag, "move_elements": []any{map[string]any{"index": 2, "to": 0}}}); !res.IsError {
+		t.Errorf("moved an element that is not there: %s", toolText(res))
+	}
 	// A draft never saved, too, and one that cannot be made for an asset says why.
 	draft := map[string]any{}
 	_ = json.Unmarshal([]byte(labelTemplate), &draft)

@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, goTo, test, unique } from './fixtures';
 
 test('design a template with the mouse and keyboard, and save it', async ({ signedIn: page, api, printer }) => {
@@ -72,7 +73,7 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
   const id = new URL(page.url()).pathname.split('/')[2]!;
   await expect(page.getByText(id, { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('list', { name: 'Elements' }).getByRole('listitem')).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('listitem')).toHaveCount(2);
   const saved = await api.call('GET', `/templates/${id}`);
   expect(saved.template.elements[0]).toMatchObject({ type: 'text', x: left });
   expect(saved.template.elements[1]).toMatchObject({ type: 'generator', generator_type: 'qr', x: x0 + 5.5 });
@@ -151,11 +152,12 @@ test('make a template adaptive, see it on each printer, and print it on two roll
   await page.getByLabel('Narrowest (mm)').fill('25');
   await page.getByLabel('Narrowest (mm)').press('Tab');
   // The code pinned to the top left, the name stretching beside it.
-  const elements = page.getByRole('list', { name: 'Elements' });
-  await elements.getByRole('button', { name: /^Barcode 1/ }).click();
+  // Written without layering, it is stored as it was drawn: text, then the code.
+  const layers = page.getByRole('list', { name: 'Layers' });
+  await layers.getByRole('button', { name: 'QR code' }).click();
   await page.getByLabel('Across').selectOption('start');
   await page.getByLabel('Down').selectOption('start');
-  await elements.getByRole('button', { name: /^Text 2/ }).click();
+  await layers.getByRole('button', { name: 'Text: {{asset.name}}' }).click();
   await page.getByLabel('Across').selectOption('both');
   await page.getByLabel('Down').selectOption('start');
 
@@ -172,4 +174,47 @@ test('make a template adaptive, see it on each printer, and print it on two roll
     await api.call('POST', `/printers/${p.id}/print`, { template_id: template.id, asset_ids: [asset.asset.id], copies: 1 });
   }
   await printer.job(2);
+});
+
+test('stack elements: the top one takes a click, Alt+click the one beneath, and layers drag', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Stack'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [
+      { type: 'text', x: 2, y: 2, width: 40, height: 20, font_size: 14, content_binding: '{{asset.name}}' },
+      { type: 'generator', generator_type: 'qr', x: 10, y: 5, width: 15, height: 15 },
+    ],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const layers = page.getByRole('list', { name: 'Layers' });
+  await expect(layers.getByRole('button')).toHaveText(['QR code', 'Text: {{asset.name}}']);
+
+  // Where they overlap, a click takes the code on top, and Alt+click the text beneath.
+  const code = page.getByRole('button', { name: 'Barcode 2 (qr)' });
+  const box = (await code.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(code).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.down('Alt');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.up('Alt');
+  await expect(page.getByRole('button', { name: /^Text 1/, pressed: true })).toBeFocused();
+  await expect(layers.getByRole('button', { name: 'Text: {{asset.name}}' })).toHaveAttribute('aria-pressed', 'true');
+
+  // Dragging the text's layer over the code's brings it to the top.
+  await layers.getByRole('listitem').filter({ hasText: 'Text:' }).dragTo(layers.getByRole('listitem').filter({ hasText: 'QR code' }));
+  await expect(layers.getByRole('button')).toHaveText(['Text: {{asset.name}}', 'QR code']);
+  // Page Down on the focused element sends it back again.
+  await page.getByRole('button', { name: /^Text 2/ }).focus();
+  await page.keyboard.press('PageDown');
+  await expect(layers.getByRole('button')).toHaveText(['QR code', 'Text: {{asset.name}}']);
+  await page.getByRole('button', { name: 'Bring to front' }).click();
+  await expect(layers.getByRole('button')).toHaveText(['Text: {{asset.name}}', 'QR code']);
+
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.layering).toBe('list');
+  expect(saved.template.elements.map((e: { type: string }) => e.type)).toEqual(['generator', 'text']);
 });

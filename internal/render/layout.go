@@ -31,7 +31,7 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 	}
 	canvas := image.Rect(0, 0, s.Width, s.Height)
 
-	for i := range t.Elements {
+	for _, i := range t.DrawingOrder() {
 		e := &t.Elements[i]
 		path := fmt.Sprintf("elements[%d]", i)
 		fail := func(format string, args ...any) error {
@@ -73,7 +73,7 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 				return nil, fail("%v", err)
 			}
 			if len(p) > 0 {
-				s.Paths = append(s.Paths, p)
+				s.Items = append(s.Items, Item{Path: p})
 			}
 
 		case labels.ElementStaticImage:
@@ -84,7 +84,8 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 			if err != nil {
 				return nil, fail("loading image %s: %v", e.ImageID, err)
 			}
-			s.Images = append(s.Images, fitImage(img, box))
+			placed := fitImage(img, box)
+			s.Items = append(s.Items, Item{Image: &placed})
 
 		default:
 			return nil, fail("unknown element type %q", e.Type)
@@ -130,6 +131,7 @@ func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectang
 			sym.Cols, sym.Rows, needW, needH, bw, bh)
 	}
 
+	var rects []Rect
 	rowHeight := module
 	x0 := box.Min.X + (bw-sym.Cols*module)/2
 	y0 := box.Min.Y + (bh-sym.Rows*module)/2
@@ -146,8 +148,11 @@ func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectang
 			for c < sym.Cols && sym.Dark[r*sym.Cols+c] {
 				c++
 			}
-			s.Rects = append(s.Rects, Rect{X: x0 + start*module, Y: y0 + r*module, W: (c - start) * module, H: rowHeight})
+			rects = append(rects, Rect{X: x0 + start*module, Y: y0 + r*module, W: (c - start) * module, H: rowHeight})
 		}
+	}
+	if len(rects) > 0 {
+		s.Items = append(s.Items, Item{Rects: rects})
 	}
 	return nil
 }

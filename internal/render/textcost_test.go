@@ -136,11 +136,12 @@ func TestLongTextLaysOutQuickly(t *testing.T) {
 }
 
 func TestSceneParts(t *testing.T) {
-	s := &Scene{
-		Rects:  make([]Rect, 3),
-		Images: make([]PlacedImage, 1),
-		Paths:  []Path{make(Path, 5), make(Path, 2)},
-	}
+	s := &Scene{Items: []Item{
+		{Rects: make([]Rect, 3)},
+		{Image: &PlacedImage{}},
+		{Path: make(Path, 5)},
+		{Path: make(Path, 2)},
+	}}
 	if got := s.Parts(); got != 11 {
 		t.Errorf("Parts() = %d, want 11", got)
 	}

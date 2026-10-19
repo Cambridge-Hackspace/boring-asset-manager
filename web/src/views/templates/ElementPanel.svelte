@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { GeneratorInfo } from '../../lib/models';
-  import { describeElement, opensAPage, SCAN_URL, withProp, type TemplateDoc, type TemplateElement } from '../../lib/template';
+  import { describeElement, opensAPage, SCAN_URL, withProp, type Restack, type TemplateDoc, type TemplateElement } from '../../lib/template';
   import ImagePicker from './ImagePicker.svelte';
+  import StackButtons from './StackButtons.svelte';
   import AdaptiveElementPanel from './AdaptiveElementPanel.svelte';
 
   // Edits one element. Each change goes through onupdate with the new
@@ -14,7 +15,7 @@
     problems,
     onupdate,
     onremove,
-    onorder,
+    onrestack,
   }: {
     doc: TemplateDoc;
     index: number;
@@ -23,7 +24,7 @@
     problems: string[];
     onupdate: (e: TemplateElement) => void;
     onremove: () => void;
-    onorder: (delta: number) => void;
+    onrestack: (how: Restack) => void;
   } = $props();
 
   const e = $derived(doc.elements[index]!);
@@ -55,12 +56,9 @@
 <section class="card space-y-4" aria-labelledby="element-heading">
   <div class="flex flex-wrap items-center justify-between gap-2">
     <h2 id="element-heading" class="text-lg font-semibold">{describeElement(e, index)}</h2>
-    <div class="flex flex-wrap gap-1">
-      <button type="button" class="btn-secondary" onclick={() => onorder(-1)} disabled={index === 0}>Send backward</button>
-      <button type="button" class="btn-secondary" onclick={() => onorder(1)} disabled={index === doc.elements.length - 1}>Bring forward</button>
-      <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={onremove}>Remove</button>
-    </div>
+    <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={onremove}>Remove</button>
   </div>
+  <StackButtons elements={doc.elements} selected={[index]} {onrestack} />
 
   {#if problems.length}
     <ul class="space-y-1" role="alert">

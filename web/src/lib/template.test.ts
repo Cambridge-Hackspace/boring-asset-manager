@@ -4,18 +4,24 @@ import {
   blankTemplate,
   convertUnits,
   elementIndex,
+  elementsAt,
+  inListOrder,
+  layerName,
   makeAdaptive,
   makeFixed,
   moveElements,
+  moveLayer,
   newElement,
   opensAPage,
   placeholders,
   resizeElement,
   resizeLabel,
+  restack,
   snap,
   tooSmall,
   withProp,
   type TemplateDoc,
+  type TemplateElement,
 } from './template';
 
 const doc = (): TemplateDoc => ({
@@ -191,5 +197,57 @@ describe('codes phones open', () => {
     expect(opensAPage(qr())).toBe(false);
     expect(opensAPage(qr('{{asset.code.qr}}'))).toBe(false);
     expect(opensAPage({ ...qr(), generator_type: 'code128' })).toBe(true);
+  });
+});
+
+describe('layers', () => {
+  const els = (...names: string[]): TemplateElement[] => names.map((n) => ({ type: 'text', x: 0, y: 0, width: 1, height: 1, content_binding: n }));
+  const names = (r: { elements: TemplateElement[] }) => r.elements.map((e) => e.content_binding).join('');
+
+  it('lists a template from before layering as it was drawn: images, then text, then codes', () => {
+    const old: TemplateDoc = {
+      ...blankTemplate(),
+      layering: undefined,
+      elements: [
+        { type: 'generator', generator_type: 'qr', x: 0, y: 0, width: 5, height: 5 },
+        { type: 'text', x: 0, y: 0, width: 5, height: 5, content_binding: 'a' },
+        { type: 'static_image', x: 0, y: 0, width: 5, height: 5, image_id: 'i' },
+        { type: 'text', x: 0, y: 0, width: 5, height: 5, content_binding: 'b' },
+      ],
+    };
+    const listed = inListOrder(old);
+    expect(listed.layering).toBe('list');
+    expect(listed.elements.map((e) => e.content_binding ?? e.type)).toEqual(['static_image', 'a', 'b', 'generator']);
+    expect(inListOrder(listed)).toBe(listed);
+  });
+
+  it('brings forward and sends backward one step, past what is not selected', () => {
+    expect(restack(els('a', 'b', 'c', 'd'), [0, 2], 'forward')).toEqual({ elements: els('b', 'a', 'd', 'c'), selected: [1, 3] });
+    expect(names(restack(els('a', 'b', 'c', 'd'), [2, 3], 'forward'))).toBe('abcd');
+    expect(restack(els('a', 'b', 'c', 'd'), [1, 3], 'backward')).toEqual({ elements: els('b', 'a', 'd', 'c'), selected: [0, 2] });
+  });
+
+  it('brings to the front and sends to the back, keeping the selection in its order', () => {
+    expect(restack(els('a', 'b', 'c', 'd'), [0, 2], 'front')).toEqual({ elements: els('b', 'd', 'a', 'c'), selected: [2, 3] });
+    expect(restack(els('a', 'b', 'c', 'd'), [3, 1], 'back')).toEqual({ elements: els('b', 'd', 'a', 'c'), selected: [0, 1] });
+  });
+
+  it('moves one layer, and the selection follows', () => {
+    expect(moveLayer(els('a', 'b', 'c'), [0], 0, 2)).toEqual({ elements: els('b', 'c', 'a'), selected: [2] });
+    expect(moveLayer(els('a', 'b', 'c'), [1], 2, 0)).toEqual({ elements: els('c', 'a', 'b'), selected: [2] });
+  });
+
+  it('finds the elements under a point, the top one first', () => {
+    const d = doc();
+    d.elements.push({ type: 'text', x: 15, y: 8, width: 50, height: 10 });
+    expect(elementsAt(d, 18, 10)).toEqual([2, 0]);
+    expect(elementsAt(d, 85, 1)).toEqual([]);
+  });
+
+  it('names layers by what they show', () => {
+    expect(layerName({ type: 'text', x: 0, y: 0, width: 1, height: 1, content_binding: '{{asset.name}}' })).toBe('Text: {{asset.name}}');
+    expect(layerName({ type: 'generator', generator_type: 'qr', x: 0, y: 0, width: 1, height: 1 })).toBe('QR code');
+    expect(layerName({ type: 'generator', generator_type: 'code128', content_binding: '{{asset.id}}', x: 0, y: 0, width: 1, height: 1 })).toBe('Code 128: {{asset.id}}');
+    expect(layerName({ type: 'static_image', x: 0, y: 0, width: 1, height: 1, image_id: 'x' })).toBe('Image');
   });
 });
