@@ -57,6 +57,40 @@ describe('TemplateEditor', () => {
     expect((screen.getByLabelText('Top') as HTMLInputElement).value).toBe('5');
   });
 
+  it('keeps the newest preview when an earlier one answers after it', async () => {
+    // Previews are held until released, the first one asked last.
+    const held: { left: number; release: () => void }[] = [];
+    let hold = false;
+    const { sent } = api({
+      'POST /templates/preview': (b) => {
+        if (!hold) return '<svg/>';
+        return new Promise((resolve) => held.push({ left: (b as { template: TemplateDoc }).template.elements[0]!.x, release: () => resolve('<svg/>') }));
+      },
+    });
+    let made = 0;
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => `blob:preview-${++made}`, revokeObjectURL: () => {} }));
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    const image = () => screen.getByAltText('Label preview').getAttribute('src');
+    await vi.waitFor(() => expect(image()).toBe('blob:preview-1'));
+
+    hold = true;
+    const box = await screen.findByRole('button', { name: 'Text 1: {{asset.name}}', pressed: false });
+    await fireEvent.focus(box);
+    await fireEvent.keyDown(box, { key: 'ArrowRight' });
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    await fireEvent.keyDown(box, { key: 'ArrowRight' });
+    await vi.waitFor(() => expect(held).toHaveLength(2));
+    expect(held.map((h) => h.left)).toEqual([10.5, 11]);
+
+    // The second answers first, and is shown; the first, late, is dropped.
+    held[1]!.release();
+    await vi.waitFor(() => expect(image()).toBe('blob:preview-2'));
+    held[0]!.release();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(image()).toBe('blob:preview-2');
+    expect(sent.filter((r) => r.path === '/templates/preview')).toHaveLength(3);
+  });
+
   const printers = () => ({
     printers: [
       { id: 'p0', name: 'Rollo', driver: 'tspl', model: 'Rollo X1038', media: '4x6', connection: { type: 'tcp', address: 'rollo' }, created_at: '', updated_at: '' },
