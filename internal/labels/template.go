@@ -49,6 +49,26 @@ const (
 	MaxPolygonPoints = 256
 )
 
+// Mirrors flip an image.
+const (
+	MirrorAcross = "across"
+	MirrorDown   = "down"
+	MirrorBoth   = "both"
+)
+
+// MaxGuides bounds a template's guides each way; maxGroupLength a group's
+// name.
+const (
+	MaxGuides      = 50
+	maxGroupLength = 64
+)
+
+// Guides are lines in the editor at places across (X) and down (Y).
+type Guides struct {
+	X []float64 `json:"x,omitempty"`
+	Y []float64 `json:"y,omitempty"`
+}
+
 // DefaultStrokeMM is a shape's stroke width when it gives none: four dots
 // at 406 DPI, three at 300 and two at 203.
 const DefaultStrokeMM = 0.25
@@ -140,6 +160,10 @@ type Template struct {
 	// Turnable lets an adaptive template take labels turned a quarter turn
 	// from the sizes it takes, its content turned to match.
 	Turnable bool `json:"turnable,omitempty"`
+	// Guides are lines in the editor to line elements up against, across
+	// (at each X) and down (at each Y), in the template's units. They never
+	// print.
+	Guides *Guides `json:"guides,omitempty"`
 	// Elements are drawn in this order: the first at the back.
 	Elements  []Element `json:"elements"`
 	CreatedAt time.Time `json:"created_at"`
@@ -202,8 +226,17 @@ type Element struct {
 	Wrap        bool    `json:"wrap,omitempty"`
 	MinFontSize float64 `json:"min_font_size,omitempty"`
 
+	// Group names the group an element is in, which the editor moves,
+	// resizes and turns as one; Locked keeps the editor from selecting it on
+	// the canvas by accident. Neither changes what prints.
+	Group  string `json:"group,omitempty"`
+	Locked bool   `json:"locked,omitempty"`
+
 	// static_image
 	ImageID string `json:"image_id,omitempty"`
+	// Mirror flips an image across (left for right), down (top for bottom)
+	// or both.
+	Mirror string `json:"mirror,omitempty"`
 
 	// shape, and Fill for text too: what it is, how it is drawn, and its
 	// paint. A rectangle may
@@ -390,6 +423,23 @@ func (t *Template) Validate() error {
 	if t.Turnable && !t.Adaptive() {
 		v.add("turnable", "applies only to adaptive templates")
 	}
+	if g := t.Guides; g != nil {
+		for _, axis := range []struct {
+			path  string
+			at    []float64
+			limit float64
+		}{{"guides.x", g.X, t.Width}, {"guides.y", g.Y, t.Height}} {
+			if len(axis.at) > MaxGuides {
+				v.add(axis.path, fmt.Sprintf("at most %d guides are allowed", MaxGuides))
+			}
+			for _, at := range axis.at {
+				if !(at >= 0 && at <= axis.limit+geometryTolerance) {
+					v.add(axis.path, "must be on the label")
+					break
+				}
+			}
+		}
+	}
 
 	if len(t.Elements) > MaxElements {
 		v.add("elements", fmt.Sprintf("at most %d elements are allowed", MaxElements))
@@ -483,6 +533,12 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"margin_unit":      e.MarginUnit != "",
 		"vertical_align":   e.VerticalAlign != "",
 	}
+	if e.Type != ElementStaticImage && e.Mirror != "" {
+		v.add(at("mirror"), "applies only to images: shapes are flipped by their points, and text and codes are turned")
+	}
+	if len(e.Group) > maxGroupLength || strings.TrimSpace(e.Group) != e.Group {
+		v.add(at("group"), fmt.Sprintf("must be at most %d characters, without spaces at either end", maxGroupLength))
+	}
 	shapeProps := map[string]bool{
 		"shape":         e.Shape != "",
 		"corner_radius": e.CornerRadius != 0,
@@ -563,6 +619,9 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		unset(generatorProps)
 		unset(textProps)
 		unset(shapeProps)
+		if e.Mirror != "" && e.Mirror != MirrorAcross && e.Mirror != MirrorDown && e.Mirror != MirrorBoth {
+			v.add(at("mirror"), `must be "across", "down" or "both"`)
+		}
 		unset(map[string]bool{"content_binding": e.ContentBinding != "", "align": e.Align != ""})
 		if _, err := uuid.Parse(e.ImageID); err != nil {
 			v.add(at("image_id"), "must be the ID of an uploaded image")

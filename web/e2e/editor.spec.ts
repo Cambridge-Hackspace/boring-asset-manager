@@ -154,10 +154,10 @@ test('make a template adaptive, see it on each printer, and print it on two roll
   // The code pinned to the top left, the name stretching beside it.
   // Written without layering, it is stored as it was drawn: text, then the code.
   const layers = page.getByRole('list', { name: 'Layers' });
-  await layers.getByRole('button', { name: 'QR code' }).click();
+  await layers.getByRole('button', { name: 'QR code', exact: true }).click();
   await page.getByLabel('Across', { exact: true }).selectOption('start');
   await page.getByLabel('Down', { exact: true }).selectOption('start');
-  await layers.getByRole('button', { name: 'Text: {{asset.name}}' }).click();
+  await layers.getByRole('button', { name: 'Text: {{asset.name}}', exact: true }).click();
   await page.getByLabel('Across', { exact: true }).selectOption('both');
   await page.getByLabel('Down', { exact: true }).selectOption('start');
 
@@ -186,7 +186,7 @@ test('stack elements: the top one takes a click, Alt+click the one beneath, and 
   });
   await page.goto(`/templates/${template.id}/edit`);
   const layers = page.getByRole('list', { name: 'Layers' });
-  await expect(layers.getByRole('button')).toHaveText(['QR code', 'Text: {{asset.name}}']);
+  await expect(layers.locator('li > button:not([aria-label^="Lock"])')).toHaveText(['QR code', 'Text: {{asset.name}}']);
 
   // Where they overlap, a click takes the code on top, and Alt+click the text beneath.
   const code = page.getByRole('button', { name: 'Barcode 2 (qr)' });
@@ -197,17 +197,17 @@ test('stack elements: the top one takes a click, Alt+click the one beneath, and 
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.keyboard.up('Alt');
   await expect(page.getByRole('button', { name: /^Text 1/, pressed: true })).toBeFocused();
-  await expect(layers.getByRole('button', { name: 'Text: {{asset.name}}' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(layers.getByRole('button', { name: 'Text: {{asset.name}}', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
   // Dragging the text's layer over the code's brings it to the top.
   await layers.getByRole('listitem').filter({ hasText: 'Text:' }).dragTo(layers.getByRole('listitem').filter({ hasText: 'QR code' }));
-  await expect(layers.getByRole('button')).toHaveText(['Text: {{asset.name}}', 'QR code']);
+  await expect(layers.locator('li > button:not([aria-label^="Lock"])')).toHaveText(['Text: {{asset.name}}', 'QR code']);
   // Page Down on the focused element sends it back again.
   await page.getByRole('button', { name: /^Text 2/ }).focus();
   await page.keyboard.press('PageDown');
-  await expect(layers.getByRole('button')).toHaveText(['QR code', 'Text: {{asset.name}}']);
+  await expect(layers.locator('li > button:not([aria-label^="Lock"])')).toHaveText(['QR code', 'Text: {{asset.name}}']);
   await page.getByRole('button', { name: 'Bring to front' }).click();
-  await expect(layers.getByRole('button')).toHaveText(['Text: {{asset.name}}', 'QR code']);
+  await expect(layers.locator('li > button:not([aria-label^="Lock"])')).toHaveText(['Text: {{asset.name}}', 'QR code']);
 
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
@@ -409,7 +409,7 @@ test('import SVG artwork as shapes, and save them', async ({ signedIn: page, api
     '<circle cx="12" cy="12" r="11" fill="none" stroke="#000"/><text x="2" y="23">Caution</text></svg>';
   await page.getByLabel('Import SVG').setInputFiles({ name: 'warning.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) });
   await expect(page.getByRole('status').filter({ hasText: 'Imported 2 shapes from warning.svg.' })).toContainText('Left out: text');
-  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('button', { name: 'Artwork' })).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('button', { name: 'Artwork', exact: true })).toHaveCount(2);
 
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
@@ -418,4 +418,81 @@ test('import SVG artwork as shapes, and save them', async ({ signedIn: page, api
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
   const saved = await api.call('GET', `/templates/${template.id}`);
   expect(saved.template.elements.map((e: { shape: string; fill_rule?: string }) => [e.shape, e.fill_rule ?? ''])).toEqual([['path', 'evenodd'], ['path', '']]);
+});
+
+test('zoom, place guides, line up and group elements, copy them, and see every shortcut', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Workspace'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [
+      { type: 'text', x: 3, y: 3, width: 20, height: 8, font_size: 10, content_binding: 'One' },
+      { type: 'text', x: 30, y: 12, width: 20, height: 8, font_size: 10, content_binding: 'Two' },
+    ],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const view = page.getByRole('toolbar', { name: 'View' });
+  await view.getByRole('button', { name: 'Zoom in' }).click();
+  await expect(view.getByText('125%')).toBeVisible();
+  await view.getByRole('button', { name: 'Fit' }).click();
+  await expect(view.getByText('100%')).toBeVisible();
+
+  // A guide dragged down out of the top ruler, then moved with the keyboard.
+  const ruler = page.locator('.ruler').first();
+  const r = (await ruler.boundingBox())!;
+  const label = (await page.getByRole('img', { name: 'Label preview' }).boundingBox())!;
+  await page.mouse.move(r.x + 50, r.y + r.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(r.x + 50, label.y + label.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const guide = page.getByRole('slider', { name: 'Horizontal guide' });
+  await expect(guide).toHaveCount(1);
+  await guide.focus();
+  const before = Number(await guide.getAttribute('aria-valuenow'));
+  await page.keyboard.press('ArrowDown');
+  await expect(guide).toHaveAttribute('aria-valuenow', String(before + 0.5));
+
+  // Both, by a box drawn round them, lined up by their tops, and grouped.
+  await page.mouse.move(label.x + 2, label.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(label.x + label.width - 2, label.y + label.height - 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByRole('heading', { name: '2 elements' })).toBeVisible();
+  await page.getByRole('group', { name: 'Line up' }).getByRole('button', { name: 'Tops' }).click();
+  await page.keyboard.press('Control+g');
+  await expect(page.getByRole('heading', { name: 'Group group-1' })).toBeVisible();
+
+  // A click on one takes the group; copied and pasted, it comes back as another.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Text 1/ }).click();
+  await expect(page.getByRole('heading', { name: 'Group group-1' })).toBeVisible();
+  await page.keyboard.press('Control+c');
+  await page.keyboard.press('Control+v');
+  await expect(page.getByRole('heading', { name: 'Group group-2' })).toBeVisible();
+
+  await page.keyboard.press('?');
+  const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(dialog).toBeVisible();
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements.map((e: { group?: string; y: number }) => [e.group, e.y])).toEqual([
+    ['group-1', 3], ['group-1', 3], ['group-2', 5], ['group-2', 5],
+  ]);
+  expect(saved.template.guides.y).toHaveLength(1);
+});
+
+test('the editor fits a phone', async ({ signedIn: page, api }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Phone'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [{ type: 'text', x: 3, y: 3, width: 20, height: 8, font_size: 10, content_binding: 'One' }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  await expect(page.getByRole('img', { name: 'Label preview' })).toBeVisible();
+  // Nothing reaches past the screen's edge.
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(wide).toBeLessThanOrEqual(390);
 });

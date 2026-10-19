@@ -188,6 +188,20 @@ func TestMCPLabelTools(t *testing.T) {
 	}
 	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "remove_elements": []int{2}}), &saved)
 
+	// The text lined up with the code's left edge.
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag,
+		"arrange_elements": map[string]any{"elements": []int{0, 1}, "align": "left"}}), &saved)
+	var lined struct {
+		Template struct{ Elements []struct{ X float64 } }
+	}
+	structured(t, callTool(t, cs, "get_template", map[string]any{"id": tag}), &lined)
+	if e := lined.Template.Elements; e[0].X != 1 || e[1].X != 1 {
+		t.Errorf("lined up: %+v", e)
+	}
+	if res := callTool(t, cs, "save_template", map[string]any{"id": tag, "arrange_elements": map[string]any{"elements": []int{0, 1}, "distribute": "across"}}); !res.IsError {
+		t.Errorf("spread out two: %s", toolText(res))
+	}
+
 	// Turned upright with everything on it, then back.
 	var got struct {
 		Template struct {

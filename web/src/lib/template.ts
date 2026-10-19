@@ -59,6 +59,12 @@ export interface TemplateElement {
   min_font_size?: number;
   // static_image
   image_id?: string;
+  /** An image flipped across, down or both. */
+  mirror?: 'across' | 'down' | 'both';
+  /** The group it is in, moved, resized and turned as one in the editor. */
+  group?: string;
+  /** Kept from being selected on the canvas; still selectable from the layers. */
+  locked?: boolean;
   // shape, and fill for text too (black, or white reversed out of black)
   shape?: ShapeKind;
   /** A rectangle's corners, in the template's units. */
@@ -98,6 +104,8 @@ export interface TemplateDoc {
   feed?: Feed;
   /** An adaptive template takes labels turned a quarter turn too, its content turned to match. */
   turnable?: boolean;
+  /** Lines to line elements up against, across (at each x) and down (at each y); they never print. */
+  guides?: Guides;
   elements: TemplateElement[];
 }
 
@@ -264,7 +272,9 @@ export function bounds(e: TemplateElement): { x: number; y: number; width: numbe
 
 /**
  * Moves elements together by (dx, dy), snapped to the grid, without letting
- * any of them leave the canvas, as they lie once turned.
+ * any of them leave the canvas, as they lie once turned. An axis marked
+ * exact, snapped already to a guide or another element, is not put on the
+ * grid.
  */
 export function moveElements(
   doc: TemplateDoc,
@@ -273,6 +283,7 @@ export function moveElements(
   dx: number,
   dy: number,
   step: number,
+  exact: { x?: boolean; y?: boolean } = {},
 ): TemplateElement[] {
   const moving = indices.map((i) => start[i]!);
   if (!moving.length) return start;
@@ -282,11 +293,41 @@ export function moveElements(
   const maxX = Math.max(...boxes.map((b) => b.x + b.width));
   const maxY = Math.max(...boxes.map((b) => b.y + b.height));
   // Snap the group's corner, then keep the whole group inside.
-  const sx = clamp(snap(minX + dx, step, doc.units), 0, Math.max(0, doc.width - (maxX - minX))) - minX;
-  const sy = clamp(snap(minY + dy, step, doc.units), 0, Math.max(0, doc.height - (maxY - minY))) - minY;
+  const sx = clamp(exact.x ? tidy(minX + dx, doc.units) : snap(minX + dx, step, doc.units), 0, Math.max(0, doc.width - (maxX - minX))) - minX;
+  const sy = clamp(exact.y ? tidy(minY + dy, doc.units) : snap(minY + dy, step, doc.units), 0, Math.max(0, doc.height - (maxY - minY))) - minY;
   return start.map((e, i) =>
     indices.includes(i) ? { ...e, x: tidy(e.x + sx, doc.units), y: tidy(e.y + sy, doc.units) } : e,
   );
+}
+
+/**
+ * Scales elements together from the box round them, from to the box to:
+ * each keeps its place in it, its box scaled across and down, and its text
+ * and corners by the lesser of the two.
+ */
+export function scaleElements(doc: TemplateDoc, indices: number[], start: TemplateElement[], from: Box, to: Box): TemplateElement[] {
+  const sx = to.width / from.width;
+  const sy = to.height / from.height;
+  const s = Math.min(sx, sy);
+  const t = (v: number) => tidy(v, doc.units);
+  return start.map((e, i) => {
+    if (!indices.includes(i)) return e;
+    // Its center keeps its place in the box; its box scales.
+    const cx = to.x + (e.x + e.width / 2 - from.x) * sx;
+    const cy = to.y + (e.y + e.height / 2 - from.y) * sy;
+    const w = e.width * sx;
+    const h = e.height * sy;
+    return {
+      ...e,
+      x: t(cx - w / 2),
+      y: t(cy - h / 2),
+      width: t(w),
+      height: t(h),
+      ...(e.font_size ? { font_size: Math.max(1, Math.round(e.font_size * s * 2) / 2) } : {}),
+      ...(e.min_font_size ? { min_font_size: Math.max(1, Math.round(e.min_font_size * s * 2) / 2) } : {}),
+      ...(e.corner_radius ? { corner_radius: t(e.corner_radius * s) } : {}),
+    };
+  });
 }
 
 /** An angle as kept: from 0 up to 360, to a hundredth of a degree. */
@@ -718,4 +759,221 @@ export function marginOf(e: TemplateElement, side: Side): number | undefined {
   if (e.margin) return e.margin[side];
   if (e.quiet_zone === undefined || (e.generator_type === 'code128' && (side === 'top' || side === 'bottom'))) return undefined;
   return e.quiet_zone;
+}
+
+export interface Guides {
+  x?: number[];
+  y?: number[];
+}
+
+/** A box on the label, in the template's units. */
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The box round some elements, as they lie turned. */
+export function boundsOf(elements: TemplateElement[]): Box {
+  const boxes = elements.map(bounds);
+  const x = Math.min(...boxes.map((b) => b.x));
+  const y = Math.min(...boxes.map((b) => b.y));
+  return { x, y, width: Math.max(...boxes.map((b) => b.x + b.width)) - x, height: Math.max(...boxes.map((b) => b.y + b.height)) - y };
+}
+
+export type Alignment = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+
+/**
+ * Lines elements up as they lie turned: with each other, or with the label;
+ * or, with distribute, spreads three or more out evenly, the outermost
+ * staying put. As the server arranges them (README §4.1).
+ */
+export function arrange(doc: TemplateDoc, indices: number[], how: { align?: Alignment; distribute?: 'across' | 'down'; toLabel?: boolean }): TemplateElement[] {
+  const els = doc.elements;
+  const boxes = indices.map((i) => bounds(els[i]!));
+  const moved = new Map<number, [number, number]>();
+  if (how.distribute) {
+    if (indices.length < 3) return els;
+    const across = how.distribute === 'across';
+    const start = (b: Box) => (across ? b.x : b.y);
+    const size = (b: Box) => (across ? b.width : b.height);
+    const order = indices.map((_, k) => k).sort((a, b) => start(boxes[a]!) + size(boxes[a]!) / 2 - (start(boxes[b]!) + size(boxes[b]!) / 2));
+    const first = boxes[order[0]!]!;
+    const last = boxes[order[order.length - 1]!]!;
+    const total = boxes.reduce((n, b) => n + size(b), 0);
+    const gap = (start(last) + size(last) - start(first) - total) / (order.length - 1);
+    let at = start(first);
+    for (const k of order) {
+      const d = at - start(boxes[k]!);
+      moved.set(indices[k]!, across ? [d, 0] : [0, d]);
+      at += size(boxes[k]!) + gap;
+    }
+  } else if (how.align) {
+    if (indices.length < (how.toLabel ? 1 : 2)) return els;
+    const t = how.toLabel ? { x: 0, y: 0, width: doc.width, height: doc.height } : boundsOf(indices.map((i) => els[i]!));
+    boxes.forEach((b, k) => {
+      const dx = { left: t.x - b.x, center: t.x + t.width / 2 - (b.x + b.width / 2), right: t.x + t.width - (b.x + b.width) }[how.align as string] ?? 0;
+      const dy = { top: t.y - b.y, middle: t.y + t.height / 2 - (b.y + b.height / 2), bottom: t.y + t.height - (b.y + b.height) }[how.align as string] ?? 0;
+      moved.set(indices[k]!, [dx, dy]);
+    });
+  }
+  return els.map((e, i) => {
+    const d = moved.get(i);
+    return d ? { ...e, x: tidy(e.x + d[0], doc.units), y: tidy(e.y + d[1], doc.units) } : e;
+  });
+}
+
+/** Normalized path data, as the server writes it, with each point mirrored. */
+function mirrorPathData(d: string, across: boolean): string {
+  if (!/^[MLQCZ\d\s.eE+-]*$/.test(d)) return d;
+  let k = 0;
+  return d.replace(/-?\d*\.?\d+(?:[eE][+-]?\d+)?/g, (n) => {
+    const v = Number(n);
+    const mirror = across ? k % 2 === 0 : k % 2 === 1;
+    k++;
+    return mirror ? String(Math.round((1 - v) * 1e5) / 1e5) : n;
+  });
+}
+
+/**
+ * Flips elements across (left for right) or down, about the middle of them
+ * all: each moves to its mirrored place and its turn is mirrored. Images,
+ * polygons, artwork and lines are mirrored too; text and codes are not, so
+ * they stay readable.
+ */
+export function flipElements(doc: TemplateDoc, indices: number[], across: boolean): TemplateElement[] {
+  if (!indices.length) return doc.elements;
+  const box = boundsOf(indices.map((i) => doc.elements[i]!));
+  const mid = across ? box.x + box.width / 2 : box.y + box.height / 2;
+  return doc.elements.map((e, i) => {
+    if (!indices.includes(i)) return e;
+    let next: TemplateElement = across ? { ...e, x: tidy(2 * mid - (e.x + e.width), doc.units) } : { ...e, y: tidy(2 * mid - (e.y + e.height), doc.units) };
+    next = withProp(next, 'rotation', normalAngle(-(e.rotation ?? 0)) || undefined);
+    if (e.type === 'static_image') {
+      const a = (e.mirror === 'across' || e.mirror === 'both') !== across;
+      const d = (e.mirror === 'down' || e.mirror === 'both') !== !across;
+      next = withProp(next, 'mirror', a && d ? 'both' : a ? 'across' : d ? 'down' : undefined);
+    } else if (e.type === 'shape' && e.shape === 'polygon' && e.points) {
+      const frac = (v: number) => Math.round((1 - v) * 1e4) / 1e4;
+      next.points = e.points.map(([u, v]) => (across ? [frac(u), v] : [u, frac(v)]));
+    } else if (e.type === 'shape' && e.shape === 'path' && e.d) {
+      next.d = mirrorPathData(e.d, across);
+    } else if (e.type === 'shape' && e.shape === 'line') {
+      next = withProp(next, 'flip', e.flip ? undefined : true);
+    }
+    return next;
+  });
+}
+
+/** Where a moving box snaps to, and the lines it snapped to, to show. */
+export interface Snapped {
+  dx: number;
+  dy: number;
+  /** Lines across (at x) and down (at y) it snapped to. */
+  x?: number;
+  y?: number;
+}
+
+/**
+ * Snaps a box being moved by (dx, dy) to what is near: the edges and
+ * middles of the other elements, the label's edges and middle, and its
+ * guides, within threshold, on each axis by itself. An axis with nothing
+ * near keeps its delta, for the grid.
+ */
+export function smartSnap(doc: TemplateDoc, moving: number[], start: Box, dx: number, dy: number, threshold: number): Snapped {
+  const xs = [0, doc.width / 2, doc.width, ...(doc.guides?.x ?? [])];
+  const ys = [0, doc.height / 2, doc.height, ...(doc.guides?.y ?? [])];
+  doc.elements.forEach((e, i) => {
+    if (moving.includes(i)) return;
+    const b = bounds(e);
+    xs.push(b.x, b.x + b.width / 2, b.x + b.width);
+    ys.push(b.y, b.y + b.height / 2, b.y + b.height);
+  });
+  const best = (edges: number[], targets: number[]): [number, number] | null => {
+    let found: [number, number] | null = null;
+    for (const edge of edges) {
+      for (const t of targets) {
+        const d = t - edge;
+        if (Math.abs(d) <= threshold && (!found || Math.abs(d) < Math.abs(found[0]))) found = [d, t];
+      }
+    }
+    return found;
+  };
+  const sx = best([start.x + dx, start.x + dx + start.width / 2, start.x + dx + start.width], xs);
+  const sy = best([start.y + dy, start.y + dy + start.height / 2, start.y + dy + start.height], ys);
+  return {
+    dx: sx ? dx + sx[0] : dx,
+    dy: sy ? dy + sy[0] : dy,
+    ...(sx ? { x: sx[1] } : {}),
+    ...(sy ? { y: sy[1] } : {}),
+  };
+}
+
+/** The selection, with every member of the groups it touches. */
+export function withGroups(elements: TemplateElement[], indices: number[]): number[] {
+  const groups = new Set(indices.map((i) => elements[i]?.group).filter((g): g is string => Boolean(g)));
+  if (!groups.size) return indices;
+  return elements.flatMap((e, i) => (indices.includes(i) || (e.group && groups.has(e.group)) ? [i] : []));
+}
+
+/** A new group's name, not one in use. */
+export function newGroupName(elements: TemplateElement[]): string {
+  const used = new Set(elements.map((e) => e.group));
+  for (let n = 1; ; n++) if (!used.has(`group-${n}`)) return `group-${n}`;
+}
+
+/** What the editor puts on the clipboard: elements, and the units they are in. */
+export interface Clipping {
+  bam: 'elements';
+  units: Units;
+  elements: TemplateElement[];
+}
+
+/** Elements copied, in their units, as text for the clipboard. */
+export function clip(doc: TemplateDoc, indices: number[]): string {
+  const c: Clipping = { bam: 'elements', units: doc.units, elements: indices.map((i) => doc.elements[i]!) };
+  return JSON.stringify(c);
+}
+
+/**
+ * Elements from the clipboard, in a template's units and moved a little,
+ * so they are seen; null when it holds none. Groups get names of their own.
+ */
+export function unclip(doc: TemplateDoc, text: string, offset: number): TemplateElement[] | null {
+  let c: Clipping;
+  try {
+    c = JSON.parse(text) as Clipping;
+  } catch {
+    return null;
+  }
+  if (c?.bam !== 'elements' || !Array.isArray(c.elements) || (c.units !== 'mm' && c.units !== 'in')) return null;
+  const converted = convertUnits({ ...doc, units: c.units, elements: c.elements }, doc.units).elements;
+  const renamed = new Map<string, string>();
+  const used = [...doc.elements];
+  return converted.map((e) => {
+    let next: TemplateElement = { ...e, x: tidy(e.x + offset, doc.units), y: tidy(e.y + offset, doc.units) };
+    if (e.group) {
+      if (!renamed.has(e.group)) {
+        renamed.set(e.group, newGroupName(used));
+        used.push({ ...next, group: renamed.get(e.group) });
+      }
+      next = { ...next, group: renamed.get(e.group) };
+    }
+    return next;
+  });
+}
+
+/** CSS pixels in a millimeter, for showing a label at its actual size. */
+export const PX_PER_MM = 96 / MM_PER_INCH;
+
+/** A ruler's ticks for a scale: a step of 1, 2, 5 or 10 times a power of ten, at least minPx apart. */
+export function rulerStep(pxPerUnit: number, minPx = 8): number {
+  for (let p = -3; p < 6; p++) {
+    for (const m of [1, 2, 5]) {
+      const step = m * 10 ** p;
+      if (step * pxPerUnit >= minPx) return step;
+    }
+  }
+  return 10 ** 6;
 }

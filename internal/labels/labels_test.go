@@ -631,3 +631,90 @@ func TestPaths(t *testing.T) {
 		t.Errorf("too many segments: %v", err)
 	}
 }
+
+// TestWorkspaceProperties checks guides, groups, locks and mirrors, which
+// change how the editor works but not what prints, and that guides turn
+// with a template.
+func TestWorkspaceProperties(t *testing.T) {
+	doc := func(guides, element string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","guides":` + guides + `,"elements":[` + element + `]}`
+	}
+	img := `{"type":"static_image","x":0,"y":0,"width":10,"height":10,"image_id":"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
+	tpl, err := Parse([]byte(doc(`{"x":[5,20],"y":[10]}`, img+`,"mirror":"across","group":"logo","locked":true}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if right := tpl.Turned(true); !reflect.DeepEqual(right.Guides, &Guides{X: []float64{10}, Y: []float64{5, 20}}) {
+		t.Errorf("turned guides: %+v", right.Guides)
+	}
+	for _, tc := range []struct {
+		guides, element string
+		want            []string
+	}{
+		{`{"x":[41]}`, img + `}`, []string{"guides.x"}},
+		{`{"y":[` + strings.TrimSuffix(strings.Repeat("1,", MaxGuides+1), ",") + `]}`, img + `}`, []string{"guides.y"}},
+		{`{}`, img + `,"mirror":"sideways"}`, []string{"elements[0].mirror"}},
+		{`{}`, `{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","mirror":"across","group":" logo"}`, []string{"elements[0].group", "elements[0].mirror"}},
+	} {
+		_, err := Parse([]byte(doc(tc.guides, tc.element)))
+		got := problemPaths(t, err)
+		sort.Strings(got)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s %s: %v, want %v", tc.guides, tc.element, got, tc.want)
+		}
+	}
+}
+
+// TestArrange lines elements up with each other and with the label, as
+// they lie turned, and spreads them out evenly.
+func TestArrange(t *testing.T) {
+	box := func(x, y, w, h float64) Element { return Element{Type: ElementText, X: x, Y: y, Width: w, Height: h} }
+	tpl := func() *Template {
+		return &Template{Width: 100, Height: 50, Elements: []Element{box(10, 5, 10, 10), box(40, 20, 20, 10), box(80, 30, 5, 5)}}
+	}
+	at := func(t *Template) [][2]float64 {
+		var out [][2]float64
+		for _, e := range t.Elements {
+			x, y, _, _ := e.Bounds()
+			out = append(out, [2]float64{x, y})
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		align, distribute string
+		toLabel           bool
+		want              [][2]float64
+	}{
+		{"left", "", false, [][2]float64{{10, 5}, {10, 20}, {10, 30}}},
+		{"right", "", true, [][2]float64{{90, 5}, {80, 20}, {95, 30}}},
+		{"center", "", false, [][2]float64{{42.5, 5}, {37.5, 20}, {45, 30}}},
+		{"middle", "", true, [][2]float64{{10, 20}, {40, 20}, {80, 22.5}}},
+		{"bottom", "", false, [][2]float64{{10, 25}, {40, 25}, {80, 30}}},
+		// From 10 to 85, 35 wide in all: gaps of 20.
+		{"", "across", false, [][2]float64{{10, 5}, {40, 20}, {80, 30}}},
+		// From 5 to 35, 25 high in all: gaps of 2.5.
+		{"", "down", false, [][2]float64{{10, 5}, {40, 17.5}, {80, 30}}},
+	} {
+		got := tpl()
+		if err := got.Arrange([]int{0, 1, 2}, tc.align, tc.distribute, tc.toLabel); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(at(got), tc.want) {
+			t.Errorf("%s%s, to the label %v: %v, want %v", tc.align, tc.distribute, tc.toLabel, at(got), tc.want)
+		}
+	}
+	// A turned element lines up by where it lies.
+	turned := tpl()
+	turned.Elements[1].Rotation = 90 // 20 × 10 turned: 10 wide, from 45
+	if err := turned.Arrange([]int{0, 1}, "left", "", false); err != nil || turned.Elements[1].X != 5 {
+		t.Errorf("turned: %+v %v", turned.Elements[1], err)
+	}
+	for _, bad := range [][]int{{0}, {0, 3}, {0, 0}} {
+		if err := tpl().Arrange(bad, "left", "", false); err == nil {
+			t.Errorf("%v: arranged", bad)
+		}
+	}
+	if err := tpl().Arrange([]int{0, 1}, "", "across", false); err == nil {
+		t.Error("spread out two")
+	}
+}

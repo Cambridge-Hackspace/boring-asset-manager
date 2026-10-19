@@ -75,21 +75,40 @@ func inListOrder(spec map[string]any) map[string]any {
 	return spec
 }
 
+// arrangeIn lines elements up, or spreads them out.
+type arrangeIn struct {
+	Elements   []int  `json:"elements" jsonschema:"the elements, by index"`
+	Align      string `json:"align,omitempty" jsonschema:"left, center or right across; top, middle or bottom down"`
+	Distribute string `json:"distribute,omitempty" jsonschema:"across or down: even gaps between three or more, the outermost staying put"`
+	ToLabel    bool   `json:"to_label,omitempty" jsonschema:"align with the label, not with each other"`
+}
+
 // turned is a template turned a quarter turn, left or right, with
 // everything on it.
 func turned(spec map[string]any, way string) (map[string]any, error) {
 	if way != "left" && way != "right" {
 		return nil, fmt.Errorf(`turn must be "left" or "right"`)
 	}
+	return edited(spec, func(t *labels.Template) error {
+		*t = *t.Turned(way == "right")
+		return nil
+	})
+}
+
+// edited is a template changed by f, read and written back as JSON.
+func edited(spec map[string]any, f func(*labels.Template) error) (map[string]any, error) {
 	raw, err := json.Marshal(spec)
 	if err != nil {
 		return nil, err
 	}
 	var t labels.Template
 	if err := json.Unmarshal(raw, &t); err != nil {
-		return nil, fmt.Errorf("the template cannot be turned: %v", err)
+		return nil, fmt.Errorf("the template cannot be read: %v", err)
 	}
-	if raw, err = json.Marshal(t.Turned(way == "right")); err != nil {
+	if err := f(&t); err != nil {
+		return nil, err
+	}
+	if raw, err = json.Marshal(&t); err != nil {
 		return nil, err
 	}
 	out := map[string]any{}
@@ -231,12 +250,13 @@ func labelTools() []tool {
 				Name     string         `json:"name,omitempty"`
 				Change   []struct {
 					Index int            `json:"index"`
-					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, and for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align; a shape has shape (rectangle, ellipse, line or polygon), stroke and fill (black, white or none), stroke_width, corner_radius, flip, and points (fractions of its box) and closed"`
+					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, group (the editor moves a group as one), locked; for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align; an image mirror (across, down or both); a shape has shape (rectangle, ellipse, line or polygon), stroke and fill (black, white or none), stroke_width, corner_radius, flip, and points (fractions of its box) and closed"`
 				} `json:"change_elements,omitempty"`
-				Move   []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
-				Turn   string           `json:"turn,omitempty" jsonschema:"left or right: turn the whole template a quarter turn with everything on it, as the editor's portrait and landscape switch does, after the other changes"`
-				Remove []int            `json:"remove_elements,omitempty"`
-				Add    []map[string]any `json:"add_elements,omitempty"`
+				Move    []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
+				Turn    string           `json:"turn,omitempty" jsonschema:"left or right: turn the whole template a quarter turn with everything on it, as the editor's portrait and landscape switch does, after the other changes"`
+				Arrange *arrangeIn       `json:"arrange_elements,omitempty" jsonschema:"line elements up or spread them out, as the editor's align and distribute buttons do, after the other changes and before turning"`
+				Remove  []int            `json:"remove_elements,omitempty"`
+				Add     []map[string]any `json:"add_elements,omitempty"`
 			}) (reply[map[string]any], error) {
 				out := map[string]any{}
 				if in.ID == "" {
@@ -291,6 +311,14 @@ func labelTools() []tool {
 				}
 				spec["id"] = in.ID
 				inListOrder(spec)
+				if in.Arrange != nil {
+					var err error
+					if spec, err = edited(spec, func(t *labels.Template) error {
+						return t.Arrange(in.Arrange.Elements, in.Arrange.Align, in.Arrange.Distribute, in.Arrange.ToLabel)
+					}); err != nil {
+						return reply[map[string]any]{}, err
+					}
+				}
 				if in.Turn != "" {
 					var err error
 					if spec, err = turned(spec, in.Turn); err != nil {

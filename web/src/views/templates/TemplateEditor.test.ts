@@ -250,14 +250,14 @@ describe('TemplateEditor', () => {
 
     render(TemplateEditor, { params: { id: 'ql90' } });
     await fireEvent.click(await screen.findByRole('button', { name: 'Restore them' }));
-    expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button')).toHaveLength(2);
+    expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('listitem')).toHaveLength(2);
   });
 
   it('lists layers top first, and moves them over and under each other', async () => {
     const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
     await fireEvent.click(await screen.findByRole('button', { name: 'Add barcode' }));
-    const layers = () => within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').map((b) => b.textContent?.trim());
+    const layers = () => within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').filter((b) => !b.getAttribute('aria-label')?.startsWith('Lock')).map((b) => b.textContent?.trim());
     expect(layers()).toEqual(['QR code: {{scan_url}}', 'Text: {{asset.name}}']);
     expect((screen.getByRole('button', { name: 'Bring to front' }) as HTMLButtonElement).disabled).toBe(true);
 
@@ -284,7 +284,7 @@ describe('TemplateEditor', () => {
     });
     render(TemplateEditor, { params: { id: 'old' } });
     await screen.findByDisplayValue('QL 90x29');
-    expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['QR code', 'Text: {{asset.name}}']);
+    expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').filter((b) => !b.getAttribute('aria-label')?.startsWith('Lock')).map((b) => b.textContent?.trim())).toEqual(['QR code', 'Text: {{asset.name}}']);
   });
 
   it('turns an element from its settings and with [ and ]', async () => {
@@ -408,7 +408,7 @@ describe('TemplateEditor', () => {
     const file = new File(['<svg viewBox="0 0 10 10"><path d="M0 0 L10 0 L10 10 Z"/></svg>'], 'logo.svg', { type: 'image/svg+xml' });
     await fireEvent.change(screen.getByLabelText('Import SVG'), { target: { files: [file] } });
     expect(await screen.findByText('Imported 2 shapes from logo.svg. Left out: text, which needs the fonts.')).toBeTruthy();
-    expect(screen.getByText('2 elements selected. Drag or use the arrow keys to move them together.')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '2 elements' })).toBeTruthy();
     const asked = sent.find((r) => r.path === '/templates/import-svg')!.body as { svg: string; box: { x: number; width: number } };
     expect(asked.svg).toContain('<svg');
     expect(asked.box).toMatchObject({ x: 9, width: 72 });
@@ -416,5 +416,40 @@ describe('TemplateEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
     expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements.map((e) => e.shape ?? e.type)).toEqual(['text', 'path', 'path']);
+  });
+
+  it('selects everything, groups it, copies and pastes it, and keeps guides', async () => {
+    const two = { ...template, elements: [...template.elements, { type: 'text' as const, x: 60, y: 5, width: 20, height: 10, content_binding: 'B', font_size: 12 }] };
+    const { sent } = api({ 'GET /templates/ql90': () => ({ template: two }), 'PUT /templates/ql90': () => ({ template: two }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await screen.findByDisplayValue('QL 90x29');
+    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    expect(screen.getByRole('heading', { name: '2 elements' })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Group' }));
+    expect(screen.getByRole('heading', { name: 'Group group-1' })).toBeTruthy();
+    await fireEvent.click(within(screen.getByRole('group', { name: 'Line up' })).getByRole('button', { name: 'Tops' }));
+
+    // Copied and pasted, a little way off, in a group of its own.
+    const data = new Map<string, string>();
+    const clipboardData = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? '' };
+    window.dispatchEvent(Object.assign(new Event('copy', { cancelable: true }), { clipboardData }));
+    window.dispatchEvent(Object.assign(new Event('paste', { cancelable: true }), { clipboardData }));
+    await vi.waitFor(() => expect(screen.getByRole('heading', { name: 'Group group-2' })).toBeTruthy());
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a vertical guide' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    expect(body.elements.map((e) => e.group)).toEqual(['group-1', 'group-1', 'group-2', 'group-2']);
+    expect(body.elements.map((e) => e.y)).toEqual([5, 5, 7, 7]);
+    expect(body.guides).toEqual({ x: [45] });
+  });
+
+  it('opens the keyboard shortcuts with ?', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await screen.findByDisplayValue('QL 90x29');
+    await fireEvent.keyDown(window, { key: '?' });
+    expect(screen.getByRole('heading', { name: 'Keyboard shortcuts' })).toBeTruthy();
   });
 });

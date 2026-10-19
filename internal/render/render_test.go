@@ -784,3 +784,36 @@ func TestTurnedTemplatePrintsTurned(t *testing.T) {
 		t.Errorf("%d of %d dark dots have none near them turned", alone, dark)
 	}
 }
+
+// TestMirroredImage flips an image across, so the arrow points left.
+func TestMirroredImage(t *testing.T) {
+	images := memImages{arrowID: testArrow()}
+	dark := func(mirror string) (left, right int) {
+		tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":20,"height":10,"dpi":300,"layering":"list","elements":[
+			{"type":"static_image","x":0,"y":0,"width":20,"height":10,"image_id":"`+arrowID+`"`+mirror+`}]}`)
+		s, err := Layout(tpl, labels.Data{}, images)
+		if err != nil {
+			t.Fatal(err)
+		}
+		img := s.Raster(true)
+		// The arrow's head is its widest part: its dark dots at the box's
+		// top quarter fall in the half it points to.
+		w := img.Bounds().Dx()
+		for x := 0; x < w; x++ {
+			if img.GrayAt(x, img.Bounds().Dy()/4).Y == 0 {
+				if x < w/2 {
+					left++
+				} else {
+					right++
+				}
+			}
+		}
+		return left, right
+	}
+	if l, r := dark(""); r <= l {
+		t.Errorf("as it is, the head is not on the right: %d, %d", l, r)
+	}
+	if l, r := dark(`,"mirror":"across"`); l <= r {
+		t.Errorf("mirrored, the head is not on the left: %d, %d", l, r)
+	}
+}
