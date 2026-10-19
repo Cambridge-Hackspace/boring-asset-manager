@@ -731,3 +731,56 @@ func TestShapes(t *testing.T) {
 		t.Errorf("turned: %+v", it)
 	}
 }
+
+// TestTurnedTemplatePrintsTurned turns a template a quarter turn with
+// everything on it: its label prints as the original turned, within a dot,
+// as boxes round to dots the other way.
+func TestTurnedTemplatePrintsTurned(t *testing.T) {
+	tpl := mustTemplate(t, goldenTemplates["qr_label"])
+	turned := tpl.Turned(true)
+	if err := turned.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	a, err := Layout(tpl, testData, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := Layout(turned, testData, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ra, rb := a.Raster(true), b.Raster(true)
+	if rb.Bounds().Dx() != ra.Bounds().Dy() || rb.Bounds().Dy() != ra.Bounds().Dx() {
+		t.Fatalf("sizes %v and %v", ra.Bounds(), rb.Bounds())
+	}
+	// A quarter turn clockwise takes dot (x, y) to (H-1-y, x). Each dark
+	// dot of either has a dark dot in the other within a dot of it.
+	h := ra.Bounds().Dy()
+	darkNear := func(img *image.Gray, x, y int) bool {
+		for dy := -1; dy <= 1; dy++ {
+			for dx := -1; dx <= 1; dx++ {
+				if p := image.Pt(x+dx, y+dy); p.In(img.Bounds()) && img.GrayAt(p.X, p.Y).Y == 0 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	alone, dark := 0, 0
+	for y := 0; y < h; y++ {
+		for x := 0; x < ra.Bounds().Dx(); x++ {
+			if ra.GrayAt(x, y).Y == 0 {
+				dark++
+				if !darkNear(rb, h-1-y, x) {
+					alone++
+				}
+			}
+			if rb.GrayAt(h-1-y, x).Y == 0 && !darkNear(ra, x, y) {
+				alone++
+			}
+		}
+	}
+	if dark == 0 || float64(alone) > 0.002*float64(dark) {
+		t.Errorf("%d of %d dark dots have none near them turned", alone, dark)
+	}
+}

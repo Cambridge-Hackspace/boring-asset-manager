@@ -364,3 +364,38 @@ test('draw shapes with the mouse and the keyboard, and edit a polygon’s points
   expect(saved.template.elements[1].points).toHaveLength(3);
   expect(saved.template.elements[2]).toMatchObject({ height: 0 });
 });
+
+test('turn a template portrait and landscape, and choose which way it is fed', async ({ signedIn: page, api, printer }) => {
+  const printerName = unique('QL 62');
+  await api.call('POST', '/printers', {
+    name: printerName, driver: 'brother_ql', model: 'QL-810W', connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` }, media: 'dk-22205',
+  });
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Turnable'), units: 'mm', width: 62, height: 40, dpi: 300, layering: 'list',
+    elements: [{ type: 'text', x: 2, y: 2, width: 40, height: 10, font_size: 12, content_binding: '{{asset.name}}' }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  await page.getByRole('radio', { name: 'Portrait' }).check();
+  await expect(page.locator('#tpl-width')).toHaveValue('40');
+  await expect(page.locator('#tpl-height')).toHaveValue('62');
+  await expect(page.getByRole('button', { name: /^Text 1/ })).toHaveAttribute('style', /rotate\(90deg\)/);
+
+  // On a 62 mm roll, fed as it fits, then with its width along the roll.
+  await page.getByLabel('Printer').selectOption({ label: printerName });
+  await expect(page.getByText(`Fits ${printerName}. Fed with its width along the roll.`)).toBeVisible();
+  await page.getByRole('radio', { name: 'Landscape' }).check();
+  await expect(page.getByText(`Fits ${printerName}. Fed with its width across the roll.`)).toBeVisible();
+  await page.getByLabel('Feed').selectOption('along');
+  await expect(page.getByText(/fed with its width along the roll, but the roll loaded/)).toBeVisible();
+  await page.getByLabel('Feed').selectOption('auto');
+
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
+
+  await page.getByRole('button', { name: 'Turn right' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template).toMatchObject({ width: 40, height: 62 });
+  expect(saved.template.elements[0].rotation).toBe(90);
+});

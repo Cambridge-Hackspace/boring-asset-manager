@@ -199,3 +199,35 @@ func TestFitSaysWhereThePrinterPrints(t *testing.T) {
 		t.Errorf("on a Rollo: %+v", f)
 	}
 }
+
+// TestFeed sends labels that fit either way through the printer as their
+// feed says, on die-cut and continuous rolls, on each driver; a feed one
+// that fits only the other way refuses it, saying so.
+func TestFeed(t *testing.T) {
+	for _, c := range []struct {
+		name, driver, model, media string
+		size                       float64
+		dpi                        int
+	}{
+		{"Brother round", DriverBrotherQL, "QL-810W", "dk-11207", 58, 300},
+		{"Brother continuous", DriverBrotherQL, "QL-810W", "dk-22205", 62, 300},
+		{"DYMO continuous", DriverDymoLabelWriter, "LabelWriter 450", "30270", 57, 300},
+		{"TSPL continuous", DriverTSPL, "Rollo X1038", "continuous-4", 101.6, 203},
+	} {
+		for feed, rotate := range map[string]bool{"": false, "auto": false, "across": false, "along": true} {
+			_, f, err := PlanLabel(c.driver, Settings{Model: c.model, Media: c.media}, LabelSpec{WidthMM: c.size, HeightMM: c.size, DPI: c.dpi, Feed: feed})
+			if err != nil || f.Rotate != rotate {
+				t.Errorf("%s, feed %q: rotate %v, %v", c.name, feed, f.Rotate, err)
+			}
+		}
+	}
+	// 29 × 90 mm fits a 29 mm die-cut roll only with its width across it.
+	_, _, err := PlanLabel(DriverBrotherQL, Settings{Model: "QL-810W", Media: "dk-11201"}, LabelSpec{WidthMM: 29, HeightMM: 90, DPI: 300, Feed: "along"})
+	if !errors.Is(err, ErrDoesNotFit) || !strings.Contains(err.Error(), "fed with its width along the roll") {
+		t.Errorf("along: %v", err)
+	}
+	_, _, err = PlanLabel(DriverBrotherQL, Settings{Model: "QL-810W", Media: "dk-22205"}, LabelSpec{WidthMM: 100, HeightMM: 62, DPI: 300, Feed: "across"})
+	if !errors.Is(err, ErrDoesNotFit) || !strings.Contains(err.Error(), "fed with its width across the roll, but the roll loaded") {
+		t.Errorf("across: %v", err)
+	}
+}

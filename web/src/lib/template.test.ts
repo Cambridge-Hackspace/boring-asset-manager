@@ -11,6 +11,8 @@ import {
   marginOf,
   hairline,
   newShape,
+  orientation,
+  turnTemplate,
   polygonPoints,
   polygonThrough,
   makeAdaptive,
@@ -379,5 +381,32 @@ describe('shapes', () => {
       expect(onLabel(moved, k)[0]).toBeCloseTo(onLabel(tri, k)[0]!, 2);
       expect(onLabel(moved, k)[1]).toBeCloseTo(onLabel(tri, k)[1]!, 2);
     }
+  });
+});
+
+describe('turning a template', () => {
+  const tpl = (): TemplateDoc => ({
+    ...makeAdaptive({ ...blankTemplate(), width: 60, height: 20 }),
+    elements: [
+      { type: 'generator', generator_type: 'qr', x: 2, y: 2, width: 16, height: 16, anchor_x: 'start', anchor_y: 'end' },
+      { type: 'text', x: 20, y: 4, width: 38, height: 6, font_size: 10, content_binding: 'A', rotation: 10 },
+    ],
+  });
+
+  it('turns it a quarter turn with everything on it, as the server does', () => {
+    const right = turnTemplate(tpl(), true);
+    expect(orientation(tpl())).toBe('landscape');
+    expect(orientation(right)).toBe('portrait');
+    expect(right).toMatchObject({ width: 20, height: 60, adapt: { min_width: 10, max_width: 40, min_height: 30, max_height: 120 } });
+    // The code's center, (10, 10), goes to (20 - 10, 10); it reads turned.
+    expect(right.elements[0]).toMatchObject({ x: 2, y: 2, rotation: 90, anchor_x: 'start', anchor_y: 'start' });
+    expect(right.elements[1]!.rotation).toBe(100);
+  });
+
+  it('gives it back after four turns, or one each way', () => {
+    let t = tpl();
+    for (let i = 0; i < 4; i++) t = turnTemplate(t, true);
+    expect(t).toEqual(tpl());
+    expect(turnTemplate(turnTemplate(tpl(), false), true)).toEqual(tpl());
   });
 });

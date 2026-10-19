@@ -11,6 +11,9 @@
     fromMM,
     makeAdaptive,
     makeFixed,
+    orientation,
+    turnTemplate,
+    type Feed,
     resizeLabel,
     toMM,
     type Adapt,
@@ -52,6 +55,7 @@
     edge_mm?: number;
     outside?: number[];
     near_edge?: number[];
+    feed?: 'across' | 'along';
   }
 
   let printers = $state<Printer[]>([]);
@@ -125,6 +129,7 @@
       width_mm: mm(snapshot.width),
       height_mm: mm(snapshot.height),
       dpi: snapshot.dpi,
+      ...(snapshot.feed ? { feed: snapshot.feed } : {}),
       // Where the template has content, for warnings about parts that will not print.
       content: snapshot.elements.map(bounds).map((b) => ({ x: mm(b.x), y: mm(b.y), width: mm(b.width), height: mm(b.height) })),
     });
@@ -171,14 +176,22 @@
   });
 
   // Takes the label size from the printer: the longer side across, so
-  // labels read along the tape; continuous rolls keep the current length.
-  // The elements scale with it, so they stay on the label.
-  function sizeFromPrinter() {
+  // labels read along the tape, or upright, the shorter side across;
+  // continuous rolls keep the current length. The elements scale with it,
+  // so they stay on the label.
+  function sizeFromPrinter(upright = false) {
     if (!printerMedia) return;
     const { media, dpi } = printerMedia;
     const across = fromMM(media.width_mm, doc.units);
-    const along = media.die_cut && media.length_mm ? fromMM(media.length_mm, doc.units) : Math.max(doc.width, across);
-    onchange({ ...resizeLabel(doc, Math.max(across, along), Math.min(across, along)), ...(dpi ? { dpi } : {}) });
+    const along = media.die_cut && media.length_mm ? fromMM(media.length_mm, doc.units) : Math.max(doc.width, doc.height, across);
+    const [long, short] = [Math.max(across, along), Math.min(across, along)];
+    onchange({ ...(upright ? resizeLabel(doc, short, long) : resizeLabel(doc, long, short)), ...(dpi ? { dpi } : {}) });
+  }
+
+  /** Portrait or landscape: the template turned to it, a quarter turn, with everything on it. */
+  function setOrientation(to: 'portrait' | 'landscape') {
+    if (orientation(doc) === to) return;
+    onchange(turnTemplate(doc, to === 'portrait'));
   }
 
   // The fit check, re-run (debounced) as the template changes; an answer
@@ -223,6 +236,9 @@
     (indices ?? []).filter((i) => doc.elements[i]).map((i) => describeElement(doc.elements[i]!, i)).join(', ');
 
   const fieldError = (key: string) => problems[key];
+
+  /** Which way the label goes through the printer, said after the fit. */
+  const fedText = (f: FitAnswer) => (f.feed && doc.sizing !== 'adaptive' ? ` Fed with its width ${f.feed} the roll.` : '');
 
   function setRange(key: 'min_width' | 'max_width' | 'min_height' | 'max_height', raw: string) {
     const n = Number(raw);
@@ -269,6 +285,25 @@
     </div>
   </div>
   <p class="-mt-2 text-xs text-zinc-600 dark:text-zinc-400">DPI is the printer's resolution, in dots per inch; <strong>Use its label size</strong>, below, sets it from a printer.</p>
+  <div class="flex flex-wrap items-center gap-3">
+    <fieldset class="flex flex-wrap items-center gap-3 text-sm">
+      <legend class="sr-only">Orientation</legend>
+      <span class="label" aria-hidden="true">Orientation</span>
+      <label class="flex items-center gap-1">
+        <input type="radio" name="tpl-orientation" checked={orientation(doc) === 'landscape'} onchange={() => setOrientation('landscape')} /> Landscape
+      </label>
+      <label class="flex items-center gap-1">
+        <input type="radio" name="tpl-orientation" checked={orientation(doc) === 'portrait'} onchange={() => setOrientation('portrait')} /> Portrait
+      </label>
+    </fieldset>
+    <div class="flex gap-1">
+      <button type="button" class="btn-secondary" onclick={() => onchange(turnTemplate(doc, false))}>Turn left</button>
+      <button type="button" class="btn-secondary" onclick={() => onchange(turnTemplate(doc, true))}>Turn right</button>
+    </div>
+  </div>
+  <p class="-mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+    {orientation(doc) === 'square' ? 'Square. ' : ''}Changing it turns the label a quarter turn, with everything on it, so the design reads the same, turned.
+  </p>
   {#each ['width', 'height', 'dpi', 'units'] as key (key)}
     {#if fieldError(key)}<p class="error-text">{fieldError(key)}</p>{/if}
   {/each}
@@ -294,6 +329,10 @@
           </div>
         {/each}
       </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={doc.turnable ?? false} onchange={(e) => update({ turnable: e.currentTarget.checked || undefined })} />
+        Also takes labels turned a quarter turn, its content turned to match
+      </label>
       <div>
         <label class="text-xs" for="tpl-length">On a continuous roll</label>
         <select
@@ -321,7 +360,16 @@
           {#each printers as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
         </select>
       </div>
-      <button type="button" class="btn-secondary" disabled={!printerMedia} onclick={sizeFromPrinter}>Use its label size</button>
+      <button type="button" class="btn-secondary" disabled={!printerMedia} onclick={() => sizeFromPrinter()}>Use its label size</button>
+      <button type="button" class="btn-secondary" disabled={!printerMedia} onclick={() => sizeFromPrinter(true)}>Use it upright</button>
+      <div>
+        <label class="label" for="tpl-feed">Feed</label>
+        <select id="tpl-feed" class="input" value={doc.feed ?? 'auto'} onchange={(e) => update({ feed: e.currentTarget.value === 'auto' ? undefined : (e.currentTarget.value as Feed) })}>
+          <option value="auto">As it fits</option>
+          <option value="across">Its width across the roll</option>
+          <option value="along">Its width along the roll</option>
+        </select>
+      </div>
       {#if canTest}
         <button type="button" class="btn-secondary" disabled={!printerId || testing || fit?.fits === false} onclick={testPrint}>Test print</button>
       {/if}
@@ -332,12 +380,12 @@
     <div aria-live="polite" class="space-y-1">
       {#if fit?.fits && fit.warnings?.length && doc.sizing !== 'adaptive'}
         {@const n = fit.warnings.length}
-        <p class="text-sm text-amber-900 dark:text-amber-200">Fits {chosenPrinter?.name}, with {n} warning{n === 1 ? '' : 's'}.</p>
+        <p class="text-sm text-amber-900 dark:text-amber-200">Fits {chosenPrinter?.name}, with {n} warning{n === 1 ? '' : 's'}.{fedText(fit)}</p>
         <FitWarnings warnings={fit.warnings} />
         {#if named(fit.outside)}<p class="text-sm text-amber-900 dark:text-amber-200">In the shaded area, which it does not print: {named(fit.outside)}.</p>{/if}
         {#if named(fit.near_edge)}<p class="text-sm text-amber-900 dark:text-amber-200">Near the edge: {named(fit.near_edge)}.</p>{/if}
       {:else if fit?.fits}
-        <p class="text-sm text-green-700 dark:text-green-400">Fits {chosenPrinter?.name}.</p>
+        <p class="text-sm text-green-700 dark:text-green-400">Fits {chosenPrinter?.name}.{fedText(fit)}</p>
         <FitWarnings warnings={fit.warnings} label="Laid out there" />
       {:else if fit}
         <p class="error-text">{fit.message}</p>
