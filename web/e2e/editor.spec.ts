@@ -199,8 +199,15 @@ test('stack elements: the top one takes a click, Alt+click the one beneath, and 
   await expect(page.getByRole('button', { name: /^Text 1/, pressed: true })).toBeFocused();
   await expect(layers.getByRole('button', { name: 'Text: {{asset.name}}', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
-  // Dragging the text's layer over the code's brings it to the top.
-  await layers.getByRole('listitem').filter({ hasText: 'Text:' }).dragTo(layers.getByRole('listitem').filter({ hasText: 'QR code' }));
+  // Dragging the text's layer over the code's brings it to the top. Moved
+  // onto the code's layer twice: dragTo's single move does not reliably
+  // fire dragover, and without it there is no drop.
+  const codeLayer = layers.getByRole('listitem').filter({ hasText: 'QR code' });
+  await layers.getByRole('listitem').filter({ hasText: 'Text:' }).hover();
+  await page.mouse.down();
+  await codeLayer.hover();
+  await codeLayer.hover();
+  await page.mouse.up();
   await expect(layers.locator('li > button:not([aria-label^="Lock"])')).toHaveText(['Text: {{asset.name}}', 'QR code']);
   // Page Down on the focused element sends it back again.
   await page.getByRole('button', { name: /^Text 2/ }).focus();
