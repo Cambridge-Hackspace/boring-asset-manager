@@ -48,6 +48,7 @@
     tool = null,
     ondraw,
     ontoolcancel,
+    onfile,
   }: {
     doc: TemplateDoc;
     selected: number[];
@@ -66,6 +67,8 @@
     tool?: ShapeKind | null;
     ondraw?: (e: TemplateElement) => void;
     ontoolcancel?: () => void;
+    /** An SVG file dropped on the label, to import. */
+    onfile?: (file: File) => void;
   } = $props();
 
   let surface: HTMLDivElement | undefined = $state();
@@ -312,6 +315,15 @@
     onpointermove={pointerMove}
     onpointerup={pointerUp}
     onpointercancel={pointerUp}
+    ondragover={(ev) => {
+      if (ev.dataTransfer?.types.includes('Files')) ev.preventDefault();
+    }}
+    ondrop={(ev) => {
+      const file = ev.dataTransfer?.files[0];
+      if (!file || !onfile) return;
+      ev.preventDefault();
+      if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) onfile(file);
+    }}
   >
     {#if previewURL}
       <img

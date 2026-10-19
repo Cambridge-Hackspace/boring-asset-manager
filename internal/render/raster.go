@@ -37,7 +37,7 @@ func (s *Scene) Raster(mono bool) *image.Gray {
 			// where their edges meet, their coverage adds up as one shape's
 			// would.
 			j := i + 1
-			for j < len(s.Items) && s.Items[j].isPath() && s.Items[j].Paint == it.Paint {
+			for !it.EvenOdd && j < len(s.Items) && s.Items[j].isPath() && s.Items[j].Paint == it.Paint && !s.Items[j].EvenOdd {
 				j++
 			}
 			fillPaths(img, s.Items[i:j], mono, it.Paint)
@@ -50,12 +50,16 @@ func (s *Scene) Raster(mono bool) *image.Gray {
 // fillPaths fills the items' paths in paint.
 func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 	bounds := img.Bounds()
-	z := vector.NewRasterizer(bounds.Dx(), bounds.Dy())
-	for _, it := range items {
-		tracePath(z, it.Path)
-	}
 	coverage := image.NewAlpha(bounds)
-	z.Draw(coverage, bounds, image.Opaque, image.Point{})
+	if len(items) == 1 && items[0].EvenOdd {
+		evenOdd(coverage, items[0].Path)
+	} else {
+		z := vector.NewRasterizer(bounds.Dx(), bounds.Dy())
+		for _, it := range items {
+			tracePath(z, it.Path)
+		}
+		z.Draw(coverage, bounds, image.Opaque, image.Point{})
+	}
 	ink := uint8(0)
 	if paint == White {
 		ink = 0xFF
@@ -72,6 +76,33 @@ func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 		default:
 			img.Pix[i] = uint8(uint32(img.Pix[i]) * uint32(0xFF-a) / 0xFF)
 		}
+	}
+}
+
+// evenOdd is the coverage of a path filled by the even-odd rule: each of
+// its outlines filled alone, and where they overlap, cancelling, as an odd
+// number of crossings is inside and an even number out.
+func evenOdd(coverage *image.Alpha, p Path) {
+	bounds := coverage.Bounds()
+	one := image.NewAlpha(bounds)
+	for start := 0; start < len(p); {
+		end := start + 1
+		for end < len(p) && p[end].Op != MoveTo {
+			end++
+		}
+		z := vector.NewRasterizer(bounds.Dx(), bounds.Dy())
+		tracePath(z, p[start:end])
+		clear(one.Pix)
+		z.Draw(one, bounds, image.Opaque, image.Point{})
+		for i, a := range one.Pix {
+			if a == 0 {
+				continue
+			}
+			// c XOR a, as coverage: c + a - 2ca.
+			c := uint32(coverage.Pix[i])
+			coverage.Pix[i] = uint8(c + uint32(a) - 2*c*uint32(a)/0xFF)
+		}
+		start = end
 	}
 }
 

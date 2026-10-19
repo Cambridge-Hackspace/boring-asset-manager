@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
 
 // edgeTemplate is landscapeTemplate with its name at the very top of the
@@ -203,5 +206,44 @@ func TestFeed(t *testing.T) {
 	// Turned the other way, the label went to the printer differently.
 	if jobs := ql.waitForJobs(t, 2, 5*time.Second); len(jobs) != 2 || bytes.Equal(jobs[0], jobs[1]) {
 		t.Errorf("%d jobs, the same both ways", len(jobs))
+	}
+}
+
+// TestImportSVG turns artwork into shapes fitted to a box, saving nothing,
+// lists what it left out, refuses what is not SVG, and is for those who
+// design templates.
+func TestImportSVG(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	svg, _ := json.Marshal(`<svg viewBox="0 0 20 10"><rect width="20" height="10"/><text>Hi</text></svg>`)
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/import-svg", `{"svg":`+string(svg)+`,"box":{"x":5,"y":5,"width":10,"height":10}}`)
+	var out ImportSVGResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if len(out.Elements) != 1 || out.Elements[0].X != 5 || out.Elements[0].Y != 7.5 || out.Elements[0].Width != 10 || out.Elements[0].Height != 5 ||
+		len(out.Skipped) != 1 || !strings.Contains(out.Skipped[0], "text") {
+		t.Errorf("imported: %+v", out)
+	}
+	// Without a box, in the artwork's own units.
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/import-svg", `{"svg":`+string(svg)+`}`)
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Width != 20 || out.Elements[0].Width != 20 {
+		t.Errorf("unplaced: %s", rec.Body)
+	}
+	for body, code := range map[string]int{
+		`{"svg":"<html/>"}`: http.StatusUnprocessableEntity,
+		`{"svg":""}`:        http.StatusBadRequest,
+		`{"svg":` + string(svg) + `,"box":{"width":0,"height":1}}`: http.StatusBadRequest,
+	} {
+		if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/import-svg", body); rec.Code != code {
+			t.Errorf("%s: %d, want %d", body, rec.Code, code)
+		}
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/templates/import-svg", strings.NewReader(`{"svg":`+string(svg)+`}`))
+	req.Header.Set("Authorization", "Bearer "+tokenWith(t, srv, admin.ID, "Reader", rbac.PermAssetsRead))
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("without templates.manage: %d", rec.Code)
 	}
 }

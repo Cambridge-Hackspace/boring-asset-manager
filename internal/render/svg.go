@@ -38,7 +38,7 @@ func WriteSVG(w io.Writer, s *Scene) error {
 			i--
 			bw.WriteString(`"/>` + "\n")
 		default:
-			svgPath(bw, it.Path, it.Paint)
+			svgPath(bw, it.Path, it.Paint, it.EvenOdd)
 		}
 	}
 
@@ -70,8 +70,12 @@ func svgColor(p Paint) string {
 }
 
 // svgPath writes a filled path.
-func svgPath(bw *bufio.Writer, p Path, paint Paint) {
-	fmt.Fprintf(bw, `<path fill="%s" d="`, svgColor(paint))
+func svgPath(bw *bufio.Writer, p Path, paint Paint, evenOdd bool) {
+	rule := ""
+	if evenOdd {
+		rule = ` fill-rule="evenodd"`
+	}
+	fmt.Fprintf(bw, `<path fill="%s"%s d="`, svgColor(paint), rule)
 	for _, seg := range p {
 		a, b, c := seg.Pts[0], seg.Pts[1], seg.Pts[2]
 		switch seg.Op {

@@ -171,6 +171,23 @@ func TestMCPLabelTools(t *testing.T) {
 	if c := coded.Labels[0].Elements[1].Code; c == nil || c.MarginDots.Left != 0 || !slices.Contains(c.Narrow, "left") || len(coded.Labels[0].Warnings) != 1 {
 		t.Errorf("margins: %+v", coded.Labels[0])
 	}
+	// Artwork imported into a box, then added.
+	var art struct {
+		Elements []map[string]any
+		Skipped  []string
+	}
+	structured(t, callTool(t, cs, "import_svg", map[string]any{"svg": `<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="5"/></svg>`,
+		"box": map[string]any{"x": 30, "y": 10, "width": 8, "height": 8}}), &art)
+	if len(art.Elements) != 1 || art.Elements[0]["shape"] != "path" || art.Elements[0]["x"] != 30.0 {
+		t.Fatalf("imported: %+v", art)
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "add_elements": []any{art.Elements[0]}}), &saved)
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &framed)
+	if e := framed.Labels[0].Elements; len(e) != 3 || e[2].Shape != "path" {
+		t.Errorf("with the artwork: %+v", e)
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "remove_elements": []int{2}}), &saved)
+
 	// Turned upright with everything on it, then back.
 	var got struct {
 		Template struct {

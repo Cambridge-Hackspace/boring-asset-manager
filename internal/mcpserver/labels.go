@@ -302,6 +302,34 @@ func labelTools() []tool {
 				}
 				return say(out, "Saved the template %q. Preview it with preview_template.", nameOf(out, "template"))
 			}),
+		define(&mcp.Tool{Name: "import_svg", Description: "Turn SVG artwork (a logo, symbol or icon) into shapes for a template: paths in black or white, sharp at any size. " +
+			"Give the box on the template, in its units, to fit it into, keeping its proportions; nothing is saved: add the shapes with save_template's add_elements. " +
+			"Text, images, scripts, links to other files, filters and the like are left out, and listed.",
+			Annotations: readOnly("Import SVG artwork")}, []string{"POST /api/v1/templates/import-svg"}, design,
+			func(ctx context.Context, e *env, in struct {
+				SVG string `json:"svg" jsonschema:"the SVG file's text, at most 1 MB"`
+				Box *struct {
+					X      float64 `json:"x"`
+					Y      float64 `json:"y"`
+					Width  float64 `json:"width"`
+					Height float64 `json:"height"`
+				} `json:"box,omitempty" jsonschema:"where on the template to fit it, in the template's units; without one, the shapes are in the artwork's own units"`
+			}) (reply[map[string]any], error) {
+				out := map[string]any{}
+				body := map[string]any{"svg": in.SVG}
+				if in.Box != nil {
+					body["box"] = in.Box
+				}
+				if err := e.call(ctx, http.MethodPost, "/api/v1/templates/import-svg", body, &out); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				skipped, _ := out["skipped"].([]any)
+				summary := fmt.Sprintf("%d shapes, to add with save_template.", count(out, "elements"))
+				if len(skipped) > 0 {
+					summary += fmt.Sprintf(" Left out: %v.", skipped)
+				}
+				return say(out, "%s", summary)
+			}),
 		simple(&mcp.Tool{Name: "delete_template", Description: "Delete a label template no category names.",
 			Annotations: destroys("Delete a template", true)}, "DELETE /api/v1/templates/{id}", design,
 			func(in idIn) (request, error) {

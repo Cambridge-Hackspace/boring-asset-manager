@@ -3,7 +3,7 @@
 
 export type Units = 'mm' | 'in';
 export type ElementType = 'text' | 'generator' | 'static_image' | 'shape';
-export type ShapeKind = 'rectangle' | 'ellipse' | 'line' | 'polygon';
+export type ShapeKind = 'rectangle' | 'ellipse' | 'line' | 'polygon' | 'path';
 /** Labels print black and white; white paints over what is beneath it. */
 export type Paint = 'black' | 'white' | 'none';
 /** How an element of an adaptive template follows the label; absent is scale. */
@@ -69,6 +69,9 @@ export interface TemplateElement {
   points?: [number, number][];
   /** Whether a polygon is closed; absent is closed. */
   closed?: boolean;
+  /** Imported artwork's SVG path data, its points fractions of its box. */
+  d?: string;
+  fill_rule?: 'nonzero' | 'evenodd';
   stroke?: Paint;
   /** In the template's units. */
   stroke_width?: number;
@@ -524,7 +527,7 @@ export function layerName(e: TemplateElement): string {
   }
 }
 
-export const shapeNames: Record<ShapeKind, string> = { rectangle: 'Rectangle', ellipse: 'Ellipse', line: 'Line', polygon: 'Polygon' };
+export const shapeNames: Record<ShapeKind, string> = { rectangle: 'Rectangle', ellipse: 'Ellipse', line: 'Line', polygon: 'Polygon', path: 'Artwork' };
 
 /** A shape's stroke width when it is drawn: 0.25 mm. */
 export function defaultStroke(units: Units): number {

@@ -211,7 +211,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"image_inches", "layers", "margins", "micro_code128", "qr45", "qr_label", "shapes", "turned"} {
+	for _, name := range []string{"image_inches", "imported", "layers", "margins", "micro_code128", "qr45", "qr_label", "shapes", "turned"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)

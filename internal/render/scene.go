@@ -40,6 +40,9 @@ type Item struct {
 	Rects []Rect
 	// Paint is what a path or rectangles are filled with.
 	Paint Paint
+	// EvenOdd fills a path by the even-odd rule: where its outlines cross
+	// it an odd number of times.
+	EvenOdd bool
 }
 
 // Paint is black, or white, which paints over what is beneath it.

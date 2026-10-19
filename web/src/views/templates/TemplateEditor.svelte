@@ -240,6 +240,34 @@
     tool = null;
   }
 
+  // What the last import left out, or why it failed.
+  let imported = $state('');
+
+  /**
+   * Imports SVG artwork as shapes, fitted into the middle of the label,
+   * selected together.
+   */
+  async function importSVG(file: File) {
+    imported = '';
+    if (file.size > 1 << 20) {
+      imported = `${file.name} is larger than 1 MB.`;
+      return;
+    }
+    try {
+      const svg = await file.text();
+      const box = { x: doc.width * 0.1, y: doc.height * 0.1, width: doc.width * 0.8, height: doc.height * 0.8 };
+      const res = await request<{ elements: TemplateElement[]; skipped: string[] }>('POST', '/templates/import-svg', { svg, box });
+      begin();
+      const first = doc.elements.length;
+      doc.elements.push(...res.elements);
+      selected = res.elements.map((_, k) => first + k);
+      const n = res.elements.length;
+      imported = `Imported ${n} shape${n === 1 ? '' : 's'} from ${file.name}.` + (res.skipped.length ? ` Left out: ${res.skipped.join('; ')}.` : '');
+    } catch (err) {
+      imported = messageOf(err);
+    }
+  }
+
   function addElement(type: ElementType) {
     begin();
     doc.elements.push(newElement(type, doc, generators[0]?.type ?? 'qr'));
@@ -367,12 +395,26 @@
         <button type="button" class="btn-secondary" onclick={() => addElement('text')}>Add text</button>
         <button type="button" class="btn-secondary" onclick={() => addElement('generator')}>Add barcode</button>
         <button type="button" class="btn-secondary" onclick={() => addElement('static_image')}>Add image</button>
+        <label class="btn-secondary cursor-pointer focus-within:outline-2 focus-within:outline-blue-600">
+          Import SVG
+          <input
+            type="file"
+            accept=".svg,image/svg+xml"
+            class="sr-only"
+            onchange={(ev) => {
+              const file = ev.currentTarget.files?.[0];
+              ev.currentTarget.value = '';
+              if (file) void importSVG(file);
+            }}
+          />
+        </label>
       </div>
       <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Draw a shape">
         {#each tools as [kind, label] (kind)}
           <button type="button" class="btn-secondary" aria-pressed={tool === kind} onclick={(ev) => chooseTool(ev, kind)}>{label}</button>
         {/each}
       </div>
+      {#if imported}<p class="text-sm" role="status">{imported}</p>{/if}
       <p class="text-xs text-zinc-600 dark:text-zinc-400" role="status">
         {#if tool === 'polygon'}
           Click to place each point; double-click, press Enter or click the first point to finish. Escape stops.
@@ -398,6 +440,7 @@
         {codeLayouts}
         {tool}
         ondraw={addDrawn}
+        onfile={importSVG}
         ontoolcancel={() => (tool = null)}
       />
 
