@@ -41,10 +41,16 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 		box := image.Rect(
 			round(e.X*dotsPerUnit), round(e.Y*dotsPerUnit),
 			round((e.X+e.Width)*dotsPerUnit), round((e.Y+e.Height)*dotsPerUnit),
-		).Intersect(canvas)
+		)
+		// A turned element's box may reach off the canvas before it is
+		// turned; what it draws is clipped as it is drawn.
+		if e.Rotation == 0 {
+			box = box.Intersect(canvas)
+		}
 		if box.Empty() {
 			return nil, fail("box is smaller than one dot at %d DPI", t.DPI)
 		}
+		first := len(s.Items)
 
 		switch e.Type {
 		case labels.ElementGenerator:
@@ -90,6 +96,7 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 		default:
 			return nil, fail("unknown element type %q", e.Type)
 		}
+		s.turn(s.Items[first:], box, e.Rotation)
 	}
 	return s, nil
 }

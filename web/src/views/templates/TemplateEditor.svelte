@@ -13,6 +13,7 @@
     newElement,
     placeholders,
     restack,
+    rotateElements,
     type ElementType,
     type Restack,
     type PrintArea,
@@ -222,6 +223,12 @@
     selected = next.selected;
   }
 
+  /** Turns the selected elements together, about the middle of them all. */
+  function turnSelected(delta: number) {
+    begin();
+    doc.elements = rotateElements(doc, selected, $state.snapshot(doc.elements) as TemplateElement[], delta);
+  }
+
   function moveSelectedLayer(from: number, to: number) {
     begin();
     const next = moveLayer($state.snapshot(doc.elements) as TemplateElement[], selected, from, to);
@@ -373,6 +380,10 @@
         <section class="card space-y-2">
           <p class="text-sm">{selected.length} elements selected. Drag or use the arrow keys to move them together.</p>
           <StackButtons elements={doc.elements} {selected} onrestack={restackSelected} />
+          <div class="flex flex-wrap gap-1">
+            <button type="button" class="btn-secondary" onclick={() => turnSelected(-90)}>Turn them 90° left</button>
+            <button type="button" class="btn-secondary" onclick={() => turnSelected(90)}>Turn them 90° right</button>
+          </div>
           <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={removeSelected}>Remove them</button>
         </section>
       {/if}

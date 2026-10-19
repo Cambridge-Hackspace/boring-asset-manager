@@ -286,4 +286,31 @@ describe('TemplateEditor', () => {
     await screen.findByDisplayValue('QL 90x29');
     expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['QR code', 'Text: {{asset.name}}']);
   });
+
+  it('turns an element from its settings and with [ and ]', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Text: {{asset.name}}' }));
+    const angle = () => (screen.getByLabelText('Turned (degrees clockwise)') as HTMLInputElement).value;
+    await fireEvent.click(screen.getByRole('button', { name: 'Turn 90° right' }));
+    expect(angle()).toBe('90');
+    const outline = screen.getByRole('button', { name: /^Text 1/ });
+    await fireEvent.keyDown(outline, { code: 'BracketLeft', key: '[' });
+    expect(angle()).toBe('75');
+    await fireEvent.keyDown(outline, { code: 'BracketRight', key: '}', shiftKey: true });
+    expect(angle()).toBe('76');
+    await fireEvent.change(screen.getByLabelText('Turned (degrees clockwise)'), { target: { value: '400' } });
+    expect(angle()).toBe('40');
+    expect(outline.getAttribute('style')).toContain('rotate(40deg)');
+
+    // Snapping is on until switched off, and stays off in this browser.
+    const snapping = screen.getByRole('checkbox', { name: 'Snap angles to 45°' }) as HTMLInputElement;
+    expect(snapping.checked).toBe(true);
+    await fireEvent.click(snapping);
+    expect(localStorage.getItem('bam.editor-snap-angles')).toBe('off');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements[0]!.rotation).toBe(40);
+  });
 });

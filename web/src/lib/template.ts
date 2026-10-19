@@ -21,6 +21,8 @@ export interface TemplateElement {
   y: number;
   width: number;
   height: number;
+  /** Degrees it is turned clockwise about the center of its box, from 0 up to 360; absent is 0. */
+  rotation?: number;
   anchor_x?: Anchor;
   anchor_y?: Anchor;
   /** Bounds on each side of its box as an adaptive template is laid out, in the template's units. */
@@ -198,9 +200,29 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(Math.max(v, lo), hi);
 }
 
+/** The sine and cosine of an angle in degrees, exact at quarter turns. */
+export function sinCos(degrees: number): [number, number] {
+  const d = ((degrees % 360) + 360) % 360;
+  if (d === 0) return [0, 1];
+  if (d === 90) return [1, 0];
+  if (d === 180) return [0, -1];
+  if (d === 270) return [-1, 0];
+  const r = (d * Math.PI) / 180;
+  return [Math.sin(r), Math.cos(r)];
+}
+
+/** Where an element lies once turned: its own box when it is not. */
+export function bounds(e: TemplateElement): { x: number; y: number; width: number; height: number } {
+  if (!e.rotation) return { x: e.x, y: e.y, width: e.width, height: e.height };
+  const [sin, cos] = sinCos(e.rotation);
+  const width = Math.abs(e.width * cos) + Math.abs(e.height * sin);
+  const height = Math.abs(e.width * sin) + Math.abs(e.height * cos);
+  return { x: e.x + (e.width - width) / 2, y: e.y + (e.height - height) / 2, width, height };
+}
+
 /**
  * Moves elements together by (dx, dy), snapped to the grid, without letting
- * any of them leave the canvas.
+ * any of them leave the canvas, as they lie once turned.
  */
 export function moveElements(
   doc: TemplateDoc,
@@ -212,16 +234,62 @@ export function moveElements(
 ): TemplateElement[] {
   const moving = indices.map((i) => start[i]!);
   if (!moving.length) return start;
-  const minX = Math.min(...moving.map((e) => e.x));
-  const minY = Math.min(...moving.map((e) => e.y));
-  const maxX = Math.max(...moving.map((e) => e.x + e.width));
-  const maxY = Math.max(...moving.map((e) => e.y + e.height));
+  const boxes = moving.map(bounds);
+  const minX = Math.min(...boxes.map((b) => b.x));
+  const minY = Math.min(...boxes.map((b) => b.y));
+  const maxX = Math.max(...boxes.map((b) => b.x + b.width));
+  const maxY = Math.max(...boxes.map((b) => b.y + b.height));
   // Snap the group's corner, then keep the whole group inside.
-  const sx = clamp(snap(minX + dx, step, doc.units), 0, doc.width - (maxX - minX)) - minX;
-  const sy = clamp(snap(minY + dy, step, doc.units), 0, doc.height - (maxY - minY)) - minY;
+  const sx = clamp(snap(minX + dx, step, doc.units), 0, Math.max(0, doc.width - (maxX - minX))) - minX;
+  const sy = clamp(snap(minY + dy, step, doc.units), 0, Math.max(0, doc.height - (maxY - minY))) - minY;
   return start.map((e, i) =>
     indices.includes(i) ? { ...e, x: tidy(e.x + sx, doc.units), y: tidy(e.y + sy, doc.units) } : e,
   );
+}
+
+/** An angle as kept: from 0 up to 360, to a hundredth of a degree. */
+export function normalAngle(degrees: number): number {
+  const d = Math.round((((degrees % 360) + 360) % 360) * 100) / 100;
+  return d === 360 ? 0 : d;
+}
+
+/** How near a multiple of 45° an angle snaps to it, in degrees. */
+export const ANGLE_SNAP = 5;
+
+/** An angle, snapped to a multiple of 45° when within ANGLE_SNAP of one. */
+export function snapAngle(degrees: number): number {
+  const nearest = Math.round(degrees / 45) * 45;
+  return normalAngle(Math.abs(degrees - nearest) <= ANGLE_SNAP ? nearest : degrees);
+}
+
+/**
+ * Turns elements clockwise from where they start: one about its own center
+ * to an angle delta more, snapped to 45° when snapped is set, and several
+ * together by delta about the center of all of them as they lie.
+ */
+export function rotateElements(doc: TemplateDoc, indices: number[], start: TemplateElement[], delta: number, snapped = false): TemplateElement[] {
+  const moving = indices.map((i) => start[i]!);
+  if (!moving.length) return start;
+  const turned = (e: TemplateElement, angle: number) => withProp(e, 'rotation', angle ? angle : undefined);
+  if (moving.length === 1) {
+    return start.map((e, i) => {
+      if (!indices.includes(i)) return e;
+      const angle = normalAngle((e.rotation ?? 0) + delta);
+      return turned(e, snapped ? snapAngle(angle) : angle);
+    });
+  }
+  const boxes = moving.map(bounds);
+  const cx = (Math.min(...boxes.map((b) => b.x)) + Math.max(...boxes.map((b) => b.x + b.width))) / 2;
+  const cy = (Math.min(...boxes.map((b) => b.y)) + Math.max(...boxes.map((b) => b.y + b.height))) / 2;
+  const [sin, cos] = sinCos(delta);
+  return start.map((e, i) => {
+    if (!indices.includes(i)) return e;
+    const ex = e.x + e.width / 2 - cx;
+    const ey = e.y + e.height / 2 - cy;
+    const nx = cx + ex * cos - ey * sin;
+    const ny = cy + ex * sin + ey * cos;
+    return { ...turned(e, normalAngle((e.rotation ?? 0) + delta)), x: tidy(nx - e.width / 2, doc.units), y: tidy(ny - e.height / 2, doc.units) };
+  });
 }
 
 export type Handle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
@@ -233,6 +301,7 @@ export const handles: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
  * one grid step in size.
  */
 export function resizeElement(doc: TemplateDoc, e: TemplateElement, handle: Handle, dx: number, dy: number, step: number): TemplateElement {
+  if (e.rotation) return resizeTurned(doc, e, handle, dx, dy, step);
   let left = e.x;
   let top = e.y;
   let right = e.x + e.width;
@@ -242,6 +311,33 @@ export function resizeElement(doc: TemplateDoc, e: TemplateElement, handle: Hand
   if (handle.includes('n')) top = clamp(snap(top + dy, step, doc.units), 0, bottom - step);
   if (handle.includes('s')) bottom = clamp(snap(bottom + dy, step, doc.units), top + step, doc.height);
   return { ...e, x: tidy(left, doc.units), y: tidy(top, doc.units), width: tidy(right - left, doc.units), height: tidy(bottom - top, doc.units) };
+}
+
+/**
+ * Resizes a turned element along its own sides: the drag is turned back
+ * onto them, its size snapped to the grid, and the corner or side opposite
+ * the handle stays where it is on the label.
+ */
+function resizeTurned(doc: TemplateDoc, e: TemplateElement, handle: Handle, dx: number, dy: number, step: number): TemplateElement {
+  const [sin, cos] = sinCos(e.rotation ?? 0);
+  // The drag along the element's own sides.
+  const along = dx * cos + dy * sin;
+  const down = -dx * sin + dy * cos;
+  const sx = handle.includes('e') ? 1 : handle.includes('w') ? -1 : 0;
+  const sy = handle.includes('s') ? 1 : handle.includes('n') ? -1 : 0;
+  const width = sx ? Math.max(step, snap(e.width + sx * along, step, doc.units)) : e.width;
+  const height = sy ? Math.max(step, snap(e.height + sy * down, step, doc.units)) : e.height;
+  // The point that stays, the opposite corner or side, from the center, turned.
+  const stays = (w: number, h: number): [number, number] => {
+    const u = (-sx * w) / 2;
+    const v = (-sy * h) / 2;
+    return [u * cos - v * sin, u * sin + v * cos];
+  };
+  const [ox, oy] = stays(e.width, e.height);
+  const [nx, ny] = stays(width, height);
+  const cx = e.x + e.width / 2 + ox - nx;
+  const cy = e.y + e.height / 2 + oy - ny;
+  return { ...e, x: tidy(cx - width / 2, doc.units), y: tidy(cy - height / 2, doc.units), width: tidy(width, doc.units), height: tidy(height, doc.units) };
 }
 
 /** The placeholder for an asset's scan page address (README §6.4). */
@@ -354,11 +450,17 @@ export function moveLayer(elements: TemplateElement[], selected: number[], from:
   return { elements: items.map((x) => x.e), selected: items.flatMap((x, k) => (x.picked ? [k] : [])) };
 }
 
-/** The elements whose boxes take in a point, in the template's units, the top one first. */
+/** The elements that take in a point, in the template's units, as they lie turned, the top one first. */
 export function elementsAt(doc: TemplateDoc, x: number, y: number): number[] {
   const hits: number[] = [];
   doc.elements.forEach((e, i) => {
-    if (x >= e.x && x <= e.x + e.width && y >= e.y && y <= e.y + e.height) hits.unshift(i);
+    // The point turned back onto the element's box.
+    const [sin, cos] = sinCos(e.rotation ?? 0);
+    const dx = x - (e.x + e.width / 2);
+    const dy = y - (e.y + e.height / 2);
+    const u = dx * cos + dy * sin;
+    const v = -dx * sin + dy * cos;
+    if (Math.abs(u) <= e.width / 2 + 1e-9 && Math.abs(v) <= e.height / 2 + 1e-9) hits.unshift(i);
   });
   return hits;
 }

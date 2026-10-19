@@ -5,6 +5,7 @@
   import type { DriverInfo, Printer } from '../../lib/models';
   import { session } from '../../lib/session.svelte';
   import {
+    bounds,
     convertUnits,
     describeElement,
     fromMM,
@@ -125,7 +126,7 @@
       height_mm: mm(snapshot.height),
       dpi: snapshot.dpi,
       // Where the template has content, for warnings about parts that will not print.
-      content: snapshot.elements.map((e) => ({ x: mm(e.x), y: mm(e.y), width: mm(e.width), height: mm(e.height) })),
+      content: snapshot.elements.map(bounds).map((b) => ({ x: mm(b.x), y: mm(b.y), width: mm(b.width), height: mm(b.height) })),
     });
   }
 

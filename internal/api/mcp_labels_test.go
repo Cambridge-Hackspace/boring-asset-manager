@@ -121,6 +121,20 @@ func TestMCPLabelTools(t *testing.T) {
 	if res := callTool(t, cs, "save_template", map[string]any{"id": tag, "move_elements": []any{map[string]any{"index": 2, "to": 0}}}); !res.IsError {
 		t.Errorf("moved an element that is not there: %s", toolText(res))
 	}
+	// Turning the code upside down, and reading where it lies turned.
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 1, "set": map[string]any{"rotation": 180}}}}), &saved)
+	var turned struct {
+		Labels []struct {
+			Elements []struct {
+				Rotation float64
+				Bounds   *struct{ X, Width float64 }
+			}
+		}
+	}
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &turned)
+	if e := turned.Labels[0].Elements[1]; e.Rotation != 180 || e.Bounds == nil || e.Bounds.Width != 18 {
+		t.Errorf("turned: %+v", turned.Labels[0].Elements)
+	}
 	// A draft never saved, too, and one that cannot be made for an asset says why.
 	draft := map[string]any{}
 	_ = json.Unmarshal([]byte(labelTemplate), &draft)

@@ -69,11 +69,14 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 		e.X, e.Width = follow(e.AnchorX, e.X, e.Width, t.Width, width, sx)
 		e.Y, e.Height = follow(e.AnchorY, e.Y, e.Height, t.Height, height, sy)
 		const eps = 1e-6
-		if e.Width > eps && e.Height > eps && (e.X < -eps || e.Y < -eps || e.X+e.Width > width+eps || e.Y+e.Height > height+eps) {
+		// Its box is placed, then turned.
+		if bx, by, bw, bh := e.Bounds(); e.Width > eps && e.Height > eps && (bx < -eps || by < -eps || bx+bw > width+eps || by+bh > height+eps) {
 			return refuse(path, "would run off %s", on)
 		}
-		e.X, e.Y = math.Max(0, e.X), math.Max(0, e.Y)
-		e.Width, e.Height = math.Min(e.Width, width-e.X), math.Min(e.Height, height-e.Y)
+		if e.Rotation == 0 {
+			e.X, e.Y = math.Max(0, e.X), math.Max(0, e.Y)
+			e.Width, e.Height = math.Min(e.Width, width-e.X), math.Min(e.Height, height-e.Y)
+		}
 		if e.MaxSize > 0 {
 			// Kept at its maximum, centered where its box would be.
 			if e.Width > e.MaxSize {
@@ -91,7 +94,7 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 				continue
 			case labels.TooSmallAlternative:
 				alt := *design.Alternative
-				alt.X, alt.Y, alt.Width, alt.Height = e.X, e.Y, e.Width, e.Height
+				alt.X, alt.Y, alt.Width, alt.Height, alt.Rotation = e.X, e.Y, e.Width, e.Height, e.Rotation
 				if altWhy := fits(&out, &alt, &alt, sample); altWhy != "" {
 					return refuse(path, "%s, nor does its alternative: %s", why, altWhy)
 				}
@@ -188,9 +191,12 @@ func follow(anchor string, start, length, design, size, scale float64) (float64,
 	}
 }
 
+// overlap reports whether two elements' turned bounds overlap.
 func overlap(a, b labels.Element) bool {
 	const eps = 1e-6
-	return a.X < b.X+b.Width-eps && b.X < a.X+a.Width-eps && a.Y < b.Y+b.Height-eps && b.Y < a.Y+a.Height-eps
+	ax, ay, aw, ah := a.Bounds()
+	bx, by, bw, bh := b.Bounds()
+	return ax < bx+bw-eps && bx < ax+aw-eps && ay < by+bh-eps && by < ay+ah-eps
 }
 
 // length writes a length to a hundredth, without trailing zeros.

@@ -274,7 +274,8 @@ func labelSpec(t *labels.Template) printers.LabelSpec {
 	}
 	label := printers.LabelSpec{WidthMM: t.Width * mm, HeightMM: t.Height * mm, DPI: t.DPI}
 	for _, e := range t.Elements {
-		label.Content = append(label.Content, printers.RectMM{X: e.X * mm, Y: e.Y * mm, Width: e.Width * mm, Height: e.Height * mm})
+		x, y, w, h := e.Bounds()
+		label.Content = append(label.Content, printers.RectMM{X: x * mm, Y: y * mm, Width: w * mm, Height: h * mm})
 	}
 	return label
 }

@@ -30,6 +30,18 @@
   ]
  },
  {
+  "file": "qr45.png",
+  "payloads": [
+   "https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"
+  ]
+ },
+ {
+  "file": "qr45.mono.png",
+  "payloads": [
+   "https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"
+  ]
+ },
+ {
   "file": "qr_label.png",
   "payloads": [
    "https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"
@@ -39,6 +51,28 @@
   "file": "qr_label.mono.png",
   "payloads": [
    "https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"
+  ]
+ },
+ {
+  "file": "turned.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "BAM-QR-0042",
+   "BAM-QR-0042",
+   "BAM-QR-0042",
+   "1234",
+   "1234"
+  ]
+ },
+ {
+  "file": "turned.mono.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "BAM-QR-0042",
+   "BAM-QR-0042",
+   "BAM-QR-0042",
+   "1234",
+   "1234"
   ]
  }
 ]

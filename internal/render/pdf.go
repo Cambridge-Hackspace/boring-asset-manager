@@ -7,7 +7,10 @@ import (
 	"image"
 	"image/color"
 	"io"
+	"strconv"
 	"strings"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 
 	"golang.org/x/image/draw"
 )
@@ -92,8 +95,15 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 			}
 			name := fmt.Sprintf("Im%d", len(xobjects))
 			xobjects = append(xobjects, fmt.Sprintf("/%s %d 0 R", name, id))
+			content.WriteString("q ")
+			if pi.Rotation != 0 {
+				// Turned clockwise, as dots run down the page, about its center.
+				sin, cos := labels.SinCos(pi.Rotation)
+				fmt.Fprintf(&content, "%s %s %s %s %s %s cm ", fine(cos), fine(sin), fine(-sin), fine(cos),
+					fine(pi.Cx-pi.Cx*cos+pi.Cy*sin), fine(pi.Cy-pi.Cx*sin-pi.Cy*cos))
+			}
 			// The image's unit square has its first row at the top (v = 1).
-			fmt.Fprintf(&content, "q %d 0 0 %d %d %d cm /%s Do Q\n", pi.W, -pi.H, pi.X, pi.Y+pi.H, name)
+			fmt.Fprintf(&content, "%d 0 0 %d %d %d cm /%s Do Q\n", pi.W, -pi.H, pi.X, pi.Y+pi.H, name)
 		case it.Rects != nil:
 			// The modules of codes drawn one after another are filled at once.
 			for ; i < len(s.Items) && s.Items[i].Rects != nil; i++ {
@@ -118,6 +128,17 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 	pw.writeObjectAt(pageID, fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %s %s] /Resources %s /Contents %d 0 R >>",
 		num(float64(s.Width)*scale), num(float64(s.Height)*scale), resources, contentID))
 	return pageID, nil
+}
+
+// fine formats a number to six decimals, for a turn's matrix, whose
+// rounding is multiplied across the image.
+func fine(v float64) string {
+	s := strings.TrimRight(strconv.FormatFloat(v, 'f', 6, 64), "0")
+	s = strings.TrimSuffix(s, ".")
+	if s == "-0" {
+		return "0"
+	}
+	return s
 }
 
 // pdfPath writes a path's construction operators, without painting it.

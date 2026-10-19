@@ -269,6 +269,19 @@ type PreviewElement struct {
 	GeneratorType string  `json:"generator_type,omitempty"`
 	ImageID       string  `json:"image_id,omitempty"`
 	FontSize      float64 `json:"font_size,omitempty"`
+	// Rotation is the degrees it is turned clockwise about the center of
+	// its box, and Bounds where it lies once turned; both are left out when
+	// it is not turned.
+	Rotation float64     `json:"rotation,omitempty"`
+	Bounds   *PreviewBox `json:"bounds,omitempty"`
+}
+
+// PreviewBox is a box on a previewed label, in the template's units.
+type PreviewBox struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 // PreviewDescription is a previewed label as format json describes it.
@@ -286,7 +299,11 @@ func describePreview(t *labels.Template, data labels.Data) PreviewDescription {
 	for i := range t.Elements {
 		e := &t.Elements[i]
 		pe := PreviewElement{Index: i, Type: e.Type, X: e.X, Y: e.Y, Width: e.Width, Height: e.Height,
-			GeneratorType: e.GeneratorType, ImageID: e.ImageID, FontSize: e.FontSize}
+			GeneratorType: e.GeneratorType, ImageID: e.ImageID, FontSize: e.FontSize, Rotation: e.Rotation}
+		if e.Rotation != 0 {
+			x, y, w, h := e.Bounds()
+			pe.Bounds = &PreviewBox{X: x, Y: y, Width: w, Height: h}
+		}
 		if b, err := e.Binding(); err == nil && e.Type != labels.ElementStaticImage {
 			pe.Value = b.Resolve(data)
 		}

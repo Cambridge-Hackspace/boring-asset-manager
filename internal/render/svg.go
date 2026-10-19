@@ -52,8 +52,12 @@ func svgImage(bw *bufio.Writer, pi *PlacedImage) error {
 	if err := png.Encode(&buf, pi.Image); err != nil {
 		return fmt.Errorf("encoding image: %w", err)
 	}
-	fmt.Fprintf(bw, `<image x="%d" y="%d" width="%d" height="%d" preserveAspectRatio="none" xlink:href="data:image/png;base64,%s"/>`+"\n",
-		pi.X, pi.Y, pi.W, pi.H, base64.StdEncoding.EncodeToString(buf.Bytes()))
+	turn := ""
+	if pi.Rotation != 0 {
+		turn = fmt.Sprintf(` transform="rotate(%s %s %s)"`, num(pi.Rotation), num(pi.Cx), num(pi.Cy))
+	}
+	fmt.Fprintf(bw, `<image x="%d" y="%d" width="%d" height="%d"%s preserveAspectRatio="none" xlink:href="data:image/png;base64,%s"/>`+"\n",
+		pi.X, pi.Y, pi.W, pi.H, turn, base64.StdEncoding.EncodeToString(buf.Bytes()))
 	return nil
 }
 

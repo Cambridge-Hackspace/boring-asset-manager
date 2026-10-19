@@ -220,3 +220,48 @@ func TestRange(t *testing.T) {
 		t.Errorf("a long code: %v", err)
 	}
 }
+
+// TestAdaptTurned places a turned element's box by its anchors, then turns
+// it: it is refused only where, turned, it would run off the label, and an
+// alternative in its place is turned as it is.
+func TestAdaptTurned(t *testing.T) {
+	tag := &labels.Template{
+		Name: "Tag", Units: labels.UnitsMM, Width: 62, Height: 29, DPI: 300, Sizing: labels.SizingAdaptive, Layering: labels.LayeringList,
+		Adapt: &labels.Adapt{MinWidth: 40, MaxWidth: 102, MinHeight: 20, MaxHeight: 60},
+		Elements: []labels.Element{
+			// A 25 × 6 mm name, turned upright 4 mm from the right edge.
+			{Type: labels.ElementText, X: 42.5, Y: 11.5, Width: 25, Height: 6, Rotation: 90, FontSize: 10, ContentBinding: "{{asset.name}}",
+				AnchorX: labels.AnchorEnd, AnchorY: labels.AnchorCenter},
+			{Type: labels.ElementGenerator, GeneratorType: "qr", X: 5, Y: 5, Width: 18, Height: 18, Rotation: 45, AnchorX: labels.AnchorStart, AnchorY: labels.AnchorStart,
+				MinSize: 15, WhenTooSmall: labels.TooSmallAlternative,
+				Alternative: &labels.Element{Type: labels.ElementText, FontSize: 8, ContentBinding: "{{asset.name}}"}},
+		},
+	}
+	tag.Normalize()
+	if err := tag.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	laid, _, err := Adapt(tag, 90, 29, 300, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := laid.Elements[0]
+	if x, _, w, _ := name.Bounds(); name.Rotation != 90 || !near(x+w, 86) {
+		t.Errorf("kept to the right, turned: %+v", name)
+	}
+
+	// Shorter than its turned height, the name runs off the label.
+	if _, _, err := Adapt(tag, 62, 20, 300, nil); err == nil || !strings.Contains(err.Error(), "elements[0]") {
+		t.Errorf("a turned element that runs off: %v", err)
+	}
+
+	// Under its minimum, the code gives way to its alternative, turned too.
+	tag.Elements[1].MinSize = 19
+	laid, notices, err := Adapt(tag, 62, 29, 300, nil)
+	if err != nil || len(notices) != 1 {
+		t.Fatalf("%v %v", err, notices)
+	}
+	if alt := laid.Elements[1]; alt.Type != labels.ElementText || alt.Rotation != 45 {
+		t.Errorf("the alternative: %+v", alt)
+	}
+}

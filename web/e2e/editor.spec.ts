@@ -218,3 +218,55 @@ test('stack elements: the top one takes a click, Alt+click the one beneath, and 
   expect(saved.template.layering).toBe('list');
   expect(saved.template.elements.map((e: { type: string }) => e.type)).toEqual(['generator', 'text']);
 });
+
+test('turn an element with its handle, snapping to 45°, and from its settings', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Turn'), units: 'mm', width: 62, height: 40, dpi: 300, layering: 'list',
+    elements: [{ type: 'text', x: 16, y: 15, width: 30, height: 10, font_size: 14, content_binding: '{{asset.name}}' }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const text = page.getByRole('button', { name: /^Text 1/ });
+  await text.click();
+  const angle = page.getByLabel('Turned (degrees clockwise)');
+
+  // Swept from above its center round to its right: a quarter turn, snapped.
+  const box = (await text.boundingBox())!;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  const handle = page.locator('.rotate-handle');
+  const h = (await handle.boundingBox())!;
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cx + 40, cy - 30, { steps: 5 });
+  await page.mouse.move(cx + 80, cy + 4, { steps: 5 });
+  await page.mouse.up();
+  await expect(angle).toHaveValue('90');
+  await expect(text).toHaveAttribute('style', /rotate\(90deg\)/);
+
+  // With Alt, a few degrees more does not snap back. The handle is now to
+  // its right.
+  const h2 = (await handle.boundingBox())!;
+  await page.keyboard.down('Alt');
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + h2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cx + 80, cy + 4, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  const free = Number(await angle.inputValue());
+  expect(free).toBeGreaterThan(91);
+  expect(free).toBeLessThan(95);
+
+  await angle.fill('30');
+  await angle.press('Tab');
+  await expect(text).toHaveAttribute('style', /rotate\(30deg\)/);
+  await page.getByRole('button', { name: 'Turn 90° right' }).click();
+  await expect(angle).toHaveValue('120');
+
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements[0].rotation).toBe(120);
+});
