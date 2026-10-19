@@ -6,6 +6,8 @@
 
 Elements are drawn in order, each over those before it, so text can sit on an image. The **Layers** list beside the canvas shows them with the top one first. Drag a layer, or use **Bring forward**, **Send backward**, **Bring to front** and **Send to back**, to change what is drawn over what. On a layer or a selected element, Page Up and Page Down move it one step, and Home and End to the top and bottom. Where elements overlap, a click selects the top one, and Alt+click the one beneath it.
 
+Any element can be turned, to any angle. Drag the round handle above a selected element to turn it: it snaps to multiples of 45° as it passes them, unless **Snap angles to 45°** is switched off, or Alt is held. Its settings take an exact angle, and turn it a quarter turn left or right; with it focused, [ and ] turn it 15°, or 1° with Shift. Several selected elements turn together, about the middle of them all. Codes turned a quarter turn print as sharply as upright ones; at other angles their edges follow the printer's dots, so check that a turned code scans with the scanners you use.
+
 ## Printing
 
 On an asset's page, or for several assets ticked on the list, choose a template to download labels as SVG, PNG or PDF, or send them to a printer set up on the **Printers** page. **Images** holds logos and pictures for templates.

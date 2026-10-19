@@ -5,7 +5,9 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"math"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/vector"
 )
@@ -108,6 +110,10 @@ func tracePath(z *vector.Rasterizer, p Path) {
 // then Floyd–Steinberg dithered; what is already drawn there is pure black
 // and white, which dithering leaves as it is.
 func drawImage(dst *image.Gray, pi PlacedImage, mono bool) {
+	if pi.Rotation != 0 {
+		drawTurnedImage(dst, pi, mono)
+		return
+	}
 	rect := image.Rect(pi.X, pi.Y, pi.X+pi.W, pi.Y+pi.H)
 	scaled := image.NewGray(image.Rect(0, 0, pi.W, pi.H))
 	for y := 0; y < pi.H; y++ {
@@ -169,4 +175,75 @@ func WritePNG(w io.Writer, s *Scene, mono bool) error {
 		}
 	}
 	return png.Encode(w, bw)
+}
+
+// drawTurnedImage draws an image turned by pi.Rotation about (pi.Cx, pi.Cy):
+// scaled to its rectangle, then each dot it covers takes the color found
+// there turned back, between the four nearest pixels, over what is already
+// drawn. In mono mode the dots it covers are then dithered, as drawImage
+// does.
+func drawTurnedImage(dst *image.Gray, pi PlacedImage, mono bool) {
+	if pi.W <= 0 || pi.H <= 0 {
+		return
+	}
+	scaled := image.NewRGBA(image.Rect(0, 0, pi.W, pi.H))
+	draw.CatmullRom.Scale(scaled, scaled.Bounds(), pi.Image, pi.Image.Bounds(), draw.Src, nil)
+
+	sin, cos := labels.SinCos(pi.Rotation)
+	turned := func(x, y float64) (float64, float64) {
+		dx, dy := x-pi.Cx, y-pi.Cy
+		return pi.Cx + dx*cos - dy*sin, pi.Cy + dx*sin + dy*cos
+	}
+	minX, minY, maxX, maxY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, c := range [][2]float64{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
+		x, y := turned(float64(pi.X)+c[0]*float64(pi.W), float64(pi.Y)+c[1]*float64(pi.H))
+		minX, minY, maxX, maxY = math.Min(minX, x), math.Min(minY, y), math.Max(maxX, x), math.Max(maxY, y)
+	}
+	area := image.Rect(int(math.Floor(minX)), int(math.Floor(minY)), int(math.Ceil(maxX)), int(math.Ceil(maxY))).Intersect(dst.Bounds())
+	if area.Empty() {
+		return
+	}
+
+	// Premultiplied gray and alpha at a point of the scaled image, from 0 to
+	// 0xFFFF, between its four nearest pixels; none outside it.
+	sample := func(u, v float64) (float64, float64) {
+		u, v = u-0.5, v-0.5
+		x0, y0 := int(math.Floor(u)), int(math.Floor(v))
+		fx, fy := u-float64(x0), v-float64(y0)
+		var g, a float64
+		for _, n := range [4]struct {
+			x, y int
+			w    float64
+		}{{x0, y0, (1 - fx) * (1 - fy)}, {x0 + 1, y0, fx * (1 - fy)}, {x0, y0 + 1, (1 - fx) * fy}, {x0 + 1, y0 + 1, fx * fy}} {
+			if n.w == 0 || n.x < 0 || n.y < 0 || n.x >= pi.W || n.y >= pi.H {
+				continue
+			}
+			r, gr, b, al := scaled.At(n.x, n.y).RGBA()
+			g += n.w * (0.299*float64(r) + 0.587*float64(gr) + 0.114*float64(b))
+			a += n.w * float64(al)
+		}
+		return g, a
+	}
+
+	region := image.NewGray(area)
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
+			back := float64(dst.GrayAt(x, y).Y)
+			// The dot's center, turned back onto the image.
+			u, v := unturn(pi, sin, cos, float64(x)+0.5, float64(y)+0.5)
+			g, a := sample(u-float64(pi.X), v-float64(pi.Y))
+			out := (g/0x101 + back*(0xFFFF-a)/0xFFFF)
+			region.SetGray(x, y, color.Gray{Y: uint8(math.Round(math.Min(255, math.Max(0, out))))})
+		}
+	}
+	if mono {
+		dither(region)
+	}
+	draw.Draw(dst, area, region, area.Min, draw.Src)
+}
+
+// unturn turns a point back by the image's rotation about its center.
+func unturn(pi PlacedImage, sin, cos, x, y float64) (float64, float64) {
+	dx, dy := x-pi.Cx, y-pi.Cy
+	return pi.Cx + dx*cos + dy*sin, pi.Cy - dx*sin + dy*cos
 }

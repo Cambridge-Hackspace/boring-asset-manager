@@ -109,8 +109,12 @@ func (t *Template) validateLimits(v *validator, path string, e *Element, canvasO
 		v.add(at("alternative"), "cannot have an alternative of its own")
 		return
 	}
+	if alt.Rotation != 0 {
+		v.add(at("alternative.rotation"), "does not apply: an alternative is turned as the element it stands in for")
+		return
+	}
 	placed := *alt
-	placed.X, placed.Y, placed.Width, placed.Height = e.X, e.Y, e.Width, e.Height
+	placed.X, placed.Y, placed.Width, placed.Height, placed.Rotation = e.X, e.Y, e.Width, e.Height, e.Rotation
 	placed.AnchorX, placed.AnchorY = "", ""
 	t.validateElement(v, at("alternative"), &placed, canvasOK)
 }

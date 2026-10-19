@@ -6,6 +6,7 @@
     handles,
     moveElements,
     resizeElement,
+    rotateElements,
     type Handle,
     type PrintArea,
     type Restack,
@@ -18,7 +19,9 @@
   // start of one undoable gesture. With a printer chosen, what it does not
   // print is shaded, and elements reaching into it are outlined in amber.
   // Outlines are stacked as the elements are drawn, so a click takes the top
-  // one; Alt+click takes the one beneath the selected one there.
+  // one; Alt+click takes the one beneath the selected one there. Outlines
+  // turn with their elements, and the handle above one turns it, snapping to
+  // multiples of 45° unless that is switched off.
 
   let {
     doc,
@@ -48,9 +51,29 @@
 
   let surface: HTMLDivElement | undefined = $state();
 
+  // Whether turning snaps to multiples of 45°, remembered in this browser.
+  const snapKey = 'bam.editor-snap-angles';
+  let snapAngles = $state(readSnap());
+  function readSnap(): boolean {
+    try {
+      return localStorage.getItem(snapKey) !== 'off';
+    } catch {
+      return true;
+    }
+  }
+  function setSnap(on: boolean) {
+    snapAngles = on;
+    try {
+      localStorage.setItem(snapKey, on ? 'on' : 'off');
+    } catch {
+      // Storage unavailable: it lasts as long as the page.
+    }
+  }
+
   const pct = (v: number, total: number) => `${(v / total) * 100}%`;
   const boxStyle = (e: TemplateElement) =>
-    `left:${pct(e.x, doc.width)};top:${pct(e.y, doc.height)};width:${pct(e.width, doc.width)};height:${pct(e.height, doc.height)}`;
+    `left:${pct(e.x, doc.width)};top:${pct(e.y, doc.height)};width:${pct(e.width, doc.width)};height:${pct(e.height, doc.height)}` +
+    (e.rotation ? `;transform:rotate(${e.rotation}deg)` : '');
 
   const warned = $derived(new Set([...(area?.outside ?? []), ...(area?.nearEdge ?? [])]));
 
@@ -76,7 +99,8 @@
 
   type Gesture =
     | { kind: 'move'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; moved: boolean }
-    | { kind: 'resize'; x0: number; y0: number; start: TemplateElement[]; index: number; handle: Handle; moved: boolean };
+    | { kind: 'resize'; x0: number; y0: number; start: TemplateElement[]; index: number; handle: Handle; moved: boolean }
+    | { kind: 'rotate'; x0: number; y0: number; start: TemplateElement[]; index: number; cx: number; cy: number; moved: boolean };
   let gesture: Gesture | null = null;
 
   function pointerDownOnElement(event: PointerEvent, i: number) {
@@ -116,8 +140,31 @@
     surface?.setPointerCapture(event.pointerId);
   }
 
+  function pointerDownOnRotate(event: PointerEvent, i: number) {
+    if (event.button !== 0 || !surface) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const r = surface.getBoundingClientRect();
+    const e = doc.elements[i]!;
+    const cx = r.left + ((e.x + e.width / 2) / doc.width) * r.width;
+    const cy = r.top + ((e.y + e.height / 2) / doc.height) * r.height;
+    gesture = { kind: 'rotate', x0: event.clientX, y0: event.clientY, start: $state.snapshot(doc.elements) as TemplateElement[], index: i, cx, cy, moved: false };
+    surface.setPointerCapture(event.pointerId);
+  }
+
   function pointerMove(event: PointerEvent) {
     if (!gesture) return;
+    if (gesture.kind === 'rotate') {
+      const g = gesture;
+      if (!g.moved) {
+        g.moved = true;
+        onbegin();
+      }
+      // The angle the pointer has swept about the element's center.
+      const delta = ((Math.atan2(event.clientY - g.cy, event.clientX - g.cx) - Math.atan2(g.y0 - g.cy, g.x0 - g.cx)) * 180) / Math.PI;
+      onchange(rotateElements(doc, [g.index], g.start, delta, snapAngles && !event.altKey));
+      return;
+    }
     const k = unitsPerPixel();
     const dx = (event.clientX - gesture.x0) * k;
     const dy = (event.clientY - gesture.y0) * k;
@@ -148,6 +195,14 @@
 
   function keydown(event: KeyboardEvent) {
     if (!selected.length) return;
+    // [ and ] turn by 15°, or 1° with Shift; by key position, as Shift changes the character.
+    const turn = { BracketLeft: -1, BracketRight: 1 }[event.code];
+    if (turn) {
+      event.preventDefault();
+      onbegin();
+      onchange(rotateElements(doc, selected, $state.snapshot(doc.elements) as TemplateElement[], turn * (event.shiftKey ? 1 : 15)));
+      return;
+    }
     const step = gridStep(doc.units) * (event.shiftKey ? 10 : 1);
     const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     const move = moves[event.key];
@@ -236,10 +291,21 @@
               onpointerdown={(ev) => pointerDownOnHandle(ev, i, h)}
             ></span>
           {/each}
+          <span aria-hidden="true" class="rotate-stem absolute bg-blue-600"></span>
+          <span
+            aria-hidden="true"
+            class="handle rotate-handle absolute rounded-full border border-white bg-blue-600"
+            title="Drag to turn"
+            onpointerdown={(ev) => pointerDownOnRotate(ev, i)}
+          ></span>
         {/if}
       </div>
     {/each}
   </div>
+  <label class="flex items-center gap-2 text-sm">
+    <input type="checkbox" checked={snapAngles} onchange={(ev) => setSnap(ev.currentTarget.checked)} />
+    Snap angles to 45°
+  </label>
   {#if unprinted.length || (area && area.edge > 0)}
     <p class="text-xs text-zinc-600 dark:text-zinc-400">
       {#if unprinted.length}Shaded: where the printer does not print.{/if}
@@ -250,9 +316,10 @@
     Drag to move, and drag a corner to resize; or set an element's position and size exactly in its settings.
   </p>
   <p class="text-xs text-zinc-600 pointer-coarse:hidden dark:text-zinc-400">
-    Drag to move, drag a corner to resize, Shift+click to select several, Alt+click to select what is beneath. With an element focused: arrow keys
-    move it by {gridStep(doc.units)} {doc.units} (Shift for ten times that), Page Up and Page Down bring it forward and send it backward, Home and End
-    to the front and back, Delete removes it, Escape deselects. Hold Alt while dragging to leave the grid.
+    Drag to move, drag a corner to resize, drag the round handle to turn, Shift+click to select several, Alt+click to select what is beneath. With an
+    element focused: arrow keys move it by {gridStep(doc.units)} {doc.units} (Shift for ten times that), [ and ] turn it 15° (Shift for 1°), Page Up and
+    Page Down bring it forward and send it backward, Home and End to the front and back, Delete removes it, Escape deselects. Hold Alt while dragging to
+    leave the grid, or while turning not to snap.
   </p>
 </div>
 
@@ -267,6 +334,18 @@
     .handle {
       --h: 22px;
     }
+  }
+  /* The turning handle, on a stem above the top edge. */
+  .rotate-handle {
+    left: calc(50% - var(--h) / 2);
+    top: calc(-1 * var(--h) - 16px);
+    cursor: grab;
+  }
+  .rotate-stem {
+    left: calc(50% - 1px);
+    top: -16px;
+    width: 2px;
+    height: 16px;
   }
   .unprinted {
     background: repeating-linear-gradient(45deg, rgb(113 113 122 / 0.35) 0 4px, rgb(113 113 122 / 0.12) 4px 8px);

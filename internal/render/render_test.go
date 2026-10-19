@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"compress/zlib"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -52,6 +53,24 @@ func testLogo() image.Image {
 	return img
 }
 
+const arrowID = "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f"
+
+// testArrow is an arrow pointing right, on a clear background, so that
+// which way it is turned shows.
+func testArrow() image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, 56, 40))
+	for y := 0; y < 40; y++ {
+		for x := 0; x < 56; x++ {
+			shaft := x < 34 && y >= 14 && y < 26
+			head := x >= 34 && math.Abs(float64(y)-19.5) < float64(56-x)*20/22
+			if shaft || head {
+				img.Set(x, y, color.NRGBA{R: 20, G: 20, B: 20, A: 255})
+			}
+		}
+	}
+	return img
+}
+
 var testData = labels.Data{
 	AssetID:   "2f1e3c4d-5b6a-4789-8abc-def012345678",
 	AssetName: "Bench Drill Press",
@@ -93,6 +112,28 @@ var goldenTemplates = map[string]string{
 		{"type":"static_image","x":4,"y":2,"width":18,"height":16,"image_id":"` + logoID + `"},
 		{"type":"static_image","x":27,"y":2,"width":22,"height":16,"image_id":"` + logoID + `"},
 		{"type":"text","x":26,"y":2,"width":23,"height":16,"font_size":40,"font_weight":"bold","content_binding":"BAM"}]}`,
+	// Text, an image, a QR Code and a Code 128 code, one to a row, turned
+	// 0°, 90°, 30° and 45°, one to a column.
+	"turned": `{"id":"turned","name":"Turned","units":"mm","width":120,"height":104,"dpi":300,"layering":"list","elements":[
+		{"type":"text","x":6.0,"y":10.0,"width":18,"height":6,"font_size":12,"font_weight":"bold","align":"center","content_binding":"BAM 42"},
+		{"type":"static_image","x":8.0,"y":34.0,"width":14,"height":10,"image_id":"` + arrowID + `"},
+		{"type":"generator","x":7.0,"y":57.0,"width":16,"height":16,"generator_type":"qr","content_binding":"{{asset.code.qr}}"},
+		{"type":"generator","x":3.0,"y":87.0,"width":24,"height":8,"generator_type":"code128","content_binding":"1234"},
+		{"type":"text","x":36.0,"y":10.0,"width":18,"height":6,"rotation":90,"font_size":12,"font_weight":"bold","align":"center","content_binding":"BAM 42"},
+		{"type":"static_image","x":38.0,"y":34.0,"width":14,"height":10,"rotation":90,"image_id":"` + arrowID + `"},
+		{"type":"generator","x":37.0,"y":57.0,"width":16,"height":16,"rotation":90,"generator_type":"qr","content_binding":"{{asset.code.qr}}"},
+		{"type":"generator","x":33.0,"y":87.0,"width":24,"height":8,"rotation":90,"generator_type":"code128","content_binding":"1234"},
+		{"type":"text","x":66.0,"y":10.0,"width":18,"height":6,"rotation":30,"font_size":12,"font_weight":"bold","align":"center","content_binding":"BAM 42"},
+		{"type":"static_image","x":68.0,"y":34.0,"width":14,"height":10,"rotation":30,"image_id":"` + arrowID + `"},
+		{"type":"generator","x":67.0,"y":57.0,"width":16,"height":16,"rotation":30,"generator_type":"qr","content_binding":"{{asset.code.qr}}"},
+		{"type":"generator","x":63.0,"y":87.0,"width":24,"height":8,"rotation":30,"generator_type":"code128","content_binding":"1234"},
+		{"type":"text","x":96.0,"y":10.0,"width":18,"height":6,"rotation":45,"font_size":12,"font_weight":"bold","align":"center","content_binding":"BAM 42"},
+		{"type":"static_image","x":98.0,"y":34.0,"width":14,"height":10,"rotation":45,"image_id":"` + arrowID + `"},
+		{"type":"generator","x":97.0,"y":57.0,"width":16,"height":16,"rotation":45,"generator_type":"qr","content_binding":"{{asset.code.qr}}"},
+		{"type":"generator","x":93.0,"y":87.0,"width":24,"height":8,"rotation":45,"generator_type":"code128","content_binding":"1234"}]}`,
+	// A QR Code at 45°, which phones still read.
+	"qr45": `{"id":"qr45","name":"QR 45","units":"mm","width":40,"height":40,"dpi":300,"layering":"list","elements":[
+		{"type":"generator","generator_type":"qr","x":7.5,"y":7.5,"width":25,"height":25,"rotation":45,"content_binding":"{{base_url}}/a/{{asset.id}}"}]}`,
 }
 
 // goldenPayloads lists what each golden's barcodes must decode to; see
@@ -102,6 +143,8 @@ var goldenPayloads = map[string][]string{
 	"micro_code128": {"BAM-0042", "TOOL-0042"},
 	"image_inches":  {},
 	"layers":        {},
+	"turned":        {"BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "1234", "1234"},
+	"qr45":          {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
 }
 
 func renderAll(t *testing.T, s *Scene) map[string][]byte {
@@ -134,14 +177,14 @@ func renderAll(t *testing.T, s *Scene) map[string][]byte {
 // go test ./internal/render -update, inspect the files, and run
 // tools/goldens/verify_renders.py to confirm the barcodes still scan.
 func TestGoldens(t *testing.T) {
-	images := memImages{logoID: testLogo()}
+	images := memImages{logoID: testLogo(), arrowID: testArrow()}
 	type manifestEntry struct {
 		File     string   `json:"file"`
 		Payloads []string `json:"payloads"`
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"image_inches", "layers", "micro_code128", "qr_label"} {
+	for _, name := range []string{"image_inches", "layers", "micro_code128", "qr45", "qr_label", "turned"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -444,4 +487,106 @@ func TestDrawsInListOrder(t *testing.T) {
 			t.Errorf("%.80s...: soft mask %v, want %v", tc.elements, got, tc.mask)
 		}
 	}
+}
+
+// TestQuarterTurnsStayOnDots turns codes by quarter turns: their modules
+// stay rectangles of whole dots, the same size, and the symbol stays where
+// its box is.
+func TestQuarterTurnsStayOnDots(t *testing.T) {
+	for _, rotation := range []string{"0", "90", "180", "270"} {
+		tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":30,"height":30,"dpi":300,"layering":"list","elements":[
+			{"type":"generator","generator_type":"qr","x":5,"y":5,"width":20,"height":20,"rotation":`+rotation+`,"content_binding":"HELLO"}]}`)
+		s, err := Layout(tpl, labels.Data{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(s.Items) != 1 || s.Items[0].Rects == nil {
+			t.Fatalf("%s°: %d items, not modules", rotation, len(s.Items))
+		}
+		minX, minY, maxX, maxY := math.MaxInt, math.MaxInt, 0, 0
+		for _, r := range s.Items[0].Rects {
+			if r.W%8 != 0 || r.H%8 != 0 {
+				t.Fatalf("%s°: rect %+v is not whole 8-dot modules", rotation, r)
+			}
+			minX, minY = min(minX, r.X), min(minY, r.Y)
+			maxX, maxY = max(maxX, r.X+r.W), max(maxY, r.Y+r.H)
+		}
+		if minX != 93 || minY != 93 || maxX-minX != 168 || maxY-minY != 168 {
+			t.Errorf("%s°: symbol at (%d,%d) %d×%d dots", rotation, minX, minY, maxX-minX, maxY-minY)
+		}
+	}
+
+	// At other angles, modules are turned polygons.
+	tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":30,"height":30,"dpi":300,"layering":"list","elements":[
+		{"type":"generator","generator_type":"qr","x":5,"y":5,"width":20,"height":20,"rotation":30,"content_binding":"HELLO"}]}`)
+	s, err := Layout(tpl, labels.Data{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Items) != 1 || s.Items[0].Rects != nil || len(s.Items[0].Path) == 0 {
+		t.Errorf("at 30°: %+v", s.Items)
+	}
+}
+
+// TestTurnedImagesAgree checks that the PDF's matrix for an image turned
+// 30° puts its corners where the PNG draws them.
+func TestTurnedImagesAgree(t *testing.T) {
+	tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":40,"height":40,"dpi":300,"layering":"list","elements":[
+		{"type":"static_image","x":5,"y":10,"width":30,"height":20,"rotation":30,"image_id":"`+arrowID+`"}]}`)
+	s, err := Layout(tpl, labels.Data{}, memImages{arrowID: testArrow()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi := s.Items[0].Image
+	if pi == nil || pi.Rotation != 30 {
+		t.Fatalf("not turned: %+v", s.Items)
+	}
+	var pdf bytes.Buffer
+	if err := WritePDF(&pdf, s); err != nil {
+		t.Fatal(err)
+	}
+	// The page's content is the only stream without a dictionary of its own.
+	stream := pdfContent(t, pdf.Bytes())
+	m := regexp.MustCompile(`q (\S+) (\S+) (\S+) (\S+) (\S+) (\S+) cm (\S+) 0 0 (\S+) (\S+) (\S+) cm /Im0 Do Q`).FindStringSubmatch(stream)
+	if m == nil {
+		t.Fatalf("no turned image in %s", stream)
+	}
+	f := make([]float64, 10)
+	for i := range f {
+		f[i], _ = strconv.ParseFloat(m[i+1], 64)
+	}
+	sin, cos := labels.SinCos(30)
+	for _, c := range [][2]float64{{0, 0}, {1, 0}, {0, 1}, {1, 1}} {
+		// The image's unit square, as PDF draws it, in dots.
+		x, y := f[6]*c[0]+f[8], f[7]*c[1]+f[9]
+		x, y = f[0]*x+f[2]*y+f[4], f[1]*x+f[3]*y+f[5]
+		// The same corner as the raster turns it: (0, 1) in PDF's unit
+		// square is the image's top left.
+		ux, uy := float64(pi.X)+c[0]*float64(pi.W), float64(pi.Y)+(1-c[1])*float64(pi.H)
+		wx := pi.Cx + (ux-pi.Cx)*cos - (uy-pi.Cy)*sin
+		wy := pi.Cy + (ux-pi.Cx)*sin + (uy-pi.Cy)*cos
+		if math.Abs(x-wx) > 0.01 || math.Abs(y-wy) > 0.01 {
+			t.Errorf("corner %v: PDF puts it at (%.2f, %.2f), the raster at (%.2f, %.2f)", c, x, y, wx, wy)
+		}
+	}
+}
+
+// pdfContent inflates the first page's content stream.
+func pdfContent(t *testing.T, pdf []byte) string {
+	t.Helper()
+	i := bytes.Index(pdf, []byte("<<  /Filter /FlateDecode"))
+	if i < 0 {
+		t.Fatal("no content stream")
+	}
+	start := bytes.Index(pdf[i:], []byte("stream\n")) + i + len("stream\n")
+	end := bytes.Index(pdf[start:], []byte("\nendstream")) + start
+	r, err := zlib.NewReader(bytes.NewReader(pdf[start:end]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }

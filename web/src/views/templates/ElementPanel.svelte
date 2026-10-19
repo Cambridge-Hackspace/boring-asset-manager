@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { GeneratorInfo } from '../../lib/models';
-  import { describeElement, opensAPage, SCAN_URL, withProp, type Restack, type TemplateDoc, type TemplateElement } from '../../lib/template';
+  import { describeElement, normalAngle, opensAPage, SCAN_URL, withProp, type Restack, type TemplateDoc, type TemplateElement } from '../../lib/template';
   import ImagePicker from './ImagePicker.svelte';
   import StackButtons from './StackButtons.svelte';
   import AdaptiveElementPanel from './AdaptiveElementPanel.svelte';
@@ -45,6 +45,13 @@
     if (Number.isFinite(n)) set(key, n);
   }
 
+  /** Turns it to an angle, kept from 0 up to 360. */
+  function setRotation(degrees: number) {
+    if (!Number.isFinite(degrees)) return;
+    const angle = normalAngle(degrees);
+    onupdate(withProp(e, 'rotation', angle || undefined));
+  }
+
   function setGeneratorType(type: string) {
     const levels = generators.find((g) => g.type === type)?.error_correction_levels ?? [];
     const next: TemplateElement = { ...e, generator_type: type };
@@ -67,14 +74,23 @@
   {/if}
 
   <fieldset class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-    <legend class="label">Position and size ({doc.units})</legend>
+    <legend class="label">Position and size ({doc.units}){#if e.rotation}, before it is turned{/if}</legend>
     {#each [['x', 'Left'], ['y', 'Top'], ['width', 'Width'], ['height', 'Height']] as const as [key, label] (key)}
       <div>
         <label class="text-xs" for={id(key)}>{label}</label>
-        <input id={id(key)} class="input" type="number" step="any" min="0" value={e[key]} onchange={(ev) => setNumber(key, ev.currentTarget.value)} />
+        <input id={id(key)} class="input" type="number" step="any" min={key === 'width' || key === 'height' ? '0' : undefined} value={e[key]} onchange={(ev) => setNumber(key, ev.currentTarget.value)} />
       </div>
     {/each}
   </fieldset>
+
+  <div class="flex flex-wrap items-end gap-2">
+    <div>
+      <label class="label" for={id('rotation')}>Turned (degrees clockwise)</label>
+      <input id={id('rotation')} class="input w-32" type="number" step="any" min="0" max="359.99" value={e.rotation ?? 0} onchange={(ev) => setRotation(Number(ev.currentTarget.value))} />
+    </div>
+    <button type="button" class="btn-secondary" onclick={() => setRotation((e.rotation ?? 0) - 90)}>Turn 90° left</button>
+    <button type="button" class="btn-secondary" onclick={() => setRotation((e.rotation ?? 0) + 90)}>Turn 90° right</button>
+  </div>
 
   {#if e.type === 'text' || e.type === 'generator'}
     <div>

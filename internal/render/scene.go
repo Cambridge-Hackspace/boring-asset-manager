@@ -43,10 +43,15 @@ type Rect struct {
 	X, Y, W, H int
 }
 
-// PlacedImage is a bitmap scaled into a rectangle of dots.
+// PlacedImage is a bitmap scaled into a rectangle of dots, and turned
+// clockwise by Rotation degrees about (Cx, Cy) when that is not 0. An image
+// turned a whole number of quarter turns is turned dot for dot instead, and
+// has no Rotation.
 type PlacedImage struct {
 	X, Y, W, H int
 	Image      image.Image
+	Rotation   float64
+	Cx, Cy     float64
 }
 
 // Point is a position in dots; fractional values come from glyph outlines.

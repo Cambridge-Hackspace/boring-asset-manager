@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { History } from './history';
 import {
   blankTemplate,
+  bounds,
   convertUnits,
   elementIndex,
   elementsAt,
@@ -17,6 +18,8 @@ import {
   resizeElement,
   resizeLabel,
   restack,
+  rotateElements,
+  snapAngle,
   snap,
   tooSmall,
   withProp,
@@ -249,5 +252,58 @@ describe('layers', () => {
     expect(layerName({ type: 'generator', generator_type: 'qr', x: 0, y: 0, width: 1, height: 1 })).toBe('QR code');
     expect(layerName({ type: 'generator', generator_type: 'code128', content_binding: '{{asset.id}}', x: 0, y: 0, width: 1, height: 1 })).toBe('Code 128: {{asset.id}}');
     expect(layerName({ type: 'static_image', x: 0, y: 0, width: 1, height: 1, image_id: 'x' })).toBe('Image');
+  });
+});
+
+describe('turning', () => {
+  const box = (rotation?: number): TemplateElement => ({ type: 'text', x: 10, y: 10, width: 20, height: 10, ...(rotation ? { rotation } : {}) });
+
+  it('knows where a turned element lies', () => {
+    expect(bounds(box())).toEqual({ x: 10, y: 10, width: 20, height: 10 });
+    expect(bounds(box(90))).toEqual({ x: 15, y: 5, width: 10, height: 20 });
+    const b = bounds(box(45));
+    expect(b.width).toBeCloseTo(30 / Math.SQRT2, 9);
+    expect(b.x + b.width / 2).toBeCloseTo(20, 9);
+  });
+
+  it('snaps to multiples of 45° within 5°, and keeps angles from 0 up to 360', () => {
+    expect(snapAngle(43)).toBe(45);
+    expect(snapAngle(39)).toBe(39);
+    expect(snapAngle(-2)).toBe(0);
+    expect(snapAngle(358)).toBe(0);
+    expect(snapAngle(272.5)).toBe(270);
+  });
+
+  it('turns one element about its center, and several about the middle of them all', () => {
+    const d = doc();
+    const one = rotateElements(d, [0], d.elements, 30);
+    expect(one[0]).toMatchObject({ x: 10, y: 5, rotation: 30 });
+    expect(rotateElements(d, [0], [{ ...d.elements[0]!, rotation: 300 }], 60)[0]!.rotation).toBeUndefined();
+    expect(rotateElements(d, [0], d.elements, 43, true)[0]!.rotation).toBe(45);
+
+    // Two boxes, 10-30 and 60-80 across, 5-15 and 15-25 down, turned a quarter
+    // turn about (45, 15): their centers move round it.
+    const two = rotateElements(d, [0, 1], d.elements, 90);
+    expect(two.map((e) => [e.x + e.width / 2, e.y + e.height / 2, e.rotation])).toEqual([
+      [50, -10, 90],
+      [40, 40, 90],
+    ]);
+  });
+
+  it('resizes a turned element along its own sides, keeping the opposite side where it is', () => {
+    const d = doc();
+    // Turned upright, its east side faces down: dragging down 4 widens it by 4.
+    const e = { ...d.elements[0]!, rotation: 90 };
+    const r = resizeElement(d, e, 'e', 0, 4, 0.5);
+    expect(r).toMatchObject({ width: 24, height: 10, rotation: 90 });
+    // Its west side, the top once turned, stays at y = 0.
+    expect(bounds(r).y).toBeCloseTo(bounds(e).y, 9);
+  });
+
+  it('finds a turned element under a point only where it lies turned', () => {
+    const d = doc();
+    d.elements[0] = { ...d.elements[0]!, rotation: 90 };
+    expect(elementsAt(d, 20, 1)).toEqual([0]); // above its box, inside it turned
+    expect(elementsAt(d, 11, 10)).toEqual([]); // inside its box, outside it turned
   });
 });

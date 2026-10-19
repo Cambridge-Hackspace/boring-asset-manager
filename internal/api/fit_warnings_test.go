@@ -71,3 +71,38 @@ func TestFitWarningsReachThePersonPrinting(t *testing.T) {
 		t.Errorf("printing from the spool: %+v", resp)
 	}
 }
+
+// TestTurnedElementsAreWhereTheyLie checks a turned element where it lies
+// once turned: the JSON preview gives its bounds, and a printer warns about
+// it reaching where it does not print, though its box does not.
+func TestTurnedElementsAreWhereTheyLie(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ql := newFakeQL(t)
+	printerID := createPrinter(t, srv, cookie, ql.port(), "dk-11201")
+	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	// A 29 × 6 mm name in the middle of the label, turned upright: it then
+	// runs from the top edge to the bottom one.
+	const doc = `{"name":"Upright","units":"mm","width":90,"height":29,"dpi":300,"layering":"list","elements":[
+	  {"type":"text","x":45.5,"y":11.5,"width":29,"height":6,"font_size":10,"rotation":90,"content_binding":"{{asset.name}}"}]}`
+
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+doc+`,"format":"json"}`)
+	var desc PreviewDescription
+	if err := json.Unmarshal(rec.Body.Bytes(), &desc); err != nil || len(desc.Elements) != 1 {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+	if e := desc.Elements[0]; e.Rotation != 90 || e.X != 45.5 || e.Bounds == nil || *e.Bounds != (PreviewBox{X: 57, Y: 0, Width: 6, Height: 29}) {
+		t.Errorf("described: %+v %+v", e, e.Bounds)
+	}
+
+	for _, tc := range []struct {
+		doc  string
+		warn bool
+	}{{doc, true}, {strings.Replace(doc, `"rotation":90,`, "", 1), false}} {
+		tmpl := createTemplate(t, srv, cookie, tc.doc)
+		rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+tmpl+`","asset_ids":["`+asset.Asset.ID+`"],"copies":1}`)
+		if warned := strings.Contains(rec.Body.String(), "does not print"); warned != tc.warn {
+			t.Errorf("turned %v: %s", tc.warn, rec.Body)
+		}
+	}
+}

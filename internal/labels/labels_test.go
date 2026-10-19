@@ -2,6 +2,7 @@ package labels
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -395,5 +396,43 @@ func TestListOrder(t *testing.T) {
 	var ve *ValidationError
 	if _, err := Parse([]byte(strings.Replace(listed, `"list"`, `"type"`, 1))); !errors.As(err, &ve) || ve.Problems[0].Path != "layering" {
 		t.Errorf("unknown layering: %v", err)
+	}
+}
+
+// TestRotation checks turned elements against the canvas by where they
+// lie once turned, so a box may start before the canvas.
+func TestRotation(t *testing.T) {
+	doc := func(element string) string {
+		return `{"name":"T","units":"mm","width":20,"height":50,"dpi":300,"layering":"list","elements":[` + element + `]}`
+	}
+	// 40 × 6 mm, turned upright, centered on a 20 × 50 mm label.
+	upright := `{"type":"text","x":-10,"y":22,"width":40,"height":6,"font_size":8,"content_binding":"A","rotation":90}`
+	tpl, err := Parse([]byte(doc(upright)))
+	if err != nil {
+		t.Fatalf("upright: %v", err)
+	}
+	if x, y, w, h := tpl.Elements[0].Bounds(); x != 7 || y != 5 || w != 6 || h != 40 {
+		t.Errorf("bounds (%g, %g) %g × %g", x, y, w, h)
+	}
+	e := Element{X: 0, Y: 0, Width: 10, Height: 10, Rotation: 45}
+	if x, _, w, _ := e.Bounds(); math.Abs(w-10*math.Sqrt2) > 1e-9 || math.Abs(x-(5-5*math.Sqrt2)) > 1e-9 {
+		t.Errorf("45°: x %g width %g", x, w)
+	}
+
+	for _, tc := range []struct {
+		element string
+		want    []string
+	}{
+		{strings.Replace(upright, `"rotation":90`, `"rotation":0`, 1), []string{"elements[0].x"}},
+		{strings.Replace(upright, `"rotation":90`, `"rotation":45`, 1), []string{"elements[0].rotation", "elements[0].rotation"}},
+		{strings.Replace(upright, `"rotation":90`, `"rotation":360`, 1), []string{"elements[0].rotation", "elements[0].x"}},
+		{strings.Replace(upright, `"rotation":90`, `"rotation":-90`, 1), []string{"elements[0].rotation", "elements[0].x"}},
+		{`{"type":"generator","generator_type":"qr","x":0,"y":0,"width":10,"height":10,"when_too_small":"alternative",
+			"alternative":{"type":"text","x":0,"y":0,"width":1,"height":1,"font_size":8,"content_binding":"A","rotation":90}}`, []string{"elements[0].alternative.rotation"}},
+	} {
+		_, err := Parse([]byte(doc(tc.element)))
+		if got := problemPaths(t, err); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.element, got, tc.want)
+		}
 	}
 }

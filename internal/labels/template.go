@@ -93,6 +93,10 @@ type Element struct {
 	Y      float64 `json:"y"`
 	Width  float64 `json:"width"`
 	Height float64 `json:"height"`
+	// Rotation turns the element clockwise about the center of its box, in
+	// degrees from 0 up to 360. X, Y, Width and Height are its box before it
+	// is turned; Bounds is where it is after.
+	Rotation float64 `json:"rotation,omitempty"`
 	// AnchorX and AnchorY say how it follows an adaptive template's label
 	// across and down; empty is AnchorScale.
 	AnchorX string `json:"anchor_x,omitempty"`
@@ -285,27 +289,48 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	at := func(prop string) string { return path + "." + prop }
 
 	geometryOK := true
+	turned := e.Rotation != 0
+	if math.IsNaN(e.Rotation) || e.Rotation < 0 || e.Rotation >= 360 {
+		v.add(at("rotation"), "must be at least 0 degrees and less than 360")
+		geometryOK, turned = false, false
+	}
 	for _, g := range []struct {
 		prop     string
 		value    float64
 		positive bool
 	}{{"x", e.X, false}, {"y", e.Y, false}, {"width", e.Width, true}, {"height", e.Height, true}} {
-		ok := !math.IsNaN(g.value) && !math.IsInf(g.value, 0) && g.value >= 0 && (!g.positive || g.value > 0)
+		// A turned element's box may start before the canvas, as long as
+		// the element, turned, lies on it.
+		ok := !math.IsNaN(g.value) && !math.IsInf(g.value, 0) && (turned && !g.positive || g.value >= 0) && (!g.positive || g.value > 0)
 		if !ok {
 			geometryOK = false
-			if g.positive {
+			switch {
+			case g.positive:
 				v.add(at(g.prop), "must be a positive number")
-			} else {
+			case turned:
+				v.add(at(g.prop), "must be a number")
+			default:
 				v.add(at(g.prop), "must be zero or a positive number")
 			}
 		}
 	}
-	if geometryOK && canvasOK {
+	if geometryOK && canvasOK && !turned {
 		if e.X+e.Width > t.Width+geometryTolerance {
 			v.add(at("width"), "extends past the right edge of the canvas")
 		}
 		if e.Y+e.Height > t.Height+geometryTolerance {
 			v.add(at("height"), "extends past the bottom edge of the canvas")
+		}
+	}
+	if geometryOK && canvasOK && turned {
+		x, y, w, h := e.Bounds()
+		for _, edge := range []struct {
+			past bool
+			name string
+		}{{x < -geometryTolerance, "left"}, {y < -geometryTolerance, "top"}, {x+w > t.Width+geometryTolerance, "right"}, {y+h > t.Height+geometryTolerance, "bottom"}} {
+			if edge.past {
+				v.add(at("rotation"), fmt.Sprintf("turned, it extends past the %s edge of the canvas", edge.name))
+			}
 		}
 	}
 
