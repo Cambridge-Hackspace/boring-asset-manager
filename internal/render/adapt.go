@@ -48,6 +48,17 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 	if !t.Adaptive() {
 		return refuse("", "the template is not adaptive")
 	}
+	if !t.Takes(width, height) && t.Turnable && t.Takes(height, width) {
+		// A label turned a quarter turn from those it takes: the design
+		// turned to match.
+		turned := t.Turned(true)
+		turned.Turnable = false
+		laid, notices, err := Adapt(turned, width, height, dpi, sample)
+		if err != nil {
+			return nil, nil, err
+		}
+		return laid, append([]string{fmt.Sprintf("It is turned a quarter turn to suit a %s × %s %s label.", length(width), length(height), t.Units)}, notices...), nil
+	}
 	if !t.Takes(width, height) {
 		a := t.Adapt
 		return refuse("", "it takes labels %s-%s × %s-%s %s, not %s × %s",
@@ -55,7 +66,7 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 	}
 	out := *t
 	out.Width, out.Height, out.DPI = width, height, dpi
-	out.Sizing, out.Adapt = "", nil
+	out.Sizing, out.Adapt, out.Turnable = "", nil, false
 	out.Elements = nil
 	sx, sy := width/t.Width, height/t.Height
 	on := fmt.Sprintf("a %s × %s %s label", length(width), length(height), t.Units)

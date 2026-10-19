@@ -91,6 +91,10 @@ export interface TemplateDoc {
    * then codes.
    */
   layering?: 'list';
+  /** Which way labels that fit either way go through the printer; absent is as fits. */
+  feed?: Feed;
+  /** An adaptive template takes labels turned a quarter turn too, its content turned to match. */
+  turnable?: boolean;
   elements: TemplateElement[];
 }
 
@@ -606,9 +610,51 @@ export function makeAdaptive(doc: TemplateDoc): TemplateDoc {
   };
 }
 
+export type Feed = 'auto' | 'across' | 'along';
+
+/** Which way up a template is read, from its sides. */
+export function orientation(doc: TemplateDoc): 'portrait' | 'landscape' | 'square' {
+  if (doc.height > doc.width) return 'portrait';
+  return doc.width > doc.height ? 'landscape' : 'square';
+}
+
+/** An anchor seen from the other side: start and end swap. */
+function reversed(a: Anchor | undefined): Anchor | undefined {
+  return a === 'start' ? 'end' : a === 'end' ? 'start' : a;
+}
+
+/**
+ * A template turned a quarter turn, clockwise or not, with everything on
+ * it: its sides swap, as do an adaptive template's ranges, and each element
+ * turns about the label's center, its box keeping its size, so the design
+ * reads the same, turned. Anchors follow the sides they were on. As the
+ * server turns it (README §4.1).
+ */
+export function turnTemplate(doc: TemplateDoc, clockwise: boolean): TemplateDoc {
+  const fine = (v: number) => Math.round(v * 1e6) / 1e6;
+  return {
+    ...doc,
+    width: doc.height,
+    height: doc.width,
+    ...(doc.adapt
+      ? { adapt: { ...doc.adapt, min_width: doc.adapt.min_height, max_width: doc.adapt.max_height, min_height: doc.adapt.min_width, max_height: doc.adapt.max_width } }
+      : {}),
+    elements: doc.elements.map((e) => {
+      const cx = e.x + e.width / 2;
+      const cy = e.y + e.height / 2;
+      const [nx, ny] = clockwise ? [doc.height - cy, cx] : [cy, doc.width - cx];
+      const [ax, ay] = clockwise ? [reversed(e.anchor_y), e.anchor_x] : [e.anchor_y, reversed(e.anchor_x)];
+      let next: TemplateElement = { ...e, x: fine(nx - e.width / 2), y: fine(ny - e.height / 2) };
+      next = withProp(next, 'rotation', normalAngle((e.rotation ?? 0) + (clockwise ? 90 : 270)) || undefined);
+      next = withProp(next, 'anchor_x', ax);
+      return withProp(next, 'anchor_y', ay);
+    }),
+  };
+}
+
 /** A fixed copy of a template: its size range and its elements' adaptive settings go. */
 export function makeFixed(doc: TemplateDoc): TemplateDoc {
-  const { sizing: _s, adapt: _a, ...rest } = doc;
+  const { sizing: _s, adapt: _a, turnable: _t, ...rest } = doc;
   return {
     ...rest,
     elements: doc.elements.map((e) => {

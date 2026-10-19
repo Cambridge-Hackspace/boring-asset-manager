@@ -90,6 +90,8 @@
           id: t.id, name: t.name, units: t.units, width: t.width, height: t.height, dpi: t.dpi,
           ...(t.sizing === 'adaptive' ? { sizing: t.sizing, adapt: t.adapt } : {}),
           ...(t.layering ? { layering: t.layering } : {}),
+          ...(t.feed ? { feed: t.feed } : {}),
+          ...(t.turnable ? { turnable: true } : {}),
           elements: t.elements ?? [],
         });
       }

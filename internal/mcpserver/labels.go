@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -72,6 +73,27 @@ func inListOrder(spec map[string]any) map[string]any {
 		spec["layering"] = "list"
 	}
 	return spec
+}
+
+// turned is a template turned a quarter turn, left or right, with
+// everything on it.
+func turned(spec map[string]any, way string) (map[string]any, error) {
+	if way != "left" && way != "right" {
+		return nil, fmt.Errorf(`turn must be "left" or "right"`)
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return nil, err
+	}
+	var t labels.Template
+	if err := json.Unmarshal(raw, &t); err != nil {
+		return nil, fmt.Errorf("the template cannot be turned: %v", err)
+	}
+	if raw, err = json.Marshal(t.Turned(way == "right")); err != nil {
+		return nil, err
+	}
+	out := map[string]any{}
+	return out, json.Unmarshal(raw, &out)
 }
 
 // moveElements moves elements to new places in the drawing order, in turn;
@@ -140,6 +162,7 @@ type fitIn struct {
 	HeightMM  float64          `json:"height_mm"`
 	DPI       int              `json:"dpi"`
 	Content   []map[string]any `json:"content,omitempty" jsonschema:"the boxes printed on, each x, y, width, height in mm"`
+	Feed      string           `json:"feed,omitempty" jsonschema:"for a label that fits either way: across (its width across the roll), along, or auto (as fits)"`
 }
 
 type previewOut struct {
@@ -211,6 +234,7 @@ func labelTools() []tool {
 					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, and for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align; a shape has shape (rectangle, ellipse, line or polygon), stroke and fill (black, white or none), stroke_width, corner_radius, flip, and points (fractions of its box) and closed"`
 				} `json:"change_elements,omitempty"`
 				Move   []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
+				Turn   string           `json:"turn,omitempty" jsonschema:"left or right: turn the whole template a quarter turn with everything on it, as the editor's portrait and landscape switch does, after the other changes"`
 				Remove []int            `json:"remove_elements,omitempty"`
 				Add    []map[string]any `json:"add_elements,omitempty"`
 			}) (reply[map[string]any], error) {
@@ -267,6 +291,12 @@ func labelTools() []tool {
 				}
 				spec["id"] = in.ID
 				inListOrder(spec)
+				if in.Turn != "" {
+					var err error
+					if spec, err = turned(spec, in.Turn); err != nil {
+						return reply[map[string]any]{}, err
+					}
+				}
 				if err := e.call(ctx, http.MethodPut, pathOf("/api/v1/templates/{id}", in.ID), spec, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}
@@ -484,6 +514,7 @@ func labelTools() []tool {
 				TemplateID string   `json:"template_id"`
 				Assets     []string `json:"assets" jsonschema:"by ID or code, up to 50"`
 				Copies     int      `json:"copies,omitempty"`
+				Feed       string   `json:"feed,omitempty" jsonschema:"this time, which way labels that fit either way go through it: across (width across the roll), along, or auto"`
 			}) (reply[map[string]any], error) {
 				if err := checkItems(len(in.Assets)); err != nil {
 					return reply[map[string]any]{}, err
@@ -493,7 +524,7 @@ func labelTools() []tool {
 					return reply[map[string]any]{}, err
 				}
 				out := map[string]any{}
-				if err := e.call(ctx, http.MethodPost, pathOf("/api/v1/printers/{id}/print", in.PrinterID), map[string]any{"template_id": in.TemplateID, "asset_ids": ids, "copies": in.Copies}, &out); err != nil {
+				if err := e.call(ctx, http.MethodPost, pathOf("/api/v1/printers/{id}/print", in.PrinterID), map[string]any{"template_id": in.TemplateID, "asset_ids": ids, "copies": in.Copies, "feed": in.Feed}, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}
 				return say(out, "Sent %d labels to the printer.", len(ids))
@@ -565,11 +596,11 @@ func labelTools() []tool {
 		simple(&mcp.Tool{Name: "check_fit", Description: "Whether a label of a size prints on a printer as loaded, with the content's boxes in mm: why not, and what lies near the edge.",
 			Annotations: readOnly("Check fit")}, "POST /api/v1/printers/{id}/fit", seePrinters,
 			func(in fitIn) (request, error) {
-				return request{path: pathOf("/api/v1/printers/{id}/fit", in.PrinterID), body: map[string]any{"width_mm": in.WidthMM, "height_mm": in.HeightMM, "dpi": in.DPI, "content": in.Content}}, need(in.PrinterID, "printer_id")
+				return request{path: pathOf("/api/v1/printers/{id}/fit", in.PrinterID), body: map[string]any{"width_mm": in.WidthMM, "height_mm": in.HeightMM, "dpi": in.DPI, "content": in.Content, "feed": in.Feed}}, need(in.PrinterID, "printer_id")
 			},
 			func(_ fitIn, out map[string]any) string {
 				if fits, _ := out["fits"].(bool); fits {
-					return "It prints."
+					return fmt.Sprintf("It prints, fed with its width %s the roll.", out["feed"])
 				}
 				msg, _ := out["message"].(string)
 				return msg

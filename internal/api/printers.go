@@ -182,6 +182,9 @@ type PrintRequest struct {
 	AssetIDs   []string `json:"asset_ids"`
 	// Copies of each label, printed one asset after another; defaults to 1.
 	Copies int `json:"copies,omitempty"`
+	// Feed, when given, is which way the labels go through the printer
+	// this time, in place of the template's.
+	Feed string `json:"feed,omitempty"`
 }
 
 // handlePrint renders labels and sends them to a printer:
@@ -199,6 +202,10 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("copies must be 1-%d", MaxCopies))
 		return
 	}
+	if !labels.ValidFeed(req.Feed) {
+		writeJSONError(w, http.StatusBadRequest, `feed must be "auto", "across" or "along"`)
+		return
+	}
 	if !checkAssetIDs(w, req.AssetIDs) {
 		return
 	}
@@ -214,6 +221,11 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	t, ok := s.loadTemplateFor(w, req.TemplateID)
 	if !ok {
 		return
+	}
+	if req.Feed != "" {
+		fed := *t
+		fed.Feed = req.Feed
+		t = &fed
 	}
 	// Check the template against the printer before laying out assets.
 	plan, t, warnings, err := s.planFor(p, t)
@@ -272,7 +284,7 @@ func labelSpec(t *labels.Template) printers.LabelSpec {
 	if t.Units == labels.UnitsIn {
 		mm = 25.4
 	}
-	label := printers.LabelSpec{WidthMM: t.Width * mm, HeightMM: t.Height * mm, DPI: t.DPI}
+	label := printers.LabelSpec{WidthMM: t.Width * mm, HeightMM: t.Height * mm, DPI: t.DPI, Feed: t.Feed}
 	for _, e := range t.Elements {
 		x, y, w, h := e.Bounds()
 		label.Content = append(label.Content, printers.RectMM{X: x * mm, Y: y * mm, Width: w * mm, Height: h * mm})
@@ -287,6 +299,9 @@ type FitRequest struct {
 	HeightMM float64           `json:"height_mm"`
 	DPI      int               `json:"dpi"`
 	Content  []printers.RectMM `json:"content,omitempty"`
+	// Feed is which way the labels go through the printer when they fit
+	// either way; empty or "auto" is as fits.
+	Feed string `json:"feed,omitempty"`
 }
 
 // handlePrinterFit runs a printer's fit check without printing, for the
@@ -301,7 +316,11 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "width_mm, height_mm and dpi must be positive")
 		return
 	}
-	label := printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI, Content: req.Content}
+	if !labels.ValidFeed(req.Feed) {
+		writeJSONError(w, http.StatusBadRequest, `feed must be "auto", "across" or "along"`)
+		return
+	}
+	label := printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI, Content: req.Content, Feed: req.Feed}
 	_, fit, err := printers.PlanLabel(p.Driver, store.PrinterSettings(p), label)
 	switch {
 	case errors.Is(err, printers.ErrDoesNotFit):
@@ -309,7 +328,12 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeServerError(w, err, "check the fit")
 	default:
-		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "warnings": nonNil(fit.Warnings),
+		// Which way it goes through the printer: its width across the roll, or along it.
+		feed := labels.FeedAcross
+		if fit.Rotate {
+			feed = labels.FeedAlong
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "warnings": nonNil(fit.Warnings), "feed": feed,
 			"printable": fit.Printable, "edge_mm": fit.EdgeMM, "outside": nonNilInts(fit.Outside), "near_edge": nonNilInts(fit.NearEdge)})
 	}
 }

@@ -1,10 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // edgeTemplate is landscapeTemplate with its name at the very top of the
@@ -150,5 +152,56 @@ func TestPreviewDescribesShapes(t *testing.T) {
 	}
 	if len(desc.Warnings) != 1 || !strings.Contains(desc.Warnings[0], "elements[1] (line) has a stroke thinner than one dot at 203 DPI") {
 		t.Errorf("warnings: %v", desc.Warnings)
+	}
+}
+
+// TestFeed checks a label that fits either way goes through the printer as
+// the template, or a print, says, and the fit check tells which.
+func TestFeed(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ql := newFakeQL(t)
+	printerID := createPrinter(t, srv, cookie, ql.port(), "dk-22205")
+	fit := func(body string) map[string]any {
+		t.Helper()
+		var out map[string]any
+		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/fit", body)
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		return out
+	}
+	// 62 × 62 mm on a 62 mm roll fits either way.
+	if out := fit(`{"width_mm":62,"height_mm":62,"dpi":300}`); out["feed"] != "across" {
+		t.Errorf("as fits: %v", out)
+	}
+	if out := fit(`{"width_mm":62,"height_mm":62,"dpi":300,"feed":"along"}`); out["feed"] != "along" {
+		t.Errorf("along: %v", out)
+	}
+	if out := fit(`{"width_mm":100,"height_mm":62,"dpi":300,"feed":"across"}`); out["fits"] != false || !strings.Contains(out["message"].(string), "fed with its width across the roll") {
+		t.Errorf("forced the wrong way: %v", out)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/fit", `{"width_mm":62,"height_mm":62,"dpi":300,"feed":"up"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("an unknown feed: %d", rec.Code)
+	}
+
+	// A template that says along, and a print that says across this time.
+	tmpl := createTemplate(t, srv, cookie, `{"name":"Square","units":"mm","width":62,"height":62,"dpi":300,"layering":"list","feed":"along","elements":[
+	  {"type":"text","x":2,"y":2,"width":58,"height":10,"font_size":10,"content_binding":"{{asset.name}}"}]}`)
+	got := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates/"+tmpl, "")
+	if !strings.Contains(got.Body.String(), `"feed":"along"`) {
+		t.Errorf("stored: %s", got.Body)
+	}
+	asset, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	for _, feed := range []string{"", "across"} {
+		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+tmpl+`","asset_ids":["`+asset.Asset.ID+`"],"feed":"`+feed+`"}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("printing, feed %q: %d %s", feed, rec.Code, rec.Body)
+		}
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+tmpl+`","asset_ids":["`+asset.Asset.ID+`"],"feed":"up"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("printing, an unknown feed: %d", rec.Code)
+	}
+	// Turned the other way, the label went to the printer differently.
+	if jobs := ql.waitForJobs(t, 2, 5*time.Second); len(jobs) != 2 || bytes.Equal(jobs[0], jobs[1]) {
+		t.Errorf("%d jobs, the same both ways", len(jobs))
 	}
 }

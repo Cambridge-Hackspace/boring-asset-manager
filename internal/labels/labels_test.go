@@ -524,3 +524,43 @@ func TestShapes(t *testing.T) {
 		t.Error("a polygon of too many points")
 	}
 }
+
+// TestTurned turns a template a quarter turn with everything on it, its
+// anchors following their sides, and four turns give it back.
+func TestTurned(t *testing.T) {
+	tpl, err := Parse([]byte(`{"name":"T","units":"mm","width":60,"height":20,"dpi":300,"layering":"list","sizing":"adaptive",
+		"adapt":{"min_width":30,"max_width":90,"min_height":10,"max_height":40,"continuous_length":"fixed"},"turnable":true,"feed":"along","elements":[
+		{"type":"generator","generator_type":"qr","x":2,"y":2,"width":16,"height":16,"anchor_x":"start","anchor_y":"end"},
+		{"type":"text","x":20,"y":4,"width":38,"height":6,"font_size":10,"content_binding":"A","rotation":10}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	right := tpl.Turned(true)
+	if right.Width != 20 || right.Height != 60 || right.Adapt.MinWidth != 10 || right.Adapt.MaxHeight != 90 || !right.Turnable || right.Feed != FeedAlong {
+		t.Fatalf("turned: %+v %+v", right, right.Adapt)
+	}
+	// The code's center, (10, 10), goes to (20 - 10, 10); it reads turned.
+	if c := right.Elements[0]; c.X != 2 || c.Y != 2 || c.Rotation != 90 || c.AnchorX != AnchorStart || c.AnchorY != AnchorStart {
+		t.Errorf("the code: %+v", c)
+	}
+	if err := right.Validate(); err != nil {
+		t.Errorf("turned, it is invalid: %v", err)
+	}
+	// Left undoes right, and four turns either way give it back.
+	if back := right.Turned(false); !reflect.DeepEqual(back, tpl) {
+		t.Errorf("right then left: %+v", back)
+	}
+	four := tpl
+	for range 4 {
+		four = four.Turned(false)
+	}
+	if !reflect.DeepEqual(four, tpl) {
+		t.Errorf("four turns: %+v", four)
+	}
+
+	var ve *ValidationError
+	if _, err := Parse([]byte(`{"name":"T","units":"mm","width":60,"height":20,"dpi":300,"feed":"sideways","turnable":true,"elements":[]}`)); !errors.As(err, &ve) ||
+		!reflect.DeepEqual(problemPaths(t, err), []string{"feed", "turnable"}) {
+		t.Errorf("feed and turnable: %v", err)
+	}
+}

@@ -130,6 +130,12 @@ type Template struct {
 	// Layering is LayeringList, or empty in a document written before it;
 	// see DrawingOrder.
 	Layering string `json:"layering,omitempty"`
+	// Feed is which way its labels go through the printer when they fit
+	// either way: FeedAuto (or empty), FeedAcross or FeedAlong.
+	Feed string `json:"feed,omitempty"`
+	// Turnable lets an adaptive template take labels turned a quarter turn
+	// from the sizes it takes, its content turned to match.
+	Turnable bool `json:"turnable,omitempty"`
 	// Elements are drawn in this order: the first at the back.
 	Elements  []Element `json:"elements"`
 	CreatedAt time.Time `json:"created_at"`
@@ -369,6 +375,12 @@ func (t *Template) Validate() error {
 	t.validateSizing(&v, canvasOK && unitsOK)
 	if t.Layering != "" && t.Layering != LayeringList {
 		v.add("layering", `must be "list"`)
+	}
+	if !ValidFeed(t.Feed) {
+		v.add("feed", `must be "auto", "across" or "along"`)
+	}
+	if t.Turnable && !t.Adaptive() {
+		v.add("turnable", "applies only to adaptive templates")
 	}
 
 	if len(t.Elements) > MaxElements {

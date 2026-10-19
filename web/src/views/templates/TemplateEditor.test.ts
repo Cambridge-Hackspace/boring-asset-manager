@@ -376,4 +376,24 @@ describe('TemplateEditor', () => {
     const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
     expect(body.elements[1]).toEqual({ type: 'shape', shape: 'rectangle', x: 37.75, y: 7.25, width: 14.5, height: 14.5, stroke: 'none', fill: 'black', corner_radius: 2 });
   });
+
+  it('turns the template portrait and back, with what is on it, and chooses the feed', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await screen.findByDisplayValue('QL 90x29');
+    await fireEvent.click(screen.getByRole('radio', { name: 'Portrait' }));
+    expect((screen.getByLabelText('Width') as HTMLInputElement).value).toBe('29');
+    expect((screen.getByLabelText('Height') as HTMLInputElement).value).toBe('90');
+    expect(screen.getByRole('button', { name: /^Text 1/ }).getAttribute('style')).toContain('rotate(90deg)');
+    await fireEvent.click(screen.getByRole('radio', { name: 'Landscape' }));
+    expect((screen.getByLabelText('Width') as HTMLInputElement).value).toBe('90');
+    expect(screen.getByRole('button', { name: /^Text 1/ }).getAttribute('style')).not.toContain('rotate');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    expect(body).toMatchObject({ width: 29, height: 90 });
+    expect(body.elements[0]).toMatchObject({ rotation: 90 });
+  });
 });

@@ -30,6 +30,10 @@ type LabelSpec struct {
 	WidthMM, HeightMM float64
 	DPI               int
 	Content           []RectMM
+	// Feed is which way the label goes through the printer when it fits
+	// either way: "across" its width across the roll, "along" its width
+	// along it, or empty or "auto" for as fits, not turned when that fits.
+	Feed string
 }
 
 // PlanLabel checks labels against a printer and plans printing them: the

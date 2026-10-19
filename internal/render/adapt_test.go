@@ -265,3 +265,33 @@ func TestAdaptTurned(t *testing.T) {
 		t.Errorf("the alternative: %+v", alt)
 	}
 }
+
+// TestAdaptTurnable lays a turnable template out on labels turned a
+// quarter turn from those it takes, its design turned to match, and
+// refuses them when it is not turnable.
+func TestAdaptTurnable(t *testing.T) {
+	tag := adaptiveTag()
+	tag.Turnable, tag.Layering = true, labels.LayeringList
+	if err := tag.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	// 29 × 62 mm: upright, where it takes 25-102 by 20-60 mm.
+	laid, notices, err := Adapt(tag, 29, 62, 300, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if laid.Width != 29 || laid.Height != 62 || laid.Elements[0].Rotation != 90 || len(notices) == 0 || !strings.Contains(notices[0], "turned a quarter turn") {
+		t.Errorf("turned: %+v %v", laid, notices)
+	}
+	if err := laid.Validate(); err != nil {
+		t.Errorf("laid out turned, it is invalid: %v", err)
+	}
+	// One it takes as it is is not turned.
+	if laid, _, err = Adapt(tag, 62, 29, 300, nil); err != nil || laid.Elements[0].Rotation != 0 {
+		t.Errorf("as it is: %v %+v", err, laid)
+	}
+	tag.Turnable = false
+	if _, _, err := Adapt(tag, 29, 62, 300, nil); !errors.Is(err, ErrDoesNotAdapt) {
+		t.Errorf("not turnable: %v", err)
+	}
+}

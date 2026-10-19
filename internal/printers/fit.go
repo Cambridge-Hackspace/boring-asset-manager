@@ -85,7 +85,8 @@ const DriftMM = 1.0
 // FitLabel checks a label against a printer's geometry. One side of the
 // label must be the roll's width; on die-cut rolls the other must be the
 // label length, and on continuous ones within the printer's range. A label
-// whose height is the roll's width is rotated. Errors wrap ErrDoesNotFit.
+// whose height is the roll's width is rotated, and so is one that fits
+// either way when its feed says along. Errors wrap ErrDoesNotFit.
 //
 // The label's content, when given, is checked against what the head
 // reaches and against die-cut labels' edges, for warnings.
@@ -96,7 +97,14 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 		reasons = append(reasons, fmt.Sprintf("it is laid out at %d DPI, but %s at %d DPI", label.DPI, g.Prints, g.DPI))
 	}
 	matches := func(a, b float64) bool { return math.Abs(a-b) <= SizeTolerance }
-	for _, rotate := range []bool{false, true} {
+	turns := []bool{false, true}
+	switch label.Feed {
+	case "across":
+		turns = []bool{false}
+	case "along":
+		turns = []bool{true}
+	}
+	for _, rotate := range turns {
 		across, along := label.WidthMM, label.HeightMM
 		if rotate {
 			across, along = along, across
@@ -120,9 +128,21 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 		checkContent(&f, g, label, across, along)
 		return f, nil
 	}
+	fed := ""
+	switch {
+	case len(turns) == 2:
+	case turns[0]:
+		fed = " fed with its width along the roll"
+	default:
+		fed = " fed with its width across the roll"
+	}
 	if g.DieCut() {
-		return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm, but the roll loaded, %s, takes %s × %s mm",
-			mm(label.WidthMM), mm(label.HeightMM), g.Roll, mm(g.WidthMM), mm(g.LengthMM))))
+		return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm%s, but the roll loaded, %s, takes %s × %s mm",
+			mm(label.WidthMM), mm(label.HeightMM), fed, g.Roll, mm(g.WidthMM), mm(g.LengthMM))))
+	}
+	if fed != "" {
+		return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm%s, but the roll loaded, %s, is %s mm wide",
+			mm(label.WidthMM), mm(label.HeightMM), fed, g.Roll, mm(g.WidthMM))))
 	}
 	return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm, but the roll loaded, %s, needs one side to be %s mm",
 		mm(label.WidthMM), mm(label.HeightMM), g.Roll, mm(g.WidthMM))))

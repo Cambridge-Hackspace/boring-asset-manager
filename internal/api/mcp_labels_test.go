@@ -171,6 +171,26 @@ func TestMCPLabelTools(t *testing.T) {
 	if c := coded.Labels[0].Elements[1].Code; c == nil || c.MarginDots.Left != 0 || !slices.Contains(c.Narrow, "left") || len(coded.Labels[0].Warnings) != 1 {
 		t.Errorf("margins: %+v", coded.Labels[0])
 	}
+	// Turned upright with everything on it, then back.
+	var got struct {
+		Template struct {
+			Width, Height float64
+			Elements      []struct{ Rotation float64 }
+		}
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "turn": "right"}), &saved)
+	structured(t, callTool(t, cs, "get_template", map[string]any{"id": tag}), &got)
+	if got.Template.Width != 20 || got.Template.Height != 40 || got.Template.Elements[0].Rotation != 90 || got.Template.Elements[1].Rotation != 270 {
+		t.Errorf("turned right: %+v", got.Template)
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "turn": "left"}), &saved)
+	structured(t, callTool(t, cs, "get_template", map[string]any{"id": tag}), &got)
+	if got.Template.Width != 40 || got.Template.Elements[0].Rotation != 0 || got.Template.Elements[1].Rotation != 180 {
+		t.Errorf("and back: %+v", got.Template)
+	}
+	if res := callTool(t, cs, "save_template", map[string]any{"id": tag, "turn": "around"}); !res.IsError {
+		t.Errorf("an unknown turn: %s", toolText(res))
+	}
 	// A draft never saved, too, and one that cannot be made for an asset says why.
 	draft := map[string]any{}
 	_ = json.Unmarshal([]byte(labelTemplate), &draft)
