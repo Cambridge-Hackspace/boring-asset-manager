@@ -396,4 +396,25 @@ describe('TemplateEditor', () => {
     expect(body).toMatchObject({ width: 29, height: 90 });
     expect(body.elements[0]).toMatchObject({ rotation: 90 });
   });
+
+  it('imports SVG artwork as shapes, selected together, saying what it left out', async () => {
+    const shape = (x: number) => ({ type: 'shape' as const, shape: 'path' as const, x, y: 3, width: 5, height: 5, d: 'M0 0 L1 0 L1 1 Z', fill: 'black' as const, stroke: 'none' as const });
+    const { sent } = api({
+      'POST /templates/import-svg': () => ({ width: 72, height: 23.2, elements: [shape(10), shape(20)], skipped: ['text, which needs the fonts'] }),
+      'PUT /templates/ql90': () => ({ template }),
+    });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await screen.findByDisplayValue('QL 90x29');
+    const file = new File(['<svg viewBox="0 0 10 10"><path d="M0 0 L10 0 L10 10 Z"/></svg>'], 'logo.svg', { type: 'image/svg+xml' });
+    await fireEvent.change(screen.getByLabelText('Import SVG'), { target: { files: [file] } });
+    expect(await screen.findByText('Imported 2 shapes from logo.svg. Left out: text, which needs the fonts.')).toBeTruthy();
+    expect(screen.getByText('2 elements selected. Drag or use the arrow keys to move them together.')).toBeTruthy();
+    const asked = sent.find((r) => r.path === '/templates/import-svg')!.body as { svg: string; box: { x: number; width: number } };
+    expect(asked.svg).toContain('<svg');
+    expect(asked.box).toMatchObject({ x: 9, width: 72 });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements.map((e) => e.shape ?? e.type)).toEqual(['text', 'path', 'path']);
+  });
 });

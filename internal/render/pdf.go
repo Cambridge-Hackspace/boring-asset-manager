@@ -129,7 +129,11 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 		default:
 			setPaint(it.Paint)
 			pdfPath(&content, it.Path)
-			content.WriteString("f\n")
+			if it.EvenOdd {
+				content.WriteString("f*\n")
+			} else {
+				content.WriteString("f\n")
+			}
 		}
 	}
 

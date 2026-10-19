@@ -564,3 +564,70 @@ func TestTurned(t *testing.T) {
 		t.Errorf("feed and turnable: %v", err)
 	}
 }
+
+// TestParsePathData reads every command, relative and absolute, the
+// shorthands and arcs, and writes what it read back.
+func TestParsePathData(t *testing.T) {
+	segs, err := ParsePathData("m10 10 h5 v5 H0 V0 l1,1 2-2 c1 1 2 2 3 3 s4 0 5 5 q1 1 2 0 t2 0 z M0 0 L1 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := FormatPathData(segs)
+	want := "M10 10 L15 10 L15 15 L0 15 L0 0 L1 1 L3 -1 C4 0 5 1 6 2 C7 3 10 2 11 7 Q12 8 13 7 Q14 6 15 7 Z M0 0 L1 1"
+	if got != want {
+		t.Errorf("read\n%s\nwant\n%s", got, want)
+	}
+	again, err := ParsePathData(got)
+	if err != nil || FormatPathData(again) != got {
+		t.Errorf("round trip: %v %s", err, FormatPathData(again))
+	}
+	// A half circle, as two quarter-turn cubics, ending where the arc ends.
+	arc, err := ParsePathData("M0 0 A1 1 0 0 1 2 0")
+	if err != nil || len(arc) != 3 || arc[2].End() != [2]float64{2, 0} {
+		t.Errorf("arc: %+v %v", arc, err)
+	}
+	if top := arc[1].End(); math.Abs(top[0]-1) > 1e-9 || math.Abs(top[1]+1) > 1e-9 {
+		t.Errorf("the arc's top: %v", top)
+	}
+	for _, bad := range []string{"", "L1 1", "M1", "M0 0 X 1", "M0 0 A1 1 0 2 0 1 1", "M1e999 0", strings.Repeat("M0 0 ", MaxPathSegments+1)} {
+		if _, err := ParsePathData(bad); err == nil {
+			t.Errorf("%.30q: read", bad)
+		}
+	}
+}
+
+// TestPaths checks a path shape's data, its points within its box, and
+// how many segments a template's paths may have.
+func TestPaths(t *testing.T) {
+	doc := func(elements string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[` + elements + `]}`
+	}
+	path := func(props string) string {
+		return `{"type":"shape","shape":"path","x":0,"y":0,"width":10,"height":10,` + props + `}`
+	}
+	if _, err := Parse([]byte(doc(path(`"d":"M0 0 L1 0 L0.5 1 Z","fill":"black","fill_rule":"evenodd"`)))); err != nil {
+		t.Error(err)
+	}
+	for _, tc := range []struct {
+		element string
+		want    []string
+	}{
+		{path(`"d":"M0 0 L2 1"`), []string{"elements[0].d"}},
+		{path(`"d":"nonsense"`), []string{"elements[0].d"}},
+		{path(`"d":"M0 0 L1 1","fill_rule":"odd"`), []string{"elements[0].fill_rule"}},
+		{`{"type":"shape","shape":"rectangle","x":0,"y":0,"width":10,"height":10,"d":"M0 0 L1 1","fill_rule":"evenodd"}`, []string{"elements[0].d", "elements[0].fill_rule"}},
+	} {
+		_, err := Parse([]byte(doc(tc.element)))
+		got := problemPaths(t, err)
+		sort.Strings(got)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.element, got, tc.want)
+		}
+	}
+	// Eleven paths of 2,000 segments: past the template's 20,000.
+	d := "M0 0" + strings.Repeat(" L1 1", MaxPathSegments-1)
+	many := strings.TrimSuffix(strings.Repeat(path(`"d":"`+d+`"`)+",", 11), ",")
+	if _, err := Parse([]byte(doc(many))); err == nil || !strings.Contains(err.Error(), "segments") {
+		t.Errorf("too many segments: %v", err)
+	}
+}

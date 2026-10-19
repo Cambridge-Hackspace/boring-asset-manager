@@ -215,6 +215,9 @@ func (s *Scene) placeShape(e *labels.Element, box image.Rectangle) {
 			add(bar(a, b, width).appendTo(nil), paintOf(e.Stroke))
 		}
 
+	case labels.ShapePath:
+		s.placePath(e, x0, y0, x1, y1, width)
+
 	case labels.ShapePolygon:
 		pts := make([]Point, len(e.Points))
 		for i, p := range e.Points {
@@ -242,6 +245,107 @@ func (s *Scene) placeShape(e *labels.Element, box image.Rectangle) {
 			}
 			add(p, paintOf(e.Stroke))
 		}
+	}
+}
+
+// placePath draws a path shape, its data fractions of the box from (x0, y0)
+// to (x1, y1): its fill by its fill rule, then its stroke, centered on it.
+func (s *Scene) placePath(e *labels.Element, x0, y0, x1, y1, width float64) {
+	segs, err := labels.ParsePathData(e.D)
+	if err != nil {
+		return // validated already
+	}
+	at := func(p [2]float64) Point { return Point{x0 + p[0]*(x1-x0), y0 + p[1]*(y1-y0)} }
+	if e.Fill != labels.PaintNone {
+		var p Path
+		for _, sg := range segs {
+			switch sg.Op {
+			case labels.SegMove:
+				p = append(p, Segment{Op: MoveTo, Pts: [3]Point{at(sg.Pts[0])}})
+			case labels.SegLine:
+				p = append(p, Segment{Op: LineTo, Pts: [3]Point{at(sg.Pts[0])}})
+			case labels.SegQuad:
+				p = append(p, Segment{Op: QuadTo, Pts: [3]Point{at(sg.Pts[0]), at(sg.Pts[1])}})
+			case labels.SegCubic:
+				p = append(p, Segment{Op: CubeTo, Pts: [3]Point{at(sg.Pts[0]), at(sg.Pts[1]), at(sg.Pts[2])}})
+			}
+		}
+		if len(p) > 0 {
+			s.Items = append(s.Items, Item{Path: p, Paint: paintOf(e.Fill), EvenOdd: e.FillRule == labels.FillEvenOdd})
+		}
+	}
+	if e.Stroke == labels.PaintNone {
+		return
+	}
+	// Each outline as a polyline, its curves in short straight pieces, each
+	// piece a bar, with a disc wherever two pieces meet at an angle.
+	var stroke Path
+	var line []Point
+	var joints []bool
+	closed := false
+	flush := func() {
+		if len(line) < 2 {
+			line, joints, closed = nil, nil, false
+			return
+		}
+		n := len(line) - 1
+		for i := 0; i < n; i++ {
+			stroke = bar(line[i], line[i+1], width).appendTo(stroke)
+		}
+		if closed && line[0] != line[n] {
+			stroke = bar(line[n], line[0], width).appendTo(stroke)
+		}
+		for i, q := range line {
+			if joints[i] && (closed || (i > 0 && i < n)) {
+				stroke = ellipseContour(q.X, q.Y, width/2, width/2).appendTo(stroke)
+			}
+		}
+		line, joints, closed = nil, nil, false
+	}
+	var cur Point
+	pieces := func(a, b Point) int { return max(2, min(32, int(math.Hypot(b.X-a.X, b.Y-a.Y)/4)+1)) }
+	for _, sg := range segs {
+		switch sg.Op {
+		case labels.SegMove:
+			flush()
+			cur = at(sg.Pts[0])
+			line, joints = []Point{cur}, []bool{true}
+		case labels.SegLine:
+			cur = at(sg.Pts[0])
+			line, joints = append(line, cur), append(joints, true)
+		case labels.SegQuad, labels.SegCubic:
+			c1, end := at(sg.Pts[0]), at(sg.End())
+			c2 := c1
+			if sg.Op == labels.SegCubic {
+				c2 = at(sg.Pts[1])
+			} else {
+				// A quadratic as the cubic it is.
+				c1 = Point{cur.X + 2.0/3*(c1.X-cur.X), cur.Y + 2.0/3*(c1.Y-cur.Y)}
+				c2 = Point{end.X + 2.0/3*(at(sg.Pts[0]).X-end.X), end.Y + 2.0/3*(at(sg.Pts[0]).Y-end.Y)}
+			}
+			n := pieces(cur, end) + pieces(c1, c2)
+			for k := 1; k <= n; k++ {
+				t := float64(k) / float64(n)
+				u := 1 - t
+				line = append(line, Point{
+					u*u*u*cur.X + 3*u*u*t*c1.X + 3*u*t*t*c2.X + t*t*t*end.X,
+					u*u*u*cur.Y + 3*u*u*t*c1.Y + 3*u*t*t*c2.Y + t*t*t*end.Y,
+				})
+				// Within a curve, pieces meet smoothly; discs only where it ends.
+				joints = append(joints, k == n)
+			}
+			cur = end
+		case labels.SegClose:
+			closed = true
+			if len(line) > 0 {
+				cur = line[0]
+			}
+			flush()
+		}
+	}
+	flush()
+	if len(stroke) > 0 {
+		s.Items = append(s.Items, Item{Path: stroke, Paint: paintOf(e.Stroke)})
 	}
 }
 

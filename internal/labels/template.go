@@ -38,9 +38,13 @@ const (
 	ShapeEllipse   = "ellipse"
 	ShapeLine      = "line"
 	ShapePolygon   = "polygon"
+	ShapePath      = "path"
 	PaintBlack     = "black"
 	PaintWhite     = "white"
 	PaintNone      = "none"
+	// How a path's fill decides what is inside where it crosses itself.
+	FillNonzero = "nonzero"
+	FillEvenOdd = "evenodd"
 	// MaxPolygonPoints bounds a polygon.
 	MaxPolygonPoints = 256
 )
@@ -216,6 +220,10 @@ type Element struct {
 	Stroke       string       `json:"stroke,omitempty"`
 	StrokeWidth  float64      `json:"stroke_width,omitempty"`
 	Fill         string       `json:"fill,omitempty"`
+	// A path's SVG path data, with points as fractions of its box, as
+	// imported artwork has; filled by FillRule, nonzero unless evenodd.
+	D        string `json:"d,omitempty"`
+	FillRule string `json:"fill_rule,omitempty"`
 }
 
 // Parse decodes a template document, rejecting unknown properties, applies
@@ -386,6 +394,9 @@ func (t *Template) Validate() error {
 	if len(t.Elements) > MaxElements {
 		v.add("elements", fmt.Sprintf("at most %d elements are allowed", MaxElements))
 	}
+	if n := t.pathSegments(); n > MaxTemplatePathSegments {
+		v.add("elements", fmt.Sprintf("its paths have %d segments; at most %d are allowed", n, MaxTemplatePathSegments))
+	}
 	for i := range t.Elements {
 		t.validateElement(&v, fmt.Sprintf("elements[%d]", i), &t.Elements[i], canvasOK)
 	}
@@ -481,6 +492,8 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"stroke":        e.Stroke != "",
 		"stroke_width":  e.StrokeWidth != 0,
 		"fill":          e.Fill != "",
+		"d":             e.D != "",
+		"fill_rule":     e.FillRule != "",
 	}
 	textProps := map[string]bool{
 		"font_size":     e.FontSize != 0,
@@ -595,6 +608,8 @@ func validateShape(v *validator, path string, e *Element) {
 	only("flip", e.Flip, ShapeLine)
 	only("points", e.Points != nil, ShapePolygon)
 	only("closed", e.Closed != nil, ShapePolygon)
+	only("d", e.D != "", ShapePath)
+	only("fill_rule", e.FillRule != "", ShapePath)
 
 	switch e.Shape {
 	case ShapeRectangle:
@@ -623,9 +638,40 @@ func validateShape(v *validator, path string, e *Element) {
 		if e.Closed != nil && !*e.Closed && e.Fill != PaintNone {
 			v.add(at("fill"), "does not apply: an open polygon has no inside to fill")
 		}
+	case ShapePath:
+		segs, err := ParsePathData(e.D)
+		if err != nil {
+			v.add(at("d"), err.Error())
+			break
+		}
+		for _, s := range segs {
+			for _, p := range s.Points() {
+				if p[0] < -geometryTolerance || p[0] > 1+geometryTolerance || p[1] < -geometryTolerance || p[1] > 1+geometryTolerance {
+					v.add(at("d"), "must keep its points within its box: fractions of it, each from 0 to 1")
+					return
+				}
+			}
+		}
+		if e.FillRule != "" && e.FillRule != FillNonzero && e.FillRule != FillEvenOdd {
+			v.add(at("fill_rule"), `must be "nonzero" or "evenodd"`)
+		}
 	default:
-		v.add(at("shape"), `must be "rectangle", "ellipse", "line" or "polygon"`)
+		v.add(at("shape"), `must be "rectangle", "ellipse", "line", "polygon" or "path"`)
 	}
+}
+
+// pathSegments counts the path segments of a template's paths, for
+// MaxTemplatePathSegments; paths that do not parse count none.
+func (t *Template) pathSegments() int {
+	n := 0
+	for _, e := range t.Elements {
+		if e.Type == ElementShape && e.Shape == ShapePath {
+			if segs, err := ParsePathData(e.D); err == nil {
+				n += len(segs)
+			}
+		}
+	}
+	return n
 }
 
 // validateMargin checks a code's margin: in modules, each side up to

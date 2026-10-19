@@ -399,3 +399,23 @@ test('turn a template portrait and landscape, and choose which way it is fed', a
   expect(saved.template).toMatchObject({ width: 40, height: 62 });
   expect(saved.template.elements[0].rotation).toBe(90);
 });
+
+test('import SVG artwork as shapes, and save them', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Artwork'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list', elements: [],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 3 L22 20 H2 Z M11 9 h2 v6 h-2 z"/>' +
+    '<circle cx="12" cy="12" r="11" fill="none" stroke="#000"/><text x="2" y="23">Caution</text></svg>';
+  await page.getByLabel('Import SVG').setInputFiles({ name: 'warning.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg) });
+  await expect(page.getByRole('status').filter({ hasText: 'Imported 2 shapes from warning.svg.' })).toContainText('Left out: text');
+  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('button', { name: 'Artwork' })).toHaveCount(2);
+
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements.map((e: { shape: string; fill_rule?: string }) => [e.shape, e.fill_rule ?? ''])).toEqual([['path', 'evenodd'], ['path', '']]);
+});
