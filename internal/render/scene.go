@@ -23,6 +23,9 @@ type Scene struct {
 
 	// Items are drawn in order, the first at the back.
 	Items []Item
+	// Codes says how each code was laid out, by element index, before it
+	// was turned.
+	Codes map[int]CodePlacement
 }
 
 // Item is one thing drawn: exactly one of an image, a path or barcode

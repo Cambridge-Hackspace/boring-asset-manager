@@ -106,3 +106,28 @@ func TestTurnedElementsAreWhereTheyLie(t *testing.T) {
 		}
 	}
 }
+
+// TestPreviewDescribesCodes says how each code is laid out: its module and
+// the margins drawn, warning where one is narrower than the standard.
+func TestPreviewDescribesCodes(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	// HELLO is a 21-module QR Code; in a 20 mm box at 300 DPI, 236 dots,
+	// 29 modules high with its margins, so 8 dots each, at the box's left.
+	const doc = `{"name":"Codes","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[
+	  {"type":"generator","generator_type":"qr","x":0,"y":0,"width":20,"height":20,"content_binding":"HELLO","margin":{"left":0},"align":"left"},
+	  {"type":"text","x":21,"y":0,"width":19,"height":10,"font_size":8,"content_binding":"A"}]}`
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview", `{"template":`+doc+`,"format":"json"}`)
+	var desc PreviewDescription
+	if err := json.Unmarshal(rec.Body.Bytes(), &desc); err != nil || len(desc.Elements) != 2 {
+		t.Fatalf("preview: %d %s", rec.Code, rec.Body)
+	}
+	c := desc.Elements[0].Code
+	if c == nil || c.ModuleDots != 8 || c.Module != 0.677 || c.MarginDots.Left != 0 || c.MarginDots.Right != 236-21*8 || c.MarginDots.Top != 34 || c.Margin.Top != 2.879 ||
+		len(c.Narrow) != 1 || c.Narrow[0] != "left" {
+		t.Errorf("the code: %+v", c)
+	}
+	if desc.Elements[1].Code != nil || len(desc.Warnings) != 1 || !strings.Contains(desc.Warnings[0], "on its left side") {
+		t.Errorf("warnings: %v", desc.Warnings)
+	}
+}

@@ -116,7 +116,8 @@ type previewIn struct {
 
 type previewLabel struct {
 	Asset    string           `json:"asset,omitempty"`
-	Elements []map[string]any `json:"elements" jsonschema:"each element: index, type, its box (x, y, width, height in the template's units), and value, what it prints"`
+	Elements []map[string]any `json:"elements" jsonschema:"each element: index, type, its box (x, y, width, height in the template's units), rotation and bounds when turned, value, what it prints, and for a code, its module and margins as drawn"`
+	Warnings []string         `json:"warnings,omitempty" jsonschema:"what to know, which never stops it printing, such as a code's margin narrower than its standard quiet zone"`
 	Problem  string           `json:"problem,omitempty" jsonschema:"why this label cannot be made"`
 }
 
@@ -207,7 +208,7 @@ func labelTools() []tool {
 				Name     string         `json:"name,omitempty"`
 				Change   []struct {
 					Index int            `json:"index"`
-					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size"`
+					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, and for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align"`
 				} `json:"change_elements,omitempty"`
 				Move   []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
 				Remove []int            `json:"remove_elements,omitempty"`
@@ -329,6 +330,7 @@ func labelTools() []tool {
 						Units    string           `json:"units"`
 						DPI      int              `json:"dpi"`
 						Elements []map[string]any `json:"elements"`
+						Warnings []string         `json:"warnings"`
 					}
 					body["format"] = "json"
 					if err := e.call(ctx, http.MethodPost, "/api/v1/templates/preview", body, &desc); err != nil {
@@ -337,7 +339,7 @@ func labelTools() []tool {
 						continue
 					}
 					out.Width, out.Height, out.Units, out.DPI = desc.Width, desc.Height, desc.Units, desc.DPI
-					label.Elements = desc.Elements
+					label.Elements, label.Warnings = desc.Elements, desc.Warnings
 					body["format"], body["mono"] = "png", in.Mono
 					raw, _ := json.Marshal(body)
 					res := e.api(ctx, http.MethodPost, "/api/v1/templates/preview", raw, "application/json")

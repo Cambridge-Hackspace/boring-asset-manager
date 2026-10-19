@@ -8,6 +8,7 @@ import {
   elementsAt,
   inListOrder,
   layerName,
+  marginOf,
   makeAdaptive,
   makeFixed,
   moveElements,
@@ -24,6 +25,7 @@ import {
   tooSmall,
   withProp,
   type TemplateDoc,
+  withMargin,
   type TemplateElement,
 } from './template';
 
@@ -305,5 +307,34 @@ describe('turning', () => {
     d.elements[0] = { ...d.elements[0]!, rotation: 90 };
     expect(elementsAt(d, 20, 1)).toEqual([0]); // above its box, inside it turned
     expect(elementsAt(d, 11, 10)).toEqual([]); // inside its box, outside it turned
+  });
+});
+
+describe('code margins', () => {
+  const qr: TemplateElement = { type: 'generator', generator_type: 'qr', x: 0, y: 0, width: 20, height: 20 };
+
+  it('sets sides, and puts them back to standard', () => {
+    const one = withMargin(qr, ['left'], 0);
+    expect(one.margin).toEqual({ left: 0 });
+    expect(marginOf(one, 'left')).toBe(0);
+    expect(marginOf(one, 'top')).toBeUndefined();
+    expect(withMargin(one, ['left'], undefined)).toEqual(qr);
+  });
+
+  it('turns a quiet zone from before margins into the margin on every side it gave', () => {
+    const old = { ...qr, quiet_zone: 2 };
+    expect(marginOf(old, 'top')).toBe(2);
+    expect(withMargin(old, ['left'], 0)).toEqual({ ...qr, margin: { top: 2, right: 2, bottom: 2, left: 0 } });
+    const bars = { ...qr, generator_type: 'code128', quiet_zone: 5 };
+    expect(marginOf(bars, 'top')).toBeUndefined();
+    expect(withMargin(bars, ['top'], 1).margin).toEqual({ top: 1, right: 5, left: 5 });
+  });
+
+  it('converts and scales margins in length, but not in modules', () => {
+    const inMM = { ...withMargin(qr, ['left'], 2.54), margin_unit: 'length' as const };
+    const d = { ...blankTemplate(), elements: [inMM, withMargin(qr, ['left'], 3)] };
+    const inches = convertUnits(d, 'in');
+    expect(inches.elements[0]!.margin).toEqual({ left: 0.1 });
+    expect(inches.elements[1]!.margin).toEqual({ left: 3 });
   });
 });

@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -131,6 +132,11 @@ var goldenTemplates = map[string]string{
 		{"type":"static_image","x":98.0,"y":34.0,"width":14,"height":10,"rotation":45,"image_id":"` + arrowID + `"},
 		{"type":"generator","x":97.0,"y":57.0,"width":16,"height":16,"rotation":45,"generator_type":"qr","content_binding":"{{asset.code.qr}}"},
 		{"type":"generator","x":93.0,"y":87.0,"width":24,"height":8,"rotation":45,"generator_type":"code128","content_binding":"1234"}]}`,
+	// A QR Code in the top left corner of its box, with no margin on those
+	// two sides, and a Code 128 code with margins of 2 and 3 mm.
+	"margins": `{"id":"margins","name":"Margins","units":"mm","width":50,"height":25,"dpi":300,"layering":"list","elements":[
+		{"type":"generator","generator_type":"qr","x":2,"y":2,"width":21,"height":21,"content_binding":"{{asset.code.qr}}","margin":{"top":0,"left":0},"align":"left","vertical_align":"top"},
+		{"type":"generator","generator_type":"code128","x":25,"y":2,"width":24,"height":21,"content_binding":"1234","margin":{"top":3,"bottom":3,"left":2,"right":2},"margin_unit":"length"}]}`,
 	// A QR Code at 45°, which phones still read.
 	"qr45": `{"id":"qr45","name":"QR 45","units":"mm","width":40,"height":40,"dpi":300,"layering":"list","elements":[
 		{"type":"generator","generator_type":"qr","x":7.5,"y":7.5,"width":25,"height":25,"rotation":45,"content_binding":"{{base_url}}/a/{{asset.id}}"}]}`,
@@ -145,6 +151,7 @@ var goldenPayloads = map[string][]string{
 	"layers":        {},
 	"turned":        {"BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "1234", "1234"},
 	"qr45":          {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
+	"margins":       {"BAM-QR-0042", "1234"},
 }
 
 func renderAll(t *testing.T, s *Scene) map[string][]byte {
@@ -184,7 +191,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"image_inches", "layers", "micro_code128", "qr45", "qr_label", "turned"} {
+	for _, name := range []string{"image_inches", "layers", "margins", "micro_code128", "qr45", "qr_label", "turned"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -589,4 +596,66 @@ func pdfContent(t *testing.T, pdf []byte) string {
 		t.Fatal(err)
 	}
 	return string(out)
+}
+
+// TestCodeMargins lays codes out with margins side by side, in modules and
+// in length, aligned in their boxes.
+func TestCodeMargins(t *testing.T) {
+	// A 20 mm box at 300 DPI is 236 dots; HELLO is a 21-module QR Code.
+	layout := func(t *testing.T, element string) (CodePlacement, Rect) {
+		t.Helper()
+		tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":30,"height":30,"dpi":300,"layering":"list","elements":[
+			{"type":"generator","generator_type":"qr","x":5,"y":5,"width":20,"height":20,"content_binding":"HELLO",`+element+`}]}`)
+		s, err := Layout(tpl, labels.Data{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		minX, minY, maxX, maxY := math.MaxInt, math.MaxInt, 0, 0
+		for _, r := range s.Items[0].Rects {
+			minX, minY = min(minX, r.X), min(minY, r.Y)
+			maxX, maxY = max(maxX, r.X+r.W), max(maxY, r.Y+r.H)
+		}
+		return s.Codes[0], Rect{X: minX, Y: minY, W: maxX - minX, H: maxY - minY}
+	}
+
+	// Standard: 4 modules each side, 29 in all, 8 dots each, centered.
+	c, r := layout(t, `"align":"center"`)
+	if c.Module != 8 || r != (Rect{X: 93, Y: 93, W: 168, H: 168}) || c.Margin != [4]int{34, 34, 34, 34} || len(c.Narrow()) != 0 {
+		t.Errorf("standard: %+v %+v", c, r)
+	}
+	// No margin on the left and top, in the top left corner: 25 modules of 9 dots.
+	c, r = layout(t, `"margin":{"left":0,"top":0},"align":"left","vertical_align":"top"`)
+	if c.Module != 9 || r.X != 59 || r.Y != 59 || c.Margin[0] != 0 || c.Margin[3] != 0 || !reflect.DeepEqual(c.Narrow(), []string{"top", "left"}) {
+		t.Errorf("in the corner: %+v %+v", c, r)
+	}
+	// Bottom right, its margins 1 mm (12 dots) whatever the module.
+	c, r = layout(t, `"margin":{"top":1,"right":1,"bottom":1,"left":1},"margin_unit":"length","align":"right","vertical_align":"bottom"`)
+	if c.Module != 10 || r.X+r.W != 59+236-12 || r.Y+r.H != 59+236-12 || c.Margin[1] != 12 || c.Margin[2] != 12 {
+		t.Errorf("in length: %+v %+v", c, r)
+	}
+	// quiet_zone, from before margins, still means every side.
+	c, _ = layout(t, `"quiet_zone":1`)
+	if c.Module != 10 || !reflect.DeepEqual(c.Narrow(), []string{"top", "right", "bottom", "left"}) {
+		t.Errorf("quiet_zone: %+v", c)
+	}
+
+	// Code 128 bars fill the height inside the top and bottom margins.
+	tpl := mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[
+		{"type":"generator","generator_type":"code128","x":0,"y":0,"width":40,"height":10,"content_binding":"1234","margin":{"top":2,"bottom":3},"margin_unit":"length"}]}`)
+	s, err := Layout(tpl, labels.Data{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bar := s.Items[0].Rects[0]; bar.Y != 24 || bar.H != 118-24-35 {
+		t.Errorf("bars: %+v", bar)
+	}
+	if c := s.Codes[0]; c.Margin[0] != 24 || c.Margin[2] != 35 || len(c.Narrow()) != 0 {
+		t.Errorf("code 128: %+v", c)
+	}
+	// Margins that leave no room are refused when laid out.
+	tpl = mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[
+		{"type":"generator","generator_type":"qr","x":0,"y":0,"width":10,"height":10,"content_binding":"HELLO","margin":{"left":20,"right":20}}]}`)
+	if _, err := Layout(tpl, labels.Data{}, nil); err == nil || !strings.Contains(err.Error(), "needs a box") {
+		t.Errorf("no room: %v", err)
+	}
 }

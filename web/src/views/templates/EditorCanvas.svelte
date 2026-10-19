@@ -7,7 +7,13 @@
     moveElements,
     resizeElement,
     rotateElements,
+    sides,
+    sinCos,
+    snap,
+    withMargin,
+    type CodeLayout,
     type Handle,
+    type Side,
     type PrintArea,
     type Restack,
     type TemplateDoc,
@@ -35,6 +41,7 @@
     onbegin,
     ondelete,
     onrestack,
+    codeLayouts = {},
   }: {
     doc: TemplateDoc;
     selected: number[];
@@ -47,6 +54,8 @@
     onbegin: () => void;
     ondelete: () => void;
     onrestack: (how: Restack) => void;
+    /** How the server laid out each code, by element index, for its margins. */
+    codeLayouts?: Record<number, CodeLayout>;
   } = $props();
 
   let surface: HTMLDivElement | undefined = $state();
@@ -100,7 +109,8 @@
   type Gesture =
     | { kind: 'move'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; moved: boolean }
     | { kind: 'resize'; x0: number; y0: number; start: TemplateElement[]; index: number; handle: Handle; moved: boolean }
-    | { kind: 'rotate'; x0: number; y0: number; start: TemplateElement[]; index: number; cx: number; cy: number; moved: boolean };
+    | { kind: 'rotate'; x0: number; y0: number; start: TemplateElement[]; index: number; cx: number; cy: number; moved: boolean }
+    | { kind: 'margin'; x0: number; y0: number; start: TemplateElement[]; index: number; side: Side; from: number; moved: boolean };
   let gesture: Gesture | null = null;
 
   function pointerDownOnElement(event: PointerEvent, i: number) {
@@ -152,8 +162,64 @@
     surface.setPointerCapture(event.pointerId);
   }
 
+  /**
+   * A code with one side's margin set from a length in the template's units:
+   * whole modules, or on the grid in length.
+   */
+  function marginFrom(e: TemplateElement, side: Side, length: number, layout: CodeLayout): TemplateElement {
+    const across = side === 'left' || side === 'right';
+    const most = (across ? e.width : e.height) / 2;
+    const value =
+      e.margin_unit === 'length'
+        ? Math.min(Math.max(0, snap(length, gridStep(doc.units), doc.units)), most)
+        : Math.min(Math.max(0, Math.round(length / layout.module)), 20);
+    return withMargin(e, [side], value);
+  }
+
+  function pointerDownOnMargin(event: PointerEvent, i: number, side: Side) {
+    const layout = codeLayouts[i];
+    if (event.button !== 0 || !layout) return;
+    event.preventDefault();
+    event.stopPropagation();
+    gesture = { kind: 'margin', x0: event.clientX, y0: event.clientY, start: $state.snapshot(doc.elements) as TemplateElement[], index: i, side, from: layout.margin[side], moved: false };
+    surface?.setPointerCapture(event.pointerId);
+  }
+
+  /** Margin handles are sliders: arrow keys move them a module, or a grid step in length. */
+  function keydownOnMargin(event: KeyboardEvent, i: number, side: Side) {
+    const layout = codeLayouts[i];
+    const e = doc.elements[i];
+    const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[event.key];
+    if (!layout || !e || !step) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const by = e.margin_unit === 'length' ? gridStep(doc.units) : layout.module;
+    onbegin();
+    onchange(doc.elements.map((x, k) => (k === i ? marginFrom(x, side, layout.margin[side] + step * by, layout) : x)));
+  }
+
   function pointerMove(event: PointerEvent) {
     if (!gesture) return;
+    if (gesture.kind === 'margin') {
+      const g = gesture;
+      const e = g.start[g.index]!;
+      const layout = codeLayouts[g.index];
+      if (!layout) return;
+      const k = unitsPerPixel();
+      // The drag along the code's own sides, turned back.
+      const [sin, cos] = sinCos(e.rotation ?? 0);
+      const dx = (event.clientX - g.x0) * k;
+      const dy = (event.clientY - g.y0) * k;
+      const along = dx * cos + dy * sin;
+      const downward = -dx * sin + dy * cos;
+      const inward = { left: along, right: -along, top: downward, bottom: -downward }[g.side];
+      if (!g.moved) {
+        g.moved = true;
+        onbegin();
+      }
+      onchange(g.start.map((x, i) => (i === g.index ? marginFrom(x, g.side, g.from + inward, layout) : x)));
+      return;
+    }
     if (gesture.kind === 'rotate') {
       const g = gesture;
       if (!g.moved) {
@@ -301,6 +367,36 @@
         {/if}
       </div>
     {/each}
+    {#if selected.length === 1 && doc.elements[selected[0]!]?.type === 'generator' && codeLayouts[selected[0]!]}
+      {@const i = selected[0]!}
+      {@const e = doc.elements[i]!}
+      {@const layout = codeLayouts[i]!}
+      <!-- The selected code's margin, shaded, with a handle on each inner edge. -->
+      <div class="pointer-events-none absolute" style={boxStyle(e)}>
+        {#each sides as side (side)}
+          {@const m = layout.margin[side]}
+          {@const across = side === 'left' || side === 'right'}
+          <span
+            aria-hidden="true"
+            class="code-margin absolute"
+            style="{side}:0;{across ? `top:0;bottom:0;width:${pct(m, e.width)}` : `left:0;right:0;height:${pct(m, e.height)}`}"
+          ></span>
+          <span
+            role="slider"
+            tabindex="0"
+            aria-label="{side[0]!.toUpperCase() + side.slice(1)} margin"
+            aria-valuemin={0}
+            aria-valuemax={e.margin_unit === 'length' ? (across ? e.width : e.height) / 2 : 20}
+            aria-valuenow={e.margin_unit === 'length' ? m : Math.round(m / layout.module)}
+            aria-valuetext={e.margin_unit === 'length' ? `${m} ${doc.units}` : `${Math.round(m / layout.module)} modules`}
+            class="margin-handle pointer-events-auto absolute border border-white bg-emerald-600"
+            style="{across ? `top:calc(50% - var(--h) / 2);${side}:calc(${pct(m, e.width)} - var(--h) / 2)` : `left:calc(50% - var(--h) / 2);${side}:calc(${pct(m, e.height)} - var(--h) / 2)`};cursor:{across ? 'ew' : 'ns'}-resize"
+            onpointerdown={(ev) => pointerDownOnMargin(ev, i, side)}
+            onkeydown={(ev) => keydownOnMargin(ev, i, side)}
+          ></span>
+        {/each}
+      </div>
+    {/if}
   </div>
   <label class="flex items-center gap-2 text-sm">
     <input type="checkbox" checked={snapAngles} onchange={(ev) => setSnap(ev.currentTarget.checked)} />
@@ -332,6 +428,21 @@
   }
   @media (pointer: coarse) {
     .handle {
+      --h: 22px;
+    }
+  }
+  /* A code's margin, and the handles that set it. */
+  .code-margin {
+    background: rgb(16 185 129 / 0.18);
+  }
+  .margin-handle {
+    --h: 10px;
+    width: var(--h);
+    height: var(--h);
+    transform: rotate(45deg);
+  }
+  @media (pointer: coarse) {
+    .margin-handle {
       --h: 22px;
     }
   }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"math"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -274,6 +275,28 @@ type PreviewElement struct {
 	// it is not turned.
 	Rotation float64     `json:"rotation,omitempty"`
 	Bounds   *PreviewBox `json:"bounds,omitempty"`
+	// Code is how a code is laid out in its box, before it is turned.
+	Code *PreviewCode `json:"code,omitempty"`
+}
+
+// PreviewCode is how a code is laid out in its box: the size of its
+// modules, and the space between it and each side of its box as drawn, in
+// the template's units and in dots, with the sides narrower than its
+// standard quiet zone.
+type PreviewCode struct {
+	Module     float64      `json:"module"`
+	ModuleDots int          `json:"module_dots"`
+	Margin     PreviewSides `json:"margin"`
+	MarginDots PreviewSides `json:"margin_dots"`
+	Narrow     []string     `json:"narrow,omitempty"`
+}
+
+// PreviewSides are lengths on each side of a box.
+type PreviewSides struct {
+	Top    float64 `json:"top"`
+	Right  float64 `json:"right"`
+	Bottom float64 `json:"bottom"`
+	Left   float64 `json:"left"`
 }
 
 // PreviewBox is a box on a previewed label, in the template's units.
@@ -291,11 +314,17 @@ type PreviewDescription struct {
 	Units    string           `json:"units"`
 	DPI      int              `json:"dpi"`
 	Elements []PreviewElement `json:"elements"`
+	// Warnings never stop it printing, such as a code's margin narrower
+	// than its standard quiet zone.
+	Warnings []string `json:"warnings"`
 }
 
-// describePreview says what each element of a laid-out label prints.
-func describePreview(t *labels.Template, data labels.Data) PreviewDescription {
-	d := PreviewDescription{Width: t.Width, Height: t.Height, Units: t.Units, DPI: t.DPI, Elements: []PreviewElement{}}
+// describePreview says what each element of a laid-out label prints, and
+// how its codes were laid out in the scene.
+func describePreview(t *labels.Template, data labels.Data, scene *render.Scene) PreviewDescription {
+	d := PreviewDescription{Width: t.Width, Height: t.Height, Units: t.Units, DPI: t.DPI, Elements: []PreviewElement{}, Warnings: []string{}}
+	dotsPerUnit := float64(t.DPI) * t.InchesPerUnit()
+	units := func(dots int) float64 { return math.Round(float64(dots)/dotsPerUnit*1000) / 1000 }
 	for i := range t.Elements {
 		e := &t.Elements[i]
 		pe := PreviewElement{Index: i, Type: e.Type, X: e.X, Y: e.Y, Width: e.Width, Height: e.Height,
@@ -304,12 +333,34 @@ func describePreview(t *labels.Template, data labels.Data) PreviewDescription {
 			x, y, w, h := e.Bounds()
 			pe.Bounds = &PreviewBox{X: x, Y: y, Width: w, Height: h}
 		}
+		if c, ok := scene.Codes[i]; ok {
+			m := c.Margin
+			pe.Code = &PreviewCode{Module: units(c.Module), ModuleDots: c.Module, Narrow: c.Narrow(),
+				Margin:     PreviewSides{Top: units(m[0]), Right: units(m[1]), Bottom: units(m[2]), Left: units(m[3])},
+				MarginDots: PreviewSides{Top: float64(m[0]), Right: float64(m[1]), Bottom: float64(m[2]), Left: float64(m[3])}}
+			if len(pe.Code.Narrow) > 0 {
+				side := "side"
+				if len(pe.Code.Narrow) > 1 {
+					side = "sides"
+				}
+				d.Warnings = append(d.Warnings, fmt.Sprintf("elements[%d] (%s code) has less space than its standard quiet zone on its %s %s, which some scanners need.",
+					i, e.GeneratorType, joinSides(pe.Code.Narrow), side))
+			}
+		}
 		if b, err := e.Binding(); err == nil && e.Type != labels.ElementStaticImage {
 			pe.Value = b.Resolve(data)
 		}
 		d.Elements = append(d.Elements, pe)
 	}
 	return d
+}
+
+// joinSides names sides in a sentence: "left", "left and top".
+func joinSides(sides []string) string {
+	if len(sides) < 2 {
+		return strings.Join(sides, "")
+	}
+	return strings.Join(sides[:len(sides)-1], ", ") + " and " + sides[len(sides)-1]
 }
 
 // previewData stands in for an asset when previewing without one. Every
@@ -391,7 +442,7 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Format == "json" {
-		writeJSON(w, http.StatusOK, describePreview(t, data))
+		writeJSON(w, http.StatusOK, describePreview(t, data, scene))
 		return
 	}
 

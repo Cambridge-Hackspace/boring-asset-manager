@@ -156,7 +156,7 @@ func fits(t *labels.Template, e, design *labels.Element, sample *labels.Data) st
 		}
 		dotsPerUnit := float64(t.DPI) * t.InchesPerUnit()
 		box := image.Rect(round(e.X*dotsPerUnit), round(e.Y*dotsPerUnit), round((e.X+e.Width)*dotsPerUnit), round((e.Y+e.Height)*dotsPerUnit))
-		if err := (&Scene{DPI: t.DPI}).placeSymbol(e, payload, box); err != nil {
+		if _, err := (&Scene{DPI: t.DPI, Units: t.Units}).placeSymbol(e, payload, box); err != nil {
 			return fmt.Sprintf("at %d DPI, for the code %q: %v", t.DPI, payload, err)
 		}
 	}

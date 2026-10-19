@@ -8,6 +8,8 @@ Elements are drawn in order, each over those before it, so text can sit on an im
 
 Any element can be turned, to any angle. Drag the round handle above a selected element to turn it: it snaps to multiples of 45° as it passes them, unless **Snap angles to 45°** is switched off, or Alt is held. Its settings take an exact angle, and turn it a quarter turn left or right; with it focused, [ and ] turn it 15°, or 1° with Shift. Several selected elements turn together, about the middle of them all. Codes turned a quarter turn print as sharply as upright ones; at other angles their edges follow the printer's dots, so check that a turned code scans with the scanners you use.
 
+A code keeps a **margin** clear around it, which scanners use to find where it starts. Empty, each side has the code's standard quiet zone. Set one margin for every side, or tick **Each side on its own**, counted in modules (the code's squares or bar widths, so the margin grows and shrinks with the code) or in millimeters or inches, the same whatever the code holds. With a code selected, its margin is shaded on the canvas: drag the handle on any side, or focus it and use the arrow keys. Under **Across its box** and **Down its box**, choose where the code sits in its box: centered, or against a side or corner. A margin narrower than the standard is allowed, since a code against the label's edge often scans, but the editor says so: try it with your scanners.
+
 ## Printing
 
 On an asset's page, or for several assets ticked on the list, choose a template to download labels as SVG, PNG or PDF, or send them to a printer set up on the **Printers** page. **Images** holds logos and pictures for templates.

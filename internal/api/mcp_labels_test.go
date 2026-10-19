@@ -135,6 +135,24 @@ func TestMCPLabelTools(t *testing.T) {
 	if e := turned.Labels[0].Elements[1]; e.Rotation != 180 || e.Bounds == nil || e.Bounds.Width != 18 {
 		t.Errorf("turned: %+v", turned.Labels[0].Elements)
 	}
+	// No margin on the code's left, and where that leaves it.
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 1,
+		"set": map[string]any{"margin": map[string]any{"left": 0}, "align": "left"}}}}), &saved)
+	var coded struct {
+		Labels []struct {
+			Elements []struct {
+				Code *struct {
+					MarginDots struct{ Left float64 } `json:"margin_dots"`
+					Narrow     []string
+				}
+			}
+			Warnings []string
+		}
+	}
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &coded)
+	if c := coded.Labels[0].Elements[1].Code; c == nil || c.MarginDots.Left != 0 || !slices.Contains(c.Narrow, "left") || len(coded.Labels[0].Warnings) != 1 {
+		t.Errorf("margins: %+v", coded.Labels[0])
+	}
 	// A draft never saved, too, and one that cannot be made for an asset says why.
 	draft := map[string]any{}
 	_ = json.Unmarshal([]byte(labelTemplate), &draft)

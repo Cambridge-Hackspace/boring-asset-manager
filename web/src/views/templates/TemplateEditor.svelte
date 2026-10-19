@@ -14,6 +14,7 @@
     placeholders,
     restack,
     rotateElements,
+    type CodeLayout,
     type ElementType,
     type Restack,
     type PrintArea,
@@ -51,6 +52,8 @@
   let previewURL = $state('');
   let previewStale = $state(false);
   let previewProblems = $state<ProblemDetail[]>([]);
+  // How the server laid out each code, by element index, for its margins.
+  let codeLayouts = $state<Record<number, CodeLayout>>({});
 
   // Previewing against an asset.
   let assetQuery = $state('');
@@ -155,11 +158,18 @@
     previewStale = true;
     const timer = setTimeout(async () => {
       try {
-        const blob = await requestBlob('POST', '/templates/preview', body);
+        const hasCodes = body.template.elements.some((e) => e.type === 'generator');
+        const [blob, described] = await Promise.all([
+          requestBlob('POST', '/templates/preview', body),
+          hasCodes
+            ? request<{ elements: { index: number; code?: CodeLayout }[] }>('POST', '/templates/preview', { ...body, format: 'json' })
+            : Promise.resolve({ elements: [] }),
+        ]);
         const url = URL.createObjectURL(blob);
         if (previewURL) URL.revokeObjectURL(previewURL);
         previewURL = url;
         previewProblems = [];
+        codeLayouts = Object.fromEntries((described.elements ?? []).flatMap((d) => (d.code ? [[d.index, d.code]] : [])));
       } catch (err) {
         previewProblems =
           err instanceof ApiError && err.details.length ? err.details : [{ path: '', message: messageOf(err) }];
@@ -341,6 +351,7 @@
         onbegin={begin}
         ondelete={removeSelected}
         onrestack={restackSelected}
+        {codeLayouts}
       />
 
       {#if generalProblems.length || (previewProblems.length && !problemElements.size && !Object.keys(canvasProblems).length)}
@@ -375,6 +386,7 @@
           }}
           onremove={removeSelected}
           onrestack={restackSelected}
+          codeLayout={codeLayouts[selected[0]!]}
         />
       {:else if selected.length > 1}
         <section class="card space-y-2">

@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { GeneratorInfo } from '../../lib/models';
-  import { describeElement, normalAngle, opensAPage, SCAN_URL, withProp, type Restack, type TemplateDoc, type TemplateElement } from '../../lib/template';
+  import { describeElement, normalAngle, opensAPage, SCAN_URL, withProp, type CodeLayout, type Restack, type TemplateDoc, type TemplateElement } from '../../lib/template';
   import ImagePicker from './ImagePicker.svelte';
   import StackButtons from './StackButtons.svelte';
+  import CodeMargins from './CodeMargins.svelte';
   import AdaptiveElementPanel from './AdaptiveElementPanel.svelte';
 
   // Edits one element. Each change goes through onupdate with the new
@@ -16,6 +17,7 @@
     onupdate,
     onremove,
     onrestack,
+    codeLayout,
   }: {
     doc: TemplateDoc;
     index: number;
@@ -25,6 +27,8 @@
     onupdate: (e: TemplateElement) => void;
     onremove: () => void;
     onrestack: (how: Restack) => void;
+    /** How the server laid the code out, when it is one. */
+    codeLayout?: CodeLayout;
   } = $props();
 
   const e = $derived(doc.elements[index]!);
@@ -35,13 +39,8 @@
     onupdate({ ...e, [key]: value });
   }
 
-  function setNumber(key: 'x' | 'y' | 'width' | 'height' | 'font_size' | 'min_font_size' | 'quiet_zone', raw: string) {
+  function setNumber(key: 'x' | 'y' | 'width' | 'height' | 'font_size' | 'min_font_size', raw: string) {
     const n = Number(raw);
-    if (raw === '' && key === 'quiet_zone') {
-      const { quiet_zone: _q, ...rest } = e;
-      onupdate(rest);
-      return;
-    }
     if (Number.isFinite(n)) set(key, n);
   }
 
@@ -165,6 +164,7 @@
         </select>
       </div>
     </div>
+    <CodeMargins {doc} {e} {index} layout={codeLayout} {onupdate} />
     <details class="text-sm">
       <summary class="cursor-pointer">More settings</summary>
       <div class="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -177,10 +177,6 @@
           </select>
         </div>
       {/if}
-      <div>
-        <label class="label" for={id('quiet')}>Quiet zone (modules)</label>
-        <input id={id('quiet')} class="input" type="number" min="0" step="1" placeholder="Standard" value={e.quiet_zone ?? ''} onchange={(ev) => setNumber('quiet_zone', ev.currentTarget.value)} />
-      </div>
       <div>
         <label class="label" for={id('module')}>Smallest module (mm)</label>
         <input
