@@ -142,6 +142,12 @@ var goldenTemplates = map[string]string{
 	// ellipse's outline, white text reversed out of a black band, an arrow,
 	// a diagonal line, a hairline widened to a dot, a turned rounded frame
 	// and an open zigzag.
+	// Paths as the editor's pen draws them: an open curve, and a closed
+	// shape of curves and lines, stroked and filled, one turned.
+	"pen": `{"id":"pen","name":"Pen","units":"mm","width":60,"height":30,"dpi":300,"layering":"list","elements":[
+		{"type":"shape","shape":"path","x":4,"y":4,"width":24,"height":12,"d":"M0 1 C0.25 0 0.75 1 1 0","stroke":"black","stroke_width":0.6,"fill":"none"},
+		{"type":"shape","shape":"path","x":32,"y":4,"width":22,"height":22,"rotation":20,"d":"M0.5 0 C0.9 0 1 0.3 1 0.5 L0.5 1 L0 0.5 C0 0.2 0.2 0 0.5 0 Z","stroke":"black","stroke_width":0.4,"fill":"black"},
+		{"type":"shape","shape":"path","x":4,"y":20,"width":20,"height":6,"d":"M0 0.5 C0.3 0 0.7 1 1 0.5 L1 1 L0 1 Z","fill":"black","stroke":"none"}]}`,
 	"shapes": `{"id":"shapes","name":"Shapes","units":"mm","width":80,"height":40,"dpi":300,"layering":"list","elements":[
 		{"type":"shape","shape":"rectangle","x":2,"y":2,"width":30,"height":12,"stroke_width":0.5},
 		{"type":"shape","shape":"rectangle","x":35,"y":2,"width":20,"height":12,"corner_radius":3,"stroke":"none","fill":"black"},
@@ -172,6 +178,7 @@ var goldenPayloads = map[string][]string{
 	"qr45":          {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
 	"margins":       {"BAM-QR-0042", "1234"},
 	"shapes":        {},
+	"pen":           {},
 }
 
 func renderAll(t *testing.T, s *Scene) map[string][]byte {
@@ -211,7 +218,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"image_inches", "imported", "layers", "margins", "micro_code128", "qr45", "qr_label", "shapes", "turned"} {
+	for _, name := range []string{"image_inches", "imported", "layers", "margins", "micro_code128", "pen", "qr45", "qr_label", "shapes", "turned"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)

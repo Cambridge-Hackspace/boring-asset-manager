@@ -52,6 +52,14 @@
   ]
  },
  {
+  "file": "pen.png",
+  "payloads": []
+ },
+ {
+  "file": "pen.mono.png",
+  "payloads": []
+ },
+ {
   "file": "qr45.png",
   "payloads": [
    "https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"
