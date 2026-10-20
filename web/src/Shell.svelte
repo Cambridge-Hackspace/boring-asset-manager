@@ -9,7 +9,9 @@
   import NavMenu from './components/NavMenu.svelte';
 
   // A workspace, such as the template editor, has the whole window below
-  // the header, rather than a column of the page.
+  // the header, rather than a column of the page: the header's height
+  // counted with its border, and positioned, so that nothing placed
+  // absolutely inside it (a screen reader's label, say) lengthens the page.
   let { children, workspace = false }: { children: Snippet; workspace?: boolean } = $props();
 
   const sections = $derived(
@@ -51,7 +53,7 @@
 <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-zinc-900">
   Skip to content
 </a>
-<header bind:clientHeight={headerHeight} class="border-b border-zinc-200 bg-white print:hidden dark:border-zinc-800 dark:bg-zinc-900">
+<header bind:offsetHeight={headerHeight} class="border-b border-zinc-200 bg-white print:hidden dark:border-zinc-800 dark:bg-zinc-900">
   <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
     <a href="/" class="text-lg font-black tracking-tight">BAM!</a>
     <button
@@ -123,7 +125,7 @@
     </nav>
   {/if}
 </header>
-<main id="main" tabindex="-1" bind:this={main} class={workspace ? 'outline-none md:h-(--workspace-height) md:overflow-hidden' : 'mx-auto max-w-7xl px-4 py-6 outline-none'}
+<main id="main" tabindex="-1" bind:this={main} class={workspace ? 'outline-none md:relative md:h-(--workspace-height) md:overflow-hidden' : 'mx-auto max-w-7xl px-4 py-6 outline-none'}
   style:--workspace-height={workspace ? `calc(100dvh - ${headerHeight}px)` : undefined}
 >
   {@render children()}
