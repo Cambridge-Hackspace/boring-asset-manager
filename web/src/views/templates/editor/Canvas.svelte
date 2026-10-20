@@ -387,7 +387,12 @@
   }
 
   function downOnDesk(event: PointerEvent) {
+    // In the text being typed, the caret is placed, as in any text box.
+    if (event.target instanceof Element && event.target.closest('[data-text-editor]')) return;
     if (startPan(event) || event.button !== 0 || !paper) return;
+    // A click elsewhere finishes typing: the desk takes no focus, so the
+    // text box is not left by it.
+    if (editor.editingText !== null) finishTyping();
     if (editor.tool === 'select') {
       // Off every element: a box to select with; a click alone selects nothing.
       event.preventDefault();

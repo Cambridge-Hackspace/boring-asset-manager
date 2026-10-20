@@ -189,6 +189,44 @@ test.describe('drawing', () => {
     await expect.poll(async () => (await inkBox(page)).box?.x ?? 0).toBeCloseTo(before.box!.x, -1);
   });
 
+  test('12: text finished by clicking away, rather than Escape, is drawn when moved', async ({ signedIn: page }) => {
+    await goTo(page, 'Templates');
+    await page.getByRole('link', { name: 'New template' }).click();
+    const r = await box(labelImage(page));
+    await tool(page, 'Text').click();
+    await drag(page, [r.x + r.width * 0.1, r.y + r.height * 0.2], [r.x + r.width * 0.5, r.y + r.height * 0.5]);
+    await page.keyboard.type('Clicked away');
+    await page.mouse.click(r.x + r.width * 0.8, r.y + r.height * 0.85);
+    await expect.poll(() => ink(page)).toBeGreaterThan(50);
+    await tool(page, 'Select and move').click();
+    const e = await box(element(page));
+    await drag(page, middle(e), [middle(e)[0] + 80, middle(e)[1] + 40]);
+    await expect.poll(() => ink(page)).toBeGreaterThan(50);
+    await page.mouse.click(r.x + r.width * 0.9, r.y + r.height * 0.9);
+    await expect.poll(() => ink(page)).toBeGreaterThan(50);
+  });
+
+  test('51: a click in the text being typed places the caret there', async ({ signedIn: page }) => {
+    await goTo(page, 'Templates');
+    await page.getByRole('link', { name: 'New template' }).click();
+    const r = await box(labelImage(page));
+    await tool(page, 'Text').click();
+    await drag(page, [r.x + r.width * 0.1, r.y + r.height * 0.2], [r.x + r.width * 0.7, r.y + r.height * 0.5]);
+    await page.keyboard.type('abcdefghij');
+    const area = page.locator('[data-text-editor] textarea');
+    const a = await box(area);
+    // Near the start of the line: the caret goes there, and typing goes in there.
+    const line = await area.evaluate((t: HTMLTextAreaElement) => {
+      const m = document.createElement('canvas').getContext('2d')!;
+      m.font = getComputedStyle(t).font;
+      return { a: m.measureText('a').width, left: t.getBoundingClientRect().left };
+    });
+    await page.mouse.click(line.left + line.a * 1.5, a.y + a.height / 2);
+    await page.keyboard.type('X');
+    await expect(area).toHaveValue(/^a[X]bcdefghij$|^aX/);
+    await expect(area).toBeFocused();
+  });
+
   test('13: text moved partly off the label is drawn, the part still on it', async ({ signedIn: page }) => {
     await withText(page);
     const label = await box(labelImage(page));
@@ -322,6 +360,21 @@ test.describe('pointer and keyboard', () => {
     await expect(element(page)).toHaveAttribute('aria-pressed', 'false');
     await panels(page).getByRole('list', { name: 'Layers' }).getByRole('button', { name: /Hello there/ }).first().click();
     await expect(element(page)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('27: a double-click types into text, and a click away finishes it', async ({ signedIn: page }) => {
+    await withText(page);
+    await element(page).dblclick();
+    const area = page.locator('[data-text-editor] textarea');
+    await expect(area).toBeFocused();
+    await page.keyboard.press('End');
+    await page.keyboard.type('!');
+    const label = await box(labelImage(page));
+    await page.mouse.click(label.x + label.width * 0.9, label.y + label.height * 0.9);
+    await expect(area).toHaveCount(0);
+    await expect.poll(() => ink(page)).toBeGreaterThan(50);
+    await panels(page).getByRole('list', { name: 'Layers' }).getByRole('button', { name: /Hello there/ }).first().click();
+    await expect(page.locator('#el-0-binding')).toHaveValue('Hello there!');
   });
 
   test('28, 29, 30, 31: keys typed in a field stay in the field', async ({ signedIn: page }) => {
