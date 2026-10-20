@@ -47,6 +47,8 @@ export interface Route {
   group?: NavGroup;
   /** Signed-out visitors may open it too, when the public role allows (README §3.3). */
   public?: boolean;
+  /** A workspace, such as the template editor: the whole window below the header, and no footer. */
+  workspace?: boolean;
 }
 
 export const routes: Route[] = [
@@ -73,8 +75,8 @@ export const routes: Route[] = [
   { pattern: '/relations', component: RelationsPage, title: 'Link types', permissions: ['categories.manage'], nav: 'Link types', group: 'Catalog' },
   { pattern: '/actions', component: ActionsPage, title: 'Actions', permissions: ['categories.manage'], nav: 'Actions', group: 'Catalog' },
   { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates.manage'], nav: 'Templates', group: 'Labels' },
-  { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates.manage'] },
-  { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates.manage'] },
+  { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates.manage'], workspace: true },
+  { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates.manage'], workspace: true },
   { pattern: '/images', component: ImagesPage, title: 'Images', permissions: ['templates.manage'], nav: 'Images', group: 'Labels' },
   { pattern: '/printers', component: PrintersPage, title: 'Printers', permissions: ['settings.manage', 'labels.print'], nav: 'Printers', group: 'Labels' },
   { pattern: '/users', component: UsersPage, title: 'Users', permissions: ['users.manage'], nav: 'Users', group: 'Admin' },

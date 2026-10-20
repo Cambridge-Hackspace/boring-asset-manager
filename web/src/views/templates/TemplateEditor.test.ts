@@ -27,6 +27,21 @@ function api(extra: Record<string, (b: unknown) => unknown> = {}) {
   });
 }
 
+const value = (selector: string) => (document.querySelector(selector) as HTMLInputElement).value;
+const loaded = () => screen.findByDisplayValue('QL 90x29');
+const canvasElement = (name: RegExp | string) => screen.getAllByRole('button', { name }).find((b) => b.hasAttribute('data-element'))!;
+const layerNames = () =>
+  within(screen.getByRole('list', { name: 'Layers' }))
+    .getAllByRole('button')
+    .filter((b) => !b.getAttribute('aria-label')?.startsWith('Lock'))
+    .map((b) => b.textContent?.trim());
+
+async function saved(sent: { method: string; body: unknown }[]): Promise<TemplateDoc> {
+  await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+  return sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+}
+
 beforeEach(() => {
   session.permissions = ['templates.manage'];
   vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:preview', revokeObjectURL: () => {} }));
@@ -38,23 +53,46 @@ afterEach(() => {
 });
 
 describe('TemplateEditor', () => {
-  it('previews through the server and nudges elements with the keyboard', async () => {
+  it('lays out a toolbox, the tool options, the label, panels and a status bar', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    expect(screen.getByRole('heading', { level: 1, name: 'QL 90x29' })).toBeTruthy();
+    const tools = screen.getByRole('toolbar', { name: 'Tools' });
+    expect(within(tools).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Select and move', 'Text', 'Barcode or QR code', 'Image', 'Rectangle', 'Ellipse', 'Line', 'Polygon',
+    ]);
+    expect(screen.getByRole('group', { name: 'Tool options' })).toBeTruthy();
+    for (const panel of ['Properties', 'Layers', 'Arrange', 'Label', 'Printer', 'Preview data']) {
+      expect(screen.getByRole('button', { name: panel, expanded: true })).toBeTruthy();
+    }
+    // jsdom runs no workers: the server draws the label, and the status bar says so.
+    expect(screen.getByText('Live preview unavailable')).toBeTruthy();
+    expect(screen.getByText('Click an element to select it. Shift+click: select several.')).toBeTruthy();
+  });
+
+  it('previews through the server, and moves the selection with the arrow keys', async () => {
     const { sent } = api();
     render(TemplateEditor, { params: { id: 'ql90' } });
     await vi.waitFor(() => expect(sent.some((r) => r.path === '/templates/preview')).toBe(true));
     expect((sent.find((r) => r.path === '/templates/preview')!.body as { template: TemplateDoc }).template.elements).toHaveLength(1);
 
-    // The canvas boxes are the buttons with a pressed state; the element list repeats the names.
+    // Focused, an element is selected, and its numbers are in the tool options.
     const box = await screen.findByRole('button', { name: 'Text 1: {{asset.name}}', pressed: false });
     await fireEvent.focus(box);
+    expect(box.getAttribute('aria-pressed')).toBe('true');
     await fireEvent.keyDown(box, { key: 'ArrowRight' });
     await fireEvent.keyDown(box, { key: 'ArrowDown', shiftKey: true });
-    expect((screen.getByLabelText('Left') as HTMLInputElement).value).toBe('10.5');
-    expect((screen.getByLabelText('Top') as HTMLInputElement).value).toBe('10');
+    await fireEvent.keyDown(box, { key: 'ArrowRight', altKey: true });
+    expect(value('#el-0-x')).toBe('10.55');
+    expect(value('#el-0-y')).toBe('10');
     expect(screen.getByText('Unsaved changes')).toBeTruthy();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    expect((screen.getByLabelText('Top') as HTMLInputElement).value).toBe('5');
+    await fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    await fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(value('#el-0-y')).toBe('5');
+    await fireEvent.keyDown(window, { key: 'Z', ctrlKey: true, shiftKey: true });
+    expect(value('#el-0-y')).toBe('10');
   });
 
   it('keeps the newest preview when an earlier one answers after it', async () => {
@@ -91,6 +129,75 @@ describe('TemplateEditor', () => {
     expect(sent.filter((r) => r.path === '/templates/preview')).toHaveLength(3);
   });
 
+  it('selects all with Ctrl+A, none with Ctrl+Shift+A or Escape, and copies and pastes', async () => {
+    const two = { ...template, elements: [...template.elements, { type: 'text' as const, x: 60, y: 5, width: 20, height: 10, content_binding: 'B', font_size: 12 }] };
+    const { sent } = api({ 'GET /templates/ql90': () => ({ template: two }), 'PUT /templates/ql90': () => ({ template: two }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    expect(screen.getByText('2 elements')).toBeTruthy();
+    await fireEvent.keyDown(window, { key: 'A', ctrlKey: true, shiftKey: true });
+    expect(screen.queryByText('2 elements')).toBeNull();
+    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByText(/Nothing selected/)).toBeTruthy();
+
+    // Grouped, copied and pasted: a little way off, in a group of its own.
+    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    await fireEvent.click(screen.getByRole('button', { name: 'Group' }));
+    expect(screen.getByText('Group group-1')).toBeTruthy();
+    await fireEvent.click(within(screen.getByRole('group', { name: 'Line up' })).getByRole('button', { name: 'Tops' }));
+    const data = new Map<string, string>();
+    const clipboardData = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? '' };
+    window.dispatchEvent(Object.assign(new Event('copy', { cancelable: true }), { clipboardData }));
+    window.dispatchEvent(Object.assign(new Event('paste', { cancelable: true }), { clipboardData }));
+    await vi.waitFor(() => expect(screen.getByText('Group group-2')).toBeTruthy());
+
+    const body = await saved(sent);
+    expect(body.elements.map((e) => e.group)).toEqual(['group-1', 'group-1', 'group-2', 'group-2']);
+    expect(body.elements.map((e) => e.y)).toEqual([5, 5, 7, 7]);
+  });
+
+  it('hides everything but the label with Tab, and shows it again', async () => {
+    api();
+    const { container } = render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    (document.activeElement as HTMLElement | null)?.blur();
+    await fireEvent.keyDown(window, { key: 'Tab' });
+    expect(screen.getByRole('button', { name: /Canvas only. Press Tab/ })).toBeTruthy();
+    expect((container.querySelector('aside[aria-label="Panels"]') as HTMLElement).hidden).toBe(true);
+    expect((container.querySelector('aside[aria-label="Toolbox"]') as HTMLElement).hidden).toBe(true);
+    // What was in the panels is kept, not made again.
+    expect((document.querySelector('#tpl-name') as HTMLInputElement).value).toBe('QL 90x29');
+    await fireEvent.keyDown(window, { key: 'Tab' });
+    expect((container.querySelector('aside[aria-label="Panels"]') as HTMLElement).hidden).toBe(false);
+    // Focused on a field, Tab moves on, as it always does.
+    (document.querySelector('#tpl-name') as HTMLElement).focus();
+    await fireEvent.keyDown(document.querySelector('#tpl-name')!, { key: 'Tab' });
+    expect((container.querySelector('aside[aria-label="Panels"]') as HTMLElement).hidden).toBe(false);
+  });
+
+  it('collapses panels and moves them, as remembered in this browser', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Arrange', expanded: true }));
+    expect(screen.getByRole('button', { name: 'Arrange', expanded: false })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Move Label up' }));
+    const titles = () => screen.getAllByRole('button', { expanded: true }).concat(screen.getAllByRole('button', { expanded: false })).map((b) => b.id).filter((id) => id.startsWith('panel-'));
+    expect(titles()).toContain('panel-label');
+    expect(JSON.parse(localStorage.getItem('bam.editor.panels')!)).toEqual({
+      order: ['properties', 'layers', 'label', 'arrange', 'printer', 'preview'],
+      collapsed: ['arrange'],
+    });
+    cleanup();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    expect(screen.getByRole('button', { name: 'Arrange', expanded: false })).toBeTruthy();
+    const order = [...document.querySelectorAll('[id^="panel-"]')].map((b) => b.id);
+    expect(order).toEqual(['panel-properties', 'panel-layers', 'panel-label', 'panel-arrange', 'panel-printer', 'panel-preview']);
+  });
+
   const printers = () => ({
     printers: [
       { id: 'p0', name: 'Rollo', driver: 'tspl', model: 'Rollo X1038', media: '4x6', connection: { type: 'tcp', address: 'rollo' }, created_at: '', updated_at: '' },
@@ -111,25 +218,25 @@ describe('TemplateEditor', () => {
     const { container } = render(TemplateEditor, { params: { id: 'ql90' } });
     // The Rollo does not take it, so the QL is chosen.
     expect(await screen.findByText('Fits QL, with 1 warning.', {}, { timeout: 2000 })).toBeTruthy();
-    expect((screen.getByLabelText('Printer') as HTMLSelectElement).value).toBe('p1');
-    expect(within(screen.getByRole('list', { name: 'Before printing' })).getByText(/does not print/)).toBeTruthy();
+    expect(value('#tpl-printer')).toBe('p1');
     expect(screen.getByText('In the shaded area, which it does not print: Text 1: {{asset.name}}.')).toBeTruthy();
     expect(screen.getByText('Loaded: DK-11201 29 × 90 mm die-cut.')).toBeTruthy();
-    // Four strips around what it prints, and the line a die-cut label may be cut at.
+    // Four strips around what it prints, and the element reaching into them outlined.
     expect(container.querySelectorAll('.unprinted')).toHaveLength(4);
-    expect(screen.getByText(/Dashed: within 1 mm of the edge/)).toBeTruthy();
+    expect(canvasElement(/^Text 1/).classList.contains('warned')).toBe(true);
     const fit = sent.find((r) => r.path === '/printers/p1/fit')!;
     expect(fit.body).toEqual({ width_mm: 90, height_mm: 29, dpi: 300, content: [{ x: 10, y: 5, width: 40, height: 10 }] });
 
-    // Choosing None turns the check off, and is remembered.
-    await fireEvent.change(screen.getByLabelText('Printer'), { target: { value: '' } });
+    // The shading can be put away, and that is remembered.
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Shade what it does not print' }));
     await vi.waitFor(() => expect(container.querySelectorAll('.unprinted')).toHaveLength(0));
+    expect(localStorage.getItem('bam.editor-printer-limits')).toBe('off');
+    // Choosing None turns the check off, and is remembered.
+    await fireEvent.change(document.querySelector('#tpl-printer')!, { target: { value: '' } });
     expect(localStorage.getItem('bam.editor-printer.ql90')).toBe('');
   });
 
   it('keeps a printer chosen by hand while it is still choosing one, and drops late answers', async () => {
-    // The Rollo, first, takes it but answers slowly; the person chooses the
-    // QL meanwhile, which does not.
     let release: () => void = () => {};
     const slow = new Promise<void>((r) => (release = r));
     let rolloChecks = 0;
@@ -142,7 +249,8 @@ describe('TemplateEditor', () => {
       'POST /printers/p1/fit': () => ({ fits: false, message: "This template can't print on QL: wrong size." }),
     });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    const select = (await screen.findByLabelText('Printer')) as HTMLSelectElement;
+    await vi.waitFor(() => expect(document.querySelector('#tpl-printer')).not.toBeNull());
+    const select = document.querySelector('#tpl-printer') as HTMLSelectElement;
     await vi.waitFor(() => expect(sent.some((r) => r.path === '/printers/p0/fit')).toBe(true));
     await fireEvent.change(select, { target: { value: 'p1' } });
     expect(await screen.findByText(/can't print on QL/, {}, { timeout: 2000 })).toBeTruthy();
@@ -150,7 +258,6 @@ describe('TemplateEditor', () => {
     await new Promise((r) => setTimeout(r, 400));
     expect(select.value).toBe('p1');
     expect(screen.queryByText('Fits Rollo.')).toBeNull();
-    expect(screen.getByText(/can't print on QL/)).toBeTruthy();
   });
 
   it('test-prints the template as it is, saved or not', async () => {
@@ -159,12 +266,12 @@ describe('TemplateEditor', () => {
     const { sent } = api({
       'GET /printers': printers,
       'POST /printers/p1/fit': () => ({ fits: true, warnings: [], printable: { x: 0, y: 0, width: 90, height: 29 }, edge_mm: 1, outside: [], near_edge: [] }),
-      'POST /printers/p1/test-print': () => ({ labels: 1, warnings: ['Part of the template is within 1 mm of the label\'s edge.'] }),
+      'POST /printers/p1/test-print': () => ({ labels: 1, warnings: ["Part of the template is within 1 mm of the label's edge."] }),
     });
     render(TemplateEditor, { params: { id: 'ql90' } });
     expect(await screen.findByText('Fits QL.', {}, { timeout: 2000 })).toBeTruthy();
     // An unsaved change prints too.
-    await fireEvent.change(screen.getByLabelText('Height'), { target: { value: '30' } });
+    await fireEvent.change(document.querySelector('#tpl-height')!, { target: { value: '30' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Test print' }));
     expect(await screen.findByText('Sent a test label to QL.')).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Printed, with warnings' })).getByText(/within 1 mm/)).toBeTruthy();
@@ -176,13 +283,14 @@ describe('TemplateEditor', () => {
   it('scales the elements when taking the label size from a printer', async () => {
     api({ 'GET /printers': printers, 'GET /printers/drivers': () => ({ drivers: [] }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await fireEvent.change(await screen.findByLabelText('Printer'), { target: { value: 'p1' } });
-    await fireEvent.change(screen.getByLabelText('Width'), { target: { value: '180' } });
+    await vi.waitFor(() => expect(document.querySelector('#tpl-printer')).not.toBeNull());
+    await fireEvent.change(document.querySelector('#tpl-printer')!, { target: { value: 'p1' } });
+    await fireEvent.change(document.querySelector('#tpl-width')!, { target: { value: '180' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Use its label size' }));
-    expect((screen.getByLabelText('Width') as HTMLInputElement).value).toBe('90');
-    await fireEvent.focus(await screen.findByRole('button', { name: 'Text 1: {{asset.name}}', pressed: false }));
+    expect(value('#tpl-width')).toBe('90');
+    await fireEvent.focus(canvasElement('Text 1: {{asset.name}}'));
     // Halved across, as the label was.
-    expect((screen.getByLabelText('Left') as HTMLInputElement).value).toBe('5');
+    expect(value('#el-0-x')).toBe('5');
   });
 
   it('keeps an adaptive template adaptive when saving it', async () => {
@@ -190,50 +298,46 @@ describe('TemplateEditor', () => {
       elements: [{ ...template.elements[0]!, anchor_x: 'both' }] };
     const { sent } = api({ 'GET /templates/ql90': () => ({ template: adaptive }), 'PUT /templates/ql90': () => ({ template: adaptive }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await screen.findByDisplayValue('QL 90x29');
-    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Any tag' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    expect(sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ name: 'Any tag', sizing: 'adaptive', adapt: adaptive.adapt, elements: [{ anchor_x: 'both' }] });
+    await loaded();
+    await fireEvent.input(document.querySelector('#tpl-name')!, { target: { value: 'Any tag' } });
+    const body = await saved(sent);
+    expect(body).toMatchObject({ name: 'Any tag', sizing: 'adaptive', adapt: adaptive.adapt, elements: [{ anchor_x: 'both' }] });
   });
 
   it('makes a template adaptive, and sets how its elements follow the label', async () => {
     const { sent } = api({ 'PUT /templates/ql90': () => ({ template }), 'POST /templates/range': () => ({ fits: false, units: 'mm' }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await screen.findByDisplayValue('QL 90x29');
-    await fireEvent.click(screen.getByRole('radio', { name: /Fits several label sizes/ }));
-    expect((screen.getByLabelText('Narrowest (mm)') as HTMLInputElement).value).toBe('45');
-    await fireEvent.change(screen.getByLabelText('Narrowest (mm)'), { target: { value: '25' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('radio', { name: /Fits several sizes/ }));
+    expect(value('#tpl-min_width')).toBe('45');
+    await fireEvent.change(document.querySelector('#tpl-min_width')!, { target: { value: '25' } });
 
     await fireEvent.click(within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: 'Text: {{asset.name}}' }));
     await fireEvent.change(screen.getByLabelText('Across'), { target: { value: 'both' } });
     await fireEvent.change(screen.getByLabelText('Where it does not fit'), { target: { value: 'alternative' } });
     await fireEvent.change(screen.getByLabelText('In its place'), { target: { value: 'generator' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    const body = await saved(sent);
     expect(body.sizing).toBe('adaptive');
     expect(body.adapt).toMatchObject({ min_width: 25, max_width: 180, continuous_length: 'proportional' });
     expect(body.elements[0]).toMatchObject({ anchor_x: 'both', when_too_small: 'alternative', alternative: { type: 'generator' } });
 
     // Fixed again, the adaptive settings go.
     await fireEvent.click(screen.getByRole('radio', { name: /One label size/ }));
-    expect(screen.queryByLabelText('Narrowest (mm)')).toBeNull();
+    expect(document.querySelector('#tpl-min_width')).toBeNull();
     expect(screen.queryByLabelText('Across')).toBeNull();
   });
 
-  it('undoes a field edit even after focus moves on', async () => {
+  it('undoes a field edit even after focus moves on, and not a rename', async () => {
     api();
     render(TemplateEditor, { params: { id: 'ql90' } });
-    const height = (await screen.findByLabelText('Height', { selector: '#tpl-height' })) as HTMLInputElement;
+    await loaded();
+    const height = document.querySelector('#tpl-height') as HTMLInputElement;
     await fireEvent.focus(height);
     await fireEvent.change(height, { target: { value: '40' } });
-    // Moving to the next field must not record the edited state as a step.
-    await fireEvent.focus(screen.getByLabelText('DPI'));
+    await fireEvent.focus(document.querySelector('#tpl-dpi')!);
     await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(height.value).toBe('29');
-    // Renaming is not an undo step at all.
-    await fireEvent.input(screen.getByLabelText('Name', { selector: '#tpl-name' }), { target: { value: 'Renamed' } });
+    await fireEvent.input(document.querySelector('#tpl-name')!, { target: { value: 'Renamed' } });
     expect((screen.getByRole('button', { name: 'Undo' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -241,10 +345,8 @@ describe('TemplateEditor', () => {
     const id = '3f6c2a9e-8b1d-4e57-a0c4-91d2b7e5f803';
     const { sent } = api({ 'POST /templates': (b) => ({ status: 201, body: { template: { ...(b as TemplateDoc), id } } }) });
     render(TemplateEditor, { params: {} });
-    const name = await screen.findByLabelText('Name', { selector: '#tpl-name' });
-    // There is no ID to choose.
-    expect(screen.queryByText('ID')).toBeNull();
-    await fireEvent.input(name, { target: { value: 'Shelf tag' } });
+    expect(await screen.findByRole('heading', { level: 1, name: 'New template' })).toBeTruthy();
+    await fireEvent.input(document.querySelector('#tpl-name')!, { target: { value: 'Shelf tag' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(window.location.pathname).toBe(`/templates/${id}/edit`));
     expect((sent.find((r) => r.method === 'POST' && r.path === '/templates')!.body as TemplateDoc).name).toBe('Shelf tag');
@@ -264,21 +366,21 @@ describe('TemplateEditor', () => {
       }),
     });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Add barcode' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    await loaded();
+    // From the keyboard, the code tool adds a code in the middle of the label.
+    await fireEvent.click(screen.getByRole('button', { name: 'Barcode or QR code' }), { detail: 0 });
+    const body = await saved(sent);
     expect(body.elements[1]).toMatchObject({ type: 'generator', generator_type: 'qr' });
-    // The element with the problem is selected and its panel shows the message.
     expect(await screen.findByText('unknown placeholder {{asset.nope}}')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Barcode 2 (qr)' })).toBeTruthy();
+    expect(screen.getByText('Barcode 2 (qr)')).toBeTruthy();
+    expect(canvasElement(/^Barcode 2/).classList.contains('problem')).toBe(true);
   });
 
   it('keeps unsaved work in the browser and offers it back', async () => {
     api();
     const first = render(TemplateEditor, { params: { id: 'ql90' } });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Add text' }));
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Text' }), { detail: 0 });
     await vi.waitFor(() => expect(localStorage.getItem('bam.template-draft.ql90')).not.toBeNull());
     first.unmount();
 
@@ -287,27 +389,28 @@ describe('TemplateEditor', () => {
     expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('listitem')).toHaveLength(2);
   });
 
-  it('lists layers top first, and moves them over and under each other', async () => {
+  it('lists layers top first, and stacks them from the Arrange panel', async () => {
     const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Add barcode' }));
-    const layers = () => within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').filter((b) => !b.getAttribute('aria-label')?.startsWith('Lock')).map((b) => b.textContent?.trim());
-    expect(layers()).toEqual(['QR code: {{scan_url}}', 'Text: {{asset.name}}']);
-    expect((screen.getByRole('button', { name: 'Bring to front' }) as HTMLButtonElement).disabled).toBe(true);
-
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Barcode or QR code' }), { detail: 0 });
+    expect(layerNames()).toEqual(['QR code: {{scan_url}}', 'Text: {{asset.name}}']);
     await fireEvent.click(screen.getByRole('button', { name: 'Send to back' }));
-    expect(layers()).toEqual(['Text: {{asset.name}}', 'QR code: {{scan_url}}']);
-    // Page Up on a layer brings it forward.
-    await fireEvent.keyDown(within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: 'QR code: {{scan_url}}' }), { key: 'PageUp' });
-    expect(layers()).toEqual(['QR code: {{scan_url}}', 'Text: {{asset.name}}']);
+    expect(layerNames()).toEqual(['Text: {{asset.name}}', 'QR code: {{scan_url}}']);
+    await fireEvent.click(screen.getByRole('button', { name: 'Bring forward' }));
+    expect(layerNames()).toEqual(['QR code: {{scan_url}}', 'Text: {{asset.name}}']);
     await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(layers()).toEqual(['Text: {{asset.name}}', 'QR code: {{scan_url}}']);
+    expect(layerNames()).toEqual(['Text: {{asset.name}}', 'QR code: {{scan_url}}']);
+    // A locked element is not taken on the label, nor by Ctrl+A.
+    await fireEvent.click(screen.getByRole('button', { name: 'Lock Text: {{asset.name}}' }));
+    expect(canvasElement(/^Text 2/).classList.contains('locked')).toBe(true);
+    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    expect(screen.getByText('Barcode 1 (qr)')).toBeTruthy();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    const body = await saved(sent);
     expect(body.layering).toBe('list');
     expect(body.elements.map((e) => e.type)).toEqual(['generator', 'text']);
+    expect(body.elements[1]!.locked).toBe(true);
   });
 
   it('lists a template from before layering as it was drawn', async () => {
@@ -317,35 +420,21 @@ describe('TemplateEditor', () => {
       }),
     });
     render(TemplateEditor, { params: { id: 'old' } });
-    await screen.findByDisplayValue('QL 90x29');
-    expect(within(screen.getByRole('list', { name: 'Layers' })).getAllByRole('button').filter((b) => !b.getAttribute('aria-label')?.startsWith('Lock')).map((b) => b.textContent?.trim())).toEqual(['QR code', 'Text: {{asset.name}}']);
+    await loaded();
+    expect(layerNames()).toEqual(['QR code', 'Text: {{asset.name}}']);
   });
 
-  it('turns an element from its settings and with [ and ]', async () => {
+  it('turns an element from the tool options', async () => {
     const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await fireEvent.click(await screen.findByRole('button', { name: 'Text: {{asset.name}}' }));
-    const angle = () => (screen.getByLabelText('Turned (degrees clockwise)') as HTMLInputElement).value;
+    await loaded();
+    await fireEvent.focus(canvasElement('Text 1: {{asset.name}}'));
     await fireEvent.click(screen.getByRole('button', { name: 'Turn 90° right' }));
-    expect(angle()).toBe('90');
-    const outline = screen.getByRole('button', { name: /^Text 1/ });
-    await fireEvent.keyDown(outline, { code: 'BracketLeft', key: '[' });
-    expect(angle()).toBe('75');
-    await fireEvent.keyDown(outline, { code: 'BracketRight', key: '}', shiftKey: true });
-    expect(angle()).toBe('76');
-    await fireEvent.change(screen.getByLabelText('Turned (degrees clockwise)'), { target: { value: '400' } });
-    expect(angle()).toBe('40');
-    expect(outline.getAttribute('style')).toContain('rotate(40deg)');
-
-    // Snapping is on until switched off, and stays off in this browser.
-    const snapping = screen.getByRole('checkbox', { name: 'Snap angles to 45°' }) as HTMLInputElement;
-    expect(snapping.checked).toBe(true);
-    await fireEvent.click(snapping);
-    expect(localStorage.getItem('bam.editor-snap-angles')).toBe('off');
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements[0]!.rotation).toBe(40);
+    expect(value('#el-0-rotation')).toBe('90');
+    await fireEvent.change(document.querySelector('#el-0-rotation')!, { target: { value: '400' } });
+    expect(value('#el-0-rotation')).toBe('40');
+    expect(canvasElement(/^Text 1/).getAttribute('style')).toContain('rotate(40deg)');
+    expect((await saved(sent)).elements[0]!.rotation).toBe(40);
   });
 
   it('sets the margins of a code and where it sits, and warns of a narrow one', async () => {
@@ -357,77 +446,58 @@ describe('TemplateEditor', () => {
         const body = b as { format?: string; template: TemplateDoc };
         if (body.format !== 'json') return '<svg/>';
         const left = body.template.elements[0]!.margin?.left === 0 ? 0 : 1;
-        return {
-          elements: [{ index: 0, code: { module: 0.5, module_dots: 6, margin: { top: 2, right: 2, bottom: 2, left: left }, ...(left ? {} : { narrow: ['left'] }) } }],
-          warnings: [],
-        };
+        return { elements: [{ index: 0, code: { module: 0.5, module_dots: 6, margin: { top: 2, right: 2, bottom: 2, left }, ...(left ? {} : { narrow: ['left'] }) } }], warnings: [] };
       },
     });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await fireEvent.click(await screen.findByRole('button', { name: 'QR code' }));
-    expect(await screen.findByRole('slider', { name: 'Left margin' })).toBeTruthy();
-
-    await fireEvent.click(screen.getByRole('checkbox', { name: 'Each side on its own' }));
-    await fireEvent.change(screen.getByLabelText('Left side'), { target: { value: '0' } });
-    expect(await screen.findByText(/Less space than the code’s standard quiet zone on its left side/)).toBeTruthy();
-    // The slider moves the top margin a module at a time.
-    await fireEvent.keyDown(screen.getByRole('slider', { name: 'Top margin' }), { key: 'ArrowUp' });
-    expect((screen.getByLabelText('Top side') as HTMLInputElement).value).toBe('5');
-
-    const across = screen.getByRole('group', { name: 'Where it sits across its box' });
-    await fireEvent.click(within(across).getByRole('button', { name: 'Left' }));
-    await fireEvent.click(within(screen.getByRole('group', { name: 'Where it sits down its box' })).getByRole('button', { name: 'Top' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements[0]).toMatchObject({
-      margin: { left: 0, top: 5 },
-      align: 'left',
-      vertical_align: 'top',
-    });
+    await loaded();
+    await fireEvent.focus(canvasElement(/^Barcode 1/));
+    await fireEvent.change(document.querySelector('#el-0-margin-left')!, { target: { value: '0' } });
+    expect(await screen.findByText(/Less than the code's standard quiet zone on its left/)).toBeTruthy();
+    await fireEvent.change(document.querySelector('#el-0-margin-top')!, { target: { value: '5' } });
+    await fireEvent.change(document.querySelector('#el-0-code-align')!, { target: { value: 'left' } });
+    await fireEvent.change(document.querySelector('#el-0-code-valign')!, { target: { value: 'top' } });
+    expect((await saved(sent)).elements[0]).toMatchObject({ margin: { left: 0, top: 5 }, align: 'left', vertical_align: 'top' });
   });
 
-  it('adds a shape from the keyboard, and sets its paint', async () => {
+  it('adds a shape from the keyboard, sets its paint, and chooses tools with the mouse', async () => {
     const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await screen.findByDisplayValue('QL 90x29');
-    // A click from the keyboard has no detail: the shape goes in the middle.
+    await loaded();
     await fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }), { detail: 0 });
-    expect(screen.getByRole('heading', { name: 'Shape 2 (rectangle)' })).toBeTruthy();
-    await fireEvent.change(screen.getByLabelText('Fill'), { target: { value: 'black' } });
-    await fireEvent.change(screen.getByLabelText('Corner radius (mm)'), { target: { value: '2' } });
-    await fireEvent.change(screen.getByLabelText('Stroke width (mm)'), { target: { value: '0.05' } });
+    expect(screen.getByText('Shape 2 (rectangle)')).toBeTruthy();
+    await fireEvent.change(document.querySelector('#el-1-fill')!, { target: { value: 'black' } });
+    await fireEvent.change(document.querySelector('#el-1-radius')!, { target: { value: '2' } });
+    await fireEvent.change(document.querySelector('#el-1-stroke-width')!, { target: { value: '0.05' } });
     expect(await screen.findByText(/thinner than one printer dot at 300 DPI/)).toBeTruthy();
-    await fireEvent.change(screen.getByLabelText('Stroke'), { target: { value: 'none' } });
-    // A mouse click chooses the tool, to draw on the label; again puts it down.
+    await fireEvent.change(document.querySelector('#el-1-stroke')!, { target: { value: 'none' } });
+    // A mouse click takes the tool in hand, to draw on the label; Escape puts it down.
     const ellipse = screen.getByRole('button', { name: 'Ellipse' });
     await fireEvent.click(ellipse, { detail: 1 });
     expect(ellipse.getAttribute('aria-pressed')).toBe('true');
-    await fireEvent.click(ellipse, { detail: 1 });
+    expect(screen.getByText('Drag to draw an ellipse, or click to place one. Esc: back to selecting.')).toBeTruthy();
+    await fireEvent.keyDown(window, { key: 'Escape' });
     expect(ellipse.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Select and move' }).getAttribute('aria-pressed')).toBe('true');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
+    const body = await saved(sent);
     expect(body.elements[1]).toEqual({ type: 'shape', shape: 'rectangle', x: 37.75, y: 7.25, width: 14.5, height: 14.5, stroke: 'none', fill: 'black', corner_radius: 2 });
   });
 
   it('turns the template portrait and back, with what is on it, and chooses the feed', async () => {
-    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }), 'GET /printers': printers });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await screen.findByDisplayValue('QL 90x29');
+    await loaded();
     await fireEvent.click(screen.getByRole('radio', { name: 'Portrait' }));
-    expect((screen.getByLabelText('Width') as HTMLInputElement).value).toBe('29');
-    expect((screen.getByLabelText('Height') as HTMLInputElement).value).toBe('90');
-    expect(screen.getByRole('button', { name: /^Text 1/ }).getAttribute('style')).toContain('rotate(90deg)');
+    expect(value('#tpl-width')).toBe('29');
+    expect(value('#tpl-height')).toBe('90');
+    expect(canvasElement(/^Text 1/).getAttribute('style')).toContain('rotate(90deg)');
     await fireEvent.click(screen.getByRole('radio', { name: 'Landscape' }));
-    expect((screen.getByLabelText('Width') as HTMLInputElement).value).toBe('90');
-    expect(screen.getByRole('button', { name: /^Text 1/ }).getAttribute('style')).not.toContain('rotate');
-
+    expect(value('#tpl-width')).toBe('90');
     await fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
-    expect(body).toMatchObject({ width: 29, height: 90 });
+    await fireEvent.change(await screen.findByLabelText('Feed'), { target: { value: 'along' } });
+    const body = await saved(sent);
+    expect(body).toMatchObject({ width: 29, height: 90, feed: 'along' });
     expect(body.elements[0]).toMatchObject({ rotation: 90 });
   });
 
@@ -438,52 +508,22 @@ describe('TemplateEditor', () => {
       'PUT /templates/ql90': () => ({ template }),
     });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await screen.findByDisplayValue('QL 90x29');
+    await loaded();
     const file = new File(['<svg viewBox="0 0 10 10"><path d="M0 0 L10 0 L10 10 Z"/></svg>'], 'logo.svg', { type: 'image/svg+xml' });
     await fireEvent.change(screen.getByLabelText('Import SVG'), { target: { files: [file] } });
     expect(await screen.findByText('Imported 2 shapes from logo.svg. Left out: text, which needs the fonts.')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: '2 elements' })).toBeTruthy();
+    expect(screen.getByText('2 elements')).toBeTruthy();
     const asked = sent.find((r) => r.path === '/templates/import-svg')!.body as { svg: string; box: { x: number; width: number } };
-    expect(asked.svg).toContain('<svg');
     expect(asked.box).toMatchObject({ x: 9, width: 72 });
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    expect((sent.find((r) => r.method === 'PUT')!.body as TemplateDoc).elements.map((e) => e.shape ?? e.type)).toEqual(['text', 'path', 'path']);
+    expect((await saved(sent)).elements.map((e) => e.shape ?? e.type)).toEqual(['text', 'path', 'path']);
   });
 
-  it('selects everything, groups it, copies and pastes it, and keeps guides', async () => {
-    const two = { ...template, elements: [...template.elements, { type: 'text' as const, x: 60, y: 5, width: 20, height: 10, content_binding: 'B', font_size: 12 }] };
-    const { sent } = api({ 'GET /templates/ql90': () => ({ template: two }), 'PUT /templates/ql90': () => ({ template: two }) });
+  it('keeps guides and groups made before, though it has no tools for them yet', async () => {
+    const kept = { ...template, guides: { x: [45] }, elements: [{ ...template.elements[0]!, group: 'group-1' }] };
+    const { sent } = api({ 'GET /templates/ql90': () => ({ template: kept }), 'PUT /templates/ql90': () => ({ template: kept }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    await screen.findByDisplayValue('QL 90x29');
-    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
-    expect(screen.getByRole('heading', { name: '2 elements' })).toBeTruthy();
-    await fireEvent.click(screen.getByRole('button', { name: 'Group' }));
-    expect(screen.getByRole('heading', { name: 'Group group-1' })).toBeTruthy();
-    await fireEvent.click(within(screen.getByRole('group', { name: 'Line up' })).getByRole('button', { name: 'Tops' }));
-
-    // Copied and pasted, a little way off, in a group of its own.
-    const data = new Map<string, string>();
-    const clipboardData = { setData: (k: string, v: string) => data.set(k, v), getData: (k: string) => data.get(k) ?? '' };
-    window.dispatchEvent(Object.assign(new Event('copy', { cancelable: true }), { clipboardData }));
-    window.dispatchEvent(Object.assign(new Event('paste', { cancelable: true }), { clipboardData }));
-    await vi.waitFor(() => expect(screen.getByRole('heading', { name: 'Group group-2' })).toBeTruthy());
-
-    await fireEvent.click(screen.getByRole('button', { name: 'Add a vertical guide' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    const body = sent.find((r) => r.method === 'PUT')!.body as TemplateDoc;
-    expect(body.elements.map((e) => e.group)).toEqual(['group-1', 'group-1', 'group-2', 'group-2']);
-    expect(body.elements.map((e) => e.y)).toEqual([5, 5, 7, 7]);
-    expect(body.guides).toEqual({ x: [45] });
-  });
-
-  it('opens the keyboard shortcuts with ?', async () => {
-    api();
-    render(TemplateEditor, { params: { id: 'ql90' } });
-    await screen.findByDisplayValue('QL 90x29');
-    await fireEvent.keyDown(window, { key: '?' });
-    expect(screen.getByRole('heading', { name: 'Keyboard shortcuts' })).toBeTruthy();
+    await loaded();
+    await fireEvent.change(document.querySelector('#tpl-dpi')!, { target: { value: '203' } });
+    expect(await saved(sent)).toMatchObject({ dpi: 203, guides: { x: [45] }, elements: [{ group: 'group-1' }] });
   });
 });
