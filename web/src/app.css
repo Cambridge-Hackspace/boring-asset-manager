@@ -54,6 +54,16 @@
 @utility error-text {
   @apply text-sm text-red-700 dark:text-red-400;
 }
+/* The template editor's dense controls, as a desktop editor's. */
+@utility input-sm {
+  @apply block w-full min-w-0 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-950;
+}
+@utility btn-sm {
+  @apply inline-flex items-center justify-center gap-1 rounded border border-zinc-300 bg-white px-2 py-0.5 text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:bg-zinc-800 aria-pressed:text-white dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-200 dark:aria-pressed:text-zinc-900;
+}
+@utility icon-btn {
+  @apply inline-grid h-7 w-7 place-items-center rounded text-zinc-700 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-zinc-800 aria-pressed:text-white dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-200 dark:aria-pressed:text-zinc-900;
+}
 
 /* Tables that become cards on a phone (lib/stack.ts): each row a card,
    each cell under its column's heading. Unlayered, so it wins over the

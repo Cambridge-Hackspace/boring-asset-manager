@@ -2,56 +2,51 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { ApiError, request, requestBlob, type ProblemDetail } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { History } from '../../lib/history';
   import { startLiveRenderer, type Frame, type LiveRenderer, type LiveState, type PreviewData } from '../../lib/live/client';
-  import type { AssetWithDetails, Field, GeneratorInfo } from '../../lib/models';
+  import type { Field, GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import {
-    blankTemplate,
     elementIndex,
+    gridStep,
+    snap,
     inListOrder,
-    moveLayer,
+    moveElements,
     newElement,
     newShape,
     placeholders,
-    restack,
-    rotateElements,
-    arrange,
-    clip,
-    flipElements,
-    newGroupName,
-    unclip,
-    withGroups,
-    gridStep,
-    type Alignment,
-    type Guides,
     type CodeLayout,
-    type ElementType,
-    type Restack,
-    type ShapeKind,
     type PrintArea,
     type TemplateDoc,
     type TemplateElement,
   } from '../../lib/template';
-  import ErrorMessage from '../../components/ErrorMessage.svelte';
-  import LabelActions from '../../components/LabelActions.svelte';
-  import CanvasPanel from './CanvasPanel.svelte';
-  import EditorCanvas from './EditorCanvas.svelte';
-  import ElementPanel from './ElementPanel.svelte';
-  import AdaptivePreview from './AdaptivePreview.svelte';
-  import LayersPanel from './LayersPanel.svelte';
-  import StackButtons from './StackButtons.svelte';
-  import ShortcutsDialog from './ShortcutsDialog.svelte';
+  import ArrangePanel from './editor/ArrangePanel.svelte';
+  import Canvas from './editor/Canvas.svelte';
+  import Dock from './editor/Dock.svelte';
+  import { Editor, provideEditor, type Tool } from './editor/editor.svelte';
+  import Icon from './editor/Icon.svelte';
+  import LabelPanel from './editor/LabelPanel.svelte';
+  import LayersPanel from './editor/LayersPanel.svelte';
+  import OptionsBar from './editor/OptionsBar.svelte';
+  import PreviewPanel from './editor/PreviewPanel.svelte';
+  import PrinterPanel from './editor/PrinterPanel.svelte';
+  import PropertiesPanel from './editor/PropertiesPanel.svelte';
+  import StatusBar from './editor/StatusBar.svelte';
+  import Toolbox from './editor/Toolbox.svelte';
 
+  // The template editor (README §4.1), laid out as Krita is: the toolbox on
+  // the left, the tool's options across the top, the label in the middle,
+  // panels down the right, and the status bar along the bottom. Tab hides
+  // everything but the label.
   // /templates/new and /templates/:id/edit
   let { params }: { params: Record<string, string> } = $props();
   const routeId = untrack(() => params.id ?? '');
   const isNew = !routeId;
   const draftKey = `bam.template-draft.${routeId || 'new'}`;
 
-  let doc = $state<TemplateDoc>(blankTemplate());
+  const editor = provideEditor(new Editor());
+  const doc = $derived(editor.doc);
+
   let saved = $state(''); // the last saved document, as JSON
-  let selected = $state<number[]>([]);
   let generators = $state<GeneratorInfo[]>([]);
   let fields = $state<Field[]>([]);
   let loading = $state(true);
@@ -60,34 +55,25 @@
   let problems = $state<ProblemDetail[]>([]);
   let saving = $state(false);
   let draft = $state<{ doc: TemplateDoc; at: string } | null>(null);
+  let notice = $state('');
 
-  // The server preview.
+  // The server's preview, while the live renderer cannot draw.
   let previewURL = $state('');
   let previewStale = $state(false);
   let previewProblems = $state<ProblemDetail[]>([]);
-  // How the server laid out each code, by element index, for its margins.
+  // How each code was laid out, by element index, for its margins.
   let codeLayouts = $state<Record<number, CodeLayout>>({});
-
-  // Previewing against an asset.
-  let assetQuery = $state('');
-  let assetResults = $state<AssetWithDetails[]>([]);
   let previewAsset = $state<{ id: string; name: string } | null>(null);
-
-  // Where the printer chosen in the label settings prints.
+  // Where the printer chosen prints.
   let printArea = $state<PrintArea | null>(null);
-
-  const history = new History<TemplateDoc>();
-  let canUndo = $state(false);
-  let canRedo = $state(false);
 
   const dirty = $derived(JSON.stringify(doc) !== saved);
   const placeholderList = $derived(placeholders(fields.map((f) => f.key), generators.map((g) => g.type)));
   const allProblems = $derived([...problems, ...previewProblems]);
   const problemElements = $derived(new Set(allProblems.map((p) => elementIndex(p.path)).filter((i): i is number => i !== null)));
-  const canvasProblems = $derived(
-    Object.fromEntries(allProblems.filter((p) => elementIndex(p.path) === null && p.path).map((p) => [p.path, p.message])),
-  );
+  const labelProblems = $derived(Object.fromEntries(allProblems.filter((p) => elementIndex(p.path) === null && p.path).map((p) => [p.path, p.message])));
   const generalProblems = $derived(allProblems.filter((p) => !p.path));
+  const problemsFor = (i: number) => allProblems.filter((p) => elementIndex(p.path) === i).map((p) => p.message);
 
   onMount(async () => {
     try {
@@ -95,19 +81,22 @@
         request<{ generators: GeneratorInfo[] }>('GET', '/generators').then((r) => r.generators ?? []),
         request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? []),
       ]);
+      if (generators.length && !generators.some((g) => g.type === editor.codeType)) editor.codeType = generators[0]!.type;
       if (!isNew) {
         const t = (await request<{ template: TemplateDoc }>('GET', `/templates/${encodeURIComponent(routeId)}`)).template;
-        doc = inListOrder({
-          id: t.id, name: t.name, units: t.units, width: t.width, height: t.height, dpi: t.dpi,
-          ...(t.sizing === 'adaptive' ? { sizing: t.sizing, adapt: t.adapt } : {}),
-          ...(t.layering ? { layering: t.layering } : {}),
-          ...(t.feed ? { feed: t.feed } : {}),
-          ...(t.guides ? { guides: t.guides } : {}),
-          ...(t.turnable ? { turnable: true } : {}),
-          elements: t.elements ?? [],
-        });
+        editor.load(
+          inListOrder({
+            id: t.id, name: t.name, units: t.units, width: t.width, height: t.height, dpi: t.dpi,
+            ...(t.sizing === 'adaptive' ? { sizing: t.sizing, adapt: t.adapt } : {}),
+            ...(t.layering ? { layering: t.layering } : {}),
+            ...(t.feed ? { feed: t.feed } : {}),
+            ...(t.guides ? { guides: t.guides } : {}),
+            ...(t.turnable ? { turnable: true } : {}),
+            elements: t.elements ?? [],
+          }),
+        );
       }
-      saved = JSON.stringify(doc);
+      saved = JSON.stringify(editor.doc);
       draft = readDraft();
     } catch (err) {
       error = messageOf(err);
@@ -150,11 +139,9 @@
 
   function restoreDraft() {
     if (!draft) return;
-    history.record($state.snapshot(doc));
     // Kept before layering, it is listed as it was drawn.
-    doc = inListOrder(draft.doc);
+    editor.apply(inListOrder(draft.doc));
     draft = null;
-    syncHistory();
   }
 
   function discardDraft() {
@@ -179,6 +166,7 @@
     liveState = live.state;
   });
   onDestroy(() => live?.close());
+  const drawingLive = $derived(liveState === 'ready' && liveData !== null);
 
   // What it draws with: the sample data, or the asset previewed.
   $effect(() => {
@@ -211,12 +199,11 @@
 
   // The server renders the preview while the live renderer cannot; ask
   // again shortly after each change. A later change wins: an answer for an
-  // earlier one, arriving after it, is dropped rather than shown over the
-  // newer preview.
+  // earlier one, arriving after it, is dropped.
   let previewRound = 0;
   $effect(() => {
     const body = { template: JSON.parse(JSON.stringify(doc)) as TemplateDoc, asset_id: previewAsset?.id };
-    if (loading || (liveState === 'ready' && liveData)) return;
+    if (loading || drawingLive) return;
     if (!body.template.id) body.template.id = 'preview';
     const mine = ++previewRound;
     previewStale = true;
@@ -229,7 +216,7 @@
             ? request<{ elements: { index: number; code?: CodeLayout }[] }>('POST', '/templates/preview', { ...body, format: 'json' })
             : Promise.resolve({ elements: [] }),
         ]);
-        if (mine !== previewRound || (liveState === 'ready' && liveData)) return;
+        if (mine !== previewRound || drawingLive) return;
         const url = URL.createObjectURL(blob);
         if (previewURL) URL.revokeObjectURL(previewURL);
         previewURL = url;
@@ -237,8 +224,7 @@
         codeLayouts = Object.fromEntries((described.elements ?? []).flatMap((d) => (d.code ? [[d.index, d.code]] : [])));
       } catch (err) {
         if (mine !== previewRound) return;
-        previewProblems =
-          err instanceof ApiError && err.details.length ? err.details : [{ path: '', message: messageOf(err) }];
+        previewProblems = err instanceof ApiError && err.details.length ? err.details : [{ path: '', message: messageOf(err) }];
       } finally {
         if (mine === previewRound) previewStale = false;
       }
@@ -246,234 +232,44 @@
     return () => clearTimeout(timer);
   });
 
-  function syncHistory() {
-    canUndo = history.canUndo;
-    canRedo = history.canRedo;
-  }
-
-  /** Marks the start of one undoable change. */
-  function begin() {
-    history.record($state.snapshot(doc));
-    syncHistory();
-    status = '';
-  }
-
-  function undo() {
-    const prev = history.undo($state.snapshot(doc));
-    if (prev) {
-      doc = prev;
-      selected = selected.filter((i) => i < prev.elements.length);
+  /** Adds what a tool adds, in the middle of the label: the toolbox, from the keyboard. */
+  function addCentered(tool: Exclude<Tool, 'select'>) {
+    let e: TemplateElement;
+    if (tool === 'text' || tool === 'code' || tool === 'image') {
+      e = newElement(({ text: 'text', code: 'generator', image: 'static_image' } as const)[tool], doc, editor.codeType);
+      // On the grid, as everything placed is.
+      const step = gridStep(doc.units);
+      e = { ...e, x: Math.max(0, snap((doc.width - e.width) / 2, step, doc.units)), y: Math.max(0, snap((doc.height - e.height) / 2, step, doc.units)) };
+    } else {
+      e = newShape(tool, doc);
     }
-    syncHistory();
+    editor.add(e);
   }
 
-  function redo() {
-    const next = history.redo($state.snapshot(doc));
-    if (next) {
-      doc = next;
-      selected = selected.filter((i) => i < next.elements.length);
-    }
-    syncHistory();
-  }
-
-  // The shape being drawn on the canvas, if any.
-  let tool = $state<ShapeKind | null>(null);
-  const tools: [ShapeKind, string][] = [
-    ['rectangle', 'Rectangle'],
-    ['ellipse', 'Ellipse'],
-    ['line', 'Line'],
-    ['polygon', 'Polygon'],
-  ];
-
-  /** Chooses a shape to draw; from the keyboard, adds one in the middle of the label instead. */
-  function chooseTool(event: MouseEvent, kind: ShapeKind) {
-    if (event.detail === 0) {
-      tool = null;
-      addDrawn(newShape(kind, doc));
-      return;
-    }
-    tool = tool === kind ? null : kind;
-  }
-
-  function addDrawn(e: TemplateElement) {
-    begin();
-    doc.elements.push(e);
-    selected = [doc.elements.length - 1];
-    tool = null;
-  }
-
-  // What the last import left out, or why it failed.
-  let imported = $state('');
-
-  /**
-   * Imports SVG artwork as shapes, fitted into the middle of the label,
-   * selected together.
-   */
+  /** Imports SVG artwork as shapes, fitted into the middle of the label, selected together. */
   async function importSVG(file: File) {
-    imported = '';
+    notice = '';
     if (file.size > 1 << 20) {
-      imported = `${file.name} is larger than 1 MB.`;
+      notice = `${file.name} is larger than 1 MB.`;
       return;
     }
     try {
       const svg = await file.text();
       const box = { x: doc.width * 0.1, y: doc.height * 0.1, width: doc.width * 0.8, height: doc.height * 0.8 };
       const res = await request<{ elements: TemplateElement[]; skipped: string[] }>('POST', '/templates/import-svg', { svg, box });
-      begin();
-      const first = doc.elements.length;
-      doc.elements.push(...res.elements);
-      selected = res.elements.map((_, k) => first + k);
+      editor.add(...res.elements);
       const n = res.elements.length;
-      imported = `Imported ${n} shape${n === 1 ? '' : 's'} from ${file.name}.` + (res.skipped.length ? ` Left out: ${res.skipped.join('; ')}.` : '');
+      notice = `Imported ${n} shape${n === 1 ? '' : 's'} from ${file.name}.` + (res.skipped.length ? ` Left out: ${res.skipped.join('; ')}.` : '');
     } catch (err) {
-      imported = messageOf(err);
+      notice = messageOf(err);
     }
   }
-
-  function addElement(type: ElementType) {
-    begin();
-    doc.elements.push(newElement(type, doc, generators[0]?.type ?? 'qr'));
-    selected = [doc.elements.length - 1];
-  }
-
-  function removeSelected() {
-    if (!selected.length) return;
-    begin();
-    doc.elements = doc.elements.filter((_, i) => !selected.includes(i));
-    selected = [];
-  }
-
-  /** Moves the selected elements over or under the others. */
-  function restackSelected(how: Restack) {
-    if (!selected.length) return;
-    const next = restack($state.snapshot(doc.elements) as TemplateElement[], selected, how);
-    if (JSON.stringify(next.elements) === JSON.stringify(doc.elements)) return;
-    begin();
-    doc.elements = next.elements;
-    selected = next.selected;
-  }
-
-  /** Turns the selected elements together, about the middle of them all. */
-  function turnSelected(delta: number) {
-    begin();
-    doc.elements = rotateElements(doc, selected, $state.snapshot(doc.elements) as TemplateElement[], delta);
-  }
-
-  function moveSelectedLayer(from: number, to: number) {
-    begin();
-    const next = moveLayer($state.snapshot(doc.elements) as TemplateElement[], selected, from, to);
-    doc.elements = next.elements;
-    selected = next.selected;
-  }
-
-  let shortcuts = $state(false);
-
-  function keydown(event: KeyboardEvent) {
-    if (event.target instanceof Element && event.target.closest('input, textarea, select, dialog')) return;
-    const mod = event.ctrlKey || event.metaKey;
-    const key = event.key.toLowerCase();
-    if (mod && key === 'z') {
-      event.preventDefault();
-      if (event.shiftKey) redo();
-      else undo();
-    } else if (mod && key === 'y') {
-      event.preventDefault();
-      redo();
-    } else if (mod && key === 'a') {
-      event.preventDefault();
-      selected = doc.elements.flatMap((e, i) => (e.locked ? [] : [i]));
-    } else if (mod && key === 'd' && selected.length) {
-      event.preventDefault();
-      paste(clip(doc, selected));
-    } else if (mod && key === 'g' && selected.length) {
-      event.preventDefault();
-      if (event.shiftKey) ungroup();
-      else group();
-    } else if (event.key === '?') {
-      event.preventDefault();
-      shortcuts = true;
-    }
-  }
-
-  // The clipboard: elements, as the editor writes them, or SVG artwork.
-  function copying(event: ClipboardEvent, cut: boolean) {
-    if ((event.target instanceof Element && event.target.closest('input, textarea, select')) || !selected.length || !event.clipboardData) return;
-    event.preventDefault();
-    event.clipboardData.setData('text/plain', clip(doc, selected));
-    if (cut) removeSelected();
-  }
-
-  function pasting(event: ClipboardEvent) {
-    if (event.target instanceof Element && event.target.closest('input, textarea, select')) return;
-    const text = event.clipboardData?.getData('text/plain') ?? '';
-    if (!text) return;
-    event.preventDefault();
-    if (/<svg[\s>]/.test(text)) {
-      void importSVG(new File([text], 'the clipboard', { type: 'image/svg+xml' }));
-      return;
-    }
-    paste(text);
-  }
-
-  /** Adds elements from the clipboard's text, a little way from where they were, selected. */
-  function paste(text: string) {
-    const elements = unclip(doc, text, gridStep(doc.units) * 4);
-    if (!elements?.length) return;
-    begin();
-    const first = doc.elements.length;
-    doc.elements.push(...elements);
-    selected = elements.map((_, k) => first + k);
-  }
-
-  /** The selection made one group, moved, resized and turned as one. */
-  function group() {
-    if (selected.length < 2) return;
-    begin();
-    const name = newGroupName(doc.elements);
-    doc.elements = doc.elements.map((e, i) => (selected.includes(i) ? { ...e, group: name } : e));
-  }
-
-  function ungroup() {
-    begin();
-    doc.elements = doc.elements.map((e, i) => {
-      if (!selected.includes(i) || !e.group) return e;
-      const { group: _g, ...rest } = e;
-      return rest;
-    });
-  }
-
-  function arrangeSelected(how: { align?: Alignment; distribute?: 'across' | 'down' }) {
-    begin();
-    doc.elements = arrange(doc, selected, { ...how, toLabel: toLabel || selected.length === 1 });
-  }
-
-  function flipSelected(across: boolean) {
-    begin();
-    doc.elements = flipElements(doc, selected, across);
-  }
-
-  function setGuides(guides: Guides) {
-    doc.guides = guides.x?.length || guides.y?.length ? { ...(guides.x?.length ? { x: guides.x } : {}), ...(guides.y?.length ? { y: guides.y } : {}) } : undefined;
-    if (!doc.guides) delete doc.guides;
-  }
-
-  // Aligning with the label, rather than with each other.
-  let toLabel = $state(false);
-  const alignments: [Alignment, string][] = [
-    ['left', 'Left edges'],
-    ['center', 'Centers'],
-    ['right', 'Right edges'],
-    ['top', 'Tops'],
-    ['middle', 'Middles'],
-    ['bottom', 'Bottoms'],
-  ];
-  const grouped = $derived(selected.length > 1 && selected.every((i) => doc.elements[i]?.group && doc.elements[i]?.group === doc.elements[selected[0]!]?.group));
 
   async function save() {
     error = status = '';
     problems = [];
     saving = true;
-    const body = $state.snapshot(doc);
+    const body = $state.snapshot(editor.doc);
     try {
       // A new template is given its ID by the server.
       let id = routeId;
@@ -482,7 +278,7 @@
       } else {
         await request('PUT', `/templates/${encodeURIComponent(routeId)}`, body);
       }
-      saved = JSON.stringify(doc);
+      saved = JSON.stringify(editor.doc);
       try {
         localStorage.removeItem(draftKey);
       } catch {
@@ -494,237 +290,182 @@
       error = messageOf(err);
       if (err instanceof ApiError) problems = err.details;
       const first = problems.map((p) => elementIndex(p.path)).find((i) => i !== null);
-      if (first !== undefined && first !== null) selected = [first];
+      if (first !== undefined && first !== null) editor.selected = [first];
     } finally {
       saving = false;
     }
   }
 
-  async function searchAssets(event: SubmitEvent) {
-    event.preventDefault();
-    try {
-      const q = new URLSearchParams({ search: assetQuery });
-      assetResults = ((await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? []).slice(0, 8);
-    } catch (err) {
-      error = messageOf(err);
+  let canvas = $state<ReturnType<typeof Canvas> | null>(null);
+
+  function typing(target: EventTarget | null): boolean {
+    return target instanceof Element && Boolean(target.closest('input, textarea, select, [contenteditable]'));
+  }
+
+  // The shortcuts: few, and standard (#54).
+  function keydown(event: KeyboardEvent) {
+    if (loading || typing(event.target)) return;
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    if (mod && key === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) editor.redo();
+      else editor.undo();
+    } else if (mod && key === 'a') {
+      event.preventDefault();
+      if (event.shiftKey) editor.deselect();
+      else editor.selectAll();
+    } else if (event.key === 'Escape') {
+      if (canvas?.cancel()) event.preventDefault();
+      else editor.deselect();
+    } else if (event.key === 'Enter' && canvas?.finish()) {
+      event.preventDefault();
+    } else if (event.key === 'Tab' && !mod && !event.shiftKey && !event.altKey && (document.activeElement === document.body || !document.activeElement)) {
+      // Tab with nothing focused: everything but the label, hidden or shown.
+      event.preventDefault();
+      setCanvasOnly(!editor.canvasOnly);
+    } else if (event.key.startsWith('Arrow') && editor.selected.length && !mod) {
+      const base = gridStep(doc.units);
+      const step = event.altKey ? base / 10 : base;
+      const by = event.shiftKey ? base * 10 : step;
+      const moves: Record<string, [number, number]> = { ArrowLeft: [-by, 0], ArrowRight: [by, 0], ArrowUp: [0, -by], ArrowDown: [0, by] };
+      const [dx, dy] = moves[event.key] ?? [0, 0];
+      event.preventDefault();
+      editor.begin();
+      editor.doc.elements = moveElements(doc, editor.selected, editor.elements(), dx, dy, step);
     }
   }
 
-  const problemsFor = (i: number) => allProblems.filter((p) => elementIndex(p.path) === i).map((p) => p.message);
+  // The clipboard: elements, as the editor writes them, or SVG artwork.
+  function copying(event: ClipboardEvent) {
+    if (typing(event.target) || !editor.selected.length || !event.clipboardData) return;
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', editor.copy());
+  }
+  function pasting(event: ClipboardEvent) {
+    if (typing(event.target)) return;
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (!text) return;
+    event.preventDefault();
+    if (/<svg[\s>]/.test(text)) void importSVG(new File([text], 'the clipboard', { type: 'image/svg+xml' }));
+    else editor.paste(text);
+  }
+
+  // Canvas-only mode, and the message saying how to leave it, which fades.
+  let showLeaveHint = $state(false);
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  function setCanvasOnly(on: boolean) {
+    editor.canvasOnly = on;
+    clearTimeout(hintTimer);
+    showLeaveHint = on;
+    if (on) hintTimer = setTimeout(() => (showLeaveHint = false), 2500);
+  }
+  onDestroy(() => clearTimeout(hintTimer));
+
+  const title = $derived(isNew ? 'New template' : doc.name || routeId);
 </script>
 
-<svelte:window onkeydown={keydown} oncopy={(ev) => copying(ev, false)} oncut={(ev) => copying(ev, true)} onpaste={pasting} />
-
-<ShortcutsDialog open={shortcuts} onclose={() => (shortcuts = false)} />
-
-<nav aria-label="Breadcrumb" class="mb-2 text-sm"><a class="underline" href="/templates">Templates</a></nav>
+<svelte:window onkeydown={keydown} oncopy={copying} onpaste={pasting} />
 
 {#if loading}
-  <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
+  <p role="status" class="p-4 text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else}
-  <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-    <h1 class="text-2xl font-bold">{isNew ? 'New template' : doc.name || routeId}{#if dirty}<span class="ml-2 text-sm font-normal text-zinc-600 dark:text-zinc-400">Unsaved changes</span>{/if}</h1>
-    <div class="flex flex-wrap gap-2">
-      <button type="button" class="btn-secondary" onclick={() => (shortcuts = true)}>Keyboard shortcuts</button>
-      <button type="button" class="btn-secondary" onclick={undo} disabled={!canUndo}>Undo</button>
-      <button type="button" class="btn-secondary" onclick={redo} disabled={!canRedo}>Redo</button>
-      <button type="button" class="btn-primary" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
-    </div>
-  </div>
-
-  {#if draft}
-    <div class="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-800 dark:bg-amber-950" role="status">
-      Unsaved changes from {new Date(draft.at).toLocaleString()} were kept in this browser.
-      <button type="button" class="btn-secondary" onclick={restoreDraft}>Restore them</button>
-      <button type="button" class="btn-secondary" onclick={discardDraft}>Discard them</button>
-    </div>
-  {/if}
-
-  <ErrorMessage {error} />
-  {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
-
-  <div class="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-    <div class="space-y-4">
-      <div class="flex flex-wrap gap-2" role="toolbar" aria-label="Add element">
-        <button type="button" class="btn-secondary" onclick={() => addElement('text')}>Add text</button>
-        <button type="button" class="btn-secondary" onclick={() => addElement('generator')}>Add barcode</button>
-        <button type="button" class="btn-secondary" onclick={() => addElement('static_image')}>Add image</button>
-        <label class="btn-secondary cursor-pointer focus-within:outline-2 focus-within:outline-blue-600">
-          Import SVG
-          <input
-            type="file"
-            accept=".svg,image/svg+xml"
-            class="sr-only"
-            onchange={(ev) => {
-              const file = ev.currentTarget.files?.[0];
-              ev.currentTarget.value = '';
-              if (file) void importSVG(file);
-            }}
-          />
-        </label>
+  <!-- On a phone, the parts stack and the page scrolls: tools, label, panels. -->
+  <div class="flex flex-col bg-white text-zinc-900 md:h-full dark:bg-zinc-950 dark:text-zinc-100">
+    <!-- Canvas only hides the rest, keeping it as it was, not removing it. -->
+    <div class="contents" hidden={editor.canvasOnly}>
+      <div class="flex h-11 shrink-0 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-800">
+        <nav aria-label="Breadcrumb"><a class="text-sm hover:underline" href="/templates">Templates</a></nav>
+        <span aria-hidden="true" class="text-zinc-400">/</span>
+        <h1 class="min-w-0 truncate text-sm font-semibold">{title}</h1>
+        {#if dirty}<span class="shrink-0 text-xs text-zinc-600 dark:text-zinc-400">Unsaved changes</span>{/if}
+        <div class="ml-auto flex items-center gap-0.5">
+          <button type="button" class="icon-btn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!editor.canUndo} onclick={() => editor.undo()}><Icon name="undo" size={16} /></button>
+          <button type="button" class="icon-btn" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!editor.canRedo} onclick={() => editor.redo()}><Icon name="redo" size={16} /></button>
+          <button type="button" class="icon-btn" aria-label="Canvas only" title="Hide everything but the label (Tab)" onclick={() => setCanvasOnly(true)}><Icon name="expand" size={16} /></button>
+          <button type="button" class="btn-primary ml-2 px-3 py-1" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
+        </div>
       </div>
-      <div class="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Draw a shape">
-        {#each tools as [kind, label] (kind)}
-          <button type="button" class="btn-secondary" aria-pressed={tool === kind} onclick={(ev) => chooseTool(ev, kind)}>{label}</button>
-        {/each}
-      </div>
-      {#if imported}<p class="text-sm" role="status">{imported}</p>{/if}
-      <p class="text-xs text-zinc-600 dark:text-zinc-400" role="status">
-        {#if tool === 'polygon'}
-          Click to place each point; double-click, press Enter or click the first point to finish. Escape stops.
-        {:else if tool}
-          Drag on the label to draw it, with Shift to keep it {tool === 'line' ? 'at 45°' : tool === 'ellipse' ? 'round' : 'square'}, or click to place one. Escape stops.
-        {:else}
-          Choose a shape, then drag on the label to draw it; from the keyboard, the shape is added in the middle of the label.
-        {/if}
-      </p>
 
-      <EditorCanvas
-        {doc}
-        {selected}
-        {previewURL}
-        {previewStale}
-        frame={liveState === 'ready' && liveData ? frame : null}
-        {liveState}
-        {problemElements}
-        area={printArea}
-        onselect={(s) => (selected = s)}
-        onchange={(els) => (doc.elements = els)}
-        onbegin={begin}
-        ondelete={removeSelected}
-        onrestack={restackSelected}
-        {codeLayouts}
-        {tool}
-        ondraw={addDrawn}
-        onfile={importSVG}
-        onguides={setGuides}
-        ontoolcancel={() => (tool = null)}
-      />
-
-      {#if generalProblems.length || (previewProblems.length && !problemElements.size && !Object.keys(canvasProblems).length)}
-        <div role="alert" class="space-y-1">
-          {#each generalProblems as p (p.message)}<p class="error-text">{p.message}</p>{/each}
+      {#if draft || error || status || notice || generalProblems.length}
+        <div class="shrink-0 space-y-1 border-b border-zinc-200 px-3 py-1.5 text-xs dark:border-zinc-800">
+          {#if draft}
+            <div class="flex flex-wrap items-center gap-2 text-amber-900 dark:text-amber-200" role="status">
+              Unsaved changes from {new Date(draft.at).toLocaleString()} were kept in this browser.
+              <button type="button" class="btn-sm" onclick={restoreDraft}>Restore them</button>
+              <button type="button" class="btn-sm" onclick={discardDraft}>Discard them</button>
+            </div>
+          {/if}
+          {#if error}<p class="error-text text-xs" role="alert">{error}</p>{/if}
+          {#if status}<p class="text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
+          {#if notice}<p role="status">{notice}</p>{/if}
+          {#if generalProblems.length}
+            <div role="alert">
+              {#each generalProblems as p (p.message)}<p class="error-text text-xs">{p.message}</p>{/each}
+            </div>
+          {/if}
         </div>
       {/if}
 
-      {#if doc.elements.length}
-        <LayersPanel
-          elements={doc.elements}
-          {selected}
+      <OptionsBar {generators} />
+    </div>
+
+    <div class="flex min-h-0 flex-1 flex-col md:flex-row">
+      <aside hidden={editor.canvasOnly} class="shrink-0 overflow-y-auto border-b border-zinc-200 bg-zinc-50 md:border-r md:border-b-0 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Toolbox">
+          <Toolbox onadd={addCentered} onimport={importSVG} />
+      </aside>
+      <div class="relative h-[55dvh] min-w-0 md:h-auto md:flex-1">
+        <Canvas
+          bind:this={canvas}
+          frame={drawingLive ? frame : null}
+          {previewURL}
+          {previewStale}
           {problemElements}
-          onselect={(s) => (selected = s)}
-          onrestack={restackSelected}
-          onmove={moveSelectedLayer}
-          onlock={(i) => {
-            begin();
-            const e = doc.elements[i]!;
-            doc.elements[i] = e.locked ? (({ locked: _l, ...rest }) => rest)(e) : { ...e, locked: true };
-          }}
+          area={printArea}
+          generatorType={editor.codeType}
+          onfile={importSVG}
         />
-      {/if}
+        {#if editor.canvasOnly}
+          <button
+            type="button"
+            class="absolute top-2 right-2 rounded bg-zinc-900/70 px-2 py-1 text-xs text-white transition-opacity duration-500 hover:opacity-100 focus:opacity-100 {showLeaveHint ? 'opacity-100' : 'opacity-0'}"
+            onclick={() => setCanvasOnly(false)}>Canvas only. Press Tab, or here, to show everything.</button
+          >
+        {/if}
+      </div>
+      <aside hidden={editor.canvasOnly} class="w-full shrink-0 border-t border-zinc-200 md:w-72 md:overflow-y-auto md:border-t-0 md:border-l bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-label="Panels">
+          <Dock
+            panels={[
+              { id: 'properties', title: 'Properties', content: properties },
+              { id: 'layers', title: 'Layers', content: layers },
+              { id: 'arrange', title: 'Arrange', content: arrange },
+              { id: 'label', title: 'Label', content: label },
+              { id: 'printer', title: 'Printer', content: printer },
+              { id: 'preview', title: 'Preview data', content: preview },
+            ]}
+          />
+      </aside>
     </div>
 
-    <div class="space-y-4">
-      {#if selected.length === 1 && doc.elements[selected[0]!]}
-        <ElementPanel
-          {doc}
-          index={selected[0]!}
-          {generators}
-          {placeholderList}
-          problems={problemsFor(selected[0]!)}
-          onupdate={(e: TemplateElement) => {
-            begin();
-            doc.elements[selected[0]!] = e;
-          }}
-          onremove={removeSelected}
-          onrestack={restackSelected}
-          onflip={flipSelected}
-          codeLayout={codeLayouts[selected[0]!]}
-        />
-      {:else if selected.length > 1}
-        <section class="card space-y-3" aria-labelledby="several-heading">
-          <h2 id="several-heading" class="text-lg font-semibold">{grouped ? `Group ${doc.elements[selected[0]!]!.group}` : `${selected.length} elements`}</h2>
-          <p class="text-sm">Drag or use the arrow keys to move them together; the box round them scales and turns them as one.</p>
-          <StackButtons elements={doc.elements} {selected} onrestack={restackSelected} />
-          <div class="flex flex-wrap gap-1">
-            {#if grouped}
-              <button type="button" class="btn-secondary" onclick={ungroup}>Ungroup</button>
-            {:else}
-              <button type="button" class="btn-secondary" onclick={group}>Group</button>
-            {/if}
-            <button type="button" class="btn-secondary" onclick={() => turnSelected(-90)}>Turn them 90° left</button>
-            <button type="button" class="btn-secondary" onclick={() => turnSelected(90)}>Turn them 90° right</button>
-            <button type="button" class="btn-secondary" onclick={() => flipSelected(true)}>Flip across</button>
-            <button type="button" class="btn-secondary" onclick={() => flipSelected(false)}>Flip down</button>
-          </div>
-          <div class="space-y-1" role="group" aria-label="Line up">
-            <p class="label" aria-hidden="true">Line up</p>
-            <div class="flex flex-wrap gap-1">
-              {#each alignments as [how, label] (how)}
-                <button type="button" class="btn-secondary" onclick={() => arrangeSelected({ align: how })}>{label}</button>
-              {/each}
-            </div>
-            <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={toLabel} /> With the label, not each other</label>
-          </div>
-          <div class="flex flex-wrap gap-1" role="group" aria-label="Spread out evenly">
-            <button type="button" class="btn-secondary" disabled={selected.length < 3} onclick={() => arrangeSelected({ distribute: 'across' })}>Spread out across</button>
-            <button type="button" class="btn-secondary" disabled={selected.length < 3} onclick={() => arrangeSelected({ distribute: 'down' })}>Spread out down</button>
-          </div>
-          <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={removeSelected}>Remove them</button>
-        </section>
-      {/if}
-
-      <CanvasPanel
-        {doc}
-        {isNew}
-        problems={canvasProblems}
-        assetId={previewAsset?.id}
-        onfit={(a) => (printArea = a)}
-        onchange={(d, record = true) => {
-          if (record) begin();
-          doc = d;
-        }}
-      />
-
-      {#if doc.sizing === 'adaptive'}
-        <AdaptivePreview {doc} />
-      {/if}
-
-      <section class="card space-y-3" aria-labelledby="preview-heading">
-        <h2 id="preview-heading" class="text-lg font-semibold">Preview data</h2>
-        {#if previewAsset}
-          <p class="text-sm">
-            Showing <strong>{previewAsset.name}</strong>.
-            <button type="button" class="underline" onclick={() => (previewAsset = null)}>Use placeholders</button>
-          </p>
-        {:else}
-          <p class="text-sm text-zinc-600 dark:text-zinc-400">Showing placeholder data. Pick an asset to see real values.</p>
-        {/if}
-        <form class="flex gap-2" role="search" onsubmit={searchAssets}>
-          <label class="sr-only" for="preview-search">Find an asset</label>
-          <input id="preview-search" class="input" type="search" placeholder="Name or code" bind:value={assetQuery} />
-          <button type="submit" class="btn-secondary">Find</button>
-        </form>
-        {#if assetResults.length}
-          <ul class="text-sm">
-            {#each assetResults as a (a.asset.id)}
-              <li>
-                <button type="button" class="hover:underline" onclick={() => { previewAsset = { id: a.asset.id, name: a.asset.name }; assetResults = []; }}>
-                  {a.asset.name}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
-
-      {#if previewAsset && !isNew && !dirty}
-        {#key previewAsset.id}
-          <LabelActions assetIds={[previewAsset.id]} templateId={doc.id} />
-        {/key}
-      {:else if previewAsset}
-        <p class="text-sm text-zinc-600 dark:text-zinc-400">Save the template to export this asset’s label, or print it for several assets; Test print, above, works as it is.</p>
-      {/if}
-    </div>
+    <div class="contents" hidden={editor.canvasOnly}><StatusBar {liveState} /></div>
   </div>
 {/if}
+
+{#snippet properties()}
+  <PropertiesPanel {generators} {placeholderList} {problemsFor} {codeLayouts} />
+{/snippet}
+{#snippet layers()}
+  <LayersPanel {problemElements} />
+{/snippet}
+{#snippet arrange()}
+  <ArrangePanel />
+{/snippet}
+{#snippet label()}
+  <LabelPanel {isNew} problems={labelProblems} />
+{/snippet}
+{#snippet printer()}
+  <PrinterPanel assetId={previewAsset?.id} onfit={(a) => (printArea = a)} />
+{/snippet}
+{#snippet preview()}
+  <PreviewPanel bind:asset={previewAsset} {isNew} {dirty} />
+{/snippet}

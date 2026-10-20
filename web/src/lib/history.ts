@@ -39,6 +39,15 @@ export class History<T> {
     return JSON.parse(next) as T;
   }
 
+  /**
+   * Returns the state before the last change and forgets the change, for one
+   * cancelled before it was finished: unlike undo, it cannot be redone.
+   */
+  discard(): T | null {
+    const prev = this.past.pop();
+    return prev === undefined ? null : (JSON.parse(prev) as T);
+  }
+
   clear(): void {
     this.past = [];
     this.future = [];
