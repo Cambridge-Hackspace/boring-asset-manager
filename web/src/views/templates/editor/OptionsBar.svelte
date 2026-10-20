@@ -4,13 +4,14 @@
   import { useEditor } from './editor.svelte';
   import Icon from './Icon.svelte';
   import NumberField from './NumberField.svelte';
+  import TextBar from './TextBar.svelte';
   import { anchorAt, anchors, setAtAnchor, type Anchor } from './transform';
 
   // The tool's options, across the top as in Krita: for the select tool,
   // the selection's place and size in numbers, given at the anchor chosen
   // on the 3 × 3 grid (which Ctrl+click on a handle also sets), with its
   // aspect locked or not; for the others, what they will add.
-  let { generators }: { generators: GeneratorInfo[] } = $props();
+  let { generators, placeholderList }: { generators: GeneratorInfo[]; placeholderList: string[] } = $props();
 
   const editor = useEditor();
   const doc = $derived(editor.doc);
@@ -48,7 +49,9 @@
 <svelte:window onpointerdown={(e) => snapOpen && !(e.target as Element).closest('[data-snap-menu]') && (snapOpen = false)} />
 
 <div class="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-200 bg-zinc-50 px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-900" role="group" aria-label="Tool options">
-  {#if editor.tool === 'select'}
+  {#if editor.editingText !== null}
+    <TextBar index={editor.editingText} {placeholderList} />
+  {:else if editor.tool === 'select'}
     {#if e && at}
       <div class="grid grid-cols-3 gap-px" role="radiogroup" aria-label="Numbers given at">
         {#each anchors as a (a)}

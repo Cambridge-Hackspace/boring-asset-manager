@@ -36,6 +36,7 @@ interface Request {
   template: string;
   data: string;
   placeholders: boolean;
+  hidden: number[];
   resolve: (frame: Frame | null) => void;
 }
 
@@ -67,7 +68,7 @@ export class LiveRenderer {
    * order, so a frame is always newer than any shown before it. Null too
    * once the renderer has failed: the caller falls back to the server.
    */
-  async render(doc: TemplateDoc, data: PreviewData): Promise<Frame | null> {
+  async render(doc: TemplateDoc, data: PreviewData, hidden: number[] = []): Promise<Frame | null> {
     if (this.state === 'failed') return null;
     const seq = ++this.asked;
     const ids = [...new Set(doc.elements.flatMap((e) => (e.type === 'static_image' && e.image_id ? [e.image_id] : [])))];
@@ -76,7 +77,7 @@ export class LiveRenderer {
     if (seq < this.queued || this.failed()) return null;
     this.queued = seq;
     return new Promise((resolve) => {
-      const req: Request = { seq, template: JSON.stringify(doc), data: JSON.stringify(data.data), placeholders: data.placeholders, resolve };
+      const req: Request = { seq, template: JSON.stringify(doc), data: JSON.stringify(data.data), placeholders: data.placeholders, hidden, resolve };
       if (this.state === 'ready' && !this.drawing) {
         this.post(req);
       } else {
@@ -113,12 +114,13 @@ export class LiveRenderer {
 
   private post(req: Request) {
     this.drawing = req;
-    this.port.postMessage({ type: 'render', seq: req.seq, template: req.template, data: req.data, placeholders: req.placeholders });
+    this.port.postMessage({ type: 'render', seq: req.seq, template: req.template, data: req.data, placeholders: req.placeholders, hidden: req.hidden });
   }
 
   private receive(msg: FromWorker) {
     switch (msg.type) {
       case 'ready':
+        if (msg.fonts) addFonts(msg.fonts);
         this.setState('ready');
         this.next();
         return;
@@ -162,6 +164,20 @@ export class LiveRenderer {
   private setState(state: LiveState) {
     this.state = state;
     this.onstate?.(state);
+  }
+}
+
+/** The family the fonts labels print in are known by, in the page. */
+export const PRINTED_FONT = { sans: 'BAM Printed Sans', mono: 'BAM Printed Mono' } as const;
+
+/** Adds the fonts labels print in to the page, for text being typed. */
+function addFonts(fonts: Record<string, ArrayBuffer>) {
+  if (typeof FontFace === 'undefined' || typeof document === 'undefined') return;
+  for (const [key, ttf] of Object.entries(fonts)) {
+    const [family, weight] = key.split(' ') as ['sans' | 'mono', string];
+    const face = new FontFace(PRINTED_FONT[family], ttf, { weight: weight === 'bold' ? '700' : '400' });
+    document.fonts.add(face);
+    void face.load().catch(() => {});
   }
 }
 

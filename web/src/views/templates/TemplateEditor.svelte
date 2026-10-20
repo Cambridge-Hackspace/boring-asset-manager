@@ -190,7 +190,7 @@
   // what is said of those drawn is said of them by their own indices.
   function drawn(): { template: TemplateDoc; shown: number[] } {
     const template = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
-    const shown = template.elements.map((_, i) => i).filter((i) => !editor.hidden.includes(i));
+    const shown = template.elements.map((_, i) => i).filter((i) => !editor.hidden.includes(i) && i !== editor.editingText);
     if (shown.length < template.elements.length) template.elements = shown.map((i) => template.elements[i]!);
     return { template, shown };
   }
@@ -198,18 +198,31 @@
     problems.map((p) => ({ ...p, path: p.path.replace(/^elements\[(\d+)\]/, (_, k: string) => `elements[${shown[Number(k)] ?? k}]`) }));
   const ownLayouts = (shown: number[], described: { index: number; code?: unknown }[]) =>
     Object.fromEntries(described.flatMap((d) => (d.code ? [[shown[d.index] ?? d.index, d.code as CodeLayout]] : [])));
+  /** The size each text was drawn at, by its own index; kept for one being typed, left out of the drawing. */
+  function noteSizes(shown: number[], described: { index: number; drawn_font_size?: number }[]) {
+    const sizes: Record<number, number> = {};
+    for (const d of described) if (d.drawn_font_size) sizes[shown[d.index] ?? d.index] = d.drawn_font_size;
+    const typing = editor.editingText;
+    if (typing !== null && editor.drawnSizes[typing] !== undefined && sizes[typing] === undefined) sizes[typing] = editor.drawnSizes[typing]!;
+    editor.drawnSizes = sizes;
+  }
 
   $effect(() => {
-    const { template, shown } = drawn();
+    const template = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
+    // Hidden elements, and text being typed, are left out of the dots; the
+    // renderer still says how they were laid out, as typing needs their size.
+    const hidden = [...editor.hidden, ...(editor.editingText !== null ? [editor.editingText] : [])];
     const data = liveData;
     if (loading || liveState !== 'ready' || !data || !live) return;
+    const all = template.elements.map((_, i) => i);
     // Frames come in the order they were asked for, so each is shown.
-    void live.render(template, data).then((f) => {
+    void live.render(template, data, hidden).then((f) => {
       if (!f || liveState !== 'ready') return;
-      previewProblems = own(shown, f.problems);
+      previewProblems = f.problems;
       if (!f.problems.length) {
         frame = f;
-        codeLayouts = ownLayouts(shown, f.description?.elements ?? []);
+        codeLayouts = ownLayouts(all, f.description?.elements ?? []);
+        noteSizes(all, (f.description?.elements ?? []) as { index: number; drawn_font_size?: number }[]);
       }
     });
   });
@@ -227,11 +240,11 @@
     previewStale = true;
     const timer = setTimeout(async () => {
       try {
-        const hasCodes = body.template.elements.some((e) => e.type === 'generator');
+        const hasCodes = body.template.elements.some((e) => e.type === 'generator' || e.type === 'text');
         const [blob, described] = await Promise.all([
           requestBlob('POST', '/templates/preview', body),
           hasCodes
-            ? request<{ elements: { index: number; code?: CodeLayout }[] }>('POST', '/templates/preview', { ...body, format: 'json' })
+            ? request<{ elements: { index: number; code?: CodeLayout; drawn_font_size?: number }[] }>('POST', '/templates/preview', { ...body, format: 'json' })
             : Promise.resolve({ elements: [] }),
         ]);
         if (mine !== previewRound || drawingLive) return;
@@ -240,6 +253,7 @@
         previewURL = url;
         previewProblems = [];
         codeLayouts = ownLayouts(shown, described.elements ?? []);
+        noteSizes(shown, described.elements ?? []);
       } catch (err) {
         if (mine !== previewRound) return;
         previewProblems = own(shown, err instanceof ApiError && err.details.length ? err.details : [{ path: '', message: messageOf(err) }]);
@@ -484,7 +498,7 @@
         </div>
       {/if}
 
-      <OptionsBar {generators} />
+      <OptionsBar {generators} {placeholderList} />
     </div>
 
     <div class="flex min-h-0 flex-1 flex-col md:flex-row">
