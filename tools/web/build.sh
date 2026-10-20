@@ -33,9 +33,11 @@ esac
 # WebAssembly (README §4.1). TinyGo's build is a third the size of Go's and
 # draws every golden label dot for dot as the server does (web/src/lib/live
 # tests that); its default stack is too small for compiling the renderer's
-# regular expressions, hence -stack-size.
+# regular expressions, hence -stack-size. It is built without the git
+# stamp, which it has no use for: where the checkout is not root's, as on
+# GitHub's runners under docker, git refuses to read it and the build fails.
 mkdir -p "$ROOT/web/src/lib/live/generated"
-MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm --user root   -v "$ROOT:/src" -w /src   -v "$GO_MOD:/root/go/pkg/mod"   -v "$TINYGO_CACHE:/root/.cache"   "$TINYGO_IMAGE"   sh -c 'tinygo build -target wasm -opt z -no-debug -stack-size=1MB -o web/src/lib/live/generated/bamlive.wasm ./cmd/bamlive &&
+MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm --user root -e GOFLAGS=-buildvcs=false   -v "$ROOT:/src" -w /src   -v "$GO_MOD:/root/go/pkg/mod"   -v "$TINYGO_CACHE:/root/.cache"   "$TINYGO_IMAGE"   sh -c 'tinygo build -target wasm -opt z -no-debug -stack-size=1MB -o web/src/lib/live/generated/bamlive.wasm ./cmd/bamlive &&
     cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" web/src/lib/live/generated/wasm_exec.js'
 
 # node_modules lives in a volume: it holds Linux binaries, and bind mounts
