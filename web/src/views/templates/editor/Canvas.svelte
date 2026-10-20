@@ -9,12 +9,13 @@
     newElement,
     newShape,
     polygonThrough,
-    resizeElement,
     scaleElements,
     sinCos,
     snap,
     tidy,
     withGroups,
+    withProp,
+    rotateElements,
     type Box,
     type Handle,
     type PrintArea,
@@ -24,6 +25,8 @@
   import { untrack } from 'svelte';
   import { useEditor, type Tool } from './editor.svelte';
   import Ruler from './Ruler.svelte';
+  import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import { alongOneAxis, beneath, inBox, resizeFrom, scaledBox, turned, type Anchor } from './transform';
 
   // The label on its desk: the live renderer's drawing of it (or, until it
   // can, the server's), an outline over each element to take it by, and the
@@ -134,7 +137,7 @@
   }
 
   /** Where a pointer is on the label, in its units. */
-  function onLabel(event: PointerEvent | MouseEvent): [number, number] {
+  function onLabel(event: { clientX: number; clientY: number }): [number, number] {
     const r = paper!.getBoundingClientRect();
     return [((event.clientX - r.left) / r.width) * doc.width, ((event.clientY - r.top) / r.height) * doc.height];
   }
@@ -201,16 +204,29 @@
   const hitStyle = (e: TemplateElement) =>
     boxStyle(e) + (e.type === 'shape' && e.shape === 'line' && (!e.width || !e.height) ? ';padding:4px;margin:-4px;box-sizing:content-box' : '');
 
-  // What a drag is doing.
+  // What a drag is doing. The last pointer event is kept, so a modifier
+  // pressed or let go mid-drag takes effect at once, as in Krita.
+  interface Pointer {
+    clientX: number;
+    clientY: number;
+    shiftKey: boolean;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+  }
   type Gesture =
-    | { kind: 'move'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; moved: boolean }
-    | { kind: 'resize'; x0: number; y0: number; start: TemplateElement[]; index: number; handle: Handle; moved: boolean }
-    | { kind: 'scale'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; handle: Handle; box: Box; moved: boolean }
+    | { kind: 'move'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; hit: number; moved: boolean; last?: Pointer }
+    | { kind: 'resize'; x0: number; y0: number; start: TemplateElement[]; index: number; handle: Handle; moved: boolean; last?: Pointer }
+    | { kind: 'scale'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; handle: Handle; box: Box; moved: boolean; last?: Pointer }
+    | { kind: 'rotate'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; cx: number; cy: number; moved: boolean; last?: Pointer }
+    | { kind: 'band'; x0: number; y0: number; from: [number, number]; to: [number, number]; add: boolean; moved: boolean; last?: Pointer }
     | { kind: 'draw'; from: [number, number]; to: [number, number] }
     | { kind: 'pan'; x: number; y: number };
   let gesture = $state<Gesture | null>(null);
   // A polygon's points so far, in the template's units.
   let points = $state<[number, number][]>([]);
+  // Where the pointer is in the viewport, for the readout beside it.
+  let readoutAt = $state<[number, number] | null>(null);
 
   const toolNames: Record<Exclude<Tool, 'select'>, string> = {
     text: 'a text box',
@@ -224,20 +240,24 @@
   };
 
   // What the status bar says can be done now.
-  let overHandle = $state(false);
+  let over = $state<'handle' | 'rotate' | null>(null);
   $effect(() => {
     const g = gesture;
     const tool = editor.tool;
     if (g?.kind === 'pan' || spaceHeld) editor.hint = 'Moving the view.';
-    else if (g?.kind === 'move') editor.hint = 'Moving. Alt: off the grid. Esc: put it back.';
-    else if (g?.kind === 'resize' || g?.kind === 'scale') editor.hint = 'Resizing. Alt: off the grid. Esc: put it back.';
+    else if (g?.kind === 'move') editor.hint = 'Moving. Shift: along one axis, off the grid. Esc: put it back.';
+    else if (g?.kind === 'resize' || g?.kind === 'scale') editor.hint = 'Resizing. Shift: keep proportions, off the grid. Ctrl: from the center. Esc: put it back.';
+    else if (g?.kind === 'rotate') editor.hint = `Turning. Ctrl: 15° steps.${editor.snapAngles ? ' Snaps to 45° near one; Shift: freely.' : ''} Esc: put it back.`;
+    else if (g?.kind === 'band') editor.hint = 'Selecting. Left to right: what the box covers. Right to left: what it touches. Shift: add to the selection.';
     else if (g?.kind === 'draw') editor.hint = `Drawing ${toolNames[tool as Exclude<Tool, 'select'>] ?? 'a shape'}. Alt: off the grid. Esc: stop.`;
     else if (tool === 'polygon')
       editor.hint = points.length ? 'Click to place the next point. Double-click or Enter: finish. Click the first point: close it. Esc: stop.' : 'Click to place the first point.';
     else if (tool !== 'select') editor.hint = `Drag to draw ${toolNames[tool]}, or click to place one. Esc: back to selecting.`;
-    else if (overHandle) editor.hint = 'Drag to resize.';
-    else if (editor.selected.length) editor.hint = 'Drag to move. Shift+click: add or remove. Arrow keys: move (Shift: ten steps, Alt: a tenth). Esc: deselect.';
-    else editor.hint = 'Click an element to select it. Shift+click: select several.';
+    else if (over === 'rotate') editor.hint = 'Drag to turn. Ctrl: 15° steps.';
+    else if (over === 'handle') editor.hint = 'Drag to resize. Shift: keep proportions. Ctrl: from the center. Ctrl+click: numbers given at this point.';
+    else if (editor.selected.length)
+      editor.hint = 'Drag to move. Shift+click: add or remove. Ctrl+click: the one beneath. Right-click: more. Arrow keys: move (Shift: ten steps, Alt: a tenth).';
+    else editor.hint = 'Click an element to select it. Drag on the label to select with a box. Shift+click: select several.';
   });
 
   function capture(event: PointerEvent) {
@@ -256,15 +276,36 @@
     return true;
   }
 
+  /** A box to select with, from where the pointer went down on the label. */
+  function startBand(event: PointerEvent) {
+    gesture = { kind: 'band', x0: event.clientX, y0: event.clientY, from: onLabel(event), to: onLabel(event), add: event.shiftKey, moved: false };
+    capture(event);
+  }
+
   function downOnElement(event: PointerEvent, i: number) {
     if (startPan(event)) return;
     if (event.button !== 0 || editor.tool !== 'select') return;
     event.preventDefault();
     event.stopPropagation();
+    // Alt: a box to select with, even over an element.
+    if (event.altKey) {
+      startBand(event);
+      return;
+    }
     // Focused by the pointer, it is selected below, not by its focus.
     byPointer = true;
     (event.currentTarget as HTMLElement).focus();
     byPointer = false;
+    // Ctrl: the element beneath the one selected there.
+    if (event.ctrlKey || event.metaKey) {
+      const [x, y] = onLabel(event);
+      const next = beneath(doc, x, y, editor.selected);
+      if (next !== null) {
+        editor.selected = [next];
+        paper?.querySelector<HTMLElement>(`[data-element="${next}"]`)?.focus();
+      }
+      return;
+    }
     // A click takes the element's whole group.
     const taken = withGroups(doc.elements, [i]);
     let next = editor.selected;
@@ -276,7 +317,7 @@
       next = taken;
       editor.selected = next;
     }
-    gesture = { kind: 'move', x0: event.clientX, y0: event.clientY, start: editor.elements(), indices: next, moved: false };
+    gesture = { kind: 'move', x0: event.clientX, y0: event.clientY, start: editor.elements(), indices: next, hit: i, moved: false };
     capture(event);
   }
 
@@ -293,11 +334,26 @@
     capture(event);
   }
 
+  /** Just outside a corner: turning, about the element's center or the selection's. */
+  function downOnRotate(event: PointerEvent) {
+    if (startPan(event) || event.button !== 0 || !viewport) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const b = single ?? selectionBox;
+    if (!b) return;
+    const r = viewport.getBoundingClientRect();
+    const cx = r.left + sx(b.x + b.width / 2);
+    const cy = r.top + sy(b.y + b.height / 2);
+    gesture = { kind: 'rotate', x0: event.clientX, y0: event.clientY, start: editor.elements(), indices: [...editor.selected], cx, cy, moved: false };
+    capture(event);
+  }
+
   function downOnDesk(event: PointerEvent) {
     if (startPan(event) || event.button !== 0 || !paper) return;
     if (editor.tool === 'select') {
-      // Off every element: nothing selected, or as it was with Shift.
-      if (!event.shiftKey) editor.deselect();
+      // Off every element: a box to select with; a click alone selects nothing.
+      event.preventDefault();
+      startBand(event);
       return;
     }
     event.preventDefault();
@@ -314,10 +370,57 @@
     capture(event);
   }
 
+  /** Carries a gesture to where the pointer is now, with the modifiers held now. */
+  function apply(g: Exclude<Gesture, { kind: 'draw' } | { kind: 'pan' }>, p: Pointer) {
+    // A copy: an event's coordinates are not its own properties, and do not spread.
+    g.last = { clientX: p.clientX, clientY: p.clientY, shiftKey: p.shiftKey, ctrlKey: p.ctrlKey, metaKey: p.metaKey, altKey: p.altKey };
+    if (g.kind === 'band') {
+      if (!g.moved && Math.abs(p.clientX - g.x0) + Math.abs(p.clientY - g.y0) < 3) return;
+      g.moved = true;
+      g.to = onLabel(p);
+      return;
+    }
+    let dx = (p.clientX - g.x0) / scale;
+    let dy = (p.clientY - g.y0) / scale;
+    if (!g.moved) {
+      if (Math.abs(p.clientX - g.x0) + Math.abs(p.clientY - g.y0) < 3) return;
+      g.moved = true;
+      editor.begin();
+    }
+    const ctrl = p.ctrlKey || p.metaKey;
+    // Shift frees it from the grid, as from any snapping.
+    const step = p.shiftKey ? undefined : gridStep(doc.units);
+    if (g.kind === 'move') {
+      if (p.shiftKey) [dx, dy] = alongOneAxis(dx, dy);
+      editor.doc.elements = moveElements(doc, g.indices, g.start, dx, dy, step ?? 0.001);
+    } else if (g.kind === 'resize') {
+      const o = { keepRatio: p.shiftKey, fromCenter: ctrl, step };
+      editor.doc.elements = g.start.map((e, i) => (i === g.index ? resizeFrom(doc, e, g.handle, dx, dy, o) : e));
+    } else if (g.kind === 'scale') {
+      const to = scaledBox(g.box, g.handle, dx, dy, doc.units, { keepRatio: p.shiftKey, fromCenter: ctrl, step });
+      editor.doc.elements = scaleElements(doc, g.indices, g.start, g.box, to);
+    } else {
+      // The angle swept about the center.
+      const delta = ((Math.atan2(p.clientY - g.cy, p.clientX - g.cx) - Math.atan2(g.y0 - g.cy, g.x0 - g.cx)) * 180) / Math.PI;
+      const snapping = { steps: ctrl, snap45: editor.snapAngles && !p.shiftKey };
+      if (g.indices.length === 1) {
+        const i = g.indices[0]!;
+        const angle = turned((g.start[i]!.rotation ?? 0) + delta, snapping);
+        editor.doc.elements = g.start.map((e, k) => (k === i ? withProp(e, 'rotation', angle || undefined) : e));
+      } else {
+        editor.doc.elements = rotateElements(doc, g.indices, g.start, snapping.steps ? Math.round(delta / 15) * 15 : delta);
+      }
+    }
+  }
+
   function pointerMove(event: PointerEvent) {
     if (paper) {
       const [x, y] = onLabel(event);
       editor.pointer = x >= 0 && y >= 0 && x <= doc.width && y <= doc.height ? { x: tidy(x, doc.units), y: tidy(y, doc.units) } : null;
+    }
+    if (viewport) {
+      const r = viewport.getBoundingClientRect();
+      readoutAt = [event.clientX - r.left, event.clientY - r.top];
     }
     const g = gesture;
     if (!g) return;
@@ -331,27 +434,14 @@
       g.to = gridPoint(event);
       return;
     }
-    const dx = (event.clientX - g.x0) / scale;
-    const dy = (event.clientY - g.y0) / scale;
-    if (!g.moved) {
-      if (Math.abs(event.clientX - g.x0) + Math.abs(event.clientY - g.y0) < 3) return;
-      g.moved = true;
-      editor.begin();
-    }
-    const step = event.altKey ? 0.001 : gridStep(doc.units);
-    if (g.kind === 'move') {
-      editor.doc.elements = moveElements(doc, g.indices, g.start, dx, dy, step);
-    } else if (g.kind === 'scale') {
-      const b = g.box;
-      let [x0, y0, x1, y1] = [b.x, b.y, b.x + b.width, b.y + b.height];
-      if (g.handle.includes('w')) x0 = Math.min(snap(x0 + dx, step, doc.units), x1 - step);
-      if (g.handle.includes('e')) x1 = Math.max(snap(x1 + dx, step, doc.units), x0 + step);
-      if (g.handle.includes('n')) y0 = Math.min(snap(y0 + dy, step, doc.units), y1 - step);
-      if (g.handle.includes('s')) y1 = Math.max(snap(y1 + dy, step, doc.units), y0 + step);
-      editor.doc.elements = scaleElements(doc, g.indices, g.start, b, { x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
-    } else {
-      editor.doc.elements = g.start.map((e, i) => (i === g.index ? resizeElement(doc, e, g.handle, dx, dy, step) : e));
-    }
+    apply(g, event);
+  }
+
+  // A modifier pressed or let go mid-drag: the drag again, as it would be with it.
+  function modifierChanged(event: KeyboardEvent) {
+    const g = gesture;
+    if (!g || !('last' in g) || !g.last || !['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return;
+    apply(g, { ...g.last, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, altKey: event.altKey });
   }
 
   function pointerUp(event: PointerEvent) {
@@ -359,7 +449,99 @@
     const g = gesture;
     gesture = null;
     if (g?.kind === 'draw') finishDrawing(g.from, g.to);
+    // A click, not a drag, on one of several selected: that one alone, with its group.
+    if (g?.kind === 'move' && !g.moved && g.indices.length > 1) editor.selected = withGroups(doc.elements, [g.hit]);
+    if (g?.kind === 'band') {
+      if (!g.moved) {
+        if (!g.add) editor.deselect();
+        return;
+      }
+      const b = { x: Math.min(g.from[0], g.to[0]), y: Math.min(g.from[1], g.to[1]), width: Math.abs(g.to[0] - g.from[0]), height: Math.abs(g.to[1] - g.from[1]) };
+      const taken = withGroups(doc.elements, inBox(doc, b, g.to[0] >= g.from[0]));
+      editor.selected = g.add ? [...new Set([...editor.selected, ...taken])] : taken;
+    }
+    // Ctrl+click on a handle, not dragged: the numbers are given at that point.
+    if (g?.kind === 'resize' && !g.moved && (event.ctrlKey || event.metaKey)) editor.anchor = handleAnchor[g.handle];
   }
+
+  const handleAnchor: Record<Handle, Anchor> = { nw: 'nw', n: 'n', ne: 'ne', e: 'e', se: 'se', s: 's', sw: 'sw', w: 'w' };
+
+  /** What floats beside the pointer while dragging: the size, angle or place. */
+  const readout = $derived.by(() => {
+    const g = gesture;
+    if (!g || !('moved' in g) || !g.moved || g.kind === 'band') return null;
+    const u = doc.units;
+    const f = (v: number) => (u === 'in' ? v.toFixed(3) : v.toFixed(2));
+    const els = editor.selected.map((i) => doc.elements[i]).filter((e) => e !== undefined);
+    if (!els.length) return null;
+    if (g.kind === 'rotate') return els.length === 1 ? `${els[0]!.rotation ?? 0}°` : null;
+    const b = boundsOf(els);
+    if (g.kind === 'move') return `${f(b.x)}, ${f(b.y)} ${u}`;
+    const e = els.length === 1 ? els[0]! : b;
+    return `${f(e.width)} × ${f(e.height)} ${u}`;
+  });
+
+  // The menu a right-click opens: on an element not selected, it is selected first.
+  let menu = $state<{ x: number; y: number } | null>(null);
+  function openMenu(event: MouseEvent) {
+    event.preventDefault();
+    const hit = (event.target as Element).closest('[data-element]');
+    const i = hit ? Number(hit.getAttribute('data-element')) : -1;
+    if (i >= 0 && !editor.selected.includes(i) && !doc.elements[i]?.locked) editor.selected = withGroups(doc.elements, [i]);
+    menu = { x: event.clientX, y: event.clientY };
+  }
+  /** Shift+F10 or the menu key, on an element: the same menu, at it. */
+  function menuKey(event: KeyboardEvent, i: number) {
+    if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return;
+    event.preventDefault();
+    if (!editor.selected.includes(i)) editor.selected = withGroups(doc.elements, [i]);
+    const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    menu = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  async function pasteFromMenu() {
+    if (editor.clipboard && editor.paste(editor.clipboard)) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (/<svg[\s>]/.test(text)) onfile(new File([text], 'the clipboard', { type: 'image/svg+xml' }));
+      else editor.paste(text);
+    } catch {
+      // The system clipboard cannot be read here: Ctrl+V can.
+    }
+  }
+
+  const menuItems = $derived.by((): MenuItem[] => {
+    const none = !editor.selected.length;
+    const grouped =
+      editor.selected.length > 1 && editor.selected.every((i) => doc.elements[i]?.group && doc.elements[i]?.group === doc.elements[editor.selected[0]!]?.group);
+    const locked = !none && editor.selected.every((i) => doc.elements[i]?.locked);
+    return [
+      { label: 'Bring to front', run: () => editor.restack('front'), disabled: none },
+      { label: 'Bring forward', run: () => editor.restack('forward'), disabled: none },
+      { label: 'Send backward', run: () => editor.restack('backward'), disabled: none },
+      { label: 'Send to back', run: () => editor.restack('back'), disabled: none },
+      'separator',
+      grouped ? { label: 'Ungroup', run: () => editor.ungroup() } : { label: 'Group', run: () => editor.group(), disabled: editor.selected.length < 2 },
+      'separator',
+      { label: 'Turn 90° left', run: () => editor.turn(-90), disabled: none },
+      { label: 'Turn 90° right', run: () => editor.turn(90), disabled: none },
+      { label: 'Flip across', run: () => editor.flip(true), disabled: none },
+      { label: 'Flip down', run: () => editor.flip(false), disabled: none },
+      'separator',
+      { label: locked ? 'Unlock' : 'Lock', run: () => editor.lockSelected(), disabled: none },
+      'separator',
+      {
+        label: 'Copy',
+        run: () => {
+          const text = editor.copy();
+          void navigator.clipboard?.writeText(text).catch(() => {});
+        },
+        disabled: none,
+      },
+      { label: 'Paste', run: () => void pasteFromMenu() },
+      { label: 'Delete', run: () => editor.remove(), disabled: none },
+    ];
+  });
 
   /** Adds what the tool draws, in the box dragged out, or at its usual size where clicked. */
   function finishDrawing(a: [number, number], b: [number, number]) {
@@ -401,7 +583,7 @@
     const g = gesture;
     if (g) {
       gesture = null;
-      if (g.kind !== 'draw' && g.kind !== 'pan' && g.moved) editor.cancel();
+      if (g.kind !== 'draw' && g.kind !== 'pan' && g.kind !== 'band' && g.moved) editor.cancel();
       return true;
     }
     if (points.length) {
@@ -446,7 +628,16 @@
   });
 </script>
 
-<svelte:window onkeydown={windowKeydown} onkeyup={windowKeyup} />
+<svelte:window
+  onkeydown={(e) => {
+    windowKeydown(e);
+    modifierChanged(e);
+  }}
+  onkeyup={(e) => {
+    windowKeyup(e);
+    modifierChanged(e);
+  }}
+/>
 
 <div class="grid h-full w-full" style="grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr)">
 <div aria-hidden="true" class="border-r border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"></div>
@@ -467,6 +658,7 @@
     hovering = false;
     editor.pointer = null;
   }}
+  oncontextmenu={openMenu}
   ondblclick={(ev) => {
     if (editor.tool !== 'polygon') return;
     ev.preventDefault();
@@ -518,6 +710,7 @@
         aria-pressed={editor.selected.includes(i)}
         tabindex={e.locked ? -1 : 0}
         onpointerdown={(ev) => downOnElement(ev, i)}
+        onkeydown={(ev) => menuKey(ev, i)}
         onfocus={() => {
           // Tabbed to, it is selected, as clicked.
           if (!byPointer && !editor.selected.includes(i) && !e.locked) editor.selected = withGroups(doc.elements, [i]);
@@ -537,6 +730,20 @@
     {/each}
     {#if single && !single.locked}
       {@const h = handlePoints(single)}
+      {@const c = handlePoints({ ...single, width: 0, height: 0 }).n}
+      {#each ['nw', 'ne', 'se', 'sw'] as const as k (k)}
+        {@const len = Math.hypot(h[k][0] - c[0], h[k][1] - c[1]) || 1}
+        <circle
+          cx={h[k][0] + ((h[k][0] - c[0]) / len) * 12}
+          cy={h[k][1] + ((h[k][1] - c[1]) / len) * 12}
+          r="12"
+          class="rotate-zone"
+          data-rotate={k}
+          onpointerdown={downOnRotate}
+          onpointerenter={() => (over = 'rotate')}
+          onpointerleave={() => (over = null)}
+        />
+      {/each}
       {#each handles as k (k)}
         <rect
           x={h[k][0] - 4}
@@ -547,13 +754,25 @@
           data-handle={k}
           style:cursor={cursorFor(k, single.rotation)}
           onpointerdown={(ev) => downOnHandle(ev, k)}
-          onpointerenter={() => (overHandle = true)}
-          onpointerleave={() => (overHandle = false)}
+          onpointerenter={() => (over = 'handle')}
+          onpointerleave={() => (over = null)}
         />
       {/each}
     {:else if selectionBox}
       {@const b = selectionBox}
       <rect x={sx(b.x)} y={sy(b.y)} width={b.width * scale} height={b.height * scale} class="outline group-box" />
+      {#each [[0, 0, -1, -1], [1, 0, 1, -1], [1, 1, 1, 1], [0, 1, -1, 1]] as const as [fx, fy, ux, uy], k (k)}
+        <circle
+          cx={sx(b.x + fx * b.width) + ux * 8.5}
+          cy={sy(b.y + fy * b.height) + uy * 8.5}
+          r="12"
+          class="rotate-zone"
+          data-rotate={k}
+          onpointerdown={downOnRotate}
+          onpointerenter={() => (over = 'rotate')}
+          onpointerleave={() => (over = null)}
+        />
+      {/each}
       {#each handles as k (k)}
         {@const px = sx(b.x + (k.includes('w') ? 0 : k.includes('e') ? b.width : b.width / 2))}
         {@const py = sy(b.y + (k.includes('n') ? 0 : k.includes('s') ? b.height : b.height / 2))}
@@ -566,10 +785,22 @@
           data-handle={k}
           style:cursor={cursorFor(k)}
           onpointerdown={(ev) => downOnHandle(ev, k)}
-          onpointerenter={() => (overHandle = true)}
-          onpointerleave={() => (overHandle = false)}
+          onpointerenter={() => (over = 'handle')}
+          onpointerleave={() => (over = null)}
         />
       {/each}
+    {/if}
+    {#if gesture?.kind === 'band' && gesture.moved}
+      {@const g = gesture}
+      {@const covering = g.to[0] >= g.from[0]}
+      <rect
+        x={sx(Math.min(g.from[0], g.to[0]))}
+        y={sy(Math.min(g.from[1], g.to[1]))}
+        width={Math.abs(g.to[0] - g.from[0]) * scale}
+        height={Math.abs(g.to[1] - g.from[1]) * scale}
+        class={covering ? 'band covering' : 'band touching'}
+        data-band={covering ? 'covering' : 'touching'}
+      />
     {/if}
     {#if draft}
       {#if editor.tool === 'line'}
@@ -587,8 +818,17 @@
       {/each}
     {/if}
   </svg>
+  {#if readout && readoutAt}
+    <div class="pointer-events-none absolute rounded bg-zinc-900/85 px-1.5 py-0.5 text-[0.7rem] text-white tabular-nums" style="left:{readoutAt[0] + 14}px;top:{readoutAt[1] + 14}px" data-readout>
+      {readout}
+    </div>
+  {/if}
 </div>
 </div>
+
+{#if menu}
+  <ContextMenu x={menu.x} y={menu.y} label="Selection" items={menuItems} onclose={() => (menu = null)} />
+{/if}
 
 <style>
   .element {
@@ -625,6 +865,23 @@
     stroke: rgb(37 99 235);
     stroke-width: 1px;
     pointer-events: auto;
+  }
+  .rotate-zone {
+    fill: transparent;
+    pointer-events: auto;
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M18 8a8 8 0 1 0 1 7' fill='none' stroke='white' stroke-width='4'/%3E%3Cpath d='M18 8a8 8 0 1 0 1 7' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M20 3v6h-6' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E") 12 12, alias;
+  }
+  .band {
+    stroke-width: 1px;
+  }
+  .band.covering {
+    fill: rgb(37 99 235 / 0.08);
+    stroke: rgb(37 99 235);
+  }
+  .band.touching {
+    fill: rgb(22 163 74 / 0.08);
+    stroke: rgb(22 163 74);
+    stroke-dasharray: 4 3;
   }
   .draft {
     fill: rgb(37 99 235 / 0.08);

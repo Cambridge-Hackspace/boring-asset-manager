@@ -22,6 +22,7 @@ import {
   type TemplateDoc,
   type TemplateElement,
 } from '../../../lib/template';
+import type { Anchor } from './transform';
 import { clampScale, fitView, fitWidthView, nextStep, scaleAt100, zoomAround, type View } from './view';
 
 /** What a click or drag on the label does. */
@@ -40,6 +41,24 @@ export class Editor {
   pointer = $state<{ x: number; y: number } | null>(null);
   canUndo = $state(false);
   canRedo = $state(false);
+  /** The point of the selection its numbers are given at, and its handles' Ctrl+click sets. */
+  anchor = $state<Anchor>('nw');
+  /** Width and height changed together, in proportion, from the numbers. */
+  aspectLocked = $state(false);
+  /** Turning snaps to multiples of 45° when near one. */
+  snapAngles = $state(rememberedOn('bam.editor-snap-angles'));
+  /** What was last copied, for Paste in the menu, where the system clipboard cannot be read. */
+  clipboard = $state('');
+
+  setSnapAngles(on: boolean) {
+    this.snapAngles = on;
+    try {
+      localStorage.setItem('bam.editor-snap-angles', on ? 'on' : 'off');
+    } catch {
+      // Storage unavailable: it lasts as long as the page.
+    }
+  }
+
   /** Everything but the canvas hidden (Tab). */
   canvasOnly = $state(false);
 
@@ -311,9 +330,26 @@ export class Editor {
     }
   }
 
-  /** The selection as the clipboard holds it. */
+  /** The selection as the clipboard holds it, kept for Paste in the menu too. */
   copy(): string {
-    return clip(this.doc, this.selected);
+    this.clipboard = clip(this.doc, this.selected);
+    return this.clipboard;
+  }
+
+  /** Locks the selection, or unlocks it when all of it is locked. */
+  lockSelected() {
+    if (!this.selected.length) return;
+    const all = this.selected.every((i) => this.doc.elements[i]?.locked);
+    this.begin();
+    this.doc.elements = this.doc.elements.map((e, i) => {
+      if (!this.selected.includes(i)) return e;
+      if (all) {
+        const { locked: _l, ...rest } = e;
+        return rest;
+      }
+      return { ...e, locked: true };
+    });
+    if (!all) this.selected = [];
   }
 
   /** Adds elements from the clipboard's text, a little way from where they were. */
@@ -331,6 +367,15 @@ function rememberedUnits(): 'mm' | 'in' | null {
     return u === 'mm' || u === 'in' ? u : null;
   } catch {
     return null;
+  }
+}
+
+/** A switch on until switched off in this browser. */
+function rememberedOn(key: string): boolean {
+  try {
+    return localStorage.getItem(key) !== 'off';
+  } catch {
+    return true;
   }
 }
 
