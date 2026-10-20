@@ -97,9 +97,11 @@
       <button type="button" class="icon-btn" aria-label="Remove it" title="Remove it" onclick={() => editor.remove()}><Icon name="trash" size={16} /></button>
     </div>
     {#if problemsFor(index).length}
-      <ul class="space-y-1" role="alert">
-        {#each problemsFor(index) as p (p)}<li class="error-text text-xs">{p}</li>{/each}
-      </ul>
+      <div role="alert">
+        <ul class="space-y-1">
+          {#each problemsFor(index) as p (p)}<li class="error-text text-xs">{p}</li>{/each}
+        </ul>
+      </div>
     {/if}
 
 

@@ -750,3 +750,103 @@ test('guides out of the rulers, snapping to them and the grid, and dragging them
   expect(saved.template.guides).toBeUndefined();
   expect(saved.template.grid).toEqual({ x: 5, y: 5, visible: true });
 });
+
+test('draw with the modifiers, the pen and the measure, and edit the points', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', { name: unique('Drawing'), units: 'mm', width: 60, height: 30, dpi: 300, layering: 'list', elements: [] });
+  await page.goto(`/templates/${template.id}/edit`);
+  // Snapping off, to draw exactly where the pointer goes.
+  await page.getByRole('button', { name: 'Snap to ▾' }).click();
+  for (const item of ['The grid', 'Guides', 'Other elements', 'The label']) await page.getByRole('menuitemcheckbox', { name: new RegExp(item) }).click();
+  await page.keyboard.press('Escape');
+  const at = await onPaper(page);
+  const mm = (x: number, y: number) => at(x / 60, y / 30);
+
+  // A square with Shift, from its center with Ctrl; Alt moves it while drawing.
+  await tool(page, 'Rectangle').click();
+  await page.mouse.move(...mm(10, 10));
+  await page.mouse.down();
+  await page.keyboard.down('Shift');
+  await page.keyboard.down('Control');
+  await page.mouse.move(...mm(14, 12), { steps: 4 });
+  await expect(page.locator('[data-readout]')).toHaveText('8.00 × 8.00 mm');
+  await page.keyboard.up('Control');
+  await page.keyboard.up('Shift');
+  await page.keyboard.down('Alt');
+  await page.mouse.move(...mm(16, 14), { steps: 4 });
+  await page.keyboard.up('Alt');
+  await page.mouse.up();
+  // Let go of Shift and Ctrl, it runs from where it was pressed, which Alt
+  // moved 2 across and down: from (12, 12) to (16, 14).
+  await expect(page.locator('#el-0-x')).toHaveValue('12');
+  await expect(page.locator('#el-0-y')).toHaveValue('12');
+
+  // A line in 15° steps with Shift.
+  await tool(page, 'Line').click();
+  await page.mouse.move(...mm(30, 25));
+  await page.mouse.down();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(...mm(40, 20.5), { steps: 4 });
+  await expect(page.locator('[data-readout]')).toContainText('at 30°');
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+
+  // The pen: a corner, a curve pulled out, a corner, then the first point again to close it.
+  await tool(page, 'Pen').click();
+  await page.mouse.click(...mm(40, 3));
+  await page.mouse.move(...mm(55, 5));
+  await page.mouse.down();
+  await page.mouse.move(...mm(58, 12), { steps: 4 });
+  await page.mouse.up();
+  await page.mouse.click(...mm(42, 14));
+  await expect(page.locator('[data-pen]')).toBeAttached();
+  await page.mouse.click(...mm(40, 3));
+  // An open path: a point taken back with a right-click, finished with a double-click.
+  await tool(page, 'Pen').click();
+  await page.mouse.click(...mm(2, 26));
+  await page.mouse.click(...mm(10, 22));
+  await page.mouse.click(...mm(12, 24), { button: 'right' });
+  await page.mouse.click(...mm(11, 29));
+  await page.mouse.dblclick(...mm(20, 26));
+  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('listitem')).toHaveCount(4);
+
+  // Editing the closed path's points: a double-click enters; one on the outline adds a point.
+  const closed = onLabel(page, /^Shape 3/);
+  await closed.click();
+  await closed.dblclick();
+  await expect(page.locator('[data-point-editor] [data-node]')).toHaveCount(3);
+  await page.mouse.dblclick(...mm(41, 8.5));
+  await expect(page.locator('[data-point-editor] [data-node]')).toHaveCount(4);
+  // A point dragged; Shift+click makes one smooth; Delete takes the chosen one off.
+  const node = (await page.locator('[data-node="0-0"]').boundingBox())!;
+  await page.mouse.move(node.x + 4, node.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(node.x + 4, node.y - 20, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.locator('#el-2-y')).not.toHaveValue('3');
+  await page.keyboard.down('Shift');
+  await page.locator('[data-node="0-2"]').click();
+  await page.keyboard.up('Shift');
+  await expect(page.locator('[data-node-handle^="0-2-"]')).toHaveCount(2);
+  await page.locator('[data-node="0-3"]').click();
+  await page.keyboard.press('Delete');
+  await expect(page.locator('[data-point-editor] [data-node]')).toHaveCount(3);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-point-editor]')).toHaveCount(0);
+
+  // The measure: nothing is added.
+  await tool(page, 'Measure').click();
+  await drag(page, mm(10, 5), mm(13, 9));
+  await expect(page.locator('[data-measured]')).toContainText('5.00 mm at 306.9°');
+  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('listitem')).toHaveCount(4);
+  await axe(page);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = (await api.call('GET', `/templates/${template.id}`)).template.elements as { shape: string; d?: string; fill?: string; width: number; height: number }[];
+  expect(saved.map((e) => e.shape)).toEqual(['rectangle', 'line', 'path', 'path']);
+  expect(saved[0]).toMatchObject({ width: 4, height: 2 });
+  expect(saved[2]!.d).toMatch(/C.* Z$/);
+  // From (2, 26) down to (11, 29) and up to (20, 26): 18 across, 3 down.
+  expect(saved[3]!.d).toBe('M0 0 L0.5 1 L1 0');
+  expect(saved[3]!.fill).toBe('none');
+});
