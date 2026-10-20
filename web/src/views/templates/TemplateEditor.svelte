@@ -5,6 +5,7 @@
   import { startLiveRenderer, type Frame, type LiveRenderer, type LiveState, type PreviewData } from '../../lib/live/client';
   import type { Field, GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
+  import { screenKey } from '../../lib/screen';
   import {
     elementIndex,
     gridStep,
@@ -27,6 +28,7 @@
   import LabelPanel from './editor/LabelPanel.svelte';
   import LayersPanel from './editor/LayersPanel.svelte';
   import OptionsBar from './editor/OptionsBar.svelte';
+  import OverviewPanel from './editor/OverviewPanel.svelte';
   import PreviewPanel from './editor/PreviewPanel.svelte';
   import PrinterPanel from './editor/PrinterPanel.svelte';
   import PropertiesPanel from './editor/PropertiesPanel.svelte';
@@ -324,6 +326,8 @@
       // Tab with nothing focused: everything but the label, hidden or shown.
       event.preventDefault();
       setCanvasOnly(!editor.canvasOnly);
+    } else if (!mod && !event.altKey && zoomKey(event.key)) {
+      event.preventDefault();
     } else if (event.key.startsWith('Arrow') && editor.selected.length && !mod) {
       const base = gridStep(doc.units);
       const step = event.altKey ? base / 10 : base;
@@ -335,6 +339,57 @@
       editor.doc.elements = moveElements(doc, editor.selected, editor.elements(), dx, dy, step);
     }
   }
+
+  // The zoom keys, as in Krita: + and - toward the pointer, 1 for 100%, 2
+  // to fit the label, 3 to fit its width, and 0 between fitting and the
+  // zoom before.
+  function zoomKey(key: string): boolean {
+    const at = editor.pointer && canvas ? canvas.viewportPoint(editor.pointer.x, editor.pointer.y) : undefined;
+    switch (key) {
+      case '+':
+      case '=':
+        editor.zoomStep(true, ...(at ?? []));
+        return true;
+      case '-':
+        editor.zoomStep(false, ...(at ?? []));
+        return true;
+      case '1':
+        editor.setZoom(100, ...(at ?? []));
+        return true;
+      case '2':
+        editor.fit();
+        return true;
+      case '3':
+        editor.fitWidth();
+        return true;
+      case '0':
+        editor.toggleFit();
+        return true;
+    }
+    return false;
+  }
+
+  // Print size follows the screen the window is on: moved to another, or
+  // its pixel ratio changed, it takes that screen's calibration.
+  onMount(() => {
+    const update = () => (editor.screen = screenKey());
+    let query: MediaQueryList | null = null;
+    const watch = () => {
+      query?.removeEventListener('change', onChange);
+      query = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`) ?? null;
+      query?.addEventListener('change', onChange);
+    };
+    const onChange = () => {
+      update();
+      watch();
+    };
+    watch();
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      query?.removeEventListener('change', onChange);
+    };
+  });
 
   // The clipboard: elements, as the editor writes them, or SVG artwork.
   function copying(event: ClipboardEvent) {
@@ -436,6 +491,7 @@
       <aside hidden={editor.canvasOnly} class="w-full shrink-0 border-t border-zinc-200 md:w-72 md:overflow-y-auto md:border-t-0 md:border-l bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-label="Panels">
           <Dock
             panels={[
+              { id: 'overview', title: 'Overview', content: overview },
               { id: 'properties', title: 'Properties', content: properties },
               { id: 'layers', title: 'Layers', content: layers },
               { id: 'arrange', title: 'Arrange', content: arrange },
@@ -451,6 +507,9 @@
   </div>
 {/if}
 
+{#snippet overview()}
+  <OverviewPanel frame={drawingLive ? frame : null} {previewURL} />
+{/snippet}
 {#snippet properties()}
   <PropertiesPanel {generators} {placeholderList} {problemsFor} {codeLayouts} />
 {/snippet}

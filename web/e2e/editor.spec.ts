@@ -429,3 +429,93 @@ test('the label redraws as it will print while an element is dragged, in the bro
   await page.mouse.up();
   expect(asked).toEqual([]);
 });
+
+test('zoom toward the pointer, pan, the zoom keys, rulers, the overview and print size', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('View'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [{ type: 'shape', shape: 'rectangle', x: 10, y: 5, width: 10, height: 10, stroke: 'black', stroke_width: 0.5 }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const label = page.getByRole('img', { name: 'Label preview' });
+  await expect(label).toBeVisible();
+  const zoom = page.locator('#zoom-level');
+  const rect = () => onLabel(page, /^Shape 1/).boundingBox().then((b) => b!);
+
+  // Ctrl+wheel zooms in toward the pointer: the corner under it stays there.
+  const r0 = await rect();
+  await page.mouse.move(r0.x, r0.y);
+  const before = await zoom.inputValue();
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -300);
+  await page.keyboard.up('Control');
+  await expect(zoom).not.toHaveValue(before);
+  const r1 = await rect();
+  expect(r1.width).toBeGreaterThan(r0.width * 1.5);
+  expect(Math.abs(r1.x - r0.x)).toBeLessThan(2);
+  expect(Math.abs(r1.y - r0.y)).toBeLessThan(2);
+
+  // Space and drag, or the middle button, moves the view; the wheel scrolls it.
+  await page.mouse.move(r1.x + 200, r1.y + 50);
+  await page.keyboard.down(' ');
+  await drag(page, [r1.x + 200, r1.y + 50], [r1.x + 260, r1.y + 90]);
+  await page.keyboard.up(' ');
+  let r2 = await rect();
+  expect(Math.round(r2.x - r1.x)).toBe(60);
+  expect(Math.round(r2.y - r1.y)).toBe(40);
+  await page.mouse.move(r2.x + 200, r2.y + 50);
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(r2.x + 170, r2.y + 50, { steps: 4 });
+  await page.mouse.up({ button: 'middle' });
+  const r3 = await rect();
+  expect(Math.round(r3.x - r2.x)).toBe(-30);
+  await page.mouse.wheel(0, 50);
+  r2 = await rect();
+  expect(Math.round(r3.y - r2.y)).toBe(50);
+  // Nothing was moved on the label.
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+
+  // 2 fits the label; 0 goes back to the zoom before, and 0 again fits.
+  await page.mouse.move(5, 5);
+  await page.keyboard.press('2');
+  const fitted = (await label.boundingBox())!;
+  const fittedZoom = await zoom.inputValue();
+  await page.keyboard.press('0');
+  await expect(zoom).not.toHaveValue(fittedZoom);
+  await page.keyboard.press('0');
+  await expect(zoom).toHaveValue(fittedZoom);
+  // 3 fills the width, 32 pixels in from each side; 1 is 100%, a printer
+  // dot a screen pixel: 62 mm at 300 DPI.
+  await page.keyboard.press('1');
+  await page.keyboard.press('3');
+  const desk = (await page.locator('[data-ruler="x"]').boundingBox())!;
+  const wide = (await label.boundingBox())!;
+  expect(Math.round(wide.x - desk.x)).toBe(32);
+  expect(Math.round(wide.width)).toBe(Math.round(desk.width - 64));
+  expect(wide.width).toBeGreaterThanOrEqual(fitted.width - 1);
+  await page.keyboard.press('1');
+  await expect(zoom).toHaveValue('100%');
+  expect(Math.round((await label.boundingBox())!.width)).toBe(732);
+
+  // The rulers mark the pointer.
+  const r4 = await rect();
+  await page.mouse.move(r4.x + 5, r4.y + 5);
+  const marker = page.locator('[data-ruler="x"] line.stroke-blue-600');
+  expect(Math.abs(Number(await marker.getAttribute('x1')) - (r4.x + 5 - (await page.locator('[data-ruler="x"]').boundingBox())!.x))).toBeLessThan(1.5);
+
+  // Dragging in the overview moves the view there.
+  await page.keyboard.press('Control+Shift+A');
+  const overview = page.locator('[data-overview-view]').locator('..');
+  const o = (await overview.boundingBox())!;
+  const l0 = (await label.boundingBox())!;
+  await page.mouse.click(o.x + o.width * 0.9, o.y + o.height * 0.5);
+  const l1 = (await label.boundingBox())!;
+  expect(l1.x).toBeLessThan(l0.x - 50);
+
+  // Print size: at 100%, the label is its real size, by the browser's inch until calibrated.
+  await page.getByRole('button', { name: 'Print size' }).click();
+  await page.mouse.move(5, 5);
+  await page.keyboard.press('1');
+  await expect(page.getByRole('button', { name: 'Approximate: calibrate' })).toBeVisible();
+  expect(Math.round((await label.boundingBox())!.width)).toBe(Math.round((62 * 96) / 25.4));
+  await axe(page);
+});
