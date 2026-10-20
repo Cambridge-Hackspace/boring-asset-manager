@@ -503,3 +503,42 @@ test('the editor fits a phone', async ({ signedIn: page, api }) => {
   const wide = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(wide).toBeLessThanOrEqual(390);
 });
+
+test('the label redraws as it will print while an element is dragged, in the browser', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Live'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [{ type: 'text', x: 2, y: 2, width: 30, height: 10, font_size: 14, content_binding: 'LIVE' }],
+  });
+  const wasm = page.waitForResponse((r) => r.url().endsWith('.wasm'));
+  await page.goto(`/templates/${template.id}/edit`);
+  const preview = page.getByRole('img', { name: 'Label preview' });
+  // The live renderer's canvas, once it has loaded; the server's image before.
+  await expect(preview.locator('canvas')).toBeVisible();
+  // It came compressed, as WebAssembly.
+  const served = (await wasm).headers();
+  expect([served['content-encoding'], served['content-type']]).toEqual(['br', 'application/wasm']);
+  await expect(page.getByRole('status').filter({ hasText: /live preview/i })).toHaveCount(0);
+  const dots = () =>
+    preview.locator('canvas').evaluate((c: HTMLCanvasElement) => {
+      const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+      let black = 0;
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i] === 0) (black++, (sum += (i / 4) % c.width));
+      return { black, meanX: black ? sum / black : 0 };
+    });
+  await expect.poll(async () => (await dots()).black).toBeGreaterThan(100);
+  const before = await dots();
+
+  // Dragged, and not yet let go: the canvas has already redrawn, and the
+  // server was not asked.
+  const asked: string[] = [];
+  page.on('request', (r) => r.url().includes('/templates/preview') && !r.url().includes('preview-data') && asked.push(r.url()));
+  const box = (await page.getByRole('button', { name: /^Text 1/ }).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 8 });
+  await expect.poll(async () => (await dots()).meanX).toBeGreaterThan(before.meanX + 100);
+  expect((await dots()).black).toBe(before.black);
+  await page.mouse.up();
+  expect(asked).toEqual([]);
+});

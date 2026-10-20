@@ -8,11 +8,14 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 };
 
-// A dialog's showModal and close, which open and close it.
-HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
-  this.open = true;
-};
-HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
-  this.open = false;
-  this.dispatchEvent(new Event('close'));
-};
+// A dialog's showModal and close, which open and close it. (Tests run in
+// Node rather than jsdom, such as the live renderer's, have no dialogs.)
+if (typeof HTMLDialogElement !== 'undefined') {
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+    this.open = false;
+    this.dispatchEvent(new Event('close'));
+  };
+}

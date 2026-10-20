@@ -22,8 +22,9 @@ GOCACHE=$REAPER_CACHE_GOCACHE \
 GOPATH=$REAPER_CACHE_GOPATH \
 go build -v -o /dev/null ./cmd/bam"""
 # Caches are declared here and mounted for every verb. npm and node-modules
-# hold the web interface's packages, off the guest's small root disk.
-cache = ["gocache", "gopath", "npm", "node-modules"]
+# hold the web interface's packages, off the guest's small root disk, and
+# tinygo the standard library TinyGo builds for the live renderer.
+cache = ["gocache", "gopath", "npm", "node-modules", "tinygo"]
 
 [run]
 # The Go suites (with -race, the test database and uploads in $REAPER_STATE),
@@ -37,6 +38,7 @@ images = [
   "docker.io/library/golang@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61",
   "docker.io/library/node@sha256:2c752226d477b4a886378baa95b9af252be59301b725fdb0b7e15208131505a8",
   "mcr.microsoft.com/playwright@sha256:bc72a8df40831ded821e3cbc79c318c21b44d6e51dff9fd89ace7a8249c5b462",
+  "docker.io/tinygo/tinygo@sha256:3470986dbce0b43cc5c590d46b8770f656528bc3e9f29267214d464c0fbbe9c5",
 ]
 
 [sync]
@@ -46,6 +48,7 @@ exclude = [
   "/out/",
   "/web/node_modules/",
   "/web/.e2e/",
+  "/web/src/lib/live/generated/",
   "/web/test-results/",
   "/web/playwright-report/",
   "/internal/webui/static/app/",

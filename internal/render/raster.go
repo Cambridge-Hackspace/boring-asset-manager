@@ -54,11 +54,11 @@ func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 	if len(items) == 1 && items[0].EvenOdd {
 		evenOdd(coverage, items[0].Path)
 	} else {
-		z := vector.NewRasterizer(bounds.Dx(), bounds.Dy())
-		for _, it := range items {
-			tracePath(z, it.Path)
+		paths := make([]Path, len(items))
+		for i, it := range items {
+			paths[i] = it.Path
 		}
-		z.Draw(coverage, bounds, image.Opaque, image.Point{})
+		fill(coverage, paths)
 	}
 	ink := uint8(0)
 	if paint == White {
@@ -90,10 +90,8 @@ func evenOdd(coverage *image.Alpha, p Path) {
 		for end < len(p) && p[end].Op != MoveTo {
 			end++
 		}
-		z := vector.NewRasterizer(bounds.Dx(), bounds.Dy())
-		tracePath(z, p[start:end])
 		clear(one.Pix)
-		z.Draw(one, bounds, image.Opaque, image.Point{})
+		fill(one, []Path{p[start:end]})
 		for i, a := range one.Pix {
 			if a == 0 {
 				continue
@@ -123,23 +121,90 @@ func fillRects(img *image.Gray, rects []Rect, paint Paint) {
 	}
 }
 
-func tracePath(z *vector.Rasterizer, p Path) {
-	open := false
+// tile is the largest square the rasterizer fills at once. Up to 512 dots
+// across, x/image/vector adds up coverage in integers, which its assembly
+// on amd64 and its Go everywhere else (arm64, and the editor's live
+// renderer in WebAssembly) do identically; above it, in floating point,
+// which they round differently, flipping dots on the edges of text. Filling
+// in tiles keeps every label, at any size, the same dot for dot wherever
+// it is drawn.
+const tile = 512
+
+// fill adds the coverage of paths, filled together by the nonzero rule, to
+// coverage, which is blank where they fall: tile by tile, each path traced
+// only into the tiles its control points reach.
+func fill(coverage *image.Alpha, paths []Path) {
+	bounds := coverage.Bounds()
+	boxes := make([][4]float64, len(paths))
+	for i, p := range paths {
+		boxes[i] = pathBox(p)
+	}
+	var z vector.Rasterizer
+	for y := bounds.Min.Y; y < bounds.Max.Y; y += tile {
+		for x := bounds.Min.X; x < bounds.Max.X; x += tile {
+			r := image.Rect(x, y, min(x+tile, bounds.Max.X), min(y+tile, bounds.Max.Y))
+			z.Reset(r.Dx(), r.Dy())
+			traced := false
+			for i, p := range paths {
+				b := boxes[i]
+				// A path wholly to the left of a tile still adds to it, as its
+				// edges' winding carries across; above, below or to the right,
+				// it cannot.
+				if b[1] >= float64(r.Max.Y) || b[3] <= float64(r.Min.Y) || b[0] >= float64(r.Max.X) {
+					continue
+				}
+				tracePath(&z, p, float64(x), float64(y))
+				traced = true
+			}
+			if traced {
+				z.Draw(coverage, r, image.Opaque, image.Point{})
+			}
+		}
+	}
+}
+
+// pathBox is the box around a path's points and control points, which holds
+// the whole curve: left, top, right, bottom.
+func pathBox(p Path) [4]float64 {
+	b := [4]float64{math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)}
 	for _, seg := range p {
-		a, b, c := seg.Pts[0], seg.Pts[1], seg.Pts[2]
+		n := 1
+		switch seg.Op {
+		case QuadTo:
+			n = 2
+		case CubeTo:
+			n = 3
+		}
+		for _, pt := range seg.Pts[:n] {
+			b[0], b[1] = math.Min(b[0], pt.X), math.Min(b[1], pt.Y)
+			b[2], b[3] = math.Max(b[2], pt.X), math.Max(b[3], pt.Y)
+		}
+	}
+	return b
+}
+
+// tracePath traces p into z, moved by (-ox, -oy): z's top left is that
+// point of the label.
+func tracePath(z *vector.Rasterizer, p Path, ox, oy float64) {
+	open := false
+	at := func(pt Point) (float32, float32) { return float32(pt.X - ox), float32(pt.Y - oy) }
+	for _, seg := range p {
+		ax, ay := at(seg.Pts[0])
+		bx, by := at(seg.Pts[1])
+		cx, cy := at(seg.Pts[2])
 		switch seg.Op {
 		case MoveTo:
 			if open {
 				z.ClosePath()
 			}
-			z.MoveTo(float32(a.X), float32(a.Y))
+			z.MoveTo(ax, ay)
 			open = true
 		case LineTo:
-			z.LineTo(float32(a.X), float32(a.Y))
+			z.LineTo(ax, ay)
 		case QuadTo:
-			z.QuadTo(float32(a.X), float32(a.Y), float32(b.X), float32(b.Y))
+			z.QuadTo(ax, ay, bx, by)
 		case CubeTo:
-			z.CubeTo(float32(a.X), float32(a.Y), float32(b.X), float32(b.Y), float32(c.X), float32(c.Y))
+			z.CubeTo(ax, ay, bx, by, cx, cy)
 		}
 	}
 	if open {

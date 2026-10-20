@@ -59,3 +59,4 @@ Thumbs.db
 *.swo
 *~
 web/.e2e/
+web/src/lib/live/generated/

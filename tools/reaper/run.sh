@@ -6,8 +6,8 @@
 # run.images in .reaper.toml so reaper pulls them first.
 #
 # It needs REAPER_STATE and the caches declared in .reaper.toml
-# (REAPER_CACHE_GOCACHE, _GOPATH, _NPM and _NODE_MODULES). Run by hand with
-# those pointing at directories of your own, it does the same.
+# (REAPER_CACHE_GOCACHE, _GOPATH, _NPM, _NODE_MODULES and _TINYGO). Run by
+# hand with those pointing at directories of your own, it does the same.
 set -eu
 
 GO_IMAGE="docker.io/library/golang@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61"
@@ -35,7 +35,8 @@ BAM_WEB_NODE_MODULES="$REAPER_CACHE_NODE_MODULES"
 BAM_NPM_CACHE="$REAPER_CACHE_NPM"
 BAM_GO_CACHE="$REAPER_CACHE_GOCACHE"
 BAM_GO_MOD="$REAPER_CACHE_GOPATH/pkg/mod"
-export BAM_WEB_NODE_MODULES BAM_NPM_CACHE BAM_GO_CACHE BAM_GO_MOD
+BAM_TINYGO_CACHE="$REAPER_CACHE_TINYGO"
+export BAM_WEB_NODE_MODULES BAM_NPM_CACHE BAM_GO_CACHE BAM_GO_MOD BAM_TINYGO_CACHE
 
 step "web interface: svelte-check and Vitest"
 "$ROOT/tools/web/build.sh" check

@@ -3,6 +3,7 @@
   import { ApiError, request, requestBlob, type ProblemDetail } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { History } from '../../lib/history';
+  import { startLiveRenderer, type Frame, type LiveRenderer, type LiveState, type PreviewData } from '../../lib/live/client';
   import type { AssetWithDetails, Field, GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import {
@@ -165,13 +166,57 @@
     }
   }
 
-  // The server renders the preview; ask again shortly after each change.
-  // A later change wins: an answer for an earlier one, arriving after it,
-  // is dropped rather than shown over the newer preview.
+  // The live renderer draws the label in the browser, exactly as it will
+  // print, at every change (README §4.1). Until it has loaded, or where it
+  // cannot, the server renders the preview instead.
+  let live: LiveRenderer | null = null;
+  let liveState = $state<LiveState>('loading');
+  let liveData = $state<PreviewData | null>(null);
+  let frame = $state<Frame | null>(null);
+  onMount(() => {
+    live = startLiveRenderer(async (id) => (await requestBlob('GET', `/images/${encodeURIComponent(id)}`)).arrayBuffer());
+    live.onstate = (s) => (liveState = s);
+    liveState = live.state;
+  });
+  onDestroy(() => live?.close());
+
+  // What it draws with: the sample data, or the asset previewed.
+  $effect(() => {
+    const id = previewAsset?.id;
+    liveData = null;
+    request<PreviewData>('POST', '/templates/preview-data', id ? { asset_id: id } : {}).then(
+      (d) => {
+        if (previewAsset?.id === id) liveData = d;
+      },
+      () => {
+        // The server's preview says why.
+      },
+    );
+  });
+
+  $effect(() => {
+    const template = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
+    const data = liveData;
+    if (loading || liveState !== 'ready' || !data || !live) return;
+    // Frames come in the order they were asked for, so each is shown.
+    void live.render(template, data).then((f) => {
+      if (!f || liveState !== 'ready') return;
+      previewProblems = f.problems;
+      if (!f.problems.length) {
+        frame = f;
+        codeLayouts = Object.fromEntries((f.description?.elements ?? []).flatMap((d) => (d.code ? [[d.index, d.code as CodeLayout]] : [])));
+      }
+    });
+  });
+
+  // The server renders the preview while the live renderer cannot; ask
+  // again shortly after each change. A later change wins: an answer for an
+  // earlier one, arriving after it, is dropped rather than shown over the
+  // newer preview.
   let previewRound = 0;
   $effect(() => {
     const body = { template: JSON.parse(JSON.stringify(doc)) as TemplateDoc, asset_id: previewAsset?.id };
-    if (loading) return;
+    if (loading || (liveState === 'ready' && liveData)) return;
     if (!body.template.id) body.template.id = 'preview';
     const mine = ++previewRound;
     previewStale = true;
@@ -184,7 +229,7 @@
             ? request<{ elements: { index: number; code?: CodeLayout }[] }>('POST', '/templates/preview', { ...body, format: 'json' })
             : Promise.resolve({ elements: [] }),
         ]);
-        if (mine !== previewRound) return;
+        if (mine !== previewRound || (liveState === 'ready' && liveData)) return;
         const url = URL.createObjectURL(blob);
         if (previewURL) URL.revokeObjectURL(previewURL);
         previewURL = url;
@@ -539,6 +584,8 @@
         {selected}
         {previewURL}
         {previewStale}
+        frame={liveState === 'ready' && liveData ? frame : null}
+        {liveState}
         {problemElements}
         area={printArea}
         onselect={(s) => (selected = s)}

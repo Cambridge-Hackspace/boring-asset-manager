@@ -6,8 +6,10 @@ package webui
 import (
 	"embed"
 	"io/fs"
+	"mime"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -17,7 +19,9 @@ var embedded embed.FS
 // contentSecurityPolicy allows only the app's own scripts, styles and
 // requests. Images may also be data: and blob: URLs (label previews), and
 // inline style attributes position the template editor's elements.
-const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+// 'wasm-unsafe-eval' lets the app compile its own WebAssembly, the editor's
+// live renderer, and nothing else: it allows no eval of script.
+const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
 	"base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
@@ -66,6 +70,9 @@ func newHandler(fsys fs.FS) http.Handler {
 			if strings.HasPrefix(name, "assets/") {
 				// Vite puts a content hash in every asset name.
 				h.Set("Cache-Control", "public, max-age=31536000, immutable")
+				if serveCompressed(w, r, app, name) {
+					return
+				}
 			} else {
 				h.Set("Cache-Control", "no-cache")
 			}
@@ -78,6 +85,46 @@ func newHandler(fsys fs.FS) http.Handler {
 			serveFile(w, r, app, "index.html")
 		}
 	})
+}
+
+// serveCompressed serves the Brotli or gzip copy of an asset that the build
+// wrote beside it (web/vite.config.ts), when the browser takes that
+// encoding, and reports whether it did.
+func serveCompressed(w http.ResponseWriter, r *http.Request, fsys fs.FS, name string) bool {
+	w.Header().Add("Vary", "Accept-Encoding")
+	accepted := r.Header.Get("Accept-Encoding")
+	for _, enc := range []struct{ token, ext string }{{"br", ".br"}, {"gzip", ".gz"}} {
+		if !acceptsEncoding(accepted, enc.token) || !exists(fsys, name+enc.ext) {
+			continue
+		}
+		if t := mime.TypeByExtension(path.Ext(name)); t != "" {
+			w.Header().Set("Content-Type", t)
+		}
+		w.Header().Set("Content-Encoding", enc.token)
+		http.ServeFileFS(w, r, fsys, name+enc.ext)
+		return true
+	}
+	return false
+}
+
+// acceptsEncoding reports whether an Accept-Encoding header takes token,
+// with a quality above zero.
+func acceptsEncoding(header, token string) bool {
+	for _, part := range strings.Split(header, ",") {
+		name, params, _ := strings.Cut(part, ";")
+		if !strings.EqualFold(strings.TrimSpace(name), token) {
+			continue
+		}
+		for _, param := range strings.Split(params, ";") {
+			key, value, _ := strings.Cut(param, "=")
+			if strings.EqualFold(strings.TrimSpace(key), "q") {
+				q, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+				return err == nil && q > 0
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // serveFile writes an HTML file directly; http.ServeFileFS would redirect
