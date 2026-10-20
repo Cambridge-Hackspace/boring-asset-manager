@@ -30,6 +30,21 @@ import { clampScale, fitView, fitWidthView, nextStep, scaleAt100, zoomAround, ty
 /** What a click or drag on the label does. */
 export type Tool = 'select' | 'text' | 'code' | 'image' | ShapeKind | 'pen' | 'measure';
 
+/** What each tool is called, in the toolbox and the action search. */
+export const toolNames: Record<Tool, string> = {
+  select: 'Select and move',
+  text: 'Text',
+  code: 'Barcode or QR code',
+  image: 'Image',
+  rectangle: 'Rectangle',
+  ellipse: 'Ellipse',
+  line: 'Line',
+  polygon: 'Polygon',
+  path: 'Path',
+  pen: 'Pen',
+  measure: 'Measure',
+};
+
 export class Editor {
   doc = $state<TemplateDoc>(blankTemplate());
   /** Indices of the selected elements, in the order they were chosen. */

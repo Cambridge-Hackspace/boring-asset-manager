@@ -15,6 +15,8 @@
     newElement,
     newShape,
     placeholders,
+    turnTemplate,
+    type Alignment,
     type CodeLayout,
     type PrintArea,
     type TemplateDoc,
@@ -22,8 +24,10 @@
   } from '../../lib/template';
   import ArrangePanel from './editor/ArrangePanel.svelte';
   import Canvas from './editor/Canvas.svelte';
+  import CommandSearch from './editor/CommandSearch.svelte';
+  import type { Command } from './editor/commands';
   import Dock from './editor/Dock.svelte';
-  import { Editor, provideEditor, type Tool } from './editor/editor.svelte';
+  import { Editor, provideEditor, toolNames, type Tool } from './editor/editor.svelte';
   import Icon from './editor/Icon.svelte';
   import LabelPanel from './editor/LabelPanel.svelte';
   import GridPanel from './editor/GridPanel.svelte';
@@ -349,6 +353,10 @@
       event.preventDefault();
       if (event.shiftKey) editor.redo();
       else editor.undo();
+    } else if (mod && event.key === 'Enter') {
+      // Krita's action search.
+      event.preventDefault();
+      searching = true;
     } else if (mod && key === 'a') {
       event.preventDefault();
       if (event.shiftKey) editor.deselect();
@@ -447,6 +455,66 @@
     event.preventDefault();
     if (/<svg[\s>]/.test(text)) void importSVG(new File([text], 'the clipboard', { type: 'image/svg+xml' }));
     else editor.paste(text);
+  }
+
+  // Every action the editor has, for the action search: those that can be
+  // taken now, named as their buttons and menus name them.
+  let searching = $state(false);
+  const alignName = (a: Alignment) => `Align ${a === 'center' || a === 'middle' ? `${a}s` : `${a} edges`}`;
+  function commands(): Command[] {
+    const any = editor.selected.length > 0;
+    const several = editor.selected.length > 1;
+    const single = editor.single;
+    const grouped = several && editor.selected.every((i) => doc.elements[i]?.group && doc.elements[i]?.group === doc.elements[editor.selected[0]!]?.group);
+    const all: (Command | false | null)[] = [
+      ...(Object.keys(toolNames) as Tool[])
+        .filter((t) => t !== 'path')
+        .map((t) => ({ name: `${toolNames[t]} tool`, keywords: 'tool draw add', run: () => (editor.tool = t) })),
+      { name: 'Save', run: () => void save() },
+      editor.canUndo && { name: 'Undo', keys: 'Ctrl+Z', run: () => editor.undo() },
+      editor.canRedo && { name: 'Redo', keys: 'Ctrl+Shift+Z', run: () => editor.redo() },
+      { name: 'Select all', keys: 'Ctrl+A', run: () => editor.selectAll() },
+      any && { name: 'Select none', keywords: 'deselect', keys: 'Ctrl+Shift+A', run: () => editor.deselect() },
+      any && { name: 'Copy', keys: 'Ctrl+C', run: () => void navigator.clipboard?.writeText(editor.copy()).catch(() => {}) },
+      { name: 'Paste', keys: 'Ctrl+V', run: () => canvas?.paste() },
+      any && { name: 'Delete', keywords: 'remove erase', keys: 'Delete', run: () => editor.remove() },
+      several && !grouped && { name: 'Group', run: () => editor.group() },
+      grouped && { name: 'Ungroup', run: () => editor.ungroup() },
+      any && { name: editor.selected.every((i) => doc.elements[i]?.locked) ? 'Unlock' : 'Lock', run: () => editor.lockSelected() },
+      any && { name: 'Bring to front', keywords: 'raise top stacking order', run: () => editor.restack('front') },
+      any && { name: 'Bring forward', keywords: 'raise stacking order', run: () => editor.restack('forward') },
+      any && { name: 'Send backward', keywords: 'lower stacking order', run: () => editor.restack('backward') },
+      any && { name: 'Send to back', keywords: 'lower bottom stacking order', run: () => editor.restack('back') },
+      any && { name: 'Turn 90° left', keywords: 'rotate', run: () => editor.turn(-90) },
+      any && { name: 'Turn 90° right', keywords: 'rotate', run: () => editor.turn(90) },
+      any && { name: 'Flip across', keywords: 'mirror horizontal', run: () => editor.flip(true) },
+      any && { name: 'Flip down', keywords: 'mirror vertical', run: () => editor.flip(false) },
+      single?.type === 'shape' && (single.shape === 'polygon' || single.shape === 'path') && { name: 'Edit points', keywords: 'nodes', run: () => (editor.editingPoints = editor.selected[0]!) },
+      ...(['left', 'center', 'right', 'top', 'middle', 'bottom'] as Alignment[]).flatMap((a) => [
+        several && { name: alignName(a), keywords: 'line up arrange', run: () => editor.arrange({ align: a }, false) },
+        any && { name: `${alignName(a)} to the label`, keywords: 'line up arrange', run: () => editor.arrange({ align: a }, true) },
+      ]),
+      editor.selected.length > 2 && { name: 'Distribute across', keywords: 'spread space evenly arrange', run: () => editor.arrange({ distribute: 'across' }, false) },
+      editor.selected.length > 2 && { name: 'Distribute down', keywords: 'spread space evenly arrange', run: () => editor.arrange({ distribute: 'down' }, false) },
+      { name: 'Zoom in', keys: '+', run: () => editor.zoomStep(true) },
+      { name: 'Zoom out', keys: '-', run: () => editor.zoomStep(false) },
+      { name: 'Zoom to 100%', keywords: 'actual dots pixels', keys: '1', run: () => editor.setZoom(100) },
+      { name: 'Fit the label', keywords: 'zoom view', keys: '2', run: () => editor.fit() },
+      { name: 'Fit the width', keywords: 'zoom view', keys: '3', run: () => editor.fitWidth() },
+      { name: editor.printSize ? 'Show dots, not print size' : 'Show print size', keywords: 'zoom real physical', run: () => editor.setPrintSize(!editor.printSize) },
+      { name: editor.canvasOnly ? 'Show the panels' : 'Hide everything but the label', keywords: 'canvas only fullscreen', keys: 'Tab', run: () => setCanvasOnly(!editor.canvasOnly) },
+      { name: editor.guidesShown ? 'Hide guides' : 'Show guides', run: () => editor.setGuidesShown(!editor.guidesShown) },
+      { name: editor.guidesLocked ? 'Unlock guides' : 'Lock guides', run: () => editor.setGuidesLocked(!editor.guidesLocked) },
+      ...(['grid', 'guides', 'elements', 'label'] as const).map((what) => ({
+        name: `${editor.snapTo[what] ? 'Stop snapping' : 'Snap'} to ${what === 'elements' ? 'other elements' : `the ${what}`}`,
+        keywords: 'snapping',
+        run: () => editor.setSnap(what, !editor.snapTo[what]),
+      })),
+      { name: editor.snapAngles ? 'Stop snapping turns to 45°' : 'Snap turns to 45°', keywords: 'snapping rotate angle', run: () => editor.setSnapAngles(!editor.snapAngles) },
+      { name: 'Turn the label left', keywords: 'rotate orientation template', run: () => editor.apply(turnTemplate(doc, false), 'Turn the label left') },
+      { name: 'Turn the label right', keywords: 'rotate orientation template', run: () => editor.apply(turnTemplate(doc, true), 'Turn the label right') },
+    ];
+    return all.filter((c): c is Command => Boolean(c));
   }
 
   // Canvas-only mode, and the message saying how to leave it, which fades.
@@ -553,6 +621,9 @@
 
     <div class="contents" hidden={editor.canvasOnly}><StatusBar {liveState} /></div>
   </div>
+  {#if searching}
+    <CommandSearch commands={commands()} onclose={() => (searching = false)} />
+  {/if}
 {/if}
 
 {#snippet overview()}
