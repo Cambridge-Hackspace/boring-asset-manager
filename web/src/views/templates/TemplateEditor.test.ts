@@ -687,7 +687,7 @@ describe('TemplateEditor', () => {
     expect((await saved(sent)).elements[0]!.rotation).toBe(40);
   });
 
-  it('sets the margins of a code and where it sits, and warns of a narrow one', async () => {
+  it('pads a code, each side or all, in the template units, and names what is left over', async () => {
     const code = { ...template, elements: [{ type: 'generator' as const, generator_type: 'qr', x: 1, y: 1, width: 20, height: 20 }] };
     const { sent } = api({
       'GET /templates/ql90': () => ({ template: code }),
@@ -695,19 +695,40 @@ describe('TemplateEditor', () => {
       'POST /templates/preview': (b) => {
         const body = b as { format?: string; template: TemplateDoc };
         if (body.format !== 'json') return '<svg/>';
-        const left = body.template.elements[0]!.margin?.left === 0 ? 0 : 1;
-        return { elements: [{ index: 0, code: { module: 0.5, module_dots: 6, margin: { top: 2, right: 2, bottom: 2, left }, ...(left ? {} : { narrow: ['left'] }) } }], warnings: [] };
+        const left = body.template.elements[0]!.margin?.left === 0 ? 0 : 2;
+        const pad = { top: 2, right: 2, bottom: 2, left };
+        // Half a millimeter more each side, as the box is not a whole number of modules.
+        const drawn = { top: 2.5, right: 2.5, bottom: 2.5, left: left + 0.5 };
+        return {
+          elements: [{ index: 0, code: { module: 0.5, module_dots: 6, margin: drawn, padding: pad, standard: { top: 2, right: 2, bottom: 2, left: 2 }, ...(left ? {} : { narrow: ['left'] }) } }],
+          warnings: [],
+        };
       },
     });
     render(TemplateEditor, { params: { id: 'ql90' } });
     await loaded();
     await fireEvent.focus(canvasElement(/^Barcode 1/));
-    await fireEvent.change(document.querySelector('#el-0-margin-left')!, { target: { value: '0' } });
+    // One field, the standard quiet zone as its placeholder.
+    await vi.waitFor(() => expect((document.querySelector('#el-0-padding') as HTMLInputElement).placeholder).toBe('2 standard'));
+    expect(screen.getByText(/1 mm across and 1 mm down left over/)).toBeTruthy();
+    // All sides at once, typed with a unit.
+    await fireEvent.change(document.querySelector('#el-0-padding')!, { target: { value: '0.3cm' } });
+    expect(value('#el-0-padding')).toBe('3');
+    // Each side: the left to nothing, warned of.
+    await fireEvent.click(screen.getByRole('button', { name: 'Each side' }));
+    await fireEvent.change(document.querySelector('#el-0-padding-left')!, { target: { value: '0' } });
     expect(await screen.findByText(/Less than the code's standard quiet zone on its left/)).toBeTruthy();
-    await fireEvent.change(document.querySelector('#el-0-margin-top')!, { target: { value: '5' } });
     await fireEvent.change(document.querySelector('#el-0-code-align')!, { target: { value: 'left' } });
     await fireEvent.change(document.querySelector('#el-0-code-valign')!, { target: { value: 'top' } });
-    expect((await saved(sent)).elements[0]).toMatchObject({ margin: { left: 0, top: 5 }, align: 'left', vertical_align: 'top' });
+    expect((await saved(sent)).elements[0]).toMatchObject({
+      margin: { top: 3, right: 3, bottom: 3, left: 0 },
+      margin_unit: 'length',
+      align: 'left',
+      vertical_align: 'top',
+    });
+    // Back to the standard on every side.
+    await fireEvent.click(screen.getByRole('button', { name: 'Standard' }));
+    expect(value('#el-0-padding-top')).toBe('');
   });
 
   it('adds a shape from the keyboard, sets its paint, and chooses tools with the mouse', async () => {
