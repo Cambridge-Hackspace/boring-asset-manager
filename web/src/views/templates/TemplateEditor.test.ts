@@ -131,6 +131,32 @@ describe('TemplateEditor', () => {
     expect(sent.filter((r) => r.path === '/templates/preview' && !(r.body as { format?: string }).format)).toHaveLength(3);
   });
 
+  it('deletes what is selected with Delete or Backspace, but not while a field is typed in', async () => {
+    const two = { ...template, elements: [...template.elements, { type: 'text' as const, x: 60, y: 5, width: 20, height: 10, content_binding: 'B', font_size: 12 }] };
+    api({ 'GET /templates/ql90': () => ({ template: two }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    const count = two.elements.length;
+    // With nothing left, there is no list of layers.
+    const layers = () => (screen.queryByRole('list', { name: 'Layers' }) ? layerNames().length : 0);
+    expect(layers()).toBe(count);
+    // Nothing selected, nothing comes off.
+    await fireEvent.keyDown(window, { key: 'Delete' });
+    expect(layers()).toBe(count);
+    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    // In a field, the key edits the field.
+    await fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Delete' });
+    expect(layers()).toBe(count);
+    await fireEvent.keyDown(window, { key: 'Delete' });
+    expect(layers()).toBe(0);
+    expect(screen.getByText(/Nothing selected/)).toBeTruthy();
+    await fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(layers()).toBe(count);
+    await fireEvent.keyDown(window, { key: 'a', ctrlKey: true });
+    await fireEvent.keyDown(window, { key: 'Backspace' });
+    expect(layers()).toBe(0);
+  });
+
   it('selects all with Ctrl+A, none with Ctrl+Shift+A or Escape, and copies and pastes', async () => {
     const two = { ...template, elements: [...template.elements, { type: 'text' as const, x: 60, y: 5, width: 20, height: 10, content_binding: 'B', font_size: 12 }] };
     const { sent } = api({ 'GET /templates/ql90': () => ({ template: two }), 'PUT /templates/ql90': () => ({ template: two }) });
