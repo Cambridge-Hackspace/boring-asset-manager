@@ -258,6 +258,9 @@
       // On the grid, as everything placed is.
       const step = gridStep(doc.units);
       e = { ...e, x: Math.max(0, snap((doc.width - e.width) / 2, step, doc.units)), y: Math.max(0, snap((doc.height - e.height) / 2, step, doc.units)) };
+    } else if (tool === 'pen' || tool === 'measure') {
+      // They need a pointer: nothing to add from the keyboard.
+      return;
     } else {
       e = newShape(tool, doc);
     }
@@ -337,6 +340,9 @@
       if (canvas?.cancel()) event.preventDefault();
       else editor.deselect();
     } else if (event.key === 'Enter' && canvas?.finish()) {
+      event.preventDefault();
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && canvas?.deletePoint()) {
+      // Editing points: the chosen point comes off.
       event.preventDefault();
     } else if (event.key === 'Tab' && !mod && !event.shiftKey && !event.altKey && (document.activeElement === document.body || !document.activeElement)) {
       // Tab with nothing focused: everything but the label, hidden or shown.

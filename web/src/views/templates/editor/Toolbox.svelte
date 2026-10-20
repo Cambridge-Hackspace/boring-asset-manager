@@ -18,13 +18,17 @@
     { tool: 'ellipse', icon: 'ellipse', name: 'Ellipse' },
     { tool: 'line', icon: 'line', name: 'Line' },
     { tool: 'polygon', icon: 'polygon', name: 'Polygon' },
+    { tool: 'pen', icon: 'pen', name: 'Pen' },
+    { tool: 'measure', icon: 'measure', name: 'Measure' },
   ];
 
   const button =
     'grid h-9 w-9 place-items-center rounded-md text-zinc-700 hover:bg-zinc-200 aria-pressed:bg-zinc-800 aria-pressed:text-white dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-200 dark:aria-pressed:text-zinc-900';
 
   function choose(event: MouseEvent, tool: Tool) {
-    if (event.detail === 0 && tool !== 'select') {
+    // From the keyboard, a tool that adds something adds it; the pen and
+    // the measure need a pointer, and are only taken in hand.
+    if (event.detail === 0 && tool !== 'select' && tool !== 'pen' && tool !== 'measure') {
       editor.tool = 'select';
       onadd(tool);
       return;
@@ -35,13 +39,13 @@
 
 <div role="toolbar" aria-label="Tools" class="flex flex-wrap items-center gap-0.5 p-1 md:flex-col md:flex-nowrap">
   {#each tools as t, i (t.tool)}
-    {#if i === 1 || i === 4}<hr class="hidden md:my-1 md:block md:w-6 md:border-zinc-300 dark:md:border-zinc-700" />{/if}
+    {#if i === 1 || i === 4 || i === 9}<hr class="hidden md:my-1 md:block md:w-6 md:border-zinc-300 dark:md:border-zinc-700" />{/if}
     <button
       type="button"
       class={button}
       aria-label={t.name}
       aria-pressed={editor.tool === t.tool}
-      title={t.tool === 'select' ? t.name : `${t.name}: drag on the label to place it`}
+      title={t.tool === 'select' ? t.name : t.tool === 'pen' ? 'Pen: click for points, drag for curves' : t.tool === 'measure' ? 'Measure: drag between two points' : `${t.name}: drag on the label to place it`}
       onclick={(ev) => choose(ev, t.tool)}
     >
       <Icon name={t.icon} />

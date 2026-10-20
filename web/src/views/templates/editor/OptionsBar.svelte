@@ -40,7 +40,9 @@
     ['label', 'The label: edges and center'],
   ] as const;
 
-  const names: Record<string, string> = { text: 'Text', code: 'Code', image: 'Image', rectangle: 'Rectangle', ellipse: 'Ellipse', line: 'Line', polygon: 'Polygon' };
+  const names: Record<string, string> = {
+    text: 'Text', code: 'Code', image: 'Image', rectangle: 'Rectangle', ellipse: 'Ellipse', line: 'Line', polygon: 'Polygon', pen: 'Pen', measure: 'Measure',
+  };
 </script>
 
 <svelte:window onpointerdown={(e) => snapOpen && !(e.target as Element).closest('[data-snap-menu]') && (snapOpen = false)} />

@@ -28,7 +28,7 @@ import type { Anchor } from './transform';
 import { clampScale, fitView, fitWidthView, nextStep, scaleAt100, zoomAround, type View } from './view';
 
 /** What a click or drag on the label does. */
-export type Tool = 'select' | 'text' | 'code' | 'image' | ShapeKind;
+export type Tool = 'select' | 'text' | 'code' | 'image' | ShapeKind | 'pen' | 'measure';
 
 export class Editor {
   doc = $state<TemplateDoc>(blankTemplate());
@@ -94,6 +94,9 @@ export class Editor {
       // Storage unavailable: it lasts as long as the page.
     }
   }
+
+  /** The polygon or path whose points are being edited, by index, if any. */
+  editingPoints = $state<number | null>(null);
 
   /** Everything but the canvas hidden (Tab). */
   canvasOnly = $state(false);

@@ -3,6 +3,7 @@
   import {
     boundsOf,
     describeElement,
+    elementsAt,
     gridStep,
     handles,
     moveElements,
@@ -26,6 +27,8 @@
   import { useEditor, type Tool } from './editor.svelte';
   import Ruler from './Ruler.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
+  import PointEditor from './PointEditor.svelte';
+  import { withContours, type Node } from './nodes';
   import { alongOneAxis, beneath, inBox, pull, resizeFrom, scaledBox, turned, type Anchor } from './transform';
   import { gridOf, snapBox, snapNothing, snapPoint, type SnapLine } from './snapping';
 
@@ -148,7 +151,7 @@
     const [x, y] = onLabel(event);
     const cx = Math.min(Math.max(x, 0), doc.width);
     const cy = Math.min(Math.max(y, 0), doc.height);
-    const s = snapPoint(doc, cx, cy, threshold(), event.altKey ? snapNothing : editor.snapTo);
+    const s = snapPoint(doc, cx, cy, threshold(), editor.snapTo);
     snapLines = { x: s.lineX, y: s.lineY };
     return [s.x, s.y];
   }
@@ -227,7 +230,9 @@
     | { kind: 'scale'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; handle: Handle; box: Box; moved: boolean; last?: Pointer }
     | { kind: 'rotate'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; cx: number; cy: number; moved: boolean; last?: Pointer }
     | { kind: 'band'; x0: number; y0: number; from: [number, number]; to: [number, number]; add: boolean; moved: boolean; last?: Pointer }
-    | { kind: 'draw'; from: [number, number]; to: [number, number] }
+    | { kind: 'draw'; from: [number, number]; to: [number, number]; prev: [number, number]; shift: boolean; ctrl: boolean; last?: Pointer }
+    | { kind: 'pen'; index: number; x0: number; y0: number }
+    | { kind: 'measure'; from: [number, number]; to: [number, number] }
     | { kind: 'pan'; x: number; y: number };
   let gesture = $state<Gesture | null>(null);
   // A polygon's points so far, in the template's units.
@@ -244,6 +249,8 @@
     line: 'a line',
     polygon: 'a polygon',
     path: 'a path',
+    pen: 'a path',
+    measure: 'a measurement',
   };
 
   // What the status bar says can be done now.
@@ -256,7 +263,15 @@
     else if (g?.kind === 'resize' || g?.kind === 'scale') editor.hint = 'Resizing. Shift: keep proportions, off the grid. Ctrl: from the center. Esc: put it back.';
     else if (g?.kind === 'rotate') editor.hint = `Turning. Ctrl: 15° steps.${editor.snapAngles ? ' Snaps to 45° near one; Shift: freely.' : ''} Esc: put it back.`;
     else if (g?.kind === 'band') editor.hint = 'Selecting. Left to right: what the box covers. Right to left: what it touches. Shift: add to the selection.';
-    else if (g?.kind === 'draw') editor.hint = `Drawing ${toolNames[tool as Exclude<Tool, 'select'>] ?? 'a shape'}. Alt: off the grid. Esc: stop.`;
+    else if (g?.kind === 'draw')
+      editor.hint = `Drawing ${toolNames[tool as Exclude<Tool, 'select'>] ?? 'a shape'}. Shift: ${tool === 'line' ? 'in 15° steps' : 'square'}. Ctrl: from the center. Alt: move it. Esc: stop.`;
+    else if (tool === 'pen')
+      editor.hint = pen.length
+        ? 'Click: the next point. Drag: pull out its handles (Alt: one only). Right-click: take back the last. Double-click or Enter: finish. Click the first point: close it. Esc: stop.'
+        : 'Click to place the first point; drag to pull out its handles.';
+    else if (tool === 'measure') editor.hint = measured ? `Measured: ${measurement(measured)}.` : 'Drag between two points to measure. Nothing is added.';
+    else if (editor.editingPoints !== null)
+      editor.hint = 'Drag a point or a handle (Alt: the one handle only). Double-click the outline: add a point. Shift+click a point: sharp or smooth. Delete: remove it. Esc: done.';
     else if (tool === 'polygon')
       editor.hint = points.length ? 'Click to place the next point. Double-click or Enter: finish. Click the first point: close it. Esc: stop.' : 'Click to place the first point.';
     else if (tool !== 'select') editor.hint = `Drag to draw ${toolNames[tool]}, or click to place one. Esc: back to selecting.`;
@@ -292,6 +307,12 @@
   function downOnElement(event: PointerEvent, i: number) {
     if (startPan(event)) return;
     if (event.button !== 0 || editor.tool !== 'select') return;
+    // Its points being edited, it stays put; a double-click adds a point.
+    if (editor.editingPoints === i) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     // Alt: a box to select with, even over an element.
@@ -374,12 +395,22 @@
       else points = [...points, p];
       return;
     }
-    gesture = { kind: 'draw', from: p, to: p };
+    if (editor.tool === 'pen') {
+      downWithPen(event, p);
+      return;
+    }
+    if (editor.tool === 'measure') {
+      measured = null;
+      gesture = { kind: 'measure', from: p, to: p };
+      capture(event);
+      return;
+    }
+    gesture = { kind: 'draw', from: p, to: p, prev: p, shift: event.shiftKey, ctrl: event.ctrlKey || event.metaKey };
     capture(event);
   }
 
   /** Carries a gesture to where the pointer is now, with the modifiers held now. */
-  function apply(g: Exclude<Gesture, { kind: 'draw' } | { kind: 'pan' }>, p: Pointer) {
+  function apply(g: Exclude<Gesture, { kind: 'draw' } | { kind: 'pan' } | { kind: 'pen' } | { kind: 'measure' }>, p: Pointer) {
     // A copy: an event's coordinates are not its own properties, and do not spread.
     g.last = { clientX: p.clientX, clientY: p.clientY, shiftKey: p.shiftKey, ctrlKey: p.ctrlKey, metaKey: p.metaKey, altKey: p.altKey };
     if (g.kind === 'band') {
@@ -534,6 +565,7 @@
       const r = viewport.getBoundingClientRect();
       readoutAt = [event.clientX - r.left, event.clientY - r.top];
     }
+    if (editor.tool === 'pen' && pen.length && paper) penAt = onLabel(event);
     if (guideDrag) {
       moveGuide(event);
       return;
@@ -547,6 +579,20 @@
       return;
     }
     if (g.kind === 'draw') {
+      const at = gridPoint(event);
+      // Alt: the shape moves while it is drawn, as in Krita.
+      if (event.altKey) g.from = [g.from[0] + at[0] - g.prev[0], g.from[1] + at[1] - g.prev[1]];
+      g.prev = at;
+      g.to = at;
+      g.shift = event.shiftKey;
+      g.ctrl = event.ctrlKey || event.metaKey;
+      return;
+    }
+    if (g.kind === 'pen') {
+      pullHandles(g, event);
+      return;
+    }
+    if (g.kind === 'measure') {
       g.to = gridPoint(event);
       return;
     }
@@ -556,7 +602,13 @@
   // A modifier pressed or let go mid-drag: the drag again, as it would be with it.
   function modifierChanged(event: KeyboardEvent) {
     const g = gesture;
-    if (!g || !('last' in g) || !g.last || !['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return;
+    if (!g || !['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return;
+    if (g.kind === 'draw') {
+      g.shift = event.shiftKey;
+      g.ctrl = event.ctrlKey || event.metaKey;
+      return;
+    }
+    if (!('last' in g) || !g.last) return;
     apply(g, { ...g.last, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, altKey: event.altKey });
   }
 
@@ -569,7 +621,8 @@
     }
     const g = gesture;
     gesture = null;
-    if (g?.kind === 'draw') finishDrawing(g.from, g.to);
+    if (g?.kind === 'draw') finishDrawing(...corners(g));
+    if (g?.kind === 'measure') measured = { from: g.from, to: g.to };
     // A click, not a drag, on one of several selected: that one alone, with its group.
     if (g?.kind === 'move' && !g.moved && g.indices.length > 1) editor.selected = withGroups(doc.elements, [g.hit]);
     if (g?.kind === 'band') {
@@ -590,6 +643,15 @@
   /** What floats beside the pointer while dragging: the size, angle or place. */
   const readout = $derived.by(() => {
     const g = gesture;
+    const f2 = (v: number) => (doc.units === 'in' ? v.toFixed(3) : v.toFixed(2));
+    if (g?.kind === 'draw' && draft) {
+      if (editor.tool === 'line') {
+        const angle = Math.round(((((-Math.atan2(draft.b[1] - draft.a[1], draft.b[0] - draft.a[0]) * 180) / Math.PI) % 360) + 360) % 360);
+        return `${f2(Math.hypot(draft.w, draft.h))} ${doc.units} at ${angle}°`;
+      }
+      return `${f2(draft.w)} × ${f2(draft.h)} ${doc.units}`;
+    }
+    if (g?.kind === 'measure') return measurement(g);
     if (!g || !('moved' in g) || !g.moved || g.kind === 'band') return null;
     const u = doc.units;
     const f = (v: number) => (u === 'in' ? v.toFixed(3) : v.toFixed(2));
@@ -606,6 +668,10 @@
   let menu = $state<{ x: number; y: number } | null>(null);
   function openMenu(event: MouseEvent) {
     event.preventDefault();
+    if (editor.tool === 'pen') {
+      pen = pen.slice(0, -1);
+      return;
+    }
     const hit = (event.target as Element).closest('[data-element]');
     const i = hit ? Number(hit.getAttribute('data-element')) : -1;
     if (i >= 0 && !editor.selected.includes(i) && !doc.elements[i]?.locked) editor.selected = withGroups(doc.elements, [i]);
@@ -637,6 +703,9 @@
       editor.selected.length > 1 && editor.selected.every((i) => doc.elements[i]?.group && doc.elements[i]?.group === doc.elements[editor.selected[0]!]?.group);
     const locked = !none && editor.selected.every((i) => doc.elements[i]?.locked);
     return [
+      ...(editor.selected.length === 1 && editable(doc.elements[editor.selected[0]!])
+        ? [{ label: 'Edit points', run: () => (editor.editingPoints = editor.selected[0]!) }, 'separator' as const]
+        : []),
       { label: 'Bring to front', run: () => editor.restack('front'), disabled: none },
       { label: 'Bring forward', run: () => editor.restack('forward'), disabled: none },
       { label: 'Send backward', run: () => editor.restack('backward'), disabled: none },
@@ -664,10 +733,113 @@
     ];
   });
 
+  /**
+   * Where what is being drawn runs from and to, as in Krita: Shift keeps a
+   * box square, or a line at a multiple of 15°; Ctrl draws it from its
+   * center out.
+   */
+  function corners(g: Extract<Gesture, { kind: 'draw' }>): [[number, number], [number, number]] {
+    let dx = g.to[0] - g.from[0];
+    let dy = g.to[1] - g.from[1];
+    if (g.shift) {
+      if (editor.tool === 'line') {
+        const length = Math.hypot(dx, dy);
+        const angle = (Math.round(Math.atan2(dy, dx) / (Math.PI / 12)) * Math.PI) / 12;
+        dx = tidy(Math.cos(angle) * length, doc.units);
+        dy = tidy(Math.sin(angle) * length, doc.units);
+      } else {
+        const side = Math.max(Math.abs(dx), Math.abs(dy));
+        dx = Math.sign(dx || 1) * side;
+        dy = Math.sign(dy || 1) * side;
+      }
+    }
+    return g.ctrl ? [[g.from[0] - dx, g.from[1] - dy], [g.from[0] + dx, g.from[1] + dy]] : [g.from, [g.from[0] + dx, g.from[1] + dy]];
+  }
+
+  // The pen, as Krita's path tool: a click places a point; a drag pulls out
+  // its handles, in line, or with Alt the one only; right-click takes back
+  // the last point; a double-click or Enter finishes; a click on the first
+  // point closes the path.
+  let pen = $state<Node[]>([]);
+  let penAt = $state<[number, number] | null>(null);
+
+  function downWithPen(event: PointerEvent, p: [number, number]) {
+    const first = pen[0];
+    if (first && pen.length >= 2 && Math.hypot(first.p[0] - p[0], first.p[1] - p[1]) * scale < 8) {
+      finishPen(true);
+      return;
+    }
+    pen = [...pen, { p }];
+    gesture = { kind: 'pen', index: pen.length - 1, x0: event.clientX, y0: event.clientY };
+    capture(event);
+  }
+
+  function pullHandles(g: Extract<Gesture, { kind: 'pen' }>, event: PointerEvent) {
+    if (Math.abs(event.clientX - g.x0) + Math.abs(event.clientY - g.y0) < 4) return;
+    const n = pen[g.index];
+    if (!n) return;
+    const h = gridPoint(event);
+    // Handles stay on the label, as the path's box must.
+    const on = (q: [number, number]): [number, number] => [Math.min(Math.max(q[0], 0), doc.width), Math.min(Math.max(q[1], 0), doc.height)];
+    const mirrored = on([2 * n.p[0] - h[0], 2 * n.p[1] - h[1]]);
+    pen[g.index] = event.altKey ? { ...n, out: h, smooth: false } : { p: n.p, in: mirrored, out: h, smooth: true };
+  }
+
+  function finishPen(closed: boolean) {
+    // A double click's clicks each placed a point; one is enough.
+    const nodes = pen.filter((n, k) => k === 0 || n.p[0] !== pen[k - 1]!.p[0] || n.p[1] !== pen[k - 1]!.p[1]);
+    pen = [];
+    penAt = null;
+    if (nodes.length < 2) return;
+    const start: TemplateElement = { ...newShape('path', doc), x: 0, y: 0, width: 1, height: 1, fill: 'none', d: 'M0 0' };
+    editor.add(withContours(doc, start, [{ nodes: $state.snapshot(nodes) as Node[], closed }]));
+    editor.tool = 'select';
+  }
+
+  /** A measurement, kept on the label until the next or another tool. */
+  let measured = $state<{ from: [number, number]; to: [number, number] } | null>(null);
+  const measurement = (m: { from: [number, number]; to: [number, number] }) => {
+    const dx = m.to[0] - m.from[0];
+    const dy = m.to[1] - m.from[1];
+    const f = (v: number) => (doc.units === 'in' ? v.toFixed(3) : v.toFixed(2));
+    const angle = Math.round(((((-Math.atan2(dy, dx) * 180) / Math.PI) % 360) + 360) % 360 * 10) / 10;
+    return `${f(Math.hypot(dx, dy))} ${doc.units} at ${angle}°, ${f(Math.abs(dx))} across, ${f(Math.abs(dy))} down`;
+  };
+
+  // Editing points: entered by a double-click on a selected polygon or path,
+  // left with Escape, another tool or another selection.
+  let pointEditor = $state<ReturnType<typeof PointEditor> | null>(null);
+  const editable = (e: TemplateElement | undefined) => e?.type === 'shape' && (e.shape === 'polygon' || e.shape === 'path');
+  $effect(() => {
+    const i = editor.editingPoints;
+    if (i !== null && (editor.tool !== 'select' || editor.selected.length !== 1 || editor.selected[0] !== i || !editable(doc.elements[i]))) editor.editingPoints = null;
+  });
+  $effect(() => {
+    if (editor.tool !== 'measure') measured = null;
+    if (editor.tool !== 'pen') {
+      pen = [];
+      penAt = null;
+    }
+  });
+
+  function doubleClickElement(event: MouseEvent, i: number) {
+    if (editor.tool !== 'select') return;
+    if (editor.editingPoints === i) {
+      pointEditor?.insertAt(onLabel(event));
+      return;
+    }
+    if (editable(doc.elements[i]) && editor.selected.length === 1 && editor.selected[0] === i) editor.editingPoints = i;
+  }
+
+  /** Delete, while editing points: the chosen point; reports whether it was taken. */
+  export function deletePoint(): boolean {
+    return editor.editingPoints !== null && Boolean(pointEditor?.removeChosen());
+  }
+
   /** Adds what the tool draws, in the box dragged out, or at its usual size where clicked. */
   function finishDrawing(a: [number, number], b: [number, number]) {
     const tool = editor.tool;
-    if (tool === 'select' || tool === 'polygon') return;
+    if (tool === 'select' || tool === 'polygon' || tool === 'pen' || tool === 'measure') return;
     const step = gridStep(doc.units);
     const box = { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), width: tidy(Math.abs(b[0] - a[0]), doc.units), height: tidy(Math.abs(b[1] - a[1]), doc.units) };
     const clicked = box.width < step && box.height < step;
@@ -709,11 +881,24 @@
     const g = gesture;
     if (g) {
       gesture = null;
-      if (g.kind !== 'draw' && g.kind !== 'pan' && g.kind !== 'band' && g.moved) editor.cancel();
+      if ('moved' in g && g.kind !== 'band' && g.moved) editor.cancel();
       return true;
     }
     if (points.length) {
       points = [];
+      return true;
+    }
+    if (pen.length) {
+      pen = [];
+      penAt = null;
+      return true;
+    }
+    if (measured) {
+      measured = null;
+      return true;
+    }
+    if (editor.editingPoints !== null) {
+      editor.editingPoints = null;
       return true;
     }
     if (editor.tool !== 'select') {
@@ -727,6 +912,10 @@
   export function finish(): boolean {
     if (editor.tool === 'polygon' && points.length >= 3) {
       finishPolygon();
+      return true;
+    }
+    if (editor.tool === 'pen' && pen.length >= 2) {
+      finishPen(false);
       return true;
     }
     return false;
@@ -750,7 +939,8 @@
   const draft = $derived.by(() => {
     const g = gesture;
     if (g?.kind !== 'draw') return null;
-    return { x: Math.min(g.from[0], g.to[0]), y: Math.min(g.from[1], g.to[1]), w: Math.abs(g.to[0] - g.from[0]), h: Math.abs(g.to[1] - g.from[1]), g };
+    const [a, b] = corners(g);
+    return { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]), a, b };
   });
 </script>
 
@@ -786,9 +976,19 @@
   }}
   oncontextmenu={openMenu}
   ondblclick={(ev) => {
-    if (editor.tool !== 'polygon') return;
-    ev.preventDefault();
-    finishPolygon();
+    if (editor.tool === 'polygon') {
+      ev.preventDefault();
+      finishPolygon();
+    } else if (editor.tool === 'pen') {
+      ev.preventDefault();
+      finishPen(false);
+    } else {
+      // The pointer is captured mid-click, so the double-click lands here:
+      // the element is the one under the pointer.
+      const [x, y] = onLabel(ev);
+      const one = editor.selected.length === 1 ? editor.selected[0]! : null;
+      if (one !== null && (editor.editingPoints === one || elementsAt(doc, x, y).includes(one))) doubleClickElement(ev, one);
+    }
   }}
   ondragover={(ev) => {
     if (ev.dataTransfer?.types.includes('Files')) ev.preventDefault();
@@ -893,7 +1093,9 @@
         <polygon points={[h.nw, h.ne, h.se, h.sw].map((p) => p.join(',')).join(' ')} class="outline" />
       {/if}
     {/each}
-    {#if single && !single.locked}
+    {#if editor.editingPoints !== null}
+      <PointEditor bind:this={pointEditor} index={editor.editingPoints} {scale} {ox} {oy} />
+    {:else if single && !single.locked}
       {@const h = handlePoints(single)}
       {@const c = handlePoints({ ...single, width: 0, height: 0 }).n}
       {#each ['nw', 'ne', 'se', 'sw'] as const as k (k)}
@@ -969,11 +1171,41 @@
     {/if}
     {#if draft}
       {#if editor.tool === 'line'}
-        <line x1={sx(draft.g.from[0])} y1={sy(draft.g.from[1])} x2={sx(draft.g.to[0])} y2={sy(draft.g.to[1])} class="draft" />
+        <line x1={sx(draft.a[0])} y1={sy(draft.a[1])} x2={sx(draft.b[0])} y2={sy(draft.b[1])} class="draft" />
       {:else if editor.tool === 'ellipse'}
         <ellipse cx={sx(draft.x + draft.w / 2)} cy={sy(draft.y + draft.h / 2)} rx={(draft.w * scale) / 2} ry={(draft.h * scale) / 2} class="draft" />
       {:else}
         <rect x={sx(draft.x)} y={sy(draft.y)} width={draft.w * scale} height={draft.h * scale} class="draft" />
+      {/if}
+    {/if}
+    {#if pen.length}
+      {@const d = pen
+        .map((n, k) => {
+          const prev = pen[k - 1];
+          if (!prev) return `M${sx(n.p[0])} ${sy(n.p[1])}`;
+          const c1 = prev.out ?? prev.p;
+          const c2 = n.in ?? n.p;
+          return `C${sx(c1[0])} ${sy(c1[1])} ${sx(c2[0])} ${sy(c2[1])} ${sx(n.p[0])} ${sy(n.p[1])}`;
+        })
+        .join(' ')}
+      <path {d} class="draft" fill="none" data-pen />
+      {#if penAt}
+        {@const last = pen[pen.length - 1]!}
+        <line x1={sx(last.p[0])} y1={sy(last.p[1])} x2={sx(penAt[0])} y2={sy(penAt[1])} class="draft" />
+      {/if}
+      {#each pen as n, k (k)}
+        {#if n.out}<circle cx={sx(n.out[0])} cy={sy(n.out[1])} r="3" class="handle" />{/if}
+        {#if n.in}<circle cx={sx(n.in[0])} cy={sy(n.in[1])} r="3" class="handle" />{/if}
+        <rect x={sx(n.p[0]) - 3.5} y={sy(n.p[1]) - 3.5} width="7" height="7" class="handle" />
+      {/each}
+    {/if}
+    {#if gesture?.kind === 'measure' || measured}
+      {@const m = gesture?.kind === 'measure' ? gesture : measured!}
+      <line x1={sx(m.from[0])} y1={sy(m.from[1])} x2={sx(m.to[0])} y2={sy(m.to[1])} class="measure" data-measure />
+      <circle cx={sx(m.from[0])} cy={sy(m.from[1])} r="3" class="measure-end" />
+      <circle cx={sx(m.to[0])} cy={sy(m.to[1])} r="3" class="measure-end" />
+      {#if measured && !gesture}
+        <text x={sx(m.to[0]) + 8} y={sy(m.to[1]) - 8} class="measure-text" data-measured>{measurement(m)}</text>
       {/if}
     {/if}
     {#if points.length}
@@ -1078,6 +1310,20 @@
     fill: rgb(22 163 74 / 0.08);
     stroke: rgb(22 163 74);
     stroke-dasharray: 4 3;
+  }
+  .measure {
+    stroke: rgb(219 39 119);
+    stroke-width: 1.5px;
+  }
+  .measure-end {
+    fill: rgb(219 39 119);
+  }
+  .measure-text {
+    fill: rgb(219 39 119);
+    font-size: 11px;
+    paint-order: stroke;
+    stroke: white;
+    stroke-width: 3px;
   }
   .draft {
     fill: rgb(37 99 235 / 0.08);
