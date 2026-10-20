@@ -79,6 +79,11 @@ func TestSecurityHeaders(t *testing.T) {
 	for _, h := range []http.Handler{newHandler(builtApp()), newHandler(fstest.MapFS{"placeholder.html": {}})} {
 		hdr := get(t, h, http.MethodGet, "/").Header()
 		csp := hdr.Get("Content-Security-Policy")
+		// WebAssembly may be compiled, for the editor's live renderer, and
+		// script still never evaluated.
+		if !strings.Contains(csp, "script-src 'self' 'wasm-unsafe-eval';") || strings.Contains(csp, "'unsafe-eval'") {
+			t.Errorf("script-src in %q", csp)
+		}
 		if !strings.Contains(csp, "default-src 'self'") || !strings.Contains(csp, "frame-ancestors 'none'") ||
 			hdr.Get("X-Content-Type-Options") != "nosniff" || hdr.Get("Referrer-Policy") != "same-origin" {
 			t.Errorf("headers %v", hdr)
@@ -94,5 +99,44 @@ func TestEmbeddedFilesServe(t *testing.T) {
 	}
 	if rec := get(t, Handler(), http.MethodGet, "/"); rec.Code != 200 {
 		t.Errorf("GET / from the embedded files: %d", rec.Code)
+	}
+}
+
+// TestServesPrecompressedAssets sends the Brotli or gzip copy the build
+// wrote beside an asset to a browser that takes it, typed as the asset, and
+// the asset itself to one that does not.
+func TestServesPrecompressedAssets(t *testing.T) {
+	fsys := builtApp()
+	fsys["app/assets/bamlive-9f8e.wasm"] = &fstest.MapFile{Data: []byte("raw wasm")}
+	fsys["app/assets/bamlive-9f8e.wasm.br"] = &fstest.MapFile{Data: []byte("brotli wasm")}
+	fsys["app/assets/bamlive-9f8e.wasm.gz"] = &fstest.MapFile{Data: []byte("gzip wasm")}
+	fsys["app/assets/app-1a2b.js.gz"] = &fstest.MapFile{Data: []byte("gzip js")}
+	h := newHandler(fsys)
+	for _, c := range []struct{ target, accept, body, encoding, contentType string }{
+		{"/assets/bamlive-9f8e.wasm", "gzip, deflate, br, zstd", "brotli wasm", "br", "application/wasm"},
+		{"/assets/bamlive-9f8e.wasm", "gzip", "gzip wasm", "gzip", "application/wasm"},
+		{"/assets/bamlive-9f8e.wasm", "br;q=0, gzip;q=0.5", "gzip wasm", "gzip", "application/wasm"},
+		{"/assets/bamlive-9f8e.wasm", "BR", "brotli wasm", "br", "application/wasm"},
+		{"/assets/bamlive-9f8e.wasm", "", "raw wasm", "", "application/wasm"},
+		{"/assets/bamlive-9f8e.wasm", "identity, br;q=0.000", "raw wasm", "", "application/wasm"},
+		{"/assets/app-1a2b.js", "br, gzip", "gzip js", "gzip", "text/javascript; charset=utf-8"},
+	} {
+		req := httptest.NewRequest(http.MethodGet, c.target, nil)
+		if c.accept != "" {
+			req.Header.Set("Accept-Encoding", c.accept)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		hdr := rec.Header()
+		if rec.Code != 200 || rec.Body.String() != c.body || hdr.Get("Content-Encoding") != c.encoding ||
+			hdr.Get("Content-Type") != c.contentType || hdr.Get("Vary") != "Accept-Encoding" ||
+			hdr.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Errorf("%s with %q: %d %q, encoding %q, type %q, vary %q", c.target, c.accept, rec.Code, rec.Body.String(),
+				hdr.Get("Content-Encoding"), hdr.Get("Content-Type"), hdr.Get("Vary"))
+		}
+	}
+	// The compressed copies are not pages of their own.
+	if rec := get(t, h, http.MethodGet, "/index.html.br"); rec.Code != 404 {
+		t.Errorf("GET /index.html.br: %d", rec.Code)
 	}
 }

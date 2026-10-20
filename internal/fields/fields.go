@@ -5,18 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fieldkey"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
 var (
-	keyRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
-
 	ErrInvalidKey            = errors.New("field key must be non-empty snake_case (lowercase letters, numbers, underscores)")
 	ErrInvalidLabel          = errors.New("field label cannot be empty")
 	ErrInvalidValidationType = errors.New("validation_type must be one of: text, number, date, url, select")
@@ -52,8 +50,7 @@ func IsValidValidationType(t string) bool {
 
 // ValidateKey validates that a field key follows snake_case conventions.
 func ValidateKey(key string) error {
-	key = strings.TrimSpace(key)
-	if key == "" || len(key) > 64 || !keyRegex.MatchString(key) {
+	if !fieldkey.Valid(key) {
 		return ErrInvalidKey
 	}
 	return nil

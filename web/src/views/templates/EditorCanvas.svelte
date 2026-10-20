@@ -34,8 +34,10 @@
   import PolygonPoints from './PolygonPoints.svelte';
   import Ruler from './Ruler.svelte';
   import ShapeTool from './ShapeTool.svelte';
+  import type { Frame, LiveState } from '../../lib/live/client';
 
-  // The label as the server renders it, with an interactive outline over
+  // The label as the live renderer draws it (or, until it can, as the
+  // server renders it), with an interactive outline over
   // each element, rulers along it, and its guides. Changes are reported
   // through onchange; onbegin marks the start of one undoable gesture. With
   // a printer chosen, what it does not print is shaded, and elements
@@ -54,6 +56,8 @@
     selected,
     previewURL,
     previewStale,
+    frame = null,
+    liveState = 'failed',
     problemElements,
     area = null,
     onselect,
@@ -72,6 +76,10 @@
     selected: number[];
     previewURL: string;
     previewStale: boolean;
+    /** The live renderer's drawing of the label, shown over previewURL once it has one. */
+    frame?: Frame | null;
+    /** Whether the live renderer is loading, ready, or could not load. */
+    liveState?: LiveState;
     problemElements: Set<number>;
     area?: PrintArea | null;
     onselect: (indices: number[]) => void;
@@ -562,6 +570,14 @@
   }
 
   const zoomLabel = $derived(`${Math.round(zoom * 100)}%`);
+
+  // The live renderer's frame, drawn dot for dot.
+  let frameCanvas = $state<HTMLCanvasElement | null>(null);
+  $effect(() => {
+    const f = frame;
+    if (!f || !frameCanvas) return;
+    frameCanvas.getContext('2d')?.putImageData(new ImageData(new Uint8ClampedArray(f.pixels), f.width, f.height), 0, 0);
+  });
 </script>
 
 <svelte:window onkeydown={windowKeydown} onkeyup={(ev) => ev.key === ' ' && (spaceHeld = false)} />
@@ -577,6 +593,14 @@
       <button type="button" class="btn-secondary" onclick={() => { onbegin(); onguides({ ...doc.guides, x: [...(doc.guides?.x ?? []), snap(doc.width / 2, gridStep(doc.units), doc.units)] }); }}>Add a vertical guide</button>
       <button type="button" class="btn-secondary" onclick={() => { onbegin(); onguides({ ...doc.guides, y: [...(doc.guides?.y ?? []), snap(doc.height / 2, gridStep(doc.units), doc.units)] }); }}>Add a horizontal guide</button>
     {/if}
+    <span role="status" class="ml-auto flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+      {#if liveState === 'loading'}
+        <span aria-hidden="true" class="h-3 w-3 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent"></span>
+        Loading the live preview
+      {:else if liveState === 'failed'}
+        Live preview unavailable: the preview updates shortly after each change.
+      {/if}
+    </span>
   </div>
 
   <div class="grid" style="grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: 20px auto">
@@ -618,7 +642,11 @@
           if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) onfile(file);
         }}
       >
-        {#if previewURL}
+        {#if frame}
+          <div role="img" aria-label="Label preview" class="pointer-events-none absolute inset-0">
+            <canvas bind:this={frameCanvas} class="h-full w-full" width={frame.width} height={frame.height}></canvas>
+          </div>
+        {:else if previewURL}
           <img
             src={previewURL}
             alt="Label preview"

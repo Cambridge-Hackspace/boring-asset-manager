@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/png"
 	"math/rand"
@@ -249,6 +250,51 @@ func TestExportLabels(t *testing.T) {
 	}
 }
 
+// TestPreviewData gives the editor's live renderer what the server's
+// preview draws with: the sample data, whose fields it fills itself, or an
+// asset's own, for those who may see the asset.
+func TestPreviewData(t *testing.T) {
+	srv, cookie, tagged, _, _ := labelFixture(t)
+	var got PreviewDataResponse
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview-data", `{}`)
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil {
+		t.Fatalf("sample data: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !got.Placeholders || got.Data.AssetName != "Sample asset" || got.Data.Codes["qr"] != "BAM-0001" || len(got.Data.Fields) != 0 {
+		t.Errorf("sample data: %+v", got)
+	}
+	// The JSON is what labels.Data reads back, for the renderer.
+	if !strings.Contains(rec.Body.String(), `"asset_name":"Sample asset"`) {
+		t.Errorf("sample data JSON: %s", rec.Body.String())
+	}
+
+	got = PreviewDataResponse{}
+	rec = doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview-data", `{"asset_id":"`+tagged+`"}`)
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil {
+		t.Fatalf("asset data: got %d %s", rec.Code, rec.Body.String())
+	}
+	if got.Placeholders || got.Data.AssetName != "Drill" || got.Data.Codes["micro_qr"] != "BAM-0042" || got.Data.Fields["location"] != "Shelf B3" {
+		t.Errorf("asset data: %+v", got)
+	}
+
+	archived, err := srv.store.CreateAsset("Old", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.store.DeleteAsset(archived.Asset.ID); err != nil {
+		t.Fatal(err)
+	}
+	for id, message := range map[string]string{archived.Asset.ID: "asset is archived", "00000000-0000-4000-8000-00000000dead": "asset not found"} {
+		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview-data", `{"asset_id":"`+id+`"}`)
+		if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), message) {
+			t.Errorf("%s: got %d %s", message, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/templates/preview-data", `[`); rec.Code != http.StatusBadRequest {
+		t.Errorf("malformed request: got %d", rec.Code)
+	}
+}
+
 func TestExportPermissions(t *testing.T) {
 	srv, _, tagged, _, tag := labelFixture(t)
 	nothingPublic(t, srv)
@@ -261,6 +307,7 @@ func TestExportPermissions(t *testing.T) {
 		{http.MethodGet, "/api/v1/assets/" + tagged + "/label?template_id=" + tag, ""},
 		{http.MethodPost, "/api/v1/labels/export", `{}`},
 		{http.MethodPost, "/api/v1/templates/preview", `{}`},
+		{http.MethodPost, "/api/v1/templates/preview-data", `{}`},
 	} {
 		if rec := doJSON(t, srv, cookie, c.method, c.path, c.body); rec.Code != http.StatusForbidden {
 			t.Errorf("%s %s: got %d, want 403", c.method, c.path, rec.Code)

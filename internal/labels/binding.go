@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fieldkey"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 )
 
@@ -104,7 +104,7 @@ func parseRef(name string) (Ref, error) {
 		return Ref{Kind: RefAssetCode, Arg: genType}, nil
 	case strings.HasPrefix(name, "field."):
 		key := strings.TrimPrefix(name, "field.")
-		if fields.ValidateKey(key) != nil {
+		if !fieldkey.Valid(key) {
 			return Ref{}, fmt.Errorf("%w: malformed field key in {{%s}}", ErrInvalidBinding, name)
 		}
 		return Ref{Kind: RefField, Arg: key}, nil
@@ -130,20 +130,27 @@ func (b Binding) IsEmpty() bool {
 }
 
 // Data is what a binding resolves against.
+//
+// It is sent as JSON to the editor's live renderer, which draws a label in
+// the browser with an asset's data.
 type Data struct {
-	AssetID   string
-	AssetName string
-	BaseURL   string
+	AssetID   string `json:"asset_id"`
+	AssetName string `json:"asset_name"`
+	BaseURL   string `json:"base_url"`
 	// Codes maps generator type to the asset's assigned code.
-	Codes map[string]string
+	Codes map[string]string `json:"codes"`
 	// Fields maps field key to the asset's value.
-	Fields map[string]string
+	Fields map[string]string `json:"fields"`
 	// Categories, Location, Condition, Quantity, Unit, Borrower and Due are
 	// the asset's categories, where it is, its condition, its stock and who
 	// has it until when, as text; empty when it has none.
-	Categories, Location, Condition string
-	Quantity, Unit                  string
-	Borrower, Due                   string
+	Categories string `json:"categories"`
+	Location   string `json:"location"`
+	Condition  string `json:"condition"`
+	Quantity   string `json:"quantity"`
+	Unit       string `json:"unit"`
+	Borrower   string `json:"borrower"`
+	Due        string `json:"due"`
 }
 
 // Resolve substitutes every placeholder. Missing codes and field values
