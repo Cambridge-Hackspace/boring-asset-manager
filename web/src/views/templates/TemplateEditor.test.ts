@@ -63,7 +63,7 @@ describe('TemplateEditor', () => {
       'Select and move', 'Text', 'Barcode or QR code', 'Image', 'Rectangle', 'Ellipse', 'Line', 'Polygon',
     ]);
     expect(screen.getByRole('group', { name: 'Tool options' })).toBeTruthy();
-    for (const panel of ['Overview', 'Layers', 'Properties', 'Arrange', 'History', 'Label', 'Printer', 'Preview data']) {
+    for (const panel of ['Overview', 'Layers', 'Properties', 'Arrange', 'History', 'Grid and guides', 'Label', 'Printer', 'Preview data']) {
       expect(screen.getByRole('button', { name: panel, expanded: true })).toBeTruthy();
     }
     // jsdom runs no workers: the server draws the label, and the status bar says so.
@@ -187,7 +187,7 @@ describe('TemplateEditor', () => {
     const titles = () => screen.getAllByRole('button', { expanded: true }).concat(screen.getAllByRole('button', { expanded: false })).map((b) => b.id).filter((id) => id.startsWith('panel-'));
     expect(titles()).toContain('panel-label');
     expect(JSON.parse(localStorage.getItem('bam.editor.panels')!)).toEqual({
-      order: ['overview', 'layers', 'properties', 'arrange', 'label', 'history', 'printer', 'preview'],
+      order: ['overview', 'layers', 'properties', 'arrange', 'history', 'label', 'grid', 'printer', 'preview'],
       collapsed: ['arrange'],
     });
     cleanup();
@@ -195,7 +195,7 @@ describe('TemplateEditor', () => {
     await loaded();
     expect(screen.getByRole('button', { name: 'Arrange', expanded: false })).toBeTruthy();
     const order = [...document.querySelectorAll('[id^="panel-"]')].map((b) => b.id);
-    expect(order).toEqual(['panel-overview', 'panel-layers', 'panel-properties', 'panel-arrange', 'panel-label', 'panel-history', 'panel-printer', 'panel-preview']);
+    expect(order).toEqual(['panel-overview', 'panel-layers', 'panel-properties', 'panel-arrange', 'panel-history', 'panel-label', 'panel-grid', 'panel-printer', 'panel-preview']);
   });
 
   it('zooms with the keys and the zoom box, and shows print size as approximate until calibrated', async () => {
@@ -267,14 +267,51 @@ describe('TemplateEditor', () => {
     expect((await saved(sent)).elements[0]).toMatchObject({ x: -10, y: 10, width: 80, height: 20 });
   });
 
-  it('snaps turns to 45° until switched off, which is remembered', async () => {
+  it('chooses what to snap to from one menu, remembered in this browser', async () => {
     api();
     render(TemplateEditor, { params: { id: 'ql90' } });
     await loaded();
-    const snapping = screen.getByRole('checkbox', { name: 'Snap turns to 45°' }) as HTMLInputElement;
-    expect(snapping.checked).toBe(true);
-    await fireEvent.click(snapping);
+    await fireEvent.click(screen.getByRole('button', { name: 'Snap to ▾' }));
+    const menu = screen.getByRole('menu', { name: 'Snap to' });
+    const items = within(menu).getAllByRole('menuitemcheckbox');
+    expect(items.map((i) => [i.textContent?.trim(), i.getAttribute('aria-checked')])).toEqual([
+      ['✓The grid', 'true'],
+      ['✓Guides', 'true'],
+      ['✓Other elements: edges and centers', 'true'],
+      ['✓The label: edges and center', 'true'],
+      ['✓Turns, to 45°', 'true'],
+    ]);
+    await fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: /Other elements/ }));
+    await fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: /Turns/ }));
+    expect(JSON.parse(localStorage.getItem('bam.editor-snap')!)).toEqual({ grid: true, guides: true, elements: false, label: true });
     expect(localStorage.getItem('bam.editor-snap-angles')).toBe('off');
+    await fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Snap to' })).toBeNull();
+  });
+
+  it('keeps the grid with the template, and the guides shown, locked or deleted', async () => {
+    const guided = { ...template, guides: { x: [45] } };
+    const { sent } = api({ 'GET /templates/ql90': () => ({ template: guided }), 'PUT /templates/ql90': () => ({ template: guided }) });
+    const { container } = render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    expect(container.querySelector('[data-grid]')).toBeNull();
+    expect(container.querySelectorAll('line.guide')).toHaveLength(1);
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show it' }));
+    expect(container.querySelector('[data-grid]')).not.toBeNull();
+    // Equal spacing, until unlocked.
+    await fireEvent.change(document.querySelector('#grid-x')!, { target: { value: '2' } });
+    expect(value('#grid-y')).toBe('2');
+    await fireEvent.click(screen.getByRole('button', { name: 'Keep the spacing equal' }));
+    await fireEvent.change(document.querySelector('#grid-y')!, { target: { value: '1' } });
+    await fireEvent.change(document.querySelector('#grid-offset-x')!, { target: { value: '0.5' } });
+    await fireEvent.change(document.querySelector('#grid-subdivisions')!, { target: { value: '4' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Show them' }));
+    expect(container.querySelectorAll('line.guide')).toHaveLength(0);
+    expect(localStorage.getItem('bam.editor-guides-shown')).toBe('off');
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
+    const body = await saved(sent);
+    expect(body.grid).toEqual({ x: 2, y: 1, offset_x: 0.5, subdivisions: 4, visible: true });
+    expect(body.guides).toBeUndefined();
   });
 
   it('opens the menu from the keyboard, and stacks, locks, copies, pastes and deletes from it', async () => {
