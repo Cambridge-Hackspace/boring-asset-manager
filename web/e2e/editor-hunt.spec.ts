@@ -599,4 +599,34 @@ test.describe('pointer and keyboard', () => {
     expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`)).toEqual([]);
   });
 
+  test('50: an image is drawn on the label and in the overview', async ({ signedIn: page }) => {
+    await goTo(page, 'Templates');
+    await page.getByRole('link', { name: 'New template' }).click();
+    const png = await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d')!;
+      g.fillStyle = 'white';
+      g.fillRect(0, 0, 64, 64);
+      g.fillStyle = 'black';
+      g.fillRect(8, 8, 48, 48);
+      return c.toDataURL('image/png').split(',')[1]!;
+    });
+    const r = await box(labelImage(page));
+    await tool(page, 'Image').click();
+    await drag(page, [r.x + r.width * 0.1, r.y + r.height * 0.1], [r.x + r.width * 0.4, r.y + r.height * 0.8]);
+    await panels(page).locator('input[type=file]').first().setInputFiles({ name: 'square.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    await expect.poll(() => ink(page)).toBeGreaterThan(200);
+    const dark = await page
+      .locator('[data-overview-view]')
+      .locator('..')
+      .locator('canvas')
+      .evaluate((c: HTMLCanvasElement) => {
+        const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i]! < 100) n++;
+        return n;
+      });
+    expect(dark).toBeGreaterThan(200);
+  });
 });
