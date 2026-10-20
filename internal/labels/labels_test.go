@@ -682,6 +682,52 @@ func TestWorkspaceProperties(t *testing.T) {
 	}
 }
 
+// TestGrid checks the editor's grid, which never prints: its steps and
+// offsets are on the label, and it turns with a template, its lines
+// staying where they were on the design.
+func TestGrid(t *testing.T) {
+	doc := func(grid string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","grid":` + grid + `,"elements":[]}`
+	}
+	tpl, err := Parse([]byte(doc(`{"x":3,"y":2,"offset_x":1,"offset_y":0.5,"subdivisions":2,"visible":true}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Turned right, lines down from the left at 1, 4, 7... become lines
+	// across from the top; lines across at 0.5, 2.5... come round to lines
+	// down at 20 - 0.5 = 19.5, 17.5..., so from 1.5, two apart.
+	right := tpl.Turned(true)
+	if g := right.Grid; *g != (Grid{X: 2, Y: 3, OffsetX: 1.5, OffsetY: 1, Subdivisions: 2, Visible: true}) {
+		t.Errorf("turned right: %+v", g)
+	}
+	left := tpl.Turned(false)
+	if g := left.Grid; *g != (Grid{X: 2, Y: 3, OffsetX: 0.5, OffsetY: 0, Subdivisions: 2, Visible: true}) {
+		t.Errorf("turned left: %+v", g)
+	}
+	if back := right.Turned(false).Grid; *back != *tpl.Grid {
+		t.Errorf("turned back: %+v", back)
+	}
+	for grid, want := range map[string][]string{
+		`{"x":0,"y":2}`:                   {"grid.x"},
+		`{"x":41,"y":2}`:                  {"grid.x"},
+		`{"x":2,"y":2,"offset_y":2}`:      {"grid.offset_y"},
+		`{"x":2,"y":2,"offset_x":-1}`:     {"grid.offset_x"},
+		`{"x":2,"y":2,"subdivisions":11}`: {"grid.subdivisions"},
+		`{"x":2,"y":2,"spacing":3}`:       nil,
+	} {
+		_, err := Parse([]byte(doc(grid)))
+		if want == nil {
+			if err == nil {
+				t.Errorf("%s: an unknown property was taken", grid)
+			}
+			continue
+		}
+		if got := problemPaths(t, err); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: %v, want %v", grid, got, want)
+		}
+	}
+}
+
 // TestElementNameLength takes a name of 100 characters, counted as
 // characters, not bytes.
 func TestElementNameLength(t *testing.T) {

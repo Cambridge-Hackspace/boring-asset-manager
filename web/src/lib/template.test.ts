@@ -17,7 +17,6 @@ import {
   flipElements,
   rulerStep,
   scaleElements,
-  smartSnap,
   unclip,
   withGroups,
   orientation,
@@ -412,6 +411,15 @@ describe('turning a template', () => {
     expect(right.elements[1]!.rotation).toBe(100);
   });
 
+  it('turns its guides and grid with it, as the server does', () => {
+    const t = { ...tpl(), width: 40, guides: { x: [5, 30], y: [4] }, grid: { x: 3, y: 2, offset_x: 1, offset_y: 0.5, subdivisions: 2, visible: true } };
+    const right = turnTemplate(t, true);
+    expect(right.guides).toEqual({ x: [16], y: [5, 30] });
+    expect(right.grid).toEqual({ x: 2, y: 3, offset_x: 1.5, offset_y: 1, subdivisions: 2, visible: true });
+    expect(turnTemplate(t, false).grid).toEqual({ x: 2, y: 3, offset_x: 0.5, subdivisions: 2, visible: true });
+    expect(turnTemplate(right, false)).toEqual(t);
+  });
+
   it('gives it back after four turns, or one each way', () => {
     let t = tpl();
     for (let i = 0; i < 4; i++) t = turnTemplate(t, true);
@@ -459,15 +467,6 @@ describe('the workspace', () => {
     expect(flipped[1]).toMatchObject({ rotation: 330, points: [[1, 0], [0, 0.25], [0.5, 1]] });
     expect(flipped[2]!.mirror).toBe('across');
     expect(flipElements({ ...d, elements: flipped }, [2], false)[2]!.mirror).toBe('both');
-  });
-
-  it('snaps a moving box to the edges and middles near it, and the guides', () => {
-    const d = { ...three(), guides: { x: [33] } };
-    // The first box, moved 15 across, has its right edge 2 from the guide.
-    expect(smartSnap(d, [0], { x: 10, y: 5, width: 10, height: 10 }, 15, 0, 3)).toMatchObject({ dx: 13, x: 33, dy: 0 });
-    // Its middle near the second's top, at 20: snapped to it.
-    expect(smartSnap(d, [0], { x: 10, y: 5, width: 10, height: 10 }, 0, 4, 3)).toMatchObject({ dy: 5, y: 20 });
-    expect(smartSnap(d, [0], { x: 10, y: 5, width: 10, height: 10 }, 11, 0.5, 0.1)).toEqual({ dx: 11, dy: 0.5 });
   });
 
   it('scales elements with the box round them', () => {

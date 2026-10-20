@@ -5,7 +5,8 @@
   // A ruler along the top or down the left of the label, as in Krita: its
   // numbers spaced to suit the zoom, a mark where the pointer is, and the
   // selection's extent shaded. Right-click it to change its units.
-  let { axis }: { axis: 'x' | 'y' } = $props();
+  // Pressed and dragged onto the label, it gives a guide (onguide).
+  let { axis, onguide }: { axis: 'x' | 'y'; onguide?: (event: PointerEvent) => void } = $props();
 
   const editor = useEditor();
   let w = $state(0);
@@ -57,9 +58,11 @@
 <div
   bind:clientWidth={w}
   bind:clientHeight={h}
-  class="relative h-full w-full overflow-hidden bg-zinc-100 text-[0.6rem] text-zinc-600 select-none dark:bg-zinc-900 dark:text-zinc-400"
+  title="Drag onto the label for a guide. Right-click for its units."
+  class="relative h-full w-full cursor-default overflow-hidden bg-zinc-100 text-[0.6rem] text-zinc-600 select-none dark:bg-zinc-900 dark:text-zinc-400"
   aria-hidden="true"
   data-ruler={axis}
+  onpointerdown={(e) => e.button === 0 && onguide?.(e)}
   oncontextmenu={(e) => {
     e.preventDefault();
     menu = { x: e.clientX, y: e.clientY };

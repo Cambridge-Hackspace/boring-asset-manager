@@ -281,13 +281,14 @@ func TestTemplateFeedAndTurnable(t *testing.T) {
 	tmpl := sampleTemplate("")
 	tmpl.Feed, tmpl.Turnable, tmpl.Sizing = labels.FeedAlong, true, labels.SizingAdaptive
 	tmpl.Guides = &labels.Guides{X: []float64{10, 31}, Y: []float64{14.5}}
+	tmpl.Grid = &labels.Grid{X: 2, Y: 1.5, OffsetX: 0.5, Subdivisions: 4, Visible: true}
 	tmpl.Adapt = &labels.Adapt{MinWidth: 30, MaxWidth: 100, MinHeight: 20, MaxHeight: 50, ContinuousLength: labels.LengthFixed}
 	created, err := st.CreateTemplate(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetTemplate(created.ID)
-	if err != nil || got.Feed != labels.FeedAlong || !got.Turnable || !reflect.DeepEqual(got.Guides, tmpl.Guides) {
+	if err != nil || got.Feed != labels.FeedAlong || !got.Turnable || !reflect.DeepEqual(got.Guides, tmpl.Guides) || !reflect.DeepEqual(got.Grid, tmpl.Grid) {
 		t.Fatalf("stored: %+v %v", got, err)
 	}
 	got.Feed, got.Turnable = "", false
