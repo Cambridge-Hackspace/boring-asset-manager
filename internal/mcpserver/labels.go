@@ -250,13 +250,15 @@ func labelTools() []tool {
 				Name     string         `json:"name,omitempty"`
 				Change   []struct {
 					Index int            `json:"index"`
-					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, group (the editor moves a group as one), locked; for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align; an image mirror (across, down or both); a shape has shape (rectangle, ellipse, line or polygon), stroke and fill (black, white or none), stroke_width, corner_radius, flip, and points (fractions of its box) and closed"`
+					Set   map[string]any `json:"set" jsonschema:"properties to set, such as x, y, width, height, rotation (degrees clockwise about the box's center), content_binding, font_size, group (the editor moves a group as one), locked; for a code margin (top, right, bottom, left; sides left out are standard), margin_unit (modules or length), align and vertical_align; mirror (across, down or both) flips any element in its box, though a mirrored code does not scan from the side the label is read from; a shape has shape (rectangle, ellipse, line or polygon), stroke and fill (black, white or none), stroke_width, corner_radius, flip, and points (fractions of its box) and closed"`
 				} `json:"change_elements,omitempty"`
-				Move    []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
-				Turn    string           `json:"turn,omitempty" jsonschema:"left or right: turn the whole template a quarter turn with everything on it, as the editor's portrait and landscape switch does, after the other changes"`
-				Arrange *arrangeIn       `json:"arrange_elements,omitempty" jsonschema:"line elements up or spread them out, as the editor's align and distribute buttons do, after the other changes and before turning"`
-				Remove  []int            `json:"remove_elements,omitempty"`
-				Add     []map[string]any `json:"add_elements,omitempty"`
+				Move          []elementMove    `json:"move_elements,omitempty" jsonschema:"elements to put elsewhere in the drawing order, moved in turn"`
+				Turn          string           `json:"turn,omitempty" jsonschema:"left or right: turn the whole template a quarter turn with everything on it, as the editor's portrait and landscape switch does, after the other changes"`
+				PrintMirror   string           `json:"print_mirror,omitempty" jsonschema:"how its labels print mirror-image, codes and all, for a clear label read through glass: across, down, both, or none; it is designed the right way round"`
+				PrintRotation *float64         `json:"print_rotation,omitempty" jsonschema:"degrees clockwise, from 0 up to 360, everything on its labels is turned as they print, for labels put on turned by a dispenser; 0 for none. What is turned off the label is cut off, and printing warns of it"`
+				Arrange       *arrangeIn       `json:"arrange_elements,omitempty" jsonschema:"line elements up or spread them out, as the editor's align and distribute buttons do, after the other changes and before turning"`
+				Remove        []int            `json:"remove_elements,omitempty"`
+				Add           []map[string]any `json:"add_elements,omitempty"`
 			}) (reply[map[string]any], error) {
 				out := map[string]any{}
 				if in.ID == "" {
@@ -310,6 +312,20 @@ func labelTools() []tool {
 					}
 				}
 				spec["id"] = in.ID
+				switch in.PrintMirror {
+				case "":
+				case labels.MirrorNone:
+					delete(spec, "print_mirror")
+				default:
+					spec["print_mirror"] = in.PrintMirror
+				}
+				if in.PrintRotation != nil {
+					if *in.PrintRotation == 0 {
+						delete(spec, "print_rotation")
+					} else {
+						spec["print_rotation"] = *in.PrintRotation
+					}
+				}
 				inListOrder(spec)
 				if in.Arrange != nil {
 					var err error
@@ -571,6 +587,7 @@ func labelTools() []tool {
 				Assets     []string `json:"assets" jsonschema:"by ID or code, up to 50"`
 				Copies     int      `json:"copies,omitempty"`
 				Feed       string   `json:"feed,omitempty" jsonschema:"this time, which way labels that fit either way go through it: across (width across the roll), along, or auto"`
+				Mirror     string   `json:"mirror,omitempty" jsonschema:"this time, in place of the template's: print mirror-image across, down or both, for clear labels read through glass, or none for the right way round"`
 			}) (reply[map[string]any], error) {
 				if err := checkItems(len(in.Assets)); err != nil {
 					return reply[map[string]any]{}, err
@@ -580,7 +597,7 @@ func labelTools() []tool {
 					return reply[map[string]any]{}, err
 				}
 				out := map[string]any{}
-				if err := e.call(ctx, http.MethodPost, pathOf("/api/v1/printers/{id}/print", in.PrinterID), map[string]any{"template_id": in.TemplateID, "asset_ids": ids, "copies": in.Copies, "feed": in.Feed}, &out); err != nil {
+				if err := e.call(ctx, http.MethodPost, pathOf("/api/v1/printers/{id}/print", in.PrinterID), map[string]any{"template_id": in.TemplateID, "asset_ids": ids, "copies": in.Copies, "feed": in.Feed, "mirror": in.Mirror}, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}
 				return say(out, "Sent %d labels to the printer.", len(ids))

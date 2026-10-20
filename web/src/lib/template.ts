@@ -63,8 +63,8 @@ export interface TemplateElement {
   max_font_size?: number;
   // static_image
   image_id?: string;
-  /** An image flipped across, down or both. */
-  mirror?: 'across' | 'down' | 'both';
+  /** Flipped in its box, before it is turned: across, down or both. A mirrored code does not scan from the side the label is read from. */
+  mirror?: Mirror;
   /** The group it is in, moved, resized and turned as one in the editor. */
   group?: string;
   /** Kept from being selected on the canvas; still selectable from the layers. */
@@ -114,7 +114,85 @@ export interface TemplateDoc {
   guides?: Guides;
   /** The editor's grid; absent, gridStep's, not drawn. It never prints. */
   grid?: Grid;
+  /** Its labels print mirror-image, for a clear label read through glass; it is designed the right way round. */
+  print_mirror?: Mirror;
+  /** Degrees clockwise everything on its labels turns as they print, after any mirroring, for labels put on turned. */
+  print_rotation?: number;
   elements: TemplateElement[];
+}
+
+/** Which way something is mirrored: left for right, top for bottom, or both. */
+export type Mirror = 'across' | 'down' | 'both';
+
+/** Whether a mirror flips across, and down. */
+export function mirrorSides(m: Mirror | undefined): { across: boolean; down: boolean } {
+  return { across: m === 'across' || m === 'both', down: m === 'down' || m === 'both' };
+}
+
+/** The mirror that flips across, down, both or neither. */
+export function mirrorOf(across: boolean, down: boolean): Mirror | undefined {
+  return across && down ? 'both' : across ? 'across' : down ? 'down' : undefined;
+}
+
+/** Where a point of the design lands as the label prints: mirrored, then turned, about its center, as the server prints it. */
+export function printedPoint(doc: Pick<TemplateDoc, 'width' | 'height' | 'print_mirror' | 'print_rotation'>, x: number, y: number): [number, number] {
+  const { across, down } = mirrorSides(doc.print_mirror);
+  if (across) x = doc.width - x;
+  if (down) y = doc.height - y;
+  const r = ((doc.print_rotation ?? 0) * Math.PI) / 180;
+  if (!r) return [x, y];
+  const cx = doc.width / 2;
+  const cy = doc.height / 2;
+  const [dx, dy] = [x - cx, y - cy];
+  return [cx + dx * Math.cos(r) - dy * Math.sin(r), cy + dx * Math.sin(r) + dy * Math.cos(r)];
+}
+
+/**
+ * How the label itself lies, turned, once it is on, with what is on it
+ * reading level: against the turn it printed with, or with it where it
+ * was mirrored one way only, as a mirror turns a turn the other way.
+ */
+export function appliedTurn(doc: Pick<TemplateDoc, 'print_mirror' | 'print_rotation'>): number {
+  const { across, down } = mirrorSides(doc.print_mirror);
+  const r = doc.print_rotation ?? 0;
+  return across !== down ? r : -r;
+}
+
+/** The size of a box turned by degrees: the box around it, level. */
+export function turnedSize(width: number, height: number, degrees: number): [number, number] {
+  const r = (degrees * Math.PI) / 180;
+  const c = Math.abs(Math.cos(r));
+  const s = Math.abs(Math.sin(r));
+  return [width * c + height * s, width * s + height * c];
+}
+
+/**
+ * What prints otherwise than the design shows, as printing warns of it:
+ * elements turned partly off the label as it prints, cut off there, and
+ * mirrored codes, which do not scan from the side it is read from.
+ */
+export function printWarnings(doc: TemplateDoc): { index: number; message: string }[] {
+  const out: { index: number; message: string }[] = [];
+  const tolerance = 1e-6;
+  doc.elements.forEach((e, index) => {
+    const name = e.name ? `“${e.name}”` : describeElement(e, index);
+    if (e.type === 'generator' && e.mirror) out.push({ index, message: `${name} is a mirrored code: it does not scan from the side the label is read from.` });
+    if (!doc.print_rotation) return;
+    const r = ((e.rotation ?? 0) * Math.PI) / 180;
+    const [cx, cy] = [e.x + e.width / 2, e.y + e.height / 2];
+    const off = [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ].some(([u, v]) => {
+      const [dx, dy] = [(u! * e.width) / 2, (v! * e.height) / 2];
+      const [x, y] = printedPoint(doc, cx + dx * Math.cos(r) - dy * Math.sin(r), cy + dx * Math.sin(r) + dy * Math.cos(r));
+      return x < -tolerance || y < -tolerance || x > doc.width + tolerance || y > doc.height + tolerance;
+    });
+    if (off) out.push({ index, message: `Turned ${doc.print_rotation}° as it prints, ${name} goes partly off the label and is cut off.` });
+  });
+  return out;
 }
 
 export const MM_PER_INCH = 25.4;
@@ -958,9 +1036,8 @@ export function flipElements(doc: TemplateDoc, indices: number[], across: boolea
     let next: TemplateElement = across ? { ...e, x: tidy(2 * mid - (e.x + e.width), doc.units) } : { ...e, y: tidy(2 * mid - (e.y + e.height), doc.units) };
     next = withProp(next, 'rotation', normalAngle(-(e.rotation ?? 0)) || undefined);
     if (e.type === 'static_image') {
-      const a = (e.mirror === 'across' || e.mirror === 'both') !== across;
-      const d = (e.mirror === 'down' || e.mirror === 'both') !== !across;
-      next = withProp(next, 'mirror', a && d ? 'both' : a ? 'across' : d ? 'down' : undefined);
+      const m = mirrorSides(e.mirror);
+      next = withProp(next, 'mirror', mirrorOf(m.across !== across, m.down !== !across));
     } else if (e.type === 'shape' && e.shape === 'polygon' && e.points) {
       const frac = (v: number) => Math.round((1 - v) * 1e4) / 1e4;
       next.points = e.points.map(([u, v]) => (across ? [frac(u), v] : [u, frac(v)]));

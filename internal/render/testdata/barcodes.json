@@ -60,12 +60,58 @@
   ]
  },
  {
+  "file": "mirrored.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ],
+  "mirror": "across"
+ },
+ {
+  "file": "mirrored.mono.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ],
+  "mirror": "across"
+ },
+ {
+  "file": "mirrored_turned.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ],
+  "mirror": "down"
+ },
+ {
+  "file": "mirrored_turned.mono.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ],
+  "mirror": "down"
+ },
+ {
   "file": "pen.png",
   "payloads": []
  },
  {
   "file": "pen.mono.png",
   "payloads": []
+ },
+ {
+  "file": "print_turned.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ]
+ },
+ {
+  "file": "print_turned.mono.png",
+  "payloads": [
+   "BAM-QR-0042",
+   "1234"
+  ]
  },
  {
   "file": "qr45.png",

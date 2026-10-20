@@ -41,7 +41,7 @@ func (s *Scene) turn(items []Item, box image.Rectangle, degrees float64) {
 		it := &items[i]
 		switch {
 		case it.Image != nil:
-			it.Image.Rotation, it.Image.Cx, it.Image.Cy = degrees, cx, cy
+			it.Image.turn(degrees, cx, cy, at)
 		case it.Rects != nil:
 			// Each run of modules becomes a turned rectangle.
 			p := make(Path, 0, 4*len(it.Rects))
@@ -97,6 +97,11 @@ func (q quarterTurn) item(it *Item) {
 		pi := *it.Image
 		pi.X, pi.Y, pi.W, pi.H = q.rect(pi.X, pi.Y, pi.W, pi.H)
 		pi.Image = turnImage(pi.Image, q.quarters)
+		// An image already turned keeps its turn, about its center moved.
+		if pi.Rotation != 0 {
+			c := q.point(Point{pi.Cx, pi.Cy})
+			pi.Cx, pi.Cy = c.X, c.Y
+		}
 		it.Image = &pi
 	case it.Rects != nil:
 		rects := make([]Rect, len(it.Rects))
@@ -151,4 +156,98 @@ func turnImage(img image.Image, quarters int) image.Image {
 		}
 	}
 	return out
+}
+
+// turn turns the image by degrees about (cx, cy), at being that turn, on
+// top of any turn it has: one turn, by both, about the point that does
+// both. Turned back level, it is moved instead, to the nearest dot.
+func (pi *PlacedImage) turn(degrees, cx, cy float64, at func(Point) Point) {
+	if pi.Rotation == 0 {
+		pi.Rotation, pi.Cx, pi.Cy = degrees, cx, cy
+		return
+	}
+	// Where the image's center goes, turned as it is and then as asked.
+	sin, cos := labels.SinCos(pi.Rotation)
+	bx, by := float64(pi.X)+float64(pi.W)/2, float64(pi.Y)+float64(pi.H)/2
+	dx, dy := bx-pi.Cx, by-pi.Cy
+	to := at(Point{pi.Cx + dx*cos - dy*sin, pi.Cy + dx*sin + dy*cos})
+	total := math.Mod(pi.Rotation+degrees, 360)
+	if total == 0 {
+		pi.X, pi.Y = round(to.X-float64(pi.W)/2), round(to.Y-float64(pi.H)/2)
+		pi.Rotation, pi.Cx, pi.Cy = 0, 0, 0
+		return
+	}
+	// The point p about which turning the center b by total lands it on to:
+	// (I - R) p = to - R b.
+	sin, cos = labels.SinCos(total)
+	tx, ty := to.X-(bx*cos-by*sin), to.Y-(bx*sin+by*cos)
+	det := (1-cos)*(1-cos) + sin*sin
+	pi.Rotation = total
+	pi.Cx = ((1-cos)*tx - sin*ty) / det
+	pi.Cy = (sin*tx + (1-cos)*ty) / det
+}
+
+// mirror flips what was drawn in box, across (left for right), down (top
+// for bottom) or both, about the box's center. Barcode modules stay whole
+// dots and images are flipped dot for dot.
+func mirror(items []Item, box image.Rectangle, across, down bool) {
+	if !across && !down {
+		return
+	}
+	sx, sy := box.Min.X+box.Max.X, box.Min.Y+box.Max.Y
+	at := func(p Point) Point {
+		if across {
+			p.X = float64(sx) - p.X
+		}
+		if down {
+			p.Y = float64(sy) - p.Y
+		}
+		return p
+	}
+	for i := range items {
+		it := &items[i]
+		switch {
+		case it.Image != nil:
+			pi := *it.Image
+			pi.Image = mirrored(pi.Image, across, down)
+			if across {
+				pi.X = sx - pi.X - pi.W
+			}
+			if down {
+				pi.Y = sy - pi.Y - pi.H
+			}
+			if pi.Rotation != 0 {
+				c := at(Point{pi.Cx, pi.Cy})
+				pi.Cx, pi.Cy = c.X, c.Y
+				// Mirrored one way, a turn goes the other way.
+				if across != down {
+					pi.Rotation = 360 - pi.Rotation
+				}
+			}
+			it.Image = &pi
+		case it.Rects != nil:
+			rects := make([]Rect, len(it.Rects))
+			for k, r := range it.Rects {
+				if across {
+					r.X = sx - r.X - r.W
+				}
+				if down {
+					r.Y = sy - r.Y - r.H
+				}
+				rects[k] = r
+			}
+			it.Rects = rects
+		default:
+			it.Path.transform(at)
+		}
+	}
+}
+
+// print mirrors and turns everything on the label as it prints, as the
+// template's PrintMirror and PrintRotation say, about the label's center.
+func (s *Scene) print(t *labels.Template) {
+	canvas := image.Rect(0, 0, s.Width, s.Height)
+	m := t.PrintMirror
+	mirror(s.Items, canvas, m == labels.MirrorAcross || m == labels.MirrorBoth, m == labels.MirrorDown || m == labels.MirrorBoth)
+	s.turn(s.Items, canvas, t.PrintRotation)
 }

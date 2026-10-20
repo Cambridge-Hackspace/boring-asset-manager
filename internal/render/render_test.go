@@ -142,6 +142,32 @@ var goldenTemplates = map[string]string{
 	// ellipse's outline, white text reversed out of a black band, an arrow,
 	// a diagonal line, a hairline widened to a dot, a turned rounded frame
 	// and an open zigzag.
+	// A clear label read through glass: it prints mirror-image, codes and
+	// all, and the text mirrored in its own box prints the right way round.
+	// The arrow, turned, mirrors its turn.
+	"mirrored": `{"id":"mirrored","name":"Mirrored","units":"mm","width":60,"height":30,"dpi":300,"layering":"list","print_mirror":"across","elements":[
+		{"type":"generator","generator_type":"qr","x":2,"y":2,"width":20,"height":20,"content_binding":"{{asset.code.qr}}"},
+		{"type":"text","x":24,"y":2,"width":34,"height":7,"font_size":14,"font_weight":"bold","content_binding":"READ ME"},
+		{"type":"text","x":24,"y":10,"width":34,"height":6,"font_size":10,"mirror":"across","content_binding":"PRINTED"},
+		{"type":"static_image","x":26,"y":17,"width":10,"height":7,"rotation":30,"image_id":"` + arrowID + `"},
+		{"type":"shape","shape":"polygon","x":40,"y":17,"width":8,"height":6,"fill":"black","stroke":"none","mirror":"down","points":[[0,0],[1,0],[0,1]]},
+		{"type":"generator","generator_type":"code128","x":2,"y":23,"width":56,"height":6,"content_binding":"1234"}]}`,
+	// A square label put on turned 30°: everything on it turned the other
+	// way as it prints, the corners cut off.
+	"print_turned": `{"id":"print_turned","name":"Print turned","units":"mm","width":40,"height":40,"dpi":300,"layering":"list","print_rotation":330,"elements":[
+		{"type":"generator","generator_type":"qr","x":11,"y":4,"width":18,"height":18,"content_binding":"{{asset.code.qr}}"},
+		{"type":"text","x":4,"y":23,"width":32,"height":6,"font_size":12,"font_weight":"bold","align":"center","content_binding":"BAM 42"},
+		{"type":"static_image","x":4,"y":30,"width":8,"height":6,"image_id":"` + arrowID + `"},
+		{"type":"static_image","x":28,"y":30,"width":8,"height":6,"rotation":90,"image_id":"` + arrowID + `"},
+		{"type":"generator","generator_type":"code128","x":13,"y":30,"width":14,"height":7,"content_binding":"1234"},
+		{"type":"shape","shape":"rectangle","x":0,"y":0,"width":40,"height":40,"stroke":"black","fill":"none","stroke_width":0.5}]}`,
+	// Both: mirrored top for bottom and turned a quarter turn, so codes stay
+	// on whole dots, with an arrow already turned 30° turned on with it.
+	"mirrored_turned": `{"id":"mirrored_turned","name":"Mirrored and turned","units":"mm","width":40,"height":40,"dpi":203,"layering":"list","print_mirror":"down","print_rotation":90,"elements":[
+		{"type":"generator","generator_type":"qr","x":2,"y":2,"width":18,"height":18,"content_binding":"{{asset.code.qr}}"},
+		{"type":"text","x":22,"y":2,"width":16,"height":8,"font_size":12,"font_weight":"bold","content_binding":"BAM"},
+		{"type":"static_image","x":24,"y":11,"width":12,"height":8,"rotation":30,"image_id":"` + arrowID + `"},
+		{"type":"generator","generator_type":"code128","x":2,"y":24,"width":36,"height":12,"content_binding":"1234"}]}`,
 	// Text filling its box: the same words grown in a large box and shrunk in
 	// a small one, held to a largest size in a third, and wrapped in a fourth.
 	"fit": `{"id":"fit","name":"Fit","units":"mm","width":80,"height":40,"dpi":300,"layering":"list","elements":[
@@ -177,17 +203,25 @@ var goldenTemplates = map[string]string{
 // goldenPayloads lists what each golden's barcodes must decode to; see
 // tools/goldens/verify_renders.py.
 var goldenPayloads = map[string][]string{
-	"qr_label":      {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
-	"micro_code128": {"BAM-0042", "TOOL-0042"},
-	"image_inches":  {},
-	"layers":        {},
-	"turned":        {"BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "1234", "1234"},
-	"qr45":          {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
-	"margins":       {"BAM-QR-0042", "1234"},
-	"shapes":        {},
-	"pen":           {},
-	"fit":           {},
+	"qr_label":        {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
+	"micro_code128":   {"BAM-0042", "TOOL-0042"},
+	"image_inches":    {},
+	"layers":          {},
+	"turned":          {"BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "BAM-QR-0042", "1234", "1234"},
+	"qr45":            {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
+	"margins":         {"BAM-QR-0042", "1234"},
+	"shapes":          {},
+	"pen":             {},
+	"fit":             {},
+	"mirrored":        {"BAM-QR-0042", "1234"},
+	"print_turned":    {"BAM-QR-0042", "1234"},
+	"mirrored_turned": {"BAM-QR-0042", "1234"},
 }
+
+// goldenMirrors are how the goldens that print mirrored are mirrored, for
+// tools/goldens/verify_renders.py to mirror them back before it reads
+// their codes, as they are read through the glass.
+var goldenMirrors = map[string]string{"mirrored": "across", "mirrored_turned": "down"}
 
 func renderAll(t *testing.T, s *Scene) map[string][]byte {
 	t.Helper()
@@ -223,10 +257,11 @@ func TestGoldens(t *testing.T) {
 	type manifestEntry struct {
 		File     string   `json:"file"`
 		Payloads []string `json:"payloads"`
+		Mirror   string   `json:"mirror,omitempty"`
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"fit", "image_inches", "imported", "layers", "margins", "micro_code128", "pen", "qr45", "qr_label", "shapes", "turned"} {
+	for _, name := range []string{"fit", "image_inches", "imported", "layers", "margins", "micro_code128", "mirrored", "mirrored_turned", "pen", "print_turned", "qr45", "qr_label", "shapes", "turned"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -253,7 +288,7 @@ func TestGoldens(t *testing.T) {
 			}
 		}
 		for _, ext := range []string{"png", "mono.png"} {
-			manifest = append(manifest, manifestEntry{File: name + "." + ext, Payloads: goldenPayloads[name]})
+			manifest = append(manifest, manifestEntry{File: name + "." + ext, Payloads: goldenPayloads[name], Mirror: goldenMirrors[name]})
 		}
 	}
 

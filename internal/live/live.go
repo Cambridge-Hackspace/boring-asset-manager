@@ -76,6 +76,10 @@ type Result struct {
 // The elements hidden, by index, are left out of the dots but not of the
 // description: the editor hides elements while editing, and text being typed
 // on the label, whose size it still needs.
+//
+// The label is drawn as designed, the right way round and level: a
+// template that prints mirrored or turned is edited as it is read once it
+// is on.
 func (r *Renderer) Render(templateJSON, dataJSON []byte, placeholders bool, hidden ...int) Result {
 	doc, err := preview.WithDefaults(templateJSON)
 	if err != nil {
@@ -89,6 +93,7 @@ func (r *Renderer) Render(templateJSON, dataJSON []byte, placeholders bool, hidd
 		}
 		return problem("", err.Error())
 	}
+	t.PrintMirror, t.PrintRotation = "", 0
 	var data labels.Data
 	if err := json.Unmarshal(dataJSON, &data); err != nil {
 		return problem("", "data must be the preview data the server gives")
