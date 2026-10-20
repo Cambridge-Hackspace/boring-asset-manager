@@ -365,8 +365,20 @@
 
   // The shortcuts: few, and standard (#54).
   function keydown(event: KeyboardEvent) {
-    if (loading || typing(event.target)) return;
+    if (loading) return;
     const mod = event.ctrlKey || event.metaKey;
+    if (mod && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 's') {
+      // Saves, as everywhere, not the page: from a field too, with what was
+      // typed in it, which it takes as it is left.
+      event.preventDefault();
+      const field = typing(event.target) ? (event.target as HTMLElement) : null;
+      field?.blur();
+      // As the button: not while saving, which would save a new one twice.
+      if (!saving && (dirty || isNew)) void save();
+      field?.focus();
+      return;
+    }
+    if (typing(event.target)) return;
     const key = event.key.toLowerCase();
     if (mod && key === 'z') {
       event.preventDefault();

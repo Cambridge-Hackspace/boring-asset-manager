@@ -543,6 +543,21 @@ test.describe('pointer and keyboard', () => {
     await expect(page.getByRole('button', { name: 'Restore them' })).toBeVisible();
   });
 
+  test('43: Ctrl+S saves, once however quickly pressed, and from a field too', async ({ signedIn: page, api }) => {
+    await withText(page);
+    const name = await page.locator('#tpl-name').inputValue();
+    await page.keyboard.press('Control+s');
+    await page.keyboard.press('Control+s');
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+    await expect(page).not.toHaveURL(/\/new$/);
+    const { templates } = await api.call<{ templates: { name: string }[] }>('GET', '/templates');
+    expect(templates.filter((t) => t.name === name)).toHaveLength(1);
+    await panels(page).getByRole('list', { name: 'Layers' }).getByRole('button', { name: /Hello there/ }).first().click();
+    await page.locator('#el-0-binding').fill('Changed');
+    await page.keyboard.press('Control+s');
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+  });
+
   test('44, 45: Ctrl+wheel zooms the label only over the label, and the overview zooms it without moving the page', async ({ signedIn: page }) => {
     await withText(page);
     const label = await box(labelImage(page));
