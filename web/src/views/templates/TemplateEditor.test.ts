@@ -63,7 +63,7 @@ describe('TemplateEditor', () => {
       'Select and move', 'Text', 'Barcode or QR code', 'Image', 'Rectangle', 'Ellipse', 'Line', 'Polygon',
     ]);
     expect(screen.getByRole('group', { name: 'Tool options' })).toBeTruthy();
-    for (const panel of ['Properties', 'Layers', 'Arrange', 'Label', 'Printer', 'Preview data']) {
+    for (const panel of ['Overview', 'Properties', 'Layers', 'Arrange', 'Label', 'Printer', 'Preview data']) {
       expect(screen.getByRole('button', { name: panel, expanded: true })).toBeTruthy();
     }
     // jsdom runs no workers: the server draws the label, and the status bar says so.
@@ -187,7 +187,7 @@ describe('TemplateEditor', () => {
     const titles = () => screen.getAllByRole('button', { expanded: true }).concat(screen.getAllByRole('button', { expanded: false })).map((b) => b.id).filter((id) => id.startsWith('panel-'));
     expect(titles()).toContain('panel-label');
     expect(JSON.parse(localStorage.getItem('bam.editor.panels')!)).toEqual({
-      order: ['properties', 'layers', 'label', 'arrange', 'printer', 'preview'],
+      order: ['overview', 'properties', 'layers', 'label', 'arrange', 'printer', 'preview'],
       collapsed: ['arrange'],
     });
     cleanup();
@@ -195,7 +195,54 @@ describe('TemplateEditor', () => {
     await loaded();
     expect(screen.getByRole('button', { name: 'Arrange', expanded: false })).toBeTruthy();
     const order = [...document.querySelectorAll('[id^="panel-"]')].map((b) => b.id);
-    expect(order).toEqual(['panel-properties', 'panel-layers', 'panel-label', 'panel-arrange', 'panel-printer', 'panel-preview']);
+    expect(order).toEqual(['panel-overview', 'panel-properties', 'panel-layers', 'panel-label', 'panel-arrange', 'panel-printer', 'panel-preview']);
+  });
+
+  it('zooms with the keys and the zoom box, and shows print size as approximate until calibrated', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    const zoom = () => value('#zoom-level');
+    // 1 is 100%: a printer dot a screen pixel.
+    await fireEvent.keyDown(window, { key: '1' });
+    expect(zoom()).toBe('100%');
+    await fireEvent.keyDown(window, { key: '+' });
+    expect(zoom()).toBe('150%');
+    await fireEvent.keyDown(window, { key: '-' });
+    await fireEvent.keyDown(window, { key: '-' });
+    expect(zoom()).toBe('67%');
+    // Typed in the zoom box.
+    const box = document.querySelector('#zoom-level') as HTMLInputElement;
+    await fireEvent.input(box, { target: { value: '250' } });
+    await fireEvent.keyDown(box, { key: 'Enter' });
+    expect(zoom()).toBe('250%');
+    await fireEvent.input(box, { target: { value: '99999' } });
+    await fireEvent.keyDown(box, { key: 'Enter' });
+    expect(zoom()).toBe('6400%');
+
+    // Print size keeps the percentage, at the label's real size: approximate here.
+    await fireEvent.keyDown(window, { key: '1' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Print size' }));
+    expect(screen.getByRole('button', { name: 'Print size' }).getAttribute('aria-pressed')).toBe('true');
+    expect(zoom()).toBe('100%');
+    await fireEvent.click(screen.getByRole('button', { name: 'Approximate: calibrate' }));
+    await fireEvent.input(document.querySelector('#calibrate-mm')!, { target: { value: '75' } });
+    await fireEvent.submit(document.querySelector('#calibrate-mm')!.closest('form')!);
+    expect(screen.getByRole('button', { name: 'Calibrated' })).toBeTruthy();
+    expect(localStorage.getItem('bam.editor-print-size')).toBe('on');
+    expect(Object.values(JSON.parse(localStorage.getItem('bam.screen-calibration')!))).toEqual([4]);
+  });
+
+  it('changes the units of the rulers from their menu', async () => {
+    api();
+    const { container } = render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.contextMenu(container.querySelector('[data-ruler="x"]')!);
+    const menu = screen.getByRole('menu', { name: 'Ruler units' });
+    expect(within(menu).getByRole('menuitemradio', { name: 'Millimeters' }).getAttribute('aria-checked')).toBe('true');
+    await fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Inches' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(localStorage.getItem('bam.editor-ruler-units')).toBe('in');
   });
 
   const printers = () => ({

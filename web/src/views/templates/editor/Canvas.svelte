@@ -21,7 +21,9 @@
     type ShapeKind,
     type TemplateElement,
   } from '../../../lib/template';
+  import { untrack } from 'svelte';
   import { useEditor, type Tool } from './editor.svelte';
+  import Ruler from './Ruler.svelte';
 
   // The label on its desk: the live renderer's drawing of it (or, until it
   // can, the server's), an outline over each element to take it by, and the
@@ -55,33 +57,28 @@
   let viewport = $state<HTMLDivElement | null>(null);
   let paper = $state<HTMLDivElement | null>(null);
 
-  // The view: screen pixels per template unit, and where the label's top
-  // left corner is in the viewport. It fits the label until changed.
-  let scale = $state(4);
-  let ox = $state(24);
-  let oy = $state(24);
-  let fitted = true;
+  // The view (editor.view): screen pixels per template unit, and where the
+  // label's top left corner is in the viewport. It fits the label until
+  // zoomed or moved.
+  const scale = $derived(editor.view.scale);
+  const ox = $derived(editor.view.x);
+  const oy = $derived(editor.view.y);
   let viewW = $state(0);
   let viewH = $state(0);
-  const pad = 32;
 
-  function fit() {
-    if (!viewW || !viewH) return;
-    scale = Math.max(0.1, Math.min((viewW - 2 * pad) / doc.width, (viewH - 2 * pad) / doc.height));
-    ox = (viewW - doc.width * scale) / 2;
-    oy = (viewH - doc.height * scale) / 2;
-  }
-
+  $effect(() => {
+    editor.viewport = { w: viewW, h: viewH };
+  });
   $effect(() => {
     void doc.width;
     void doc.height;
     void viewW;
     void viewH;
-    if (fitted) fit();
+    if (untrack(() => editor.fitted)) untrack(() => editor.fit());
   });
 
   // Hiding everything but the canvas moves it on the screen; the label is
-  // moved back, so it stays where it was under the eye.
+  // moved back, so it stays where it was under the eye, as in Krita.
   let lastOrigin: { left: number; top: number } | null = null;
   $effect(() => {
     void editor.canvasOnly;
@@ -90,14 +87,51 @@
     queueMicrotask(() => {
       if (!viewport) return;
       const r = viewport.getBoundingClientRect();
-      if (was && (r.left !== was.left || r.top !== was.top)) {
-        fitted = false;
-        ox += was.left - r.left;
-        oy += was.top - r.top;
-      }
+      if (was && (r.left !== was.left || r.top !== was.top)) editor.panBy(was.left - r.left, was.top - r.top);
       lastOrigin = { left: r.left, top: r.top };
     });
   });
+
+  // Panning, as in Krita: Space held, or the middle button, drags the view
+  // from any tool; the wheel scrolls it, and with Ctrl zooms toward the
+  // pointer.
+  let spaceHeld = $state(false);
+  let hovering = false;
+  function typing(target: EventTarget | null): boolean {
+    return target instanceof Element && Boolean(target.closest('input, textarea, select, [contenteditable]'));
+  }
+  function windowKeydown(event: KeyboardEvent) {
+    if (event.key === ' ' && hovering && !typing(event.target)) {
+      event.preventDefault();
+      spaceHeld = true;
+    }
+  }
+  function windowKeyup(event: KeyboardEvent) {
+    if (event.key === ' ') spaceHeld = false;
+  }
+  function wheel(event: WheelEvent) {
+    event.preventDefault();
+    const r = viewport!.getBoundingClientRect();
+    if (event.ctrlKey || event.metaKey) {
+      editor.zoomBy(Math.exp(-event.deltaY * 0.002), event.clientX - r.left, event.clientY - r.top);
+    } else if (event.shiftKey && !event.deltaX) {
+      editor.panBy(-event.deltaY, 0);
+    } else {
+      editor.panBy(-event.deltaX, -event.deltaY);
+    }
+  }
+  // Not passive, so the page does not scroll or zoom instead.
+  $effect(() => {
+    const v = viewport;
+    if (!v) return;
+    v.addEventListener('wheel', wheel, { passive: false });
+    return () => v.removeEventListener('wheel', wheel);
+  });
+
+  /** Where a point of the label is in the viewport, for zooming toward it. */
+  export function viewportPoint(x: number, y: number): [number, number] {
+    return [ox + x * scale, oy + y * scale];
+  }
 
   /** Where a pointer is on the label, in its units. */
   function onLabel(event: PointerEvent | MouseEvent): [number, number] {
@@ -172,7 +206,8 @@
     | { kind: 'move'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; moved: boolean }
     | { kind: 'resize'; x0: number; y0: number; start: TemplateElement[]; index: number; handle: Handle; moved: boolean }
     | { kind: 'scale'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; handle: Handle; box: Box; moved: boolean }
-    | { kind: 'draw'; from: [number, number]; to: [number, number] };
+    | { kind: 'draw'; from: [number, number]; to: [number, number] }
+    | { kind: 'pan'; x: number; y: number };
   let gesture = $state<Gesture | null>(null);
   // A polygon's points so far, in the template's units.
   let points = $state<[number, number][]>([]);
@@ -193,7 +228,8 @@
   $effect(() => {
     const g = gesture;
     const tool = editor.tool;
-    if (g?.kind === 'move') editor.hint = 'Moving. Alt: off the grid. Esc: put it back.';
+    if (g?.kind === 'pan' || spaceHeld) editor.hint = 'Moving the view.';
+    else if (g?.kind === 'move') editor.hint = 'Moving. Alt: off the grid. Esc: put it back.';
     else if (g?.kind === 'resize' || g?.kind === 'scale') editor.hint = 'Resizing. Alt: off the grid. Esc: put it back.';
     else if (g?.kind === 'draw') editor.hint = `Drawing ${toolNames[tool as Exclude<Tool, 'select'>] ?? 'a shape'}. Alt: off the grid. Esc: stop.`;
     else if (tool === 'polygon')
@@ -210,7 +246,18 @@
 
   let byPointer = false;
 
+  /** Space, or the middle button: the view moves instead. */
+  function startPan(event: PointerEvent): boolean {
+    if (!(event.button === 1 || (event.button === 0 && spaceHeld))) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    gesture = { kind: 'pan', x: event.clientX, y: event.clientY };
+    capture(event);
+    return true;
+  }
+
   function downOnElement(event: PointerEvent, i: number) {
+    if (startPan(event)) return;
     if (event.button !== 0 || editor.tool !== 'select') return;
     event.preventDefault();
     event.stopPropagation();
@@ -234,7 +281,7 @@
   }
 
   function downOnHandle(event: PointerEvent, handle: Handle) {
-    if (event.button !== 0) return;
+    if (startPan(event) || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     const start = editor.elements();
@@ -247,7 +294,7 @@
   }
 
   function downOnDesk(event: PointerEvent) {
-    if (event.button !== 0 || !paper) return;
+    if (startPan(event) || event.button !== 0 || !paper) return;
     if (editor.tool === 'select') {
       // Off every element: nothing selected, or as it was with Shift.
       if (!event.shiftKey) editor.deselect();
@@ -274,6 +321,12 @@
     }
     const g = gesture;
     if (!g) return;
+    if (g.kind === 'pan') {
+      editor.panBy(event.clientX - g.x, event.clientY - g.y);
+      g.x = event.clientX;
+      g.y = event.clientY;
+      return;
+    }
     if (g.kind === 'draw') {
       g.to = gridPoint(event);
       return;
@@ -348,7 +401,7 @@
     const g = gesture;
     if (g) {
       gesture = null;
-      if (g.kind !== 'draw' && g.moved) editor.cancel();
+      if (g.kind !== 'draw' && g.kind !== 'pan' && g.moved) editor.cancel();
       return true;
     }
     if (points.length) {
@@ -393,17 +446,27 @@
   });
 </script>
 
+<svelte:window onkeydown={windowKeydown} onkeyup={windowKeyup} />
+
+<div class="grid h-full w-full" style="grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr)">
+<div aria-hidden="true" class="border-r border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"></div>
+<div class="border-b border-zinc-200 dark:border-zinc-800"><Ruler axis="x" /></div>
+<div class="border-r border-zinc-200 dark:border-zinc-800"><Ruler axis="y" /></div>
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={viewport}
   bind:clientWidth={viewW}
   bind:clientHeight={viewH}
-  class="relative h-full w-full overflow-hidden bg-zinc-300 select-none dark:bg-zinc-800 {editor.tool === 'select' ? '' : 'cursor-crosshair'}"
+  class="relative h-full w-full overflow-hidden bg-zinc-300 select-none dark:bg-zinc-800 {gesture?.kind === 'pan' ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : editor.tool === 'select' ? '' : 'cursor-crosshair'}"
+  onpointerenter={() => (hovering = true)}
   onpointerdown={downOnDesk}
   onpointermove={pointerMove}
   onpointerup={pointerUp}
   onpointercancel={pointerUp}
-  onpointerleave={() => (editor.pointer = null)}
+  onpointerleave={() => {
+    hovering = false;
+    editor.pointer = null;
+  }}
   ondblclick={(ev) => {
     if (editor.tool !== 'polygon') return;
     ev.preventDefault();
@@ -524,6 +587,7 @@
       {/each}
     {/if}
   </svg>
+</div>
 </div>
 
 <style>
