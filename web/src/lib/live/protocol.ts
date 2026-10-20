@@ -4,10 +4,10 @@
 
 export type ToWorker =
   | { type: 'image'; id: string; bytes: ArrayBuffer }
-  | { type: 'render'; seq: number; template: string; data: string; placeholders: boolean };
+  | { type: 'render'; seq: number; template: string; data: string; placeholders: boolean; hidden: number[] };
 
 export type FromWorker =
-  | { type: 'ready' }
+  | { type: 'ready'; fonts?: Record<string, ArrayBuffer> }
   | { type: 'failed'; message: string }
   | { type: 'image-failed'; id: string; message: string }
   | {

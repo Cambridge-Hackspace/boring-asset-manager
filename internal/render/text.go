@@ -60,11 +60,13 @@ type face struct {
 	buf     sfnt.Buffer
 	ppem    fixed.Int26_6
 	metrics font.Metrics
+	// size is in points, as asked for.
+	size float64
 }
 
 func newFace(f *sfnt.Font, points float64, dpi int) (*face, error) {
 	ppem := fixed.Int26_6(math.Round(points * float64(dpi) / 72 * 64))
-	fc := &face{font: f, ppem: ppem}
+	fc := &face{font: f, ppem: ppem, size: points}
 	m, err := f.Metrics(&fc.buf, ppem, font.HintingNone)
 	if err != nil {
 		return nil, err
@@ -205,39 +207,72 @@ func (b *textBlock) fits(width, height float64) bool {
 // (and at spaces when wrapping), shrink in 0.5 pt steps until it fits, and at
 // the minimum size cut it short with an ellipsis. The block is centered
 // vertically.
-func layoutText(e *labels.Element, text string, box image.Rectangle, dpi int) (Path, error) {
+func layoutText(e *labels.Element, text string, box image.Rectangle, dpi int) (Path, float64, error) {
 	all, err := loadFonts()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	f := all[fontKey{e.FontFamily, e.FontWeight}]
 	if f == nil {
-		return nil, fmt.Errorf("no font for %s %s", e.FontFamily, e.FontWeight)
+		return nil, 0, fmt.Errorf("no font for %s %s", e.FontFamily, e.FontWeight)
 	}
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	if strings.TrimSpace(text) == "" {
-		return nil, nil
+		return nil, e.FontSize, nil
 	}
 	bw, bh := float64(box.Dx()), float64(box.Dy())
 
-	var sizes []float64
-	for size := e.FontSize; size > e.MinFontSize; size -= fontSizeStep {
-		sizes = append(sizes, size)
-	}
-	sizes = append(sizes, e.MinFontSize)
-
 	paras := splitParagraphs(text, e.Wrap)
-	var block *textBlock
-	for _, size := range sizes {
+	at := func(size float64) (*textBlock, error) {
 		fc, err := newFace(f, size, dpi)
 		if err != nil {
 			return nil, err
 		}
-		block = &textBlock{face: fc}
+		b := &textBlock{face: fc}
 		// Lines past the box's height cannot be shown; see enoughFor.
-		block.lines = paras.lines(fc, bw, block.enoughFor(bh))
-		if block.fits(bw, bh) {
-			break
+		b.lines = paras.lines(fc, bw, b.enoughFor(bh))
+		return b, nil
+	}
+
+	var block *textBlock
+	if e.Fit == labels.FitFill {
+		// The largest size, in 0.5 pt steps, from the least to the most,
+		// that fits: found by halving, as a larger size never fits where a
+		// smaller one does not.
+		most := e.MaxFontSize
+		if most == 0 {
+			most = labels.MaxFontSize
+		}
+		lo, hi := 0, int(math.Floor((most-e.MinFontSize)/fontSizeStep))
+		size := func(k int) float64 { return e.MinFontSize + float64(k)*fontSizeStep }
+		if block, err = at(size(lo)); err != nil {
+			return nil, 0, err
+		}
+		for lo < hi {
+			mid := (lo + hi + 1) / 2
+			b, err := at(size(mid))
+			if err != nil {
+				return nil, 0, err
+			}
+			if b.fits(bw, bh) {
+				lo, block = mid, b
+			} else {
+				hi = mid - 1
+			}
+		}
+	} else {
+		var sizes []float64
+		for size := e.FontSize; size > e.MinFontSize; size -= fontSizeStep {
+			sizes = append(sizes, size)
+		}
+		sizes = append(sizes, e.MinFontSize)
+		for _, size := range sizes {
+			if block, err = at(size); err != nil {
+				return nil, 0, err
+			}
+			if block.fits(bw, bh) {
+				break
+			}
 		}
 	}
 	if !block.fits(bw, bh) {
@@ -258,7 +293,7 @@ func layoutText(e *labels.Element, text string, box image.Rectangle, dpi int) (P
 		baseline := top + block.ascent() + float64(i)*block.lineHeight()
 		p = block.face.outline(p, line, x, baseline)
 	}
-	return p, nil
+	return p, block.face.size, nil
 }
 
 // breakLines splits text at newlines and, when wrapping, between words so no

@@ -31,6 +31,9 @@ type Element struct {
 	GeneratorType string  `json:"generator_type,omitempty"`
 	ImageID       string  `json:"image_id,omitempty"`
 	FontSize      float64 `json:"font_size,omitempty"`
+	// DrawnFontSize is the size text was drawn at, in points: its
+	// font_size, or smaller where it shrank to fit, or as it filled its box.
+	DrawnFontSize float64 `json:"drawn_font_size,omitempty"`
 	// Rotation is the degrees it is turned clockwise about the center of
 	// its box, and Bounds where it lies once turned; both are left out when
 	// it is not turned.
@@ -101,6 +104,9 @@ func Describe(t *labels.Template, data labels.Data, scene *render.Scene) Descrip
 			Shape: e.Shape, Stroke: e.Stroke, StrokeWidth: e.StrokeWidth, Fill: e.Fill, CornerRadius: e.CornerRadius, Flip: e.Flip, Points: e.Points, Closed: e.Closed}
 		if e.Type == labels.ElementShape && e.Stroke != labels.PaintNone && e.StrokeWidth*dotsPerUnit < 1 {
 			d.Warnings = append(d.Warnings, fmt.Sprintf("elements[%d] (%s) has a stroke thinner than one dot at %d DPI: it is drawn one dot wide.", i, e.Shape, t.DPI))
+		}
+		if size, ok := scene.TextSizes[i]; ok {
+			pe.DrawnFontSize = size
 		}
 		if e.Rotation != 0 {
 			x, y, w, h := e.Bounds()

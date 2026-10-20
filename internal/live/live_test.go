@@ -111,3 +111,26 @@ func TestParityFixture(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderHidden leaves elements hidden out of the dots, but still says
+// how they were laid out, as the editor needs of text being typed.
+func TestRenderHidden(t *testing.T) {
+	r := New()
+	all := r.Render([]byte(tag), []byte(sample), true)
+	hidden := r.Render([]byte(tag), []byte(sample), true, 0)
+	black := func(res Result) int {
+		n := 0
+		for i := 0; i < len(res.Pixels); i += 4 {
+			if res.Pixels[i] == 0 {
+				n++
+			}
+		}
+		return n
+	}
+	if black(all) == 0 || black(hidden) != 0 {
+		t.Errorf("black dots: %d drawn, %d hidden", black(all), black(hidden))
+	}
+	if d := hidden.Description; d == nil || len(d.Elements) != 1 || d.Elements[0].Value != "[room]" || d.Elements[0].DrawnFontSize != 10 {
+		t.Errorf("hidden, still described: %+v", hidden.Description)
+	}
+}

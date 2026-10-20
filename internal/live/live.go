@@ -72,7 +72,11 @@ type Result struct {
 // POST /api/v1/templates/preview-data answers. With placeholders, every
 // field the template binds is filled with its key in brackets, as the
 // server's preview of no asset is.
-func (r *Renderer) Render(templateJSON, dataJSON []byte, placeholders bool) Result {
+//
+// The elements hidden, by index, are left out of the dots but not of the
+// description: the editor hides elements while editing, and text being typed
+// on the label, whose size it still needs.
+func (r *Renderer) Render(templateJSON, dataJSON []byte, placeholders bool, hidden ...int) Result {
 	doc, err := preview.WithDefaults(templateJSON)
 	if err != nil {
 		return problem("", "template must be a JSON object")
@@ -100,7 +104,24 @@ func (r *Renderer) Render(templateJSON, dataJSON []byte, placeholders bool) Resu
 		}
 		return problem("", err.Error())
 	}
-	gray := scene.Raster(true)
+	drawn := scene
+	if len(hidden) > 0 {
+		left := map[int]bool{}
+		for _, i := range hidden {
+			left[i] = true
+		}
+		shown := *t
+		shown.Elements = nil
+		for i, e := range t.Elements {
+			if !left[i] {
+				shown.Elements = append(shown.Elements, e)
+			}
+		}
+		if drawn, err = render.Layout(&shown, data, r); err != nil {
+			return problem("", err.Error())
+		}
+	}
+	gray := drawn.Raster(true)
 	b := gray.Bounds()
 	pixels := make([]byte, 0, b.Dx()*b.Dy()*4)
 	for y := b.Min.Y; y < b.Max.Y; y++ {

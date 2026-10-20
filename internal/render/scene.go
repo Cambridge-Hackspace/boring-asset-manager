@@ -26,6 +26,10 @@ type Scene struct {
 	// Codes says how each code was laid out, by element index, before it
 	// was turned.
 	Codes map[int]CodePlacement
+	// TextSizes is the size each text was drawn at, in points, by element
+	// index: its font_size, or smaller where it shrank, or as it filled its
+	// box.
+	TextSizes map[int]float64
 }
 
 // Item is one thing drawn: exactly one of an image, a path or rectangles of

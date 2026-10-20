@@ -57,6 +57,10 @@ export interface TemplateElement {
   align?: 'left' | 'center' | 'right';
   wrap?: boolean;
   min_font_size?: number;
+  /** How text meets its box: shrinking to fit (absent), or filling it, between its least and most sizes. */
+  fit?: 'shrink' | 'fill';
+  /** The largest size text filling its box takes; absent, the largest allowed. */
+  max_font_size?: number;
   // static_image
   image_id?: string;
   /** An image flipped across, down or both. */

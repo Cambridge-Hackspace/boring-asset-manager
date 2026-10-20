@@ -81,10 +81,14 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 			if err != nil {
 				return nil, fail("%v", err)
 			}
-			p, err := layoutText(e, binding.Resolve(data), box, t.DPI)
+			p, size, err := layoutText(e, binding.Resolve(data), box, t.DPI)
 			if err != nil {
 				return nil, fail("%v", err)
 			}
+			if s.TextSizes == nil {
+				s.TextSizes = map[int]float64{}
+			}
+			s.TextSizes[i] = size
 			if len(p) > 0 {
 				s.Items = append(s.Items, Item{Path: p, Paint: paintOf(e.Fill)})
 			}

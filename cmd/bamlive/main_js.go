@@ -6,7 +6,8 @@
 //
 //	addImage(id, bytes)                        -> null, or an error message
 //	hasImage(id)                               -> whether it was added
-//	render(template, data, placeholders)       -> {width, height, pixels, description, problems}
+//	render(template, data, placeholders, hidden) -> {width, height, pixels, description, problems}
+//	font(family, weight)                       -> the font labels are printed in, as TTF bytes
 //
 // where template and data are JSON strings, pixels a Uint8ClampedArray of
 // RGBA dots, and description and problems JSON strings (or null).
@@ -19,7 +20,20 @@ import (
 	"syscall/js"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/live"
+	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/gomono"
+	"golang.org/x/image/font/gofont/gomonobold"
+	"golang.org/x/image/font/gofont/goregular"
 )
+
+// fonts are those labels are printed in (internal/render), for the editor
+// to show text being typed in the font it prints in.
+var fonts = map[string][]byte{
+	"sans normal": goregular.TTF,
+	"sans bold":   gobold.TTF,
+	"mono normal": gomono.TTF,
+	"mono bold":   gomonobold.TTF,
+}
 
 func main() {
 	r := live.New()
@@ -36,7 +50,12 @@ func main() {
 		return r.HasImage(args[0].String())
 	}))
 	api.Set("render", js.FuncOf(func(_ js.Value, args []js.Value) any {
-		res := r.Render([]byte(args[0].String()), []byte(args[1].String()), args[2].Bool())
+		// The elements left out of the dots, as a JSON array of indices.
+		var hidden []int
+		if len(args) > 3 && args[3].Type() == js.TypeString {
+			_ = json.Unmarshal([]byte(args[3].String()), &hidden)
+		}
+		res := r.Render([]byte(args[0].String()), []byte(args[1].String()), args[2].Bool(), hidden...)
 		out := js.Global().Get("Object").New()
 		out.Set("width", res.Width)
 		out.Set("height", res.Height)
@@ -45,6 +64,15 @@ func main() {
 		out.Set("pixels", pixels)
 		out.Set("description", jsonOrNull(res.Description))
 		out.Set("problems", jsonOrNull(res.Problems))
+		return out
+	}))
+	api.Set("font", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		ttf, ok := fonts[args[0].String()+" "+args[1].String()]
+		if !ok {
+			return nil
+		}
+		out := js.Global().Get("Uint8Array").New(len(ttf))
+		js.CopyBytesToJS(out, ttf)
 		return out
 	}))
 	js.Global().Set("bamlive", api)

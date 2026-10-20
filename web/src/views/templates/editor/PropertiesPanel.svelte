@@ -155,6 +155,21 @@
             <option value="white">White</option>
           </select>
         </label>
+        <label class="flex items-center gap-1 text-xs" for={id('fit')}>
+          <span class="text-zinc-600 dark:text-zinc-400">Fit</span>
+          <select
+            id={id('fit')}
+            class="input-sm"
+            value={e.fit ?? 'shrink'}
+            onchange={(ev) => update(ev.currentTarget.value === 'fill' ? withProp(e, 'fit', 'fill') : withProp(withProp(e, 'fit', undefined), 'max_font_size', undefined))}
+          >
+            <option value="shrink">Shrink to fit</option>
+            <option value="fill">Fill the box</option>
+          </select>
+        </label>
+        {#if e.fit === 'fill'}
+          <NumberField id={id('max')} label="Most" title="The largest it grows to, filling its box" value={e.max_font_size ?? 200} min={1} max={200} step={0.5} unit="pt" onchange={(n) => update(withProp(e, 'max_font_size', n >= 200 ? undefined : n))} />
+        {/if}
         <div class="flex items-center gap-3 text-xs">
           <label class="flex items-center gap-1"><input type="checkbox" checked={e.font_weight === 'bold'} onchange={(ev) => set('font_weight', ev.currentTarget.checked ? 'bold' : 'normal')} /> Bold</label>
           <label class="flex items-center gap-1"><input type="checkbox" checked={e.wrap ?? false} onchange={(ev) => set('wrap', ev.currentTarget.checked)} /> Wrap</label>

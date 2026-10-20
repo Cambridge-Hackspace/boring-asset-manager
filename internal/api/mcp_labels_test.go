@@ -116,6 +116,27 @@ func TestMCPLabelTools(t *testing.T) {
 	if named.Template.Elements[2]["name"] != "Warning" {
 		t.Errorf("get_template: %+v", named.Template.Elements[2])
 	}
+	// Text filling its box, and the size it was drawn at.
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 1, "set": map[string]any{"fit": "fill", "max_font_size": 30}}}}), &saved)
+	var sized struct {
+		Labels []struct {
+			Elements []struct {
+				FontSize      float64 `json:"font_size"`
+				DrawnFontSize float64 `json:"drawn_font_size"`
+			}
+		}
+	}
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &sized)
+	filled := sized.Labels[0].Elements[1].DrawnFontSize
+	if !(filled > 6 && filled <= 30) {
+		t.Errorf("filling its box: drawn at %v pt", filled)
+	}
+	// Held to 6 pt at most, it is drawn no larger.
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 1, "set": map[string]any{"max_font_size": 6}}}}), &saved)
+	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &sized)
+	if held := sized.Labels[0].Elements[1].DrawnFontSize; held != 6 {
+		t.Errorf("held to 6 pt: drawn at %v pt", held)
+	}
 	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "remove_elements": []int{2}}), &saved)
 	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &preview)
 	if len(preview.Labels[0].Elements) != 2 {

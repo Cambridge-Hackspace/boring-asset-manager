@@ -142,6 +142,13 @@ var goldenTemplates = map[string]string{
 	// ellipse's outline, white text reversed out of a black band, an arrow,
 	// a diagonal line, a hairline widened to a dot, a turned rounded frame
 	// and an open zigzag.
+	// Text filling its box: the same words grown in a large box and shrunk in
+	// a small one, held to a largest size in a third, and wrapped in a fourth.
+	"fit": `{"id":"fit","name":"Fit","units":"mm","width":80,"height":40,"dpi":300,"layering":"list","elements":[
+		{"type":"text","x":2,"y":2,"width":50,"height":20,"font_size":10,"fit":"fill","content_binding":"FILLED"},
+		{"type":"text","x":56,"y":2,"width":22,"height":6,"font_size":10,"fit":"fill","content_binding":"FILLED"},
+		{"type":"text","x":56,"y":10,"width":22,"height":12,"font_size":10,"fit":"fill","max_font_size":12,"content_binding":"FILLED"},
+		{"type":"text","x":2,"y":24,"width":76,"height":14,"font_size":10,"fit":"fill","wrap":true,"align":"center","content_binding":"Text that wraps to fill its box"}]}`,
 	// Paths as the editor's pen draws them: an open curve, and a closed
 	// shape of curves and lines, stroked and filled, one turned.
 	"pen": `{"id":"pen","name":"Pen","units":"mm","width":60,"height":30,"dpi":300,"layering":"list","elements":[
@@ -179,6 +186,7 @@ var goldenPayloads = map[string][]string{
 	"margins":       {"BAM-QR-0042", "1234"},
 	"shapes":        {},
 	"pen":           {},
+	"fit":           {},
 }
 
 func renderAll(t *testing.T, s *Scene) map[string][]byte {
@@ -218,7 +226,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"image_inches", "imported", "layers", "margins", "micro_code128", "pen", "qr45", "qr_label", "shapes", "turned"} {
+	for _, name := range []string{"fit", "image_inches", "imported", "layers", "margins", "micro_code128", "pen", "qr45", "qr_label", "shapes", "turned"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -397,7 +405,7 @@ func pathBounds(p Path) (minX, minY, maxX, maxY float64) {
 
 func TestTextShrinksToFitItsBox(t *testing.T) {
 	box := image.Rect(100, 50, 400, 110)
-	p, err := layoutText(textElement(40, 6, false), "Bench Drill Press", box, 300)
+	p, _, err := layoutText(textElement(40, 6, false), "Bench Drill Press", box, 300)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -684,6 +692,25 @@ func TestCodeMargins(t *testing.T) {
 		{"type":"generator","generator_type":"qr","x":0,"y":0,"width":10,"height":10,"content_binding":"HELLO","margin":{"left":20,"right":20}}]}`)
 	if _, err := Layout(tpl, labels.Data{}, nil); err == nil || !strings.Contains(err.Error(), "needs a box") {
 		t.Errorf("no room: %v", err)
+	}
+}
+
+// TestDrawnTextSize says what size text was drawn at: shrunk to fit, or
+// grown to fill its box, as the editor sizes text being typed.
+func TestDrawnTextSize(t *testing.T) {
+	s, err := Layout(mustTemplate(t, goldenTemplates["fit"]), testData, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The large box grows its text well past its 10 pt; the small one takes
+	// it smaller; the one held to 12 pt stops there.
+	if big, small, held := s.TextSizes[0], s.TextSizes[1], s.TextSizes[2]; !(big > 30 && small < big/2 && held == 12) {
+		t.Errorf("drawn at %v, %v and %v pt", big, small, held)
+	}
+	shrunk, err := Layout(mustTemplate(t, `{"id":"t","name":"T","units":"mm","width":20,"height":5,"dpi":300,"layering":"list","elements":[
+		{"type":"text","x":0,"y":0,"width":20,"height":5,"font_size":40,"min_font_size":6,"content_binding":"Too long for its box"}]}`), testData, nil)
+	if err != nil || !(shrunk.TextSizes[0] < 40 && shrunk.TextSizes[0] >= 6) {
+		t.Errorf("shrunk to %v pt, %v", shrunk.TextSizes[0], err)
 	}
 }
 

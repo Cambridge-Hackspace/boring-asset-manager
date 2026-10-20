@@ -8,10 +8,12 @@ import type { FromWorker, ToWorker } from './protocol';
 
 interface Bamlive {
   addImage(id: string, bytes: Uint8Array): string | null;
+  font(family: string, weight: string): Uint8Array | null;
   render(
     template: string,
     data: string,
     placeholders: boolean,
+    hidden: string,
   ): { width: number; height: number; pixels: Uint8ClampedArray; description: string | null; problems: string | null };
 }
 
@@ -40,7 +42,17 @@ async function start(): Promise<Bamlive> {
 
 const ready = start();
 ready.then(
-  () => scope.postMessage({ type: 'ready' }),
+  (live) => {
+    // The fonts labels print in, for text being typed to be shown in them.
+    const fonts: Record<string, ArrayBuffer> = {};
+    for (const family of ['sans', 'mono']) {
+      for (const weight of ['normal', 'bold']) {
+        const ttf = live.font(family, weight);
+        if (ttf) fonts[`${family} ${weight}`] = ttf.slice().buffer as ArrayBuffer;
+      }
+    }
+    scope.postMessage({ type: 'ready', fonts }, Object.values(fonts));
+  },
   (err: unknown) => scope.postMessage({ type: 'failed', message: err instanceof Error ? err.message : String(err) }),
 );
 
@@ -52,7 +64,7 @@ scope.onmessage = async (event) => {
     if (failure) scope.postMessage({ type: 'image-failed', id: msg.id, message: failure });
     return;
   }
-  const out = live.render(msg.template, msg.data, msg.placeholders);
+  const out = live.render(msg.template, msg.data, msg.placeholders, JSON.stringify(msg.hidden));
   const pixels = out.pixels.buffer as ArrayBuffer;
   scope.postMessage(
     { type: 'frame', seq: msg.seq, width: out.width, height: out.height, pixels, description: out.description, problems: out.problems },

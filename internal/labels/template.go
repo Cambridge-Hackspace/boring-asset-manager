@@ -143,13 +143,17 @@ const LayeringList = "list"
 
 // Limits that keep rendering bounded.
 const (
-	MinDPI            = 150
-	MaxDPI            = 600
-	MaxCanvasDots     = 10000 // per side, at the template's DPI
-	MaxElements       = 100
-	MaxFontSize       = 200.0 // points
-	DefaultMinFont    = 6.0   // points
-	MaxQuietZone      = 20    // modules
+	MinDPI        = 150
+	MaxDPI        = 600
+	MaxCanvasDots = 10000 // per side, at the template's DPI
+	MaxElements   = 100
+	MaxFontSize   = 200.0 // points
+
+	// How text meets its box.
+	FitShrink         = "shrink"
+	FitFill           = "fill"
+	DefaultMinFont    = 6.0 // points
+	MaxQuietZone      = 20  // modules
 	MaxModuleMM       = 5.0
 	maxBindingLength  = 1024
 	geometryTolerance = 1e-9
@@ -247,6 +251,12 @@ type Element struct {
 	Align       string  `json:"align,omitempty"`
 	Wrap        bool    `json:"wrap,omitempty"`
 	MinFontSize float64 `json:"min_font_size,omitempty"`
+	// Fit is how text meets its box: FitShrink (or empty), at font_size,
+	// shrinking as far as min_font_size to fit; or FitFill, the largest size
+	// from min_font_size to MaxFontSize (absent: the largest allowed) that
+	// fits, growing as well as shrinking.
+	Fit         string  `json:"fit,omitempty"`
+	MaxFontSize float64 `json:"max_font_size,omitempty"`
 
 	// Group names the group an element is in, which the editor moves,
 	// resizes and turns as one; Locked keeps the editor from selecting it on
@@ -602,6 +612,8 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"font_family":   e.FontFamily != "",
 		"wrap":          e.Wrap,
 		"min_font_size": e.MinFontSize != 0,
+		"fit":           e.Fit != "",
+		"max_font_size": e.MaxFontSize != 0,
 	}
 
 	switch e.Type {
@@ -648,6 +660,18 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 			v.add(at("font_size"), fmt.Sprintf("must be greater than 0 and at most %g points", MaxFontSize))
 		} else if !(e.MinFontSize > 0 && e.MinFontSize <= e.FontSize) {
 			v.add(at("min_font_size"), "must be greater than 0 and at most font_size")
+		}
+		switch e.Fit {
+		case "", FitShrink:
+			if e.MaxFontSize != 0 {
+				v.add(at("max_font_size"), `applies only when fit is "fill"`)
+			}
+		case FitFill:
+			if e.MaxFontSize != 0 && !(e.MaxFontSize >= e.MinFontSize && e.MaxFontSize <= MaxFontSize) {
+				v.add(at("max_font_size"), fmt.Sprintf("must be at least min_font_size and at most %g points", MaxFontSize))
+			}
+		default:
+			v.add(at("fit"), `must be "shrink" or "fill"`)
 		}
 		if e.FontWeight != WeightNormal && e.FontWeight != WeightBold {
 			v.add(at("font_weight"), `must be "normal" or "bold"`)

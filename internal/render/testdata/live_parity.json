@@ -1,5 +1,87 @@
 [
  {
+  "name": "fit",
+  "template": {
+   "id": "fit",
+   "name": "Fit",
+   "units": "mm",
+   "width": 80,
+   "height": 40,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "text",
+     "x": 2,
+     "y": 2,
+     "width": 50,
+     "height": 20,
+     "font_size": 10,
+     "fit": "fill",
+     "content_binding": "FILLED"
+    },
+    {
+     "type": "text",
+     "x": 56,
+     "y": 2,
+     "width": 22,
+     "height": 6,
+     "font_size": 10,
+     "fit": "fill",
+     "content_binding": "FILLED"
+    },
+    {
+     "type": "text",
+     "x": 56,
+     "y": 10,
+     "width": 22,
+     "height": 12,
+     "font_size": 10,
+     "fit": "fill",
+     "max_font_size": 12,
+     "content_binding": "FILLED"
+    },
+    {
+     "type": "text",
+     "x": 2,
+     "y": 24,
+     "width": 76,
+     "height": 14,
+     "font_size": 10,
+     "fit": "fill",
+     "wrap": true,
+     "align": "center",
+     "content_binding": "Text that wraps to fill its box"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": ""
+  },
+  "images": {},
+  "width": 945,
+  "height": 472,
+  "sha256": "69a4eeb8baf3585db711090fafa89e7cf34b4be23f99b121a90f485f30afd0b5"
+ },
+ {
   "name": "image_inches",
   "template": {
    "id": "image_inches",

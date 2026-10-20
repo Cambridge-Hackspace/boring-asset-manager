@@ -28,6 +28,7 @@
   import Ruler from './Ruler.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
   import PointEditor from './PointEditor.svelte';
+  import TextEditor from './TextEditor.svelte';
   import { withContours, type Node } from './nodes';
   import { alongOneAxis, beneath, inBox, pull, resizeFrom, scaledBox, turned, type Anchor } from './transform';
   import { gridOf, snapBox, snapNothing, snapPoint, type SnapLine } from './snapping';
@@ -270,6 +271,8 @@
         ? 'Click: the next point. Drag: pull out its handles (Alt: one only). Right-click: take back the last. Double-click or Enter: finish. Click the first point: close it. Esc: stop.'
         : 'Click to place the first point; drag to pull out its handles.';
     else if (tool === 'measure') editor.hint = measured ? `Measured: ${measurement(measured)}.` : 'Drag between two points to measure. Nothing is added.';
+    else if (editor.editingText !== null)
+      editor.hint = 'Typing. Fields go in braces, such as {{asset.name}}. Esc or a click elsewhere: done; left empty, it comes off.';
     else if (editor.editingPoints !== null)
       editor.hint = 'Drag a point or a handle (Alt: the one handle only). Double-click the outline: add a point. Shift+click a point: sharp or smooth. Delete: remove it. Esc: done.';
     else if (tool === 'polygon')
@@ -815,6 +818,10 @@
     if (i !== null && (editor.tool !== 'select' || editor.selected.length !== 1 || editor.selected[0] !== i || !editable(doc.elements[i]))) editor.editingPoints = null;
   });
   $effect(() => {
+    const i = editor.editingText;
+    if (i !== null && (editor.tool !== 'select' || doc.elements[i]?.type !== 'text')) untrack(() => finishTyping());
+  });
+  $effect(() => {
     if (editor.tool !== 'measure') measured = null;
     if (editor.tool !== 'pen') {
       pen = [];
@@ -854,8 +861,25 @@
         ? { ...made, x: tidy(Math.min(a[0], doc.width - made.width), doc.units), y: tidy(Math.min(a[1], doc.height - made.height), doc.units) }
         : { ...made, ...box, width: Math.max(box.width, step), height: Math.max(box.height, step) };
     }
+    if (tool === 'text') {
+      // Typed at once, as Krita's text tool: a click a single line, a box dragged out wraps.
+      e = { ...e, content_binding: '', wrap: !clicked };
+    }
     editor.add(e);
     editor.tool = 'select';
+    if (tool === 'text') editor.editingText = doc.elements.length - 1;
+  }
+
+  /** Done typing: a text left empty comes off. */
+  function finishTyping() {
+    const i = editor.editingText;
+    editor.editingText = null;
+    if (i === null) return;
+    const e = doc.elements[i];
+    if (e && !(e.content_binding ?? '').trim()) {
+      editor.selected = [i];
+      editor.remove();
+    }
   }
 
   function finishPolygon() {
@@ -899,6 +923,10 @@
     }
     if (editor.editingPoints !== null) {
       editor.editingPoints = null;
+      return true;
+    }
+    if (editor.editingText !== null) {
+      finishTyping();
       return true;
     }
     if (editor.tool !== 'select') {
@@ -987,6 +1015,10 @@
       // the element is the one under the pointer.
       const [x, y] = onLabel(ev);
       const one = editor.selected.length === 1 ? editor.selected[0]! : null;
+      if (one !== null && doc.elements[one]?.type === 'text' && elementsAt(doc, x, y).includes(one)) {
+        editor.editingText = one;
+        return;
+      }
       if (one !== null && (editor.editingPoints === one || elementsAt(doc, x, y).includes(one))) doubleClickElement(ev, one);
     }
   }}
@@ -1215,6 +1247,11 @@
       {/each}
     {/if}
   </svg>
+  {#if editor.editingText !== null}
+    {#key editor.editingText}
+      <TextEditor index={editor.editingText} {scale} {ox} {oy} onfinish={finishTyping} />
+    {/key}
+  {/if}
   {#if readout && readoutAt}
     <div class="pointer-events-none absolute rounded bg-zinc-900/85 px-1.5 py-0.5 text-[0.7rem] text-white tabular-nums" style="left:{readoutAt[0] + 14}px;top:{readoutAt[1] + 14}px" data-readout>
       {readout}
