@@ -4,11 +4,11 @@
     defaultStroke,
     describeElement,
     hairline,
-    marginOf,
+    paddingOf,
     opensAPage,
     SCAN_URL,
     sides,
-    withMargin,
+    withPadding,
     withProp,
     type CodeLayout,
     type Paint,
@@ -20,6 +20,7 @@
   import { useEditor } from './editor.svelte';
   import Icon from './Icon.svelte';
   import NumberField from './NumberField.svelte';
+  import { parseLength } from './transform';
 
   // What is selected, and its settings: with one element, all of them, each
   // change one undoable step; with several, what is done to them together.
@@ -69,17 +70,37 @@
     update(next);
   }
 
-  function setMargin(on: Side[], raw: string) {
-    const n = Number(raw);
-    if (!e || (raw !== '' && !(Number.isFinite(n) && n >= 0))) return;
-    update(withMargin(e, on, raw === '' ? undefined : n));
-  }
-  function setMarginUnit(to: 'modules' | 'length') {
+  /** Padding typed, with its unit or in the template's; empty is the standard. */
+  function setPadding(on: Side[], raw: string) {
     if (!e) return;
-    // A margin in one unit means nothing in the other: start again from the standard.
-    const { margin: _m, quiet_zone: _q, ...rest } = e;
-    update(withProp(rest, 'margin_unit', to === 'modules' ? undefined : to));
+    if (raw.trim() === '') {
+      update(withPadding(e, on, undefined, layout));
+      return;
+    }
+    const n = parseLength(raw, doc.units);
+    if (n === null || n < 0) return;
+    update(withPadding(e, on, Math.round(n * 1e4) / 1e4, layout));
   }
+  // Each side on its own once they differ, or when asked for.
+  let separate = $state(false);
+  const eachSide = $derived.by(() => {
+    if (separate || !e) return separate;
+    const values = sides.filter((s) => e.generator_type !== 'code128' || s === 'left' || s === 'right').map((s) => paddingOf(e, s, layout));
+    return values.some((v) => v !== values[0]);
+  });
+  const fmt = (v: number) => String(Math.round(v * (doc.units === 'in' ? 1000 : 100)) / (doc.units === 'in' ? 1000 : 100));
+  const standardText = (side: Side) => (layout?.standard ? `${fmt(layout.standard[side])} standard` : 'Standard');
+  /** What was left over beyond the padding, where the box is not a whole number of modules, said in words. */
+  const leftover = $derived.by(() => {
+    if (!layout?.padding) return '';
+    const extra = sides.map((s) => layout.margin[s] - layout.padding![s]);
+    const across = extra[1]! + extra[3]!;
+    const down = extra[0]! + extra[2]!;
+    const tiny = doc.units === 'in' ? 0.0005 : 0.01;
+    if (across < tiny && down < tiny) return '';
+    const parts = [across >= tiny ? `${fmt(across)} ${doc.units} across` : '', down >= tiny ? `${fmt(down)} ${doc.units} down` : ''].filter(Boolean);
+    return `${parts.join(' and ')} left over: the code's squares are whole printer dots, so it does not fill the box exactly. Placed as Across and Down say.`;
+  });
 
   const generator = $derived(generators.find((g) => g.type === e?.generator_type));
   const grouped = $derived(
@@ -183,34 +204,61 @@
             {#each generators as g (g.type)}<option value={g.type}>{g.name}</option>{/each}
           </select>
         </label>
+        <!-- Padding, as Figma's and the CSS box model's: the space kept clear inside the code's box. -->
         <fieldset class="space-y-1">
           <legend class="flex w-full items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
-            Margin
-            <select class="input-sm w-auto" aria-label="Margin counted in" value={e.margin_unit ?? 'modules'} onchange={(ev) => setMarginUnit(ev.currentTarget.value as 'modules' | 'length')}>
-              <option value="modules">Modules</option>
-              <option value="length">{doc.units}</option>
-            </select>
+            Padding
+            <span class="flex gap-1">
+              <button
+                type="button"
+                class="btn-sm"
+                aria-pressed={eachSide}
+                title="Set each side on its own"
+                onclick={() => (separate = !eachSide)}>Each side</button
+              >
+              <button type="button" class="btn-sm" disabled={!e.margin && e.quiet_zone === undefined} title="The space the code's standard asks for, each side" onclick={() => update(withPadding(e, [...sides], undefined))}>Standard</button>
+            </span>
           </legend>
-          <div class="grid grid-cols-4 gap-1">
-            {#each sides as side (side)}
-              <label class="text-[0.7rem] text-zinc-600 dark:text-zinc-400" for={id(`margin-${side}`)}>
-                {sideNames[side]}
-                <input
-                  id={id(`margin-${side}`)}
-                  class="input-sm"
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="Std"
-                  title="Empty is the code's standard quiet zone"
-                  value={marginOf(e, side) ?? ''}
-                  onchange={(ev) => setMargin([side], ev.currentTarget.value)}
-                />
-              </label>
-            {/each}
-          </div>
+          {#if eachSide}
+            <div class="grid grid-cols-4 gap-1">
+              {#each sides as side (side)}
+                <label class="text-[0.7rem] text-zinc-600 dark:text-zinc-400" for={id(`padding-${side}`)}>
+                  {sideNames[side]}
+                  <input
+                    id={id(`padding-${side}`)}
+                    class="input-sm"
+                    inputmode="decimal"
+                    placeholder={standardText(side)}
+                    title="In {doc.units}; empty is the code's standard quiet zone"
+                    value={paddingOf(e, side, layout) ?? ''}
+                    onchange={(ev) => setPadding([side], ev.currentTarget.value)}
+                  />
+                </label>
+              {/each}
+            </div>
+          {:else}
+            <label class="flex items-center gap-1 text-xs" for={id('padding')}>
+              <span class="text-zinc-600 dark:text-zinc-400">All sides</span>
+              <input
+                id={id('padding')}
+                class="input-sm"
+                inputmode="decimal"
+                placeholder={standardText('left')}
+                title="In {doc.units}; empty is the code's standard quiet zone"
+                value={paddingOf(e, 'left', layout) ?? ''}
+                onchange={(ev) => setPadding(e.generator_type === 'code128' && !e.margin ? ['left', 'right'] : [...sides], ev.currentTarget.value)}
+              />
+              <span class="text-zinc-600 dark:text-zinc-400">{doc.units}</span>
+            </label>
+          {/if}
+          {#if leftover}
+            <p class="text-xs text-zinc-600 dark:text-zinc-400" data-leftover>{leftover}</p>
+          {/if}
           {#if layout?.narrow?.length}
-            <p class="text-xs text-amber-900 dark:text-amber-200" role="status">Less than the code's standard quiet zone on its {layout.narrow.join(', ')}: some scanners need it.</p>
+            {@const n = layout.narrow}
+            <p class="text-xs text-amber-900 dark:text-amber-200" role="status">
+              Less than the code's standard quiet zone on its {n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0]}: some scanners need it.
+            </p>
           {/if}
         </fieldset>
         <div class={row}>

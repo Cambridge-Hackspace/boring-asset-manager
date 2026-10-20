@@ -18,6 +18,7 @@
     withProp,
     rotateElements,
     type Box,
+    type CodeLayout,
     type Handle,
     type PrintArea,
     type ShapeKind,
@@ -46,6 +47,7 @@
     area,
     generatorType,
     onfile,
+    codeLayouts = {},
   }: {
     frame: Frame | null;
     previewURL: string;
@@ -57,6 +59,8 @@
     generatorType: string;
     /** An SVG file dropped on the label, to import. */
     onfile: (file: File) => void;
+    /** How each code was laid out, by index: its padding, and what was left over. */
+    codeLayouts?: Record<number, CodeLayout>;
   } = $props();
 
   const editor = useEditor();
@@ -1054,6 +1058,25 @@
         style={boxStyle({ x: area.edge, y: area.edge, width: doc.width - 2 * area.edge, height: doc.height - 2 * area.edge })}
       ></div>
     {/if}
+    <!-- The selected code's padding, shaded inside its box, and what was left over beyond it. -->
+    {#each editor.selected as i (i)}
+      {@const e = doc.elements[i]}
+      {@const l = codeLayouts[i]}
+      {#if e?.type === 'generator' && l?.padding && e.width > 0 && e.height > 0}
+        {@const inset = (m: Record<'top' | 'right' | 'bottom' | 'left', number>) => `M${m.left} ${m.top}H${e.width - m.right}V${e.height - m.bottom}H${m.left}Z`}
+        <svg
+          class="pointer-events-none absolute overflow-visible"
+          style={boxStyle(e)}
+          viewBox="0 0 {e.width} {e.height}"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+          data-padding={i}
+        >
+          <path d="M0 0H{e.width}V{e.height}H0Z {inset(l.padding)}" fill-rule="evenodd" class="padding" />
+          <path d="{inset(l.padding)} {inset(l.margin)}" fill-rule="evenodd" class="leftover" />
+        </svg>
+      {/if}
+    {/each}
     {#each doc.elements as e, i (i)}
       <button
         type="button"
@@ -1282,6 +1305,12 @@
   .element.locked,
   .element.passive {
     pointer-events: none;
+  }
+  .padding {
+    fill: rgb(147 51 234 / 0.18);
+  }
+  .leftover {
+    fill: rgb(113 113 122 / 0.22);
   }
   .unprinted {
     background: repeating-linear-gradient(45deg, rgb(113 113 122 / 0.35) 0 4px, rgb(113 113 122 / 0.12) 4px 8px);

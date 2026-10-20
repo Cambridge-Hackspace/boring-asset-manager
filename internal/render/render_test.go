@@ -658,6 +658,11 @@ func TestCodeMargins(t *testing.T) {
 	if c.Module != 8 || r != (Rect{X: 93, Y: 93, W: 168, H: 168}) || c.Margin != [4]int{34, 34, 34, 34} || len(c.Narrow()) != 0 {
 		t.Errorf("standard: %+v %+v", c, r)
 	}
+	// Of that, 4 modules of 8 dots is its padding; the 2 dots more each side
+	// were left over, as the box is not a whole number of modules.
+	if c.Padding != [4]int{32, 32, 32, 32} || c.Standard != c.Padding {
+		t.Errorf("padding: %+v", c)
+	}
 	// No margin on the left and top, in the top left corner: 25 modules of 9 dots.
 	c, r = layout(t, `"margin":{"left":0,"top":0},"align":"left","vertical_align":"top"`)
 	if c.Module != 9 || r.X != 59 || r.Y != 59 || c.Margin[0] != 0 || c.Margin[3] != 0 || !reflect.DeepEqual(c.Narrow(), []string{"top", "left"}) {

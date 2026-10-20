@@ -515,6 +515,7 @@
           area={printArea}
           generatorType={editor.codeType}
           onfile={importSVG}
+          {codeLayouts}
         />
         {#if editor.canvasOnly}
           <button

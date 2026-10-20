@@ -9,6 +9,8 @@ import {
   inListOrder,
   layerName,
   kindName,
+  paddingOf,
+  withPadding,
   marginOf,
   hairline,
   newShape,
@@ -448,6 +450,21 @@ describe('the workspace', () => {
     expect(at(arrange(three(), [0, 1, 2], { distribute: 'down' }))).toEqual([[10, 5], [40, 17.5], [80, 30]]);
     // With their centers evenly apart: 10, 21.25 and 32.5 down.
     expect(at(arrange(three(), [0, 1, 2], { distribute: 'down', spacing: 'centers' }))).toEqual([[10, 5], [40, 16.25], [80, 30]]);
+  });
+
+  it('sets a code padding in the template units, turning modules into lengths', () => {
+    const layout = { module: 0.5, module_dots: 6, margin: { top: 2, right: 2, bottom: 2, left: 2 } };
+    const qr: TemplateElement = { type: 'generator', generator_type: 'qr', x: 0, y: 0, width: 20, height: 20, margin: { left: 2 } };
+    // Two modules of 0.5 mm on the left were 1 mm; the top is set; the rest stay standard.
+    const padded = withPadding(qr, ['top'], 1.5, layout);
+    expect(padded).toMatchObject({ margin: { left: 1, top: 1.5 }, margin_unit: 'length' });
+    expect(paddingOf(padded, 'top')).toBe(1.5);
+    expect(paddingOf(padded, 'right')).toBeUndefined();
+    expect(paddingOf(qr, 'left', layout)).toBe(1);
+    // Every side back to standard: no margin, no unit.
+    const standard = withPadding(padded, ['top', 'right', 'bottom', 'left'], undefined);
+    expect(standard.margin).toBeUndefined();
+    expect(standard.margin_unit).toBeUndefined();
   });
 
   it('calls a layer by its name, or by what it is', () => {
