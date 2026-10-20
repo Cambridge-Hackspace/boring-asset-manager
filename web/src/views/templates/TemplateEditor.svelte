@@ -361,6 +361,10 @@
     } else if ((event.key === 'Delete' || event.key === 'Backspace') && canvas?.deletePoint()) {
       // Editing points: the chosen point comes off.
       event.preventDefault();
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && !mod && editor.selected.length) {
+      // As in Krita, Inkscape and Figma: what is selected comes off.
+      event.preventDefault();
+      editor.remove();
     } else if (event.key === 'Tab' && !mod && !event.shiftKey && !event.altKey && (document.activeElement === document.body || !document.activeElement)) {
       // Tab with nothing focused: everything but the label, hidden or shown.
       event.preventDefault();
