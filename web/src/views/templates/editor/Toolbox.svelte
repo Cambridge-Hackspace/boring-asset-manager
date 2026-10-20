@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { useEditor, type Tool } from './editor.svelte';
+  import { toolNames, useEditor, type Tool } from './editor.svelte';
   import Icon, { type IconName } from './Icon.svelte';
 
   // The toolbox, down the left as in Krita and Inkscape: one tool in hand
@@ -9,18 +9,20 @@
 
   const editor = useEditor();
 
-  const tools: { tool: Tool; icon: IconName; name: string }[] = [
-    { tool: 'select', icon: 'select', name: 'Select and move' },
-    { tool: 'text', icon: 'text', name: 'Text' },
-    { tool: 'code', icon: 'code', name: 'Barcode or QR code' },
-    { tool: 'image', icon: 'image', name: 'Image' },
-    { tool: 'rectangle', icon: 'rectangle', name: 'Rectangle' },
-    { tool: 'ellipse', icon: 'ellipse', name: 'Ellipse' },
-    { tool: 'line', icon: 'line', name: 'Line' },
-    { tool: 'polygon', icon: 'polygon', name: 'Polygon' },
-    { tool: 'pen', icon: 'pen', name: 'Pen' },
-    { tool: 'measure', icon: 'measure', name: 'Measure' },
-  ];
+  const tools: { tool: Tool; icon: IconName; name: string }[] = (
+    [
+      ['select', 'select'],
+      ['text', 'text'],
+      ['code', 'code'],
+      ['image', 'image'],
+      ['rectangle', 'rectangle'],
+      ['ellipse', 'ellipse'],
+      ['line', 'line'],
+      ['polygon', 'polygon'],
+      ['pen', 'pen'],
+      ['measure', 'measure'],
+    ] as const
+  ).map(([tool, icon]) => ({ tool, icon, name: toolNames[tool] }));
 
   const button =
     'grid h-9 w-9 place-items-center rounded-md text-zinc-700 hover:bg-zinc-200 aria-pressed:bg-zinc-800 aria-pressed:text-white dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-200 dark:aria-pressed:text-zinc-900';
