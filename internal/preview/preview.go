@@ -56,11 +56,16 @@ type Element struct {
 // the space between it and each side of its box as drawn, in the template's
 // units and in dots, with the sides narrower than its standard quiet zone.
 type Code struct {
-	Module     float64  `json:"module"`
-	ModuleDots int      `json:"module_dots"`
-	Margin     Sides    `json:"margin"`
-	MarginDots Sides    `json:"margin_dots"`
-	Narrow     []string `json:"narrow,omitempty"`
+	Module     float64 `json:"module"`
+	ModuleDots int     `json:"module_dots"`
+	Margin     Sides   `json:"margin"`
+	MarginDots Sides   `json:"margin_dots"`
+	// Padding is the margin asked for each side, or its standard quiet
+	// zone; what Margin has beyond it was left over, where the box is not a
+	// whole number of modules. Standard is the standard quiet zone.
+	Padding  Sides    `json:"padding"`
+	Standard Sides    `json:"standard"`
+	Narrow   []string `json:"narrow,omitempty"`
 }
 
 // Sides are lengths on each side of a box.
@@ -114,9 +119,14 @@ func Describe(t *labels.Template, data labels.Data, scene *render.Scene) Descrip
 		}
 		if c, ok := scene.Codes[i]; ok {
 			m := c.Margin
+			sides := func(d [4]int) Sides {
+				return Sides{Top: units(d[0]), Right: units(d[1]), Bottom: units(d[2]), Left: units(d[3])}
+			}
 			pe.Code = &Code{Module: units(c.Module), ModuleDots: c.Module, Narrow: c.Narrow(),
-				Margin:     Sides{Top: units(m[0]), Right: units(m[1]), Bottom: units(m[2]), Left: units(m[3])},
-				MarginDots: Sides{Top: float64(m[0]), Right: float64(m[1]), Bottom: float64(m[2]), Left: float64(m[3])}}
+				Margin:     sides(m),
+				MarginDots: Sides{Top: float64(m[0]), Right: float64(m[1]), Bottom: float64(m[2]), Left: float64(m[3])},
+				Padding:    sides(c.Padding),
+				Standard:   sides(c.Standard)}
 			if len(pe.Code.Narrow) > 0 {
 				side := "side"
 				if len(pe.Code.Narrow) > 1 {

@@ -122,8 +122,14 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 // the space between it and each side of its box as drawn, and its
 // standard quiet zone there. Sides run top, right, bottom, left.
 type CodePlacement struct {
-	Module   int
-	Margin   [4]int
+	Module int
+	// Margin is the space between the code and each side of its box as
+	// drawn: its padding, and what was left over where the box is not a
+	// whole number of modules.
+	Margin [4]int
+	// Padding is the margin asked for, or its standard quiet zone, each
+	// side, in whole dots.
+	Padding  [4]int
 	Standard [4]int
 }
 
@@ -252,7 +258,7 @@ func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectang
 		s.Items = append(s.Items, Item{Rects: rects})
 	}
 
-	placed := CodePlacement{Module: module}
+	placed := CodePlacement{Module: module, Padding: margin}
 	height := sym.Rows * module
 	if linear {
 		height = rowHeight

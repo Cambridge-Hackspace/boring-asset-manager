@@ -772,8 +772,12 @@ export type Margin = Partial<Record<Side, number>>;
 export interface CodeLayout {
   module: number;
   module_dots: number;
-  /** The space between the code and each side of its box, as drawn. */
+  /** The space between the code and each side of its box, as drawn: its padding and what was left over. */
   margin: Record<Side, number>;
+  /** The padding asked for each side, or its standard quiet zone. */
+  padding?: Record<Side, number>;
+  /** The code's standard quiet zone each side. */
+  standard?: Record<Side, number>;
   /** Sides narrower than its standard quiet zone. */
   narrow?: Side[];
 }
@@ -795,6 +799,38 @@ export function withMargin(e: TemplateElement, set: Side[], value: number | unde
   }
   const { quiet_zone: _q, margin: _m, ...rest } = e;
   return Object.keys(margin).length ? { ...rest, margin } : rest;
+}
+
+/**
+ * A code's padding, as the editor sets it: lengths in the template's units
+ * on the sides set, or the standard quiet zone where a value is undefined.
+ * A margin given before in modules is turned into lengths first, by the
+ * code's module as laid out; without that, it starts from the standard.
+ */
+export function withPadding(e: TemplateElement, set: Side[], value: number | undefined, layout?: CodeLayout): TemplateElement {
+  const margin: Margin = {};
+  if (e.margin_unit === 'length') {
+    Object.assign(margin, e.margin ?? {});
+  } else if (layout) {
+    for (const side of sides) {
+      const modules = marginOf(e, side);
+      if (modules !== undefined) margin[side] = Math.round(modules * layout.module * 1e4) / 1e4;
+    }
+  }
+  for (const side of set) {
+    if (value === undefined) delete margin[side];
+    else margin[side] = value;
+  }
+  const { quiet_zone: _q, margin: _m, margin_unit: _u, ...rest } = e;
+  return Object.keys(margin).length ? { ...rest, margin, margin_unit: 'length' } : rest;
+}
+
+/** A code's padding one side, in the template's units, or undefined for its standard quiet zone. */
+export function paddingOf(e: TemplateElement, side: Side, layout?: CodeLayout): number | undefined {
+  const given = marginOf(e, side);
+  if (given === undefined) return undefined;
+  if (e.margin_unit === 'length') return given;
+  return layout ? Math.round(given * layout.module * 1e4) / 1e4 : undefined;
 }
 
 /** The margin given for one side, in its unit, or undefined for the standard. */

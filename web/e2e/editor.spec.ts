@@ -300,22 +300,50 @@ test('draw shapes on the label, and polygons point by point', async ({ signedIn:
   expect(shapes[4]!.points).toHaveLength(3);
 });
 
-test('set a code’s margins and where it sits', async ({ signedIn: page, api }) => {
+test('pad a code, resize it with its handles, and see it fill its box less the padding', async ({ signedIn: page, api }) => {
   const { template } = await api.call('POST', '/templates', {
-    name: unique('Margins'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
-    elements: [{ type: 'generator', generator_type: 'qr', x: 5, y: 2, width: 25, height: 25, content_binding: 'HELLO' }],
+    name: unique('Padding'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [{ type: 'generator', generator_type: 'qr', x: 5, y: 2, width: 20, height: 20, content_binding: 'HELLO' }],
   });
   await page.goto(`/templates/${template.id}/edit`);
+  const live = page.getByRole('img', { name: 'Label preview' }).locator('canvas');
+  await expect(live).toBeVisible();
   await page.getByRole('list', { name: 'Layers' }).getByRole('button', { name: 'QR code: HELLO', exact: true }).click();
-  await page.locator('#el-0-margin-left').fill('0');
-  await page.locator('#el-0-margin-left').press('Tab');
-  await expect(page.getByText(/Less than the code's standard quiet zone on its left/)).toBeVisible();
+  // Its padding shaded on the label.
+  await expect(page.locator('[data-padding="0"]')).toBeAttached();
+  // Resized with its ordinary handle.
+  const corner = (await page.locator('[data-handle="se"]').boundingBox())!;
+  await drag(page, [corner.x + 4, corner.y + 4], [corner.x + 60, corner.y + 4]);
+  const width = Number(await page.locator('#el-0-width').inputValue());
+  expect(width).toBeGreaterThan(20);
+  // 2 mm all round.
+  await page.locator('#el-0-padding').fill('2mm');
+  await page.locator('#el-0-padding').press('Enter');
+  // The code's dots keep inside the box less its padding: 2 mm is 23.6 dots at 300 DPI.
+  const inside = await live.evaluate((c: HTMLCanvasElement, box: { x: number; y: number; w: number; h: number }) => {
+    const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+    const dot = 300 / 25.4;
+    let [minX, minY, maxX, maxY] = [Infinity, Infinity, -1, -1];
+    for (let y = 0; y < c.height; y++)
+      for (let x = 0; x < c.width; x++)
+        if (data[(y * c.width + x) * 4] === 0) [minX, minY, maxX, maxY] = [Math.min(minX, x), Math.min(minY, y), Math.max(maxX, x), Math.max(maxY, y)];
+    return { left: minX - box.x * dot, top: minY - box.y * dot, right: (box.x + box.w) * dot - maxX - 1, bottom: (box.y + box.h) * dot - maxY - 1 };
+  }, { x: 5, y: 2, w: width, h: 20 });
+  for (const side of ['left', 'top', 'right', 'bottom'] as const) expect(inside[side]).toBeGreaterThanOrEqual(23);
+  // Where it sits: against the left, then nothing on its left, warned of.
+  // (Centered in its wide box, the space beside it would be more than enough.)
   await page.locator('#el-0-code-align').selectOption('left');
   await page.locator('#el-0-code-valign').selectOption('bottom');
+  await page.getByRole('button', { name: 'Each side' }).click();
+  await page.locator('#el-0-padding-left').fill('0');
+  await page.locator('#el-0-padding-left').press('Tab');
+  // Its bottom too: 2 mm is less than this code's standard, with nothing left over below it.
+  await expect(page.getByText("Less than the code's standard quiet zone on its bottom and left: some scanners need it.")).toBeVisible();
+  await axe(page);
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
   const saved = await api.call('GET', `/templates/${template.id}`);
-  expect(saved.template.elements[0]).toMatchObject({ margin: { left: 0 }, align: 'left', vertical_align: 'bottom' });
+  expect(saved.template.elements[0]).toMatchObject({ margin: { left: 0, top: 2, right: 2, bottom: 2 }, margin_unit: 'length', align: 'left', vertical_align: 'bottom' });
 });
 
 test('turn a template portrait and landscape, and choose which way it is fed', async ({ signedIn: page, api, printer }) => {
