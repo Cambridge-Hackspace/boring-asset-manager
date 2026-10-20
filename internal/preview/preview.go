@@ -19,8 +19,10 @@ import (
 // Element is one element of a previewed label, as format json describes it:
 // where it is, in the template's units, and what it prints.
 type Element struct {
-	Index         int     `json:"index"`
-	Type          string  `json:"type"`
+	Index int    `json:"index"`
+	Type  string `json:"type"`
+	// Name is what the editor's layers call it, when it has been named.
+	Name          string  `json:"name,omitempty"`
 	X             float64 `json:"x"`
 	Y             float64 `json:"y"`
 	Width         float64 `json:"width"`
@@ -94,7 +96,7 @@ func Describe(t *labels.Template, data labels.Data, scene *render.Scene) Descrip
 	units := func(dots int) float64 { return math.Round(float64(dots)/dotsPerUnit*1000) / 1000 }
 	for i := range t.Elements {
 		e := &t.Elements[i]
-		pe := Element{Index: i, Type: e.Type, X: e.X, Y: e.Y, Width: e.Width, Height: e.Height,
+		pe := Element{Index: i, Type: e.Type, Name: e.Name, X: e.X, Y: e.Y, Width: e.Width, Height: e.Height,
 			GeneratorType: e.GeneratorType, ImageID: e.ImageID, FontSize: e.FontSize, Rotation: e.Rotation,
 			Shape: e.Shape, Stroke: e.Stroke, StrokeWidth: e.StrokeWidth, Fill: e.Fill, CornerRadius: e.CornerRadius, Flip: e.Flip, Points: e.Points, Closed: e.Closed}
 		if e.Type == labels.ElementShape && e.Stroke != labels.PaintNone && e.StrokeWidth*dotsPerUnit < 1 {
