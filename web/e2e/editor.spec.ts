@@ -519,3 +519,112 @@ test('zoom toward the pointer, pan, the zoom keys, rulers, the overview and prin
   expect(Math.round((await label.boundingBox())!.width)).toBe(Math.round((62 * 96) / 25.4));
   await axe(page);
 });
+
+test('turn from outside a corner, resize with the modifiers, select with a box, and the menu', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Transform'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [
+      { type: 'shape', shape: 'rectangle', x: 4, y: 4, width: 10, height: 10, stroke: 'black', stroke_width: 0.5 },
+      { type: 'shape', shape: 'ellipse', x: 30, y: 4, width: 10, height: 10, stroke: 'black', stroke_width: 0.5 },
+      { type: 'shape', shape: 'rectangle', x: 33, y: 7, width: 4, height: 4, stroke: 'black', stroke_width: 0.5 },
+    ],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  await expect(page.getByRole('img', { name: 'Label preview' })).toBeVisible();
+  const rect = onLabel(page, /^Shape 1/);
+  const center = async () => {
+    const b = (await rect.boundingBox())!;
+    return [b.x + b.width / 2, b.y + b.height / 2] as const;
+  };
+  await rect.click();
+
+  // Turning: grabbed just outside the top right corner, swept a quarter turn round.
+  const zone = (await page.locator('[data-rotate="ne"]').boundingBox())!;
+  const [cx, cy] = await center();
+  const grab: [number, number] = [zone.x + zone.width / 2, zone.y + zone.height / 2];
+  const r = Math.hypot(grab[0] - cx, grab[1] - cy);
+  const a0 = Math.atan2(grab[1] - cy, grab[0] - cx);
+  const toward = (deg: number): [number, number] => [cx + r * Math.cos(a0 + (deg * Math.PI) / 180), cy + r * Math.sin(a0 + (deg * Math.PI) / 180)];
+  await page.mouse.move(...grab);
+  await expect(page.getByText(/Drag to turn/)).toBeVisible();
+  await page.mouse.down();
+  await page.mouse.move(...toward(43), { steps: 6 });
+  // Near 45°: snapped to it, and said beside the pointer.
+  await expect(page.locator('#el-0-rotation')).toHaveValue('45');
+  await expect(page.locator('[data-readout]')).toHaveText('45°');
+  // Shift turns freely; Ctrl in steps of 15°, changing at once as the keys go down.
+  await page.keyboard.down('Shift');
+  await expect(page.locator('#el-0-rotation')).not.toHaveValue('45');
+  await page.keyboard.up('Shift');
+  await page.mouse.move(...toward(52), { steps: 3 });
+  await page.keyboard.down('Control');
+  await expect(page.locator('#el-0-rotation')).toHaveValue('45');
+  await page.mouse.move(...toward(58), { steps: 3 });
+  await expect(page.locator('#el-0-rotation')).toHaveValue('60');
+  await page.keyboard.up('Control');
+  await page.mouse.up();
+  await page.locator('#el-0-rotation').fill('0');
+  await page.locator('#el-0-rotation').press('Enter');
+
+  // Resizing from the bottom right corner: Shift keeps proportions while held.
+  const corner = (await page.locator('[data-handle="se"]').boundingBox())!;
+  await page.mouse.move(corner.x + 4, corner.y + 4);
+  await page.mouse.down();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(corner.x + 4 + 80, corner.y + 4 + 10, { steps: 6 });
+  const w = Number(await page.locator('#el-0-width').inputValue());
+  expect(w).toBeGreaterThan(10);
+  await expect(page.locator('#el-0-height')).toHaveValue(String(w));
+  await expect(page.locator('[data-readout]')).toContainText('×');
+  // Let go of Shift mid-drag, and the height follows the pointer again.
+  await page.keyboard.up('Shift');
+  await expect(page.locator('#el-0-height')).not.toHaveValue(String(w));
+  await page.mouse.up();
+  // Ctrl resizes from the center: the left side moves out too.
+  const x0 = Number(await page.locator('#el-0-x').inputValue());
+  const east = (await page.locator('[data-handle="e"]').boundingBox())!;
+  await page.mouse.move(east.x + 4, east.y + 4);
+  await page.mouse.down();
+  await page.keyboard.down('Control');
+  await page.mouse.move(east.x + 4 + 40, east.y + 4, { steps: 4 });
+  // Let go of the mouse first: Ctrl let go mid-drag puts the left side back.
+  await page.mouse.up();
+  await page.keyboard.up('Control');
+  expect(Number(await page.locator('#el-0-x').inputValue())).toBeLessThan(x0);
+
+  // A box dragged left to right takes what it covers; right to left, what it touches.
+  const paper = await onPaper(page);
+  await page.keyboard.press('Control+Shift+A');
+  await drag(page, paper(0.4, 0.05), paper(0.7, 0.6));
+  await expect(page.locator('[data-element][aria-pressed="true"]')).toHaveCount(2);
+  await page.keyboard.press('Escape');
+  await page.mouse.move(...paper(0.7, 0.05));
+  await page.mouse.down();
+  await page.mouse.move(...paper(0.55, 0.3), { steps: 4 });
+  await expect(page.locator('[data-band="touching"]')).toBeVisible();
+  await page.mouse.up();
+  await expect(page.locator('[data-element][aria-pressed="true"]')).toHaveCount(2);
+
+  // Ctrl+click takes the element beneath the one selected there, round to the top.
+  const small = (await onLabel(page, /^Shape 3/).boundingBox())!;
+  const spot: [number, number] = [small.x + small.width / 2, small.y + small.height / 2];
+  await page.mouse.click(...spot);
+  await expect(onLabel(page, /^Shape 3/)).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.down('Control');
+  await page.mouse.click(...spot);
+  await page.keyboard.up('Control');
+  await expect(onLabel(page, /^Shape 2/)).toHaveAttribute('aria-pressed', 'true');
+
+  // The right-click menu.
+  await page.mouse.click(...spot, { button: 'right' });
+  const menu = page.getByRole('menu', { name: 'Selection' });
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await axe(page);
+  // Right-clicked, the square on top was taken, as it was not selected.
+  await expect(onLabel(page, /^Shape 3/)).toHaveAttribute('aria-pressed', 'true');
+  await menu.getByRole('menuitem', { name: 'Send to back' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements.map((e: { shape: string; width: number }) => `${e.shape} ${e.width}`)[0]).toBe('rectangle 4');
+});

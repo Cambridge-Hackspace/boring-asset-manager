@@ -68,7 +68,7 @@ describe('TemplateEditor', () => {
     }
     // jsdom runs no workers: the server draws the label, and the status bar says so.
     expect(screen.getByText('Live preview unavailable')).toBeTruthy();
-    expect(screen.getByText('Click an element to select it. Shift+click: select several.')).toBeTruthy();
+    expect(screen.getByText('Click an element to select it. Drag on the label to select with a box. Shift+click: select several.')).toBeTruthy();
   });
 
   it('previews through the server, and moves the selection with the arrow keys', async () => {
@@ -243,6 +243,70 @@ describe('TemplateEditor', () => {
     await fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Inches' }));
     expect(screen.queryByRole('menu')).toBeNull();
     expect(localStorage.getItem('bam.editor-ruler-units')).toBe('in');
+  });
+
+  it('gives numbers at an anchor, with the aspect locked or not, and takes units typed', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.focus(canvasElement('Text 1: {{asset.name}}'));
+    // At the top left, X and Y are the box's corner.
+    expect([value('#el-0-x'), value('#el-0-y')]).toEqual(['10', '5']);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Center' }));
+    expect([value('#el-0-x'), value('#el-0-y')]).toEqual(['30', '10']);
+    // Wider about the center, the height following with the aspect locked.
+    await fireEvent.click(screen.getByRole('button', { name: 'Keep proportions' }));
+    await fireEvent.change(document.querySelector('#el-0-width')!, { target: { value: '8cm' } });
+    expect([value('#el-0-width'), value('#el-0-height'), value('#el-0-x')]).toEqual(['80', '20', '30']);
+    // The arrow keys step a field; Shift by ten.
+    await fireEvent.keyDown(document.querySelector('#el-0-y')!, { key: 'ArrowUp', shiftKey: true });
+    expect(value('#el-0-y')).toBe('20');
+    // What cannot be read is put back.
+    await fireEvent.change(document.querySelector('#el-0-x')!, { target: { value: 'wide' } });
+    expect(value('#el-0-x')).toBe('30');
+    expect((await saved(sent)).elements[0]).toMatchObject({ x: -10, y: 10, width: 80, height: 20 });
+  });
+
+  it('snaps turns to 45° until switched off, which is remembered', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    const snapping = screen.getByRole('checkbox', { name: 'Snap turns to 45°' }) as HTMLInputElement;
+    expect(snapping.checked).toBe(true);
+    await fireEvent.click(snapping);
+    expect(localStorage.getItem('bam.editor-snap-angles')).toBe('off');
+  });
+
+  it('opens the menu from the keyboard, and stacks, locks, copies, pastes and deletes from it', async () => {
+    const two = { ...template, layering: 'list' as const, elements: [...template.elements, { type: 'text' as const, x: 60, y: 5, width: 20, height: 10, content_binding: 'B', font_size: 12 }] };
+    api({ 'GET /templates/ql90': () => ({ template: two }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    const first = canvasElement(/^Text 1/);
+    await fireEvent.focus(first);
+    await fireEvent.keyDown(first, { key: 'F10', shiftKey: true });
+    const menu = screen.getByRole('menu', { name: 'Selection' });
+    expect(within(menu).getByRole('menuitem', { name: 'Group' }).hasAttribute('disabled')).toBe(true);
+    await fireEvent.click(within(menu).getByRole('menuitem', { name: 'Bring to front' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(layerNames()).toEqual(['Text: {{asset.name}}', 'Text: B']);
+
+    await fireEvent.keyDown(canvasElement(/^Text 2/), { key: 'ContextMenu' });
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Copy' }));
+    await fireEvent.keyDown(canvasElement(/^Text 2/), { key: 'ContextMenu' });
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Paste' }));
+    expect(layerNames()).toEqual(['Text: {{asset.name}}', 'Text: {{asset.name}}', 'Text: B']);
+    await fireEvent.keyDown(canvasElement(/^Text 3/), { key: 'ContextMenu' });
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(layerNames()).toEqual(['Text: {{asset.name}}', 'Text: B']);
+
+    await fireEvent.keyDown(canvasElement(/^Text 1/), { key: 'ContextMenu' });
+    // Escape closes it, doing nothing.
+    await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    await fireEvent.keyDown(canvasElement(/^Text 1/), { key: 'ContextMenu' });
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Lock' }));
+    expect(canvasElement(/^Text 1/).classList.contains('locked')).toBe(true);
   });
 
   const printers = () => ({
