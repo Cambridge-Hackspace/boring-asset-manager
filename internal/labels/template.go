@@ -51,12 +51,21 @@ const (
 	MaxPolygonPoints = 256
 )
 
-// Mirrors flip an image.
+// Mirrors flip an element, or a whole label as it prints: across (left
+// for right), down (top for bottom) or both. MirrorNone, in a print
+// request, prints a template that is mirrored the right way round.
 const (
 	MirrorAcross = "across"
 	MirrorDown   = "down"
 	MirrorBoth   = "both"
+	MirrorNone   = "none"
 )
+
+// ValidMirror reports whether a mirror is one of the mirrors, or empty for
+// none.
+func ValidMirror(mirror string) bool {
+	return mirror == "" || mirror == MirrorAcross || mirror == MirrorDown || mirror == MirrorBoth
+}
 
 // MaxGuides bounds a template's guides each way; maxGroupLength a group's
 // name.
@@ -180,6 +189,16 @@ type Template struct {
 	// Feed is which way its labels go through the printer when they fit
 	// either way: FeedAuto (or empty), FeedAcross or FeedAlong.
 	Feed string `json:"feed,omitempty"`
+	// PrintMirror prints the whole label mirror-image, codes and all, as
+	// Mirror says: for a clear label stuck inside glass and read through
+	// it. It is designed the right way round; only what prints is
+	// mirrored.
+	PrintMirror string `json:"print_mirror,omitempty"`
+	// PrintRotation turns everything on the label clockwise about its
+	// center as it prints, after any PrintMirror, in degrees from 0 up to
+	// 360: for a label put on turned, by a dispenser or applicator, to read
+	// level once it is on. What is turned off the label is cut off.
+	PrintRotation float64 `json:"print_rotation,omitempty"`
 	// Turnable lets an adaptive template take labels turned a quarter turn
 	// from the sizes it takes, its content turned to match.
 	Turnable bool `json:"turnable,omitempty"`
@@ -270,8 +289,9 @@ type Element struct {
 
 	// static_image
 	ImageID string `json:"image_id,omitempty"`
-	// Mirror flips an image across (left for right), down (top for bottom)
-	// or both.
+	// Mirror flips the element in its box, before it is turned: across
+	// (left for right), down (top for bottom) or both. A mirrored code does
+	// not scan from the side the label is read from.
 	Mirror string `json:"mirror,omitempty"`
 
 	// shape, and Fill for text too: what it is, how it is drawn, and its
@@ -456,6 +476,12 @@ func (t *Template) Validate() error {
 	if !ValidFeed(t.Feed) {
 		v.add("feed", `must be "auto", "across" or "along"`)
 	}
+	if !ValidMirror(t.PrintMirror) {
+		v.add("print_mirror", `must be "across", "down" or "both"`)
+	}
+	if math.IsNaN(t.PrintRotation) || t.PrintRotation < 0 || t.PrintRotation >= 360 {
+		v.add("print_rotation", "must be at least 0 degrees and less than 360")
+	}
 	if t.Turnable && !t.Adaptive() {
 		v.add("turnable", "applies only to adaptive templates")
 	}
@@ -585,8 +611,8 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"margin_unit":      e.MarginUnit != "",
 		"vertical_align":   e.VerticalAlign != "",
 	}
-	if e.Type != ElementStaticImage && e.Mirror != "" {
-		v.add(at("mirror"), "applies only to images: shapes are flipped by their points, and text and codes are turned")
+	if !ValidMirror(e.Mirror) {
+		v.add(at("mirror"), `must be "across", "down" or "both"`)
 	}
 	if len(e.Group) > maxGroupLength || strings.TrimSpace(e.Group) != e.Group {
 		v.add(at("group"), fmt.Sprintf("must be at most %d characters, without spaces at either end", maxGroupLength))
@@ -688,9 +714,6 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		unset(generatorProps)
 		unset(textProps)
 		unset(shapeProps)
-		if e.Mirror != "" && e.Mirror != MirrorAcross && e.Mirror != MirrorDown && e.Mirror != MirrorBoth {
-			v.add(at("mirror"), `must be "across", "down" or "both"`)
-		}
 		unset(map[string]bool{"content_binding": e.ContentBinding != "", "align": e.Align != ""})
 		if _, err := uuid.Parse(e.ImageID); err != nil {
 			v.add(at("image_id"), "must be the ID of an uploaded image")

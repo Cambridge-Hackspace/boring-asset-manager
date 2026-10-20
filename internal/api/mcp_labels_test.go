@@ -252,6 +252,24 @@ func TestMCPLabelTools(t *testing.T) {
 	if res := callTool(t, cs, "save_template", map[string]any{"id": tag, "turn": "around"}); !res.IsError {
 		t.Errorf("an unknown turn: %s", toolText(res))
 	}
+	// Printing mirrored and turned, and back as designed.
+	var printing struct {
+		Template struct {
+			PrintMirror   string  `json:"print_mirror"`
+			PrintRotation float64 `json:"print_rotation"`
+		}
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "print_mirror": "across", "print_rotation": 15}), &saved)
+	structured(t, callTool(t, cs, "get_template", map[string]any{"id": tag}), &printing)
+	if printing.Template.PrintMirror != "across" || printing.Template.PrintRotation != 15 {
+		t.Errorf("printing mirrored and turned: %+v", printing.Template)
+	}
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "print_mirror": "none", "print_rotation": 0}), &saved)
+	printing.Template.PrintMirror, printing.Template.PrintRotation = "?", -1
+	structured(t, callTool(t, cs, "get_template", map[string]any{"id": tag}), &printing)
+	if printing.Template.PrintMirror != "" || printing.Template.PrintRotation != 0 {
+		t.Errorf("printing as designed: %+v", printing.Template)
+	}
 	// A draft never saved, too, and one that cannot be made for an asset says why.
 	draft := map[string]any{}
 	_ = json.Unmarshal([]byte(labelTemplate), &draft)
@@ -284,6 +302,16 @@ func TestMCPLabelTools(t *testing.T) {
 	}
 	if jobs := ql.waitForJobs(t, 1, 5*time.Second); len(jobs) != 1 {
 		t.Errorf("printed %d jobs", len(jobs))
+	}
+	// Mirrored this time, it prints otherwise.
+	if res := callTool(t, cs, "print_labels", map[string]any{"printer_id": printer, "template_id": wide, "assets": []string{tagged}, "mirror": "across"}); res.IsError {
+		t.Fatalf("print_labels mirrored: %s", toolText(res))
+	}
+	if jobs := ql.waitForJobs(t, 2, 5*time.Second); len(jobs) != 2 || bytes.Equal(jobs[0], jobs[1]) {
+		t.Errorf("printed %d jobs, mirrored the same as not", len(jobs))
+	}
+	if res := callTool(t, cs, "print_labels", map[string]any{"printer_id": printer, "template_id": wide, "assets": []string{tagged}, "mirror": "sideways"}); !res.IsError {
+		t.Errorf("an unknown mirror: %s", toolText(res))
 	}
 	draft["width"], draft["height"] = 62, 29
 	if res := callTool(t, cs, "test_print", map[string]any{"printer_id": printer, "template": draft}); res.IsError {

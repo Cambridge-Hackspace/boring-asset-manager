@@ -113,8 +113,13 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 		default:
 			return nil, fail("unknown element type %q", e.Type)
 		}
+		// An image is mirrored as it is loaded, to fit its box as it is.
+		if e.Type != labels.ElementStaticImage {
+			mirror(s.Items[first:], box, e.Mirror == labels.MirrorAcross || e.Mirror == labels.MirrorBoth, e.Mirror == labels.MirrorDown || e.Mirror == labels.MirrorBoth)
+		}
 		s.turn(s.Items[first:], box, e.Rotation)
 	}
+	s.print(t)
 	return s, nil
 }
 

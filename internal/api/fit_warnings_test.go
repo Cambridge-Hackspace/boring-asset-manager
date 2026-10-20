@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
 
@@ -206,6 +207,62 @@ func TestFeed(t *testing.T) {
 	// Turned the other way, the label went to the printer differently.
 	if jobs := ql.waitForJobs(t, 2, 5*time.Second); len(jobs) != 2 || bytes.Equal(jobs[0], jobs[1]) {
 		t.Errorf("%d jobs, the same both ways", len(jobs))
+	}
+}
+
+// TestPrintMirror checks a template that prints mirrored, mirrored or not
+// for one print as that print says, and warned of what its turn cuts off.
+func TestPrintMirror(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ql := newFakeQL(t)
+	printerID := createPrinter(t, srv, cookie, ql.port(), "dk-22205")
+	// Black down the left of the design only, turned 1° as it prints: the
+	// block in the corner goes off the label.
+	tmpl := createTemplate(t, srv, cookie, `{"name":"Glass","units":"mm","width":62,"height":30,"dpi":300,"layering":"list","print_mirror":"across","print_rotation":1,"elements":[
+	  {"type":"shape","shape":"rectangle","x":0,"y":0,"width":20,"height":30,"fill":"black","stroke":"none","name":"Block"}]}`)
+	got := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/templates/"+tmpl, "")
+	if !strings.Contains(got.Body.String(), `"print_mirror":"across","print_rotation":1`) {
+		t.Errorf("stored: %s", got.Body)
+	}
+	asset, _ := srv.store.CreateAsset("Window", nil, nil, nil)
+	mirrors := []string{"", "none", "across"}
+	for _, mirror := range mirrors {
+		rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+tmpl+`","asset_ids":["`+asset.Asset.ID+`"],"mirror":"`+mirror+`"}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("printing, mirror %q: %d %s", mirror, rec.Code, rec.Body)
+		}
+		if !strings.Contains(rec.Body.String(), "Turned 1° as it prints, “Block” goes partly off the label") {
+			t.Errorf("mirror %q, warnings: %s", mirror, rec.Body)
+		}
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/printers/"+printerID+"/print", `{"template_id":"`+tmpl+`","asset_ids":["`+asset.Asset.ID+`"],"mirror":"sideways"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("printing, an unknown mirror: %d", rec.Code)
+	}
+	// Mirrored, the black is on the right of what printed; the right way
+	// round, on the left.
+	media, _ := brotherql.LookupMedia("dk-22205")
+	for i, job := range ql.waitForJobs(t, 3, 5*time.Second) {
+		pages, err := brotherql.DecodeJob(job)
+		if err != nil || len(pages) != 1 {
+			t.Fatalf("job %d: %v, %d pages", i, err, len(pages))
+		}
+		img := brotherql.PageImage(media, pages[0])
+		left, right := 0, 0
+		for y := 0; y < img.Bounds().Dy(); y++ {
+			for x := 0; x < img.Bounds().Dx(); x++ {
+				if img.GrayAt(x, y).Y == 0 {
+					if x < img.Bounds().Dx()/2 {
+						left++
+					} else {
+						right++
+					}
+				}
+			}
+		}
+		if mirrored := mirrors[i] != "none"; mirrored != (right > left) {
+			t.Errorf("mirror %q: %d black dots on the left, %d on the right", mirrors[i], left, right)
+		}
 	}
 }
 

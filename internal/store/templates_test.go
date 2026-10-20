@@ -274,7 +274,8 @@ func TestStoredTemplatesAreLayered(t *testing.T) {
 }
 
 // TestTemplateFeedAndTurnable keeps which way a template's labels are fed,
-// whether an adaptive one takes turned labels, and its guides.
+// whether an adaptive one takes turned labels, its guides, and how it
+// prints mirrored and turned.
 func TestTemplateFeedAndTurnable(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
@@ -282,20 +283,22 @@ func TestTemplateFeedAndTurnable(t *testing.T) {
 	tmpl.Feed, tmpl.Turnable, tmpl.Sizing = labels.FeedAlong, true, labels.SizingAdaptive
 	tmpl.Guides = &labels.Guides{X: []float64{10, 31}, Y: []float64{14.5}}
 	tmpl.Grid = &labels.Grid{X: 2, Y: 1.5, OffsetX: 0.5, Subdivisions: 4, Visible: true}
+	tmpl.PrintMirror, tmpl.PrintRotation = labels.MirrorAcross, 12.5
 	tmpl.Adapt = &labels.Adapt{MinWidth: 30, MaxWidth: 100, MinHeight: 20, MaxHeight: 50, ContinuousLength: labels.LengthFixed}
 	created, err := st.CreateTemplate(tmpl)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetTemplate(created.ID)
-	if err != nil || got.Feed != labels.FeedAlong || !got.Turnable || !reflect.DeepEqual(got.Guides, tmpl.Guides) || !reflect.DeepEqual(got.Grid, tmpl.Grid) {
+	if err != nil || got.Feed != labels.FeedAlong || !got.Turnable || !reflect.DeepEqual(got.Guides, tmpl.Guides) || !reflect.DeepEqual(got.Grid, tmpl.Grid) ||
+		got.PrintMirror != labels.MirrorAcross || got.PrintRotation != 12.5 {
 		t.Fatalf("stored: %+v %v", got, err)
 	}
-	got.Feed, got.Turnable = "", false
+	got.Feed, got.Turnable, got.PrintMirror, got.PrintRotation = "", false, "", 0
 	if _, err := st.UpdateTemplate(got); err != nil {
 		t.Fatal(err)
 	}
-	if again, _ := st.GetTemplate(created.ID); again.Feed != "" || again.Turnable {
+	if again, _ := st.GetTemplate(created.ID); again.Feed != "" || again.Turnable || again.PrintMirror != "" || again.PrintRotation != 0 {
 		t.Errorf("updated: %+v", again)
 	}
 }

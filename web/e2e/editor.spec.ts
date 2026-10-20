@@ -951,3 +951,75 @@ test('type on the label, with the text bar, and fill the box', async ({ signedIn
   expect(saved[0].wrap).toBeUndefined();
   expect(saved[1]).toMatchObject({ type: 'text', content_binding: 'Wrapped across the box', wrap: true });
 });
+
+test('a label that prints mirrored and turned, shown as printed and as applied, and mirrored for one print', async ({ signedIn: page, api, printer }) => {
+  const printerName = unique('QL');
+  await api.call('POST', '/printers', { name: printerName, driver: 'brother_ql', model: 'QL-810W', connection: { type: 'tcp', address: `127.0.0.1:${printer.port}` }, media: 'dk-22205' });
+  const code = unique('G').toUpperCase();
+  const { asset } = await api.call('POST', '/assets', { name: unique('Window'), generator_keys: [{ generator_type: 'qr', assigned_code: code }] });
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Glass'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [
+      { type: 'text', x: 0, y: 0, width: 30, height: 8, font_size: 12, content_binding: '{{asset.name}}', name: 'Corner' },
+      { type: 'generator', generator_type: 'qr', x: 38, y: 4, width: 20, height: 20 },
+    ],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+
+  // Mirrored, to read through glass; turned with the dial, by its keys and
+  // dragged, snapping, and by its field.
+  await page.locator('#tpl-print-mirror').selectOption('across');
+  const dial = page.getByRole('slider', { name: 'Turned as it prints' });
+  await dial.focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect(page.locator('#tpl-print-rotation')).toHaveValue('15');
+  const d = (await dial.boundingBox())!;
+  // To just short of the right, which snaps to a quarter turn.
+  await drag(page, [d.x + d.width / 2, d.y + 2], [d.x + d.width + 30, d.y + d.height / 2 - 2]);
+  await expect(page.locator('#tpl-print-rotation')).toHaveValue('90');
+  await page.locator('#tpl-print-rotation').fill('10');
+  await page.locator('#tpl-print-rotation').press('Tab');
+  await expect(dial).toHaveAttribute('aria-valuenow', '10');
+
+  // The design stays the right way round and level, the label outlined
+  // where it lies once on, and what goes off it is warned of.
+  await expect(page.locator('[data-applied-outline]')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'As it prints' })).toContainText('“Corner” goes partly off the label');
+  const shown = page.locator('[data-applied-label]');
+  await expect(shown).toHaveAttribute('data-applied-label', 'printed');
+  await page.getByRole('radio', { name: 'As applied' }).click();
+  await expect(shown).toHaveAttribute('data-applied-label', 'applied');
+  await expect(page.getByRole('img', { name: 'The label as applied' })).toBeVisible();
+
+  // Any element mirrors in its box; a mirrored code is warned of.
+  await onLabel(page, /^Barcode 2/).click();
+  await page.getByRole('group', { name: 'Mirrored' }).getByRole('button', { name: 'Left for right' }).click();
+  await expect(page.locator('[data-mirrored-code]')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'As it prints' })).toContainText('is a mirrored code');
+  await page.getByRole('group', { name: 'Mirrored' }).getByRole('button', { name: 'Left for right' }).click();
+  await expect(page.locator('[data-mirrored-code]')).toHaveCount(0);
+  await axe(page);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = (await api.call('GET', `/templates/${template.id}`)).template;
+  expect(saved).toMatchObject({ print_mirror: 'across', print_rotation: 10 });
+  expect(saved.elements[1].mirror).toBeUndefined();
+
+  // The print screen shows it as printed or as applied, and prints it the
+  // right way round this once, warning of what is cut off.
+  await page.goto(`/assets/${asset.asset.id}`);
+  await page.getByLabel('Template').selectOption(template.id);
+  const labels = page.getByRole('region', { name: 'Labels' });
+  await expect(labels.locator('[data-applied-label]')).toHaveAttribute('data-applied-label', 'printed');
+  await labels.getByRole('radio', { name: 'As applied' }).click();
+  await expect(labels.getByRole('img', { name: /as applied/ })).toBeVisible();
+  await page.getByLabel('Printer').selectOption({ label: printerName });
+  await page.locator('#label-mirror').selectOption('none');
+  const sent = page.waitForRequest((r) => r.url().includes('/print') && r.method() === 'POST');
+  await page.getByRole('button', { name: 'Print' }).click();
+  expect((await sent).postDataJSON()).toMatchObject({ template_id: template.id, mirror: 'none' });
+  await expect(page.getByRole('status').filter({ hasText: 'Sent' })).toBeVisible();
+  await expect(labels).toContainText('goes partly off the label');
+  await printer.job();
+});

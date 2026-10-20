@@ -668,7 +668,8 @@ func TestWorkspaceProperties(t *testing.T) {
 		{`{"x":[41]}`, img + `}`, []string{"guides.x"}},
 		{`{"y":[` + strings.TrimSuffix(strings.Repeat("1,", MaxGuides+1), ",") + `]}`, img + `}`, []string{"guides.y"}},
 		{`{}`, img + `,"mirror":"sideways"}`, []string{"elements[0].mirror"}},
-		{`{}`, `{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","mirror":"across","group":" logo"}`, []string{"elements[0].group", "elements[0].mirror"}},
+		{`{}`, `{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","mirror":"across","group":" logo"}`, []string{"elements[0].group"}},
+		{`{}`, `{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","mirror":"backwards"}`, []string{"elements[0].mirror"}},
 		{`{}`, img + `,"name":" logo"}`, []string{"elements[0].name"}},
 		{`{}`, img + `,"name":"two\tcolumns"}`, []string{"elements[0].name"}},
 		{`{}`, img + `,"name":"` + strings.Repeat("é", 101) + `"}`, []string{"elements[0].name"}},
@@ -679,6 +680,66 @@ func TestWorkspaceProperties(t *testing.T) {
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s %s: %v, want %v", tc.guides, tc.element, got, tc.want)
 		}
+	}
+}
+
+// TestPrintMirrorAndRotation checks a template that prints mirrored or
+// turned: where it puts the design, and what it warns of.
+func TestPrintMirrorAndRotation(t *testing.T) {
+	doc := func(print, elements string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list"` + print + `,"elements":[` + elements + `]}`
+	}
+	for _, tc := range []struct {
+		print string
+		want  []string
+	}{
+		{`,"print_mirror":"across","print_rotation":359.5`, nil},
+		{`,"print_mirror":"none"`, []string{"print_mirror"}},
+		{`,"print_mirror":"sideways"`, []string{"print_mirror"}},
+		{`,"print_rotation":360`, []string{"print_rotation"}},
+		{`,"print_rotation":-1`, []string{"print_rotation"}},
+	} {
+		_, err := Parse([]byte(doc(tc.print, "")))
+		if tc.want == nil {
+			if err != nil {
+				t.Errorf("%s: %v", tc.print, err)
+			}
+			continue
+		}
+		if got := problemPaths(t, err); !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.print, got, tc.want)
+		}
+	}
+
+	// The top left corner, mirrored across, is the top right; turned a
+	// quarter turn about the center (20, 10), that goes to (30, 30).
+	tpl, err := Parse([]byte(doc(`,"print_mirror":"across","print_rotation":90`, "")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x, y := tpl.Printed(0, 0); math.Abs(x-30) > 1e-9 || math.Abs(y-30) > 1e-9 {
+		t.Errorf("the top left corner prints at (%g, %g), want (30, 30)", x, y)
+	}
+
+	// Turned 10°, an element in the corner goes off the label and one in
+	// the middle stays on; a mirrored code is warned of, mirrored or not
+	// as the label prints.
+	tpl, err = Parse([]byte(doc(`,"print_rotation":10`, `{"type":"text","x":0,"y":0,"width":8,"height":4,"font_size":8,"content_binding":"A","name":"Corner"},
+		{"type":"text","x":16,"y":8,"width":8,"height":4,"font_size":8,"content_binding":"B"},
+		{"type":"generator","generator_type":"qr","x":14,"y":4,"width":12,"height":12,"mirror":"across"}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"Turned 10° as it prints, “Corner” goes partly off the label and is cut off.",
+		"Barcode 3 (qr) is a mirrored code: it does not scan from the side the label is read from.",
+	}
+	if got := tpl.PrintWarnings(); !reflect.DeepEqual(got, want) {
+		t.Errorf("warnings %q, want %q", got, want)
+	}
+	tpl.PrintRotation = 0
+	if got := tpl.PrintWarnings(); len(got) != 1 {
+		t.Errorf("not turned, warnings %q", got)
 	}
 }
 

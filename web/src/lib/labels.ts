@@ -2,7 +2,7 @@
 // templates that can label them, in order of preference, and how each suits
 // each printer (README §4.4).
 
-import type { Adapt } from './template';
+import type { Adapt, Mirror } from './template';
 
 export interface LabelProblem {
   asset_id?: string;
@@ -19,6 +19,9 @@ export interface LabelTemplateOption {
   dpi: number;
   sizing?: 'adaptive' | 'fixed' | '';
   adapt?: Adapt;
+  /** How its labels print mirrored and turned, for a preview of them as applied. */
+  print_mirror?: Mirror;
+  print_rotation?: number;
   /** One of the assets' categories' templates, listed first. */
   preferred: boolean;
   /** The assets it cannot label, and why. */

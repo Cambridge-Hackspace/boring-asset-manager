@@ -7,6 +7,7 @@
     gridStep,
     handles,
     moveElements,
+    appliedTurn,
     newElement,
     newShape,
     polygonThrough,
@@ -1057,6 +1058,10 @@
         class="pointer-events-none absolute border border-dashed border-amber-500/70"
         style={boxStyle({ x: area.edge, y: area.edge, width: doc.width - 2 * area.edge, height: doc.height - 2 * area.edge })}
       ></div>
+    {/if}
+    <!-- Where the label lies once it is on, for one that prints turned: what is off it is cut off. -->
+    {#if doc.print_rotation}
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0 border-2 border-dashed border-violet-600/70" style="transform: rotate({appliedTurn(doc)}deg)" data-applied-outline></div>
     {/if}
     <!-- The selected code's padding, shaded inside its box, and what was left over beyond it. -->
     {#each editor.selected as i (i)}
