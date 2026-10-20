@@ -65,6 +65,8 @@ export interface TemplateElement {
   group?: string;
   /** Kept from being selected on the canvas; still selectable from the layers. */
   locked?: boolean;
+  /** What its layer is called, when named: a plain string in the template's JSON. */
+  name?: string;
   // shape, and fill for text too (black, or white reversed out of black)
   shape?: ShapeKind;
   /** A rectangle's corners, in the template's units. */
@@ -552,8 +554,14 @@ export function elementsAt(doc: TemplateDoc, x: number, y: number): number[] {
 
 const codeNames: Record<string, string> = { qr: 'QR code', micro_qr: 'Micro QR code', code128: 'Code 128' };
 
-/** An element's name in the layers list: what it is and what it shows. */
+/** An element's name in the layers list: the name given it, or what it is and what it shows. */
 export function layerName(e: TemplateElement): string {
+  if (e.name) return e.name;
+  return kindName(e);
+}
+
+/** What an element is and what it shows, whatever it is named. */
+export function kindName(e: TemplateElement): string {
   switch (e.type) {
     case 'generator': {
       const kind = codeNames[e.generator_type ?? ''] ?? `${e.generator_type} code`;
@@ -789,7 +797,11 @@ export type Alignment = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom
  * or, with distribute, spreads three or more out evenly, the outermost
  * staying put. As the server arranges them (README §4.1).
  */
-export function arrange(doc: TemplateDoc, indices: number[], how: { align?: Alignment; distribute?: 'across' | 'down'; toLabel?: boolean }): TemplateElement[] {
+export function arrange(
+  doc: TemplateDoc,
+  indices: number[],
+  how: { align?: Alignment; distribute?: 'across' | 'down'; spacing?: 'gaps' | 'centers'; toLabel?: boolean },
+): TemplateElement[] {
   const els = doc.elements;
   const boxes = indices.map((i) => bounds(els[i]!));
   const moved = new Map<number, [number, number]>();
@@ -801,13 +813,25 @@ export function arrange(doc: TemplateDoc, indices: number[], how: { align?: Alig
     const order = indices.map((_, k) => k).sort((a, b) => start(boxes[a]!) + size(boxes[a]!) / 2 - (start(boxes[b]!) + size(boxes[b]!) / 2));
     const first = boxes[order[0]!]!;
     const last = boxes[order[order.length - 1]!]!;
-    const total = boxes.reduce((n, b) => n + size(b), 0);
-    const gap = (start(last) + size(last) - start(first) - total) / (order.length - 1);
-    let at = start(first);
-    for (const k of order) {
-      const d = at - start(boxes[k]!);
-      moved.set(indices[k]!, across ? [d, 0] : [0, d]);
-      at += size(boxes[k]!) + gap;
+    if (how.spacing === 'centers') {
+      // Their middles evenly apart, the first and last where they are.
+      const mid = (b: Box) => start(b) + size(b) / 2;
+      const from = mid(first);
+      const step = (mid(last) - from) / (order.length - 1);
+      order.forEach((k, n) => {
+        const d = from + n * step - mid(boxes[k]!);
+        moved.set(indices[k]!, across ? [d, 0] : [0, d]);
+      });
+    } else {
+      // Equal gaps between them, the first and last where they are.
+      const total = boxes.reduce((n, b) => n + size(b), 0);
+      const gap = (start(last) + size(last) - start(first) - total) / (order.length - 1);
+      let at = start(first);
+      for (const k of order) {
+        const d = at - start(boxes[k]!);
+        moved.set(indices[k]!, across ? [d, 0] : [0, d]);
+        at += size(boxes[k]!) + gap;
+      }
     }
   } else if (how.align) {
     if (indices.length < (how.toLabel ? 1 : 2)) return els;

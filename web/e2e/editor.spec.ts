@@ -212,7 +212,7 @@ test('the top element takes a click, Escape puts back a drag, and layers drag', 
   });
   await page.goto(`/templates/${template.id}/edit`);
   const layers = page.getByRole('list', { name: 'Layers' });
-  const order = () => layers.locator('li > button:not([aria-label^="Lock"])');
+  const order = () => layers.locator('li button[title="Double-click to rename"]');
   await expect(order()).toHaveText(['QR code', 'Text: {{asset.name}}']);
 
   // Where they overlap, a click takes the code on top.
@@ -627,4 +627,54 @@ test('turn from outside a corner, resize with the modifiers, select with a box, 
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
   const saved = await api.call('GET', `/templates/${template.id}`);
   expect(saved.template.elements.map((e: { shape: string; width: number }) => `${e.shape} ${e.width}`)[0]).toBe('rectangle 4');
+});
+
+test('layers show thumbnails, hide while editing, rename, and the history goes back', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Layers'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [{ type: 'shape', shape: 'rectangle', x: 4, y: 4, width: 20, height: 20, stroke: 'none', fill: 'black' }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const live = page.getByRole('img', { name: 'Label preview' }).locator('canvas');
+  await expect(live).toBeVisible();
+  const black = (canvas: ReturnType<typeof page.locator>) =>
+    canvas.evaluate((c: HTMLCanvasElement) => {
+      const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i]! < 128) n++;
+      return n;
+    });
+  // The layer's thumbnail shows the black square.
+  const thumb = page.getByRole('list', { name: 'Layers' }).locator('canvas').first();
+  await expect.poll(() => black(thumb)).toBeGreaterThan(200);
+  await expect.poll(() => black(live)).toBeGreaterThan(10000);
+
+  // Hidden, it leaves the label drawn while editing; it still prints.
+  await page.getByRole('button', { name: 'Hide Rectangle' }).click();
+  await expect.poll(() => black(live)).toBe(0);
+  await expect(page.getByText('Hidden elements still print.')).toBeVisible();
+  await page.getByRole('button', { name: 'Hide Rectangle' }).click();
+  await expect.poll(() => black(live)).toBeGreaterThan(10000);
+
+  // Renamed by double-clicking its layer.
+  await page.getByRole('list', { name: 'Layers' }).getByRole('button', { name: 'Rectangle', exact: true }).dblclick();
+  await page.getByLabel('Name of Rectangle').fill('Background');
+  await page.getByLabel('Name of Rectangle').press('Enter');
+  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('button', { name: 'Background', exact: true })).toBeVisible();
+
+  // The history names each change, and goes back to any.
+  await page.getByRole('list', { name: 'Layers' }).getByRole('button', { name: 'Background', exact: true }).click();
+  await page.getByRole('button', { name: 'Turn 90° right' }).click();
+  const history = page.getByRole('list', { name: 'History' });
+  await expect(history.getByRole('button')).toHaveText(['As opened', 'Rename', 'Change Background']);
+  await history.getByRole('button', { name: 'Rename' }).click();
+  await expect(page.locator('#el-0-rotation')).toHaveValue('0');
+  await expect(history.getByRole('button', { name: 'Change Background' })).toHaveClass(/italic/);
+  await axe(page);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements[0]).toMatchObject({ name: 'Background' });
+  expect(saved.template.elements[0].rotation).toBeUndefined();
 });

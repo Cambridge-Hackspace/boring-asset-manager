@@ -26,6 +26,7 @@
   import { Editor, provideEditor, type Tool } from './editor/editor.svelte';
   import Icon from './editor/Icon.svelte';
   import LabelPanel from './editor/LabelPanel.svelte';
+  import HistoryPanel from './editor/HistoryPanel.svelte';
   import LayersPanel from './editor/LayersPanel.svelte';
   import OptionsBar from './editor/OptionsBar.svelte';
   import OverviewPanel from './editor/OverviewPanel.svelte';
@@ -184,17 +185,30 @@
     );
   });
 
-  $effect(() => {
+  // Hidden elements are left out of the label drawn while editing, and
+  // what is said of those drawn is said of them by their own indices.
+  function drawn(): { template: TemplateDoc; shown: number[] } {
     const template = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
+    const shown = template.elements.map((_, i) => i).filter((i) => !editor.hidden.includes(i));
+    if (shown.length < template.elements.length) template.elements = shown.map((i) => template.elements[i]!);
+    return { template, shown };
+  }
+  const own = (shown: number[], problems: ProblemDetail[]) =>
+    problems.map((p) => ({ ...p, path: p.path.replace(/^elements\[(\d+)\]/, (_, k: string) => `elements[${shown[Number(k)] ?? k}]`) }));
+  const ownLayouts = (shown: number[], described: { index: number; code?: unknown }[]) =>
+    Object.fromEntries(described.flatMap((d) => (d.code ? [[shown[d.index] ?? d.index, d.code as CodeLayout]] : [])));
+
+  $effect(() => {
+    const { template, shown } = drawn();
     const data = liveData;
     if (loading || liveState !== 'ready' || !data || !live) return;
     // Frames come in the order they were asked for, so each is shown.
     void live.render(template, data).then((f) => {
       if (!f || liveState !== 'ready') return;
-      previewProblems = f.problems;
+      previewProblems = own(shown, f.problems);
       if (!f.problems.length) {
         frame = f;
-        codeLayouts = Object.fromEntries((f.description?.elements ?? []).flatMap((d) => (d.code ? [[d.index, d.code as CodeLayout]] : [])));
+        codeLayouts = ownLayouts(shown, f.description?.elements ?? []);
       }
     });
   });
@@ -204,7 +218,8 @@
   // earlier one, arriving after it, is dropped.
   let previewRound = 0;
   $effect(() => {
-    const body = { template: JSON.parse(JSON.stringify(doc)) as TemplateDoc, asset_id: previewAsset?.id };
+    const { template, shown } = drawn();
+    const body = { template, asset_id: previewAsset?.id };
     if (loading || drawingLive) return;
     if (!body.template.id) body.template.id = 'preview';
     const mine = ++previewRound;
@@ -223,10 +238,10 @@
         if (previewURL) URL.revokeObjectURL(previewURL);
         previewURL = url;
         previewProblems = [];
-        codeLayouts = Object.fromEntries((described.elements ?? []).flatMap((d) => (d.code ? [[d.index, d.code]] : [])));
+        codeLayouts = ownLayouts(shown, described.elements ?? []);
       } catch (err) {
         if (mine !== previewRound) return;
-        previewProblems = err instanceof ApiError && err.details.length ? err.details : [{ path: '', message: messageOf(err) }];
+        previewProblems = own(shown, err instanceof ApiError && err.details.length ? err.details : [{ path: '', message: messageOf(err) }]);
       } finally {
         if (mine === previewRound) previewStale = false;
       }
@@ -335,7 +350,7 @@
       const moves: Record<string, [number, number]> = { ArrowLeft: [-by, 0], ArrowRight: [by, 0], ArrowUp: [0, -by], ArrowDown: [0, by] };
       const [dx, dy] = moves[event.key] ?? [0, 0];
       event.preventDefault();
-      editor.begin();
+      editor.begin('Move');
       editor.doc.elements = moveElements(doc, editor.selected, editor.elements(), dx, dy, step);
     }
   }
@@ -491,10 +506,13 @@
       <aside hidden={editor.canvasOnly} class="w-full shrink-0 border-t border-zinc-200 md:w-72 md:overflow-y-auto md:border-t-0 md:border-l bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-label="Panels">
           <Dock
             panels={[
+              // Layers above Properties, which grows as something is
+              // selected, so the list does not move under the pointer.
               { id: 'overview', title: 'Overview', content: overview },
-              { id: 'properties', title: 'Properties', content: properties },
               { id: 'layers', title: 'Layers', content: layers },
+              { id: 'properties', title: 'Properties', content: properties },
               { id: 'arrange', title: 'Arrange', content: arrange },
+              { id: 'history', title: 'History', content: history },
               { id: 'label', title: 'Label', content: label },
               { id: 'printer', title: 'Printer', content: printer },
               { id: 'preview', title: 'Preview data', content: preview },
@@ -514,7 +532,10 @@
   <PropertiesPanel {generators} {placeholderList} {problemsFor} {codeLayouts} />
 {/snippet}
 {#snippet layers()}
-  <LayersPanel {problemElements} />
+  <LayersPanel {problemElements} frame={drawingLive ? frame : null} />
+{/snippet}
+{#snippet history()}
+  <HistoryPanel />
 {/snippet}
 {#snippet arrange()}
   <ArrangePanel />

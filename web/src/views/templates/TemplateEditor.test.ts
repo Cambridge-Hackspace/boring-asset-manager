@@ -33,7 +33,7 @@ const canvasElement = (name: RegExp | string) => screen.getAllByRole('button', {
 const layerNames = () =>
   within(screen.getByRole('list', { name: 'Layers' }))
     .getAllByRole('button')
-    .filter((b) => !b.getAttribute('aria-label')?.startsWith('Lock'))
+    .filter((b) => b.title === 'Double-click to rename')
     .map((b) => b.textContent?.trim());
 
 async function saved(sent: { method: string; body: unknown }[]): Promise<TemplateDoc> {
@@ -63,7 +63,7 @@ describe('TemplateEditor', () => {
       'Select and move', 'Text', 'Barcode or QR code', 'Image', 'Rectangle', 'Ellipse', 'Line', 'Polygon',
     ]);
     expect(screen.getByRole('group', { name: 'Tool options' })).toBeTruthy();
-    for (const panel of ['Overview', 'Properties', 'Layers', 'Arrange', 'Label', 'Printer', 'Preview data']) {
+    for (const panel of ['Overview', 'Layers', 'Properties', 'Arrange', 'History', 'Label', 'Printer', 'Preview data']) {
       expect(screen.getByRole('button', { name: panel, expanded: true })).toBeTruthy();
     }
     // jsdom runs no workers: the server draws the label, and the status bar says so.
@@ -187,7 +187,7 @@ describe('TemplateEditor', () => {
     const titles = () => screen.getAllByRole('button', { expanded: true }).concat(screen.getAllByRole('button', { expanded: false })).map((b) => b.id).filter((id) => id.startsWith('panel-'));
     expect(titles()).toContain('panel-label');
     expect(JSON.parse(localStorage.getItem('bam.editor.panels')!)).toEqual({
-      order: ['overview', 'properties', 'layers', 'label', 'arrange', 'printer', 'preview'],
+      order: ['overview', 'layers', 'properties', 'arrange', 'label', 'history', 'printer', 'preview'],
       collapsed: ['arrange'],
     });
     cleanup();
@@ -195,7 +195,7 @@ describe('TemplateEditor', () => {
     await loaded();
     expect(screen.getByRole('button', { name: 'Arrange', expanded: false })).toBeTruthy();
     const order = [...document.querySelectorAll('[id^="panel-"]')].map((b) => b.id);
-    expect(order).toEqual(['panel-overview', 'panel-properties', 'panel-layers', 'panel-label', 'panel-arrange', 'panel-printer', 'panel-preview']);
+    expect(order).toEqual(['panel-overview', 'panel-layers', 'panel-properties', 'panel-arrange', 'panel-label', 'panel-history', 'panel-printer', 'panel-preview']);
   });
 
   it('zooms with the keys and the zoom box, and shows print size as approximate until calibrated', async () => {
@@ -307,6 +307,85 @@ describe('TemplateEditor', () => {
     await fireEvent.keyDown(canvasElement(/^Text 1/), { key: 'ContextMenu' });
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Lock' }));
     expect(canvasElement(/^Text 1/).classList.contains('locked')).toBe(true);
+  });
+
+  it('hides an element while editing, though it still prints, and renames it', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Hide Text: {{asset.name}}' }));
+    expect(screen.getByText('One element is hidden while you edit. Hidden elements still print.')).toBeTruthy();
+    // The label is drawn without it, and it cannot be taken on the label.
+    await vi.waitFor(() => {
+      const last = sent.filter((r) => r.path === '/templates/preview').at(-1)!.body as { template: TemplateDoc };
+      expect(last.template.elements).toHaveLength(0);
+    });
+    expect(canvasElement(/^Text 1/).classList.contains('locked')).toBe(true);
+
+    // Double-click names it; Escape lets a rename go.
+    await fireEvent.dblClick(within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: 'Text: {{asset.name}}' }));
+    const input = screen.getByLabelText('Name of Text: {{asset.name}}') as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: '  Asset   name ' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    expect(layerNames()).toEqual(['Asset name']);
+    await fireEvent.keyDown(within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: 'Asset name' }), { key: 'F2' });
+    await fireEvent.input(screen.getByLabelText('Name of Asset name'), { target: { value: 'Other' } });
+    await fireEvent.keyDown(screen.getByLabelText('Name of Asset name'), { key: 'Escape' });
+    expect(layerNames()).toEqual(['Asset name']);
+
+    const body = await saved(sent);
+    expect(body.elements).toHaveLength(1);
+    expect(body.elements[0]).toMatchObject({ name: 'Asset name' });
+  });
+
+  it('shows groups as folders, opened and closed, renamed and hidden together', async () => {
+    const grouped = {
+      ...template,
+      layering: 'list' as const,
+      elements: [
+        { type: 'text' as const, x: 1, y: 1, width: 10, height: 5, content_binding: 'A', font_size: 8, group: 'group-1' },
+        { type: 'text' as const, x: 1, y: 10, width: 10, height: 5, content_binding: 'B', font_size: 8 },
+        { type: 'text' as const, x: 1, y: 20, width: 10, height: 5, content_binding: 'C', font_size: 8, group: 'group-1' },
+      ],
+    };
+    const { sent } = api({ 'GET /templates/ql90': () => ({ template: grouped }), 'PUT /templates/ql90': () => ({ template: grouped }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    // The group stands where its top member is, its members under it.
+    expect(layerNames()).toEqual(['group-1', 'Text: C', 'Text: A', 'Text: B']);
+    await fireEvent.click(screen.getByRole('button', { name: 'Close group group-1' }));
+    expect(layerNames()).toEqual(['group-1', 'Text: B']);
+    await fireEvent.click(screen.getByRole('button', { name: 'Open group group-1' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'group-1' }));
+    expect(screen.getByText('Group group-1')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Hide group group-1' }));
+    expect(screen.getByText('2 elements are hidden while you edit. Hidden elements still print.')).toBeTruthy();
+    await fireEvent.dblClick(screen.getByRole('button', { name: 'group-1' }));
+    await fireEvent.input(screen.getByLabelText('Name of group group-1'), { target: { value: 'Header' } });
+    await fireEvent.keyDown(screen.getByLabelText('Name of group group-1'), { key: 'Enter' });
+    expect((await saved(sent)).elements.map((e) => e.group)).toEqual(['Header', undefined, 'Header']);
+  });
+
+  it('lists every change by name, and goes back or on to any of them', async () => {
+    api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }), { detail: 0 });
+    await fireEvent.click(screen.getByRole('button', { name: 'Turn 90° right' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Send to back' }));
+    const history = () => within(screen.getByRole('list', { name: 'History' })).getAllByRole('button').map((b) => b.textContent?.trim());
+    expect(history()).toEqual(['As opened', 'Add Rectangle', 'Change Rectangle', 'Send to back']);
+    expect(screen.getByRole('button', { name: 'Send to back', current: 'step' })).toBeTruthy();
+    // Back to just after it was added: one element on top, not turned.
+    await fireEvent.click(within(screen.getByRole('list', { name: 'History' })).getByRole('button', { name: 'Add Rectangle' }));
+    expect(layerNames()).toEqual(['Rectangle', 'Text: {{asset.name}}']);
+    await fireEvent.click(within(screen.getByRole('list', { name: 'Layers' })).getByRole('button', { name: 'Rectangle' }));
+    expect(value('#el-1-rotation')).toBe('0');
+    // And on again.
+    await fireEvent.click(within(screen.getByRole('list', { name: 'History' })).getByRole('button', { name: 'Send to back' }));
+    expect(layerNames()).toEqual(['Text: {{asset.name}}', 'Rectangle']);
+    await fireEvent.click(within(screen.getByRole('list', { name: 'History' })).getByRole('button', { name: 'As opened' }));
+    expect(layerNames()).toEqual(['Text: {{asset.name}}']);
   });
 
   const printers = () => ({

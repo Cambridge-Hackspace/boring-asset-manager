@@ -73,6 +73,7 @@ func TestMCPLabelTools(t *testing.T) {
 		Labels []struct {
 			Elements []struct {
 				Value string
+				Name  string
 			}
 		}
 		Fit   map[string]any
@@ -102,10 +103,18 @@ func TestMCPLabelTools(t *testing.T) {
 
 	// Changing an element, and seeing the change.
 	var saved map[string]any
-	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 2, "set": map[string]any{"content_binding": "Fragile"}}}}), &saved)
+	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "change_elements": []any{map[string]any{"index": 2, "set": map[string]any{"content_binding": "Fragile", "name": "Warning"}}}}), &saved)
 	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &preview)
-	if got := preview.Labels[0].Elements[2].Value; got != "Fragile" {
-		t.Errorf("after the change: %q", got)
+	if got := preview.Labels[0].Elements[2]; got.Value != "Fragile" || got.Name != "Warning" {
+		t.Errorf("after the change: %+v", got)
+	}
+	// The name is as written in the template, read raw.
+	var named struct {
+		Template struct{ Elements []map[string]any }
+	}
+	structured(t, callTool(t, cs, "get_template", map[string]any{"id": tag}), &named)
+	if named.Template.Elements[2]["name"] != "Warning" {
+		t.Errorf("get_template: %+v", named.Template.Elements[2])
 	}
 	structured(t, callTool(t, cs, "save_template", map[string]any{"id": tag, "remove_elements": []int{2}}), &saved)
 	structured(t, callTool(t, cs, "preview_template", map[string]any{"template_id": tag}), &preview)

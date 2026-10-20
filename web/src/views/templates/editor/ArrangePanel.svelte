@@ -3,7 +3,8 @@
   import { useEditor } from './editor.svelte';
   import Icon, { type IconName } from './Icon.svelte';
 
-  // Stacking, lining up and spreading out what is selected.
+  // Stacking, lining up and spreading out what is selected, as Krita's
+  // arrange docker: one element lines up with the label.
   const editor = useEditor();
   const none = $derived(!editor.selected.length);
   const n = $derived(editor.selected.length);
@@ -41,7 +42,9 @@
     <label class="flex items-center gap-1 text-xs"><input type="checkbox" bind:checked={toLabel} /> To the label, not each other</label>
   </div>
   <div class="grid grid-cols-2 gap-1" role="group" aria-label="Spread out evenly">
-    <button type="button" class="btn-sm" disabled={n < 3} onclick={() => editor.arrange({ distribute: 'across' }, false)}>Spread across</button>
-    <button type="button" class="btn-sm" disabled={n < 3} onclick={() => editor.arrange({ distribute: 'down' }, false)}>Spread down</button>
+    <button type="button" class="btn-sm" disabled={n < 3} title="Equal gaps between them, across" onclick={() => editor.arrange({ distribute: 'across' }, false)}>Equal gaps across</button>
+    <button type="button" class="btn-sm" disabled={n < 3} title="Equal gaps between them, down" onclick={() => editor.arrange({ distribute: 'down' }, false)}>Equal gaps down</button>
+    <button type="button" class="btn-sm" disabled={n < 3} title="Their centers evenly apart, across" onclick={() => editor.arrange({ distribute: 'across', spacing: 'centers' }, false)}>Centers across</button>
+    <button type="button" class="btn-sm" disabled={n < 3} title="Their centers evenly apart, down" onclick={() => editor.arrange({ distribute: 'down', spacing: 'centers' }, false)}>Centers down</button>
   </div>
 </div>

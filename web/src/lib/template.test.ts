@@ -8,6 +8,7 @@ import {
   elementsAt,
   inListOrder,
   layerName,
+  kindName,
   marginOf,
   hairline,
   newShape,
@@ -437,6 +438,15 @@ describe('the workspace', () => {
     expect(at(arrange(three(), [0, 1, 2], { align: 'right', toLabel: true }))).toEqual([[90, 5], [80, 20], [95, 30]]);
     expect(at(arrange(three(), [0, 1, 2], { align: 'middle', toLabel: true }))).toEqual([[10, 20], [40, 20], [80, 22.5]]);
     expect(at(arrange(three(), [0, 1, 2], { distribute: 'down' }))).toEqual([[10, 5], [40, 17.5], [80, 30]]);
+    // With their centers evenly apart: 10, 21.25 and 32.5 down.
+    expect(at(arrange(three(), [0, 1, 2], { distribute: 'down', spacing: 'centers' }))).toEqual([[10, 5], [40, 16.25], [80, 30]]);
+  });
+
+  it('calls a layer by its name, or by what it is', () => {
+    const e: TemplateElement = { type: 'text', x: 0, y: 0, width: 1, height: 1, content_binding: '{{asset.name}}' };
+    expect(layerName(e)).toBe('Text: {{asset.name}}');
+    expect(layerName({ ...e, name: 'Title' })).toBe('Title');
+    expect(kindName({ ...e, name: 'Title' })).toBe('Text: {{asset.name}}');
   });
 
   it('flips across and down, mirroring what can be and turning the rest', () => {

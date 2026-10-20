@@ -11,6 +11,7 @@ import {
   clip,
   flipElements,
   gridStep,
+  layerName,
   moveLayer,
   newGroupName,
   restack,
@@ -182,16 +183,27 @@ export class Editor {
     return this.selected.length === 1 ? (this.doc.elements[this.selected[0]!] ?? null) : null;
   }
 
-  /** Marks the start of one undoable change. */
-  begin() {
-    this.history.record($state.snapshot(this.doc) as TemplateDoc);
+  /** The changes made, by name, and those undone, for the History panel. */
+  changes = $state<{ done: string[]; undone: string[] }>({ done: [], undone: [] });
+
+  /**
+   * Elements hidden while editing, by index: drawn on the canvas without
+   * them, though they still print. Kept with their elements as they are
+   * reordered or removed, and let go of by undo, redo and loading.
+   */
+  hidden = $state<number[]>([]);
+
+  /** Marks the start of one undoable change, named for the history. */
+  begin(label = 'Change') {
+    this.history.record($state.snapshot(this.doc) as TemplateDoc, label);
     this.sync();
   }
 
-  /** Starts afresh with a template: nothing to undo, nothing selected. */
+  /** Starts afresh with a template: nothing to undo, nothing selected or hidden. */
   load(doc: TemplateDoc) {
     this.doc = doc;
     this.selected = [];
+    this.hidden = [];
     this.history.clear();
     this.sync();
   }
@@ -208,6 +220,46 @@ export class Editor {
     this.sync();
   }
 
+  /** Goes back or on to the state after the first done changes, as the History panel's entries do. */
+  jumpTo(done: number) {
+    const state = this.history.jump($state.snapshot(this.doc) as TemplateDoc, done);
+    if (state) this.replace(state);
+    this.sync();
+  }
+
+  /** Hides an element while editing, or shows it again. */
+  toggleHidden(index: number) {
+    this.hidden = this.hidden.includes(index) ? this.hidden.filter((i) => i !== index) : [...this.hidden, index];
+  }
+
+  /** Names an element, as its layer shows it; blank takes the name away. */
+  rename(index: number, name: string) {
+    const e = this.doc.elements[index];
+    const trimmed = name.trim().replace(/\s+/g, ' ').slice(0, 100);
+    if (!e || trimmed === (e.name ?? '')) return;
+    this.begin('Rename');
+    if (trimmed) {
+      this.doc.elements[index] = { ...e, name: trimmed };
+    } else {
+      const { name: _n, ...rest } = e;
+      this.doc.elements[index] = rest;
+    }
+  }
+
+  /** Renames a group: every element in it. */
+  renameGroup(from: string, to: string) {
+    const name = to.trim().slice(0, 64);
+    if (!name || name === from) return;
+    this.begin('Rename the group');
+    this.doc.elements = this.doc.elements.map((e) => (e.group === from ? { ...e, group: name } : e));
+  }
+
+  /** Hidden elements follow theirs from before a reordering to after it. */
+  private carryHidden(before: TemplateElement[], after: TemplateElement[]) {
+    const hidden = new Set(this.hidden.map((i) => before[i]));
+    this.hidden = after.flatMap((e, k) => (hidden.has(e) ? [k] : []));
+  }
+
   /** Cancels a change begun but not finished, such as a drag stopped with Escape. */
   cancel() {
     const prev = this.history.discard();
@@ -216,19 +268,21 @@ export class Editor {
   }
 
   /** A change from outside the history, such as a draft restored, undoable as one step. */
-  apply(doc: TemplateDoc) {
-    this.begin();
-    this.replace(doc);
+  apply(doc: TemplateDoc, label = 'Change the label') {
+    this.begin(label);
+    this.replace(doc, true);
   }
 
-  private replace(doc: TemplateDoc) {
+  private replace(doc: TemplateDoc, keepHidden = false) {
     this.doc = doc;
     this.selected = this.selected.filter((i) => i < doc.elements.length);
+    this.hidden = keepHidden ? this.hidden.filter((i) => i < doc.elements.length) : [];
   }
 
   private sync() {
     this.canUndo = this.history.canUndo;
     this.canRedo = this.history.canRedo;
+    this.changes = this.history.changes;
   }
 
   /** The elements, snapshotted, for the pure geometry in lib/template. */
@@ -237,15 +291,15 @@ export class Editor {
   }
 
   /** Replaces one element, as one undoable step. */
-  update(index: number, e: TemplateElement) {
-    this.begin();
+  update(index: number, e: TemplateElement, label = `Change ${layerName(this.doc.elements[index] ?? e)}`) {
+    this.begin(label);
     this.doc.elements[index] = e;
   }
 
   /** Adds elements on top, selected. */
   add(...elements: TemplateElement[]) {
     if (!elements.length) return;
-    this.begin();
+    this.begin(elements.length === 1 ? `Add ${layerName(elements[0]!)}` : `Add ${elements.length} elements`);
     const first = this.doc.elements.length;
     this.doc.elements.push(...elements);
     this.selected = elements.map((_, k) => first + k);
@@ -253,7 +307,9 @@ export class Editor {
 
   remove() {
     if (!this.selected.length) return;
-    this.begin();
+    this.begin(this.selected.length === 1 ? `Delete ${layerName(this.doc.elements[this.selected[0]!]!)}` : `Delete ${this.selected.length} elements`);
+    const kept = this.doc.elements.flatMap((_, i) => (this.selected.includes(i) ? [] : [i]));
+    this.hidden = kept.flatMap((i, k) => (this.hidden.includes(i) ? [k] : []));
     this.doc.elements = this.doc.elements.filter((_, i) => !this.selected.includes(i));
     this.selected = [];
   }
@@ -268,48 +324,52 @@ export class Editor {
 
   restack(how: Restack) {
     if (!this.selected.length) return;
-    const next = restack(this.elements(), this.selected, how);
+    const before = this.elements();
+    const next = restack(before, this.selected, how);
     if (JSON.stringify(next.elements) === JSON.stringify(this.doc.elements)) return;
-    this.begin();
+    this.begin({ front: 'Bring to front', forward: 'Bring forward', backward: 'Send backward', back: 'Send to back' }[how]);
+    this.carryHidden(before, next.elements);
     this.doc.elements = next.elements;
     this.selected = next.selected;
   }
 
   /** Moves the element at from to to, in the drawing order. */
   moveLayer(from: number, to: number) {
-    this.begin();
-    const next = moveLayer(this.elements(), this.selected, from, to);
+    this.begin('Move a layer');
+    const before = this.elements();
+    const next = moveLayer(before, this.selected, from, to);
+    this.carryHidden(before, next.elements);
     this.doc.elements = next.elements;
     this.selected = next.selected;
   }
 
   turn(delta: number) {
     if (!this.selected.length) return;
-    this.begin();
+    this.begin('Turn');
     this.doc.elements = rotateElements(this.doc, this.selected, this.elements(), delta);
   }
 
   flip(across: boolean) {
     if (!this.selected.length) return;
-    this.begin();
+    this.begin(across ? 'Flip across' : 'Flip down');
     this.doc.elements = flipElements(this.doc, this.selected, across);
   }
 
-  arrange(how: { align?: Alignment; distribute?: 'across' | 'down' }, toLabel: boolean) {
+  arrange(how: { align?: Alignment; distribute?: 'across' | 'down'; spacing?: 'gaps' | 'centers' }, toLabel: boolean) {
     if (!this.selected.length) return;
-    this.begin();
+    this.begin(how.align ? 'Line up' : 'Spread out');
     this.doc.elements = arrange(this.doc, this.selected, { ...how, toLabel: toLabel || this.selected.length === 1 });
   }
 
   group() {
     if (this.selected.length < 2) return;
-    this.begin();
+    this.begin('Group');
     const name = newGroupName(this.doc.elements);
     this.doc.elements = this.doc.elements.map((e, i) => (this.selected.includes(i) ? { ...e, group: name } : e));
   }
 
   ungroup() {
-    this.begin();
+    this.begin('Ungroup');
     this.doc.elements = this.doc.elements.map((e, i) => {
       if (!this.selected.includes(i) || !e.group) return e;
       const { group: _g, ...rest } = e;
@@ -320,7 +380,7 @@ export class Editor {
   toggleLock(index: number) {
     const e = this.doc.elements[index];
     if (!e) return;
-    this.begin();
+    this.begin(e.locked ? 'Unlock' : 'Lock');
     if (e.locked) {
       const { locked: _l, ...rest } = e;
       this.doc.elements[index] = rest;
@@ -340,7 +400,7 @@ export class Editor {
   lockSelected() {
     if (!this.selected.length) return;
     const all = this.selected.every((i) => this.doc.elements[i]?.locked);
-    this.begin();
+    this.begin(all ? 'Unlock' : 'Lock');
     this.doc.elements = this.doc.elements.map((e, i) => {
       if (!this.selected.includes(i)) return e;
       if (all) {

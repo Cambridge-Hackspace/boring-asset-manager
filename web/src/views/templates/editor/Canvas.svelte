@@ -385,7 +385,7 @@
     if (!g.moved) {
       if (Math.abs(p.clientX - g.x0) + Math.abs(p.clientY - g.y0) < 3) return;
       g.moved = true;
-      editor.begin();
+      editor.begin({ move: 'Move', resize: 'Resize', scale: 'Resize', rotate: 'Turn' }[g.kind]);
     }
     const ctrl = p.ctrlKey || p.metaKey;
     // Shift frees it from the grid, as from any snapping.
@@ -703,12 +703,12 @@
         class="element absolute"
         class:problem={problemElements.has(i)}
         class:warned={warned.has(i)}
-        class:locked={e.locked}
+        class:locked={e.locked || editor.hidden.includes(i)}
         class:passive={editor.tool !== 'select'}
         style={hitStyle(e)}
-        aria-label={describeElement(e, i) + (e.locked ? ', locked' : '')}
+        aria-label={describeElement(e, i) + (e.locked ? ', locked' : '') + (editor.hidden.includes(i) ? ', hidden' : '')}
         aria-pressed={editor.selected.includes(i)}
-        tabindex={e.locked ? -1 : 0}
+        tabindex={e.locked || editor.hidden.includes(i) ? -1 : 0}
         onpointerdown={(ev) => downOnElement(ev, i)}
         onkeydown={(ev) => menuKey(ev, i)}
         onfocus={() => {

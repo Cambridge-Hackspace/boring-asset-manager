@@ -28,6 +28,8 @@
     flipAcross: 'M10 2v16M8 5L3 15h5zM12 5l5 10h-5z',
     flipDown: 'M2 10h16M5 8L15 3v5zM5 12l10 5v-5z',
     group: 'M3 3h6v6H3zM11 11h6v6h-6zM9 6h4v5M11 14H6V9',
+    eye: 'M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10zM10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+    eyeOff: 'M2 10s3-5.5 8-5.5c1.6 0 3 .6 4.2 1.4M18 10s-3 5.5-8 5.5c-1.6 0-3-.6-4.2-1.4M3 3l14 14',
   } as const;
   export type IconName = keyof typeof paths;
 </script>

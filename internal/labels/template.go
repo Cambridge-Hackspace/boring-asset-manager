@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
@@ -61,6 +63,7 @@ const (
 const (
 	MaxGuides      = 50
 	maxGroupLength = 64
+	maxNameLength  = 100
 )
 
 // Guides are lines in the editor at places across (X) and down (Y).
@@ -231,6 +234,10 @@ type Element struct {
 	// the canvas by accident. Neither changes what prints.
 	Group  string `json:"group,omitempty"`
 	Locked bool   `json:"locked,omitempty"`
+	// Name is what the editor's layers call it, as written: a plain string
+	// in the template's JSON, so it reads raw, and a template rebuilt from
+	// that JSON keeps it. It never prints.
+	Name string `json:"name,omitempty"`
 
 	// static_image
 	ImageID string `json:"image_id,omitempty"`
@@ -538,6 +545,9 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	}
 	if len(e.Group) > maxGroupLength || strings.TrimSpace(e.Group) != e.Group {
 		v.add(at("group"), fmt.Sprintf("must be at most %d characters, without spaces at either end", maxGroupLength))
+	}
+	if utf8.RuneCountInString(e.Name) > maxNameLength || strings.TrimSpace(e.Name) != e.Name || strings.ContainsFunc(e.Name, unicode.IsControl) {
+		v.add(at("name"), fmt.Sprintf("must be at most %d characters on one line, without spaces at either end", maxNameLength))
 	}
 	shapeProps := map[string]bool{
 		"shape":         e.Shape != "",
