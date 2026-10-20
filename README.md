@@ -47,7 +47,7 @@ The web interface is a Svelte 5 single-page application written in TypeScript, b
 
 The editor never reimplements layout in the browser. The canvas shows the label as the server's own renderer draws it, compiled to WebAssembly (`cmd/bamlive`, `internal/live`) and run in a Web Worker, so it redraws exactly as it will print at every frame of a drag, a turn or a keystroke: 1-bit, images dithered, dot for dot as the server draws it (the web interface's tests compare every golden label's dots with the server's). It is loaded only by the editor, about 0.7 MB with Brotli; one label is drawn at a time, and of what is asked meanwhile only the newest is drawn next. It draws with the data `POST /api/v1/templates/preview-data` (`templates.manage`) gives: an asset's (`asset_id`), or the sample data, whose fields it fills with placeholders as the server's preview does. Until it has loaded, or where it cannot, the canvas shows the label as the server renders it, an SVG from `POST /api/v1/templates/preview`, requested at most a few times a second while the user works, and says so. Paths are filled in tiles of at most 512 dots, where the rasterizer adds up coverage in integers, so a label is the same dot for dot on every platform the server or browser runs on. The preview also answers as PNG (`"format": "png"`, 1-bit with `"mono": true`), and as JSON (`"format": "json"`): the label's size, units and DPI and each element's box, with its `rotation` and `bounds` once turned, `value`, the text or code it prints for the asset, and for a code, `code`: its module and its margins as drawn, in the template's units and in dots, and the sides narrower than its standard quiet zone (`narrow`), each also said in `warnings`; assistants read it (§6.6). Over it sits an interactive layer of element outlines. Text measurement, barcode module snapping and quiet zones therefore always match what prints.
 
-* **Editing:** select, drag and resize elements on a grid in the template's units, with keyboard nudging, multi-select, a layers list setting what is drawn over what, and undo/redo; zoom and pan, rulers and guides, snapping to other elements and the guides, lining up and spreading out, groups, flipping, locking, the clipboard, selecting with a box, and a panel of every shortcut. A side panel edits the selected element's properties by type: binding, font, size, weight and alignment for text; symbology and error correction for barcodes; the image for images. Bindings are offered from the field corpus and asset placeholders.
+* **Editing:** the editor is laid out as Krita is (#54): a toolbox down the left (select, text, code, image, rectangle, ellipse, line, polygon, and SVG import), the tool's options across the top (for the selection, its position, size and angle in numbers), the label in the middle, panels down the right (Properties, Layers, Arrange, Label, Printer, Preview data; each collapses and moves, remembered in the browser), and a status bar with the pointer's place and what the modifiers do. Tools that add something draw it where it is dragged or clicked, or, chosen from the keyboard, add it in the middle of the label. Handles are drawn the same size at every zoom. The shortcuts are few and standard: Ctrl+C and Ctrl+V copy and paste (SVG pasted is imported), Ctrl+A and Ctrl+Shift+A select all and none, Ctrl+Z and Ctrl+Shift+Z undo and redo, Escape cancels what is in progress (a drag put back as it was) or deselects, the arrow keys move the selection (Shift ten grid steps, Alt a tenth of one), and Tab, with nothing focused, hides everything but the label, keeping it where it is on the screen. Bindings are offered from the field corpus and asset placeholders. On a phone, the parts stack: tools, the label, then the panels.
 * **Canvas:** units, size and DPI can be set directly or taken from a printer. Choosing a printer applies its loaded media's size and its DPI, and the fit check runs as the user edits.
 * **Preview:** placeholder data or a chosen asset. Exports and test prints come straight from the editor.
 * **Saving:** templates save through the existing API. Unsaved changes are kept in the browser in case the tab closes.
@@ -1148,31 +1148,6 @@ An MCP server that does everything the API does (#33, §6.6).
 
 #### Sub-Phase 8.12: Prompts, Confirmations and Help
 * [x] Prompts for the common tasks, confirmations before what cannot be undone, and the Assistants help topic (#45).
-
-### Phase 9: Drawing Labels
-
-Label templates drawn freely, as in a drawing program (#46).
-
-#### Sub-Phase 9.1: Drawing Order
-* [x] Elements drawn in the order listed, stored templates put in the order they were drawn (migration `033`), a layers list, stacking buttons and keys, and Alt+click for what is beneath, in the editor and over MCP (#47).
-
-#### Sub-Phase 9.2: Rotation
-* [x] Any element turned to any angle: codes on whole dots at quarter turns and as polygons otherwise, turned bounds wherever boxes are measured, a turning handle snapping to 45° (switchable, Alt to skip), an angle field, quarter-turn buttons, `[` and `]`, several turned together, and rotation in the JSON preview (#48).
-
-#### Sub-Phase 9.3: Code Margins
-* [x] Codes' margins side by side, in modules or the template's units, codes aligned in their boxes, the margin shaded on the canvas with a handle on each side (a slider from the keyboard), and narrow margins warned of, never refused (#53).
-
-#### Sub-Phase 9.4: Shapes
-* [x] Rectangles with square or rounded corners, ellipses, lines and polygons, stroked and filled in black or white, white text, hairlines widened to a dot, drawn on the canvas by dragging or point by point, or added from the keyboard, with a polygon's points dragged, moved, added and removed (#49).
-
-#### Sub-Phase 9.5: Portrait and Landscape
-* [x] Templates turned a quarter turn with everything on them, by a Portrait and Landscape switch, Turn left and Turn right, or over MCP; a label size taken from a printer either way up; `feed` choosing which way labels that fit either way go through the printer, for a template or one print; and adaptive templates that also take labels turned (#50).
-
-#### Sub-Phase 9.6: Imported Artwork
-* [x] SVG artwork imported as path shapes, black or white, with the even-odd rule, its groups, transforms, viewBox and styles followed and what is not read listed, from the editor's Import SVG, by dropping a file on the label, or over MCP (#51).
-
-#### Sub-Phase 9.7: The Drawing Workspace
-* [x] Zoom and pan, rulers and guides saved with the template, snapping to other elements and the guides, lining up and spreading out (also over MCP), groups moved, scaled and turned as one, flipping, locking, copy, cut, paste and duplicate between templates and from SVG, selecting with a box, a panel of every shortcut, and the printer's limits shown or not (#52).
 
 ### Upcoming Features
 

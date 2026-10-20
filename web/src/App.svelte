@@ -25,6 +25,7 @@
   });
 
   const allowed = $derived(!match?.route.permissions || session.canAny(...match.route.permissions));
+  const workspace = $derived(allowed && !!match?.route.workspace);
   // Signed out, a page is open when the public role allows it (README §3.3).
   const openToPublic = $derived(!!match?.route.public && allowed);
 
@@ -51,7 +52,7 @@
 {:else if router.path === '/sign-in'}
   <SignIn />
 {:else if session.user || openToPublic}
-  <Shell>
+  <Shell {workspace}>
     {#if !match}
       <NotFound />
     {:else if !allowed}
@@ -64,4 +65,4 @@
   </Shell>
 {/if}
 
-<Footer />
+{#if !workspace}<Footer />{/if}
