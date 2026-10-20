@@ -214,6 +214,7 @@
     editor.drawnSizes = sizes;
   }
 
+  let liveRound = 0;
   $effect(() => {
     const template = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
     // Hidden elements, and text being typed, are left out of the dots; the
@@ -222,15 +223,33 @@
     const data = liveData;
     if (loading || liveState !== 'ready' || !data || !live) return;
     const all = template.elements.map((_, i) => i);
+    const round = ++liveRound;
+    const show = (f: Frame, shown: number[]) => {
+      frame = f;
+      codeLayouts = ownLayouts(shown, f.description?.elements ?? []);
+      noteSizes(shown, (f.description?.elements ?? []) as { index: number; drawn_font_size?: number }[]);
+    };
     // Frames come in the order they were asked for, so each is shown.
     void live.render(template, data, hidden).then((f) => {
       if (!f || liveState !== 'ready') return;
       previewProblems = f.problems;
       if (!f.problems.length) {
-        frame = f;
-        codeLayouts = ownLayouts(all, f.description?.elements ?? []);
-        noteSizes(all, (f.description?.elements ?? []) as { index: number; drawn_font_size?: number }[]);
+        show(f, all);
+        return;
       }
+      // What cannot be drawn is drawn without the elements at fault (they
+      // are outlined as problems), not left as it was last drawn: a label
+      // that has stopped following its elements is worse than one without
+      // them.
+      const faulty = new Set(f.problems.map((p) => elementIndex(p.path)).filter((i): i is number => i !== null));
+      // Asked again only while nothing newer is: a newer request waiting would be dropped for it.
+      if (!faulty.size || round !== liveRound) return;
+      const shown = all.filter((i) => !faulty.has(i));
+      const rest = { ...template, elements: shown.map((i) => template.elements[i]!) };
+      const restHidden = hidden.flatMap((i) => (shown.includes(i) ? [shown.indexOf(i)] : []));
+      void live?.render(rest, data, restHidden).then((g) => {
+        if (g && !g.problems.length && liveState === 'ready' && round === liveRound) show(g, shown);
+      });
     });
   });
 

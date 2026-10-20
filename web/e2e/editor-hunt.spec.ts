@@ -339,6 +339,20 @@ test.describe('at a device pixel ratio of 2', () => {
 });
 
 test.describe('pointer and keyboard', () => {
+  test('21: with a problem elsewhere on the label, text moved is still drawn where it went', async ({ signedIn: page }) => {
+    await withText(page);
+    const label = await box(labelImage(page));
+    // A rectangle with neither stroke nor fill: a problem, outlined; it draws nothing.
+    await tool(page, 'Rectangle').click();
+    await drag(page, [label.x + label.width * 0.7, label.y + label.height * 0.7], [label.x + label.width * 0.9, label.y + label.height * 0.9]);
+    await panels(page).getByRole('radiogroup', { name: 'Stroke' }).locator('label[title="None"]').click();
+    await expect(element(page, 1)).toHaveClass(/problem/);
+    const before = (await inkBox(page)).box!;
+    const e = await box(element(page, 0));
+    await drag(page, middle(e), [middle(e)[0] + 150, middle(e)[1] + 60]);
+    await expect.poll(async () => (await inkBox(page)).box?.x ?? 0).toBeGreaterThan(before.x + 100);
+  });
+
   test('25: a drag let go outside the window is over', async ({ signedIn: page }) => {
     await withText(page);
     const e = await box(element(page));
