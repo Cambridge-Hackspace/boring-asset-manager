@@ -1,6 +1,7 @@
 package labels
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"reflect"
@@ -640,9 +641,22 @@ func TestWorkspaceProperties(t *testing.T) {
 		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","guides":` + guides + `,"elements":[` + element + `]}`
 	}
 	img := `{"type":"static_image","x":0,"y":0,"width":10,"height":10,"image_id":"7c9e6679-7425-40de-944b-e07fc1f90ae7"`
-	tpl, err := Parse([]byte(doc(`{"x":[5,20],"y":[10]}`, img+`,"mirror":"across","group":"logo","locked":true}`)))
+	tpl, err := Parse([]byte(doc(`{"x":[5,20],"y":[10]}`, img+`,"mirror":"across","group":"logo","locked":true,"name":"Hackspace logo"}`)))
 	if err != nil {
 		t.Fatal(err)
+	}
+	// A name is a plain string in the JSON, read raw, and a template
+	// rebuilt from that JSON keeps it.
+	raw, err := json.Marshal(tpl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"name":"Hackspace logo"`) {
+		t.Errorf("the name is not as written in %s", raw)
+	}
+	again, err := Parse(raw)
+	if err != nil || again.Elements[0].Name != "Hackspace logo" {
+		t.Errorf("rebuilt from its JSON: %v, %+v", err, again)
 	}
 	if right := tpl.Turned(true); !reflect.DeepEqual(right.Guides, &Guides{X: []float64{10}, Y: []float64{5, 20}}) {
 		t.Errorf("turned guides: %+v", right.Guides)
@@ -655,6 +669,9 @@ func TestWorkspaceProperties(t *testing.T) {
 		{`{"y":[` + strings.TrimSuffix(strings.Repeat("1,", MaxGuides+1), ",") + `]}`, img + `}`, []string{"guides.y"}},
 		{`{}`, img + `,"mirror":"sideways"}`, []string{"elements[0].mirror"}},
 		{`{}`, `{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","mirror":"across","group":" logo"}`, []string{"elements[0].group", "elements[0].mirror"}},
+		{`{}`, img + `,"name":" logo"}`, []string{"elements[0].name"}},
+		{`{}`, img + `,"name":"two\tcolumns"}`, []string{"elements[0].name"}},
+		{`{}`, img + `,"name":"` + strings.Repeat("é", 101) + `"}`, []string{"elements[0].name"}},
 	} {
 		_, err := Parse([]byte(doc(tc.guides, tc.element)))
 		got := problemPaths(t, err)
@@ -662,6 +679,17 @@ func TestWorkspaceProperties(t *testing.T) {
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s %s: %v, want %v", tc.guides, tc.element, got, tc.want)
 		}
+	}
+}
+
+// TestElementNameLength takes a name of 100 characters, counted as
+// characters, not bytes.
+func TestElementNameLength(t *testing.T) {
+	name := strings.Repeat("é", 100)
+	tpl, err := Parse([]byte(`{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[` +
+		`{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","name":"` + name + `"}]}`))
+	if err != nil || tpl.Elements[0].Name != name {
+		t.Errorf("a 100-character name: %v", err)
 	}
 }
 
