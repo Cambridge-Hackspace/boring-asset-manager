@@ -763,11 +763,11 @@ describe('TemplateEditor', () => {
     await loaded();
     await fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }), { detail: 0 });
     expect(screen.getByText('Shape 2 (rectangle)')).toBeTruthy();
-    await fireEvent.change(document.querySelector('#el-1-fill')!, { target: { value: 'black' } });
+    await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Fill' })).getByRole('radio', { name: 'Black' }));
     await fireEvent.change(document.querySelector('#el-1-radius')!, { target: { value: '2' } });
     await fireEvent.change(document.querySelector('#el-1-stroke-width')!, { target: { value: '0.05' } });
     expect(await screen.findByText(/thinner than one printer dot at 300 DPI/)).toBeTruthy();
-    await fireEvent.change(document.querySelector('#el-1-stroke')!, { target: { value: 'none' } });
+    await fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Stroke' })).getByRole('radio', { name: 'None' }));
     // A mouse click takes the tool in hand, to draw on the label; Escape puts it down.
     const ellipse = screen.getByRole('button', { name: 'Ellipse' });
     await fireEvent.click(ellipse, { detail: 1 });

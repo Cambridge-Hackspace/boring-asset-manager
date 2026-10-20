@@ -464,6 +464,17 @@ test.describe('pointer and keyboard', () => {
     await expect.poll(() => ink(page)).toBeGreaterThan(50);
   });
 
+  test('37: color is chosen from swatches', async ({ signedIn: page }) => {
+    await withText(page);
+    const colors = panels(page).getByRole('radiogroup', { name: 'Color' });
+    await expect(colors).toBeVisible();
+    await colors.locator('label[title="White"]').click();
+    await expect(colors.getByRole('radio', { name: 'White' })).toBeChecked();
+    await expect.poll(() => ink(page)).toBe(0);
+    await colors.locator('label[title="Black"]').click();
+    await expect.poll(() => ink(page)).toBeGreaterThan(50);
+  });
+
   test('39: a layer renamed keeps the name on Enter, and Escape takes it back', async ({ signedIn: page }) => {
     await withText(page);
     const layers = panels(page).getByRole('list', { name: 'Layers' });
