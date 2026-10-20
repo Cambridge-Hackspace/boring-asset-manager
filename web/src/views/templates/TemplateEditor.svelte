@@ -577,7 +577,7 @@
     </div>
 
     <div class="flex min-h-0 flex-1 flex-col md:flex-row">
-      <aside hidden={editor.canvasOnly} class="shrink-0 overflow-y-auto border-b border-zinc-200 bg-zinc-50 md:border-r md:border-b-0 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Toolbox">
+      <aside hidden={editor.canvasOnly} class="relative shrink-0 overflow-y-auto overscroll-contain border-b border-zinc-200 bg-zinc-50 md:border-r md:border-b-0 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Toolbox">
           <Toolbox onadd={addCentered} onimport={importSVG} />
       </aside>
       <div class="relative h-[55dvh] min-w-0 md:h-auto md:flex-1">
@@ -600,7 +600,7 @@
           >
         {/if}
       </div>
-      <aside hidden={editor.canvasOnly} class="w-full shrink-0 border-t border-zinc-200 md:w-72 md:overflow-y-auto md:border-t-0 md:border-l bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-label="Panels">
+      <aside hidden={editor.canvasOnly} class="relative w-full shrink-0 border-t border-zinc-200 md:w-72 md:overflow-y-auto md:overscroll-contain md:border-t-0 md:border-l bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-label="Panels">
           <Dock
             panels={[
               // Layers above Properties, which grows as something is
