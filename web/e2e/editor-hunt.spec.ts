@@ -505,6 +505,24 @@ test.describe('pointer and keyboard', () => {
     await expect(element(page)).toHaveCount(1);
   });
 
+  test('40: the readout beside the pointer stays inside the view', async ({ signedIn: page }) => {
+    await withText(page);
+    const view = await labelImage(page).evaluate((l) => {
+      let a = l.parentElement;
+      while (a && getComputedStyle(a).overflow !== 'hidden') a = a.parentElement;
+      const r = a!.getBoundingClientRect();
+      return { x: r.left, y: r.top, width: r.width, height: r.height };
+    });
+    const e = await box(element(page));
+    await page.mouse.move(...middle(e));
+    await page.mouse.down();
+    await page.mouse.move(view.x + view.width - 3, view.y + view.height - 3, { steps: 10 });
+    const r = await box(page.locator('[data-readout]'));
+    await page.mouse.up();
+    expect(r.x + r.width).toBeLessThanOrEqual(view.x + view.width);
+    expect(r.y + r.height).toBeLessThanOrEqual(view.y + view.height);
+  });
+
   test('41: a guide dragged from the ruler onto the panels is not kept', async ({ signedIn: page }) => {
     await withText(page);
     const label = await box(labelImage(page));
