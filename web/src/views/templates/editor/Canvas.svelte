@@ -246,6 +246,7 @@
   let points = $state<[number, number][]>([]);
   // Where the pointer is in the viewport, for the readout beside it.
   let readoutAt = $state<[number, number] | null>(null);
+  let readoutSize = $state<[number, number]>([0, 0]);
 
   const toolNames: Record<Exclude<Tool, 'select'>, string> = {
     text: 'a text box',
@@ -1344,7 +1345,16 @@
     {/key}
   {/if}
   {#if readout && readoutAt}
-    <div class="pointer-events-none absolute rounded bg-zinc-900/85 px-1.5 py-0.5 text-[0.7rem] text-white tabular-nums" style="left:{readoutAt[0] + 14}px;top:{readoutAt[1] + 14}px" data-readout>
+    <!-- Below and right of the pointer, or across it where that would run out of the view. -->
+    {@const rx = readoutAt[0] + 14 + readoutSize[0] > editor.viewport.w ? readoutAt[0] - 14 - readoutSize[0] : readoutAt[0] + 14}
+    {@const ry = readoutAt[1] + 14 + readoutSize[1] > editor.viewport.h ? readoutAt[1] - 14 - readoutSize[1] : readoutAt[1] + 14}
+    <div
+      bind:offsetWidth={readoutSize[0]}
+      bind:offsetHeight={readoutSize[1]}
+      class="pointer-events-none absolute rounded bg-zinc-900/85 px-1.5 py-0.5 text-[0.7rem] whitespace-nowrap text-white tabular-nums"
+      style="left:{rx}px;top:{ry}px"
+      data-readout
+    >
       {readout}
     </div>
   {/if}
