@@ -14,6 +14,8 @@
     type Paint,
     type Side,
     type TemplateElement,
+    mirrorOf,
+    mirrorSides,
   } from '../../../lib/template';
   import AdaptiveElementPanel from '../AdaptiveElementPanel.svelte';
   import ImagePicker from '../ImagePicker.svelte';
@@ -48,6 +50,12 @@
   function set<K extends keyof TemplateElement>(key: K, value: TemplateElement[K]) {
     if (e) update({ ...e, [key]: value });
   }
+
+  /** Mirrored in its box across, or down, or not. */
+  function setMirror(across: boolean, down: boolean) {
+    if (e) update(withProp(e, 'mirror', mirrorOf(across, down)));
+  }
+  const mirrored = $derived(mirrorSides(e?.mirror));
 
   function setGeneratorType(type: string) {
     if (!e) return;
@@ -125,6 +133,15 @@
       </div>
     {/if}
 
+    <!-- Any element mirrors in its box, as Krita and Inkscape flip a selection. -->
+    <div class="flex items-center gap-1" role="group" aria-label="Mirrored">
+      <span class="mr-auto text-xs text-zinc-600 dark:text-zinc-400">Mirrored</span>
+      <button type="button" class="btn-sm" aria-pressed={mirrored.across} title="Mirror it in its box, left for right" onclick={() => setMirror(!mirrored.across, mirrored.down)}>Left for right</button>
+      <button type="button" class="btn-sm" aria-pressed={mirrored.down} title="Mirror it in its box, top for bottom" onclick={() => setMirror(mirrored.across, !mirrored.down)}>Top for bottom</button>
+    </div>
+    {#if e.type === 'generator' && e.mirror}
+      <p class="text-xs text-amber-900 dark:text-amber-200" data-mirrored-code>Mirrored, it does not scan from the side the label is read from.</p>
+    {/if}
 
     {#if e.type === 'text' || e.type === 'generator'}
       <div>

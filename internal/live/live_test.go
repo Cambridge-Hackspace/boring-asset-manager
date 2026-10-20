@@ -1,6 +1,7 @@
 package live
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -61,6 +62,18 @@ func TestRenderProblems(t *testing.T) {
 	}
 	if err := r.AddImage("x", []byte("not an image")); err == nil || r.HasImage("x") {
 		t.Error("an undecodable image was added")
+	}
+}
+
+// TestRenderDrawsTheDesign checks a template that prints mirrored and
+// turned is drawn as designed, the right way round and level, as it is
+// edited.
+func TestRenderDrawsTheDesign(t *testing.T) {
+	r := New()
+	designed := r.Render([]byte(tag), []byte(sample), true)
+	printed := r.Render([]byte(strings.Replace(tag, `"dpi":300`, `"dpi":300,"print_mirror":"across","print_rotation":30`, 1)), []byte(sample), true)
+	if len(printed.Problems) != 0 || !bytes.Equal(printed.Pixels, designed.Pixels) {
+		t.Errorf("drawn otherwise than designed: %v", printed.Problems)
 	}
 }
 

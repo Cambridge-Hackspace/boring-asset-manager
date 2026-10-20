@@ -52,7 +52,11 @@ func TestLiveParityFixture(t *testing.T) {
 
 	var cases []liveCase
 	for _, name := range names {
-		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
+		// The editor draws the design, the right way round and level, of
+		// a label that prints mirrored or turned.
+		tpl := mustTemplate(t, goldenTemplates[name])
+		tpl.PrintMirror, tpl.PrintRotation = "", 0
+		s, err := Layout(tpl, testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

@@ -57,7 +57,7 @@ func (s *Server) planFor(p *models.Printer, t *labels.Template) (printers.Plan, 
 	settings := store.PrinterSettings(p)
 	if !t.Adaptive() {
 		plan, fit, err := printers.PlanLabel(p.Driver, settings, labelSpec(t))
-		return plan, t, fit.Warnings, err
+		return plan, t, append(fit.Warnings, t.PrintWarnings()...), err
 	}
 	g, err := printers.GeometryOf(p.Driver, settings)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *Server) planFor(p *models.Printer, t *labels.Template) (printers.Plan, 
 			reasons = append(reasons, printers.Why(err))
 			continue
 		}
-		return plan, laid, append(notices, fit.Warnings...), err
+		return plan, laid, append(append(notices, fit.Warnings...), laid.PrintWarnings()...), err
 	}
 	return nil, t, nil, fmt.Errorf("%w: it does not adapt to %s: %s", printers.ErrDoesNotFit, g.Roll, strings.Join(dedupe(reasons), "; "))
 }

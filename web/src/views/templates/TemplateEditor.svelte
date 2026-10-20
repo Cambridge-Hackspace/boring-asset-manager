@@ -190,6 +190,9 @@
   // what is said of those drawn is said of them by their own indices.
   function drawn(): { template: TemplateDoc; shown: number[] } {
     const template = JSON.parse(JSON.stringify(doc)) as TemplateDoc;
+    // Drawn as designed, the right way round and level, as the live renderer draws it.
+    delete template.print_mirror;
+    delete template.print_rotation;
     const shown = template.elements.map((_, i) => i).filter((i) => !editor.hidden.includes(i) && i !== editor.editingText);
     if (shown.length < template.elements.length) template.elements = shown.map((i) => template.elements[i]!);
     return { template, shown };
@@ -567,7 +570,7 @@
   <ArrangePanel />
 {/snippet}
 {#snippet label()}
-  <LabelPanel {isNew} problems={labelProblems} />
+  <LabelPanel {isNew} problems={labelProblems} frame={drawingLive ? frame : null} {previewURL} />
 {/snippet}
 {#snippet printer()}
   <PrinterPanel assetId={previewAsset?.id} onfit={(a) => (printArea = a)} />

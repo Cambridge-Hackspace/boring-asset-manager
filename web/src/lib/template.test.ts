@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { History } from './history';
 import {
+  appliedTurn,
+  printedPoint,
+  printWarnings,
+  turnedSize,
   blankTemplate,
   bounds,
   convertUnits,
@@ -514,5 +518,40 @@ describe('the workspace', () => {
     expect(rulerStep(10)).toBe(1);
     expect(rulerStep(3)).toBe(5);
     expect(rulerStep(30)).toBe(0.5);
+  });
+});
+
+describe('printing mirrored and turned', () => {
+  const doc = (more: Partial<TemplateDoc>): TemplateDoc => ({ ...blankTemplate(), units: 'mm', width: 40, height: 20, elements: [], ...more });
+
+  it('puts the design where it prints, as the server does', () => {
+    // The top left corner, mirrored across, is the top right; turned a
+    // quarter turn about the center (20, 10), that goes to (30, 30).
+    const [x, y] = printedPoint(doc({ print_mirror: 'across', print_rotation: 90 }), 0, 0);
+    expect(x).toBeCloseTo(30);
+    expect(y).toBeCloseTo(30);
+    expect(printedPoint(doc({}), 3, 4)).toEqual([3, 4]);
+  });
+
+  it('turns the label the other way once on, or the same way where it was mirrored one way', () => {
+    expect(appliedTurn({ print_rotation: 30 })).toBe(-30);
+    expect(appliedTurn({ print_rotation: 30, print_mirror: 'across' })).toBe(30);
+    expect(appliedTurn({ print_rotation: 30, print_mirror: 'both' })).toBe(-30);
+    const [w, h] = turnedSize(40, 20, 90);
+    expect(w).toBeCloseTo(20);
+    expect(h).toBeCloseTo(40);
+  });
+
+  it('warns of what goes off the label, and of mirrored codes', () => {
+    const elements: TemplateElement[] = [
+      { type: 'text', x: 0, y: 0, width: 8, height: 4, font_size: 8, content_binding: 'A', name: 'Corner' },
+      { type: 'text', x: 16, y: 8, width: 8, height: 4, font_size: 8, content_binding: 'B' },
+      { type: 'generator', generator_type: 'qr', x: 14, y: 4, width: 12, height: 12, mirror: 'across' },
+    ];
+    expect(printWarnings(doc({ print_rotation: 10, elements }))).toEqual([
+      { index: 0, message: 'Turned 10° as it prints, “Corner” goes partly off the label and is cut off.' },
+      { index: 2, message: 'Barcode 3 (qr) is a mirrored code: it does not scan from the side the label is read from.' },
+    ]);
+    expect(printWarnings(doc({ elements })).map((w) => w.index)).toEqual([2]);
   });
 });

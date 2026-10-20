@@ -185,6 +185,10 @@ type PrintRequest struct {
 	// Feed, when given, is which way the labels go through the printer
 	// this time, in place of the template's.
 	Feed string `json:"feed,omitempty"`
+	// Mirror, when given, is how the labels print mirrored this time, in
+	// place of the template's: across, down, both, or none for the right
+	// way round.
+	Mirror string `json:"mirror,omitempty"`
 }
 
 // handlePrint renders labels and sends them to a printer:
@@ -206,6 +210,10 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, `feed must be "auto", "across" or "along"`)
 		return
 	}
+	if req.Mirror != labels.MirrorNone && !labels.ValidMirror(req.Mirror) {
+		writeJSONError(w, http.StatusBadRequest, `mirror must be "across", "down", "both" or "none"`)
+		return
+	}
 	if !checkAssetIDs(w, req.AssetIDs) {
 		return
 	}
@@ -222,10 +230,19 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.Feed != "" {
-		fed := *t
-		fed.Feed = req.Feed
-		t = &fed
+	if req.Feed != "" || req.Mirror != "" {
+		this := *t
+		if req.Feed != "" {
+			this.Feed = req.Feed
+		}
+		switch req.Mirror {
+		case "":
+		case labels.MirrorNone:
+			this.PrintMirror = ""
+		default:
+			this.PrintMirror = req.Mirror
+		}
+		t = &this
 	}
 	// Check the template against the printer before laying out assets.
 	plan, t, warnings, err := s.planFor(p, t)

@@ -4,6 +4,7 @@
   import { printersFor, sizeText, type LabelOptions } from '../lib/labels';
   import { session } from '../lib/session.svelte';
   import AddToSpool from './AddToSpool.svelte';
+  import AppliedLabel from './AppliedLabel.svelte';
   import ErrorMessage from './ErrorMessage.svelte';
   import FitWarnings from './FitWarnings.svelte';
 
@@ -21,6 +22,9 @@
   let templateId = $state('');
   let printerId = $state('');
   let copies = $state(1);
+  /** Mirrored this time, in place of the template's: empty is as the template prints. */
+  let mirror = $state<'' | 'across' | 'down' | 'both' | 'none'>('');
+  let applied = $state(false);
   let format = $state<'pdf' | 'zip'>('pdf');
   let error = $state('');
   let status = $state('');
@@ -94,6 +98,7 @@
         template_id: templateId,
         asset_ids: assetIds,
         copies,
+        ...(mirror ? { mirror } : {}),
       });
       status = `Sent ${res.labels} label${res.labels === 1 ? '' : 's'} to ${chosen?.name ?? 'the printer'}.`;
       printedWarnings = res.warnings ?? [];
@@ -135,11 +140,31 @@
       </ul>
     {:else if single && templateId}
       <figure class="space-y-2">
-        <img
-          src={labelURL('svg')}
-          alt="Preview of the label for this asset"
-          class="max-h-64 max-w-full border border-zinc-300 bg-white dark:border-zinc-700"
-        />
+        {#if template?.print_mirror || template?.print_rotation}
+          <!-- A label that prints mirrored or turned, shown as it prints or as it is once on. -->
+          <div class="flex w-fit rounded border border-zinc-300 dark:border-zinc-700" role="radiogroup" aria-label="Show the label">
+            {#each [[false, 'As printed'], [true, 'As applied']] as const as [value, text] (text)}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={applied === value}
+                class="px-2 py-0.5 text-sm aria-checked:bg-zinc-800 aria-checked:text-white dark:aria-checked:bg-zinc-200 dark:aria-checked:text-zinc-900"
+                onclick={() => (applied = value)}>{text}</button
+              >
+            {/each}
+          </div>
+          <div class="p-2">
+            <AppliedLabel width={template.width} height={template.height} mirror={template.print_mirror} rotation={template.print_rotation} {applied} content="printed" maxHeight={16}>
+              <img src={labelURL('svg')} alt="Preview of the label for this asset, {applied ? 'as applied' : 'as printed'}" class="block h-full w-full" />
+            </AppliedLabel>
+          </div>
+        {:else}
+          <img
+            src={labelURL('svg')}
+            alt="Preview of the label for this asset"
+            class="max-h-64 max-w-full border border-zinc-300 bg-white dark:border-zinc-700"
+          />
+        {/if}
         <figcaption class="flex flex-wrap gap-2 text-sm">
           <a class="btn-secondary" href={labelURL('png')} download>Download PNG</a>
           <a class="btn-secondary" href={labelURL('pdf')} download>Download PDF</a>
@@ -182,6 +207,16 @@
           <div class="w-24">
             <label class="label" for="label-copies">Copies</label>
             <input id="label-copies" class="input" type="number" min="1" max="20" bind:value={copies} />
+          </div>
+          <div>
+            <label class="label" for="label-mirror">Mirror</label>
+            <select id="label-mirror" class="input" bind:value={mirror} title="This time only: the template is not changed">
+              <option value="">{template?.print_mirror ? 'Mirrored, as the template prints' : 'As the template prints'}</option>
+              {#if template?.print_mirror}<option value="none">The right way round, this time</option>{/if}
+              <option value="across">Left for right, this time</option>
+              <option value="down">Top for bottom, this time</option>
+              <option value="both">Both ways, this time</option>
+            </select>
           </div>
           <button type="submit" class="btn-primary" disabled={busy || !templateId || !chosen || problems.length > 0}>Print</button>
         </form>

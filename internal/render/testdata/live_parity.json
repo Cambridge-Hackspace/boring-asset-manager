@@ -475,6 +475,200 @@
   "sha256": "3a088c90ec6d2efa240d6e4a22edd13245bf3bcdef3e7df35e02beb147b849d8"
  },
  {
+  "name": "mirrored",
+  "template": {
+   "id": "mirrored",
+   "name": "Mirrored",
+   "units": "mm",
+   "width": 60,
+   "height": 30,
+   "dpi": 300,
+   "layering": "list",
+   "print_mirror": "across",
+   "elements": [
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 2,
+     "y": 2,
+     "width": 20,
+     "height": 20,
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 24,
+     "y": 2,
+     "width": 34,
+     "height": 7,
+     "font_size": 14,
+     "font_weight": "bold",
+     "content_binding": "READ ME"
+    },
+    {
+     "type": "text",
+     "x": 24,
+     "y": 10,
+     "width": 34,
+     "height": 6,
+     "font_size": 10,
+     "mirror": "across",
+     "content_binding": "PRINTED"
+    },
+    {
+     "type": "static_image",
+     "x": 26,
+     "y": 17,
+     "width": 10,
+     "height": 7,
+     "rotation": 30,
+     "image_id": "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f"
+    },
+    {
+     "type": "shape",
+     "shape": "polygon",
+     "x": 40,
+     "y": 17,
+     "width": 8,
+     "height": 6,
+     "fill": "black",
+     "stroke": "none",
+     "mirror": "down",
+     "points": [
+      [
+       0,
+       0
+      ],
+      [
+       1,
+       0
+      ],
+      [
+       0,
+       1
+      ]
+     ]
+    },
+    {
+     "type": "generator",
+     "generator_type": "code128",
+     "x": 2,
+     "y": 23,
+     "width": 56,
+     "height": 6,
+     "content_binding": "1234"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": ""
+  },
+  "images": {
+   "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
+  },
+  "width": 709,
+  "height": 354,
+  "sha256": "90a82950e70f54037db6cef0fc4d08b5e8d4b23e47015305ef58c5bb97ddee02"
+ },
+ {
+  "name": "mirrored_turned",
+  "template": {
+   "id": "mirrored_turned",
+   "name": "Mirrored and turned",
+   "units": "mm",
+   "width": 40,
+   "height": 40,
+   "dpi": 203,
+   "layering": "list",
+   "print_mirror": "down",
+   "print_rotation": 90,
+   "elements": [
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 2,
+     "y": 2,
+     "width": 18,
+     "height": 18,
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 22,
+     "y": 2,
+     "width": 16,
+     "height": 8,
+     "font_size": 12,
+     "font_weight": "bold",
+     "content_binding": "BAM"
+    },
+    {
+     "type": "static_image",
+     "x": 24,
+     "y": 11,
+     "width": 12,
+     "height": 8,
+     "rotation": 30,
+     "image_id": "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "code128",
+     "x": 2,
+     "y": 24,
+     "width": 36,
+     "height": 12,
+     "content_binding": "1234"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": ""
+  },
+  "images": {
+   "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
+  },
+  "width": 320,
+  "height": 320,
+  "sha256": "b72927f46996e645fc5eea67471394630a623ea3b82b01b840464f9157539a2f"
+ },
+ {
   "name": "pen",
   "template": {
    "id": "pen",
@@ -548,6 +742,105 @@
   "width": 709,
   "height": 354,
   "sha256": "56f123744fb6785e57586bb877644bbdaacea5aa8c9980c78c219abaf33c2794"
+ },
+ {
+  "name": "print_turned",
+  "template": {
+   "id": "print_turned",
+   "name": "Print turned",
+   "units": "mm",
+   "width": 40,
+   "height": 40,
+   "dpi": 300,
+   "layering": "list",
+   "print_rotation": 330,
+   "elements": [
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 11,
+     "y": 4,
+     "width": 18,
+     "height": 18,
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 4,
+     "y": 23,
+     "width": 32,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "align": "center",
+     "content_binding": "BAM 42"
+    },
+    {
+     "type": "static_image",
+     "x": 4,
+     "y": 30,
+     "width": 8,
+     "height": 6,
+     "image_id": "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f"
+    },
+    {
+     "type": "static_image",
+     "x": 28,
+     "y": 30,
+     "width": 8,
+     "height": 6,
+     "rotation": 90,
+     "image_id": "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "code128",
+     "x": 13,
+     "y": 30,
+     "width": 14,
+     "height": 7,
+     "content_binding": "1234"
+    },
+    {
+     "type": "shape",
+     "shape": "rectangle",
+     "x": 0,
+     "y": 0,
+     "width": 40,
+     "height": 40,
+     "stroke": "black",
+     "fill": "none",
+     "stroke_width": 0.5
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": ""
+  },
+  "images": {
+   "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
+  },
+  "width": 472,
+  "height": 472,
+  "sha256": "4021332ae0b40a56e8d88cb79301530e60f30211b9d9020198d5b986657c188c"
  },
  {
   "name": "qr45",

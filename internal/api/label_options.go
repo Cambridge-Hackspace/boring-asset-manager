@@ -34,6 +34,10 @@ type LabelTemplateOption struct {
 	DPI    int           `json:"dpi"`
 	Sizing string        `json:"sizing,omitempty"`
 	Adapt  *labels.Adapt `json:"adapt,omitempty"`
+	// PrintMirror and PrintRotation are how its labels print mirrored and
+	// turned, for a preview as they are once stuck on.
+	PrintMirror   string  `json:"print_mirror,omitempty"`
+	PrintRotation float64 `json:"print_rotation,omitempty"`
 	// Preferred is set for one of the assets' categories' templates, which
 	// are listed first, in their order of preference.
 	Preferred bool `json:"preferred"`
@@ -110,7 +114,7 @@ func (s *Server) handleLabelOptions(w http.ResponseWriter, r *http.Request) {
 	images := s.newLabelImages()
 	for _, t := range order {
 		opt := LabelTemplateOption{ID: t.ID, Name: t.Name, Units: t.Units, Width: t.Width, Height: t.Height, DPI: t.DPI,
-			Sizing: t.Sizing, Adapt: t.Adapt, Preferred: preferred[t.ID], Problems: []LabelProblem{}}
+			Sizing: t.Sizing, Adapt: t.Adapt, PrintMirror: t.PrintMirror, PrintRotation: t.PrintRotation, Preferred: preferred[t.ID], Problems: []LabelProblem{}}
 		if len(assets) <= maxCheckedAssets {
 			for _, a := range assets {
 				if _, err := render.Layout(t, s.labelData(a), images); err != nil {
