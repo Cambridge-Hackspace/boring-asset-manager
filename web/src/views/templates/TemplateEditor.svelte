@@ -169,7 +169,7 @@
   let liveData = $state<PreviewData | null>(null);
   let frame = $state<Frame | null>(null);
   onMount(() => {
-    live = startLiveRenderer(async (id) => (await requestBlob('GET', `/images/${encodeURIComponent(id)}`)).arrayBuffer());
+    live = startLiveRenderer(async (id) => (await requestBlob('GET', `/images/${encodeURIComponent(id)}/content`)).arrayBuffer());
     live.onstate = (s) => (liveState = s);
     liveState = live.state;
   });
