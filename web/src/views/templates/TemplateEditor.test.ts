@@ -101,6 +101,8 @@ describe('TemplateEditor', () => {
     let hold = false;
     const { sent } = api({
       'POST /templates/preview': (b) => {
+        // The image is held; the description that comes with it, for text's drawn size, is not.
+        if ((b as { format?: string }).format === 'json') return { elements: [] };
         if (!hold) return '<svg/>';
         return new Promise((resolve) => held.push({ left: (b as { template: TemplateDoc }).template.elements[0]!.x, release: () => resolve('<svg/>') }));
       },
@@ -126,7 +128,7 @@ describe('TemplateEditor', () => {
     held[0]!.release();
     await new Promise((r) => setTimeout(r, 50));
     expect(image()).toBe('blob:preview-2');
-    expect(sent.filter((r) => r.path === '/templates/preview')).toHaveLength(3);
+    expect(sent.filter((r) => r.path === '/templates/preview' && !(r.body as { format?: string }).format)).toHaveLength(3);
   });
 
   it('selects all with Ctrl+A, none with Ctrl+Shift+A or Escape, and copies and pastes', async () => {
@@ -423,6 +425,27 @@ describe('TemplateEditor', () => {
     expect(layerNames()).toEqual(['Text: {{asset.name}}', 'Rectangle']);
     await fireEvent.click(within(screen.getByRole('list', { name: 'History' })).getByRole('button', { name: 'As opened' }));
     expect(layerNames()).toEqual(['Text: {{asset.name}}']);
+  });
+
+  it('fills a text box, between a least and a most size, from its properties', async () => {
+    const { sent } = api({ 'PUT /templates/ql90': () => ({ template }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.focus(canvasElement('Text 1: {{asset.name}}'));
+    expect(value('#el-0-fit')).toBe('shrink');
+    expect(document.querySelector('#el-0-max')).toBeNull();
+    await fireEvent.change(document.querySelector('#el-0-fit')!, { target: { value: 'fill' } });
+    await fireEvent.change(document.querySelector('#el-0-max')!, { target: { value: '24' } });
+    expect((await saved(sent)).elements[0]).toMatchObject({ fit: 'fill', max_font_size: 24 });
+    // Back to shrinking, the most goes with it.
+    await fireEvent.change(document.querySelector('#el-0-fit')!, { target: { value: 'shrink' } });
+    const again = sent.filter((r) => r.method === 'PUT');
+    // The first save done, the button reads Save again.
+    await fireEvent.click(await screen.findByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT').length).toBe(again.length + 1));
+    const last = sent.filter((r) => r.method === 'PUT').at(-1)!.body as TemplateDoc;
+    expect(last.elements[0]!.fit).toBeUndefined();
+    expect(last.elements[0]!.max_font_size).toBeUndefined();
   });
 
   const printers = () => ({

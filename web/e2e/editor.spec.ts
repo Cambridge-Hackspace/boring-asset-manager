@@ -67,6 +67,10 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
   await tool(page, 'Text').click();
   await expect(page.getByText(/Drag to draw a text box/)).toBeVisible();
   await drag(page, at(0.05, 0.1), at(0.45, 0.4));
+  // Typed at once, as Krita's text tool; Escape finishes.
+  await expect(page.locator('[data-text-editor] textarea')).toBeFocused();
+  await page.keyboard.type('{{asset.name}}');
+  await page.keyboard.press('Escape');
   await expect(tool(page, 'Select and move')).toHaveAttribute('aria-pressed', 'true');
   const text = onLabel(page, /^Text 1/);
   await expect(text).toHaveAttribute('aria-pressed', 'true');
@@ -849,4 +853,73 @@ test('draw with the modifiers, the pen and the measure, and edit the points', as
   // From (2, 26) down to (11, 29) and up to (20, 26): 18 across, 3 down.
   expect(saved[3]!.d).toBe('M0 0 L0.5 1 L1 0');
   expect(saved[3]!.fill).toBe('none');
+});
+
+test('type on the label, with the text bar, and fill the box', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', { name: unique('Typing'), units: 'mm', width: 60, height: 30, dpi: 300, layering: 'list', elements: [] });
+  await page.goto(`/templates/${template.id}/edit`);
+  const live = page.getByRole('img', { name: 'Label preview' }).locator('canvas');
+  await expect(live).toBeVisible();
+  const black = () =>
+    live.evaluate((c: HTMLCanvasElement) => {
+      const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i] === 0) n++;
+      return n;
+    });
+  const at = await onPaper(page);
+
+  // A click with the text tool: a single line, typed at once.
+  await tool(page, 'Text').click();
+  await page.mouse.click(...at(0.1, 0.2));
+  const area = page.locator('[data-text-editor] textarea');
+  await expect(area).toBeFocused();
+  await expect(page.getByRole('toolbar', { name: 'Text' })).toBeVisible();
+  await page.keyboard.type('Tag ');
+  // A field from the text bar, at the caret.
+  await page.getByLabel('Insert a field').selectOption('{{asset.name}}');
+  await expect(area).toHaveValue('Tag {{asset.name}}');
+  await expect(area).toBeFocused();
+  await page.getByRole('button', { name: 'Bold' }).click();
+  await expect(area).toBeFocused();
+  // While typed, it is left out of the label drawn, and shown in the font it prints in.
+  expect(await black()).toBe(0);
+  expect(await area.evaluate((el) => getComputedStyle(el).fontFamily)).toContain('BAM Printed Sans');
+  await page.keyboard.press('Escape');
+  await expect(area).toHaveCount(0);
+  await expect.poll(black).toBeGreaterThan(500);
+
+  // Double-clicked, typed again; filling its box, the text grows at once.
+  const text = onLabel(page, /^Text 1/);
+  await text.dblclick();
+  await expect(area).toBeFocused();
+  // Short, it has room to grow: it filled the box's width already.
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('Tag');
+  await expect.poll(black).toBe(0);
+  const before = await area.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  await page.getByRole('button', { name: 'Fill the box' }).click();
+  await expect.poll(() => area.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(before);
+  await page.keyboard.press('Escape');
+
+  // A box dragged out wraps; one left empty comes off.
+  await tool(page, 'Text').click();
+  await drag(page, at(0.1, 0.6), at(0.9, 0.9));
+  await expect(area).toBeFocused();
+  await page.keyboard.type('Wrapped across the box');
+  await page.keyboard.press('Escape');
+  await tool(page, 'Text').click();
+  await page.mouse.click(...at(0.8, 0.1));
+  await expect(area).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('list', { name: 'Layers' }).getByRole('listitem')).toHaveCount(2);
+  await axe(page);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = (await api.call('GET', `/templates/${template.id}`)).template.elements;
+  expect(saved[0]).toMatchObject({ type: 'text', content_binding: 'Tag', font_weight: 'bold', fit: 'fill' });
+  // A single line: no wrapping, which the server leaves out.
+  expect(saved[0].wrap).toBeUndefined();
+  expect(saved[1]).toMatchObject({ type: 'text', content_binding: 'Wrapped across the box', wrap: true });
 });

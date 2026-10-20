@@ -95,6 +95,11 @@ export class Editor {
     }
   }
 
+  /** The text being typed on the label, by index, if any. */
+  editingText = $state<number | null>(null);
+  /** The size each text was last drawn at, in points, by index, from the renderer. */
+  drawnSizes = $state<Record<number, number>>({});
+
   /** The polygon or path whose points are being edited, by index, if any. */
   editingPoints = $state<number | null>(null);
 

@@ -728,6 +728,41 @@ func TestGrid(t *testing.T) {
 	}
 }
 
+// TestTextFit checks how text meets its box: shrinking, the default, or
+// filling it between its least and most sizes.
+func TestTextFit(t *testing.T) {
+	text := func(extra string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[` +
+			`{"type":"text","x":0,"y":0,"width":20,"height":10,"font_size":10,"content_binding":"A"` + extra + `}]}`
+	}
+	for extra, want := range map[string][]string{
+		`,"fit":"shrink"`:                   {},
+		`,"fit":"fill"`:                     {},
+		`,"fit":"fill","max_font_size":24`:  {},
+		`,"fit":"stretch"`:                  {"elements[0].fit"},
+		`,"max_font_size":24`:               {"elements[0].max_font_size"},
+		`,"fit":"fill","max_font_size":2`:   {"elements[0].max_font_size"},
+		`,"fit":"fill","max_font_size":201`: {"elements[0].max_font_size"},
+	} {
+		_, err := Parse([]byte(text(extra)))
+		if len(want) == 0 {
+			if err != nil {
+				t.Errorf("%s: %v", extra, err)
+			}
+			continue
+		}
+		if got := problemPaths(t, err); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: %v, want %v", extra, got, want)
+		}
+	}
+	// A code takes no fit.
+	code := `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[` +
+		`{"type":"generator","generator_type":"qr","x":0,"y":0,"width":20,"height":20,"fit":"fill"}]}`
+	if got := problemPaths(t, func() error { _, err := Parse([]byte(code)); return err }()); !reflect.DeepEqual(got, []string{"elements[0].fit"}) {
+		t.Errorf("a code with a fit: %v", got)
+	}
+}
+
 // TestElementNameLength takes a name of 100 characters, counted as
 // characters, not bytes.
 func TestElementNameLength(t *testing.T) {

@@ -1,5 +1,13 @@
 [
  {
+  "file": "fit.png",
+  "payloads": []
+ },
+ {
+  "file": "fit.mono.png",
+  "payloads": []
+ },
+ {
   "file": "image_inches.png",
   "payloads": []
  },

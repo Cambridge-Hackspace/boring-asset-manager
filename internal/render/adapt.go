@@ -161,7 +161,8 @@ func fits(t *labels.Template, e, design *labels.Element, sample *labels.Data) st
 		if design.Width > 0 && design.Height > 0 && design != e {
 			e.FontSize = math.Min(design.FontSize*math.Min(e.Width/design.Width, e.Height/design.Height), labels.MaxFontSize)
 		}
-		if e.FontSize < e.MinFontSize-1e-9 {
+		// Text filling its box takes the size the box allows.
+		if e.Fit != labels.FitFill && e.FontSize < e.MinFontSize-1e-9 {
 			return fmt.Sprintf("its text would be %s pt, below its minimum of %s pt", length(e.FontSize), length(e.MinFontSize))
 		}
 	case labels.ElementGenerator:
