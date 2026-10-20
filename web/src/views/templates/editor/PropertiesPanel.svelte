@@ -22,6 +22,7 @@
   import { useEditor } from './editor.svelte';
   import Icon from './Icon.svelte';
   import NumberField from './NumberField.svelte';
+  import Swatches from './Swatches.svelte';
   import { parseLength } from './transform';
 
   // What is selected, and its settings: with one element, all of them, each
@@ -186,13 +187,7 @@
             <option value="right">Right</option>
           </select>
         </label>
-        <label class="flex items-center gap-1 text-xs" for={id('color')}>
-          <span class="text-zinc-600 dark:text-zinc-400">Color</span>
-          <select id={id('color')} class="input-sm" value={e.fill ?? 'black'} onchange={(ev) => update(withProp(e, 'fill', ev.currentTarget.value === 'white' ? 'white' : undefined))}>
-            <option value="black">Black</option>
-            <option value="white">White</option>
-          </select>
-        </label>
+        <Swatches label="Color" name={id('color')} value={e.fill === 'white' ? 'white' : 'black'} options={paints.slice(0, 2)} onchange={(v) => update(withProp(e, 'fill', v === 'white' ? 'white' : undefined))} />
         <label class="flex items-center gap-1 text-xs" for={id('fit')}>
           <span class="text-zinc-600 dark:text-zinc-400">Fit</span>
           <select
@@ -325,22 +320,12 @@
     {:else if e.type === 'shape'}
       {@const fillable = e.shape !== 'line' && !(e.shape === 'polygon' && e.closed === false)}
       <div class={row}>
-        <label class="flex items-center gap-1 text-xs" for={id('stroke')}>
-          <span class="text-zinc-600 dark:text-zinc-400">Stroke</span>
-          <select id={id('stroke')} class="input-sm" value={e.stroke ?? 'black'} onchange={(ev) => setStroke(ev.currentTarget.value as Paint)}>
-            {#each paints as [value, label] (value)}<option {value}>{label}</option>{/each}
-          </select>
-        </label>
+        <Swatches label="Stroke" name={id('stroke')} value={e.stroke ?? 'black'} options={paints} onchange={setStroke} />
         {#if e.stroke !== 'none'}
           <NumberField id={id('stroke-width')} label="Width" title="Stroke width" value={e.stroke_width} min={0} unit={doc.units} onchange={(n) => update(withProp(e, 'stroke_width', n || undefined))} />
         {/if}
         {#if fillable}
-          <label class="flex items-center gap-1 text-xs" for={id('fill')}>
-            <span class="text-zinc-600 dark:text-zinc-400">Fill</span>
-            <select id={id('fill')} class="input-sm" value={e.fill ?? 'none'} onchange={(ev) => update(withProp(e, 'fill', ev.currentTarget.value as Paint))}>
-              {#each paints as [value, label] (value)}<option {value}>{label}</option>{/each}
-            </select>
-          </label>
+          <Swatches label="Fill" name={id('fill')} value={e.fill ?? 'none'} options={paints} onchange={(v) => update(withProp(e, 'fill', v))} />
         {/if}
         {#if e.shape === 'rectangle'}
           <NumberField id={id('radius')} label="Corners" title="Corner radius" value={e.corner_radius ?? 0} min={0} unit={doc.units} onchange={(n) => update(withProp(e, 'corner_radius', n || undefined))} />
