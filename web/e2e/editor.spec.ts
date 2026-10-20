@@ -1023,3 +1023,115 @@ test('a label that prints mirrored and turned, shown as printed and as applied, 
   await expect(labels).toContainText('goes partly off the label');
   await printer.job();
 });
+
+test('find any action by name with Ctrl+Enter, and run it', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Search'), units: 'mm', width: 60, height: 30, dpi: 300, layering: 'list',
+    elements: [{ type: 'shape', shape: 'rectangle', x: 10, y: 10, width: 20, height: 10, stroke: 'black' }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  await expect(page.getByRole('img', { name: 'Label preview' })).toBeVisible();
+  const search = page.getByRole('dialog', { name: 'Search actions' });
+  const box = search.getByRole('combobox', { name: 'Search actions' });
+
+  // A few letters find a tool; Enter takes it.
+  await page.keyboard.press('Control+Enter');
+  await expect(box).toBeFocused();
+  await box.fill('ellip');
+  await expect(search.getByRole('option', { selected: true })).toHaveText('Ellipse tool');
+  await page.keyboard.press('Enter');
+  await expect(search).toHaveCount(0);
+  await expect(tool(page, 'Ellipse')).toHaveAttribute('aria-pressed', 'true');
+
+  // The arrow keys choose among those found; words in any order.
+  await page.keyboard.press('Control+Enter');
+  await box.fill('zoom');
+  await expect(search.getByRole('option').first()).toHaveText(/Zoom in/);
+  await box.fill('100 zoom');
+  await expect(search.getByRole('option', { selected: true })).toContainText('Zoom to 100%');
+  await axe(page);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#zoom-level')).toHaveValue('100%');
+
+  // What can be done to the selection is found once there is one; clicked, it runs.
+  await page.keyboard.press('Control+Enter');
+  await box.fill('turn 90');
+  await expect(search.getByRole('option')).toHaveCount(0);
+  await expect(search).toContainText('No action by that name.');
+  await page.keyboard.press('Escape');
+  await expect(search).toHaveCount(0);
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Control+Enter');
+  await box.fill('rotate right');
+  await search.getByRole('option', { name: 'Turn 90° right' }).click();
+  await expect(search).toHaveCount(0);
+  await page.keyboard.press('Control+Enter');
+  await box.fill('remove');
+  await page.keyboard.press('Enter');
+  await expect(onLabel(page, /^Shape 1/)).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  expect((await api.call('GET', `/templates/${template.id}`)).template.elements[0]).toMatchObject({ rotation: 90 });
+});
+
+test.describe('on a touch screen', () => {
+  test.use({ hasTouch: true });
+
+  test('one finger is the tool, two pinch and pan, and taps of two and three undo and redo', async ({ signedIn: page, api }) => {
+    const { template } = await api.call('POST', '/templates', {
+      name: unique('Touch'), units: 'mm', width: 60, height: 30, dpi: 300, layering: 'list',
+      elements: [{ type: 'shape', shape: 'rectangle', x: 10, y: 10, width: 20, height: 10, stroke: 'black', fill: 'black' }],
+    });
+    await page.goto(`/templates/${template.id}/edit`);
+    await expect(page.getByRole('img', { name: 'Label preview' })).toBeVisible();
+    const cdp = await page.context().newCDPSession(page);
+    const fingers = (type: 'touchStart' | 'touchMove' | 'touchEnd', points: [number, number][]) =>
+      cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], id) => ({ x, y, id })) });
+    const shape = onLabel(page, /^Shape 1/);
+    const where = async () => (await shape.boundingBox())!;
+    const zoom = async () => parseFloat(await page.locator('#zoom-level').inputValue());
+    const undo = page.getByRole('button', { name: 'Undo' });
+    const redo = page.getByRole('button', { name: 'Redo' });
+
+    // One finger drags the rectangle, as the mouse would.
+    const start = await where();
+    const from: [number, number] = [start.x + start.width / 2, start.y + start.height / 2];
+    await fingers('touchStart', [from]);
+    for (let k = 1; k <= 5; k++) await fingers('touchMove', [[from[0] + k * 12, from[1]]]);
+    await fingers('touchEnd', []);
+    await expect.poll(async () => Math.round((await where()).x - start.x)).toBeGreaterThan(40);
+    await expect(undo).toBeEnabled();
+
+    // Two fingers apart, twice as far: zoomed in about twice, toward them.
+    const before = await zoom();
+    const moved = await where();
+    const c: [number, number] = [moved.x + moved.width / 2, moved.y + moved.height / 2];
+    await fingers('touchStart', [[c[0] - 40, c[1]], [c[0] + 40, c[1]]]);
+    for (let k = 1; k <= 4; k++) await fingers('touchMove', [[c[0] - 40 - k * 10, c[1]], [c[0] + 40 + k * 10, c[1]]]);
+    await fingers('touchEnd', []);
+    await expect.poll(zoom).toBeGreaterThan(before * 1.8);
+    const after = await where();
+    // What was between the fingers stays there.
+    expect(Math.abs(after.x + after.width / 2 - c[0])).toBeLessThan(8);
+
+    // Two fingers dragged together pan.
+    await fingers('touchStart', [[c[0] - 40, c[1]], [c[0] + 40, c[1]]]);
+    for (let k = 1; k <= 4; k++) await fingers('touchMove', [[c[0] - 40 + k * 10, c[1] + k * 5], [c[0] + 40 + k * 10, c[1] + k * 5]]);
+    await fingers('touchEnd', []);
+    const panned = await where();
+    expect(Math.round(panned.x - after.x)).toBe(40);
+    expect(Math.round(panned.y - after.y)).toBe(20);
+
+    // A tap of two fingers undoes the drag, the one change: neither the
+    // pinch nor the pan changed the label. A tap of three redoes it.
+    await fingers('touchStart', [[c[0] - 30, c[1] + 60], [c[0] + 30, c[1] + 60]]);
+    await fingers('touchEnd', []);
+    await expect(redo).toBeEnabled();
+    await expect(undo).toBeDisabled();
+    await fingers('touchStart', [[c[0] - 30, c[1] + 60], [c[0], c[1] + 60], [c[0] + 30, c[1] + 60]]);
+    await fingers('touchEnd', []);
+    await expect(redo).toBeDisabled();
+    await expect(undo).toBeEnabled();
+  });
+});

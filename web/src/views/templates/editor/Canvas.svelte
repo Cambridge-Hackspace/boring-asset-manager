@@ -34,6 +34,7 @@
   import { withContours, type Node } from './nodes';
   import { alongOneAxis, beneath, inBox, pull, resizeFrom, scaledBox, turned, type Anchor } from './transform';
   import { gridOf, snapBox, snapNothing, snapPoint, type SnapLine } from './snapping';
+  import { Touches } from './touch';
 
   // The label on its desk: the live renderer's drawing of it (or, until it
   // can, the server's), an outline over each element to take it by, and the
@@ -694,6 +695,11 @@
     menu = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
+  /** Pastes what was copied here, or what the system clipboard holds, as the menu does. */
+  export function paste() {
+    void pasteFromMenu();
+  }
+
   async function pasteFromMenu() {
     if (editor.clipboard && editor.paste(editor.clipboard)) return;
     try {
@@ -901,6 +907,54 @@
   }
 
   /** Escape: stops what is in progress, and reports whether there was any. */
+  /** Puts back the drag in progress, if any: a guide, or what was being moved or drawn. */
+  function cancelDrag(): boolean {
+    snapLines = {};
+    if (guideDrag) {
+      guideDrag = null;
+      return true;
+    }
+    const g = gesture;
+    if (!g) return false;
+    gesture = null;
+    if ('moved' in g && g.kind !== 'band' && g.moved) editor.cancel();
+    return true;
+  }
+
+  // Touch, as Krita's gestures (touch.ts): one finger is the tool's, as the
+  // mouse is; a second puts back what the first began, and pinches to zoom
+  // and pans; a tap of two undoes, of three redoes. A gesture's fingers are
+  // kept from the tool, taken before anything on the label sees them.
+  const touches = new Touches({
+    cancel: () => void cancelDrag(),
+    pan: (dx, dy) => editor.panBy(dx, dy),
+    zoom: (factor, x, y) => {
+      const r = viewport?.getBoundingClientRect();
+      if (r) editor.zoomBy(factor, x - r.left, y - r.top);
+    },
+    undo: () => editor.undo(),
+    redo: () => editor.redo(),
+  });
+  function touchDown(event: PointerEvent) {
+    if (event.pointerType !== 'touch' || !touches.down(event.pointerId, event.clientX, event.clientY, event.timeStamp)) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    try {
+      viewport?.setPointerCapture(event.pointerId);
+    } catch {
+      // Gone already.
+    }
+  }
+  function touchMove(event: PointerEvent) {
+    if (event.pointerType !== 'touch' || !touches.move(event.pointerId, event.clientX, event.clientY)) return;
+    event.stopImmediatePropagation();
+  }
+  function touchUp(event: PointerEvent) {
+    if (event.pointerType !== 'touch' || !touches.up(event.pointerId, event.timeStamp)) return;
+    event.stopImmediatePropagation();
+    if (viewport?.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+  }
+
   export function cancel(): boolean {
     snapLines = {};
     if (guideDrag) {
@@ -997,8 +1051,12 @@
   bind:this={viewport}
   bind:clientWidth={viewW}
   bind:clientHeight={viewH}
-  class="relative h-full w-full overflow-hidden bg-zinc-300 select-none dark:bg-zinc-800 {gesture?.kind === 'pan' ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : editor.tool === 'select' ? '' : 'cursor-crosshair'}"
+  class="relative h-full w-full touch-none overflow-hidden bg-zinc-300 select-none dark:bg-zinc-800 {gesture?.kind === 'pan' ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : editor.tool === 'select' ? '' : 'cursor-crosshair'}"
   onpointerenter={() => (hovering = true)}
+  onpointerdowncapture={touchDown}
+  onpointermovecapture={touchMove}
+  onpointerupcapture={touchUp}
+  onpointercancelcapture={touchUp}
   onpointerdown={downOnDesk}
   onpointermove={pointerMove}
   onpointerup={pointerUp}
