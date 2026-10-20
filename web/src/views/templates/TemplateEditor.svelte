@@ -26,6 +26,7 @@
   import { Editor, provideEditor, type Tool } from './editor/editor.svelte';
   import Icon from './editor/Icon.svelte';
   import LabelPanel from './editor/LabelPanel.svelte';
+  import GridPanel from './editor/GridPanel.svelte';
   import HistoryPanel from './editor/HistoryPanel.svelte';
   import LayersPanel from './editor/LayersPanel.svelte';
   import OptionsBar from './editor/OptionsBar.svelte';
@@ -513,6 +514,7 @@
               { id: 'properties', title: 'Properties', content: properties },
               { id: 'arrange', title: 'Arrange', content: arrange },
               { id: 'history', title: 'History', content: history },
+              { id: 'grid', title: 'Grid and guides', content: gridAndGuides },
               { id: 'label', title: 'Label', content: label },
               { id: 'printer', title: 'Printer', content: printer },
               { id: 'preview', title: 'Preview data', content: preview },
@@ -533,6 +535,9 @@
 {/snippet}
 {#snippet layers()}
   <LayersPanel {problemElements} frame={drawingLive ? frame : null} />
+{/snippet}
+{#snippet gridAndGuides()}
+  <GridPanel />
 {/snippet}
 {#snippet history()}
   <HistoryPanel />

@@ -678,3 +678,75 @@ test('layers show thumbnails, hide while editing, rename, and the history goes b
   expect(saved.template.elements[0]).toMatchObject({ name: 'Background' });
   expect(saved.template.elements[0].rotation).toBeUndefined();
 });
+
+test('guides out of the rulers, snapping to them and the grid, and dragging them off', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Guides'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list',
+    elements: [{ type: 'shape', shape: 'rectangle', x: 4, y: 4, width: 10, height: 10, stroke: 'black', stroke_width: 0.5 }],
+  });
+  await page.goto(`/templates/${template.id}/edit`);
+  const at = await onPaper(page);
+  const ruler = (await page.locator('[data-ruler="x"]').boundingBox())!;
+
+  // Out of the top ruler, down onto the label: a guide across, at about 14.5 mm down.
+  const [, gy] = at(0.5, 14.5 / 29);
+  await page.mouse.move(at(0.5, 0)[0], ruler.y + ruler.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(at(0.5, 0)[0], gy, { steps: 6 });
+  // A line across has no height: there, rather than "visible".
+  await expect(page.locator('[data-guide-dragging]')).toBeAttached();
+  await page.mouse.up();
+  await expect(page.locator('[data-guide^="y"]')).toHaveCount(1);
+  await expect(page.getByRole('list', { name: 'History' }).getByRole('button').last()).toHaveText('Add a guide');
+  const guideY = (await api.call('GET', `/templates/${template.id}`)).template.guides; // not saved yet
+  expect(guideY).toBeUndefined();
+
+  // The square dragged down near it: its bottom edge snaps to it, the line shown.
+  const sq = (await onLabel(page, /^Shape 1/).boundingBox())!;
+  const from: [number, number] = [sq.x + sq.width / 2, sq.y + sq.height / 2];
+  const guideLine = (await page.locator('line.guide').first().boundingBox())!;
+  await page.mouse.move(...from);
+  await page.mouse.down();
+  await page.mouse.move(from[0], from[1] + (guideLine.y - (sq.y + sq.height)) + 3, { steps: 6 });
+  await expect(page.locator('[data-snapped="y"]')).toBeAttached();
+  await page.mouse.up();
+  await expect(page.locator('[data-snapped="y"]')).toHaveCount(0);
+  const snappedY = Number(await page.locator('#el-0-y').inputValue());
+  // With Shift, it moves freely: along one axis, off every line.
+  const sq2 = (await onLabel(page, /^Shape 1/).boundingBox())!;
+  await page.mouse.move(sq2.x + sq2.width / 2, sq2.y + sq2.height / 2);
+  await page.mouse.down();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(sq2.x + sq2.width / 2 + 2, sq2.y + sq2.height / 2 + 7, { steps: 4 });
+  await expect(page.locator('[data-snapped]')).toHaveCount(0);
+  await page.keyboard.up('Shift');
+  await page.mouse.up();
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#el-0-y')).toHaveValue(String(snappedY));
+  // Saved: its bottom edge is exactly on the guide.
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const guided = (await api.call('GET', `/templates/${template.id}`)).template;
+  expect(guided.elements[0].y + guided.elements[0].height).toBe(guided.guides.y[0]);
+
+  // The grid, shown, every 5 mm.
+  await page.getByRole('checkbox', { name: 'Show it' }).check();
+  await page.locator('#grid-x').fill('5');
+  await page.locator('#grid-x').press('Enter');
+  await expect(page.locator('[data-grid] line')).toHaveCount(13 + 6);
+
+  // Dragged off the label, the guide comes off.
+  const line = (await page.locator('[data-guide^="y"]').boundingBox())!;
+  await page.mouse.move(at(0.3, 0)[0], line.y + line.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(at(0.3, 0)[0], ruler.y - 40, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator('[data-guide]')).toHaveCount(0);
+  await page.getByRole('list', { name: 'History' }).getByRole('button', { name: 'Remove a guide' }).waitFor();
+  await axe(page);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.guides).toBeUndefined();
+  expect(saved.template.grid).toEqual({ x: 5, y: 5, visible: true });
+});

@@ -23,6 +23,7 @@ type templateLayout struct {
 	Feed     string           `json:"feed,omitempty"`
 	Turnable bool             `json:"turnable,omitempty"`
 	Guides   *labels.Guides   `json:"guides,omitempty"`
+	Grid     *labels.Grid     `json:"grid,omitempty"`
 }
 
 // CreateTemplate validates and stores a new template under a new ID; any ID
@@ -35,7 +36,7 @@ func (s *Store) CreateTemplate(t *labels.Template) (*labels.Template, error) {
 		return nil, err
 	}
 
-	layout, err := json.Marshal(templateLayout{Elements: created.Elements, Sizing: created.Sizing, Adapt: created.Adapt, Feed: created.Feed, Turnable: created.Turnable, Guides: created.Guides})
+	layout, err := json.Marshal(templateLayout{Elements: created.Elements, Sizing: created.Sizing, Adapt: created.Adapt, Feed: created.Feed, Turnable: created.Turnable, Guides: created.Guides, Grid: created.Grid})
 	if err != nil {
 		return nil, fmt.Errorf("encoding template layout: %w", err)
 	}
@@ -88,7 +89,7 @@ func (s *Store) UpdateTemplate(t *labels.Template) (*labels.Template, error) {
 		return nil, err
 	}
 
-	layout, err := json.Marshal(templateLayout{Elements: t.Elements, Sizing: t.Sizing, Adapt: t.Adapt, Feed: t.Feed, Turnable: t.Turnable, Guides: t.Guides})
+	layout, err := json.Marshal(templateLayout{Elements: t.Elements, Sizing: t.Sizing, Adapt: t.Adapt, Feed: t.Feed, Turnable: t.Turnable, Guides: t.Guides, Grid: t.Grid})
 	if err != nil {
 		return nil, fmt.Errorf("encoding template layout: %w", err)
 	}
@@ -145,7 +146,7 @@ func scanTemplate(row rowScanner) (*labels.Template, error) {
 	}
 	// Migration 033 put every stored template in list order.
 	t.Elements, t.Sizing, t.Adapt, t.Layering = l.Elements, l.Sizing, l.Adapt, labels.LayeringList
-	t.Feed, t.Turnable, t.Guides = l.Feed, l.Turnable, l.Guides
+	t.Feed, t.Turnable, t.Guides, t.Grid = l.Feed, l.Turnable, l.Guides, l.Grid
 	if t.Elements == nil {
 		t.Elements = []labels.Element{}
 	}

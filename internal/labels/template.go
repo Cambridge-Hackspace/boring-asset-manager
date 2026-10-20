@@ -72,6 +72,22 @@ type Guides struct {
 	Y []float64 `json:"y,omitempty"`
 }
 
+// Grid is the editor's grid, which elements keep to as they are placed:
+// lines X apart across and Y apart down, in the template's units, from
+// OffsetX and OffsetY, each step divided in Subdivisions (1 when absent),
+// drawn on the canvas when Visible. It never prints.
+type Grid struct {
+	X            float64 `json:"x"`
+	Y            float64 `json:"y"`
+	OffsetX      float64 `json:"offset_x,omitempty"`
+	OffsetY      float64 `json:"offset_y,omitempty"`
+	Subdivisions int     `json:"subdivisions,omitempty"`
+	Visible      bool    `json:"visible,omitempty"`
+}
+
+// MaxGridSubdivisions bounds how finely a grid step is divided.
+const MaxGridSubdivisions = 10
+
 // DefaultStrokeMM is a shape's stroke width when it gives none: four dots
 // at 406 DPI, three at 300 and two at 203.
 const DefaultStrokeMM = 0.25
@@ -167,6 +183,9 @@ type Template struct {
 	// (at each X) and down (at each Y), in the template's units. They never
 	// print.
 	Guides *Guides `json:"guides,omitempty"`
+	// Grid is the editor's grid; absent, the editor's own of half a
+	// millimeter or a fiftieth of an inch, not drawn. It never prints.
+	Grid *Grid `json:"grid,omitempty"`
 	// Elements are drawn in this order: the first at the back.
 	Elements  []Element `json:"elements"`
 	CreatedAt time.Time `json:"created_at"`
@@ -445,6 +464,22 @@ func (t *Template) Validate() error {
 					break
 				}
 			}
+		}
+	}
+
+	if g := t.Grid; g != nil {
+		for _, axis := range []struct {
+			path            string
+			step, off, size float64
+		}{{"grid.x", g.X, g.OffsetX, t.Width}, {"grid.y", g.Y, g.OffsetY, t.Height}} {
+			if !(axis.step >= 0.001 && axis.step <= axis.size+geometryTolerance) {
+				v.add(axis.path, "must be more than 0 and at most the label's size that way")
+			} else if !(axis.off >= 0 && axis.off < axis.step) {
+				v.add(strings.Replace(axis.path, "grid.", "grid.offset_", 1), "must be from 0 up to, not including, the grid's step")
+			}
+		}
+		if g.Subdivisions < 0 || g.Subdivisions > MaxGridSubdivisions {
+			v.add("grid.subdivisions", fmt.Sprintf("must be from 1 to %d", MaxGridSubdivisions))
 		}
 	}
 

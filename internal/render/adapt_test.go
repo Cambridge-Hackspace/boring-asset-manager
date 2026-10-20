@@ -29,6 +29,9 @@ func near(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 
 func TestAdaptFollowsAnchors(t *testing.T) {
 	tag := adaptiveTag()
+	// The editor's guides and grid are left behind: laid out, it is not designed.
+	tag.Guides = &labels.Guides{X: []float64{tag.Width}}
+	tag.Grid = &labels.Grid{X: tag.Width, Y: 1}
 	if err := tag.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +39,7 @@ func TestAdaptFollowsAnchors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if laid.Adaptive() || laid.Adapt != nil || laid.Width != 90 || laid.Height != 29 || laid.DPI != 203 {
+	if laid.Adaptive() || laid.Adapt != nil || laid.Width != 90 || laid.Height != 29 || laid.DPI != 203 || laid.Guides != nil || laid.Grid != nil {
 		t.Fatalf("laid out: %+v", laid)
 	}
 	code, name, note := laid.Elements[0], laid.Elements[1], laid.Elements[2]

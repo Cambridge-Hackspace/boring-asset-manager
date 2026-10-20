@@ -67,6 +67,8 @@ func Adapt(t *labels.Template, width, height float64, dpi int, sample *labels.Da
 	out := *t
 	out.Width, out.Height, out.DPI = width, height, dpi
 	out.Sizing, out.Adapt, out.Turnable = "", nil, false
+	// The editor's guides and grid are for designing, and laid out, it is not designed.
+	out.Guides, out.Grid = nil, nil
 	out.Elements = nil
 	sx, sy := width/t.Width, height/t.Height
 	on := fmt.Sprintf("a %s × %s %s label", length(width), length(height), t.Units)

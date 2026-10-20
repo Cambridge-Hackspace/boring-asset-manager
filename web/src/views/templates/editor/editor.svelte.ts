@@ -23,6 +23,7 @@ import {
   type TemplateDoc,
   type TemplateElement,
 } from '../../../lib/template';
+import type { SnapTo } from './snapping';
 import type { Anchor } from './transform';
 import { clampScale, fitView, fitWidthView, nextStep, scaleAt100, zoomAround, type View } from './view';
 
@@ -48,6 +49,40 @@ export class Editor {
   aspectLocked = $state(false);
   /** Turning snaps to multiples of 45° when near one. */
   snapAngles = $state(rememberedOn('bam.editor-snap-angles'));
+  /** What drags snap to, from the Snap menu, remembered in this browser. */
+  snapTo = $state<SnapTo>(rememberedSnap());
+  /** The guides drawn, and kept from being dragged by accident, remembered in this browser. */
+  guidesShown = $state(rememberedOn('bam.editor-guides-shown'));
+  guidesLocked = $state(remembered('bam.editor-guides-locked'));
+
+  setSnap(what: keyof SnapTo, on: boolean) {
+    this.snapTo = { ...this.snapTo, [what]: on };
+    try {
+      localStorage.setItem('bam.editor-snap', JSON.stringify(this.snapTo));
+    } catch {
+      // Storage unavailable: it lasts as long as the page.
+    }
+  }
+
+  setGuidesShown(on: boolean) {
+    this.guidesShown = on;
+    keep('bam.editor-guides-shown', on);
+  }
+
+  setGuidesLocked(on: boolean) {
+    this.guidesLocked = on;
+    keep('bam.editor-guides-locked', on);
+  }
+
+  /** The guides changed, as one undoable step; none left takes them away. */
+  setGuides(guides: { x?: number[]; y?: number[] }, label = 'Move a guide', record = true) {
+    if (record) this.begin(label);
+    const x = guides.x?.length ? guides.x : undefined;
+    const y = guides.y?.length ? guides.y : undefined;
+    if (x || y) this.doc.guides = { ...(x ? { x } : {}), ...(y ? { y } : {}) };
+    else delete this.doc.guides;
+  }
+
   /** What was last copied, for Paste in the menu, where the system clipboard cannot be read. */
   clipboard = $state('');
 
@@ -418,6 +453,25 @@ export class Editor {
     if (!elements?.length) return false;
     this.add(...elements);
     return true;
+  }
+}
+
+function keep(key: string, on: boolean) {
+  try {
+    localStorage.setItem(key, on ? 'on' : 'off');
+  } catch {
+    // Storage unavailable: it lasts as long as the page.
+  }
+}
+
+/** What to snap to, as last chosen in this browser: everything, at first. */
+function rememberedSnap(): SnapTo {
+  const all: SnapTo = { grid: true, guides: true, elements: true, label: true };
+  try {
+    const raw = JSON.parse(localStorage.getItem('bam.editor-snap') ?? '{}') as Partial<SnapTo>;
+    return { grid: raw.grid ?? all.grid, guides: raw.guides ?? all.guides, elements: raw.elements ?? all.elements, label: raw.label ?? all.label };
+  } catch {
+    return all;
   }
 }
 

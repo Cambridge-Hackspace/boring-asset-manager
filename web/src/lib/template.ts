@@ -108,6 +108,8 @@ export interface TemplateDoc {
   turnable?: boolean;
   /** Lines to line elements up against, across (at each x) and down (at each y); they never print. */
   guides?: Guides;
+  /** The editor's grid; absent, gridStep's, not drawn. It never prints. */
+  grid?: Grid;
   elements: TemplateElement[];
 }
 
@@ -691,6 +693,9 @@ export function turnTemplate(doc: TemplateDoc, clockwise: boolean): TemplateDoc 
     ...(doc.adapt
       ? { adapt: { ...doc.adapt, min_width: doc.adapt.min_height, max_width: doc.adapt.max_height, min_height: doc.adapt.min_width, max_height: doc.adapt.max_width } }
       : {}),
+    // Guides and the grid turn too, staying where they were on the design.
+    ...(doc.guides ? { guides: turnedGuides(doc, clockwise) } : {}),
+    ...(doc.grid ? { grid: turnedGrid(doc, doc.grid, clockwise) } : {}),
     elements: doc.elements.map((e) => {
       const cx = e.x + e.width / 2;
       const cy = e.y + e.height / 2;
@@ -701,6 +706,32 @@ export function turnTemplate(doc: TemplateDoc, clockwise: boolean): TemplateDoc 
       next = withProp(next, 'anchor_x', ax);
       return withProp(next, 'anchor_y', ay);
     }),
+  };
+}
+
+function turnedGuides(doc: TemplateDoc, clockwise: boolean): Guides {
+  const fine = (v: number) => Math.round(v * 1e6) / 1e6;
+  const g: Guides = {};
+  const across = (doc.guides?.y ?? []).map((y) => (clockwise ? fine(doc.height - y) : y));
+  const down = (doc.guides?.x ?? []).map((x) => (clockwise ? x : fine(doc.width - x)));
+  if (across.length) g.x = across;
+  if (down.length) g.y = down;
+  return g;
+}
+
+function turnedGrid(doc: TemplateDoc, grid: Grid, clockwise: boolean): Grid {
+  const fine = (v: number) => Math.round(v * 1e6) / 1e6;
+  const mod = (v: number, m: number) => fine(((v % m) + m) % m);
+  const ox = grid.offset_x ?? 0;
+  const oy = grid.offset_y ?? 0;
+  const [nx, ny] = clockwise ? [mod(doc.height - oy, grid.y), ox] : [oy, mod(doc.width - ox, grid.x)];
+  const { offset_x: _x, offset_y: _y, ...rest } = grid;
+  return {
+    ...rest,
+    x: grid.y,
+    y: grid.x,
+    ...(nx && nx < grid.y ? { offset_x: nx } : {}),
+    ...(ny && ny < grid.x ? { offset_y: ny } : {}),
   };
 }
 
@@ -767,6 +798,18 @@ export function marginOf(e: TemplateElement, side: Side): number | undefined {
   if (e.margin) return e.margin[side];
   if (e.quiet_zone === undefined || (e.generator_type === 'code128' && (side === 'top' || side === 'bottom'))) return undefined;
   return e.quiet_zone;
+}
+
+/** The editor's grid: lines x apart across and y apart down, from the offsets, each step divided. */
+export interface Grid {
+  x: number;
+  y: number;
+  offset_x?: number;
+  offset_y?: number;
+  /** Divisions of each step drawn fainter; absent is 1. */
+  subdivisions?: number;
+  /** Drawn on the canvas. */
+  visible?: boolean;
 }
 
 export interface Guides {
@@ -891,49 +934,6 @@ export function flipElements(doc: TemplateDoc, indices: number[], across: boolea
 }
 
 /** Where a moving box snaps to, and the lines it snapped to, to show. */
-export interface Snapped {
-  dx: number;
-  dy: number;
-  /** Lines across (at x) and down (at y) it snapped to. */
-  x?: number;
-  y?: number;
-}
-
-/**
- * Snaps a box being moved by (dx, dy) to what is near: the edges and
- * middles of the other elements, the label's edges and middle, and its
- * guides, within threshold, on each axis by itself. An axis with nothing
- * near keeps its delta, for the grid.
- */
-export function smartSnap(doc: TemplateDoc, moving: number[], start: Box, dx: number, dy: number, threshold: number): Snapped {
-  const xs = [0, doc.width / 2, doc.width, ...(doc.guides?.x ?? [])];
-  const ys = [0, doc.height / 2, doc.height, ...(doc.guides?.y ?? [])];
-  doc.elements.forEach((e, i) => {
-    if (moving.includes(i)) return;
-    const b = bounds(e);
-    xs.push(b.x, b.x + b.width / 2, b.x + b.width);
-    ys.push(b.y, b.y + b.height / 2, b.y + b.height);
-  });
-  const best = (edges: number[], targets: number[]): [number, number] | null => {
-    let found: [number, number] | null = null;
-    for (const edge of edges) {
-      for (const t of targets) {
-        const d = t - edge;
-        if (Math.abs(d) <= threshold && (!found || Math.abs(d) < Math.abs(found[0]))) found = [d, t];
-      }
-    }
-    return found;
-  };
-  const sx = best([start.x + dx, start.x + dx + start.width / 2, start.x + dx + start.width], xs);
-  const sy = best([start.y + dy, start.y + dy + start.height / 2, start.y + dy + start.height], ys);
-  return {
-    dx: sx ? dx + sx[0] : dx,
-    dy: sy ? dy + sy[0] : dy,
-    ...(sx ? { x: sx[1] } : {}),
-    ...(sy ? { y: sy[1] } : {}),
-  };
-}
-
 /** The selection, with every member of the groups it touches. */
 export function withGroups(elements: TemplateElement[], indices: number[]): number[] {
   const groups = new Set(indices.map((i) => elements[i]?.group).filter((g): g is string => Boolean(g)));

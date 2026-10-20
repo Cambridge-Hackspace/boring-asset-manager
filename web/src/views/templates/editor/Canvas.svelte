@@ -26,7 +26,8 @@
   import { useEditor, type Tool } from './editor.svelte';
   import Ruler from './Ruler.svelte';
   import ContextMenu, { type MenuItem } from './ContextMenu.svelte';
-  import { alongOneAxis, beneath, inBox, resizeFrom, scaledBox, turned, type Anchor } from './transform';
+  import { alongOneAxis, beneath, inBox, pull, resizeFrom, scaledBox, turned, type Anchor } from './transform';
+  import { gridOf, snapBox, snapNothing, snapPoint, type SnapLine } from './snapping';
 
   // The label on its desk: the live renderer's drawing of it (or, until it
   // can, the server's), an outline over each element to take it by, and the
@@ -147,10 +148,16 @@
     const [x, y] = onLabel(event);
     const cx = Math.min(Math.max(x, 0), doc.width);
     const cy = Math.min(Math.max(y, 0), doc.height);
-    if (event.altKey) return [tidy(cx, doc.units), tidy(cy, doc.units)];
-    const step = gridStep(doc.units);
-    return [snap(cx, step, doc.units), snap(cy, step, doc.units)];
+    const s = snapPoint(doc, cx, cy, threshold(), event.altKey ? snapNothing : editor.snapTo);
+    snapLines = { x: s.lineX, y: s.lineY };
+    return [s.x, s.y];
   }
+
+  /** How near a line snaps, in template units: six screen pixels. */
+  const threshold = () => 6 / scale;
+
+  // The lines a drag snapped to, drawn while it lasts.
+  let snapLines = $state<{ x?: SnapLine; y?: SnapLine }>({});
 
   // Screen geometry for the overlay, in viewport pixels.
   const sx = (x: number) => ox + x * scale;
@@ -215,7 +222,7 @@
     altKey: boolean;
   }
   type Gesture =
-    | { kind: 'move'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; hit: number; moved: boolean; last?: Pointer }
+    | { kind: 'move'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; box: Box; hit: number; moved: boolean; last?: Pointer }
     | { kind: 'resize'; x0: number; y0: number; start: TemplateElement[]; index: number; handle: Handle; moved: boolean; last?: Pointer }
     | { kind: 'scale'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; handle: Handle; box: Box; moved: boolean; last?: Pointer }
     | { kind: 'rotate'; x0: number; y0: number; start: TemplateElement[]; indices: number[]; cx: number; cy: number; moved: boolean; last?: Pointer }
@@ -317,7 +324,8 @@
       next = taken;
       editor.selected = next;
     }
-    gesture = { kind: 'move', x0: event.clientX, y0: event.clientY, start: editor.elements(), indices: next, hit: i, moved: false };
+    const start = editor.elements();
+    gesture = { kind: 'move', x0: event.clientX, y0: event.clientY, start, indices: next, box: boundsOf(next.map((k) => start[k]!)), hit: i, moved: false };
     capture(event);
   }
 
@@ -390,14 +398,28 @@
     const ctrl = p.ctrlKey || p.metaKey;
     // Shift frees it from the grid, as from any snapping.
     const step = p.shiftKey ? undefined : gridStep(doc.units);
+    snapLines = {};
     if (g.kind === 'move') {
-      if (p.shiftKey) [dx, dy] = alongOneAxis(dx, dy);
-      editor.doc.elements = moveElements(doc, g.indices, g.start, dx, dy, step ?? 0.001);
+      if (p.shiftKey) {
+        // Along one axis, snapping to nothing.
+        [dx, dy] = alongOneAxis(dx, dy);
+        editor.doc.elements = moveElements(doc, g.indices, g.start, dx, dy, 0.001);
+      } else {
+        const s = snapBox(doc, g.indices, g.box, dx, dy, threshold(), editor.snapTo);
+        snapLines = { x: s.x, y: s.y };
+        editor.doc.elements = moveElements(doc, g.indices, g.start, s.dx, s.dy, 0.001, { x: true, y: true });
+      }
     } else if (g.kind === 'resize') {
-      const o = { keepRatio: p.shiftKey, fromCenter: ctrl, step };
-      editor.doc.elements = g.start.map((e, i) => (i === g.index ? resizeFrom(doc, e, g.handle, dx, dy, o) : e));
+      const e = g.start[g.index]!;
+      // The handle itself snaps, where the element is not turned.
+      const snapped = !p.shiftKey && !e.rotation ? snapHandle(e, g.handle, dx, dy, [g.index]) : null;
+      const o = { keepRatio: p.shiftKey, fromCenter: ctrl, step: snapped || p.shiftKey ? undefined : step };
+      const [hx, hy] = snapped ?? [dx, dy];
+      editor.doc.elements = g.start.map((el, i) => (i === g.index ? resizeFrom(doc, el, g.handle, hx, hy, o) : el));
     } else if (g.kind === 'scale') {
-      const to = scaledBox(g.box, g.handle, dx, dy, doc.units, { keepRatio: p.shiftKey, fromCenter: ctrl, step });
+      const snapped = !p.shiftKey ? snapHandle(g.box, g.handle, dx, dy, g.indices) : null;
+      const [hx, hy] = snapped ?? [dx, dy];
+      const to = scaledBox(g.box, g.handle, hx, hy, doc.units, { keepRatio: p.shiftKey, fromCenter: ctrl, step: snapped || p.shiftKey ? undefined : step });
       editor.doc.elements = scaleElements(doc, g.indices, g.start, g.box, to);
     } else {
       // The angle swept about the center.
@@ -413,6 +435,96 @@
     }
   }
 
+  /**
+   * A handle's drag snapped: where the handle would be, snapped as a point,
+   * each axis it pulls; the drag that gets it there.
+   */
+  function snapHandle(b: Box, handle: Handle, dx: number, dy: number, moving: number[]): [number, number] {
+    const [px, py] = pull(handle);
+    const hx = b.x + (px + 1) * (b.width / 2);
+    const hy = b.y + (py + 1) * (b.height / 2);
+    const s = snapPoint(doc, hx + dx, hy + dy, threshold(), editor.snapTo, moving);
+    snapLines = { x: px ? s.lineX : undefined, y: py ? s.lineY : undefined };
+    return [px ? s.x - hx : dx, py ? s.y - hy : dy];
+  }
+
+  // Guides, as in Krita and Inkscape: dragged out of a ruler, moved, and
+  // dragged off the label to delete; locked, they stay put.
+  type GuideDrag = { axis: 'x' | 'y'; index: number; at: number | null; moved: boolean };
+  let guideDrag = $state<GuideDrag | null>(null);
+
+  /** From a ruler: a new guide, across from the top one, down from the left. */
+  export function guideFromRuler(event: PointerEvent, axis: 'x' | 'y') {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    if (!editor.guidesShown) editor.setGuidesShown(true);
+    guideDrag = { axis, index: -1, at: null, moved: false };
+    capture(event);
+  }
+
+  function downOnGuide(event: PointerEvent, axis: 'x' | 'y', index: number) {
+    if (startPan(event) || event.button !== 0 || editor.guidesLocked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    guideDrag = { axis, index, at: doc.guides?.[axis]?.[index] ?? null, moved: false };
+    capture(event);
+  }
+
+  /** Where a guide being dragged is, on the grid unless Shift is held; null off the label. */
+  function guideAt(event: PointerEvent, axis: 'x' | 'y'): number | null {
+    const [x, y] = onLabel(event);
+    const at = axis === 'x' ? x : y;
+    const across = axis === 'x' ? y : x;
+    if (at < 0 || at > (axis === 'x' ? doc.width : doc.height) || across < -threshold() * 4 || across > (axis === 'x' ? doc.height : doc.width) + threshold() * 4) return null;
+    if (event.shiftKey || !editor.snapTo.grid) return tidy(at, doc.units);
+    return axis === 'x' ? snapPoint(doc, at, 0, 0, { ...snapNothing, grid: true }).x : snapPoint(doc, 0, at, 0, { ...snapNothing, grid: true }).y;
+  }
+
+  function moveGuide(event: PointerEvent) {
+    const d = guideDrag!;
+    d.at = guideAt(event, d.axis);
+    d.moved = true;
+  }
+
+  function dropGuide() {
+    const d = guideDrag!;
+    guideDrag = null;
+    if (!d.moved) return;
+    const list = [...(doc.guides?.[d.axis] ?? [])];
+    if (d.index < 0) {
+      if (d.at === null) return;
+      list.push(d.at);
+      editor.setGuides({ ...doc.guides, [d.axis]: list }, 'Add a guide');
+    } else if (d.at === null) {
+      list.splice(d.index, 1);
+      editor.setGuides({ ...doc.guides, [d.axis]: list }, 'Remove a guide');
+    } else {
+      list[d.index] = d.at;
+      editor.setGuides({ ...doc.guides, [d.axis]: list }, 'Move a guide');
+    }
+  }
+
+  /** The grid's lines in view, in viewport pixels, major and minor, when it is shown. */
+  const gridLines = $derived.by(() => {
+    const grid = doc.grid;
+    if (!grid?.visible) return null;
+    const sub = Math.max(1, grid.subdivisions ?? 1);
+    const lines = (step: number, offset: number, size: number, origin: number) => {
+      const out: { at: number; major: boolean }[] = [];
+      const fine = step / sub;
+      // Too close together to see: the major lines only, or none.
+      const every = fine * scale >= 4 ? 1 : step * scale >= 4 ? sub : 0;
+      if (!every) return out;
+      for (let k = Math.ceil(-offset / fine); offset + k * fine <= size + 1e-9 && out.length < 4000; k += every) {
+        const v = offset + k * fine;
+        if (v < -1e-9) continue;
+        out.push({ at: Math.round(origin + v * scale) + 0.5, major: k % sub === 0 });
+      }
+      return out;
+    };
+    return { xs: lines(grid.x, grid.offset_x ?? 0, doc.width, ox), ys: lines(grid.y, grid.offset_y ?? 0, doc.height, oy) };
+  });
+
   function pointerMove(event: PointerEvent) {
     if (paper) {
       const [x, y] = onLabel(event);
@@ -421,6 +533,10 @@
     if (viewport) {
       const r = viewport.getBoundingClientRect();
       readoutAt = [event.clientX - r.left, event.clientY - r.top];
+    }
+    if (guideDrag) {
+      moveGuide(event);
+      return;
     }
     const g = gesture;
     if (!g) return;
@@ -446,6 +562,11 @@
 
   function pointerUp(event: PointerEvent) {
     if (viewport?.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+    snapLines = {};
+    if (guideDrag) {
+      dropGuide();
+      return;
+    }
     const g = gesture;
     gesture = null;
     if (g?.kind === 'draw') finishDrawing(g.from, g.to);
@@ -580,6 +701,11 @@
 
   /** Escape: stops what is in progress, and reports whether there was any. */
   export function cancel(): boolean {
+    snapLines = {};
+    if (guideDrag) {
+      guideDrag = null;
+      return true;
+    }
     const g = gesture;
     if (g) {
       gesture = null;
@@ -641,8 +767,8 @@
 
 <div class="grid h-full w-full" style="grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: 20px minmax(0, 1fr)">
 <div aria-hidden="true" class="border-r border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900"></div>
-<div class="border-b border-zinc-200 dark:border-zinc-800"><Ruler axis="x" /></div>
-<div class="border-r border-zinc-200 dark:border-zinc-800"><Ruler axis="y" /></div>
+<div class="border-b border-zinc-200 dark:border-zinc-800"><Ruler axis="x" onguide={(e) => guideFromRuler(e, 'y')} /></div>
+<div class="border-r border-zinc-200 dark:border-zinc-800"><Ruler axis="y" onguide={(e) => guideFromRuler(e, 'x')} /></div>
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:this={viewport}
@@ -721,6 +847,45 @@
 
   <!-- The selection, the same size at every zoom. -->
   <svg class="pointer-events-none absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
+    {#if gridLines}
+      <g data-grid>
+        {#each gridLines.xs as l, k (k)}
+          <line x1={l.at} x2={l.at} y1={oy} y2={oy + doc.height * scale} class={l.major ? 'grid-major' : 'grid-minor'} />
+        {/each}
+        {#each gridLines.ys as l, k (k)}
+          <line y1={l.at} y2={l.at} x1={ox} x2={ox + doc.width * scale} class={l.major ? 'grid-major' : 'grid-minor'} />
+        {/each}
+      </g>
+    {/if}
+    {#if editor.guidesShown}
+      {#each doc.guides?.x ?? [] as at, k (k)}
+        {#if !(guideDrag?.axis === 'x' && guideDrag.index === k && guideDrag.moved)}
+          <line x1={sx(at)} x2={sx(at)} y1="0" y2="100%" class="guide" />
+          <line x1={sx(at)} x2={sx(at)} y1="0" y2="100%" class="guide-grip" class:locked-guide={editor.guidesLocked} data-guide="x{k}" onpointerdown={(ev) => downOnGuide(ev, 'x', k)} />
+        {/if}
+      {/each}
+      {#each doc.guides?.y ?? [] as at, k (k)}
+        {#if !(guideDrag?.axis === 'y' && guideDrag.index === k && guideDrag.moved)}
+          <line y1={sy(at)} y2={sy(at)} x1="0" x2="100%" class="guide" />
+          <line y1={sy(at)} y2={sy(at)} x1="0" x2="100%" class="guide-grip row" class:locked-guide={editor.guidesLocked} data-guide="y{k}" onpointerdown={(ev) => downOnGuide(ev, 'y', k)} />
+        {/if}
+      {/each}
+    {/if}
+    {#if guideDrag?.moved}
+      {#if guideDrag.at === null}
+        <!-- Off the label: let go here, and it comes off. -->
+      {:else if guideDrag.axis === 'x'}
+        <line x1={sx(guideDrag.at)} x2={sx(guideDrag.at)} y1="0" y2="100%" class="guide dragging" data-guide-dragging />
+      {:else}
+        <line y1={sy(guideDrag.at)} y2={sy(guideDrag.at)} x1="0" x2="100%" class="guide dragging" data-guide-dragging />
+      {/if}
+    {/if}
+    {#if snapLines.x}
+      <line x1={sx(snapLines.x.at)} x2={sx(snapLines.x.at)} y1="0" y2="100%" class="snapped" data-snapped="x" />
+    {/if}
+    {#if snapLines.y}
+      <line y1={sy(snapLines.y.at)} y2={sy(snapLines.y.at)} x1="0" x2="100%" class="snapped" data-snapped="y" />
+    {/if}
     {#each editor.selected as i (i)}
       {@const e = doc.elements[i]}
       {#if e}
@@ -865,6 +1030,37 @@
     stroke: rgb(37 99 235);
     stroke-width: 1px;
     pointer-events: auto;
+  }
+  .grid-major {
+    stroke: rgb(113 113 122 / 0.35);
+    stroke-width: 1px;
+  }
+  .grid-minor {
+    stroke: rgb(113 113 122 / 0.15);
+    stroke-width: 1px;
+  }
+  .guide {
+    stroke: rgb(14 165 233);
+    stroke-width: 1px;
+  }
+  .guide.dragging {
+    stroke-dasharray: 4 3;
+  }
+  .guide-grip {
+    stroke: transparent;
+    stroke-width: 7px;
+    pointer-events: auto;
+    cursor: col-resize;
+  }
+  .guide-grip.row {
+    cursor: row-resize;
+  }
+  .guide-grip.locked-guide {
+    pointer-events: none;
+  }
+  .snapped {
+    stroke: rgb(219 39 119);
+    stroke-width: 1px;
   }
   .rotate-zone {
     fill: transparent;

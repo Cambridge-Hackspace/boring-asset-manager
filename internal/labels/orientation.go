@@ -50,6 +50,24 @@ func (t *Template) Turned(clockwise bool) *Template {
 		}
 		out.Guides = &g
 	}
+	if t.Grid != nil {
+		// The grid turns too: its lines across become lines down, from the
+		// side they come round to.
+		g := *t.Grid
+		g.X, g.Y = t.Grid.Y, t.Grid.X
+		if clockwise {
+			g.OffsetX, g.OffsetY = tidy(math.Mod(t.Height-t.Grid.OffsetY, t.Grid.Y)), t.Grid.OffsetX
+		} else {
+			g.OffsetX, g.OffsetY = t.Grid.OffsetY, tidy(math.Mod(t.Width-t.Grid.OffsetX, t.Grid.X))
+		}
+		if g.OffsetX >= g.X {
+			g.OffsetX = 0
+		}
+		if g.OffsetY >= g.Y {
+			g.OffsetY = 0
+		}
+		out.Grid = &g
+	}
 	out.Elements = make([]Element, len(t.Elements))
 	for i, e := range t.Elements {
 		cx, cy := e.X+e.Width/2, e.Y+e.Height/2

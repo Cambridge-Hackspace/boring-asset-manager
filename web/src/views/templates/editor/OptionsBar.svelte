@@ -31,8 +31,19 @@
   const anchorNames: Record<Anchor, string> = {
     nw: 'Top left', n: 'Top', ne: 'Top right', w: 'Left', c: 'Center', e: 'Right', sw: 'Bottom left', s: 'Bottom', se: 'Bottom right',
   };
+  // The Snap menu, as Krita's "Snap to" popup.
+  let snapOpen = $state(false);
+  const snapItems = [
+    ['grid', 'The grid'],
+    ['guides', 'Guides'],
+    ['elements', 'Other elements: edges and centers'],
+    ['label', 'The label: edges and center'],
+  ] as const;
+
   const names: Record<string, string> = { text: 'Text', code: 'Code', image: 'Image', rectangle: 'Rectangle', ellipse: 'Ellipse', line: 'Line', polygon: 'Polygon' };
 </script>
+
+<svelte:window onpointerdown={(e) => snapOpen && !(e.target as Element).closest('[data-snap-menu]') && (snapOpen = false)} />
 
 <div class="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-200 bg-zinc-50 px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-900" role="group" aria-label="Tool options">
   {#if editor.tool === 'select'}
@@ -80,9 +91,47 @@
     {:else}
       <span class="text-zinc-600 dark:text-zinc-400">Select and move</span>
     {/if}
-    <label class="ml-auto flex items-center gap-1" title="Turning snaps to multiples of 45° when near one">
-      <input type="checkbox" checked={editor.snapAngles} onchange={(ev) => editor.setSnapAngles(ev.currentTarget.checked)} /> Snap turns to 45°
-    </label>
+    <div class="relative ml-auto" data-snap-menu>
+      <button
+        type="button"
+        class="btn-sm"
+        aria-haspopup="menu"
+        aria-expanded={snapOpen}
+        title="What dragging snaps to; Shift turns it off while held"
+        onclick={() => (snapOpen = !snapOpen)}>Snap to ▾</button
+      >
+      {#if snapOpen}
+        <div
+          role="menu"
+          aria-label="Snap to"
+          tabindex="-1"
+          class="absolute top-full right-0 z-40 mt-1 min-w-56 rounded-md border border-zinc-300 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          onkeydown={(e) => e.key === 'Escape' && (snapOpen = false)}
+        >
+          {#each snapItems as [key, label] (key)}
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={editor.snapTo[key]}
+              class="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              onclick={() => editor.setSnap(key, !editor.snapTo[key])}
+            >
+              <span class="w-3" aria-hidden="true">{editor.snapTo[key] ? '✓' : ''}</span>{label}
+            </button>
+          {/each}
+          <div role="separator" class="my-1 border-t border-zinc-200 dark:border-zinc-700"></div>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={editor.snapAngles}
+            class="flex w-full items-center gap-2 px-3 py-1 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            onclick={() => editor.setSnapAngles(!editor.snapAngles)}
+          >
+            <span class="w-3" aria-hidden="true">{editor.snapAngles ? '✓' : ''}</span>Turns, to 45°
+          </button>
+        </div>
+      {/if}
+    </div>
   {:else}
     <span class="font-medium">{names[editor.tool]}</span>
     {#if editor.tool === 'code'}
