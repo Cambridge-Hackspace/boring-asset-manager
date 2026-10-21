@@ -630,3 +630,86 @@ test.describe('pointer and keyboard', () => {
     expect(dark).toBeGreaterThan(200);
   });
 });
+
+test.describe('round two', () => {
+  test('52: without the live renderer, the label and the overview are drawn by the server', async ({ signedIn: page }) => {
+    await page.route('**/*.wasm', (route) => route.abort());
+    await goTo(page, 'Templates');
+    await page.getByRole('link', { name: 'New template' }).click();
+    await page.locator('#tpl-name').fill(unique('Hunt'));
+    const preview = page.getByRole('img', { name: 'Label preview' });
+    await expect(preview).toBeVisible();
+    const r = await box(preview);
+    await tool(page, 'Text').click();
+    await drag(page, [r.x + r.width * 0.1, r.y + r.height * 0.2], [r.x + r.width * 0.5, r.y + r.height * 0.5]);
+    await page.keyboard.type('Served');
+    await page.keyboard.press('Escape');
+    // The server's picture, then: an image, with dark dots in it.
+    const dark = (img: Locator) =>
+      img.evaluate(async (i: HTMLImageElement) => {
+        await i.decode().catch(() => {});
+        if (!i.naturalWidth) return 0;
+        const c = document.createElement('canvas');
+        c.width = i.naturalWidth;
+        c.height = i.naturalHeight;
+        const g = c.getContext('2d')!;
+        g.drawImage(i, 0, 0);
+        const d = g.getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let k = 0; k < d.length; k += 4) if (d[k]! < 100 && d[k + 3]! > 128) n++;
+        return n;
+      });
+    await expect.poll(() => dark(page.locator('img[alt="Label preview"]'))).toBeGreaterThan(50);
+    await expect.poll(() => dark(page.locator('[data-overview-view]').locator('..').locator('img'))).toBeGreaterThan(20);
+  });
+
+  test('53: undoing typing brings the words back, drawn', async ({ signedIn: page }) => {
+    await withText(page, 'First');
+    const first = await ink(page);
+    await element(page).dblclick();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('A much longer second line');
+    await page.keyboard.press('Escape');
+    await expect.poll(() => ink(page)).toBeGreaterThan(first * 1.5);
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => ink(page)).toBe(first);
+  });
+
+  test('54: text copied and pasted is drawn twice, the copy beside it', async ({ signedIn: page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await withText(page);
+    const one = await ink(page);
+    await element(page).click();
+    await page.keyboard.press('Control+c');
+    await page.keyboard.press('Control+v');
+    await expect(page.locator('[data-element]')).toHaveCount(2);
+    await expect.poll(() => ink(page)).toBeGreaterThan(one * 1.5);
+    const [a, b] = [await box(element(page, 0)), await box(element(page, 1))];
+    expect(a.x !== b.x || a.y !== b.y).toBe(true);
+  });
+
+  test('55: Escape in the middle of a drag puts it back, and draws it back', async ({ signedIn: page }) => {
+    await withText(page);
+    const before = (await inkBox(page)).box!;
+    const e = await box(element(page));
+    await page.mouse.move(...middle(e));
+    await page.mouse.down();
+    await page.mouse.move(middle(e)[0] + 200, middle(e)[1] + 80, { steps: 10 });
+    await expect.poll(async () => (await inkBox(page)).box?.x ?? 0).toBeGreaterThan(before.x + 100);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect.poll(async () => (await inkBox(page)).box?.x ?? 0).toBeCloseTo(before.x, -1);
+    expect(await box(element(page))).toEqual(e);
+  });
+
+  test('56: reloading with changes not saved asks first', async ({ signedIn: page }) => {
+    await withText(page);
+    let asked = false;
+    page.on('dialog', (d) => {
+      asked = d.type() === 'beforeunload';
+      void d.dismiss();
+    });
+    await page.reload({ timeout: 3000 }).catch(() => {});
+    expect(asked).toBe(true);
+  });
+});
