@@ -64,7 +64,17 @@ scope.onmessage = async (event) => {
     if (failure) scope.postMessage({ type: 'image-failed', id: msg.id, message: failure });
     return;
   }
-  const out = live.render(msg.template, msg.data, msg.placeholders, JSON.stringify(msg.hidden));
+  // A renderer that stops (WebAssembly traps on a Go panic, and the instance
+  // is then done) says so, rather than leaving every later frame waiting
+  // on this one: the editor falls back to the server's previews.
+  let out: ReturnType<Bamlive['render']>;
+  try {
+    out = live.render(msg.template, msg.data, msg.placeholders, JSON.stringify(msg.hidden));
+  } catch (err) {
+    scope.postMessage({ type: 'failed', message: err instanceof Error ? err.message : String(err) });
+    scope.onmessage = null;
+    return;
+  }
   const pixels = out.pixels.buffer as ArrayBuffer;
   scope.postMessage(
     { type: 'frame', seq: msg.seq, width: out.width, height: out.height, pixels, description: out.description, problems: out.problems },
