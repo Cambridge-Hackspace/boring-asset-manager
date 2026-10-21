@@ -5,6 +5,7 @@
   import { startLiveRenderer, type Frame, type LiveRenderer, type LiveState, type PreviewData } from '../../lib/live/client';
   import type { Field, GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
+  import { PANELS_DEFAULT, PANELS_MAX, PANELS_MIN, clampPanels, storePanels, storedPanels } from '../../lib/panels';
   import { screenKey } from '../../lib/screen';
   import {
     elementIndex,
@@ -559,6 +560,42 @@
   }
   onDestroy(() => clearTimeout(hintTimer));
 
+  // The panels' width, dragged by their edge (or moved with the arrow keys
+  // there), within what leaves the canvas room, and remembered.
+  let panelsWant = $state(storedPanels());
+  let rowWidth = $state(0);
+  let toolboxWidth = $state(0);
+  const panelsWidth = $derived(rowWidth ? clampPanels(panelsWant, rowWidth - toolboxWidth) : panelsWant);
+  let resizing: { x: number; width: number } | null = $state(null);
+  function setPanels(width: number) {
+    panelsWant = clampPanels(width, rowWidth ? rowWidth - toolboxWidth : Infinity);
+    storePanels(panelsWant);
+  }
+  function resizeDown(event: PointerEvent) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    (event.currentTarget as Element).setPointerCapture(event.pointerId);
+    resizing = { x: event.clientX, width: panelsWidth };
+  }
+  function resizeMove(event: PointerEvent) {
+    // Dragged left, the panels grow: they are on the right.
+    if (resizing) panelsWant = clampPanels(resizing.width + resizing.x - event.clientX, rowWidth - toolboxWidth);
+  }
+  function resizeUp() {
+    if (!resizing) return;
+    resizing = null;
+    storePanels(panelsWant);
+  }
+  function resizeKey(event: KeyboardEvent) {
+    const step = event.shiftKey ? 64 : 16;
+    const to = { ArrowLeft: panelsWidth + step, ArrowRight: panelsWidth - step, Home: 0, End: Infinity }[event.key];
+    if (to === undefined) return;
+    // Not also a nudge of what is selected.
+    event.preventDefault();
+    event.stopPropagation();
+    setPanels(to);
+  }
+
   const title = $derived(isNew ? 'New template' : doc.name || routeId);
 </script>
 
@@ -607,8 +644,8 @@
       <OptionsBar {generators} {placeholderList} />
     </div>
 
-    <div class="flex min-h-0 flex-1 flex-col md:flex-row">
-      <aside hidden={editor.canvasOnly} class="relative shrink-0 overflow-y-auto overscroll-contain border-b border-zinc-200 bg-zinc-50 md:border-r md:border-b-0 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Toolbox">
+    <div bind:clientWidth={rowWidth} class="flex min-h-0 flex-1 flex-col md:flex-row {resizing ? 'cursor-col-resize select-none' : ''}">
+      <aside bind:offsetWidth={toolboxWidth} hidden={editor.canvasOnly} class="relative shrink-0 overflow-y-auto overscroll-contain border-b border-zinc-200 bg-zinc-50 md:border-r md:border-b-0 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Toolbox">
           <Toolbox onadd={addCentered} onimport={importSVG} />
       </aside>
       <div class="relative h-[55dvh] min-w-0 md:h-auto md:flex-1">
@@ -631,7 +668,30 @@
           >
         {/if}
       </div>
-      <aside hidden={editor.canvasOnly} class="relative w-full shrink-0 border-t border-zinc-200 md:w-72 md:overflow-y-auto md:overscroll-contain md:border-t-0 md:border-l bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-label="Panels">
+      <!-- The panels' edge: dragged to give them, or the canvas, more room; double-clicked, as they came. -->
+      <div hidden={editor.canvasOnly} class="relative hidden w-0 md:block">
+        <!-- A focusable separator is a widget, the window splitter of WAI-ARIA, which the linter does not know. -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panels"
+          aria-controls="editor-panels"
+          aria-valuemin={PANELS_MIN}
+          aria-valuemax={PANELS_MAX}
+          aria-valuenow={panelsWidth}
+          tabindex="0"
+          title="Drag to resize the panels; double-click to reset"
+          class="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize touch-none outline-none hover:bg-sky-500/40 focus-visible:bg-sky-500/60 {resizing ? 'bg-sky-500/60' : ''}"
+          onpointerdown={resizeDown}
+          onpointermove={resizeMove}
+          onpointerup={resizeUp}
+          onpointercancel={resizeUp}
+          ondblclick={() => setPanels(PANELS_DEFAULT)}
+          onkeydown={resizeKey}
+        ></div>
+      </div>
+      <aside id="editor-panels" hidden={editor.canvasOnly} style:--panels-width="{panelsWidth}px" class="relative w-full shrink-0 border-t border-zinc-200 md:w-(--panels-width) md:overflow-y-auto md:overscroll-contain md:border-t-0 md:border-l bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-label="Panels">
           <Dock
             panels={[
               // Layers above Properties, which grows as something is

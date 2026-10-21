@@ -1135,3 +1135,52 @@ test.describe('on a touch screen', () => {
     await expect(undo).toBeEnabled();
   });
 });
+
+test('resize the panels by dragging their edge, with the keys, and back with a double-click', async ({ signedIn: page }) => {
+  await goTo(page, 'Templates');
+  await page.getByRole('link', { name: 'New template' }).click();
+  const panels = page.getByRole('complementary', { name: 'Panels' });
+  const edge = page.getByRole('separator', { name: 'Resize panels' });
+  const label = page.getByRole('img', { name: 'Label preview' });
+  await expect(label).toBeVisible();
+  const width = async () => (await panels.boundingBox())!.width;
+  const start = await width();
+  const view = (await page.locator('[data-canvas-view], main').first().boundingBox())!;
+
+  // Dragged left, the panels take room from the canvas.
+  const e = (await edge.boundingBox())!;
+  const at: [number, number] = [e.x + e.width / 2, e.y + e.height / 2];
+  await page.mouse.move(...at);
+  await page.mouse.down();
+  await page.mouse.move(at[0] - 150, at[1], { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(width).toBeCloseTo(start + 150, -1);
+  expect(await edge.getAttribute('aria-valuenow')).toBe(String(Math.round(await width())));
+
+  // And not past the most, nor the least.
+  const e2 = (await edge.boundingBox())!;
+  await page.mouse.move(e2.x + e2.width / 2, at[1]);
+  await page.mouse.down();
+  await page.mouse.move(view.x + 10, at[1], { steps: 6 });
+  await page.mouse.up();
+  const most = await width();
+  expect(most).toBeLessThanOrEqual(640);
+  const e3 = (await edge.boundingBox())!;
+  await page.mouse.move(e3.x + e3.width / 2, at[1]);
+  await page.mouse.down();
+  await page.mouse.move(view.x + view.width - 5, at[1], { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(width).toBe(224);
+
+  // Kept across a reload.
+  await page.reload();
+  await expect.poll(width).toBe(224);
+
+  // With the keys, which move nothing on the label; and reset with a double-click.
+  await edge.focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(width).toBe(240);
+  await edge.dblclick();
+  await expect.poll(width).toBe(288);
+  expect(start).toBe(288);
+});
