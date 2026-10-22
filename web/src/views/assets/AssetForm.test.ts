@@ -164,6 +164,44 @@ describe('AssetForm', () => {
     expect(screen.getByRole('link', { name: 'Cancel' }).getAttribute('href')).toBe('/categories/tools');
   });
 
+  it('creates one and keeps the form for the next, with the next code in the series', async () => {
+    let n = 0;
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories: [cat('filament', 'Filament')] }),
+      'GET /generators': () => ({ generators }),
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'POST /categories/effective-fields': () => ({ fields: [field('colour', 'Color')] }),
+      'POST /assets': (b) => ({ status: 201, body: { asset: { asset: { id: `s${++n}`, name: (b as { name: string }).name }, location: [], links: [] } } }),
+      'GET /assets/s1/copy': () => ({ copy: { generator_keys: [{ generator_type: 'qr', assigned_code: 'SP-016' }] } }),
+    });
+    render(AssetForm, { params: {} });
+    const nameInput = (await screen.findByLabelText('Name')) as HTMLInputElement;
+    await fireEvent.input(nameInput, { target: { value: 'Yellow PLA' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Filament' }));
+    await fireEvent.input(await screen.findByLabelText('Color'), { target: { value: 'Yellow' } });
+    await fireEvent.input(screen.getByLabelText('QR Code'), { target: { value: 'SP-015' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create and add another' }));
+
+    // Still here, with what it was, but the next code; and it says what it made.
+    expect(await screen.findByRole('link', { name: 'Yellow PLA' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toMatch(/Created Yellow PLA\. The form is ready for the next\./);
+    expect(router.path).not.toBe('/assets/s1');
+    await vi.waitFor(() => expect((screen.getByLabelText('QR Code') as HTMLInputElement).value).toBe('SP-016'));
+    expect(nameInput.value).toBe('Yellow PLA');
+    expect(document.activeElement).toBe(nameInput);
+    expect((screen.getByLabelText('Color') as HTMLInputElement).value).toBe('Yellow');
+    expect((screen.getByRole('checkbox', { name: 'Filament' }) as HTMLInputElement).checked).toBe(true);
+
+    // The next, and then the last as usual.
+    await fireEvent.input(nameInput, { target: { value: 'Blue PLA' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create asset' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets/s2'));
+    expect(sent.filter((r) => r.method === 'POST' && r.path === '/assets').map((r) => (r.body as { generator_keys: unknown }).generator_keys)).toEqual([
+      [{ generator_type: 'qr', assigned_code: 'SP-015' }],
+      [{ generator_type: 'qr', assigned_code: 'SP-016' }],
+    ]);
+  });
+
   it('shows a server error beside the input it is about', async () => {
     const existing: AssetWithDetails = {
       asset: { id: 'a1', name: 'Drill', created_at: '', updated_at: '', condition: 'ok', condition_note: '' },
