@@ -261,6 +261,64 @@ func (s *Store) CreateCategoryFrom(in CategoryInput) (*models.Category, error) {
 	return s.GetCategoryByID(categoryID)
 }
 
+// cloneCategoryLinks are the tables a category's own settings are kept in,
+// each with the columns copied beside category_id.
+var cloneCategoryLinks = []struct{ table, columns string }{
+	{"category_fields", "field_id, is_required"},
+	{"category_relation_types", "relation_type_id"},
+	{"category_actions", "action_id, cascades"},
+	{"category_label_templates", "template_id, sort_order"},
+	{"category_scopes", "scope_id"},
+}
+
+// CloneCategory makes a copy of a category beside it, under the same
+// parent: its settings, fields, suggested link types, actions, scopes and
+// scan and label templates (the same templates, not copies of them), but
+// not its subcategories or its assets. An empty name names it "<name>
+// copy". The copy is not flagged running low by hand; with a threshold, it
+// flags itself, as a new category does.
+func (s *Store) CloneCategory(id, name string) (*models.Category, error) {
+	if id == UncategorizedCategoryID {
+		return nil, ErrSystemCategoryInTree
+	}
+	src, err := s.GetCategoryByID(id)
+	if err != nil {
+		return nil, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = src.Name + " copy"
+	}
+	if err := textcheck.Check("category name", name, textcheck.MaxName); err != nil {
+		return nil, err
+	}
+	cloneID := uuid.NewString()
+	now := time.Now().UTC()
+	err = s.withInventory(func(ic *inventoryChange) error {
+		res, err := s.TxExec(ic.tx, `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, stock_unit, is_lendable, is_running_low, low_stock_threshold, scan_template_id, created_at, updated_at)
+			SELECT ?, ?, parent_id, color_hex, is_consumable, stock_unit, is_lendable, ?, low_stock_threshold, scan_template_id, ?, ? FROM categories WHERE id = ?`,
+			cloneID, name, false, now, now, id)
+		if err != nil {
+			return fmt.Errorf("copying category: %w", err)
+		}
+		if n, err := res.RowsAffected(); err == nil && n == 0 {
+			// Deleted since it was read.
+			return ErrCategoryNotFound
+		}
+		for _, l := range cloneCategoryLinks {
+			q := fmt.Sprintf("INSERT INTO %s (category_id, %s) SELECT ?, %s FROM %s WHERE category_id = ?", l.table, l.columns, l.columns, l.table)
+			if _, err := s.TxExec(ic.tx, q, cloneID, id); err != nil {
+				return fmt.Errorf("copying %s: %w", l.table, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetCategoryByID(cloneID)
+}
+
 // GetCategoryByID retrieves a category by UUID.
 func (s *Store) GetCategoryByID(id string) (*models.Category, error) {
 	query := `SELECT ` + categoryColumns("") + ` FROM categories WHERE id = ?`

@@ -15,6 +15,11 @@ type idIn struct {
 	ID string `json:"id"`
 }
 
+type cloneCategoryIn struct {
+	ID   string `json:"id" jsonschema:"the category to copy"`
+	Name string `json:"name,omitempty" jsonschema:"the copy's name; empty for the original's, with copy after it"`
+}
+
 type categoryIn struct {
 	ID                string  `json:"id,omitempty" jsonschema:"the category to change; empty to make one"`
 	Name              *string `json:"name,omitempty"`
@@ -212,6 +217,13 @@ func catalogTools() []tool {
 				}
 				return say(out, "Saved %q.", nameOf(out, "category"))
 			}),
+		simple(&mcp.Tool{Name: "clone_category", Description: "Copy a category beside it, under the same parent: its settings, fields, suggested link types, actions, scopes, " +
+			"and scan and label templates (the same templates, not copies). Not its subcategories or its assets. Named \"<name> copy\" unless named.",
+			Annotations: changes("Copy a category", false)}, "POST /api/v1/categories/{id}/clone", manage,
+			func(in cloneCategoryIn) (request, error) {
+				return request{path: pathOf("/api/v1/categories/{id}/clone", in.ID), body: map[string]string{"name": in.Name}}, need(in.ID, "id")
+			},
+			func(_ cloneCategoryIn, out map[string]any) string { return fmt.Sprintf("Made %q.", nameOf(out, "category")) }),
 		simple(&mcp.Tool{Name: "delete_category", Description: "Delete a category. Its assets stay, without it; its subcategories must go first.",
 			Annotations: destroys("Delete a category", true)}, "DELETE /api/v1/categories/{id}", manage,
 			func(in idIn) (request, error) {

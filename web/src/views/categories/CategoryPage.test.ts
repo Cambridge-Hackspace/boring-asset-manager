@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import CategoryPage from './CategoryPage.svelte';
 import { fakeApi } from '../../test/fetch';
+import { router } from '../../lib/router.svelte';
 import { session } from '../../lib/session.svelte';
 import type { Category, EffectiveField } from '../../lib/models';
 
@@ -56,6 +57,20 @@ describe('CategoryPage', () => {
     expect(await screen.findByText(/Not saved yet: its details\./)).toBeTruthy();
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Power tools' } });
     await vi.waitFor(() => expect(screen.queryByText(/Not saved yet/)).toBeNull());
+  });
+
+  it('duplicates it as saved, and opens the copy', async () => {
+    const { sent } = api({ 'POST /categories/power/clone': () => ({ status: 201, body: { category: cat('copy', 'Power tools copy', 'tools') } }) });
+    render(CategoryPage, { params: { id: 'power' } });
+    const button = await screen.findByRole('button', { name: 'Duplicate' });
+    // Not with changes waiting: the copy is of what is saved.
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Big tools' } });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Power tools' } });
+    await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    await fireEvent.click(button);
+    await vi.waitFor(() => expect(router.path).toBe('/categories/copy'));
+    expect(sent.some((r) => r.method === 'POST' && r.path === '/categories/power/clone')).toBe(true);
   });
 
   it('shows own and inherited fields, and only offers to remove its own', async () => {
