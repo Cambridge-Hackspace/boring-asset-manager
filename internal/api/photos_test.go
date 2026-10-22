@@ -125,3 +125,104 @@ func TestAssetPhotosAPI(t *testing.T) {
 		t.Errorf("too large: %d", rec.Code)
 	}
 }
+
+func TestCopyingPhotos(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
+	made := func(name string) string {
+		t.Helper()
+		a, err := srv.store.CreateAsset(name, nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a.Asset.ID
+	}
+	upload := func(id string, data []byte) {
+		t.Helper()
+		body, ct := multipartBody(nil, false, map[string][]byte{"file": data}, nil)
+		if rec := do(t, srv, cookie, http.MethodPost, "/api/v1/assets/"+id+"/photos", ct, bytes.NewReader(body)); rec.Code != http.StatusCreated {
+			t.Fatalf("upload: %d %s", rec.Code, rec.Body)
+		}
+	}
+	files := func() int {
+		entries, _ := os.ReadDir(filepath.Join(srv.cfg.Storage.LocalPath, "photos"))
+		return len(entries)
+	}
+	served := func(id, photoID string) []byte {
+		t.Helper()
+		rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/assets/"+id+"/photos/"+photoID, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("serving %s: %d", photoID, rec.Code)
+		}
+		return rec.Body.Bytes()
+	}
+
+	from, to := made("Yellow spool"), made("Blue spool")
+	upload(from, testJPEG(t, 60, 40))
+	upload(from, testJPEG(t, 30, 30))
+	path := "/api/v1/assets/" + to + "/photos/copy"
+	body := `{"from_asset_id":"` + from + `"}`
+
+	for what, c := range map[string]struct {
+		who  *http.Cookie
+		body string
+		want int
+	}{
+		"a reader":         {reader, body, http.StatusForbidden},
+		"no asset to copy": {cookie, `{}`, http.StatusBadRequest},
+		"broken JSON":      {cookie, `{`, http.StatusBadRequest},
+		"a missing asset":  {cookie, `{"from_asset_id":"nope"}`, http.StatusNotFound},
+	} {
+		if rec := doJSON(t, srv, c.who, http.MethodPost, path, c.body); rec.Code != c.want {
+			t.Errorf("%s: %d %s", what, rec.Code, rec.Body)
+		}
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/nope/photos/copy", body); rec.Code != http.StatusNotFound {
+		t.Errorf("copying to a missing asset: %d", rec.Code)
+	}
+
+	rec := doJSON(t, srv, cookie, http.MethodPost, path, body)
+	var got struct{ Asset models.AssetWithDetails }
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("copy: %d %s", rec.Code, rec.Body)
+	}
+	original, _ := srv.store.GetAssetByID(from)
+	if len(got.Asset.Photos) != 2 {
+		t.Fatalf("copied %d photos", len(got.Asset.Photos))
+	}
+	for i, c := range got.Asset.Photos {
+		o := original.Photos[i]
+		if c.ID == o.ID || c.ThumbID == o.ThumbID || c.Filename != o.Filename || c.WidthPx != o.WidthPx || c.ByteSize != o.ByteSize {
+			t.Errorf("photo %d: %+v, of %+v", i, c, o)
+		}
+		if !bytes.Equal(served(to, c.ID), served(from, o.ID)) {
+			t.Errorf("photo %d is not the same picture", i)
+		}
+	}
+	// Files of their own: removing a copy leaves the original.
+	if n := files(); n != 8 {
+		t.Errorf("%d files for two photos and their copies", n)
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/assets/"+to+"/photos/"+got.Asset.Photos[0].ID, ""); rec.Code != http.StatusOK {
+		t.Fatalf("remove: %d", rec.Code)
+	}
+	served(from, original.Photos[0].ID)
+
+	// All or none: too many leaves no files behind.
+	full := made("Full")
+	for i := 0; i < store.MaxPhotos-1; i++ {
+		upload(full, testJPEG(t, 8, 8))
+	}
+	before := files()
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/"+full+"/photos/copy", body); rec.Code != http.StatusConflict {
+		t.Errorf("one too many: %d %s", rec.Code, rec.Body)
+	}
+	if n := files(); n != before {
+		t.Errorf("a refused copy left files: %d, was %d", n, before)
+	}
+	// An asset without photos gives none.
+	if rec := doJSON(t, srv, cookie, http.MethodPost, path, `{"from_asset_id":"`+made("Bare")+`"}`); rec.Code != http.StatusOK {
+		t.Errorf("copying none: %d %s", rec.Code, rec.Body)
+	}
+}

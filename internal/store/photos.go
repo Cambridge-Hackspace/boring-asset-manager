@@ -118,6 +118,13 @@ func (s *Store) editablePhotosTx(tx *sql.Tx, assetID string) ([]string, error) {
 // AddPhoto adds a photo, whose files are already stored, after an asset's
 // others, and records it in the asset's history.
 func (s *Store) AddPhoto(assetID string, p models.AssetPhoto) (*models.AssetWithDetails, error) {
+	return s.AddPhotos(assetID, []models.AssetPhoto{p})
+}
+
+// AddPhotos adds photos, whose files are already stored, after an asset's
+// others, in order, and records them in the asset's history: all of them,
+// or none if that would take it past MaxPhotos.
+func (s *Store) AddPhotos(assetID string, ps []models.AssetPhoto) (*models.AssetWithDetails, error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("beginning transaction: %w", err)
@@ -127,19 +134,25 @@ func (s *Store) AddPhoto(assetID string, p models.AssetPhoto) (*models.AssetWith
 	if err != nil {
 		return nil, err
 	}
-	if len(ids) >= MaxPhotos {
+	if len(ids)+len(ps) > MaxPhotos {
 		return nil, ErrTooManyPhotos
 	}
-	_, err = s.TxExec(tx, "INSERT INTO asset_photos ("+photoColumns+", position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		p.ID, assetID, p.ThumbID, p.Filename, p.ContentType, p.WidthPx, p.HeightPx, p.ByteSize, dbTime(p.CreatedAt), len(ids))
-	if err != nil {
-		return nil, fmt.Errorf("adding photo: %w", err)
+	changes := make([]models.EventChange, 0, len(ps))
+	for i, p := range ps {
+		_, err = s.TxExec(tx, "INSERT INTO asset_photos ("+photoColumns+", position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			p.ID, assetID, p.ThumbID, p.Filename, p.ContentType, p.WidthPx, p.HeightPx, p.ByteSize, dbTime(p.CreatedAt), len(ids)+i)
+		if err != nil {
+			return nil, fmt.Errorf("adding photo: %w", err)
+		}
+		changes = append(changes, models.EventChange{What: "photo", Key: p.ID, To: p.Filename})
 	}
-	if err := s.recordAssetEvent(tx, models.EventAssetEdited, assetID, models.EventPayload{
-		Trigger: models.TriggerManual,
-		Changes: []models.EventChange{{What: "photo", Key: p.ID, To: p.Filename}},
-	}); err != nil {
-		return nil, err
+	if len(changes) > 0 {
+		if err := s.recordAssetEvent(tx, models.EventAssetEdited, assetID, models.EventPayload{
+			Trigger: models.TriggerManual,
+			Changes: changes,
+		}); err != nil {
+			return nil, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("committing: %w", err)

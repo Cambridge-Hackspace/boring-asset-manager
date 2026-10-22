@@ -113,6 +113,34 @@ describe('AssetForm', () => {
     ]);
   });
 
+  it('copies the photos of the one it is like, unless unticked', async () => {
+    const photo = (id: string) => ({ id, thumb_id: `${id}t`, filename: `${id}.jpg`, content_type: 'image/jpeg', width_px: 4, height_px: 3, byte_size: 10, created_at: '' });
+    const made = async (untick: boolean) => {
+      navigate('/assets/new?like=spool');
+      const api = fakeApi({
+        'GET /categories': () => ({ categories: [] }),
+        'GET /generators': () => ({ generators }),
+        'GET /relation-types': () => ({ relation_types: [] }),
+        'GET /assets/spool': () => ({ asset: { asset: { id: 'spool', name: 'Yellow PLA' }, photos: [photo('front'), photo('side')] } }),
+        'GET /assets/spool/copy': () => ({ copy: { name: 'Yellow PLA', category_ids: [], field_values: {}, stock: null, generator_keys: [], links: [] } }),
+        'POST /categories/effective-fields': () => ({ fields: [] }),
+        'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' }, location: [], links: [] } } }),
+        'POST /assets/new-id/photos/copy': () => ({ asset: {} }),
+      });
+      render(AssetForm, { params: {} });
+      const box = (await screen.findByRole('checkbox', { name: 'Copy its 2 photos' })) as HTMLInputElement;
+      expect(box.checked).toBe(true);
+      expect(document.querySelector('img')!.getAttribute('src')).toBe('/api/v1/assets/spool/photos/front?size=thumb');
+      if (untick) await fireEvent.click(box);
+      await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+      await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+      cleanup();
+      return api.sent.filter((r) => r.path === '/assets/new-id/photos/copy').map((r) => r.body);
+    };
+    expect(await made(false)).toEqual([{ from_asset_id: 'spool' }]);
+    expect(await made(true)).toEqual([]);
+  });
+
   it('starts in a place, in a category, or linked to another, from the new asset’s side', async () => {
     const rel = (id: string, name: string, inverse: string, over = {}) => ({
       id, name, inverse_name: inverse, is_symmetric: false, is_single: false, is_location: false, created_at: '', updated_at: '', link_count: 0, ...over,

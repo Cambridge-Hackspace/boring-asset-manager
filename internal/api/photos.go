@@ -141,6 +141,56 @@ func (s *Server) handleReorderPhotos(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
+// handleCopyPhotos gives an asset copies of another's photos, after its own,
+// each with files of its own, so that removing one leaves the other:
+// POST /api/v1/assets/{id}/photos/copy with {"from_asset_id": "..."}
+func (s *Server) handleCopyPhotos(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
+		return
+	}
+	var req struct {
+		FromAssetID string `json:"from_asset_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.FromAssetID == "" {
+		writeJSONError(w, http.StatusBadRequest, "from_asset_id is required")
+		return
+	}
+	from, ok := s.assetFor(w, r, req.FromAssetID)
+	if !ok {
+		return
+	}
+	copies := make([]models.AssetPhoto, 0, len(from.Photos))
+	undo := func() {
+		for _, p := range copies {
+			s.removePhotoFiles(p)
+		}
+	}
+	for _, p := range from.Photos {
+		c := p
+		c.ID, c.ThumbID, c.CreatedAt = uuid.NewString(), uuid.NewString(), time.Now().UTC()
+		for to, of := range map[string]string{c.ID: p.ID, c.ThumbID: p.ThumbID} {
+			data, err := s.photos.Read(of)
+			if err == nil {
+				err = s.photos.Save(to, data)
+			}
+			if err != nil {
+				s.removePhotoFiles(c)
+				undo()
+				writeServerError(w, err, "copy the photo files")
+				return
+			}
+		}
+		copies = append(copies, c)
+	}
+	asset, err := s.actingStore(r).AddPhotos(r.PathValue("id"), copies)
+	if err != nil {
+		undo()
+		writePhotoError(w, err, "copy the photos")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
+}
+
 // removePhotoFiles removes a photo's files. A file left behind wastes space
 // but harms nothing, so a failure is logged rather than reported.
 func (s *Server) removePhotoFiles(p models.AssetPhoto) {

@@ -192,7 +192,7 @@ test('say where an asset is as it is made, find it by its place, and move it', a
   await expect(page.getByRole('region', { name: 'Contents' })).toHaveCount(0);
 });
 
-test('duplicate an asset: the form filled in from it, the next code in its series, the same place and links', async ({ signedIn: page, api }) => {
+test('duplicate an asset: the form filled in from it, the next code in its series, the same place, links and photos', async ({ signedIn: page, api }) => {
   const series = unique('SP').replace(/[^A-Za-z0-9]/g, '') + '-';
   const { relation_types } = await api.call('GET', '/relation-types');
   const contains = relation_types.find((t: { name: string }) => t.name === 'contains');
@@ -207,6 +207,9 @@ test('duplicate an asset: the form filled in from it, the next code in its serie
   await api.call('POST', `/assets/${shelf.id}/links`, { type_id: contains.id, asset_id: spool.id, outgoing: true });
   await api.call('POST', `/assets/${spool.id}/links`, { type_id: usedWith.id, asset_id: printer.id, outgoing: true });
   await api.call('POST', `/assets/${spool.id}/links`, { type_id: contains.id, asset_id: sample.id, outgoing: true });
+  const dot = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const uploaded = await page.context().request.post(`/api/v1/assets/${spool.id}/photos`, { multipart: { file: { name: 'spool.png', mimeType: 'image/png', buffer: dot } } });
+  expect(uploaded.status()).toBe(201);
 
   await page.goto(`/assets/${spool.id}`);
   await page.getByRole('link', { name: 'Duplicate…' }).click();
@@ -217,6 +220,7 @@ test('duplicate an asset: the form filled in from it, the next code in its serie
   await expect(page.getByRole('checkbox', { name: `used with ${printer.name}` })).toBeChecked();
   // What it contains stays with it.
   await expect(page.getByText(sample.name)).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Copy its photo' })).toBeChecked();
   await page.getByLabel('Name').fill(`${name} 2`);
   await page.getByRole('button', { name: 'Create asset' }).click();
 
@@ -226,10 +230,12 @@ test('duplicate an asset: the form filled in from it, the next code in its serie
   await expect(where).toContainText(shelf.name);
   await expect(page.getByText(`${series}015`).first()).toBeVisible();
   await expect(page.getByRole('link', { name: printer.name })).toBeVisible();
-  // The original keeps its place and what it holds.
+  await expect(page.getByRole('region', { name: 'Photos' }).getByRole('img')).toHaveCount(1);
+  // The original keeps its place, what it holds, and its photo.
   const original = (await api.call('GET', `/assets/${spool.id}`)).asset;
   expect(original.location.map((l: { id: string }) => l.id)).toEqual([shelf.id]);
   expect(original.links.some((l: { asset: { id: string } }) => l.asset.id === sample.id)).toBe(true);
+  expect(original.photos).toHaveLength(1);
 });
 
 test('start a new asset in a bin, in a category, or linked to another', async ({ signedIn: page, api }) => {

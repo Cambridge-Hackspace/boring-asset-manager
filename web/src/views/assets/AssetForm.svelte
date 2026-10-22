@@ -3,7 +3,7 @@
   import { ApiError, request } from '../../lib/api';
   import { assetPayload, type AssetCopy, type CopiedLink, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo, type RelationType } from '../../lib/models';
+  import { photoUrl, UNCATEGORIZED, type AssetPhoto, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo, type RelationType } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
@@ -57,6 +57,9 @@
   // its original has them, or the one it was started from.
   let startLinks = $state<(CopiedLink & { keep: boolean })[]>([]);
   let likeName = $state('');
+  // A copy's photos, copied once it is created unless unticked.
+  let likePhotos = $state<AssetPhoto[]>([]);
+  let copyPhotos = $state(true);
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
   // New assets' labels join the print queue (README §6.2), as each person last chose.
@@ -92,6 +95,7 @@
         ]);
         const copy = c.copy;
         likeName = of.asset.asset.name;
+        likePhotos = of.asset.photos ?? [];
         name = copy.name;
         categoryIds = copy.category_ids;
         codes = Object.fromEntries(copy.generator_keys.map((k) => [k.generator_type, k.assigned_code]));
@@ -212,6 +216,10 @@
         for (const l of startLinks.filter((l) => l.keep)) {
           await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/links`, { type_id: l.type_id, asset_id: l.asset.id, outgoing: l.outgoing }).catch(() => undefined);
         }
+        // Photos can be added from its page if these cannot be copied.
+        if (like && copyPhotos && likePhotos.length) {
+          await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/photos/copy`, { from_asset_id: like }).catch(() => undefined);
+        }
         if (canSpool) {
           rememberQueueNewLabels(session.user?.id ?? '', queueLabel);
           // The asset is made either way; one the spool cannot take now can
@@ -248,7 +256,7 @@
 <h1 class="mb-4 text-2xl font-bold">{isNew ? (like ? 'New asset like this one' : 'New asset') : 'Edit asset'}</h1>
 {#if likeName}
   <p class="-mt-2 mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-    Filled in from {likeName}, to change what differs. Its photos, condition, loans and history are its own; nothing is saved until you create it.
+    Filled in from {likeName}, to change what differs. Its condition, loans and history are its own; nothing is saved until you create it.
   </p>
 {/if}
 
@@ -301,6 +309,20 @@
           <ul class="space-y-1">
             {#each startLinks as l, i (l.type_id + l.asset.id + l.outgoing)}
               <li><label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={startLinks[i]!.keep} /> {l.label} {l.asset.name}</label></li>
+            {/each}
+          </ul>
+        </fieldset>
+      {/if}
+      {#if likePhotos.length}
+        <fieldset>
+          <legend class="label">Photos</legend>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" bind:checked={copyPhotos} />
+            {likePhotos.length === 1 ? 'Copy its photo' : `Copy its ${likePhotos.length} photos`}
+          </label>
+          <ul class="mt-2 flex flex-wrap gap-2" class:opacity-40={!copyPhotos} aria-hidden="true">
+            {#each likePhotos as p (p.id)}
+              <li><img src={photoUrl(like, p.id, true)} alt="" class="h-14 w-14 rounded object-cover" loading="lazy" /></li>
             {/each}
           </ul>
         </fieldset>
