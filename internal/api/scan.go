@@ -193,5 +193,23 @@ func (s *Server) scanActionsFor(r *http.Request, a *models.AssetWithDetails) map
 		"report": can(rbac.PermAssetsReport) || can(rbac.PermAssetsWrite),
 		// The actions its categories offer, such as Identify (README §5.4).
 		"actions": len(a.Actions) > 0 && can(rbac.PermAssetsAct),
+		// A new asset like it, or in it, as the asset's page starts one (README §3.2).
+		"add_similar": can(rbac.PermAssetsWrite),
+		"add_inside":  can(rbac.PermAssetsWrite) && s.hasLocationType(),
 	}
+}
+
+// hasLocationType reports whether a link type makes locations, for things
+// to be put in others.
+func (s *Server) hasLocationType() bool {
+	types, err := s.store.ListRelationTypes()
+	if err != nil {
+		return false
+	}
+	for _, t := range types {
+		if t.IsLocation {
+			return true
+		}
+	}
+	return false
 }

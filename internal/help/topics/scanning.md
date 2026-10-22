@@ -1,6 +1,6 @@
 # Scanning
 
-Scanning an asset's label opens its **scan page**: what it is, where it is, what it holds, and quick actions such as using some, borrowing it, or reporting a problem. You see only the actions you are allowed to take, and details with nothing in them are left off. Assets that are public can be scanned without signing in; anything else asks you to sign in, and comes back to it after.
+Scanning an asset's label opens its **scan page**: what it is, where it is, what it holds, and quick actions such as using some, borrowing it, reporting a problem, or adding another like it or something in it. You see only the actions you are allowed to take, and details with nothing in them are left off. Assets that are public can be scanned without signing in; anything else asks you to sign in, and comes back to it after.
 
 A phone's camera opens a label whose QR code holds its scan link, `{{scan_url}}`. New QR codes in the template editor hold it already, and the editor warns about a QR code that does not hold a link: a phone scanning it sees only the code. Each asset's page links to its scan page too.
 

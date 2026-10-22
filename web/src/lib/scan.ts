@@ -10,6 +10,8 @@ const actionLabels: Record<ScanAction, string> = {
   return: 'Return',
   report: 'Report a problem',
   actions: 'Its actions, such as Identify',
+  add_similar: 'Add another like it',
+  add_inside: 'Put something in it',
 };
 
 /** A quick action's name, as editors and previews show it. */
