@@ -8,6 +8,8 @@ Choose **New asset**, give it a name and its categories, say where it is (find t
 
 **Duplicate…** on an asset's page starts a new asset like it, such as one more spool of the same filament: the form is filled in with its categories, fields, stock and place, and the next code in its series (after SP-014, SP-015). Its links are listed to keep or untick, though not what it contains, which stays where it is. Change what differs, and nothing is saved until you choose **Create asset**. Its photos, condition and history are its own.
 
+You can also start a new asset from where it goes: **Add something inside…** on a shelf or a bin's page, **Add an asset to it** on a category's page, or **New asset…** in an asset's **Links**, which links the new one as the link chosen there would.
+
 **Edit** changes any of this; every change is kept in the asset's **History**, with who made it.
 
 ## Condition

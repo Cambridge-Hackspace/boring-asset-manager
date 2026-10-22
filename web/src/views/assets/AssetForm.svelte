@@ -16,8 +16,25 @@
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
   const isNew = !id;
-  // /assets/new?like=<id>: a new asset like that one (README §3.2).
-  const like = isNew ? (router.query.get('like') ?? '') : '';
+  // Where a new asset starts from (README §3.2): ?like=<id>, an asset like
+  // that one; ?in=<id>, in that one; ?category=<id>, in that category; and
+  // ?link=<type id>:<out|in>&to=<id>, linked to that one, read from the new
+  // asset. They combine.
+  const start = (key: string) => (isNew ? (untrack(() => router.query.get(key)) ?? '') : '');
+  const like = start('like');
+  const startIn = start('in');
+  const startCategory = start('category');
+  const [startType = '', startDir = ''] = start('link').split(':');
+  const startTo = start('to');
+  // Cancel goes back to where it was started from.
+  const backTo = like || startIn || startTo;
+  const cancelTo = !isNew
+    ? `/assets/${encodeURIComponent(id)}`
+    : backTo
+      ? `/assets/${encodeURIComponent(backTo)}`
+      : startCategory
+        ? `/categories/${encodeURIComponent(startCategory)}`
+        : '/assets';
 
   let categories = $state<Category[]>([]);
   let generators = $state<GeneratorInfo[]>([]);
@@ -36,8 +53,9 @@
   // Where it is: the asset it is in (README §5.3).
   let relationTypes = $state<RelationType[]>([]);
   let place = $state<{ id: string; name: string } | null>(null);
-  // A copy's other links, as its original has them, each made unless unticked.
-  let copiedLinks = $state<(CopiedLink & { keep: boolean })[]>([]);
+  // Links to make once it is created, each unless unticked: a copy's, as
+  // its original has them, or the one it was started from.
+  let startLinks = $state<(CopiedLink & { keep: boolean })[]>([]);
   let likeName = $state('');
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
@@ -84,8 +102,9 @@
         // Where it is goes in Where is it?; the rest are listed to keep or not.
         const located = copy.links.find((l) => l.is_location && !l.outgoing && l.type_id === relationTypes.find((t) => t.is_location)?.id);
         place = located ? located.asset : null;
-        copiedLinks = copy.links.filter((l) => l !== located).map((l) => ({ ...l, keep: true }));
+        startLinks = copy.links.filter((l) => l !== located).map((l) => ({ ...l, keep: true }));
       }
+      if (isNew) await startFrom();
       await resolveFields();
     } catch (err) {
       error = messageOf(err);
@@ -93,6 +112,25 @@
       loading = false;
     }
   });
+
+  // Fills in where a new asset was started from, other than like.
+  async function startFrom() {
+    const named = async (assetId: string) => {
+      const a = (await request<{ asset: AssetWithDetails }>('GET', `/assets/${encodeURIComponent(assetId)}`)).asset.asset;
+      return { id: a.id, name: a.name };
+    };
+    if (startCategory && categories.some((c) => c.id === startCategory) && !categoryIds.includes(startCategory)) {
+      categoryIds = [...categoryIds, startCategory];
+    }
+    if (startIn) place = await named(startIn);
+    const t = relationTypes.find((r) => r.id === startType);
+    if (t && startTo && (startDir === 'out' || startDir === 'in')) {
+      const other = await named(startTo);
+      const outgoing = t.is_symmetric || startDir === 'out';
+      if (t.is_location && !outgoing) place = other;
+      else startLinks = [...startLinks, { type_id: t.id, label: outgoing ? t.name : t.inverse_name, asset: other, outgoing, is_location: t.is_location, keep: true }];
+    }
+  }
 
   // The fields depend on the chosen categories; ask the server, which owns
   // the inheritance rules.
@@ -151,7 +189,7 @@
         // The asset is made; one that could not be placed says so on its page.
         await placeIt(res.asset).catch(() => undefined);
         // As its original is linked: each on its own, so one that cannot be leaves the rest.
-        for (const l of copiedLinks.filter((l) => l.keep)) {
+        for (const l of startLinks.filter((l) => l.keep)) {
           await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/links`, { type_id: l.type_id, asset_id: l.asset.id, outgoing: l.outgoing }).catch(() => undefined);
         }
         if (canSpool) {
@@ -231,12 +269,12 @@
           <LocationPicker value={place} exclude={id || undefined} onchange={(p) => (place = p)} />
         </fieldset>
       {/if}
-      {#if copiedLinks.length}
+      {#if startLinks.length}
         <fieldset>
-          <legend class="label">Links, as {likeName} has them</legend>
+          <legend class="label">{likeName ? `Links, as ${likeName} has them` : 'Links'}</legend>
           <ul class="space-y-1">
-            {#each copiedLinks as l, i (l.type_id + l.asset.id + l.outgoing)}
-              <li><label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={copiedLinks[i]!.keep} /> {l.label} {l.asset.name}</label></li>
+            {#each startLinks as l, i (l.type_id + l.asset.id + l.outgoing)}
+              <li><label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={startLinks[i]!.keep} /> {l.label} {l.asset.name}</label></li>
             {/each}
           </ul>
         </fieldset>
@@ -353,7 +391,7 @@
     {/if}
     <div class="flex gap-2">
       <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create asset' : 'Save'}</button>
-      <a class="btn-secondary" href={like ? `/assets/${encodeURIComponent(like)}` : isNew ? '/assets' : `/assets/${encodeURIComponent(id)}`}>Cancel</a>
+      <a class="btn-secondary" href={cancelTo}>Cancel</a>
     </div>
   </form>
 {/if}

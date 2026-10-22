@@ -57,6 +57,16 @@
     }
   }
 
+  // A new asset linked as chosen: the form reads the link from the new
+  // asset, the other way round from this one, but for a type that reads the same.
+  const newLink = $derived.by(() => {
+    const c = choices.find((c) => c.key === choice);
+    if (!c) return '';
+    const symmetric = types.find((t) => t.id === c.typeId)?.is_symmetric;
+    const dir = symmetric || !c.outgoing ? 'out' : 'in';
+    return `/assets/new?link=${encodeURIComponent(c.typeId)}:${dir}&to=${encodeURIComponent(asset.asset.id)}`;
+  });
+
   function add() {
     const c = choices.find((c) => c.key === choice);
     const other = found?.find((a) => a.id === otherId);
@@ -106,6 +116,9 @@
         <input id="link-search" class="input" type="search" placeholder="Name or code" bind:value={search} />
       </div>
       <button type="submit" class="btn-secondary">Find</button>
+      {#if newLink}
+        <a class="btn-secondary" href={newLink} title="A new asset, linked to this one as chosen">New asset…</a>
+      {/if}
     </form>
     {#if found}
       {#if found.length === 0}

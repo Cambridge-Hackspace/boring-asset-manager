@@ -212,6 +212,7 @@
         {#if session.canOn(asset.scopes, 'assets.write')}
           <a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>
           <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(id)}" title="A new asset like this one, to change before it is created">Duplicate…</a>
+          {#if locationType}<a class="btn-secondary" href="/assets/new?in={encodeURIComponent(id)}" title="A new asset, in this one">Add something inside…</a>{/if}
         {/if}
         {#if session.canAnyOn(asset.scopes, 'assets.report', 'assets.write') && !reporting}
           <button type="button" class="btn-secondary" onclick={() => (reporting = true)}>{asset.asset.condition === 'ok' ? 'Report a problem' : 'Update the problem'}</button>
