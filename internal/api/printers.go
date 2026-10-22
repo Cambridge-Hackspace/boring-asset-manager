@@ -1,13 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -255,7 +255,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(exportWriteTimeout))
+	takeLonger(w)
 	scenes, ok := s.layoutBatch(w, r, t, req.AssetIDs)
 	if !ok {
 		return
@@ -273,10 +273,12 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The printer's turn, so a job from the spool never interleaves.
+	// The printer's turn, so a job from the spool never interleaves. Once
+	// begun, a job is sent whole even if its caller goes: one cut short
+	// prints some labels and loses the rest.
 	turn := s.printerTurn(p.ID)
 	turn.Lock()
-	err = s.transport.Send(r.Context(), p.Connection, job)
+	err = s.transport.Send(context.WithoutCancel(r.Context()), p.Connection, job)
 	turn.Unlock()
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
@@ -421,9 +423,11 @@ func (s *Server) handleTestPrint(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "encode the test print")
 		return
 	}
+	// It may wait for the printer behind a long job, and is then sent whole.
+	takeLonger(w)
 	turn := s.printerTurn(p.ID)
 	turn.Lock()
-	err = s.transport.Send(r.Context(), p.Connection, job)
+	err = s.transport.Send(context.WithoutCancel(r.Context()), p.Connection, job)
 	turn.Unlock()
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))

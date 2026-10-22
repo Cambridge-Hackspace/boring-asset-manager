@@ -106,12 +106,33 @@ func Allows(ctx context.Context, permKey string, scopes []string) bool {
 	return rbac.Allows(UserPermissions(ctx), permKey, scopes)
 }
 
+// authenticatedKey marks a request made in process that already carries
+// its caller, for Authenticate to take as it is.
+type authenticatedKey struct{}
+
+// authenticatedAs carries from's caller, token or user, and permissions
+// onto ctx, for a request made in process on their behalf.
+func authenticatedAs(ctx, from context.Context) context.Context {
+	ctx = WithPermissions(ctx, UserPermissions(from))
+	if t := CurrentToken(from); t != nil {
+		ctx = WithToken(ctx, t)
+	}
+	if u := CurrentUser(from); u != nil {
+		ctx = WithUser(ctx, u)
+	}
+	return context.WithValue(ctx, authenticatedKey{}, true)
+}
+
 // Authenticate is an HTTP middleware that extracts and validates an API token
 // (Authorization: Bearer) or else the session cookie, populating the request
 // context with the token, or the user and session, and their permissions.
 func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Context().Value(authenticatedKey{}) != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
 			// Everyone holds the public role, signed in or not; signed out,
 			// only where OpenToPublic lets it count.
 			public, err := st.PublicPermissions()

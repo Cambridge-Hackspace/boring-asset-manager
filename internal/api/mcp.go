@@ -18,7 +18,7 @@ func (s *Server) mcpHandler() http.Handler {
 			writeJSONError(w, http.StatusNotFound, "MCP is turned off on this server ([mcp] enabled in its configuration)")
 		})
 	}
-	return mcpserver.Handler(mcpserver.Options{Version: Version, Identify: s.mcpCaller})
+	return mcpserver.Handler(mcpserver.Options{Version: Version, Identify: s.mcpCaller, Timeout: longRequestTimeout})
 }
 
 // mcpCaller is the API token an MCP request presents, and a way to ask the
@@ -33,8 +33,13 @@ func (s *Server) mcpCaller(w http.ResponseWriter, r *http.Request) (mcpserver.Ca
 		return mcpserver.Caller{}, nil, false
 	}
 	authorization := r.Header.Get("Authorization")
+	caught := r.Context()
 	api := func(ctx context.Context, method, path string, body []byte, contentType string) mcpserver.Response {
-		req, err := http.NewRequestWithContext(ctx, method, path, bytes.NewReader(body))
+		// As the caller was when this request came in. Reading its token
+		// again for each call failed a tool part way through its work when
+		// the token expired or was refreshed meanwhile, as an OAuth client's
+		// is every hour.
+		req, err := http.NewRequestWithContext(authenticatedAs(ctx, caught), method, path, bytes.NewReader(body))
 		if err != nil {
 			msg, _ := json.Marshal(ErrorResponse{Error: err.Error()})
 			return mcpserver.Response{Status: http.StatusBadRequest, Body: msg}

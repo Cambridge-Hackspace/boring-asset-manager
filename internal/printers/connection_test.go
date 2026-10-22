@@ -6,12 +6,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNormalizeConnection(t *testing.T) {
@@ -143,6 +145,64 @@ func TestIPPConnections(t *testing.T) {
 	fake.status = 0x0400 // client-error-bad-request
 	if err := d.Send(context.Background(), conn, job); !errors.Is(err, ErrUnreachable) || !strings.Contains(err.Error(), "0x0400") {
 		t.Errorf("refused job: got %v", err)
+	}
+}
+
+// slowConn writes a little at a time, as a connection to a printer that
+// takes a job only as fast as it prints it does.
+type slowConn struct{ net.Conn }
+
+func (c slowConn) Write(b []byte) (int, error) {
+	written := 0
+	for len(b) > 0 {
+		time.Sleep(5 * time.Millisecond)
+		n, err := c.Conn.Write(b[:min(4<<10, len(b))])
+		written += n
+		if err != nil {
+			return written, err
+		}
+		b = b[n:]
+	}
+	return written, nil
+}
+
+func TestIPPTakesAsLongAsThePrinterKeepsTakingTheJob(t *testing.T) {
+	var got int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, _ := io.ReadAll(r.Body)
+		got = len(data)
+		_, _ = w.Write([]byte{1, 1, 0, 0, 0, 0, 0, 1, ippTagOperation, ippTagEnd})
+	}))
+	defer srv.Close()
+	d := NewDispatcher(nil)
+	d.WriteTimeout = 100 * time.Millisecond
+	d.client = &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			c, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+			return slowConn{c}, err
+		},
+		WriteBufferSize: 4 << 10,
+	}}
+	conn := Connection{Type: ConnIPP, Address: strings.Replace(srv.URL, "http://", "ipp://", 1) + "/printers/ql"}
+	// 64 pieces 5ms apart: several times WriteTimeout in all.
+	job := bytes.Repeat([]byte("label"), 256<<10/5)
+	start := time.Now()
+	if err := d.Send(context.Background(), conn, job); err != nil {
+		t.Fatalf("after %v: %v", time.Since(start), err)
+	}
+	if time.Since(start) < 3*d.WriteTimeout || got < len(job) {
+		t.Errorf("took %d bytes in %v", got, time.Since(start))
+	}
+
+	// One that stops answering fails.
+	hung := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.ReadAll(r.Body)
+		<-r.Context().Done()
+	}))
+	defer hung.Close()
+	conn.Address = strings.Replace(hung.URL, "http://", "ipp://", 1) + "/printers/ql"
+	if err := d.Send(context.Background(), conn, []byte("job")); !errors.Is(err, ErrUnreachable) {
+		t.Errorf("a printer that never answers: %v", err)
 	}
 }
 

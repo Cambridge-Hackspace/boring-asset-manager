@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -86,7 +87,11 @@ var ErrUnreachable = errors.New("printer unreachable")
 // Dispatcher is the Transport for every connection type. It sends jobs one
 // at a time per destination, so concurrent jobs never interleave on a device.
 type Dispatcher struct {
-	DialTimeout  time.Duration
+	DialTimeout time.Duration
+	// WriteTimeout is how long a printer may stop taking a job before it
+	// fails. Printers take a job only as fast as they print it, so it
+	// bounds a stall, not the whole job: a long one that keeps moving is
+	// never cut off.
 	WriteTimeout time.Duration
 	// AllowedDevices are the path patterns (path.Match syntax) a device
 	// connection may name. None means device connections are refused.
@@ -107,7 +112,8 @@ func NewDispatcher(allowedDevices []string) *Dispatcher {
 		DialTimeout: 5 * time.Second, WriteTimeout: 60 * time.Second,
 		AllowedDevices: allowedDevices,
 		slots:          map[Connection]chan struct{}{},
-		client:         &http.Client{Timeout: 90 * time.Second},
+		// No overall timeout: sendIPP gives up when the printer stalls.
+		client: &http.Client{},
 	}
 }
 
@@ -191,11 +197,8 @@ func (d *Dispatcher) sendTCP(ctx context.Context, addr string, job []byte) error
 	}
 	defer conn.Close()
 
-	if err := conn.SetWriteDeadline(time.Now().Add(d.WriteTimeout)); err != nil {
+	if err := d.writeJob(conn, conn.SetWriteDeadline, job); err != nil {
 		return err
-	}
-	if _, err := conn.Write(job); err != nil {
-		return fmt.Errorf("sending job: %v", err)
 	}
 	// Signal the end of the job before closing.
 	if tcp, ok := conn.(*net.TCPConn); ok {
@@ -212,10 +215,31 @@ func (d *Dispatcher) sendDevice(name string, job []byte) error {
 	}
 	// Character devices may not support deadlines; then writes block until
 	// the printer takes the data.
-	_ = f.SetWriteDeadline(time.Now().Add(d.WriteTimeout))
-	if _, err := f.Write(job); err != nil {
+	deadline := func(t time.Time) error { _ = f.SetWriteDeadline(t); return nil }
+	if err := d.writeJob(f, deadline, job); err != nil {
 		f.Close()
-		return fmt.Errorf("sending job: %v", err)
+		return err
 	}
 	return f.Close()
+}
+
+// sendChunk is how much of a job is written at a time.
+const sendChunk = 16 << 10
+
+// writeJob writes a job a chunk at a time, each with WriteTimeout to be
+// taken, so that the deadline is for the printer stalling, not for the
+// whole job: a printer takes a job only as fast as it prints it, and a
+// single deadline cut long jobs off part way through.
+func (d *Dispatcher) writeJob(w io.Writer, setDeadline func(time.Time) error, job []byte) error {
+	for len(job) > 0 {
+		if err := setDeadline(time.Now().Add(d.WriteTimeout)); err != nil {
+			return err
+		}
+		n, err := w.Write(job[:min(sendChunk, len(job))])
+		if err != nil {
+			return fmt.Errorf("sending job: %v", err)
+		}
+		job = job[n:]
+	}
+	return nil
 }

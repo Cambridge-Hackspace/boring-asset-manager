@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // IPP encoding (RFC 8010) for the one request BAM makes: Print-Job, with
@@ -87,10 +88,22 @@ func (d *Dispatcher) sendIPP(ctx context.Context, printerURI string, job []byte)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(ippRequest(printerURI, job)))
+	// As for other connections, the printer may take its time over a long
+	// job but not stall: each part of it taken gives it WriteTimeout more,
+	// and after the last, WriteTimeout to answer.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stalled := time.AfterFunc(d.WriteTimeout, cancel)
+	defer stalled.Stop()
+	raw := ippRequest(printerURI, job)
+	body := &progressReader{r: bytes.NewReader(raw), progress: func() { stalled.Reset(d.WriteTimeout) }}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
 		return err
 	}
+	// Its length, as for the bytes it wraps, rather than sent chunked,
+	// which not every printer takes.
+	req.ContentLength = int64(len(raw))
 	req.Header.Set("Content-Type", "application/ipp")
 	resp, err := d.client.Do(req)
 	if err != nil {
@@ -108,4 +121,18 @@ func (d *Dispatcher) sendIPP(ctx context.Context, printerURI string, job []byte)
 		return fmt.Errorf("IPP server refused the job (status 0x%04X)", status)
 	}
 	return nil
+}
+
+// progressReader calls progress each time some of it is read.
+type progressReader struct {
+	r        io.Reader
+	progress func()
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	if n > 0 {
+		p.progress()
+	}
+	return n, err
 }

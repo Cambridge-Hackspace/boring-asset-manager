@@ -27,10 +27,10 @@ var (
 	spoolPoll = 2 * time.Second
 	// spoolHeartbeat is how often a batch being sent says so, and
 	// spoolStale how long without one before it counts as abandoned.
+	// Delivering one has no limit of its own: the printer's connection
+	// fails when the printer stops taking it.
 	spoolHeartbeat = 5 * time.Second
 	spoolStale     = 30 * time.Second
-	// spoolSendTimeout bounds delivering one batch to a printer.
-	spoolSendTimeout = 5 * time.Minute
 )
 
 // spooler is the Server's part in printing the spool.
@@ -137,13 +137,35 @@ func (s *Server) drainSpool(ctx context.Context) {
 }
 
 // sendBatch lays out a batch's labels as whoever asked for its job may see
-// them, sends them, and records how that went.
+// them, sends them, and records how that went. It beats the batch's
+// heartbeat from the start: laying out hundreds of labels, or waiting for
+// the printer's turn, can take longer than the sweep allows a batch whose
+// server stopped.
 func (s *Server) sendBatch(ctx context.Context, b *store.SpoolBatch) {
 	acting := s.store.As(b.CreatedBy)
 	if b.CreatedByToken {
 		acting = s.store.AsToken(b.CreatedBy)
 	}
+	beat, stop := context.WithCancel(ctx)
+	beating := make(chan struct{})
+	go func() {
+		defer close(beating)
+		tick := time.NewTicker(spoolHeartbeat)
+		defer tick.Stop()
+		for {
+			select {
+			case <-beat.Done():
+				return
+			case <-tick.C:
+				if err := s.store.HeartbeatSpoolBatch(b.ID); err != nil {
+					log.Printf("spooler: %v", err)
+				}
+			}
+		}
+	}()
 	outcome := s.printBatch(ctx, b)
+	stop()
+	<-beating
 	if err := acting.FinishSpoolBatch(b, outcome); err != nil {
 		log.Printf("spooler: finishing a batch: %v", err)
 	}
@@ -213,25 +235,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 	turn := s.printerTurn(p.ID)
 	turn.Lock()
 	defer turn.Unlock()
-	beat, stop := context.WithCancel(ctx)
-	defer stop()
-	go func() {
-		tick := time.NewTicker(spoolHeartbeat)
-		defer tick.Stop()
-		for {
-			select {
-			case <-beat.Done():
-				return
-			case <-tick.C:
-				if err := s.store.HeartbeatSpoolBatch(b.ID); err != nil {
-					log.Printf("spooler: %v", err)
-				}
-			}
-		}
-	}()
-	sendCtx, cancel := context.WithTimeout(ctx, spoolSendTimeout)
-	defer cancel()
-	if err := s.transport.Send(sendCtx, p.Connection, job); err != nil {
+	if err := s.transport.Send(ctx, p.Connection, job); err != nil {
 		if ctx.Err() != nil {
 			return store.SpoolOutcome{Failure: fmt.Sprintf("The server stopped while sending these to %s; they may have printed. Check before printing them again", p.Name), Problems: out.Problems}
 		}

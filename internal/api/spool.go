@@ -653,7 +653,7 @@ func (s *Server) handleDownloadSpool(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(exportWriteTimeout))
+	takeLonger(w)
 
 	images := s.newLabelImages()
 	type laidOut struct {

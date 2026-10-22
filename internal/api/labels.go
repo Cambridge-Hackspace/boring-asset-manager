@@ -32,9 +32,21 @@ const MaxExportAssets = 500
 // megabytes. A variable so tests can lower it.
 var maxBatchParts = 5_000_000
 
-// exportWriteTimeout replaces the server's write timeout for batch exports,
-// which can take longer than an ordinary request.
-const exportWriteTimeout = 2 * time.Minute
+// longRequestTimeout replaces the server's timeouts for work that can take
+// far longer than an ordinary request: laying out hundreds of labels, or
+// waiting while a printer prints them.
+const longRequestTimeout = 30 * time.Minute
+
+// takeLonger lets a request run for up to longRequestTimeout from now. The
+// read deadline matters as much as the write: once the server's read
+// timeout passes, it cancels the request's context, ending whatever the
+// request was doing, though its response could still be written.
+func takeLonger(w http.ResponseWriter) {
+	rc := http.NewResponseController(w)
+	until := time.Now().Add(longRequestTimeout)
+	_ = rc.SetReadDeadline(until)
+	_ = rc.SetWriteDeadline(until)
+}
 
 var labelContentTypes = map[string]string{
 	"svg": "image/svg+xml",
@@ -458,7 +470,7 @@ func (s *Server) handleExportLabels(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, `format must be "pdf" or "zip"`)
 		return
 	}
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(exportWriteTimeout))
+	takeLonger(w)
 
 	if !checkAssetIDs(w, req.AssetIDs) {
 		return

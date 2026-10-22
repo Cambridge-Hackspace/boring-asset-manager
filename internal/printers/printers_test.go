@@ -381,6 +381,73 @@ func TestSendSerializesJobsPerPrinter(t *testing.T) {
 	}
 }
 
+// slowPrinter is a printer on the far end of a pipe, which has no buffer:
+// it takes a job a little at a time, as a printer does while it prints, and
+// stops taking it once stall is closed. What it took is read once the job
+// is over.
+func slowPrinter(t *testing.T, d *Dispatcher, stall chan struct{}) func() []byte {
+	t.Helper()
+	got := &bytes.Buffer{}
+	done, ended := make(chan struct{}), make(chan struct{})
+	t.Cleanup(func() { close(ended) })
+	d.dial = func(ctx context.Context, addr string) (net.Conn, error) {
+		ours, theirs := net.Pipe()
+		go func() {
+			defer close(done)
+			defer theirs.Close()
+			buf := make([]byte, 4<<10)
+			for {
+				select {
+				case <-stall:
+					// Holding the line open, taking nothing.
+					<-ended
+					return
+				case <-time.After(5 * time.Millisecond):
+				}
+				n, err := theirs.Read(buf)
+				got.Write(buf[:n])
+				if err != nil {
+					return
+				}
+			}
+		}()
+		return ours, nil
+	}
+	return func() []byte {
+		<-done
+		return got.Bytes()
+	}
+}
+
+func TestSendTakesAsLongAsThePrinterKeepsTakingTheJob(t *testing.T) {
+	d := NewDispatcher(nil)
+	d.WriteTimeout = 100 * time.Millisecond
+	got := slowPrinter(t, d, make(chan struct{}))
+	// 64 reads 5ms apart: several times WriteTimeout in all.
+	job := bytes.Repeat([]byte("label"), 256<<10/5)
+	start := time.Now()
+	if err := d.Send(context.Background(), local(1), job); err != nil {
+		t.Fatalf("after %v: %v", time.Since(start), err)
+	}
+	if time.Since(start) < 3*d.WriteTimeout {
+		t.Errorf("the job went in %v: the printer was not slow enough to tell", time.Since(start))
+	}
+	if took := got(); !bytes.Equal(took, job) {
+		t.Errorf("the printer took %d of %d bytes", len(took), len(job))
+	}
+}
+
+func TestSendFailsWhenThePrinterStopsTakingTheJob(t *testing.T) {
+	d := NewDispatcher(nil)
+	d.WriteTimeout = 50 * time.Millisecond
+	stall := make(chan struct{})
+	close(stall)
+	slowPrinter(t, d, stall)
+	if err := d.Send(context.Background(), local(1), bytes.Repeat([]byte("x"), 64<<10)); !errors.Is(err, ErrUnreachable) {
+		t.Errorf("got %v, want ErrUnreachable", err)
+	}
+}
+
 func TestSendReportsUnreachablePrinters(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
