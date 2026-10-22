@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -120,6 +121,35 @@ func (s *Server) handleCreateCategory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"category": cat,
 	})
+}
+
+// CloneCategoryRequest names a category's copy; an empty or absent name
+// names it "<name> copy".
+type CloneCategoryRequest struct {
+	Name string `json:"name"`
+}
+
+// handleCloneCategory: POST /api/v1/categories/{id}/clone copies a category
+// beside it, without its subcategories or assets (README §3.1). Its scopes
+// are copied too, though setting them otherwise needs users.manage: a copy
+// without them would put its assets where its original's scopes keep them
+// from being seen.
+func (s *Server) handleCloneCategory(w http.ResponseWriter, r *http.Request) {
+	var req CloneCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	cat, err := s.actingStore(r).CloneCategory(r.PathValue("id"), req.Name)
+	if errors.Is(err, store.ErrCategoryNotFound) {
+		writeJSONError(w, http.StatusNotFound, "Category not found")
+		return
+	}
+	if err != nil {
+		writeStoreError(w, err, "copy the category")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"category": cat})
 }
 
 func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {

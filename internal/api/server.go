@@ -125,6 +125,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Category Hierarchy & Field Inheritance endpoints
 	handle("GET /api/v1/categories", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListCategories)))
 	handle("POST /api/v1/categories", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCreateCategory)))
+	handle("POST /api/v1/categories/{id}/clone", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCloneCategory)))
 	handle("GET /api/v1/categories/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategory)))
 	handle("PUT /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateCategory)))
 	handle("DELETE /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategory)))

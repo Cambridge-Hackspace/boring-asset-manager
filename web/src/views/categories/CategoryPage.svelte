@@ -355,6 +355,22 @@
     }
   }
 
+  // A copy beside it, as saved: settings, fields, suggestions, actions,
+  // scopes and templates, but not its subcategories or assets.
+  let duplicating = $state(false);
+  async function duplicate() {
+    error = '';
+    duplicating = true;
+    try {
+      const res = await request<{ category: Category }>('POST', `/categories/${encodeURIComponent(id)}/clone`);
+      navigate(`/categories/${encodeURIComponent(res.category.id)}`);
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      duplicating = false;
+    }
+  }
+
   async function remove() {
     try {
       await request('DELETE', `/categories/${encodeURIComponent(id)}`);
@@ -509,6 +525,13 @@
         <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create category' : 'Save'}</button>
         {#if !isNew}
           <a class="btn-secondary" href="/categories/new?parent={encodeURIComponent(id)}">New subcategory</a>
+          <button
+            type="button"
+            class="btn-secondary"
+            disabled={duplicating || unsaved.length > 0}
+            title={unsaved.length ? 'Save your changes first: the copy is of the category as saved.' : 'A copy beside it, without its subcategories or assets'}
+            onclick={duplicate}>Duplicate</button
+          >
           <ConfirmButton label="Delete" question="Delete this category? Its subcategories move to the top level." onconfirm={remove} />
         {/if}
       </div>

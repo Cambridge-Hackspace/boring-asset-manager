@@ -42,3 +42,22 @@ test('fields and categories, with inheritance', async ({ signedIn: page }) => {
   await page.getByLabel('Consumable').check();
   await expect(page.getByLabel('Running low')).toBeEnabled();
 });
+
+test('duplicate a category: its settings and fields, not its subcategories or assets', async ({ signedIn: page, api }) => {
+  const name = unique('Filament');
+  const { category } = await api.call('POST', '/categories', { name, color_hex: '#ffcc00', is_consumable: true });
+  await api.call('POST', '/categories', { name: unique('PLA'), parent_id: category.id });
+  const { field } = await api.call('POST', '/fields', { key: unique('spool_weight').toLowerCase().replace(/[^a-z0-9]+/g, '_'), label: 'Spool weight', validation_type: 'number' });
+  await api.call('POST', `/categories/${category.id}/fields`, { field_id: field.id, is_required: true });
+  await api.call('POST', '/assets', { name: unique('Yellow spool'), category_ids: [category.id], field_values: { [field.key]: '1000' } });
+
+  await page.goto(`/categories/${category.id}`);
+  await page.getByRole('button', { name: 'Duplicate' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${name} copy`);
+  await expect(page).not.toHaveURL(new RegExp(category.id));
+  await expect(page.getByLabel('Consumable')).toBeChecked();
+  await expect(page.getByRole('region', { name: 'Fields' }).getByText('Spool weight')).toBeVisible();
+  // Nothing in it, and nothing under it.
+  await expect(page.getByRole('link', { name: 'No assets in it yet' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'New subcategory' })).toBeVisible();
+});
