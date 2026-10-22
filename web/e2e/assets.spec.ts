@@ -268,3 +268,28 @@ test('start a new asset in a bin, in a category, or linked to another', async ({
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(key);
   await expect(page.getByRole('region', { name: 'Links' })).toContainText(`Part of ${drill.name}`);
 });
+
+test('create one and add another: the form kept, the code next in its series', async ({ signedIn: page, api }) => {
+  const series = unique('SP').replace(/[^A-Za-z0-9]/g, '') + '-';
+  const bin = (await api.call('POST', '/assets', { name: unique('Bin') })).asset.asset;
+  await page.goto(`/assets/new?in=${bin.id}`);
+  const first = unique('Yellow PLA');
+  await page.getByLabel('Name').fill(first);
+  await page.getByText(/^Codes/).click();
+  await page.locator('[id="code:qr"]').fill(`${series}001`);
+  await page.getByRole('button', { name: 'Create and add another' }).click();
+
+  await expect(page.getByRole('status')).toContainText(`Created ${first}.`);
+  await expect(page.locator('[id="code:qr"]')).toHaveValue(`${series}002`);
+  await expect(page.getByLabel('Name')).toBeFocused();
+  const second = unique('Blue PLA');
+  await page.keyboard.type(second);
+  await expect(page.getByLabel('Name')).toHaveValue(second);
+  await page.getByRole('button', { name: 'Create asset' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(second);
+
+  // Both are in the bin.
+  const { asset } = await api.call('GET', `/assets/${bin.id}`);
+  const inside = asset.links.filter((l: { outgoing: boolean }) => l.outgoing).map((l: { asset: { name: string } }) => l.asset.name);
+  expect(inside.sort()).toEqual([first, second].sort());
+});

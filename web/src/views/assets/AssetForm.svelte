@@ -177,6 +177,26 @@
     }
   }
 
+  // Save and add another: the form stays as it was, for the next one like
+  // it, but for its codes, which go on to the next in each one's series.
+  let made = $state<{ id: string; name: string }[]>([]);
+  let nameInput: HTMLInputElement | undefined = $state();
+  async function another(saved: AssetWithDetails) {
+    made = [...made, { id: saved.asset.id, name: saved.asset.name }];
+    const had = Object.entries(codes).filter(([, c]) => c?.trim());
+    codes = {};
+    if (had.length) {
+      try {
+        const next = (await request<{ copy: AssetCopy }>('GET', `/assets/${encodeURIComponent(saved.asset.id)}/copy`)).copy.generator_keys;
+        codes = Object.fromEntries(next.filter((k) => had.some(([t]) => t === k.generator_type)).map((k) => [k.generator_type, k.assigned_code]));
+      } catch {
+        // Left blank, for the next to be typed or assigned.
+      }
+    }
+    nameInput?.focus();
+    nameInput?.select();
+  }
+
   async function save(event: SubmitEvent) {
     event.preventDefault();
     error = '';
@@ -198,7 +218,8 @@
           // still be added from its page.
           if (queueLabel) await addToSpool({ asset_ids: [res.asset.asset.id] }).catch(() => undefined);
         }
-        navigate(`/assets/${encodeURIComponent(res.asset.asset.id)}`, true);
+        if ((event.submitter as HTMLButtonElement | null)?.value === 'another') await another(res.asset);
+        else navigate(`/assets/${encodeURIComponent(res.asset.asset.id)}`, true);
       } else {
         const res = await request<{ asset: AssetWithDetails }>('PUT', `/assets/${encodeURIComponent(id)}`, body);
         await placeIt(res.asset);
@@ -235,12 +256,17 @@
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else}
   <form class="max-w-3xl space-y-6" onsubmit={save} novalidate>
+    {#if made.length}
+      <p role="status" class="text-sm text-green-700 dark:text-green-400">
+        Created {#each made as m, i (m.id)}{#if i > 0}, {/if}<a class="underline" href="/assets/{encodeURIComponent(m.id)}">{m.name}</a>{/each}. The form is ready for the next.
+      </p>
+    {/if}
     {#if error && !errorFor}<ErrorMessage {error} />{/if}
 
     <div class="card space-y-4">
       <div>
         <label class="label" for="asset-name">Name</label>
-        <input id="asset-name" class="input" required bind:value={name} />
+        <input id="asset-name" class="input" required bind:this={nameInput} bind:value={name} />
       </div>
       <fieldset>
         <legend class="label">Categories</legend>
@@ -391,6 +417,9 @@
     {/if}
     <div class="flex gap-2">
       <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create asset' : 'Save'}</button>
+      {#if isNew}
+        <button type="submit" class="btn-secondary" value="another" disabled={busy} title="Create it, and keep the form as it is for the next one">Create and add another</button>
+      {/if}
       <a class="btn-secondary" href={cancelTo}>Cancel</a>
     </div>
   </form>
