@@ -87,6 +87,11 @@ type Options struct {
 	// Identify reads who a request is from and gives a way to ask the API as
 	// them. When it returns false it has answered the request itself.
 	Identify func(w http.ResponseWriter, r *http.Request) (Caller, Backend, bool)
+	// Timeout, when set, is how long a request may take, in place of the
+	// server's timeouts: a tool may do many things, such as laying out
+	// hundreds of labels, and once the server's read timeout passes the
+	// request's context ends, cutting it off part way.
+	Timeout time.Duration
 }
 
 type envKey struct{}
@@ -120,12 +125,16 @@ func Handler(o Options) http.Handler {
 		}
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
+		rc := http.NewResponseController(w)
 		if listening(r) {
 			// A subscription is a request kept open; the server's timeouts
 			// would end it.
-			rc := http.NewResponseController(w)
 			_ = rc.SetWriteDeadline(time.Time{})
 			_ = rc.SetReadDeadline(time.Time{})
+		} else if o.Timeout > 0 {
+			until := time.Now().Add(o.Timeout)
+			_ = rc.SetWriteDeadline(until)
+			_ = rc.SetReadDeadline(until)
 		}
 		e := &env{caller: caller, api: api, changes: changes, subs: subs, cancel: cancel, version: o.Version}
 		stream.ServeHTTP(w, r.WithContext(context.WithValue(ctx, envKey{}, e)))

@@ -301,3 +301,40 @@ func TestPlanningSplitsBigJobs(t *testing.T) {
 		t.Errorf("planned %d jobs of %d and %d", len(jobs), len(jobs[0].EntryIDs), len(jobs[len(jobs)-1].EntryIDs))
 	}
 }
+
+// TestABatchBeingPreparedIsNotGivenUp checks a batch beats its heartbeat
+// from when it is claimed: laying out hundreds of labels, or waiting for
+// the printer's turn, took longer than the sweep allows, and it gave up a
+// batch that went on to print.
+func TestABatchBeingPreparedIsNotGivenUp(t *testing.T) {
+	defer func(beat, stale time.Duration) { spoolHeartbeat, spoolStale = beat, stale }(spoolHeartbeat, spoolStale)
+	spoolHeartbeat, spoolStale = 10*time.Millisecond, 200*time.Millisecond
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ql := newFakeQL(t)
+	printerID := createPrinter(t, srv, cookie, ql.port(), "dk-11201")
+	ql90 := createTemplate(t, srv, cookie, landscapeTemplate)
+	drill, _ := srv.store.CreateAsset("Drill", nil, nil, nil)
+	spoolTo(t, srv, cookie, printerID, ql90, 1, drill.Asset.ID)
+	printSpool(t, srv, cookie, `{}`, http.StatusCreated)
+
+	// A direct print holds the printer, so the batch waits its turn.
+	turn := srv.printerTurn(printerID)
+	turn.Lock()
+	if !srv.spoolRound(context.Background()) {
+		t.Fatal("no batch was started")
+	}
+	time.Sleep(3 * spoolStale)
+	if n, err := srv.store.SweepSpool(time.Now().Add(-spoolStale)); err != nil || n != 0 {
+		t.Errorf("the sweep gave up %d batches (%v)", n, err)
+	}
+	turn.Unlock()
+	srv.drainSpool(context.Background())
+
+	if jobs := ql.waitForJobs(t, 1, 3*time.Second); len(jobs) != 1 {
+		t.Fatalf("the printer received %d jobs", len(jobs))
+	}
+	if jobs := spoolJobs(t, srv, cookie); len(jobs) != 1 || jobs[0].State != models.SpoolDone || jobs[0].Printed != 1 {
+		t.Errorf("jobs: %+v", jobs)
+	}
+}
