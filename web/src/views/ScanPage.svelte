@@ -123,6 +123,10 @@
               <button type="button" class="btn-primary" disabled={busy} onclick={() => act(() => request('POST', `${path}/checkin`), 'Returned.')}>Return</button>
             {:else if action === 'actions' && scan!.asset.actions?.length}
               <ActionButtons assetId={scan!.asset.id} actions={scan!.asset.actions} />
+            {:else if action === 'add_similar'}
+              <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(scan!.asset.id)}">{scanActionLabel(action)}</a>
+            {:else if action === 'add_inside'}
+              <a class="btn-secondary" href="/assets/new?in={encodeURIComponent(scan!.asset.id)}">{scanActionLabel(action)}</a>
             {:else if action === 'report'}
               <button type="button" class="btn-secondary" aria-expanded={reporting} onclick={() => (reporting = !reporting)}>Report a problem</button>
             {/if}
