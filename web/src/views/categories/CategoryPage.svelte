@@ -419,6 +419,10 @@
 {#if category && assetCount !== null}
   <p class="-mt-2 mb-4 text-sm">
     <a class="underline" href="/assets?category={encodeURIComponent(id)}">{assetCount === 0 ? 'No assets in it yet' : `See its ${assetCount} asset${assetCount === 1 ? '' : 's'}`}</a>
+    {#if session.can('assets.write') && !isSystem}
+      <span aria-hidden="true" class="mx-1 text-zinc-400">·</span>
+      <a class="underline" href="/assets/new?category={encodeURIComponent(id)}">Add an asset to it</a>
+    {/if}
   </p>
 {/if}
 <ErrorMessage {error} />

@@ -231,3 +231,40 @@ test('duplicate an asset: the form filled in from it, the next code in its serie
   expect(original.location.map((l: { id: string }) => l.id)).toEqual([shelf.id]);
   expect(original.links.some((l: { asset: { id: string } }) => l.asset.id === sample.id)).toBe(true);
 });
+
+test('start a new asset in a bin, in a category, or linked to another', async ({ signedIn: page, api }) => {
+  const bin = (await api.call('POST', '/assets', { name: unique('Bin') })).asset.asset;
+  const drill = (await api.call('POST', '/assets', { name: unique('Drill') })).asset.asset;
+  const catName = unique('Bits');
+  const { category } = await api.call('POST', '/categories', { name: catName });
+
+  // In a bin.
+  await page.goto(`/assets/${bin.id}`);
+  await page.getByRole('link', { name: 'Add something inside…' }).click();
+  const screw = unique('Screws');
+  await page.getByLabel('Name').fill(screw);
+  await page.getByRole('button', { name: 'Create asset' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(screw);
+  await expect(page.locator('dt', { hasText: /^Where$/ }).locator('xpath=following-sibling::dd[1]')).toContainText(bin.name);
+
+  // In a category.
+  await page.goto(`/categories/${category.id}`);
+  await page.getByRole('link', { name: 'Add an asset to it' }).click();
+  await expect(page.getByRole('checkbox', { name: catName })).toBeChecked();
+  const bit = unique('Bit');
+  await page.getByLabel('Name').fill(bit);
+  await page.getByRole('button', { name: 'Create asset' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(bit);
+  await expect(page.getByRole('link', { name: catName })).toBeVisible();
+
+  // Linked to the drill, as chosen on its page: the drill has part the new one.
+  await page.goto(`/assets/${drill.id}`);
+  await page.getByLabel('This asset').selectOption({ label: 'has part' });
+  await page.getByRole('link', { name: 'New asset…' }).click();
+  await expect(page.getByRole('checkbox', { name: `part of ${drill.name}` })).toBeChecked();
+  const key = unique('Chuck key');
+  await page.getByLabel('Name').fill(key);
+  await page.getByRole('button', { name: 'Create asset' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(key);
+  await expect(page.getByRole('region', { name: 'Links' })).toContainText(`Part of ${drill.name}`);
+});

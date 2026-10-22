@@ -37,6 +37,22 @@ afterEach(() => {
 });
 
 describe('LinksPanel', () => {
+  it('starts a new asset linked as chosen, read from the new one', async () => {
+    const usedWith: RelationType = { ...contains, id: 'w', name: 'used with', inverse_name: 'used with', is_symmetric: true, is_single: false, is_location: false };
+    fakeApi({ 'GET /relation-types': () => ({ relation_types: [contains, usedWith] }) });
+    render(LinksPanel, { asset: asset('bin', 'Bin'), onchange: () => {} });
+    const select = await screen.findByLabelText('This asset');
+    const link = () => screen.getByRole('link', { name: 'New asset…' }).getAttribute('href');
+    // The bin contains the new one: the new one is contained in the bin.
+    await fireEvent.change(select, { target: { value: 'c:out' } });
+    expect(link()).toBe('/assets/new?link=c:in&to=bin');
+    await fireEvent.change(select, { target: { value: 'c:in' } });
+    expect(link()).toBe('/assets/new?link=c:out&to=bin');
+    // Read the same both ways.
+    await fireEvent.change(select, { target: { value: 'w:out' } });
+    expect(link()).toBe('/assets/new?link=w:out&to=bin');
+  });
+
   it('finds an asset and links to it, reading from this one', async () => {
     const { sent } = fakeApi({
       'GET /relation-types': () => ({ relation_types: [contains] }),

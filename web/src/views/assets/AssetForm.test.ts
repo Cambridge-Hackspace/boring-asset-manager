@@ -113,6 +113,57 @@ describe('AssetForm', () => {
     ]);
   });
 
+  it('starts in a place, in a category, or linked to another, from the new asset’s side', async () => {
+    const rel = (id: string, name: string, inverse: string, over = {}) => ({
+      id, name, inverse_name: inverse, is_symmetric: false, is_single: false, is_location: false, created_at: '', updated_at: '', link_count: 0, ...over,
+    });
+    const named = (id: string, name: string) => () => ({ asset: { asset: { id, name } } });
+    const routes = {
+      'GET /categories': () => ({ categories: [cat('tools', 'Tools'), cat('bits', 'Bits')] }),
+      'GET /generators': () => ({ generators }),
+      'GET /relation-types': () => ({ relation_types: [rel('in', 'contains', 'contained in', { is_single: true, is_location: true }), rel('part', 'has part', 'part of')] }),
+      'GET /assets/bin': named('bin', 'Bin A3'),
+      'GET /assets/drill': named('drill', 'Drill'),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' }, location: [], links: [] } } }),
+      'POST /assets/new-id/links': () => ({ asset: {} }),
+    };
+
+    // In a bin, and a category; and a part of a drill.
+    navigate('/assets/new?in=bin&category=bits&link=part:in&to=drill');
+    const { sent } = fakeApi(routes);
+    render(AssetForm, { params: {} });
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Chuck key' } });
+    expect((screen.getByRole('checkbox', { name: 'Bits' }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('checkbox', { name: 'Tools' }) as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByText('Bin A3')).toBeTruthy();
+    expect((screen.getByRole('checkbox', { name: 'part of Drill' }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole('link', { name: 'Cancel' }).getAttribute('href')).toBe('/assets/bin');
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+    expect(sent.find((r) => r.method === 'POST' && r.path === '/assets')!.body).toMatchObject({ category_ids: ['bits'] });
+    expect(sent.filter((r) => r.path === '/assets/new-id/links').map((r) => r.body)).toEqual([
+      { type_id: 'in', asset_id: 'bin', outgoing: false },
+      { type_id: 'part', asset_id: 'drill', outgoing: false },
+    ]);
+    cleanup();
+
+    // A location link read as "contained in" is where it is.
+    navigate('/assets/new?link=in:in&to=bin');
+    fakeApi(routes);
+    render(AssetForm, { params: {} });
+    expect(await screen.findByText('Bin A3')).toBeTruthy();
+    expect(screen.queryByRole('checkbox', { name: /contained in/ })).toBeNull();
+    cleanup();
+
+    // A category alone goes back to it.
+    navigate('/assets/new?category=tools');
+    fakeApi(routes);
+    render(AssetForm, { params: {} });
+    expect(((await screen.findByRole('checkbox', { name: 'Tools' })) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole('link', { name: 'Cancel' }).getAttribute('href')).toBe('/categories/tools');
+  });
+
   it('shows a server error beside the input it is about', async () => {
     const existing: AssetWithDetails = {
       asset: { id: 'a1', name: 'Drill', created_at: '', updated_at: '', condition: 'ok', condition_note: '' },
