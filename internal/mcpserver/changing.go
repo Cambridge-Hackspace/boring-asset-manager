@@ -50,6 +50,20 @@ type failure struct {
 	Error string `json:"error"`
 }
 
+type copyIn struct {
+	Asset    string            `json:"asset" jsonschema:"the asset to copy, by ID or code"`
+	Name     string            `json:"name,omitempty" jsonschema:"the new asset's name; empty for the original's"`
+	Fields   map[string]string `json:"fields,omitempty" jsonschema:"field values that differ, by key; an empty value leaves one blank. Others are the original's"`
+	Codes    []codeIn          `json:"codes,omitempty" jsonschema:"codes to give it instead of the next in the series of the original's; an empty code gives it none of that type"`
+	Quantity *int              `json:"quantity,omitempty" jsonschema:"for stock counted by quantity, how many the new one has; otherwise the original's"`
+}
+
+type copyOut struct {
+	Asset     assetSummary `json:"asset"`
+	Linked    []string     `json:"linked" jsonschema:"the links it was given, as its original has them"`
+	NotLinked []string     `json:"not_linked,omitempty" jsonschema:"links it could not be given, and why"`
+}
+
 type updateIn struct {
 	Asset             string            `json:"asset" jsonschema:"the asset's ID, or one of its codes"`
 	Name              string            `json:"name,omitempty" jsonschema:"a new name"`
@@ -217,6 +231,92 @@ func changingTools() []tool {
 			}
 			return say(out, "%s", text)
 		}),
+		define(&mcp.Tool{
+			Name: "copy_asset",
+			Description: "Add an asset like another, such as one more spool like this one: the same categories, field values, stock and place, " +
+				"the next codes in the series of its own (after SP-014, SP-015), and its links, but not links that would take the other asset " +
+				"from it (what a box contains), nor its photos, condition, loans or history. Change what differs with name, fields, codes and quantity.",
+			Annotations: changes("Copy an asset", false),
+		}, []string{"GET /api/v1/assets/{id}/copy", "POST /api/v1/assets", "POST /api/v1/assets/{id}/links"}, []string{rbac.PermAssetsWrite},
+			func(ctx context.Context, e *env, in copyIn) (reply[copyOut], error) {
+				id, err := e.assetID(ctx, in.Asset)
+				if err != nil {
+					return reply[copyOut]{}, err
+				}
+				var got struct {
+					Copy struct {
+						Name          string                     `json:"name"`
+						CategoryIDs   []string                   `json:"category_ids"`
+						FieldValues   map[string]string          `json:"field_values"`
+						Stock         *stockIn                   `json:"stock"`
+						GeneratorKeys []models.AssetGeneratorKey `json:"generator_keys"`
+						Links         []struct {
+							TypeID   string             `json:"type_id"`
+							Label    string             `json:"label"`
+							Asset    models.LinkedAsset `json:"asset"`
+							Outgoing bool               `json:"outgoing"`
+						} `json:"links"`
+					} `json:"copy"`
+				}
+				if err := e.call(ctx, http.MethodGet, assetPath(id, "/copy"), nil, &got); err != nil {
+					return reply[copyOut]{}, err
+				}
+				c := got.Copy
+				if in.Name != "" {
+					c.Name = in.Name
+				}
+				for k, v := range in.Fields {
+					c.FieldValues[k] = v
+				}
+				codes := map[string]string{}
+				for _, k := range c.GeneratorKeys {
+					codes[k.GeneratorType] = k.AssignedCode
+				}
+				for _, k := range in.Codes {
+					codes[k.Type] = k.Code
+				}
+				keys := []map[string]string{}
+				for _, t := range sortedKeys(codes) {
+					if codes[t] != "" {
+						keys = append(keys, map[string]string{"generator_type": t, "assigned_code": codes[t]})
+					}
+				}
+				body := map[string]any{"name": c.Name, "category_ids": c.CategoryIDs, "generator_keys": keys, "field_values": c.FieldValues}
+				if c.Stock != nil {
+					if in.Quantity != nil {
+						c.Stock.Quantity = in.Quantity
+					}
+					body["stock"] = stockBody(c.Stock)
+				}
+				var res apiAsset
+				if err := e.call(ctx, http.MethodPost, "/api/v1/assets", body, &res); err != nil {
+					return reply[copyOut]{}, err
+				}
+				made := res.Asset.Asset.ID
+				out := copyOut{Linked: []string{}}
+				for _, l := range c.Links {
+					what := l.Label + " " + l.Asset.Name
+					err := e.call(ctx, http.MethodPost, assetPath(made, "/links"), map[string]any{"type_id": l.TypeID, "asset_id": l.Asset.ID, "outgoing": l.Outgoing}, nil)
+					if err != nil {
+						out.NotLinked = append(out.NotLinked, fmt.Sprintf("%s: %v", what, err))
+						continue
+					}
+					out.Linked = append(out.Linked, what)
+				}
+				after, err := e.reread(ctx, made)
+				if err != nil {
+					return reply[copyOut]{}, err
+				}
+				out.Asset = after.Asset
+				text := "Added " + describe(out.Asset) + "."
+				if len(out.Linked) > 0 {
+					text += " It is " + strings.Join(out.Linked, ", ") + "."
+				}
+				if len(out.NotLinked) > 0 {
+					text += " Could not link it: " + strings.Join(out.NotLinked, "; ") + "."
+				}
+				return say(out, "%s", text)
+			}),
 		define(&mcp.Tool{
 			Name: "update_asset",
 			Description: "Change an asset: its name, categories, field values, codes or stock. Only what is given changes; " +

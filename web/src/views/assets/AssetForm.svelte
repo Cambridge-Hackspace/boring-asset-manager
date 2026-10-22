@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { ApiError, request } from '../../lib/api';
-  import { assetPayload, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
+  import { assetPayload, type AssetCopy, type CopiedLink, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo, type RelationType } from '../../lib/models';
-  import { navigate } from '../../lib/router.svelte';
+  import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
   import { flattenTree } from '../../lib/tree';
@@ -16,6 +16,8 @@
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
   const isNew = !id;
+  // /assets/new?like=<id>: a new asset like that one (README §3.2).
+  const like = isNew ? (router.query.get('like') ?? '') : '';
 
   let categories = $state<Category[]>([]);
   let generators = $state<GeneratorInfo[]>([]);
@@ -34,6 +36,9 @@
   // Where it is: the asset it is in (README §5.3).
   let relationTypes = $state<RelationType[]>([]);
   let place = $state<{ id: string; name: string } | null>(null);
+  // A copy's other links, as its original has them, each made unless unticked.
+  let copiedLinks = $state<(CopiedLink & { keep: boolean })[]>([]);
+  let likeName = $state('');
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
   // New assets' labels join the print queue (README §6.2), as each person last chose.
@@ -62,6 +67,24 @@
         values = { ...a.field_values };
         stock = stockDraft(a.asset.stock);
         place = placeOf(a);
+      } else if (like) {
+        const [c, of] = await Promise.all([
+          request<{ copy: AssetCopy }>('GET', `/assets/${encodeURIComponent(like)}/copy`),
+          request<{ asset: AssetWithDetails }>('GET', `/assets/${encodeURIComponent(like)}`),
+        ]);
+        const copy = c.copy;
+        likeName = of.asset.asset.name;
+        name = copy.name;
+        categoryIds = copy.category_ids;
+        codes = Object.fromEntries(copy.generator_keys.map((k) => [k.generator_type, k.assigned_code]));
+        values = { ...copy.field_values };
+        stock = copy.stock
+          ? { counted: true, quantity: copy.stock.quantity ?? 0, unit: copy.stock.unit, threshold: copy.stock.low_stock_threshold }
+          : stockDraft(null);
+        // Where it is goes in Where is it?; the rest are listed to keep or not.
+        const located = copy.links.find((l) => l.is_location && !l.outgoing && l.type_id === relationTypes.find((t) => t.is_location)?.id);
+        place = located ? located.asset : null;
+        copiedLinks = copy.links.filter((l) => l !== located).map((l) => ({ ...l, keep: true }));
       }
       await resolveFields();
     } catch (err) {
@@ -127,6 +150,10 @@
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
         // The asset is made; one that could not be placed says so on its page.
         await placeIt(res.asset).catch(() => undefined);
+        // As its original is linked: each on its own, so one that cannot be leaves the rest.
+        for (const l of copiedLinks.filter((l) => l.keep)) {
+          await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/links`, { type_id: l.type_id, asset_id: l.asset.id, outgoing: l.outgoing }).catch(() => undefined);
+        }
         if (canSpool) {
           rememberQueueNewLabels(session.user?.id ?? '', queueLabel);
           // The asset is made either way; one the spool cannot take now can
@@ -157,8 +184,14 @@
 <nav aria-label="Breadcrumb" class="mb-2 text-sm">
   <a class="underline" href="/assets">Assets</a>
   {#if original}<span aria-hidden="true" class="mx-1 text-zinc-400">/</span><a class="underline" href="/assets/{encodeURIComponent(id)}">{original.asset.name}</a>{/if}
+  {#if likeName}<span aria-hidden="true" class="mx-1 text-zinc-400">/</span><a class="underline" href="/assets/{encodeURIComponent(like)}">{likeName}</a>{/if}
 </nav>
-<h1 class="mb-4 text-2xl font-bold">{isNew ? 'New asset' : 'Edit asset'}</h1>
+<h1 class="mb-4 text-2xl font-bold">{isNew ? (like ? 'New asset like this one' : 'New asset') : 'Edit asset'}</h1>
+{#if likeName}
+  <p class="-mt-2 mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+    Filled in from {likeName}, to change what differs. Its photos, condition, loans and history are its own; nothing is saved until you create it.
+  </p>
+{/if}
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
@@ -196,6 +229,16 @@
         <fieldset>
           <legend class="label">Where is it?</legend>
           <LocationPicker value={place} exclude={id || undefined} onchange={(p) => (place = p)} />
+        </fieldset>
+      {/if}
+      {#if copiedLinks.length}
+        <fieldset>
+          <legend class="label">Links, as {likeName} has them</legend>
+          <ul class="space-y-1">
+            {#each copiedLinks as l, i (l.type_id + l.asset.id + l.outgoing)}
+              <li><label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={copiedLinks[i]!.keep} /> {l.label} {l.asset.name}</label></li>
+            {/each}
+          </ul>
         </fieldset>
       {/if}
     </div>
@@ -310,7 +353,7 @@
     {/if}
     <div class="flex gap-2">
       <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create asset' : 'Save'}</button>
-      <a class="btn-secondary" href={isNew ? '/assets' : `/assets/${encodeURIComponent(id)}`}>Cancel</a>
+      <a class="btn-secondary" href={like ? `/assets/${encodeURIComponent(like)}` : isNew ? '/assets' : `/assets/${encodeURIComponent(id)}`}>Cancel</a>
     </div>
   </form>
 {/if}

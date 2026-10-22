@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import AssetForm from './AssetForm.svelte';
 import { fakeApi } from '../../test/fetch';
-import { router } from '../../lib/router.svelte';
+import { navigate, router } from '../../lib/router.svelte';
 import { session } from '../../lib/session.svelte';
 import type { AssetWithDetails, Category, EffectiveField } from '../../lib/models';
 
@@ -20,6 +20,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  navigate('/', true);
   vi.unstubAllGlobals();
 });
 
@@ -51,6 +52,65 @@ describe('AssetForm', () => {
       generator_keys: [{ generator_type: 'qr', assigned_code: 'D-1' }],
       field_values: { serial: 'SN-1' },
     });
+  });
+
+  it('fills a new asset in from one it is like, links it as that one is, and leaves out what is unticked', async () => {
+    navigate('/assets/new?like=spool');
+    const rel = (id: string, name: string, inverse: string, over = {}) => ({
+      id, name, inverse_name: inverse, is_symmetric: false, is_single: false, is_location: false, created_at: '', updated_at: '', link_count: 0, ...over,
+    });
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories: [cat('filament', 'Filament')] }),
+      'GET /generators': () => ({ generators }),
+      'GET /relation-types': () => ({
+        relation_types: [rel('in', 'contains', 'contained in', { is_single: true, is_location: true }), rel('with', 'used with', 'used with', { is_symmetric: true }), rel('part', 'has part', 'part of')],
+      }),
+      'GET /assets/spool': () => ({ asset: { asset: { id: 'spool', name: 'Yellow PLA' } } }),
+      'GET /assets/spool/copy': () => ({
+        copy: {
+          name: 'Yellow PLA',
+          category_ids: ['filament'],
+          field_values: { colour: 'Yellow' },
+          stock: { quantity: 1000, unit: 'g', low_stock_threshold: null },
+          generator_keys: [{ generator_type: 'qr', assigned_code: 'SP-015' }],
+          links: [
+            { type_id: 'in', label: 'contained in', asset: { id: 'shelf', name: 'Shelf 2' }, outgoing: false, is_location: true },
+            { type_id: 'with', label: 'used with', asset: { id: 'prusa', name: 'Prusa' }, outgoing: true, is_location: false },
+            { type_id: 'part', label: 'part of', asset: { id: 'kit', name: 'Starter kit' }, outgoing: false, is_location: false },
+          ],
+        },
+      }),
+      'POST /categories/effective-fields': () => ({ fields: [field('colour', 'Color')] }),
+      'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' }, location: [], links: [] } } }),
+      'POST /assets/new-id/links': () => ({ asset: {} }),
+    });
+    render(AssetForm, { params: {} });
+
+    expect(await screen.findByRole('heading', { name: 'New asset like this one' })).toBeTruthy();
+    expect(((await screen.findByLabelText('Name')) as HTMLInputElement).value).toBe('Yellow PLA');
+    expect((await screen.findByLabelText('Color') as HTMLInputElement).value).toBe('Yellow');
+    expect((screen.getByLabelText('QR Code') as HTMLInputElement).value).toBe('SP-015');
+    expect((screen.getByLabelText('Quantity') as HTMLInputElement).value).toBe('1000');
+    expect((screen.getByRole('checkbox', { name: 'Filament' }) as HTMLInputElement).checked).toBe(true);
+    // Where it is goes where it is chosen; the rest are listed, each to keep or not.
+    expect(screen.getByText('Shelf 2')).toBeTruthy();
+    expect((screen.getByRole('checkbox', { name: 'used with Prusa' }) as HTMLInputElement).checked).toBe(true);
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'part of Starter kit' }));
+    await fireEvent.input(screen.getByLabelText('Color'), { target: { value: 'Blue' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+
+    await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+    expect(sent.find((r) => r.method === 'POST' && r.path === '/assets')!.body).toEqual({
+      name: 'Yellow PLA',
+      category_ids: ['filament'],
+      generator_keys: [{ generator_type: 'qr', assigned_code: 'SP-015' }],
+      field_values: { colour: 'Blue' },
+      stock: { quantity: 1000, unit: 'g', low_stock_threshold: null },
+    });
+    expect(sent.filter((r) => r.path === '/assets/new-id/links').map((r) => r.body)).toEqual([
+      { type_id: 'in', asset_id: 'shelf', outgoing: false },
+      { type_id: 'with', asset_id: 'prusa', outgoing: true },
+    ]);
   });
 
   it('shows a server error beside the input it is about', async () => {

@@ -16,6 +16,23 @@ var trailingNumber = regexp.MustCompile(`^(.*?)([0-9]+)$`)
 // BIN-0100), and not taken. It is empty when no code of the type ends in a
 // number.
 func (s *Store) NextCode(generatorType string) (string, error) {
+	return s.nextCode(generatorType, nil)
+}
+
+// NextCodeLike suggests the next code of a generator type in the series of
+// code: one more than the highest code with its prefix, as NextCode does,
+// so that after SP-014 comes SP-015 however high the HS- codes go. It is
+// empty when code does not end in a number.
+func (s *Store) NextCodeLike(generatorType, code string) (string, error) {
+	m := trailingNumber.FindStringSubmatch(code)
+	if m == nil {
+		return "", nil
+	}
+	return s.nextCode(generatorType, &m[1])
+}
+
+// nextCode is NextCode among the codes with prefix, or all when it is nil.
+func (s *Store) nextCode(generatorType string, only *string) (string, error) {
 	rows, err := s.Query("SELECT assigned_code FROM asset_generator_keys WHERE generator_type = ?", generatorType)
 	if err != nil {
 		return "", fmt.Errorf("reading codes: %w", err)
@@ -31,7 +48,7 @@ func (s *Store) NextCode(generatorType string) (string, error) {
 		}
 		taken[code] = true
 		m := trailingNumber.FindStringSubmatch(code)
-		if m == nil {
+		if m == nil || (only != nil && m[1] != *only) {
 			continue
 		}
 		n, err := strconv.ParseUint(m[2], 10, 64)

@@ -131,3 +131,29 @@ func TestCloningACategory(t *testing.T) {
 		t.Error("a name too long was taken")
 	}
 }
+
+func TestNextCodeLike(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	for _, code := range []string{"SP-014", "SP-009", "HS-105", "BIN-0099", "ODD"} {
+		if _, err := st.CreateAsset(code, nil, []models.AssetGeneratorKey{{GeneratorType: "qr", AssignedCode: code}}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for like, want := range map[string]string{
+		// Its own series, however high another goes.
+		"SP-009":   "SP-015",
+		"SP-014":   "SP-015",
+		"BIN-0099": "BIN-0100",
+		// Nothing to follow.
+		"ODD": "",
+	} {
+		if got, err := st.NextCodeLike("qr", like); err != nil || got != want {
+			t.Errorf("after %s: %q, %v; want %q", like, got, err, want)
+		}
+	}
+	// NextCode still follows the highest of all.
+	if got, _ := st.NextCode("qr"); got != "HS-106" {
+		t.Errorf("NextCode: %q", got)
+	}
+}

@@ -191,3 +191,43 @@ test('say where an asset is as it is made, find it by its place, and move it', a
   await page.goto(`/assets/${shelfAsset.asset.id}`);
   await expect(page.getByRole('region', { name: 'Contents' })).toHaveCount(0);
 });
+
+test('duplicate an asset: the form filled in from it, the next code in its series, the same place and links', async ({ signedIn: page, api }) => {
+  const series = unique('SP').replace(/[^A-Za-z0-9]/g, '') + '-';
+  const { relation_types } = await api.call('GET', '/relation-types');
+  const contains = relation_types.find((t: { name: string }) => t.name === 'contains');
+  const usedWith = relation_types.find((t: { name: string }) => t.name === 'used with');
+  const shelf = (await api.call('POST', '/assets', { name: unique('Shelf') })).asset.asset;
+  const printer = (await api.call('POST', '/assets', { name: unique('Printer') })).asset.asset;
+  const sample = (await api.call('POST', '/assets', { name: unique('Test print') })).asset.asset;
+  const name = unique('Yellow PLA');
+  const spool = (await api.call('POST', '/assets', {
+    name, generator_keys: [{ generator_type: 'qr', assigned_code: `${series}014` }], stock: { quantity: 1000, unit: 'g' },
+  })).asset.asset;
+  await api.call('POST', `/assets/${shelf.id}/links`, { type_id: contains.id, asset_id: spool.id, outgoing: true });
+  await api.call('POST', `/assets/${spool.id}/links`, { type_id: usedWith.id, asset_id: printer.id, outgoing: true });
+  await api.call('POST', `/assets/${spool.id}/links`, { type_id: contains.id, asset_id: sample.id, outgoing: true });
+
+  await page.goto(`/assets/${spool.id}`);
+  await page.getByRole('link', { name: 'Duplicate…' }).click();
+  await expect(page.getByRole('heading', { name: 'New asset like this one' })).toBeVisible();
+  await expect(page.getByLabel('Name')).toHaveValue(name);
+  await expect(page.getByRole('spinbutton', { name: 'Quantity' })).toHaveValue('1000');
+  await expect(page.locator('[id="code:qr"]')).toHaveValue(`${series}015`);
+  await expect(page.getByRole('checkbox', { name: `used with ${printer.name}` })).toBeChecked();
+  // What it contains stays with it.
+  await expect(page.getByText(sample.name)).toHaveCount(0);
+  await page.getByLabel('Name').fill(`${name} 2`);
+  await page.getByRole('button', { name: 'Create asset' }).click();
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${name} 2`);
+  await expect(page).not.toHaveURL(new RegExp(spool.id));
+  const where = page.locator('dt', { hasText: /^Where$/ }).locator('xpath=following-sibling::dd[1]');
+  await expect(where).toContainText(shelf.name);
+  await expect(page.getByText(`${series}015`).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: printer.name })).toBeVisible();
+  // The original keeps its place and what it holds.
+  const original = (await api.call('GET', `/assets/${spool.id}`)).asset;
+  expect(original.location.map((l: { id: string }) => l.id)).toEqual([shelf.id]);
+  expect(original.links.some((l: { asset: { id: string } }) => l.asset.id === sample.id)).toBe(true);
+});

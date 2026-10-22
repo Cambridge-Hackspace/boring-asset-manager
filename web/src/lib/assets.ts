@@ -17,6 +17,27 @@ export function inputType(type: FieldType): string {
   }
 }
 
+/** A link a copy makes as its original has it (GET /assets/{id}/copy). */
+export interface CopiedLink {
+  type_id: string;
+  /** The type's name read from the copy. */
+  label: string;
+  asset: LinkedAsset;
+  outgoing: boolean;
+  is_location: boolean;
+}
+
+/** A new asset like another, to change before it is created (README §3.2). */
+export interface AssetCopy {
+  name: string;
+  category_ids: string[];
+  field_values: Record<string, string>;
+  stock: { quantity: number | null; unit: string; low_stock_threshold: number | null } | null;
+  /** The next codes in the series of the original's. */
+  generator_keys: GeneratorKey[];
+  links: CopiedLink[];
+}
+
 export interface AssetDraft {
   name: string;
   categoryIds: string[];
