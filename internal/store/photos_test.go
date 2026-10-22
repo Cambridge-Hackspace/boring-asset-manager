@@ -91,3 +91,37 @@ func TestAssetPhotos(t *testing.T) {
 		t.Errorf("an archived asset: %v", err)
 	}
 }
+
+func TestAddingPhotosTogether(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	id := asset(t, st, "Drill")
+	if _, err := st.AddPhoto(id, photo("own.jpg")); err != nil {
+		t.Fatal(err)
+	}
+	front, side := photo("front.jpg"), photo("side.jpg")
+	a, err := st.AddPhotos(id, []models.AssetPhoto{front, side})
+	if err != nil || !reflect.DeepEqual(photoNames(a), []string{"own.jpg", "front.jpg", "side.jpg"}) {
+		t.Fatalf("after its own, in order: %v, %v", photoNames(a), err)
+	}
+	// One entry in its history for the lot.
+	expectChanges(t, "added together", history(t, st, id)[0], models.EventAssetEdited,
+		models.EventChange{What: "photo", Key: front.ID, To: "front.jpg"}, models.EventChange{What: "photo", Key: side.ID, To: "side.jpg"})
+
+	// All or none: too many for what room is left adds none of them.
+	more := []models.AssetPhoto{}
+	for i := len(a.Photos); i <= MaxPhotos; i++ {
+		more = append(more, photo(fmt.Sprintf("%d.jpg", i)))
+	}
+	if _, err := st.AddPhotos(id, more); !errors.Is(err, ErrTooManyPhotos) {
+		t.Errorf("one too many: %v", err)
+	}
+	if again, _ := st.GetAssetByID(id); len(again.Photos) != 3 {
+		t.Errorf("a refused lot left %d photos", len(again.Photos))
+	}
+	// Nothing to add changes nothing.
+	before := len(history(t, st, id))
+	if _, err := st.AddPhotos(id, nil); err != nil || len(history(t, st, id)) != before {
+		t.Errorf("adding none: %v, history %d then %d", err, before, len(history(t, st, id)))
+	}
+}

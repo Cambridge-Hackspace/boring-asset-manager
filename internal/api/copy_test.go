@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -171,7 +172,18 @@ func TestMCPCopyAsset(t *testing.T) {
 	}
 	// Given no code of a type, it has none.
 	structured(t, callTool(t, cs, "copy_asset", map[string]any{"asset": spool.Asset.ID, "codes": []map[string]string{{"type": "qr", "code": ""}}}), &out)
-	if again, _ := st.GetAssetByID(out.Asset.ID); len(again.GeneratorKeys) != 0 {
-		t.Errorf("codes: %+v", again.GeneratorKeys)
+	if again, _ := st.GetAssetByID(out.Asset.ID); len(again.GeneratorKeys) != 0 || len(again.Photos) != 0 {
+		t.Errorf("codes: %+v, photos %d", again.GeneratorKeys, len(again.Photos))
+	}
+
+	// Its photos, when asked.
+	body, ct := multipartBody(nil, false, map[string][]byte{"file": testJPEG(t, 20, 20)}, nil)
+	if rec := do(t, srv, sessionCookie(t, srv, admin.ID), http.MethodPost, "/api/v1/assets/"+spool.Asset.ID+"/photos", ct, bytes.NewReader(body)); rec.Code != http.StatusCreated {
+		t.Fatalf("upload: %d %s", rec.Code, rec.Body)
+	}
+	res = callTool(t, cs, "copy_asset", map[string]any{"asset": spool.Asset.ID, "photos": true})
+	structured(t, res, &out)
+	if again, _ := st.GetAssetByID(out.Asset.ID); len(again.Photos) != 1 || !strings.Contains(toolText(res), "a copy of the original's photo") {
+		t.Errorf("photos %d: %s", len(again.Photos), toolText(res))
 	}
 }

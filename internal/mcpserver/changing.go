@@ -56,12 +56,15 @@ type copyIn struct {
 	Fields   map[string]string `json:"fields,omitempty" jsonschema:"field values that differ, by key; an empty value leaves one blank. Others are the original's"`
 	Codes    []codeIn          `json:"codes,omitempty" jsonschema:"codes to give it instead of the next in the series of the original's; an empty code gives it none of that type"`
 	Quantity *int              `json:"quantity,omitempty" jsonschema:"for stock counted by quantity, how many the new one has; otherwise the original's"`
+	Photos   bool              `json:"photos,omitempty" jsonschema:"true to give it copies of the original's photos"`
 }
 
 type copyOut struct {
 	Asset     assetSummary `json:"asset"`
 	Linked    []string     `json:"linked" jsonschema:"the links it was given, as its original has them"`
 	NotLinked []string     `json:"not_linked,omitempty" jsonschema:"links it could not be given, and why"`
+	Photos    int          `json:"photos,omitempty" jsonschema:"how many photos it was given"`
+	NoPhotos  string       `json:"no_photos,omitempty" jsonschema:"why the photos could not be copied"`
 }
 
 type updateIn struct {
@@ -235,9 +238,10 @@ func changingTools() []tool {
 			Name: "copy_asset",
 			Description: "Add an asset like another, such as one more spool like this one: the same categories, field values, stock and place, " +
 				"the next codes in the series of its own (after SP-014, SP-015), and its links, but not links that would take the other asset " +
-				"from it (what a box contains), nor its photos, condition, loans or history. Change what differs with name, fields, codes and quantity.",
+				"from it (what a box contains), nor its condition, loans or history. Change what differs with name, fields, codes and quantity; " +
+				"photos copies its photos too.",
 			Annotations: changes("Copy an asset", false),
-		}, []string{"GET /api/v1/assets/{id}/copy", "POST /api/v1/assets", "POST /api/v1/assets/{id}/links"}, []string{rbac.PermAssetsWrite},
+		}, []string{"GET /api/v1/assets/{id}/copy", "POST /api/v1/assets", "POST /api/v1/assets/{id}/links", "POST /api/v1/assets/{id}/photos/copy"}, []string{rbac.PermAssetsWrite},
 			func(ctx context.Context, e *env, in copyIn) (reply[copyOut], error) {
 				id, err := e.assetID(ctx, in.Asset)
 				if err != nil {
@@ -303,6 +307,14 @@ func changingTools() []tool {
 					}
 					out.Linked = append(out.Linked, what)
 				}
+				if in.Photos {
+					var copied apiAsset
+					if err := e.call(ctx, http.MethodPost, assetPath(made, "/photos/copy"), map[string]any{"from_asset_id": id}, &copied); err != nil {
+						out.NoPhotos = err.Error()
+					} else {
+						out.Photos = len(copied.Asset.Photos)
+					}
+				}
 				after, err := e.reread(ctx, made)
 				if err != nil {
 					return reply[copyOut]{}, err
@@ -314,6 +326,15 @@ func changingTools() []tool {
 				}
 				if len(out.NotLinked) > 0 {
 					text += " Could not link it: " + strings.Join(out.NotLinked, "; ") + "."
+				}
+				switch {
+				case out.Photos == 1:
+					text += " It has a copy of the original's photo."
+				case out.Photos > 1:
+					text += fmt.Sprintf(" It has copies of the original's %d photos.", out.Photos)
+				}
+				if out.NoPhotos != "" {
+					text += " Could not copy its photos: " + out.NoPhotos + "."
 				}
 				return say(out, "%s", text)
 			}),
