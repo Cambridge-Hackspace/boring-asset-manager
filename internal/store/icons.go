@@ -1039,3 +1039,110 @@ func (s *Store) SetIconSettings(ctx context.Context, c IconCompiler, settings mo
 		},
 	})
 }
+
+// IconSourceFile is a source by its path, as an archive holds it.
+type IconSourceFile struct {
+	Path   string
+	Source string
+}
+
+// IconImport is what importing library files came to.
+type IconImport struct {
+	Save    *models.IconSave `json:"save"`
+	Created int              `json:"created"`
+	Updated int              `json:"updated"`
+}
+
+// ImportIconLibrary saves files into the library at their paths, new ones
+// added and existing ones replaced, as one change: compiled once with
+// everything else, and published together, or refused, every file, if the
+// icons would not compile with them. Each replaced file's draft goes, and
+// each file published joins its history.
+func (s *Store) ImportIconLibrary(ctx context.Context, c IconCompiler, files []IconSourceFile) (*IconImport, error) {
+	seen := map[string]bool{}
+	for _, f := range files {
+		if err := ValidIconLibraryPath(f.Path); err != nil {
+			return nil, fmt.Errorf("%s: %w", f.Path, err)
+		}
+		if err := checkIconSource(f.Source); err != nil {
+			return nil, fmt.Errorf("%s: %w", f.Path, err)
+		}
+		if seen[f.Path] {
+			return nil, fmt.Errorf("%s is given twice", f.Path)
+		}
+		seen[f.Path] = true
+	}
+	existing, err := s.ListIconLibrary()
+	if err != nil {
+		return nil, err
+	}
+	idOf := map[string]string{}
+	for _, f := range existing {
+		idOf[f.Path] = f.ID
+	}
+	ids := make([]string, len(files))
+	result := &IconImport{}
+	for i, f := range files {
+		if id, ok := idOf[f.Path]; ok {
+			ids[i] = id
+			result.Updated++
+		} else {
+			ids[i] = uuid.NewString()
+			result.Created++
+		}
+	}
+	save, err := s.changeIcons(ctx, c, iconChange{
+		refuse: true,
+		apply: func(in *iconInputs) error {
+			for i, f := range files {
+				replaced := false
+				for k := range in.library {
+					if in.library[k].id == ids[i] {
+						in.library[k].source, replaced = f.Source, true
+					}
+				}
+				if !replaced {
+					in.library = append(in.library, iconSource{id: ids[i], name: f.Path, source: f.Source})
+				}
+			}
+			return nil
+		},
+		keep: func(tx *sql.Tx, _ bool, _ []models.IconDiag) error {
+			now := dbTime(time.Now())
+			for i, f := range files {
+				if _, ok := idOf[f.Path]; !ok {
+					_, err := s.TxExec(tx, `INSERT INTO icon_library (id, path, updated_at) VALUES (?, ?, ?)`, ids[i], f.Path, now)
+					if IsUniqueViolation(err) {
+						return ErrIconPathTaken
+					}
+					if err != nil {
+						return err
+					}
+				}
+				if _, err := s.TxExec(tx, `UPDATE icon_library SET source = ?, draft = NULL, draft_errors = NULL, updated_at = ? WHERE id = ?`, f.Source, now, ids[i]); err != nil {
+					return err
+				}
+				if err := s.addIconRevision(tx, "library_id", ids[i], f.Source, now); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	result.Save = save
+	return result, nil
+}
+
+// IconLexiconFiles returns what is published as the files a build
+// compiles, the lexicon block bam writes among them: a lexicon the isolex
+// compiler can check as it is.
+func (s *Store) IconLexiconFiles() ([]isolex.File, error) {
+	in, err := s.readIconInputs(s.Query)
+	if err != nil {
+		return nil, err
+	}
+	return in.files()
+}

@@ -46,6 +46,8 @@ var iconFuzzRoutes = []route{
 	{method: "GET", path: "/api/v1/categories/{category}/icon/revisions"},
 	{method: "DELETE", path: "/api/v1/categories/{category}/icon"},
 	{method: "GET", path: "/api/v1/icon-library"},
+	{method: "GET", path: "/api/v1/icons/export"},
+	{method: "POST", path: "/api/v1/icon-library/import", kind: "zip"},
 	{method: "POST", path: "/api/v1/icon-library", body: `{"path":"shared/f{n}.ilx","source":"fragment \"f{n}\" { tile 0 0 0 1 1 }"}`},
 	{method: "GET", path: "/api/v1/icon-library/{library}"},
 	{method: "PUT", path: "/api/v1/icon-library/{library}", body: `{"source":"fragment \"g{n}\" { tile 0 0 0 1 1 }"}`},

@@ -452,6 +452,13 @@ func (fz *fuzzer) request(r route, rng *rand.Rand, mutate bool) fuzzRequest {
 	case "csv":
 		file, mapping := fz.csv(rng, mutate)
 		req.body, req.contentType = multipartBody(rng, mutate, map[string][]byte{"file": file}, map[string]string{"mapping": mapping})
+	case "zip":
+		n := rng.Intn(1e9)
+		data := iconZip(map[string]string{fmt.Sprintf("shared/z%d.ilx", n): fmt.Sprintf(`fragment "z%d" { tile 0 0 0 1 1 }`, n)})
+		if mutate {
+			data = mutateBytes(rng, data)
+		}
+		req.body, req.contentType = multipartBody(rng, mutate, map[string][]byte{"file": data}, nil)
 	case "image":
 		data := tinyPNG()
 		if mutate {

@@ -150,6 +150,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("DELETE /api/v1/categories/{id}/icon", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategoryIcon)))
 	handle("DELETE /api/v1/categories/{id}/icon/draft", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDiscardCategoryIconDraft)))
 	handle("GET /api/v1/categories/{id}/icon/revisions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryIconRevisions)))
+	handle("GET /api/v1/icons/export", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportIcons)))
+	handle("POST /api/v1/icon-library/import", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleImportIcons)))
 	handle("GET /api/v1/icon-library", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListIconLibrary)))
 	handle("POST /api/v1/icon-library", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleCreateIconLibraryFile)))
 	handle("GET /api/v1/icon-library/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetIconLibraryFile)))
