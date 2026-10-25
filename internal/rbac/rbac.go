@@ -14,9 +14,13 @@ const (
 	PermAssetsDelete     = "assets.delete"
 	PermTemplatesManage  = "templates.manage"
 	PermCategoriesManage = "categories.manage"
-	PermSettingsManage   = "settings.manage"
-	PermUsersManage      = "users.manage"
-	PermLabelsPrint      = "labels.print"
+	// PermIconsManage changes what every icon is drawn with: the icon
+	// library, the palette and the lexicon settings (README §3.7). Each
+	// category's own icon is categories.manage.
+	PermIconsManage    = "icons.manage"
+	PermSettingsManage = "settings.manage"
+	PermUsersManage    = "users.manage"
+	PermLabelsPrint    = "labels.print"
 	// PermStockRecord uses, restocks and flags stock without editing assets.
 	PermStockRecord = "stock.record"
 	// PermAssetsReport reports an asset needing maintenance or out of
@@ -52,6 +56,7 @@ func AllPermissions() []string {
 		PermAssetsDelete,
 		PermTemplatesManage,
 		PermCategoriesManage,
+		PermIconsManage,
 		PermSettingsManage,
 		PermUsersManage,
 		PermLabelsPrint,

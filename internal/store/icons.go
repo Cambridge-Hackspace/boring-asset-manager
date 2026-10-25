@@ -37,7 +37,20 @@ var (
 	// ErrIconsChanging means other changes kept landing while a change
 	// compiled, so it could not be checked against what is there now.
 	ErrIconsChanging = errors.New("the icons kept changing while this change was compiled; try again")
+	// ErrIconCompile wraps a compile that stopped rather than finished:
+	// out of time or memory, which a lexicon can ask for.
+	ErrIconCompile = errors.New("the icons could not be compiled")
 )
+
+// compile runs c, telling a compiler that is not there from one that
+// stopped.
+func compile(ctx context.Context, c IconCompiler, files []isolex.File) (*isolex.Result, error) {
+	res, err := c.Compile(ctx, files)
+	if err != nil && !errors.Is(err, isolex.ErrUnavailable) {
+		return nil, fmt.Errorf("%w: %v", ErrIconCompile, err)
+	}
+	return res, err
+}
 
 // IconBuildError refuses a change the lexicon would not compile with.
 type IconBuildError struct {
@@ -317,7 +330,7 @@ func (s *Store) changeIcons(ctx context.Context, c IconCompiler, ch iconChange) 
 		if err != nil {
 			return nil, err
 		}
-		res, err := c.Compile(ctx, files)
+		res, err := compile(ctx, c, files)
 		if err != nil {
 			return nil, err
 		}
@@ -464,7 +477,7 @@ func (s *Store) CheckCategoryIcon(ctx context.Context, c IconCompiler, categoryI
 	if err != nil {
 		return nil, err
 	}
-	res, err := c.Compile(ctx, files)
+	res, err := compile(ctx, c, files)
 	if err != nil {
 		return nil, err
 	}

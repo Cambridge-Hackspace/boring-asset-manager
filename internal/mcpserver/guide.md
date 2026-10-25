@@ -31,6 +31,14 @@ An **asset** is one thing: a drill, a bin of screws, a spool of filament, a shel
 
 A category also decides whether its assets are lendable or consumable, which label templates and scan page they use, and which **actions** (buttons such as Identify, for devices to act on) they offer.
 
+## Icons
+
+A category may have an **icon**, an isometric drawing written in **isolex**, a small language for icons in KDL 2.0 syntax. A box is `box x y z width depth height` in tile units, parts are named so that others can replace them, and every color is a palette **token** (`ink`, `body-top`), never a hex value. The token `category` paints in the category's own color.
+
+All the icons compile together, as one **lexicon**. A category's icon can `extends` another, usually its parent's, and change one part. The **library** holds what no one category owns: bases, fragments and axes.
+
+**Saving** publishes a source only if everything still compiles with it and it draws an icon by the category's icon name. Otherwise the source is kept as a **draft**, with the compiler's errors as `file:line:col: message`, and the published icon stays. So check (`check_category_icon`) and fix before you save, and read the errors when a save comes back as a draft. Deleting an icon that another one uses is refused, as is taking a token off the palette while an icon paints with it.
+
 ## Places
 
 Where something is, is a link: Shelf A *contains* Bin 3, Bin 3 *contains* the screws. An asset is in one place at a time; its **location** is the chain of places, outermost first (Shelf A › Bin 3). Searching by a place's name finds what is in it, at any depth. Other **link types** (has part, used with) relate assets without placing them.
