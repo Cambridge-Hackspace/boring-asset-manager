@@ -26,7 +26,7 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
 - **Icon compiler:** Icons are written in [isolex](https://forge.axonibyte.com/axonibyte/isolex), a small language for isometric icons by **Axonibyte Innovations, LLC**, licensed under the Apache License 2.0 (`internal/isolex/NOTICE` and `LICENSE-isolex`). The compiler is isolex's own, built to WebAssembly, and runs in-process under [wazero](https://wazero.io) (pure Go, no cgo), in package `internal/isolex`. Icons are a feature, not a requirement: bam ships no icons except `bam-unknown`, a box with a question mark, drawn in place of an icon that the lexicon does not have.
   - **Pinned by checksum:** `internal/isolex/wasm.lock` pins an isolex release and the SHA-256 of its module. `tools/isolex/fetch.sh` downloads that module into `internal/isolex/wasm/` (ignored by git), and the release build runs it before `go build`. Anything that does not match the checksum is refused and nothing is written, and the server checks the module it embedded again before using it. A binary built without the module runs with icons switched off.
   - **Contained:** the module imports nothing, so it is granted nothing: no files, clock or network. Each compile gets a fresh instance, has its memory capped (256 MiB) and its time bounded (10 s), and shares nothing with any other compile.
-  - **The same compiler everywhere:** isolex's own fixture compiles here to isolex's own IR golden, byte for byte (`internal/isolex/testdata`). The IR is read by `internal/isolex/ir`, which has no dependencies, so the label renderer can read it under TinyGo too.
+  - **The same compiler everywhere:** isolex's own fixture compiles here to isolex's own IR golden, byte for byte (`internal/isolex/testdata`). The IR is read by `internal/isolex/ir`, and drawn as SVG by `internal/isolex/svg` exactly as isolex's own renderer draws it: the sample's IR, compiled here and drawn here, is isolex's SVG golden byte for byte. What each token is painted with is the caller's (a palette, or CSS variables for a page that themes icons). Both packages use only the standard library, and pass their tests under TinyGo, so the label renderer can use them too.
 
 ### Frontend Architecture
 
@@ -1161,7 +1161,7 @@ An MCP server that does everything the API does (#33, §6.6).
 ### Phase 9: Icons
 Category icons written in isolex and drawn throughout the interface, on labels and, eventually, as scenes of where things are. Planned in units, one pull request each.
 * [x] The compiler: isolex as WebAssembly, fetched against a pinned checksum, run under wazero with a memory cap and a deadline; the IR reader; the `lexicon {}` block bam writes from its palette; the `bam-unknown` icon (§1, "Icon compiler").
-* [ ] Go renderer for the IR, byte-identical to isolex's own.
+* [x] Go renderer for the IR, byte-identical to isolex's own (§1, "Icon compiler").
 * [ ] Icon sources, palette and builds stored, with the API and MCP tools.
 * [ ] The icon editor, and an Icon section on each category's page.
 * [ ] Icons throughout the interface, and as images.
