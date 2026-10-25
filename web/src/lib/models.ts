@@ -748,3 +748,53 @@ export interface ActionReply {
   message: string;
   created_at: string;
 }
+
+/** An error or warning from the icon compiler, at a place in a file of the build (README §3.7). */
+export interface IconDiag {
+  file: string;
+  line: number;
+  col: number;
+  message: string;
+}
+
+/** A category's isolex source: the published version, and a later draft that did not compile. */
+export interface CategoryIcon {
+  category_id: string;
+  icon_name: string;
+  source: string | null;
+  draft: string | null;
+  draft_errors: IconDiag[];
+  updated_at: string;
+}
+
+/** Isolex source no one category owns. */
+export interface IconLibraryFile {
+  id: string;
+  path: string;
+  source: string | null;
+  draft: string | null;
+  draft_errors: IconDiag[];
+  updated_at: string;
+}
+
+/** One published version of a source. */
+export interface IconRevision {
+  id: string;
+  source: string;
+  actor_user_id: string | null;
+  created_at: string;
+}
+
+/** What saving a source came to. */
+export interface IconSave {
+  published: boolean;
+  errors: IconDiag[];
+  warnings: IconDiag[];
+}
+
+/** A compile that kept nothing: the IR when it is clean. */
+export interface IconCheck {
+  errors: IconDiag[];
+  warnings: IconDiag[];
+  ir?: import('./isolex/ir').IrDocument;
+}
