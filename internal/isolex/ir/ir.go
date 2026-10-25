@@ -1,5 +1,5 @@
-// Package ir reads the shape IR that the isolex compiler emits (isolex
-// SPEC §6, src/ir.rs): icons as lists of shapes, every position a number
+// Package ir reads the shape IR that the isolex compiler, by Axonibyte
+// Innovations, LLC, emits (isolex SPEC §6, src/ir.rs; ../NOTICE): icons as lists of shapes, every position a number
 // and every color a theme token left for the renderer to resolve. It has
 // no dependencies beyond the standard library, so the label renderer can
 // use it under TinyGo as well as on the server.
