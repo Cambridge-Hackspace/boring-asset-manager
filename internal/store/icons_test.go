@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
 
 var (
@@ -460,5 +462,55 @@ func TestDeletingACategoryTakesItsIcon(t *testing.T) {
 	}
 	if icons, _ := st.ListCategoryIcons(); len(icons) != 0 {
 		t.Errorf("%+v", icons)
+	}
+}
+
+// Migration 035 grants icons.manage to every role that manages
+// categories, and only those, once however often it runs.
+func TestIconsManageIsGrantedToRolesThatManageCategories(t *testing.T) {
+	st := setupTestStore(t)
+	curators, err := st.CreateRole(RoleInput{Name: "Curators", Permissions: []string{rbac.PermCategoriesManage}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readers, err := st.CreateRole(RoleInput{Name: "Readers", Permissions: []string{rbac.PermAssetsRead}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		"DELETE FROM permissions WHERE permission_key = 'icons.manage'",
+		"DELETE FROM schema_migrations WHERE version = 35",
+	} {
+		if _, err := st.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if err := st.Migrate(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.Exec("DELETE FROM schema_migrations WHERE version = 35"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		id   string
+		want string
+	}{
+		{curators.ID, rbac.PermCategoriesManage + "," + rbac.PermIconsManage},
+		{readers.ID, rbac.PermAssetsRead},
+	} {
+		role, err := st.GetRole(c.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := append([]string(nil), role.Permissions...)
+		sort.Strings(got)
+		if strings.Join(got, ",") != c.want {
+			t.Errorf("%s: %v, want %s", role.Name, got, c.want)
+		}
 	}
 }

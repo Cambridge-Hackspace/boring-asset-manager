@@ -133,6 +133,19 @@ type Compiler struct {
 	err      error
 }
 
+var (
+	defaultCompiler     *Compiler
+	defaultCompilerOnce sync.Once
+)
+
+// Default returns the process's compiler, with the default options:
+// one, so the module is compiled to machine code once however many
+// servers or tests use it.
+func Default() *Compiler {
+	defaultCompilerOnce.Do(func() { defaultCompiler = New(Options{}) })
+	return defaultCompiler
+}
+
 // New returns a compiler for the module built into this binary.
 func New(opts Options) *Compiler {
 	module, err := fs.ReadFile(moduleDir, "wasm/isolex.wasm")

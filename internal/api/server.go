@@ -10,6 +10,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
@@ -38,6 +39,8 @@ type Server struct {
 	routes []string
 	// registrations limits OAuth clients registering (README §6.6).
 	registrations registrations
+	// icons compiles icon sources (README §3.7).
+	icons iconCompiler
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -53,6 +56,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		spool:     newSpooler(),
 		presses:   newPressLimiter(),
 		live:      newLiveHub(),
+		icons:     isolex.Default(),
 	}
 	handle := func(pattern string, h http.Handler) {
 		s.routes = append(s.routes, pattern)
@@ -129,6 +133,31 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/categories/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategory)))
 	handle("PUT /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateCategory)))
 	handle("DELETE /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategory)))
+	// Icons (README §3.7): reading with assets.read; a category's own icon
+	// with categories.manage, and what every icon is drawn with, the
+	// library, palette and settings, with icons.manage.
+	handle("GET /api/v1/icons", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIcons)))
+	handle("GET /api/v1/icons/ir", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconIR)))
+	handle("GET /api/v1/icons/palette", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconPalette)))
+	handle("PUT /api/v1/icons/palette", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleSetIconPalette)))
+	handle("GET /api/v1/icons/settings", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconSettings)))
+	handle("PUT /api/v1/icons/settings", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleSetIconSettings)))
+	handle("GET /api/v1/category-icons", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListCategoryIcons)))
+	handle("GET /api/v1/categories/{id}/icon", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategoryIcon)))
+	handle("PUT /api/v1/categories/{id}/icon", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveCategoryIcon)))
+	handle("POST /api/v1/categories/{id}/icon/check", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCheckCategoryIcon)))
+	handle("POST /api/v1/categories/{id}/icon/rename", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleRenameCategoryIcon)))
+	handle("DELETE /api/v1/categories/{id}/icon", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategoryIcon)))
+	handle("DELETE /api/v1/categories/{id}/icon/draft", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDiscardCategoryIconDraft)))
+	handle("GET /api/v1/categories/{id}/icon/revisions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryIconRevisions)))
+	handle("GET /api/v1/icon-library", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListIconLibrary)))
+	handle("POST /api/v1/icon-library", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleCreateIconLibraryFile)))
+	handle("GET /api/v1/icon-library/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetIconLibraryFile)))
+	handle("PUT /api/v1/icon-library/{id}", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleSaveIconLibraryFile)))
+	handle("POST /api/v1/icon-library/{id}/rename", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleRenameIconLibraryFile)))
+	handle("DELETE /api/v1/icon-library/{id}", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleDeleteIconLibraryFile)))
+	handle("DELETE /api/v1/icon-library/{id}/draft", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleDiscardIconLibraryDraft)))
+	handle("GET /api/v1/icon-library/{id}/revisions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconLibraryRevisions)))
 	handle("PUT /api/v1/categories/{id}/running-low", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleSetRunningLow)))
 	handle("GET /api/v1/categories/{id}/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategoryEffectiveFields)))
 	handle("POST /api/v1/categories/effective-fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleEffectiveFieldsForAsset)))
