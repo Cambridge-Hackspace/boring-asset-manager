@@ -11,6 +11,10 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/svg"
 )
 
 // liveCase is one label the editor's live renderer (internal/live, compiled
@@ -21,8 +25,11 @@ type liveCase struct {
 	Template json.RawMessage   `json:"template"`
 	Data     json.RawMessage   `json:"data"`
 	Images   map[string]string `json:"images"` // id -> PNG, base64
-	Width    int               `json:"width"`
-	Height   int               `json:"height"`
+	// Icons are what the live renderer's setIcons takes, for a template
+	// that draws icons.
+	Icons  json.RawMessage `json:"icons,omitempty"`
+	Width  int             `json:"width"`
+	Height int             `json:"height"`
 	// SHA256 is of the dots, one byte each (0 black, 255 white), row by row.
 	SHA256 string `json:"sha256"`
 }
@@ -73,8 +80,12 @@ func TestLiveParityFixture(t *testing.T) {
 				used[id] = encoded[id]
 			}
 		}
-		cases = append(cases, liveCase{Name: name, Template: json.RawMessage(goldenTemplates[name]), Data: data,
-			Images: used, Width: b.Dx(), Height: b.Dy(), SHA256: hex.EncodeToString(h.Sum(nil))})
+		c := liveCase{Name: name, Template: json.RawMessage(goldenTemplates[name]), Data: data,
+			Images: used, Width: b.Dx(), Height: b.Dy(), SHA256: hex.EncodeToString(h.Sum(nil))}
+		if bytes.Contains([]byte(goldenTemplates[name]), []byte(`"type":"icon"`)) {
+			c.Icons = liveIcons(t)
+		}
+		cases = append(cases, c)
 	}
 	got, err := json.MarshalIndent(cases, "", " ")
 	if err != nil {
@@ -95,4 +106,22 @@ func TestLiveParityFixture(t *testing.T) {
 	if !bytes.Equal(bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n")), got) {
 		t.Errorf("%s is out of date: run go test ./internal/render -run TestLiveParityFixture -update", path)
 	}
+}
+
+// liveIcons are the icons memImages draws, as the live renderer takes
+// them: those the golden templates use, the unknown icon, and the colors.
+func liveIcons(t *testing.T) json.RawMessage {
+	t.Helper()
+	unknown := isolex.Unknown()
+	in := map[string]any{"unknown": unknown, "colors": svg.IsolexPalette}
+	var icons []*ir.Icon
+	for _, name := range []string{"state-down", "switch-poe"} {
+		icons = append(icons, testIcons[name])
+	}
+	in["icons"] = icons
+	raw, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }

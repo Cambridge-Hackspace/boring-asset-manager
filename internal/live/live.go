@@ -14,15 +14,56 @@ import (
 	_ "image/jpeg" // the decoders the server's images are uploaded in
 	_ "image/png"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/preview"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 )
 
-// Renderer draws labels with the images it has been given.
+// Renderer draws labels with the images and icons it has been given.
 type Renderer struct {
 	images map[string]image.Image
+	// icons are the build's, by name, unknown the icon drawn for a name it
+	// does not draw, and colors the palette's light colors (SetIcons).
+	icons   map[string]*ir.Icon
+	unknown *ir.Icon
+	colors  map[string]string
 }
+
+// Icons is what SetIcons takes: the build's icons, as its IR lists them,
+// the unknown icon, and the palette's light colors, by token.
+type Icons struct {
+	Icons   []ir.Icon         `json:"icons"`
+	Unknown *ir.Icon          `json:"unknown"`
+	Colors  map[string]string `json:"colors"`
+}
+
+// SetIcons gives the renderer the icons labels draw (README §3.7),
+// replacing any it had.
+func (r *Renderer) SetIcons(data []byte) error {
+	var in Icons
+	if err := json.Unmarshal(data, &in); err != nil {
+		return fmt.Errorf("reading icons: %w", err)
+	}
+	r.icons = make(map[string]*ir.Icon, len(in.Icons))
+	for i := range in.Icons {
+		r.icons[in.Icons[i].Name] = &in.Icons[i]
+	}
+	r.unknown, r.colors = in.Unknown, in.Colors
+	return nil
+}
+
+// LabelIcon gives the renderer an icon by name, or the unknown icon for
+// a name it has none by (render.IconSource).
+func (r *Renderer) LabelIcon(name string) *ir.Icon {
+	if icon := r.icons[name]; icon != nil {
+		return icon
+	}
+	return r.unknown
+}
+
+// IconColors gives the renderer the palette's light colors.
+func (r *Renderer) IconColors() map[string]string { return r.colors }
 
 // New returns a Renderer with no images.
 func New() *Renderer {

@@ -15,6 +15,8 @@ interface Case {
   template: unknown;
   data: unknown;
   images?: Record<string, string>;
+  /** What setIcons takes, for a label that draws icons. */
+  icons?: unknown;
   width: number;
   height: number;
   sha256: string;
@@ -22,6 +24,7 @@ interface Case {
 
 interface Bamlive {
   addImage(id: string, bytes: Uint8Array): string | null;
+  setIcons(json: string): string | null;
   render(template: string, data: string, placeholders: boolean): { width: number; height: number; pixels: Uint8ClampedArray; problems: string | null };
 }
 
@@ -39,14 +42,16 @@ beforeAll(async () => {
 });
 
 describe('the live renderer', () => {
-  it('has every golden label to draw', () => {
+  it('has every golden label to draw, icons among them', () => {
     expect(cases.length).toBeGreaterThanOrEqual(9);
+    expect(cases.some((c) => c.icons)).toBe(true);
   });
 
   it.each(cases.map((c) => [c.name, c] as const))('draws %s dot for dot as the server does', (_, c) => {
     for (const [id, b64] of Object.entries(c.images ?? {})) {
       expect(live.addImage(id, new Uint8Array(Buffer.from(b64, 'base64')))).toBeNull();
     }
+    if (c.icons) expect(live.setIcons(JSON.stringify(c.icons))).toBeNull();
     const out = live.render(JSON.stringify(c.template), JSON.stringify(c.data), false);
     expect(out.problems).toBeNull();
     expect([out.width, out.height]).toEqual([c.width, c.height]);

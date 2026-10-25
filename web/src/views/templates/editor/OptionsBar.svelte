@@ -28,7 +28,7 @@
   function setRotation(degrees: number) {
     if (e && Number.isFinite(degrees)) editor.update(index, withProp(e, 'rotation', normalAngle(degrees) || undefined));
   }
-  const flippable = $derived(e?.type === 'static_image' || (e?.type === 'shape' && e.shape !== 'rectangle' && e.shape !== 'ellipse'));
+  const flippable = $derived(e?.type === 'static_image' || e?.type === 'icon' || (e?.type === 'shape' && e.shape !== 'rectangle' && e.shape !== 'ellipse'));
   const anchorNames: Record<Anchor, string> = {
     nw: 'Top left', n: 'Top', ne: 'Top right', w: 'Left', c: 'Center', e: 'Right', sw: 'Bottom left', s: 'Bottom', se: 'Bottom right',
   };

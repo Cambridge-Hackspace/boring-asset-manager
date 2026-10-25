@@ -110,11 +110,16 @@ func Layout(t *labels.Template, data labels.Data, images ImageSource) (*Scene, e
 		case labels.ElementShape:
 			s.placeShape(e, box)
 
+		case labels.ElementIcon:
+			if err := s.placeIcon(e, box, data, images); err != nil {
+				return nil, fail("drawing icon %s: %v", e.Icon, err)
+			}
+
 		default:
 			return nil, fail("unknown element type %q", e.Type)
 		}
-		// An image is mirrored as it is loaded, to fit its box as it is.
-		if e.Type != labels.ElementStaticImage {
+		// An image or icon is mirrored as it is drawn, to fit its box as it is.
+		if e.Type != labels.ElementStaticImage && e.Type != labels.ElementIcon {
 			mirror(s.Items[first:], box, e.Mirror == labels.MirrorAcross || e.Mirror == labels.MirrorBoth, e.Mirror == labels.MirrorDown || e.Mirror == labels.MirrorBoth)
 		}
 		s.turn(s.Items[first:], box, e.Rotation)

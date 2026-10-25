@@ -2,7 +2,7 @@
 // geometry the editor applies to them.
 
 export type Units = 'mm' | 'in';
-export type ElementType = 'text' | 'generator' | 'static_image' | 'shape';
+export type ElementType = 'text' | 'generator' | 'static_image' | 'shape' | 'icon';
 export type ShapeKind = 'rectangle' | 'ellipse' | 'line' | 'polygon' | 'path';
 /** Labels print black and white; white paints over what is beneath it. */
 export type Paint = 'black' | 'white' | 'none';
@@ -63,6 +63,10 @@ export interface TemplateElement {
   max_font_size?: number;
   // static_image
   image_id?: string;
+  /** An icon (README §3.7): ICON_OF_ASSET, the asset's own or its categories', or an icon by name. */
+  icon?: string;
+  /** Shaded, its faces in grays (absent), or an outline, its strokes alone. */
+  shading?: 'shaded' | 'outline';
   /** Flipped in its box, before it is turned: across, down or both. A mirrored code does not scan from the side the label is read from. */
   mirror?: Mirror;
   /** The group it is in, moved, resized and turned as one in the editor. */
@@ -295,6 +299,9 @@ export function resizeLabel(doc: TemplateDoc, width: number, height: number): Te
   };
 }
 
+/** An icon element's icon when it draws each asset's own (README §3.7). */
+export const ICON_OF_ASSET = '{{asset.icon}}';
+
 /** A new element of a type, sized to suit the canvas, near its top-left, on the grid. */
 export function newElement(type: ElementType, doc: TemplateDoc, generatorType = 'qr'): TemplateElement {
   const step = gridStep(doc.units);
@@ -314,6 +321,8 @@ export function newElement(type: ElementType, doc: TemplateDoc, generatorType = 
       };
     case 'static_image':
       return { type, x: at, y: at, width: side, height: side, image_id: '' };
+    case 'icon':
+      return { type, x: at, y: at, width: side, height: side, icon: ICON_OF_ASSET };
     default:
       return {
         type: 'text',
@@ -535,6 +544,8 @@ export function describeElement(e: TemplateElement, i: number): string {
       return `Barcode ${i + 1} (${e.generator_type})`;
     case 'static_image':
       return `Image ${i + 1}`;
+    case 'icon':
+      return `Icon ${i + 1}`;
     case 'shape':
       return `Shape ${i + 1} (${e.shape})`;
     default:
@@ -557,6 +568,7 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
     '{{stock.unit}}',
     '{{loan.borrower}}',
     '{{loan.due}}',
+    '{{asset.icon}}',
     ...generatorTypes.map((t) => `{{asset.code.${t}}}`),
     ...fieldKeys.map((k) => `{{field.${k}}}`),
   ];
@@ -567,7 +579,7 @@ export function blankTemplate(): TemplateDoc {
   return { id: '', name: '', units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list', elements: [] };
 }
 
-const layerOfType: Record<ElementType, number> = { static_image: 0, text: 1, generator: 2, shape: 3 };
+const layerOfType: Record<ElementType, number> = { static_image: 0, icon: 0, text: 1, generator: 2, shape: 3 };
 
 /**
  * A template in list order: one written before layering has its elements
@@ -653,6 +665,8 @@ export function kindName(e: TemplateElement): string {
     }
     case 'static_image':
       return 'Image';
+    case 'icon':
+      return e.icon === ICON_OF_ASSET ? "Icon: the asset's" : `Icon: ${e.icon}`;
     case 'shape':
       return shapeNames[e.shape ?? 'rectangle'];
     default:
@@ -839,7 +853,7 @@ export function withProp<K extends keyof TemplateElement>(e: TemplateElement, ke
 
 /** What an element does where it does not fit, by default: images are left off, the rest refuse. */
 export function tooSmall(e: TemplateElement): 'refuse' | 'hide' | 'alternative' {
-  return e.when_too_small ?? (e.type === 'static_image' || e.type === 'shape' ? 'hide' : 'refuse');
+  return e.when_too_small ?? (e.type === 'static_image' || e.type === 'shape' || e.type === 'icon' ? 'hide' : 'refuse');
 }
 
 export type Side = 'top' | 'right' | 'bottom' | 'left';
@@ -1035,7 +1049,7 @@ export function flipElements(doc: TemplateDoc, indices: number[], across: boolea
     if (!indices.includes(i)) return e;
     let next: TemplateElement = across ? { ...e, x: tidy(2 * mid - (e.x + e.width), doc.units) } : { ...e, y: tidy(2 * mid - (e.y + e.height), doc.units) };
     next = withProp(next, 'rotation', normalAngle(-(e.rotation ?? 0)) || undefined);
-    if (e.type === 'static_image') {
+    if (e.type === 'static_image' || e.type === 'icon') {
       const m = mirrorSides(e.mirror);
       next = withProp(next, 'mirror', mirrorOf(m.across !== across, m.down !== !across));
     } else if (e.type === 'shape' && e.shape === 'polygon' && e.points) {

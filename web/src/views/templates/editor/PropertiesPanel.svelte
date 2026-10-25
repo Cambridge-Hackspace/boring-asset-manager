@@ -16,9 +16,11 @@
     type TemplateElement,
     mirrorOf,
     mirrorSides,
+    ICON_OF_ASSET,
   } from '../../../lib/template';
   import AdaptiveElementPanel from '../AdaptiveElementPanel.svelte';
   import ImagePicker from '../ImagePicker.svelte';
+  import IconPicker from '../../../components/IconPicker.svelte';
   import { useEditor } from './editor.svelte';
   import Icon from './Icon.svelte';
   import NumberField from './NumberField.svelte';
@@ -57,6 +59,8 @@
     if (e) update(withProp(e, 'mirror', mirrorOf(across, down)));
   }
   const mirrored = $derived(mirrorSides(e?.mirror));
+  // An icon element's picker, open while one icon is being chosen.
+  let pickingIcon = $state(false);
 
   function setGeneratorType(type: string) {
     if (!e) return;
@@ -347,6 +351,54 @@
       {:else if hairline(e, doc)}
         <p class="text-xs text-amber-900 dark:text-amber-200" role="status">Its stroke is thinner than one printer dot at {doc.dpi} DPI, so it prints one dot wide.</p>
       {/if}
+    {:else if e.type === 'icon'}
+      {@const own = e.icon === ICON_OF_ASSET}
+      <fieldset class="space-y-1 text-xs">
+        <legend class="text-zinc-600 dark:text-zinc-400">Draws</legend>
+        <label class="flex items-center gap-1">
+          <input
+            type="radio"
+            name={id('icon-of')}
+            checked={own}
+            onchange={() => {
+              pickingIcon = false;
+              set('icon', ICON_OF_ASSET);
+            }}
+          /> Each asset's icon
+        </label>
+        <label class="flex items-center gap-1">
+          <input type="radio" name={id('icon-of')} checked={!own} onchange={() => (pickingIcon = true)} /> One icon{#if !own}: <span class="font-mono">{e.icon}</span>{/if}
+        </label>
+        {#if !own && !pickingIcon}<button type="button" class="underline" onclick={() => (pickingIcon = true)}>Choose another…</button>{/if}
+      </fieldset>
+      {#if pickingIcon}
+        <IconPicker
+          value={own ? '' : (e.icon ?? '')}
+          onpick={(name) => {
+            pickingIcon = false;
+            set('icon', name);
+          }}
+          onclose={() => (pickingIcon = false)}
+        />
+      {/if}
+      <div class={row}>
+        <label class="flex flex-col text-xs">
+          <span class="text-zinc-600 dark:text-zinc-400">Shading</span>
+          <select id={id('shading')} class="input-sm" value={e.shading ?? 'shaded'} onchange={(ev) => update(withProp(e, 'shading', ev.currentTarget.value === 'outline' ? 'outline' : undefined))}>
+            <option value="shaded">Shaded, its faces in grays</option>
+            <option value="outline">As an outline</option>
+          </select>
+        </label>
+        <label class="flex flex-col text-xs">
+          <span class="text-zinc-600 dark:text-zinc-400">Align</span>
+          <select id={id('icon-align')} class="input-sm" value={e.align ?? 'center'} onchange={(ev) => update(withProp(e, 'align', ev.currentTarget.value === 'center' ? undefined : (ev.currentTarget.value as 'left' | 'right')))}>
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+      </div>
+      {#if own}<p class="text-xs text-zinc-600 dark:text-zinc-400">An asset with no icon leaves its box blank; with no asset, a question mark stands in.</p>{/if}
     {:else}
       <ImagePicker value={e.image_id ?? ''} onpick={(imageId) => set('image_id', imageId)} />
     {/if}

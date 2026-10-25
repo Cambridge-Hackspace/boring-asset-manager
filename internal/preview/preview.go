@@ -136,8 +136,16 @@ func Describe(t *labels.Template, data labels.Data, scene *render.Scene) Descrip
 					i, e.GeneratorType, joinSides(pe.Code.Narrow), side))
 			}
 		}
-		if b, err := e.Binding(); err == nil && e.Type != labels.ElementStaticImage {
-			pe.Value = b.Resolve(data)
+		switch {
+		case e.Type == labels.ElementIcon && e.Icon == labels.IconOfAsset:
+			// the icon it draws, by name
+			pe.Value = data.Icon
+		case e.Type == labels.ElementIcon:
+			pe.Value = e.Icon
+		case e.Type != labels.ElementStaticImage:
+			if b, err := e.Binding(); err == nil {
+				pe.Value = b.Resolve(data)
+			}
 		}
 		d.Elements = append(d.Elements, pe)
 	}
@@ -169,6 +177,8 @@ func Sample(baseURL string) labels.Data {
 		Unit:       "pcs",
 		Borrower:   "Ada Lovelace",
 		Due:        "2026-01-31",
+		// the unknown icon, a question mark, where the asset's icon goes
+		Icon: "bam-unknown",
 	}
 	for _, genType := range generators.AllowedGeneratorTypes() {
 		d.Codes[genType] = "BAM-0001"

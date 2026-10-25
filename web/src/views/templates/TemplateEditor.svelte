@@ -2,6 +2,7 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { ApiError, request, requestBlob, type ProblemDetail } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
+  import { iconset } from '../../lib/iconset.svelte';
   import { startLiveRenderer, type Frame, type LiveRenderer, type LiveState, type PreviewData } from '../../lib/live/client';
   import type { Field, GeneratorInfo } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
@@ -177,6 +178,23 @@
   onDestroy(() => live?.close());
   const drawingLive = $derived(liveState === 'ready' && liveData !== null);
 
+  // The icons labels draw (README §3.7), given to the live renderer as
+  // they load or change; each time, the label is drawn again.
+  let iconsGiven = $state(0);
+  $effect(() => {
+    void iconset.load();
+  });
+  $effect(() => {
+    const json = JSON.stringify({
+      icons: iconset.all,
+      unknown: iconset.unknown,
+      colors: Object.fromEntries(iconset.palette.map((c) => [c.token, c.light])),
+    });
+    if (liveState !== 'ready' || !live) return;
+    live.setIcons(json);
+    iconsGiven = untrack(() => iconsGiven) + 1;
+  });
+
   // What it draws with: the sample data, or the asset previewed.
   $effect(() => {
     const id = previewAsset?.id;
@@ -222,6 +240,7 @@
     // renderer still says how they were laid out, as typing needs their size.
     const hidden = [...editor.hidden, ...(editor.editingText !== null ? [editor.editingText] : [])];
     const data = liveData;
+    void iconsGiven;
     if (loading || liveState !== 'ready' || !data || !live) return;
     const all = template.elements.map((_, i) => i);
     const round = ++liveRound;
@@ -294,8 +313,8 @@
   /** Adds what a tool adds, in the middle of the label: the toolbox, from the keyboard. */
   function addCentered(tool: Exclude<Tool, 'select'>) {
     let e: TemplateElement;
-    if (tool === 'text' || tool === 'code' || tool === 'image') {
-      e = newElement(({ text: 'text', code: 'generator', image: 'static_image' } as const)[tool], doc, editor.codeType);
+    if (tool === 'text' || tool === 'code' || tool === 'image' || tool === 'icon') {
+      e = newElement(({ text: 'text', code: 'generator', image: 'static_image', icon: 'icon' } as const)[tool], doc, editor.codeType);
       // On the grid, as everything placed is.
       const step = gridStep(doc.units);
       e = { ...e, x: Math.max(0, snap((doc.width - e.width) / 2, step, doc.units)), y: Math.max(0, snap((doc.height - e.height) / 2, step, doc.units)) };

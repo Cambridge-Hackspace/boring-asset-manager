@@ -6,10 +6,11 @@
 //
 //	addImage(id, bytes)                        -> null, or an error message
 //	hasImage(id)                               -> whether it was added
+//	setIcons(icons)                            -> null, or an error message
 //	render(template, data, placeholders, hidden) -> {width, height, pixels, description, problems}
 //	font(family, weight)                       -> the font labels are printed in, as TTF bytes
 //
-// where template and data are JSON strings, pixels a Uint8ClampedArray of
+// where template, data and icons (live.Icons) are JSON strings, pixels a Uint8ClampedArray of
 // RGBA dots, and description and problems JSON strings (or null).
 //
 // tools/web/build.sh builds it into the web interface.
@@ -48,6 +49,12 @@ func main() {
 	}))
 	api.Set("hasImage", js.FuncOf(func(_ js.Value, args []js.Value) any {
 		return r.HasImage(args[0].String())
+	}))
+	api.Set("setIcons", js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if err := r.SetIcons([]byte(args[0].String())); err != nil {
+			return err.Error()
+		}
+		return nil
 	}))
 	api.Set("render", js.FuncOf(func(_ js.Value, args []js.Value) any {
 		// The elements left out of the dots, as a JSON array of indices.

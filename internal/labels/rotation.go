@@ -90,6 +90,8 @@ func (e *Element) called(i int) string {
 		return fmt.Sprintf("Barcode %d (%s)", i+1, e.GeneratorType)
 	case e.Type == ElementStaticImage:
 		return fmt.Sprintf("Image %d", i+1)
+	case e.Type == ElementIcon:
+		return fmt.Sprintf("Icon %d", i+1)
 	case e.Type == ElementShape:
 		return fmt.Sprintf("Shape %d (%s)", i+1, e.Shape)
 	case e.ContentBinding == "":

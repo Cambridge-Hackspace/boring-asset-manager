@@ -17,8 +17,12 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// defaultIconHeight is how high an icon image is drawn unless asked.
-const defaultIconHeight = 64
+// defaultIconHeight is how high an icon image is drawn unless asked, and
+// maxIconHeight the most it may be asked to be.
+const (
+	defaultIconHeight = 64
+	maxIconHeight     = 1024
+)
 
 var hexColor = regexp.MustCompile(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
 
@@ -62,8 +66,8 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 	height := defaultIconHeight
 	if v := q.Get("height"); v != "" {
 		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > raster.MaxHeight {
-			writeJSONError(w, http.StatusBadRequest, "height is a whole number of pixels, 1 to "+strconv.Itoa(raster.MaxHeight))
+		if err != nil || n < 1 || n > maxIconHeight {
+			writeJSONError(w, http.StatusBadRequest, "height is a whole number of pixels, 1 to "+strconv.Itoa(maxIconHeight))
 			return
 		}
 		height = n

@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/preview"
@@ -62,10 +64,49 @@ type LabelProblem struct {
 }
 
 // labelImages loads uploaded images for rendering, decoding each once per
-// request.
+// request, and the icons labels draw (render.IconSource), reading the
+// build and the palette once.
 type labelImages struct {
 	s     *Server
 	cache map[string]image.Image
+	// icons is the current build, read on first use; noIcons says it was
+	// read and there is none, or it could not be read.
+	icons   *ir.Document
+	noIcons bool
+	palette map[string]string
+}
+
+// LabelIcon is the icon a label draws by name: the unknown icon for a
+// name the build does not draw, or with no build at all.
+func (li *labelImages) LabelIcon(name string) *ir.Icon {
+	if li.icons == nil && !li.noIcons {
+		li.noIcons = true
+		if b, err := li.s.store.CurrentIconBuild(); err == nil && b != nil {
+			if doc, err := ir.Parse(b.IR); err == nil {
+				li.icons, li.noIcons = doc, false
+			}
+		}
+	}
+	if li.icons != nil {
+		if icon := li.icons.Icon(name); icon != nil {
+			return icon
+		}
+	}
+	unknown := isolex.Unknown()
+	return &unknown
+}
+
+// IconColors are the palette's light colors, by token.
+func (li *labelImages) IconColors() map[string]string {
+	if li.palette == nil {
+		li.palette = map[string]string{}
+		if palette, err := li.s.store.GetIconPalette(); err == nil {
+			for _, c := range palette {
+				li.palette[c.Token] = c.Light
+			}
+		}
+	}
+	return li.palette
 }
 
 func (s *Server) newLabelImages() *labelImages {
@@ -120,6 +161,9 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 	d.Location = strings.Join(places, " › ")
 	if st := a.Asset.Stock; st != nil {
 		d.Quantity, d.Unit = strconv.Itoa(st.Quantity), st.Unit
+	}
+	if ic := a.ResolvedIcon; ic != nil {
+		d.Icon, d.IconColor = ic.Name, ic.Color
 	}
 	if l := a.Loan; l != nil {
 		// By name only; a borrower hidden from the request (no ID) is blank.

@@ -15,6 +15,7 @@
       ['text', 'text'],
       ['code', 'code'],
       ['image', 'image'],
+      ['icon', 'icon'],
       ['rectangle', 'rectangle'],
       ['ellipse', 'ellipse'],
       ['line', 'line'],

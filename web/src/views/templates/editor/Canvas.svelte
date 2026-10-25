@@ -252,6 +252,7 @@
     text: 'a text box',
     code: 'a code',
     image: 'an image',
+    icon: 'an icon',
     rectangle: 'a rectangle',
     ellipse: 'an ellipse',
     line: 'a line',
@@ -873,7 +874,10 @@
       const rising = (b[0] - a[0]) * (b[1] - a[1]) < 0;
       e = { ...newShape('line', doc, box), ...(rising ? { flip: true } : {}) };
     } else {
-      const made = tool === 'text' || tool === 'code' || tool === 'image' ? newElement(({ text: 'text', code: 'generator', image: 'static_image' } as const)[tool], doc, generatorType) : newShape(tool as ShapeKind, doc);
+      const made =
+        tool === 'text' || tool === 'code' || tool === 'image' || tool === 'icon'
+          ? newElement(({ text: 'text', code: 'generator', image: 'static_image', icon: 'icon' } as const)[tool], doc, generatorType)
+          : newShape(tool as ShapeKind, doc);
       e = clicked
         ? { ...made, x: tidy(Math.min(a[0], doc.width - made.width), doc.units), y: tidy(Math.min(a[1], doc.height - made.height), doc.units) }
         : { ...made, ...box, width: Math.max(box.width, step), height: Math.max(box.height, step) };

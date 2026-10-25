@@ -20,6 +20,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/svg"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
 
@@ -78,7 +81,38 @@ var testData = labels.Data{
 	BaseURL:   "https://bam.example/",
 	Codes:     map[string]string{"qr": "BAM-QR-0042", "micro_qr": "BAM-0042", "code128": "TOOL-0042"},
 	Fields:    map[string]string{"location": "Workshop shelf B3", "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"},
+	Icon:      "switch-poe",
+	IconColor: "#b45309",
 }
+
+// testIcons are isolex's sample icons, which memImages draws labels' icons
+// from, with isolex's own palette.
+var testIcons = func() map[string]*ir.Icon {
+	data, err := os.ReadFile(filepath.Join("..", "isolex", "testdata", "sample.ir.golden.json"))
+	if err != nil {
+		panic(err)
+	}
+	doc, err := ir.Parse(data)
+	if err != nil {
+		panic(err)
+	}
+	icons := map[string]*ir.Icon{}
+	for i := range doc.Icons {
+		icons[doc.Icons[i].Name] = &doc.Icons[i]
+	}
+	return icons
+}()
+
+// LabelIcon draws an icon from isolex's sample, or the unknown icon.
+func (memImages) LabelIcon(name string) *ir.Icon {
+	if icon := testIcons[name]; icon != nil {
+		return icon
+	}
+	unknown := isolex.Unknown()
+	return &unknown
+}
+
+func (memImages) IconColors() map[string]string { return svg.IsolexPalette }
 
 func mustTemplate(t *testing.T, doc string) *labels.Template {
 	t.Helper()
@@ -181,6 +215,14 @@ var goldenTemplates = map[string]string{
 		{"type":"shape","shape":"path","x":4,"y":4,"width":24,"height":12,"d":"M0 1 C0.25 0 0.75 1 1 0","stroke":"black","stroke_width":0.6,"fill":"none"},
 		{"type":"shape","shape":"path","x":32,"y":4,"width":22,"height":22,"rotation":20,"d":"M0.5 0 C0.9 0 1 0.3 1 0.5 L0.5 1 L0 0.5 C0 0.2 0.2 0 0.5 0 Z","stroke":"black","stroke_width":0.4,"fill":"black"},
 		{"type":"shape","shape":"path","x":4,"y":20,"width":20,"height":6,"d":"M0 0.5 C0.3 0 0.7 1 1 0.5 L1 1 L0 1 Z","fill":"black","stroke":"none"}]}`,
+	// an asset's icon shaded, an icon by name as a mirrored outline, and
+	// the asset's again turned and aligned right
+	"icon": `{"id":"icon","name":"Icon","units":"mm","width":60,"height":24,"dpi":300,"layering":"list","elements":[
+		{"type":"icon","x":1,"y":1,"width":24,"height":22,"icon":"{{asset.icon}}"},
+		{"type":"icon","x":26,"y":2,"width":12,"height":12,"icon":"state-down","shading":"outline","mirror":"across"},
+		{"type":"icon","x":41,"y":2,"width":18,"height":20,"icon":"{{asset.icon}}","align":"right","rotation":90},
+		{"type":"text","x":26,"y":16,"width":13,"height":6,"content_binding":"{{asset.icon}}","font_size":7,"min_font_size":4}
+	]}`,
 	"shapes": `{"id":"shapes","name":"Shapes","units":"mm","width":80,"height":40,"dpi":300,"layering":"list","elements":[
 		{"type":"shape","shape":"rectangle","x":2,"y":2,"width":30,"height":12,"stroke_width":0.5},
 		{"type":"shape","shape":"rectangle","x":35,"y":2,"width":20,"height":12,"corner_radius":3,"stroke":"none","fill":"black"},
@@ -211,6 +253,7 @@ var goldenPayloads = map[string][]string{
 	"qr45":            {"https://bam.example/a/2f1e3c4d-5b6a-4789-8abc-def012345678"},
 	"margins":         {"BAM-QR-0042", "1234"},
 	"shapes":          {},
+	"icon":            {},
 	"pen":             {},
 	"fit":             {},
 	"mirrored":        {"BAM-QR-0042", "1234"},
@@ -261,7 +304,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"fit", "image_inches", "imported", "layers", "margins", "micro_code128", "mirrored", "mirrored_turned", "pen", "print_turned", "qr45", "qr_label", "shapes", "turned"} {
+	for _, name := range []string{"fit", "image_inches", "imported", "layers", "margins", "micro_code128", "mirrored", "mirrored_turned", "pen", "print_turned", "qr45", "qr_label", "shapes", "turned", "icon"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -889,5 +932,69 @@ func TestMirroredImage(t *testing.T) {
 	}
 	if l, r := dark(`,"mirror":"across"`); l <= r {
 		t.Errorf("mirrored, the head is not on the left: %d, %d", l, r)
+	}
+}
+
+// noIcons is an image source with no icons to draw from.
+type noIcons struct{}
+
+func (noIcons) LoadImage(string) (image.Image, error) { return nil, errors.New("none") }
+
+// TestIconElements: an icon is as large as fits its box, aligned across
+// it; with no icon, or none to draw it from, nothing prints.
+func TestIconElements(t *testing.T) {
+	doc := func(element string) *labels.Template {
+		return mustTemplate(t, `{"name":"T","units":"mm","width":40,"height":10,"dpi":300,"layering":"list","elements":[`+element+`]}`)
+	}
+	only := func(s *Scene) *PlacedImage {
+		t.Helper()
+		if len(s.Items) != 1 || s.Items[0].Image == nil {
+			t.Fatalf("%d items", len(s.Items))
+		}
+		return s.Items[0].Image
+	}
+	// a 40 by 10 mm box, at 300 DPI 472 by 118 dots: the icon fills its height
+	for align, want := range map[string]func(p *PlacedImage) bool{
+		"left":   func(p *PlacedImage) bool { return p.X == 0 },
+		"right":  func(p *PlacedImage) bool { return p.X+p.W == 472 },
+		"center": func(p *PlacedImage) bool { return p.X == (472-p.W)/2 },
+	} {
+		s, err := Layout(doc(`{"type":"icon","x":0,"y":0,"width":40,"height":10,"icon":"{{asset.icon}}","align":"`+align+`"}`), testData, memImages{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p := only(s); p.H != 118 || p.W >= 472 || !want(p) {
+			t.Errorf("%s: %+v", align, *p)
+		}
+	}
+
+	el := `{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}"}`
+	for name, src := range map[string]ImageSource{"no icons": noIcons{}, "no source": nil} {
+		if s, err := Layout(doc(el), testData, src); err != nil || len(s.Items) != 0 {
+			t.Errorf("%s: %v, %d items", name, err, len(s.Items))
+		}
+	}
+	plain := testData
+	plain.Icon = ""
+	if s, err := Layout(doc(el), plain, memImages{}); err != nil || len(s.Items) != 0 {
+		t.Errorf("an asset with no icon: %v, %d items", err, len(s.Items))
+	}
+
+	// shaded and outlined differ; a name nothing draws is the unknown icon
+	shaded, _ := Layout(doc(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"switch-poe"}`), testData, memImages{})
+	outline, _ := Layout(doc(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"switch-poe","shading":"outline"}`), testData, memImages{})
+	if bytes.Equal(shaded.Raster(false).Pix, outline.Raster(false).Pix) {
+		t.Error("shaded and outline drew the same")
+	}
+	if s, err := Layout(doc(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"gone"}`), testData, memImages{}); err != nil || len(s.Items) != 1 {
+		t.Errorf("unknown: %v", err)
+	}
+}
+
+func TestGray(t *testing.T) {
+	for in, want := range map[string]string{"#ffffff": "#ffffffff", "#000": "#000000ff", "#ff000080": "#36363680", "ink": "ink", "#12": "#12"} {
+		if got := gray(in); got != want {
+			t.Errorf("gray(%s) = %s, want %s", in, got, want)
+		}
 	}
 }

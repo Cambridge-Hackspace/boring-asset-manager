@@ -62,12 +62,13 @@ const (
 )
 
 // TooSmall is what the element does where it does not fit: as it says, or
-// by default, an image is left off and anything else refuses the label.
+// by default, an image, shape or icon is left off and anything else
+// refuses the label.
 func (e *Element) TooSmall() string {
 	switch {
 	case e.WhenTooSmall != "":
 		return e.WhenTooSmall
-	case e.Type == ElementStaticImage, e.Type == ElementShape:
+	case e.Type == ElementStaticImage, e.Type == ElementShape, e.Type == ElementIcon:
 		return TooSmallHide
 	}
 	return TooSmallRefuse

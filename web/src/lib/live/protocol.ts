@@ -4,6 +4,8 @@
 
 export type ToWorker =
   | { type: 'image'; id: string; bytes: ArrayBuffer }
+  /** The icons labels draw (README §3.7), as the renderer's setIcons takes them. */
+  | { type: 'icons'; json: string }
   | { type: 'render'; seq: number; template: string; data: string; placeholders: boolean; hidden: number[] };
 
 export type FromWorker =

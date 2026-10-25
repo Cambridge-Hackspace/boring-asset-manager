@@ -234,7 +234,7 @@ func labelTools() []tool {
 			Annotations: readOnly("List label templates")}, "GET /api/v1/templates", read,
 			func(none) (request, error) { return request{path: "/api/v1/templates"}, nil },
 			func(_ none, out map[string]any) string { return fmt.Sprintf("%d templates.", count(out, "templates")) }),
-		simple(&mcp.Tool{Name: "get_template", Description: "One label template, whole: its size, and each element (text, codes and images) with its box and what it shows. Elements are numbered from 0 in this order.",
+		simple(&mcp.Tool{Name: "get_template", Description: "One label template, whole: its size, and each element (text, codes, images, shapes and icons) with its box and what it shows. Elements are numbered from 0 in this order.",
 			Annotations: readOnly("Get a template")}, "GET /api/v1/templates/{id}", read,
 			func(in idIn) (request, error) {
 				return request{path: pathOf("/api/v1/templates/{id}", in.ID)}, need(in.ID, "id")

@@ -324,3 +324,65 @@ func TestMissingIconsAreReported(t *testing.T) {
 		t.Error("drew nothing named")
 	}
 }
+
+// Labels draw icons: the asset's, or one by name, which must be drawn
+// when the template is saved; with no icon, its box stays blank.
+func TestLabelsDrawIcons(t *testing.T) {
+	requireIcons(t)
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	_, bins := iconedWorld(t, srv)
+	tpl := func(icon string) string {
+		return `{"name":"Bin","units":"mm","width":20,"height":20,"dpi":203,"layering":"list","elements":[{"type":"icon","x":0,"y":0,"width":20,"height":20,"icon":"` + icon + `"}]}`
+	}
+	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/templates", tpl("barrel")); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"path":"elements[0].icon"`) {
+		t.Fatalf("an icon nothing draws: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/templates", tpl("crate")); rec.Code != http.StatusCreated {
+		t.Fatalf("by name: %d %s", rec.Code, rec.Body)
+	}
+	rec := doJSON(t, srv, cookie, "POST", "/api/v1/templates", tpl("{{asset.icon}}"))
+	var created struct {
+		Template struct {
+			ID string `json:"id"`
+		} `json:"template"`
+	}
+	decodeBody(t, rec.Body.Bytes(), &created)
+
+	iconed, _ := srv.store.CreateAsset("Bin", []string{bins}, nil, nil)
+	plain, _ := srv.store.CreateAsset("Chair", nil, nil, nil)
+	inked := func(id string) int {
+		t.Helper()
+		rec := doJSON(t, srv, cookie, "GET", "/api/v1/assets/"+id+"/label?format=png&template_id="+created.Template.ID, "")
+		img, err := png.Decode(rec.Body)
+		if rec.Code != http.StatusOK || err != nil {
+			t.Fatalf("%d %v", rec.Code, err)
+		}
+		n := 0
+		b := img.Bounds()
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				if r, _, _, _ := img.At(x, y).RGBA(); r < 0xf000 {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	if n := inked(iconed.Asset.ID); n < 100 {
+		t.Errorf("the asset's icon: %d dots inked", n)
+	}
+	if n := inked(plain.Asset.ID); n != 0 {
+		t.Errorf("an asset with no icon: %d dots inked", n)
+	}
+
+	// previewed with no asset, the unknown icon stands for the asset's
+	rec = doJSON(t, srv, cookie, "POST", "/api/v1/templates/preview-data", `{}`)
+	if !strings.Contains(rec.Body.String(), `"icon":"bam-unknown"`) {
+		t.Errorf("sample: %s", rec.Body)
+	}
+	rec = doJSON(t, srv, cookie, "POST", "/api/v1/templates/preview-data", `{"asset_id":"`+iconed.Asset.ID+`"}`)
+	if !strings.Contains(rec.Body.String(), `"icon":"crate","icon_color":"#aa0000"`) {
+		t.Errorf("an asset's: %s", rec.Body)
+	}
+}
