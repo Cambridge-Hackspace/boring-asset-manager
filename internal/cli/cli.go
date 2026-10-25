@@ -166,6 +166,7 @@ func Serve(configPath string) error {
 	go server.RunSpool(workerCtx)
 	// Send live connections the events they ask for.
 	go server.RunLive(workerCtx)
+	go server.RunIcons(workerCtx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

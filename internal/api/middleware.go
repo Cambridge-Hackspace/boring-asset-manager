@@ -294,7 +294,9 @@ const MaxRequestBytes = 1 << 20
 func LimitRequestBodies(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit := int64(MaxRequestBytes)
-		if r.Method == http.MethodPost {
+		if (r.Method == http.MethodPost || r.Method == http.MethodPut) && isIconSourcePath(r.URL.Path) {
+			limit = iconBodyLimit
+		} else if r.Method == http.MethodPost {
 			switch r.URL.Path {
 			case "/api/v1/images":
 				limit = imageUploadLimit

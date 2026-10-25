@@ -6,6 +6,7 @@ export type Permission =
   | 'assets.delete'
   | 'templates.manage'
   | 'categories.manage'
+  | 'icons.manage'
   | 'settings.manage'
   | 'users.manage'
   | 'labels.print'

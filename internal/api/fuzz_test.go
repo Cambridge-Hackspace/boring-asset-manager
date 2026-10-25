@@ -334,6 +334,8 @@ func kindOf(path string) string {
 		return "stock"
 	case "/api/v1/actions":
 		return "action"
+	case "/api/v1/icon-library":
+		return "library"
 	}
 	return ""
 }

@@ -842,8 +842,8 @@ type IconColor struct {
 // build: the stroke widths allowed (none means any), the tokens only a
 // grant may paint with, and the compiler's limits by name (0 for none).
 type IconSettings struct {
-	StrokeWidths []float64       `json:"stroke_widths"`
-	Reserved     []string        `json:"reserved"`
+	StrokeWidths []float64        `json:"stroke_widths"`
+	Reserved     []string         `json:"reserved"`
 	Limits       map[string]int64 `json:"limits"`
 }
 

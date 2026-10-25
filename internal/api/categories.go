@@ -187,6 +187,11 @@ func (s *Server) handleDeleteCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Its icon goes first, which is refused if other icons use it.
+	if err := s.removeCategoryIcon(r, id); err != nil {
+		writeIconError(w, err, "delete the category")
+		return
+	}
 	err := s.actingStore(r).DeleteCategory(id)
 	if errors.Is(err, store.ErrCategoryNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Category not found")
