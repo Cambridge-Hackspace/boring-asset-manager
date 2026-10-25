@@ -302,6 +302,8 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 				limit = imageUploadLimit
 			case "/api/v1/assets/import", "/api/v1/assets/import/preview":
 				limit = importBodyLimit
+			case "/api/v1/icon-library/import":
+				limit = archiveBodyLimit
 			default:
 				if strings.HasPrefix(r.URL.Path, "/api/v1/assets/") && strings.HasSuffix(r.URL.Path, "/photos") {
 					limit = photoUploadLimit

@@ -18,4 +18,6 @@ var Refused = map[string]string{
 	"POST /api/v1/auth/tokens":            "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
 	"POST /api/v1/templates/preview-data": "the data the editor's live renderer draws a label with in the browser; preview_template draws with the same data on the server",
 	"GET /api/v1/events/live":             "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
+	"GET /api/v1/icons/export":            "a zip of the icons, for people to download; over MCP, list_icon_sources reads every source",
+	"POST /api/v1/icon-library/import":    "a zip uploaded by people; over MCP, save_icon_library_file saves each source",
 }

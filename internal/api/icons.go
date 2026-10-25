@@ -29,7 +29,8 @@ const iconBodyLimit = 4 << 20
 
 // isIconSourcePath reports whether a request carries an icon source.
 func isIconSourcePath(path string) bool {
-	return strings.HasPrefix(path, "/api/v1/icon-library") ||
+	// an archive of them has its own, larger limit
+	return (strings.HasPrefix(path, "/api/v1/icon-library") && path != "/api/v1/icon-library/import") ||
 		(strings.HasPrefix(path, "/api/v1/categories/") && (strings.HasSuffix(path, "/icon") || strings.HasSuffix(path, "/icon/check")))
 }
 

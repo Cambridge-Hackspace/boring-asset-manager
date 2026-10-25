@@ -429,6 +429,12 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
     * `DELETE /api/v1/icon-library/{id}` and `…/draft`.
     * `PUT /api/v1/icons/palette` with `{"palette": [{"token", "light", "dark"}]}`.
     * `PUT /api/v1/icons/settings` with `{"stroke_widths", "reserved", "limits"}`.
+  * **As an archive:**
+    * `GET /api/v1/icons/export` (`assets.read`) is a zip of what is published, laid out as a build compiles it: `_lexicon.ilx` (the block bam writes), `library/` and `categories/`. The isolex compiler checks it as it is (`isolex check`), and the same icons always make the same bytes.
+    * `POST /api/v1/icon-library/import` (`icons.manage`, multipart, the zip as `file`, up to 16 MiB) takes the `.ilx` files of a zip into the library at their paths, new ones added and existing ones replaced, as one change: compiled once and published together, or refused whole (`409`, with the errors) if the icons would not compile with them.
+    * A folder holding the whole archive is not part of the paths, nor is `library/`, so an export comes back in as it went out. Its `categories/` and `_lexicon.ilx`, and anything not `.ilx`, are skipped and listed.
+    * An archive may hold 4,096 sources, expanding to 64 MiB at most, whatever its entries claim.
+    * Neither is reachable over MCP, which reads and saves sources one at a time.
   * **Refusals and failures:**
     * A change refused because the icons wouldn't compile is `409`, with the errors in `details`.
     * A compile that ran out of time or memory is `422`.
