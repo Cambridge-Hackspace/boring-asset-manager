@@ -14,6 +14,7 @@
   import { outline } from '../../lib/isolex/syntax';
   import type { Vocabulary } from '../../lib/isolex/complete';
   import { iconOwner } from '../../lib/icons';
+  import { iconset } from '../../lib/iconset.svelte';
   import IsoIcon from '../../components/IsoIcon.svelte';
   import IconPaletteStyle from '../../components/IconPaletteStyle.svelte';
   import IconDiagList from '../../components/IconDiagList.svelte';
@@ -68,6 +69,11 @@
     }
   }
   onMount(load);
+  // after a change, every page's icons too
+  async function changed() {
+    await load();
+    void iconset.refresh();
+  }
 
   const vocabulary = $derived<Vocabulary>({
     tokens: [...palette.map((c) => c.token), 'category'],
@@ -111,7 +117,7 @@
       const out = await request<{ save: IconSave; created: number; updated: number; skipped: { path: string; reason: string }[] }>('POST', '/icon-library/import', form);
       const skipped = out.skipped?.length ? ` Skipped ${out.skipped.length}: ${out.skipped.map((s) => `${s.path} (${s.reason})`).join('; ')}.` : '';
       imported = `Imported ${out.created} new file${out.created === 1 ? '' : 's'} and replaced ${out.updated}.${skipped}`;
-      await load();
+      await changed();
     } catch (err) {
       importError = messageOf(err);
       const details = err instanceof ApiError ? (err.body as { details?: unknown })?.details : undefined;
@@ -220,9 +226,9 @@
       {/if}
     </section>
 
-    <LibrarySection files={library} {canManage} {vocabulary} {categories} {icons} onsaved={load} />
-    <PaletteSection {palette} {canManage} {categories} {icons} onsaved={load} />
-    <SettingsSection {settings} tokens={palette.map((c) => c.token)} {canManage} {categories} {icons} onsaved={load} />
+    <LibrarySection files={library} {canManage} {vocabulary} {categories} {icons} onsaved={changed} />
+    <PaletteSection {palette} {canManage} {categories} {icons} onsaved={changed} />
+    <SettingsSection {settings} tokens={palette.map((c) => c.token)} {canManage} {categories} {icons} onsaved={changed} />
 
     <p class="max-w-3xl text-xs text-zinc-600 dark:text-zinc-400">
       Icons are compiled by <a class="underline" href="https://forge.axonibyte.com/axonibyte/isolex">isolex</a>, the work of Axonibyte Innovations, LLC, under the

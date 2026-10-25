@@ -5,6 +5,8 @@
   import { routes } from './routes';
   import Shell from './Shell.svelte';
   import Footer from './components/Footer.svelte';
+  import IconPaletteStyle from './components/IconPaletteStyle.svelte';
+  import { iconset } from './lib/iconset.svelte';
   import SignIn from './views/SignIn.svelte';
   import NotFound from './views/NotFound.svelte';
   import Forbidden from './views/Forbidden.svelte';
@@ -66,3 +68,5 @@
 {/if}
 
 {#if !workspace}<Footer />{/if}
+<!-- the colors icons paint with (README §3.7), once there are icons -->
+{#if iconset.palette.length}<IconPaletteStyle palette={iconset.palette} />{/if}

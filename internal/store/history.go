@@ -28,6 +28,8 @@ type assetSnapshot struct {
 	codes      map[string]string
 	fields     map[string]fieldSnapshot
 	stock      *models.AssetStock
+	// icon is its own icon's name, "" for its categories'.
+	icon string
 }
 
 type fieldSnapshot struct {
@@ -40,16 +42,17 @@ func (s *Store) snapshotAssetTx(tx *sql.Tx, id string) (*assetSnapshot, error) {
 		snap     = &assetSnapshot{categories: map[string]string{}, codes: map[string]string{}, fields: map[string]fieldSnapshot{}}
 		sc       stockScan
 		archived sql.NullTime
+		icon     sql.NullString
 	)
-	err := s.TxQueryRow(tx, "SELECT name, archived_at, "+stockColumns+" FROM assets WHERE id = ?", id).
-		Scan(append([]any{&snap.name, &archived}, sc.dest()...)...)
+	err := s.TxQueryRow(tx, "SELECT name, archived_at, icon_name, "+stockColumns+" FROM assets WHERE id = ?", id).
+		Scan(append([]any{&snap.name, &archived, &icon}, sc.dest()...)...)
 	if err == sql.ErrNoRows {
 		return nil, ErrAssetNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("reading asset for its history: %w", err)
 	}
-	snap.archived, snap.stock = archived.Valid, sc.stock()
+	snap.archived, snap.stock, snap.icon = archived.Valid, sc.stock(), icon.String
 
 	err = s.scanPairs(tx, `SELECT c.id, c.name FROM asset_categories ac JOIN categories c ON ac.category_id = c.id WHERE ac.asset_id = ?`,
 		id, func(k, v string) { snap.categories[k] = v })
@@ -97,9 +100,9 @@ func (s *Store) scanPairs(tx *sql.Tx, query, id string, add func(k, v string)) e
 }
 
 // diffAssets lists what changed from before to after; a nil before is an
-// asset that did not exist. Changes come in a fixed order: the name, then
-// categories, fields and codes, each sorted as a person would read them,
-// then the stock.
+// asset that did not exist. Changes come in a fixed order: the name, its
+// icon, then categories, fields and codes, each sorted as a person would
+// read them, then the stock.
 func diffAssets(before, after *assetSnapshot) []models.EventChange {
 	if before == nil {
 		before = &assetSnapshot{}
@@ -107,6 +110,9 @@ func diffAssets(before, after *assetSnapshot) []models.EventChange {
 	var changes []models.EventChange
 	if before.name != after.name {
 		changes = append(changes, models.EventChange{What: "name", From: before.name, To: after.name})
+	}
+	if before.icon != after.icon {
+		changes = append(changes, models.EventChange{What: "icon", From: before.icon, To: after.icon})
 	}
 
 	var cats []models.EventChange

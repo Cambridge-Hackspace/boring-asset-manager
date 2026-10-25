@@ -144,7 +144,7 @@ func findingTools() []tool {
 		define(&mcp.Tool{
 			Name: "get_asset",
 			Description: "Everything about one asset, by its ID or any of its codes: its fields, codes, categories, where it is and what is in it, " +
-				"its links, condition, stock, loan, photos, and the actions it offers.",
+				"its links, condition, stock, loan, photos, the actions it offers, and the icon it is drawn with.",
 			Annotations: readOnly("Get an asset"),
 		}, []string{"GET /api/v1/assets/{id}", "GET /api/v1/scan/{code}"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in assetIn) (reply[assetDetail], error) {
 			a, err := e.asset(ctx, in.Asset)

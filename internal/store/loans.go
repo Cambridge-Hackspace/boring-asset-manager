@@ -87,6 +87,9 @@ type categoryTraits struct {
 	// depth and descendants count each category's ancestors and
 	// descendants.
 	depth, descendants map[string]int
+	// icons maps each category with a published icon to its name, colors
+	// each with a color to it, and names every category to its name.
+	icons, colors, names map[string]string
 }
 
 // weighs reports whether an asset in these categories, counting its stock
@@ -104,13 +107,14 @@ func (t categoryTraits) weighs(categoryIDs []string, unit string) bool {
 func (s *Store) categoryTraits(q interface {
 	Query(string, ...any) (*sql.Rows, error)
 }) (categoryTraits, error) {
-	rows, err := q.Query("SELECT id, parent_id, is_lendable, is_consumable, stock_unit, scan_template_id, created_at FROM categories")
+	rows, err := q.Query("SELECT id, parent_id, is_lendable, is_consumable, stock_unit, scan_template_id, created_at, color_hex, name FROM categories")
 	if err != nil {
 		return categoryTraits{}, fmt.Errorf("reading categories: %w", err)
 	}
 	defer rows.Close()
 	parents, lendable, unit := map[string]string{}, map[string]bool{}, map[string]string{}
 	scan, label, created := map[string]string{}, map[string]string{}, map[string]time.Time{}
+	colors, names := map[string]string{}, map[string]string{}
 	for rows.Next() {
 		var (
 			id                  string
@@ -119,11 +123,16 @@ func (s *Store) categoryTraits(q interface {
 			u                   string
 			template            sql.NullString
 			made                time.Time
+			color               sql.NullString
+			name                string
 		)
-		if err := rows.Scan(&id, &parent, &canLend, &consumable, &u, &template, &made); err != nil {
+		if err := rows.Scan(&id, &parent, &canLend, &consumable, &u, &template, &made, &color, &name); err != nil {
 			return categoryTraits{}, fmt.Errorf("scanning category: %w", err)
 		}
-		parents[id], lendable[id], created[id] = parent.String, canLend, made
+		parents[id], lendable[id], created[id], names[id] = parent.String, canLend, made, name
+		if color.String != "" {
+			colors[id] = color.String
+		}
 		if template.String != "" {
 			scan[id] = template.String
 		}
@@ -149,7 +158,11 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, actions: actions, offers: offers}
+	icons, err := publishedCategoryIcons(q)
+	if err != nil {
+		return categoryTraits{}, err
+	}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, actions: actions, offers: offers, icons: icons, colors: colors, names: names}
 	t.depth, t.descendants = shape(parents)
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {
@@ -544,6 +557,8 @@ type assetContext struct {
 	defaultScan *string
 	// suggestions maps categories to the relation types they suggest.
 	suggestions map[string][]string
+	// iconNames holds the names the current build draws, once read.
+	iconNames map[string]bool
 }
 
 // contextTraits returns the category traits, reading them the first time.

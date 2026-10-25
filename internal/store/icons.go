@@ -657,7 +657,8 @@ func (s *Store) addIconRevision(tx *sql.Tx, column, id, source string, at time.T
 
 // RenameCategoryIcon renames a category's published icon, which is
 // refused if anything else names it by its old name; the source must
-// already draw it under the new one.
+// already draw it under the new one. Assets drawn with it by name, or with
+// one of its variants, are given it by the new name.
 func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, categoryID, name string) (*models.IconSave, error) {
 	if err := ValidIconName(name); err != nil {
 		return nil, err
@@ -674,6 +675,8 @@ func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, category
 	} else if taken {
 		return nil, ErrIconNameTaken
 	}
+	// the names the renamed build draws, for the assets that follow it
+	var drawn map[string]bool
 	return s.changeIcons(ctx, c, iconChange{
 		refuse: true,
 		apply: func(in *iconInputs) error {
@@ -685,6 +688,12 @@ func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, category
 			return nil
 		},
 		check: func(r *isolex.Result) []models.IconDiag {
+			drawn = map[string]bool{}
+			if r.Doc != nil {
+				for _, i := range r.Doc.Icons {
+					drawn[i.Name] = true
+				}
+			}
 			if existing.Source == nil {
 				return nil
 			}
@@ -695,9 +704,65 @@ func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, category
 			if IsUniqueViolation(err) {
 				return ErrIconNameTaken
 			}
-			return err
+			if err != nil {
+				return err
+			}
+			return s.followIconRenameTx(tx, existing.IconName, name, drawn)
 		},
 	})
+}
+
+// followIconRenameTx gives assets drawn with the icon was, or a variant of
+// it (was-<variant>), the same by now. A rename only points the category
+// at another name its source draws, so the old names may well still be
+// drawn; a variant moves when the renamed build draws now-<variant>, and
+// a name that is a category's own icon never moves, being another icon
+// whose name happens to start the same.
+func (s *Store) followIconRenameTx(tx *sql.Tx, was, now string, drawn map[string]bool) error {
+	owned, err := s.txNames(tx, `SELECT icon_name FROM category_icons`)
+	if err != nil {
+		return err
+	}
+	// few assets have an icon of their own, and names may hold LIKE's '_'
+	named, err := s.txNames(tx, `SELECT DISTINCT icon_name FROM assets WHERE icon_name IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	moves := map[string]string{}
+	for n := range named {
+		switch {
+		case n == was:
+			moves[n] = now
+		case strings.HasPrefix(n, was+"-") && !owned[n]:
+			if renamed := now + strings.TrimPrefix(n, was); drawn[renamed] {
+				moves[n] = renamed
+			}
+		}
+	}
+	for from, to := range moves {
+		if _, err := s.TxExec(tx, `UPDATE assets SET icon_name = ? WHERE icon_name = ?`, to, from); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// txNames reads a column of names within tx.
+func (s *Store) txNames(tx *sql.Tx, query string) (map[string]bool, error) {
+	rows, err := s.TxQuery(tx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	names := map[string]bool{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		names[n] = true
+	}
+	return names, rows.Err()
 }
 
 // DeleteCategoryIcon removes a category's icon and its history, which is

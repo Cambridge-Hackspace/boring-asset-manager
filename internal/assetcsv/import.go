@@ -156,7 +156,7 @@ func Suggest(header []string, corpus []models.Field) []string {
 		byName[t] = CodePrefix + t
 		byName[CodePrefix+t] = CodePrefix + t
 	}
-	for _, c := range []string{ColumnID, ColumnName, ColumnCategories, ColumnQuantity, ColumnUnit, ColumnThreshold, ColumnLinks} {
+	for _, c := range []string{ColumnID, ColumnName, ColumnCategories, ColumnQuantity, ColumnUnit, ColumnThreshold, ColumnLinks, ColumnIcon} {
 		byName[c] = c
 	}
 	out := make([]string, len(header))
@@ -188,6 +188,9 @@ type Options struct {
 	// not change are problems.
 	May      func(scopes []string) bool
 	ScopesOf func(categoryIDs []string) []string
+	// Icons are the names the icon build draws (README §3.7): an icon cell
+	// gives an asset one of these, or the one it has already.
+	Icons map[string]bool
 }
 
 // PrepareWith plans an import as Prepare does, with options.
@@ -282,7 +285,7 @@ func checkMapping(plan *Plan, fieldsByKey map[string]models.Field) bool {
 			hasID = true
 		case t == ColumnName:
 			hasName = true
-		case t == ColumnCategories, t == ColumnQuantity, t == ColumnUnit, t == ColumnThreshold, t == ColumnLinks:
+		case t == ColumnCategories, t == ColumnQuantity, t == ColumnUnit, t == ColumnThreshold, t == ColumnLinks, t == ColumnIcon:
 		case strings.HasPrefix(t, CodePrefix) && generators.IsValidGeneratorType(strings.TrimPrefix(t, CodePrefix)):
 		case strings.HasPrefix(t, FieldPrefix):
 			if _, ok := fieldsByKey[strings.TrimPrefix(t, FieldPrefix)]; !ok {
@@ -493,6 +496,18 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 	// Stock: a blank cell keeps what the asset has.
 	change.Stock = p.stock(line, existing, cell)
 
+	// Its own icon: blank for its categories'.
+	if v, col, ok := cell(ColumnIcon); ok {
+		var current string
+		if existing != nil && existing.Asset.IconName != nil {
+			current = *existing.Asset.IconName
+		}
+		if v != "" && v != current && !p.opts.Icons[v] {
+			plan.problem(line, col, "no icon is drawn by the name %q", v)
+		}
+		change.Icon = &v
+	}
+
 	// Field values, merged over the asset's own.
 	values := map[string]string{}
 	if existing != nil {
@@ -688,6 +703,15 @@ func (p *planner) checkCodes() {
 func unchanged(a *models.AssetWithDetails, c store.ImportRow, corpus map[string]models.Field) bool {
 	if c.Name != a.Asset.Name {
 		return false
+	}
+	if c.Icon != nil {
+		var have string
+		if a.Asset.IconName != nil {
+			have = *a.Asset.IconName
+		}
+		if *c.Icon != have {
+			return false
+		}
 	}
 	if c.CategoryIDs != nil {
 		have := map[string]bool{}

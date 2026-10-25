@@ -8,6 +8,7 @@
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
+  import AssetIcon from '../../components/AssetIcon.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -202,7 +203,7 @@
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else if asset}
   <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-    <h1 class="text-2xl font-bold">{asset.asset.name}</h1>
+    <h1 class="flex items-center gap-2 text-2xl font-bold"><AssetIcon icon={asset.resolved_icon} height={40} />{asset.asset.name}</h1>
     <div class="flex flex-wrap gap-2">
       {#if archived}
         {#if session.canOn(asset.scopes, 'assets.delete')}
@@ -316,6 +317,17 @@
         <dd class="flex flex-wrap gap-1">
           {#each asset.categories as c (c.id)}<CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />{/each}
         </dd>
+        {#if asset.resolved_icon}
+          {@const icon = asset.resolved_icon}
+          <dt class="font-medium">Icon</dt>
+          <dd>
+            {#if icon.from === 'asset'}
+              Its own, <span class="font-mono">{icon.name}</span>{#if icon.missing}: no icon is drawn by that name any more, so it shows as unknown{/if}.
+            {:else}
+              From <a class="underline" href="/categories/{encodeURIComponent(icon.source_category_id ?? '')}">{icon.source_category_name}</a>.
+            {/if}
+          </dd>
+        {/if}
         {#if asset.scopes && !(asset.scopes.length === 1 && asset.scopes[0] === DEFAULT_SCOPE)}
           <dt class="font-medium">Scopes</dt>
           <dd>{asset.scopes.join(', ')}</dd>
