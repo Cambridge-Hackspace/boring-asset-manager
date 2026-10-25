@@ -29,6 +29,8 @@
     available: boolean;
     isolex_version: string;
     build: { built_at: string; isolex_version: string; warnings: IconDiag[]; icons: { name: string; category: string }[] } | null;
+    /** Names assets have as their own icon that the build does not draw. */
+    missing_icons?: { name: string; assets: number }[];
   }
 
   let loading = $state(true);
@@ -84,6 +86,9 @@
   const drafts = $derived(icons.filter((i) => i.draft));
   const libraryDrafts = $derived(library.filter((f) => f.draft));
   const warnings = $derived(status?.build?.warnings ?? []);
+  const missing = $derived(status?.missing_icons ?? []);
+  // an image of an icon, to download
+  const imageUrl = (name: string, format: 'svg' | 'png') => `/api/v1/icons/image?${new URLSearchParams({ name, format, height: '256' })}`;
 
   /** The gallery: icons by isolex category, as searched. */
   const groups = $derived.by(() => {
@@ -174,8 +179,8 @@
 
     <section class="card max-w-3xl" aria-labelledby="attention-heading">
       <h2 id="attention-heading" class="text-lg font-semibold">Needs attention</h2>
-      {#if !drafts.length && !libraryDrafts.length && !warnings.length}
-        <p class="text-sm">Nothing: every icon is published as it was last saved, and the build has no warnings.</p>
+      {#if !drafts.length && !libraryDrafts.length && !warnings.length && !missing.length}
+        <p class="text-sm">Nothing: every icon is published as it was last saved, the build has no warnings, and every asset's own icon is drawn.</p>
       {:else}
         <ul class="mt-1 space-y-1 text-sm">
           {#each drafts as d (d.category_id)}
@@ -187,6 +192,12 @@
           {/each}
           {#each libraryDrafts as f (f.id)}
             <li><span aria-hidden="true">⚠ </span><span class="font-mono">{f.path}</span>, in the library: a draft with {f.draft_errors.length} problem{f.draft_errors.length === 1 ? '' : 's'}.</li>
+          {/each}
+          {#each missing as m (m.name)}
+            <li>
+              <span aria-hidden="true">⚠ </span><a class="underline" href="/assets?icon={encodeURIComponent(m.name)}">{m.assets} asset{m.assets === 1 ? '' : 's'}</a>
+              {m.assets === 1 ? 'has' : 'have'} the icon <span class="font-mono">{m.name}</span> as {m.assets === 1 ? 'its' : 'their'} own, which nothing draws, so {m.assets === 1 ? 'it shows' : 'they show'} as unknown.
+            </li>
           {/each}
         </ul>
         {#if warnings.length}
@@ -214,6 +225,10 @@
                   <IsoIcon {icon} height={56} label={icon.name} categoryColor={cat?.color_hex ?? ''} />
                 </div>
                 <span class="mt-1 block truncate font-mono">{icon.name}</span>
+                <span class="block">
+                  <a class="underline" href={imageUrl(icon.name, 'svg')} download="{icon.name}.svg" aria-label="{icon.name} as SVG">SVG</a> ·
+                  <a class="underline" href={imageUrl(icon.name, 'png')} download="{icon.name}.png" aria-label="{icon.name} as PNG">PNG</a>
+                </span>
                 {#if cat}<a class="block truncate underline" href="/categories/{encodeURIComponent(cat.id)}">{cat.name}</a>{/if}
               </li>
             {/each}

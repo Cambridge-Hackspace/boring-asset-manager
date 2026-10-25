@@ -34,7 +34,7 @@ Whoever may change categories can draw their icons. Changing the palette and the
 
 ## The Icons page
 
-**Icons**, under **Catalog**, shows every icon, by group, and what **needs attention**: drafts waiting with problems, and warnings. Whoever may **Manage icons** changes there what every icon is drawn with:
+**Icons**, under **Catalog**, shows every icon, by group, each with **SVG** and **PNG** links to download it as an image, and what **needs attention**: drafts waiting with problems, warnings, and icons that assets were given that no longer exist; follow one to the assets, to give them another. Whoever may **Manage icons** changes there what every icon is drawn with:
 
 - **Library**: shapes icons share and no one category owns, such as a base to extend or a fragment to insert, written and saved as a category's icon is.
 - **Palette**: the colors icons paint with, each named, with a light and a dark color. A color an icon still uses cannot be taken away.

@@ -17,6 +17,7 @@ type searchIn struct {
 	CategoryID string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
 	Condition  string `json:"condition,omitempty" jsonschema:"ok, needs_maintenance, out_of_service, or problem for either of the last two"`
 	Loan       string `json:"loan,omitempty" jsonschema:"open for assets lent out, overdue for those past due"`
+	Icon       string `json:"icon,omitempty" jsonschema:"only assets with this icon as their own, by name, such as one in icons_overview's missing_icons"`
 	RunningLow bool   `json:"running_low,omitempty" jsonschema:"only assets flagged running low, themselves or by a category"`
 	Archived   bool   `json:"archived,omitempty" jsonschema:"list archived assets instead of active ones"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"how many to return, 1 to 200 (25 if not given)"`
@@ -31,7 +32,7 @@ type searchOut struct {
 
 func (in searchIn) query() string {
 	q := url.Values{}
-	for k, v := range map[string]string{"search": in.Search, "category_id": in.CategoryID, "condition": in.Condition, "loan": in.Loan} {
+	for k, v := range map[string]string{"search": in.Search, "category_id": in.CategoryID, "condition": in.Condition, "loan": in.Loan, "icon": in.Icon} {
 		if v != "" {
 			q.Set(k, v)
 		}

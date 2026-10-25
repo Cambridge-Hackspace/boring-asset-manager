@@ -110,3 +110,21 @@ test('library files are written here, and the lexicon goes out as a zip and come
   await section(page, 'The build').getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByText(/Imported 0 new files and replaced \d+\. Skipped \d+: _lexicon\.ilx/)).toBeVisible();
 });
+
+test("an asset's own icon that nothing draws any more needs attention, and finds the assets", async ({ signedIn: page, api }) => {
+  const { category } = await api.call('POST', '/categories', { name: unique('Kegs') });
+  const iconName = unique('keg').toLowerCase();
+  await api.call('PUT', `/categories/${category.id}/icon`, { icon_name: iconName, source: boxIcon(iconName) });
+  const name = unique('Keg 1');
+  await api.call('POST', '/assets', { name, icon_name: iconName });
+  await api.call('DELETE', `/categories/${category.id}/icon`);
+
+  await page.goto('/icons');
+  const attention = section(page, 'Needs attention');
+  await expect(attention).toContainText(`the icon ${iconName} as its own, which nothing draws`);
+  await attention.getByRole('link', { name: '1 asset' }).click();
+  await expect(page.getByText(`Showing assets with the icon ${iconName} as their own.`)).toBeVisible();
+  await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
+  // drawn as the unknown icon, beside its name
+  await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) }).locator('svg[data-icon="bam-unknown"]')).toBeVisible();
+});

@@ -33,6 +33,8 @@ func requireIcons(t *testing.T) {
 var iconFuzzRoutes = []route{
 	{method: "GET", path: "/api/v1/icons"},
 	{method: "GET", path: "/api/v1/icons/ir"},
+	{method: "GET", path: "/api/v1/icons/image", query: map[string][]string{"category": {"{category}"}, "format": {"png", "svg"}, "height": {"48", "1024"}}},
+	{method: "GET", path: "/api/v1/icons/image", query: map[string][]string{"name": {"crate{n}", "bam-unknown"}, "theme": {"dark"}, "color": {"#123"}}},
 	{method: "GET", path: "/api/v1/icons/palette"},
 	{method: "PUT", path: "/api/v1/icons/palette", body: `{"palette":[{"token":"ink","light":"#111","dark":"#eee"},{"token":"outline","light":"#222","dark":"#ddd"},{"token":"body-top","light":"#eee","dark":"#777"},{"token":"body-left","light":"#ddd","dark":"#555"},{"token":"body-right","light":"#ccc","dark":"#444"},{"token":"shadow","light":"#000","dark":"#000"}]}`},
 	{method: "GET", path: "/api/v1/icons/settings"},

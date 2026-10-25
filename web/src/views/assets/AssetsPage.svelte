@@ -35,6 +35,9 @@
   // scan_template or label_template lists only assets whose scan or label
   // template was chosen by a tie.
   let conflict = $state(router.query.get('conflict') ?? '');
+  // An icon's name lists only assets with it as their own (README §3.7),
+  // as the Icons page's report of names nothing draws links to.
+  let icon = $state(router.query.get('icon') ?? '');
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
@@ -68,6 +71,7 @@
     if (condition) q.condition = condition;
     if (loan) q.loan = loan;
     if (conflict) q.conflict = conflict;
+    if (icon) q.icon = icon;
     return q;
   }
 
@@ -100,6 +104,7 @@
     if (condition) q.set('condition', condition);
     if (loan) q.set('loan', loan);
     if (conflict) q.set('conflict', conflict);
+    if (icon) q.set('icon', icon);
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
     void load();
@@ -185,6 +190,13 @@
     <ConflictMark /> Showing assets whose {conflict === 'scan_template' ? 'scan' : 'label'} template was chosen by a tie between
     categories as close to them as each other. Name a template on one of those categories to settle it.
     <button type="button" class="underline" onclick={() => ((conflict = ''), applyFilters())}>Show all</button>
+  </p>
+{/if}
+
+{#if icon}
+  <p class="mb-3 text-sm" role="status">
+    Showing assets with the icon <span class="font-mono">{icon}</span> as their own.
+    <button type="button" class="underline" onclick={() => ((icon = ''), applyFilters())}>Show all</button>
   </p>
 {/if}
 

@@ -60,3 +60,72 @@ test("an asset is drawn with its category's icon, and given one of its own", asy
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText(`From ${parentName}.`)).toBeVisible();
 });
+
+// The server draws an icon as an image two ways; Chromium drawing the SVG
+// is the reference the PNG is held to, pixel for pixel, near enough.
+test('an icon drawn as a PNG is drawn as its SVG is', async ({ signedIn: page, api }) => {
+  const { category } = await api.call('POST', '/categories', { name: unique('Drums'), color_hex: '#b45309' });
+  const name = unique('drum').toLowerCase();
+  const source = `icon "${name}" {
+  category "storage"
+  footprint 1 1 1
+  part "body" {
+    box 0 0 0 1 1 0.5
+    cylinder 0.5 0.5 0.5 0.3 0.4
+    tile 0 0 0 1 1 fill="category" stroke="ink" dash="3 2.5" opacity=0.5
+  }
+  part "mark" {
+    at 0.5 0.5 1 {
+      circle "x" "y" 5 fill="ink" stroke="outline" width=1.2
+      path d="M{x-8},{y+6} q8,-12 16,0" stroke="ink" width=1.4 fill="none"
+    }
+  }
+}`;
+  const saved = await api.call('PUT', `/categories/${category.id}/icon`, { icon_name: name, source });
+  expect(saved.save.errors).toEqual([]);
+  await page.goto('/icons');
+
+  for (const theme of ['light', 'dark']) {
+    const diff = await page.evaluate(
+      async ({ name, theme }) => {
+        const load = async (format: string) => {
+          const res = await fetch(`/api/v1/icons/image?name=${name}&format=${format}&height=160&theme=${theme}`);
+          const img = new Image();
+          img.src = URL.createObjectURL(await res.blob());
+          await img.decode();
+          return img;
+        };
+        const [svg, png] = [await load('svg'), await load('png')];
+        const pixels = (img: HTMLImageElement) => {
+          const c = document.createElement('canvas');
+          c.width = png.naturalWidth;
+          c.height = png.naturalHeight;
+          const ctx = c.getContext('2d')!;
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          return ctx.getImageData(0, 0, c.width, c.height).data;
+        };
+        const a = pixels(svg);
+        const b = pixels(png);
+        let total = 0;
+        let far = 0;
+        for (let i = 0; i < a.length; i += 4) {
+          // compared as painted over white, as a page shows them
+          let d = 0;
+          for (let k = 0; k < 3; k++) {
+            const over = (p: Uint8ClampedArray) => (p[i + k]! * p[i + 3]! + 255 * (255 - p[i + 3]!)) / 255;
+            d = Math.max(d, Math.abs(over(a) - over(b)));
+          }
+          total += d;
+          if (d > 96) far++;
+        }
+        const n = a.length / 4;
+        return { mean: total / n, far: far / n, size: [png.naturalWidth, png.naturalHeight] };
+      },
+      { name, theme },
+    );
+    console.log(theme, JSON.stringify(diff));
+    expect(diff.size[1]).toBe(160);
+    expect(diff.mean, theme).toBeLessThan(2);
+    expect(diff.far, theme).toBeLessThan(0.01);
+  }
+});

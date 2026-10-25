@@ -416,6 +416,8 @@ type AssetFilter struct {
 	// Loan is LoansOpen for assets lent out, LoansOverdue for those past
 	// due, or LoansAll.
 	Loan string
+	// Icon is an icon's name: the assets that have it as their own.
+	Icon string
 }
 
 // FilterAssets lists the assets a filter matches: active ones newest first,
@@ -435,6 +437,10 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 		whereClauses = append(whereClauses, "a.archived_at IS NULL")
 	}
 
+	if f.Icon != "" {
+		whereClauses = append(whereClauses, "a.icon_name = ?")
+		args = append(args, f.Icon)
+	}
 	if categoryID != "" {
 		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_categories WHERE category_id = ?)")
 		args = append(args, categoryID)

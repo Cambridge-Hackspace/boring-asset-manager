@@ -138,6 +138,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// library, palette and settings, with icons.manage.
 	handle("GET /api/v1/icons", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIcons)))
 	handle("GET /api/v1/icons/ir", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconIR)))
+	handle("GET /api/v1/icons/image", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconImage)))
 	handle("GET /api/v1/icons/palette", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconPalette)))
 	handle("PUT /api/v1/icons/palette", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleSetIconPalette)))
 	handle("GET /api/v1/icons/settings", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconSettings)))
