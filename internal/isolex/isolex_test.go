@@ -189,12 +189,20 @@ icon "big" { category "c"; footprint 1 1 1
 
 func TestTheDeadlineStopsARunawayCompile(t *testing.T) {
 	c := compiler(t, Options{Timeout: 300 * time.Millisecond})
+	// Compile the module to machine code first, which the deadline does
+	// not bound and which takes seconds under -race on a slow machine, so
+	// that only stopping the compile is timed.
+	if _, err := c.Version(); err != nil {
+		t.Fatal(err)
+	}
 	start := time.Now()
 	_, err := c.Compile(context.Background(), []File{{"big.ilx", runaway}})
 	if err == nil || !strings.Contains(err.Error(), "took longer than 300ms") {
 		t.Fatalf("err = %v", err)
 	}
-	if d := time.Since(start); d > 5*time.Second {
+	d := time.Since(start)
+	t.Logf("a 300ms deadline stopped the compile after %s", d)
+	if d > 5*time.Second {
 		t.Errorf("stopping took %s", d)
 	}
 	if r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/sample.ilx")}); !r.OK {
