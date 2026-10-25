@@ -1,0 +1,11 @@
+isolex
+Copyright Axonibyte Innovations, LLC
+https://forge.axonibyte.com/axonibyte/isolex
+
+This package fetches the isolex compiler (pinned in wasm.lock), embeds it
+in bam's binaries, and runs it. isolex is the work of Axonibyte
+Innovations, LLC, licensed under the Apache License, Version 2.0, a copy
+of which is in LICENSE-isolex beside this file. The fixtures in testdata/
+are isolex's own, under the same license.
+
+bam itself is MIT-licensed (../../LICENSE); the above covers isolex only.

@@ -1,9 +1,11 @@
 // Package isolex runs the isolex compiler (README §1, "Icon compiler"):
-// icon sources in, shape IR and located diagnostics out. The compiler is
-// isolex's own, built to WebAssembly and fetched at build time against
-// the checksum in wasm.lock; it runs in-process under wazero, which needs
-// no cgo, with nothing granted to it (the module imports nothing), a
-// memory cap and a deadline. Every compile gets a fresh instance, so
+// icon sources in, shape IR and located diagnostics out. isolex is the
+// work of Axonibyte Innovations, LLC, under the Apache License 2.0 (see
+// NOTICE and LICENSE-isolex in this directory). The compiler is isolex's
+// own, built to WebAssembly and fetched at build time against the
+// checksum in wasm.lock; it runs in-process under wazero, which needs no
+// cgo, with nothing granted to it (the module imports nothing), a memory
+// cap and a deadline. Every compile gets a fresh instance, so
 // compiles share nothing and may run concurrently.
 //
 // A binary built without the module still runs: Available reports false,

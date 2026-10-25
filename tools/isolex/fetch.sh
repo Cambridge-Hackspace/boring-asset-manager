@@ -1,5 +1,6 @@
 #!/bin/sh
-# Fetches the isolex compiler, built to WebAssembly, into
+# Fetches the isolex compiler (by Axonibyte Innovations, LLC, under the
+# Apache License 2.0; see internal/isolex/NOTICE), built to WebAssembly, into
 # internal/isolex/wasm/isolex.wasm, where go build embeds it (README §1,
 # "Icon compiler"). internal/isolex/wasm.lock pins the release and its
 # SHA-256: a download that does not match is refused and nothing is
