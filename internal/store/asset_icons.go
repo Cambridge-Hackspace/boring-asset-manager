@@ -101,6 +101,38 @@ func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs []string
 	return icon, nil
 }
 
+// MissingIcon is a name assets give themselves as their icon that the
+// current build does not draw, so they are drawn with the unknown icon.
+type MissingIcon struct {
+	Name   string `json:"name"`
+	Assets int    `json:"assets"`
+}
+
+// MissingAssetIcons lists the icons active assets have as their own that
+// the build does not draw, by name, with how many have each.
+func (s *Store) MissingAssetIcons() ([]MissingIcon, error) {
+	drawn, err := s.BuiltIconNames()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.Query(`SELECT icon_name, COUNT(*) FROM assets WHERE icon_name IS NOT NULL AND archived_at IS NULL GROUP BY icon_name ORDER BY icon_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	missing := []MissingIcon{}
+	for rows.Next() {
+		var m MissingIcon
+		if err := rows.Scan(&m.Name, &m.Assets); err != nil {
+			return nil, err
+		}
+		if !drawn[m.Name] {
+			missing = append(missing, m)
+		}
+	}
+	return missing, rows.Err()
+}
+
 // BuiltIconNames returns the names the current build draws, none when
 // there is no build.
 func (s *Store) BuiltIconNames() (map[string]bool, error) {

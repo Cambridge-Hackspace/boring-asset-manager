@@ -88,11 +88,21 @@ func Number(v float64) string {
 
 // Icon draws one icon as a standalone SVG document.
 func Icon(icon *ir.Icon, colors Colors) string {
+	return Sized(icon, colors, icon.Viewbox[3])
+}
+
+// Sized draws one icon as Icon does, height units high, its width in
+// proportion; at the viewbox's own height it is Icon.
+func Sized(icon *ir.Icon, colors Colors, height float64) string {
 	var b strings.Builder
 	v := icon.Viewbox
+	width := v[2]
+	if v[3] > 0 {
+		width = v[2] * height / v[3]
+	}
 	b.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="`)
 	b.WriteString(Number(v[0]) + " " + Number(v[1]) + " " + Number(v[2]) + " " + Number(v[3]))
-	b.WriteString(`" width="` + Number(v[2]) + `" height="` + Number(v[3]) + "\">\n")
+	b.WriteString(`" width="` + Number(width) + `" height="` + Number(height) + "\">\n")
 	b.WriteString("<title>" + escape(icon.Name) + "</title>\n")
 	shapes(&b, icon.Shapes, colors, 1)
 	b.WriteString("</svg>\n")

@@ -115,7 +115,7 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	// The search is matched once the assets are as the request may see
 	// them, so where they are counts only as far as it may read.
 	search := q.Get("search")
-	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan")}
+	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan"), Icon: q.Get("icon")}
 	switch q.Get("conflict") {
 	case "", "scan_template", "label_template":
 	default:

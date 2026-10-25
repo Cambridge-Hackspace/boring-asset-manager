@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -92,15 +94,21 @@ func iconTools() []tool {
 					return reply[map[string]any]{}, err
 				}
 				out["palette"], out["settings"] = palette["palette"], settings["settings"]
+				// for pages to draw; draw_icon draws it for an assistant
+				delete(out, "unknown")
 				build, _ := out["build"].(map[string]any)
 				n := 0
 				if list, ok := build["icons"].([]any); ok {
 					n = len(list)
 				}
+				text := fmt.Sprintf("%d icons built.", n)
 				if available, _ := out["available"].(bool); !available {
-					return say(out, "%d icons built; this server cannot compile icons, so they cannot change.", n)
+					text = fmt.Sprintf("%d icons built; this server cannot compile icons, so they cannot change.", n)
 				}
-				return say(out, "%d icons built.", n)
+				if missing, _ := out["missing_icons"].([]any); len(missing) > 0 {
+					text += fmt.Sprintf(" %d icon names that assets have as their own are not drawn by the build (missing_icons); those assets show the unknown icon.", len(missing))
+				}
+				return say(out, "%s", text)
 			}),
 		define(&mcp.Tool{Name: "get_icon_ir", Description: "The current build's shape IR: each icon as polygons, paths and other shapes, every color a palette token. " +
 			"Give a name for one icon; every icon at once may be long.",
@@ -122,6 +130,49 @@ func iconTools() []tool {
 					}
 				}
 				return reply[map[string]any]{}, fmt.Errorf("no icon named %q in the current build", in.Name)
+			}),
+		define(&mcp.Tool{Name: "draw_icon", Description: "Draw an icon as a PNG, to show the person: by name, a category's (its own or inherited) or an asset's (its own or its categories'). " +
+			"A name the build does not draw comes back as the unknown icon, a question mark.",
+			Annotations: readOnly("Draw an icon")}, []string{"GET /api/v1/icons/image"}, read,
+			func(ctx context.Context, e *env, in drawIconIn) (reply[drawIconOut], error) {
+				q := url.Values{"format": {"png"}}
+				given := 0
+				if in.Name != "" {
+					q.Set("name", in.Name)
+					given++
+				}
+				if in.Category != "" {
+					q.Set("category", in.Category)
+					given++
+				}
+				if in.Asset != "" {
+					id, err := e.assetID(ctx, in.Asset)
+					if err != nil {
+						return reply[drawIconOut]{}, err
+					}
+					q.Set("asset", id)
+					given++
+				}
+				if given != 1 {
+					return reply[drawIconOut]{}, fmt.Errorf("give one of name, category or asset")
+				}
+				if in.Dark {
+					q.Set("theme", "dark")
+				}
+				if in.Height != 0 {
+					q.Set("height", strconv.Itoa(in.Height))
+				}
+				res := e.api(ctx, http.MethodGet, "/api/v1/icons/image?"+q.Encode(), nil, "")
+				if res.Status != http.StatusOK {
+					return reply[drawIconOut]{}, apiError(res)
+				}
+				out := drawIconOut{Missing: res.Header.Get("X-Icon-Missing")}
+				r, _ := say(out, "The icon.")
+				if out.Missing != "" {
+					r, _ = say(out, "No icon is drawn by the name %q, so this is the unknown icon.", out.Missing)
+				}
+				r.extra = []mcp.Content{&mcp.ImageContent{Data: res.Body, MIMEType: "image/png"}}
+				return r, nil
 			}),
 		define(&mcp.Tool{Name: "list_icon_sources", Description: "Every icon source: each category's (its icon's name, published source, and any draft that did not compile, with its errors) " +
 			"and the library's shared files.",
@@ -269,4 +320,16 @@ func iconTools() []tool {
 			},
 			func(models.IconSettings, map[string]any) string { return "Saved the icon settings." }),
 	}
+}
+
+type drawIconIn struct {
+	Name     string `json:"name,omitempty" jsonschema:"an icon by name, as the build draws it"`
+	Category string `json:"category,omitempty" jsonschema:"a category by ID: the icon it is drawn with"`
+	Asset    string `json:"asset,omitempty" jsonschema:"an asset by ID or code: the icon it is drawn with"`
+	Height   int    `json:"height,omitempty" jsonschema:"how high, in pixels, 1 to 1024; 64 unless given"`
+	Dark     bool   `json:"dark,omitempty" jsonschema:"draw it in the palette's dark colors"`
+}
+
+type drawIconOut struct {
+	Missing string `json:"missing,omitempty" jsonschema:"set to the name when the build draws no icon by it, so the unknown icon was drawn"`
 }
