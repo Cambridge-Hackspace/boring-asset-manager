@@ -388,6 +388,29 @@ Assets link to one another: a bin contains screws, a drill is used with its bits
 * **Archiving:** an asset that holds active assets through a location link cannot be archived until they are moved out (`409`). An archived asset keeps its links, marked as archived, so restoring it puts it back where it was.
 * **Suggestions:** `GET` and `PUT /api/v1/categories/{id}/relation-types` (`{"relation_type_ids": [...]}`, `categories.manage` to change) name the types a category suggests; an asset's `suggested_relation_type_ids` gathers them from its categories and their ancestors, and the web app offers them first.
 
+### 3.7 Icons
+
+A category may carry an icon, written in isolex (§1, "Icon compiler"). With no icons anywhere, nothing shows one (migration `034`). The categories' sources, the library's and the palette make one **lexicon**, compiled as a whole. The category tree is its inheritance: a subcategory's icon can `extends` its parent's and change one part.
+
+* **Category icons** (`category_icons`): a category's source draws its icon, named by `icon_name`.
+  * A name is 1 to 64 letters, digits, `-`, `_` and `.`, not starting with `.`. Names starting `bam-` are bam's own.
+  * The first save sets the name. After that it changes only by renaming, because other icons refer to it by name.
+  * In a build, the source is the file `categories/<icon_name>.ilx`.
+* **The library** (`icon_library`): sources that no one category owns, such as bases, fragments and axes, at paths such as `shared/racks.ilx`. In a build they are `library/<path>`.
+* **Published or drafted:** every change is compiled together with everything else before it is kept.
+  * A source that compiles clean, and draws the category's icon under its name, is **published**. Its build becomes the one icons are drawn from.
+  * A source that doesn't is kept as a **draft**, with its errors, wherever in the lexicon they are. The published version and the build stay as they were, so one bad edit never breaks an icon.
+  * A draft is fixed by saving again, or discarded.
+  * Every published version is kept (`icon_revisions`), and publishing a category's icon records a `category.icon_changed` event.
+* **Refused rather than drafted:** some changes have no draft to fall back on: deleting or renaming an icon or a library file, and changing the palette or the settings. Such a change is refused if the lexicon wouldn't compile after it, with the errors that say why (for example, the icon that `extends` the one being deleted).
+* **The palette is the vocabulary** (`icon_palette`): its tokens are exactly what icons may paint with, plus `category`, which paints in the category's own color.
+  * Each token has a light and a dark color, written `#rgb`, `#rrggbb` or `#rrggbbaa`.
+  * bam seeds the tokens isolex paints with by default, in its zinc and red.
+  * bam writes the `lexicon {}` block itself, from the palette and the **settings** (`icon_settings`: the stroke widths allowed, the tokens only a `grant` may paint with, and the compiler's limits). No source declares one.
+* **Builds** (`icon_build`): the last build that compiled clean, with its IR, its warnings and a hash of its inputs, the isolex version among them.
+  * A change compiles outside any transaction. It is kept under the `icons` lock only if nothing it was compiled against has changed meanwhile; otherwise it compiles again.
+  * Deleting a category deletes its icon and its history.
+
 ---
 
 ## 4. Label Template Engine & Print Subsystem
@@ -1162,7 +1185,8 @@ An MCP server that does everything the API does (#33, §6.6).
 Category icons written in isolex and drawn throughout the interface, on labels and, eventually, as scenes of where things are. Planned in units, one pull request each.
 * [x] The compiler: isolex as WebAssembly, fetched against a pinned checksum, run under wazero with a memory cap and a deadline; the IR reader; the `lexicon {}` block bam writes from its palette; the `bam-unknown` icon (§1, "Icon compiler").
 * [x] Go renderer for the IR, byte-identical to isolex's own (§1, "Icon compiler").
-* [ ] Icon sources, palette and builds stored, with the API and MCP tools.
+* [x] Icon sources, palette, settings and builds stored: published or drafted, refused when they would break the build, with history (§3.7).
+* [ ] The API and MCP tools for icons, and the compiler warmed at startup.
 * [ ] The icon editor, and an Icon section on each category's page.
 * [ ] Icons throughout the interface, and as images.
 * [ ] Icons on labels.
