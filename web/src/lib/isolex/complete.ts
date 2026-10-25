@@ -105,6 +105,30 @@ const properties: Record<string, string> = {
   corner: "A badge's corner: ne, nw, se or sw",
   scale: "A badge's size",
   reason: 'Why a grant is needed',
+  rx: "A rectangle's corner radius",
+  d: 'The path, in SVG path data',
+};
+
+/**
+ * The properties each node takes, as isolex checks them: any other is an
+ * error there (isolex #39), so it is not offered here. insert's
+ * properties are its fragment's params.
+ */
+const style = ['fill', 'stroke', 'width', 'dash', 'opacity', 'when'];
+const takes: Record<string, string[]> = {
+  icon: ['extends'],
+  base: ['extends'],
+  grant: ['reason'],
+  box: ['fills', 'opacity', 'when'],
+  cylinder: ['top', 'side', 'opacity', 'when'],
+  facerect: ['fill', 'opacity', 'when'],
+  rect: [...style, 'rx'],
+  path: [...style, 'd'],
+  badge: ['corner', 'scale', 'when'],
+  shadow: ['when'],
+  at: ['when'],
+  repeat: ['when'],
+  ...Object.fromEntries(['tile', 'poly3d', 'seg', 'line', 'circle', 'ellipse', 'arc', 'poly'].map((n) => [n, style])),
 };
 
 const tokenProps = new Set(['fill', 'stroke', 'top', 'side']);
@@ -148,9 +172,11 @@ export function complete(text: string, caret: number, vocab: Vocabulary): Comple
     return finish(start, caret, typed, specs.map(snippet));
   }
 
-  // anywhere else on a node's line: a property
+  // anywhere else on a node's line: a property it takes
   if (typed !== '') {
-    return finish(start, caret, typed, Object.entries(properties).map(([p, detail]) => ({ label: p + '=', insert: p + '=', detail })));
+    const nodeName = /^\s*([A-Za-z-]+)(?:\s|$)/u.exec(lead.split(/[{;]/u).pop()!)?.[1] ?? '';
+    const props = takes[nodeName] ?? [];
+    return finish(start, caret, typed, props.map((p) => ({ label: p + '=', insert: p + '=', detail: properties[p]! })));
   }
   return null;
 }
