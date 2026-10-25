@@ -12,6 +12,7 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import AddToSpool from '../../components/AddToSpool.svelte';
+  import CategoryIconSection from './CategoryIconSection.svelte';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -115,6 +116,7 @@
     labels: 'label templates',
     actions: 'actions',
     scopes: 'who can see its assets',
+    icon: 'its icon',
   };
   let savedAs = $state<Record<string, string>>({});
   const sectionState = $derived<Record<string, string>>({
@@ -125,7 +127,11 @@
     actions: JSON.stringify(offered),
     scopes: JSON.stringify([...scopeIds].sort()),
   });
-  const unsaved = $derived(isNew ? [] : Object.keys(savedAs).filter((k) => savedAs[k] !== sectionState[k]));
+  // The icon section keeps its own: whether its source differs from what is saved.
+  let iconUnsaved = $state(false);
+  const unsaved = $derived(
+    isNew ? [] : [...Object.keys(savedAs).filter((k) => savedAs[k] !== sectionState[k]), ...(iconUnsaved ? ['icon'] : [])],
+  );
   function markSaved(...keys: string[]) {
     for (const k of keys) savedAs[k] = sectionState[k]!;
   }
@@ -542,6 +548,12 @@
     </form>
   {:else if isSystem}
     <p class="mb-6 text-sm text-zinc-600 dark:text-zinc-400">The system category for assets with no other category. It cannot be renamed, moved or deleted.</p>
+  {/if}
+
+  {#if category && !isSystem}
+    <div class="mb-6">
+      <CategoryIconSection {category} {categories} bind:unsaved={iconUnsaved} />
+    </div>
   {/if}
 
   {#if !isNew}

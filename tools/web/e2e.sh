@@ -22,6 +22,8 @@ GO_CACHE="${BAM_GO_CACHE:-bam-gocache}"
 GO_MOD="${BAM_GO_MOD:-bam-gomod}"
 
 "$ROOT/tools/web/build.sh"
+# The icon compiler, which the binary embeds, checked against wasm.lock.
+"$ROOT/tools/isolex/fetch.sh"
 
 # go build asks git which commit it is building, and git refuses a checkout
 # owned by another user (as on a CI runner or reaper guest): trust the mount.

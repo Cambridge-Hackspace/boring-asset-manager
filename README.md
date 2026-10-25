@@ -434,6 +434,14 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
     * A compile that ran out of time or memory is `422`.
     * Any change on a server built without the compiler is `503`.
     * Requests carrying a source may be up to 4 MiB, and a source up to 262,144 characters.
+* **On a category's page** (`CategoryIconSection`), the **Icon** section shows the icon the category shows: its own, or the nearest category above it with one, inherited, painted in the category's own color.
+  * **Starting one:** those who may manage categories can draw a category its own, by extending what it inherits, from a box, or from another category's icon. Its name is suggested from the category's.
+  * **Editing:** the source editor checks the source a moment after typing stops, through `…/icon/check`. Problems in this source are marked in the editor; those it causes in other icons are listed with links to their categories.
+  * **The preview** shows the icon light and dark, large and as in lists, its variants, and the icons of its subcategories, all from the check, so an edit is seen where it spreads. A source that does not compile shows the published icon, saying so.
+  * **Saving** publishes it, or keeps it as a draft with its problems, which can be discarded.
+  * **History** loads any published version back into the editor. Renaming and deleting show what still uses the icon when they are refused.
+  * **Drawing:** icons are drawn in the page by `IsoIcon`, from the build's IR, every token painted with a CSS property, `--iso-<token>`, from the palette (`lib/isolex/palette`), so dark mode needs no redraw. Its shapes match isolex's own SVG for isolex's sample, attribute for attribute.
+  * **Help:** the help topic **Icons** explains it all.
 * **At startup** the server compiles the module to machine code in the background, so the first save doesn't wait. It then builds what is published if the current build isn't of it (none yet, or one made by another isolex). If the new isolex doesn't compile it, the last good build stays, and the log says why.
 
 ---
@@ -1218,7 +1226,7 @@ Category icons written in isolex and drawn throughout the interface, on labels a
 * [x] Icon sources, palette, settings and builds stored: published or drafted, refused when they would break the build, with history (§3.7).
 * [x] The API and MCP tools for icons, and the compiler warmed at startup (§3.7, §6.6).
 * [x] The source editor (`IconSourceEditor`): isolex colored as typed over a plain textarea, so undo, selection and screen readers are the browser's own; line numbers marking problems, the token at fault underlined, and a list of problems that goes to each; completion of nodes with their arguments, properties, palette tokens, and the icons, parts, fragments and axes the lexicon defines; Tab indents (Esc, then Tab, leaves), Enter keeps the indent, Ctrl+/ comments lines out.
-* [ ] An Icon section on each category's page.
+* [x] An Icon section on each category's page: what it shows, its own or inherited; a source started from its parent's icon, a box or another category's, checked as typed and previewed light and dark beside its subcategories; published or kept as a draft; history, renaming and deleting (§3.7).
 * [ ] Icons throughout the interface, and as images.
 * [ ] Icons on labels.
 * [ ] Icons that show an asset's state.
