@@ -1,0 +1,20 @@
+// The one icon bam ships (README §1, "Icon compiler"): drawn wherever an
+// icon is named that the current lexicon does not have. It is compiled
+// on its own, never into a lexicon, so its name cannot collide with one
+// of yours. unknown.ir.json is its IR; TestUnknownIconIsCompiled holds
+// the two together.
+icon "bam-unknown" {
+  category "bam"
+  footprint 1 1 1
+  describe "An icon this lexicon does not have."
+  part "crate" {
+    box 0 0 0 1 1 1
+  }
+  part "mark" {
+    at 0.5 0.5 1 {
+      path d="M{x-6},{y-10} c0,-12 12,-12 12,-4 c0,6 -6,6 -6,12 v2" \
+           stroke="ink" width=2.2 fill="none"
+      circle "x" "y+4" 1.6 fill="ink" stroke="none"
+    }
+  }
+}
