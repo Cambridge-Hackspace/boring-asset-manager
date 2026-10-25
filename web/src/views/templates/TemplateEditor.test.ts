@@ -60,7 +60,7 @@ describe('TemplateEditor', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'QL 90x29' })).toBeTruthy();
     const tools = screen.getByRole('toolbar', { name: 'Tools' });
     expect(within(tools).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Select and move', 'Text', 'Barcode or QR code', 'Image', 'Rectangle', 'Ellipse', 'Line', 'Polygon', 'Pen', 'Measure',
+      'Select and move', 'Text', 'Barcode or QR code', 'Image', 'Icon', 'Rectangle', 'Ellipse', 'Line', 'Polygon', 'Pen', 'Measure',
     ]);
     expect(screen.getByRole('group', { name: 'Tool options' })).toBeTruthy();
     for (const panel of ['Overview', 'Layers', 'Properties', 'Arrange', 'History', 'Grid and guides', 'Label', 'Printer', 'Preview data']) {

@@ -5,6 +5,8 @@
     text: 'M4 5V3.5h12V5M10 3.5v13M7.5 16.5h5',
     code: 'M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h2v2h-2zM15 15h2v2h-2zM12 16h1M16 12h1M5 5h1v1H5zM14 5h1v1h-1zM5 14h1v1H5z',
     image: 'M3 4h14v12H3zM3 13l4-4 3 3 2-2 5 5M12.5 7.5a1 1 0 1 0 0 .01',
+    // an isometric box, as icons are drawn
+    icon: 'M10 2.5l6.5 3.75v7.5L10 17.5l-6.5-3.75v-7.5zM3.5 6.25L10 10l6.5-3.75M10 10v7.5',
     rectangle: 'M3.5 5h13v10h-13z',
     ellipse: 'M10 4.5c3.9 0 7 2.5 7 5.5s-3.1 5.5-7 5.5S3 13 3 10s3.1-5.5 7-5.5z',
     line: 'M4 16L16 4',

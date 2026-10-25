@@ -26,6 +26,7 @@ const (
 	RefLoanBorrower                   // {{loan.borrower}}
 	RefLoanDue                        // {{loan.due}}
 	RefScanURL                        // {{scan_url}}
+	RefAssetIcon                      // {{asset.icon}}
 )
 
 // simpleRefs are the placeholders that take no argument.
@@ -41,6 +42,7 @@ var simpleRefs = map[string]RefKind{
 	"loan.borrower":    RefLoanBorrower,
 	"loan.due":         RefLoanDue,
 	"scan_url":         RefScanURL,
+	"asset.icon":       RefAssetIcon,
 }
 
 // Ref is one placeholder. Arg holds the generator type or field key.
@@ -151,6 +153,11 @@ type Data struct {
 	Unit       string `json:"unit"`
 	Borrower   string `json:"borrower"`
 	Due        string `json:"due"`
+	// Icon is the name of the icon the asset is drawn with (README §3.7),
+	// its own or its categories', empty when it has none; IconColor is
+	// what its category token paints in.
+	Icon      string `json:"icon"`
+	IconColor string `json:"icon_color"`
 }
 
 // Resolve substitutes every placeholder. Missing codes and field values
@@ -188,6 +195,8 @@ func (b Binding) Resolve(d Data) string {
 			sb.WriteString(d.Borrower)
 		case RefLoanDue:
 			sb.WriteString(d.Due)
+		case RefAssetIcon:
+			sb.WriteString(d.Icon)
 		case RefScanURL:
 			// The asset's scan page (README §6.4), by ID, which never changes.
 			sb.WriteString(strings.TrimRight(d.BaseURL, "/") + "/scan/" + d.AssetID)

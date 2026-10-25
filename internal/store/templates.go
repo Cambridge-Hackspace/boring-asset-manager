@@ -163,8 +163,9 @@ func scanTemplate(row rowScanner) (*labels.Template, error) {
 	return &t, nil
 }
 
-// validateTemplate checks the template itself, then that every field key and
-// image it references exists, reporting problems at the elements that use them.
+// validateTemplate checks the template itself, then that every field key,
+// image and icon it references exists, reporting problems at the elements
+// that use them.
 func (s *Store) validateTemplate(t *labels.Template) error {
 	t.Normalize()
 	if err := t.Validate(); err != nil {
@@ -173,6 +174,9 @@ func (s *Store) validateTemplate(t *labels.Template) error {
 
 	var problems []labels.Problem
 	knownFields := map[string]bool{}
+	// the icons the build draws, read when a template names one
+	var drawn map[string]bool
+	var err error
 	for i := range t.Elements {
 		e := &t.Elements[i]
 		path := fmt.Sprintf("elements[%d]", i)
@@ -182,6 +186,20 @@ func (s *Store) validateTemplate(t *labels.Template) error {
 				problems = append(problems, labels.Problem{Path: path + ".image_id", Message: "no uploaded image has this ID"})
 			} else if err != nil {
 				return err
+			}
+			continue
+		}
+		if e.Type == labels.ElementIcon {
+			if e.Icon == labels.IconOfAsset {
+				continue
+			}
+			if drawn == nil {
+				if drawn, err = s.BuiltIconNames(); err != nil {
+					return err
+				}
+			}
+			if !drawn[e.Icon] {
+				problems = append(problems, labels.Problem{Path: path + ".icon", Message: "no icon is drawn by this name; choose one the Icons page shows"})
 			}
 			continue
 		}

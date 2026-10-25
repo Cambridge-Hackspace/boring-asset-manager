@@ -24,8 +24,9 @@ import (
 	"golang.org/x/image/vector"
 )
 
-// MaxHeight bounds the height an icon is drawn at, in pixels.
-const MaxHeight = 1024
+// MaxHeight bounds the height an icon is drawn at, in pixels: enough for
+// a label a foot high at 300 DPI.
+const MaxHeight = 4096
 
 // miterLimit is SVG's default stroke-miterlimit.
 const miterLimit = 4
@@ -57,6 +58,18 @@ func (x transform) then(tx, ty, sc float64) transform {
 // each token as colors says. A color that is not #rgb, #rrggbb or
 // #rrggbbaa paints nothing.
 func Draw(icon *ir.Icon, colors svg.Colors, height int) (*image.NRGBA, error) {
+	return DrawWith(icon, colors, height, Options{})
+}
+
+// Options change how an icon is drawn.
+type Options struct {
+	// Outline draws strokes only, every one in Ink: no fills.
+	Outline bool
+	Ink     color.NRGBA
+}
+
+// DrawWith draws an icon as Draw does, as opts say.
+func DrawWith(icon *ir.Icon, colors svg.Colors, height int, opts Options) (*image.NRGBA, error) {
 	vb := icon.Viewbox
 	if height < 1 || height > MaxHeight {
 		return nil, fmt.Errorf("an icon is drawn 1 to %d pixels high", MaxHeight)
@@ -67,7 +80,7 @@ func Draw(icon *ir.Icon, colors svg.Colors, height int) (*image.NRGBA, error) {
 	s := float64(height) / vb[3]
 	width := max(1, int(math.Round(vb[2]*s)))
 	img := image.NewNRGBA(image.Rect(0, 0, width, height))
-	d := drawer{img: img, colors: colors}
+	d := drawer{img: img, colors: colors, opts: opts}
 	if err := d.shapes(icon.Shapes, transform{s: s, tx: -vb[0] * s, ty: -vb[1] * s}); err != nil {
 		return nil, fmt.Errorf("icon %q: %w", icon.Name, err)
 	}
@@ -86,6 +99,7 @@ func Encode(w io.Writer, icon *ir.Icon, colors svg.Colors, height int) error {
 type drawer struct {
 	img    *image.NRGBA
 	colors svg.Colors
+	opts   Options
 }
 
 func (d drawer) shapes(shapes []ir.Shape, x transform) error {
@@ -101,10 +115,14 @@ func (d drawer) shapes(shapes []ir.Shape, x transform) error {
 		if err != nil {
 			return err
 		}
-		if c, ok := d.paint(s.Fill, s.FillOpacity); ok {
+		if c, ok := d.paint(s.Fill, s.FillOpacity); ok && !d.opts.Outline {
 			d.fill(lines, c)
 		}
-		if c, ok := d.paint(s.Stroke, s.FillOpacity); ok && s.StrokeWidth > 0 {
+		c, ok := d.paint(s.Stroke, s.FillOpacity)
+		if d.opts.Outline && s.Stroke != "" && s.Stroke != "none" {
+			c, ok = d.opts.Ink, true
+		}
+		if ok && s.StrokeWidth > 0 {
 			if s.Dash != nil {
 				lines = dashed(lines, dashes(*s.Dash, x.s))
 			}

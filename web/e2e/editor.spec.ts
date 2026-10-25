@@ -1184,3 +1184,45 @@ test('resize the panels by dragging their edge, with the keys, and back with a d
   await expect.poll(width).toBe(288);
   expect(start).toBe(288);
 });
+
+test("draw an icon on the label: each asset's, or one chosen, drawn as it prints", async ({ signedIn: page, api }) => {
+  const { category } = await api.call('POST', '/categories', { name: unique('Crates') });
+  const crate = unique('crate').toLowerCase();
+  await api.call('PUT', `/categories/${category.id}/icon`, {
+    icon_name: crate,
+    source: `icon "${crate}" { category "storage"; footprint 1 1 1; part "box" { box 0 0 0 1 1 1 } }`,
+  });
+  const { template } = await api.call('POST', '/templates', { name: unique('Icons'), units: 'mm', width: 62, height: 29, dpi: 300, layering: 'list', elements: [] });
+  await page.goto(`/templates/${template.id}/edit`);
+  const preview = page.getByRole('img', { name: 'Label preview' });
+  await expect(preview.locator('canvas')).toBeVisible();
+  const at = await onPaper(page);
+  const inked = () =>
+    preview.locator('canvas').evaluate((c: HTMLCanvasElement) => {
+      const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+      let black = 0;
+      for (let i = 0; i < data.length; i += 4) if (data[i]! < 128) black++;
+      return black;
+    });
+
+  await tool(page, 'Icon').click();
+  await drag(page, at(0.05, 0.1), at(0.45, 0.9));
+  // with no asset, the unknown icon stands for each asset's
+  await expect(page.getByRole('radio', { name: "Each asset's icon" })).toBeChecked();
+  await expect.poll(inked).toBeGreaterThan(200);
+  const unknown = await inked();
+
+  await page.getByRole('radio', { name: 'One icon' }).check();
+  const picker = page.getByRole('group', { name: 'Choose an icon' });
+  await picker.getByRole('searchbox', { name: 'Search icons' }).fill(crate);
+  await axe(page);
+  await picker.getByRole('button', { name: crate }).click();
+  await expect(page.getByText(`One icon: ${crate}`)).toBeVisible();
+  await expect.poll(inked).not.toBe(unknown);
+  await page.getByLabel('Shading').selectOption('outline');
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  const saved = await api.call('GET', `/templates/${template.id}`);
+  expect(saved.template.elements).toMatchObject([{ type: 'icon', icon: crate, shading: 'outline' }]);
+});

@@ -3,6 +3,7 @@ package raster
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -223,5 +224,26 @@ func TestTheSampleDraws(t *testing.T) {
 		if os.Getenv("RASTER_DUMP") != "" {
 			_ = os.WriteFile(filepath.Join(os.Getenv("RASTER_DUMP"), doc.Icons[i].Name+".png"), encoded, 0o644)
 		}
+	}
+}
+
+// An outline draws the strokes alone, every one in the ink, and no fill.
+func TestOutline(t *testing.T) {
+	i := icon(
+		ir.Shape{Kind: ir.KindPolygon, Points: square(2, 2, 8, 8), Fill: "red", FillOpacity: 1, Stroke: "red", StrokeWidth: 2},
+		ir.Shape{Kind: ir.KindPolygon, Points: square(0, 0, 1, 1), Fill: "red", FillOpacity: 1, Stroke: "none"},
+	)
+	img, err := DrawWith(i, black, 10, Options{Outline: true, Ink: color.NRGBA{B: 255, A: 255}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := img.NRGBAAt(2, 5); c != (color.NRGBA{B: 255, A: 255}) {
+		t.Errorf("stroke: %+v", c)
+	}
+	if c := img.NRGBAAt(5, 5); c.A != 0 {
+		t.Errorf("filled: %+v", c)
+	}
+	if c := img.NRGBAAt(0, 0); c.A != 0 {
+		t.Errorf("a fill with no stroke: %+v", c)
 	}
 }

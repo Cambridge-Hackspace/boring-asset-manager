@@ -51,7 +51,7 @@ Who may see and change an asset depends on **scopes**: labels put on categories 
 
 ## Labels and printing
 
-**Label templates** lay out a label: text, codes and images, bound to an asset's values (`{{asset.name}}`, `{{scan_url}}`). A template prints on **printers** loaded with **label stock** (a roll of a given size); not every template fits every printer, and BAM! says why. Labels can be printed at once, or added to the **print queue** to print together later.
+**Label templates** lay out a label: text, codes, images and icons, bound to an asset's values (`{{asset.name}}`, `{{scan_url}}`). An `icon` element draws `{{asset.icon}}`, each asset's own icon or its categories', or one icon by name, `shading` `shaded` or `outline`. A template prints on **printers** loaded with **label stock** (a roll of a given size); not every template fits every printer, and BAM! says why. Labels can be printed at once, or added to the **print queue** to print together later.
 
 ## Reports and scanning
 

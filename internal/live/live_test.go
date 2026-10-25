@@ -89,6 +89,7 @@ func TestParityFixture(t *testing.T) {
 		Template json.RawMessage   `json:"template"`
 		Data     json.RawMessage   `json:"data"`
 		Images   map[string]string `json:"images"`
+		Icons    json.RawMessage   `json:"icons"`
 		Width    int               `json:"width"`
 		Height   int               `json:"height"`
 		SHA256   string            `json:"sha256"`
@@ -107,6 +108,11 @@ func TestParityFixture(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := r.AddImage(id, data); err != nil {
+				t.Fatalf("%s: %v", c.Name, err)
+			}
+		}
+		if len(c.Icons) > 0 {
+			if err := r.SetIcons(c.Icons); err != nil {
 				t.Fatalf("%s: %v", c.Name, err)
 			}
 		}

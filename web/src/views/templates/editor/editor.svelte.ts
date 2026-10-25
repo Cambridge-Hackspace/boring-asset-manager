@@ -28,7 +28,7 @@ import type { Anchor } from './transform';
 import { clampScale, fitView, fitWidthView, nextStep, scaleAt100, zoomAround, type View } from './view';
 
 /** What a click or drag on the label does. */
-export type Tool = 'select' | 'text' | 'code' | 'image' | ShapeKind | 'pen' | 'measure';
+export type Tool = 'select' | 'text' | 'code' | 'image' | 'icon' | ShapeKind | 'pen' | 'measure';
 
 /** What each tool is called, in the toolbox and the action search. */
 export const toolNames: Record<Tool, string> = {
@@ -36,6 +36,7 @@ export const toolNames: Record<Tool, string> = {
   text: 'Text',
   code: 'Barcode or QR code',
   image: 'Image',
+  icon: 'Icon',
   rectangle: 'Rectangle',
   ellipse: 'Ellipse',
   line: 'Line',

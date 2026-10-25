@@ -31,7 +31,20 @@ const (
 	ElementText        = "text"
 	ElementStaticImage = "static_image"
 	ElementShape       = "shape"
+	ElementIcon        = "icon"
 )
+
+// Icons (README §3.7): an icon element draws IconOfAsset, the asset's own
+// icon or its categories', or an icon by name; shaded, its faces in grays
+// from the palette's light colors, or as an outline, strokes only.
+const (
+	IconOfAsset    = "{{asset.icon}}"
+	ShadingShaded  = "shaded"
+	ShadingOutline = "outline"
+)
+
+// iconName is an icon's name, as the server checks it.
+var iconName = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$`)
 
 // Shapes, and the paints they are drawn in. Labels print black and white;
 // white paints over whatever is beneath it.
@@ -289,6 +302,11 @@ type Element struct {
 
 	// static_image
 	ImageID string `json:"image_id,omitempty"`
+	// icon: IconOfAsset, or an icon's name; and Shading, ShadingShaded (or
+	// empty) or ShadingOutline. Align places it across its box, centered
+	// when empty, and Mirror flips it as it does an image.
+	Icon    string `json:"icon,omitempty"`
+	Shading string `json:"shading,omitempty"`
 	// Mirror flips the element in its box, before it is turned: across
 	// (left for right), down (top for bottom) or both. A mirrored code does
 	// not scan from the side the label is read from.
@@ -632,6 +650,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"d":             e.D != "",
 		"fill_rule":     e.FillRule != "",
 	}
+	iconProps := map[string]bool{"icon": e.Icon != "", "shading": e.Shading != ""}
 	textProps := map[string]bool{
 		"font_size":     e.FontSize != 0,
 		"font_weight":   e.FontWeight != "",
@@ -646,6 +665,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	case ElementGenerator:
 		unset(textProps)
 		unset(shapeProps)
+		unset(iconProps)
 		unset(map[string]bool{"image_id": e.ImageID != ""})
 		g, err := generators.Lookup(e.GeneratorType)
 		if err != nil {
@@ -678,6 +698,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		textFill := e.Fill
 		delete(shapeProps, "fill")
 		unset(shapeProps)
+		unset(iconProps)
 		unset(map[string]bool{"image_id": e.ImageID != ""})
 		if textFill != "" && textFill != PaintBlack && textFill != PaintWhite {
 			v.add(at("fill"), `must be "black" or "white"`)
@@ -714,6 +735,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		unset(generatorProps)
 		unset(textProps)
 		unset(shapeProps)
+		unset(iconProps)
 		unset(map[string]bool{"content_binding": e.ContentBinding != "", "align": e.Align != ""})
 		if _, err := uuid.Parse(e.ImageID); err != nil {
 			v.add(at("image_id"), "must be the ID of an uploaded image")
@@ -722,11 +744,27 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 	case ElementShape:
 		unset(generatorProps)
 		unset(textProps)
+		unset(iconProps)
 		unset(map[string]bool{"image_id": e.ImageID != "", "content_binding": e.ContentBinding != "", "align": e.Align != ""})
 		validateShape(v, path, e)
 
+	case ElementIcon:
+		unset(generatorProps)
+		unset(textProps)
+		unset(shapeProps)
+		unset(map[string]bool{"image_id": e.ImageID != "", "content_binding": e.ContentBinding != ""})
+		if e.Icon != IconOfAsset && (!iconName.MatchString(e.Icon) || strings.HasPrefix(e.Icon, "bam-")) {
+			v.add(at("icon"), `must be "`+IconOfAsset+`", the asset's icon, or an icon's name`)
+		}
+		if e.Shading != "" && e.Shading != ShadingShaded && e.Shading != ShadingOutline {
+			v.add(at("shading"), `must be "shaded" or "outline"`)
+		}
+		if e.Align != "" && e.Align != AlignLeft && e.Align != AlignCenter && e.Align != AlignRight {
+			v.add(at("align"), `must be "left", "center" or "right"`)
+		}
+
 	default:
-		v.add(at("type"), `must be "generator", "text", "static_image" or "shape"`)
+		v.add(at("type"), `must be "generator", "text", "static_image", "shape" or "icon"`)
 	}
 }
 
@@ -909,6 +947,22 @@ func (t *Template) FieldKeys() []string {
 		}
 	}
 	return keys
+}
+
+// IconNames returns the distinct icons the template draws by name, not
+// as each asset's.
+func (t *Template) IconNames() []string {
+	seen := map[string]bool{}
+	var names []string
+	for _, e := range t.Elements {
+		for _, el := range []*Element{&e, e.Alternative} {
+			if el != nil && el.Type == ElementIcon && el.Icon != IconOfAsset && !seen[el.Icon] {
+				seen[el.Icon] = true
+				names = append(names, el.Icon)
+			}
+		}
+	}
+	return names
 }
 
 // ImageIDs returns the distinct images the template places.
