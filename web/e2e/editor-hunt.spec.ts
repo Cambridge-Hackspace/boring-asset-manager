@@ -242,9 +242,14 @@ test.describe('drawing', () => {
     const e = await box(element(page));
     await page.mouse.move(...middle(e));
     await page.mouse.down();
+    // Six sweeps back and forth, every move asking for a frame sooner than
+    // the renderer draws one. The browser takes one move per frame of the
+    // page, so the number of moves, not the machine, sets how long this
+    // lasts: 50 a sweep made 650, eleven seconds at the least, which a
+    // busy machine took past the test's limit.
     for (let i = 0; i < 6; i++) {
-      await page.mouse.move(middle(e)[0] + 200, middle(e)[1] + 40, { steps: 50 });
-      await page.mouse.move(middle(e)[0], middle(e)[1], { steps: 50 });
+      await page.mouse.move(middle(e)[0] + 200, middle(e)[1] + 40, { steps: 12 });
+      await page.mouse.move(middle(e)[0], middle(e)[1], { steps: 12 });
     }
     await page.mouse.move(middle(e)[0] + 120, middle(e)[1] + 30, { steps: 20 });
     await page.mouse.up();
