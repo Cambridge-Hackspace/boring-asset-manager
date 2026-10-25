@@ -86,3 +86,34 @@ export function iconGroup(categories: Category[], id: string): string {
   }
   return suggestIconName(c?.name ?? 'icons', []);
 }
+
+/** Stroke widths as typed, separated by commas or spaces: the numbers, or
+    why they are not. */
+export function parseWidths(text: string): { widths: number[] } | { error: string } {
+  const parts = text.split(/[\s,]+/u).filter((p) => p !== '');
+  const widths: number[] = [];
+  for (const p of parts) {
+    const n = Number(p);
+    if (!Number.isFinite(n) || n <= 0) return { error: `${p} is not a positive number` };
+    widths.push(n);
+  }
+  return { widths };
+}
+
+/** The compiler's limits a lexicon may set (isolex SPEC §9), with its defaults. */
+export const iconLimits = [
+  { key: 'shape-limit', label: 'Shapes in one icon', default: 100_000 },
+  { key: 'repeat-limit', label: 'Repetitions in one icon', default: 1_000_000 },
+  { key: 'insert-depth', label: 'Fragments inserted within each other', default: 32 },
+  { key: 'icon-limit', label: 'Icons in the lexicon', default: 100_000 },
+  { key: 'expression-depth', label: 'Nesting of one expression', default: 256 },
+] as const;
+
+/** Who owns an icon of the build: the category whose icon it is, or a
+    variant of. */
+export function iconOwner(icons: CategoryIcon[], name: string): CategoryIcon | undefined {
+  return (
+    icons.find((i) => i.icon_name === name) ??
+    icons.filter((i) => name.startsWith(i.icon_name + '-')).sort((a, b) => b.icon_name.length - a.icon_name.length)[0]
+  );
+}

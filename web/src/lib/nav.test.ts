@@ -18,7 +18,7 @@ describe('navSections', () => {
     ];
     expect(labels(all)).toEqual([
       ['', ['Assets', 'Scan', 'Loans', 'Print queue', 'Reports']],
-      ['Catalog', ['Categories', 'Fields', 'Link types', 'Actions']],
+      ['Catalog', ['Categories', 'Fields', 'Link types', 'Actions', 'Icons']],
       ['Labels', ['Templates', 'Images', 'Printers']],
       ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications']],
     ]);

@@ -448,6 +448,15 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
   * **History** loads any published version back into the editor. Renaming and deleting show what still uses the icon when they are refused.
   * **Drawing:** icons are drawn in the page by `IsoIcon`, from the build's IR, every token painted with a CSS property, `--iso-<token>`, from the palette (`lib/isolex/palette`), so dark mode needs no redraw. Its shapes match isolex's own SVG for isolex's sample, attribute for attribute.
   * **Help:** the help topic **Icons** explains it all.
+* **The Icons page** (`/icons`, under Catalog, for those who manage categories or icons) shows:
+  * **The build**, with export and import.
+  * **Needs attention:** category and library drafts with problems, and the build's warnings.
+  * **Every icon**, by isolex category, searchable, each with the category it belongs to.
+  * **The library**, written in the source editor.
+  * **The palette** as swatches, light and dark, reordered, added to and removed from.
+  * **The settings**: stroke widths, reserved colors, and the limits, each empty for the compiler's default or set to none.
+
+  A refusal lists the icons it would break, as links. The page credits isolex, Axonibyte Innovations, LLC's, and its license.
 * **At startup** the server compiles the module to machine code in the background, so the first save doesn't wait. It then builds what is published if the current build isn't of it (none yet, or one made by another isolex). If the new isolex doesn't compile it, the last good build stays, and the log says why.
 
 ---
@@ -1233,6 +1242,7 @@ Category icons written in isolex and drawn throughout the interface, on labels a
 * [x] The API and MCP tools for icons, and the compiler warmed at startup (§3.7, §6.6).
 * [x] The source editor (`IconSourceEditor`): isolex colored as typed over a plain textarea, so undo, selection and screen readers are the browser's own; line numbers marking problems, the token at fault underlined, and a list of problems that goes to each; completion of nodes with their arguments, properties, palette tokens, and the icons, parts, fragments and axes the lexicon defines; Tab indents (Esc, then Tab, leaves), Enter keeps the indent, Ctrl+/ comments lines out.
 * [x] An Icon section on each category's page: what it shows, its own or inherited; a source started from its parent's icon, a box or another category's, checked as typed and previewed light and dark beside its subcategories; published or kept as a draft; history, renaming and deleting (§3.7).
+* [x] The Icons page: every icon, what needs attention, the library, the palette and the settings; the lexicon exported as a zip and library files imported from one (§3.7).
 * [ ] Icons throughout the interface, and as images.
 * [ ] Icons on labels.
 * [ ] Icons that show an asset's state.

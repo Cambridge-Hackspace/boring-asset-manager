@@ -34,6 +34,7 @@ import ScanLookupPage from './views/ScanLookupPage.svelte';
 import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
 import ActionsPage from './views/ActionsPage.svelte';
+import IconsPage from './views/icons/IconsPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -74,6 +75,7 @@ export const routes: Route[] = [
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields', group: 'Catalog' },
   { pattern: '/relations', component: RelationsPage, title: 'Link types', permissions: ['categories.manage'], nav: 'Link types', group: 'Catalog' },
   { pattern: '/actions', component: ActionsPage, title: 'Actions', permissions: ['categories.manage'], nav: 'Actions', group: 'Catalog' },
+  { pattern: '/icons', component: IconsPage, title: 'Icons', permissions: ['categories.manage', 'icons.manage'], nav: 'Icons', group: 'Catalog' },
   { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates.manage'], nav: 'Templates', group: 'Labels' },
   { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates.manage'], workspace: true },
   { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates.manage'], workspace: true },
