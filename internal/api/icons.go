@@ -92,8 +92,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 
 // handleIcons says whether icons can change here, what the current build
 // is, which icon each category is drawn with, its own or its nearest
-// ancestor's, and the unknown icon, drawn for a name the build does not
-// draw: GET /api/v1/icons
+// ancestor's, the unknown icon, drawn for a name the build does not draw,
+// and the names assets have as their own that it does not draw, with how
+// many have each: GET /api/v1/icons
 func (s *Server) handleIcons(w http.ResponseWriter, r *http.Request) {
 	b, err := s.store.CurrentIconBuild()
 	if err != nil {
@@ -105,8 +106,13 @@ func (s *Server) handleIcons(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the category icons")
 		return
 	}
+	missing, err := s.store.MissingAssetIcons()
+	if err != nil {
+		writeServerError(w, err, "read the assets' icons")
+		return
+	}
 	body := map[string]any{"available": s.icons.Available(), "isolex_version": isolex.Pinned().Version, "build": nil,
-		"category_icons": shown, "unknown": isolex.UnknownIR()}
+		"category_icons": shown, "unknown": isolex.UnknownIR(), "missing_icons": missing}
 	if b != nil {
 		var doc struct {
 			Icons []struct {

@@ -1,10 +1,15 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"image/png"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
@@ -159,5 +164,163 @@ func TestAnAssistantSetsAnAssetsIcon(t *testing.T) {
 	structured(t, callTool(t, cs, "get_asset", map[string]any{"asset": a.Asset.ID}), &d)
 	if d.Icon == nil || d.Icon.Own {
 		t.Errorf("dropped: %+v", d.Icon)
+	}
+}
+
+// Icons drawn as images: by name, a category's (inherited too) or an
+// asset's, as SVG or PNG, light or dark, at a height, in the category's
+// color, and the unknown icon for a name the build does not draw.
+func TestIconImages(t *testing.T) {
+	requireIcons(t)
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	storage, bins := iconedWorld(t, srv)
+	// the crate paints a tile in its category's color
+	painted := strings.Replace(crateSource, "box 0 0 0 1 1 1", `box 0 0 0 1 1 1; tile 0 0 1 1 1 fill="category"`, 1)
+	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, storage, "crate", painted); err != nil || !save.Published {
+		t.Fatalf("%+v %v", save, err)
+	}
+	get := func(query string) *httptest.ResponseRecorder {
+		t.Helper()
+		return doJSON(t, srv, cookie, "GET", "/api/v1/icons/image?"+query, "")
+	}
+
+	rec := get("name=crate&height=128")
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/svg+xml" || !strings.Contains(body, `height="128.00"`) ||
+		!strings.Contains(body, `fill="#336699"`) || !strings.Contains(body, `fill="#f4f4f5"`) {
+		t.Fatalf("svg: %d %s %.600s", rec.Code, rec.Header(), body)
+	}
+	if dark := get("name=crate&height=128&theme=dark").Body.String(); dark == body || !strings.Contains(dark, `fill="#71717a"`) {
+		t.Errorf("dark: %.300s", dark)
+	}
+	// Bins draws Storage's crate, in Bins' own color
+	if b := get("category=" + bins).Body.String(); !strings.Contains(b, `fill="#aa0000"`) {
+		t.Errorf("inherited: %.600s", b)
+	}
+	if b := get("name=crate&color=%23123456").Body.String(); !strings.Contains(b, `fill="#123456"`) {
+		t.Errorf("color: %.600s", b)
+	}
+
+	rec = get("category=" + bins + "&format=png&height=40")
+	img, err := png.Decode(rec.Body)
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/png" || err != nil || img.Bounds().Dy() != 40 {
+		t.Fatalf("png: %d %v", rec.Code, err)
+	}
+	etag := rec.Header().Get("ETag")
+	req := httptest.NewRequest("GET", "/api/v1/icons/image?category="+bins+"&format=png&height=40", nil)
+	req.Header.Set("If-None-Match", etag)
+	req.AddCookie(cookie)
+	again := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(again, req)
+	if etag == "" || again.Code != http.StatusNotModified {
+		t.Errorf("unchanged: %q %d", etag, again.Code)
+	}
+
+	// an asset's, and the unknown icon for a name nothing draws
+	a, err := srv.store.CreateAsset("Bin", []string{bins}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := get("asset=" + a.Asset.ID); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "<title>crate</title>") {
+		t.Errorf("asset: %d %.200s", rec.Code, rec.Body)
+	}
+	rec = get("name=gone")
+	if rec.Code != http.StatusOK || rec.Header().Get("X-Icon-Missing") != "gone" || !strings.Contains(rec.Body.String(), "<title>bam-unknown</title>") {
+		t.Errorf("unknown: %d %s", rec.Code, rec.Header())
+	}
+
+	plain, _ := srv.store.CreateAsset("Chair", nil, nil, nil)
+	other, _ := srv.store.CreateCategoryFrom(store.CategoryInput{Name: "Chairs"})
+	for query, code := range map[string]int{
+		"":                               http.StatusBadRequest,
+		"name=crate&category=" + storage: http.StatusBadRequest,
+		"name=crate&format=gif":          http.StatusBadRequest,
+		"name=crate&theme=sepia":         http.StatusBadRequest,
+		"name=crate&height=0":            http.StatusBadRequest,
+		"name=crate&height=2000":         http.StatusBadRequest,
+		"name=crate&color=red":           http.StatusBadRequest,
+		"asset=" + plain.Asset.ID:        http.StatusNotFound,
+		"asset=nope":                     http.StatusNotFound,
+		"category=" + other.ID:           http.StatusNotFound,
+		"category=nope":                  http.StatusNotFound,
+	} {
+		if rec := get(query); rec.Code != code {
+			t.Errorf("%q: %d, want %d: %s", query, rec.Code, code, rec.Body)
+		}
+	}
+}
+
+// Names assets have as their own that the build stops drawing are
+// reported, and the assets found by them.
+func TestMissingIconsAreReported(t *testing.T) {
+	requireIcons(t)
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	_, bins := iconedWorld(t, srv)
+	barrels, _ := srv.store.CreateCategoryFrom(store.CategoryInput{Name: "Barrels"})
+	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, barrels.ID, "barrel", strings.ReplaceAll(crateSource, "crate", "barrel")); err != nil || !save.Published {
+		t.Fatalf("%+v %v", save, err)
+	}
+	var ids []string
+	for _, name := range []string{"One", "Two"} {
+		a, err := srv.store.CreateAssetWithIcon(name, []string{bins}, nil, nil, nil, "barrel")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, a.Asset.ID)
+	}
+	overview := func() []store.MissingIcon {
+		var got struct {
+			MissingIcons []store.MissingIcon `json:"missing_icons"`
+		}
+		decodeBody(t, doJSON(t, srv, cookie, "GET", "/api/v1/icons", "").Body.Bytes(), &got)
+		return got.MissingIcons
+	}
+	if m := overview(); len(m) != 0 {
+		t.Errorf("before: %+v", m)
+	}
+	if _, err := srv.store.DeleteCategoryIcon(t.Context(), srv.icons, barrels.ID); err != nil {
+		t.Fatal(err)
+	}
+	if m := overview(); len(m) != 1 || m[0] != (store.MissingIcon{Name: "barrel", Assets: 2}) {
+		t.Errorf("after: %+v", m)
+	}
+	rec := doJSON(t, srv, cookie, "GET", "/api/v1/assets?icon=barrel", "")
+	var list struct {
+		Assets []models.AssetWithDetails `json:"assets"`
+	}
+	decodeBody(t, rec.Body.Bytes(), &list)
+	if len(list.Assets) != 2 || !list.Assets[0].ResolvedIcon.Missing {
+		t.Errorf("%d %+v", rec.Code, list.Assets)
+	}
+
+	// an assistant sees the report, finds them, and draws what they show
+	cs := mcpSession(t, srv, tokenWith(t, srv, admin.ID, "assistant", rbac.PermAssetsRead))
+	if text := toolText(callTool(t, cs, "icons_overview", map[string]any{})); !strings.Contains(text, "1 icon names that assets have as their own are not drawn") {
+		t.Errorf("overview: %s", text)
+	}
+	var found struct {
+		Total int `json:"total"`
+	}
+	structured(t, callTool(t, cs, "search_assets", map[string]any{"icon": "barrel"}), &found)
+	if found.Total != 2 {
+		t.Errorf("search: %d", found.Total)
+	}
+	res := callTool(t, cs, "draw_icon", map[string]any{"asset": ids[0], "height": 32})
+	var image *mcp.ImageContent
+	for _, c := range res.Content {
+		if ic, ok := c.(*mcp.ImageContent); ok {
+			image = ic
+		}
+	}
+	if res.IsError || image == nil || image.MIMEType != "image/png" || !strings.Contains(toolText(res), `"barrel"`) {
+		t.Fatalf("draw: %s", toolText(res))
+	}
+	if img, err := png.Decode(bytes.NewReader(image.Data)); err != nil || img.Bounds().Dy() != 32 {
+		t.Errorf("%v", err)
+	}
+	if res := callTool(t, cs, "draw_icon", map[string]any{}); !res.IsError {
+		t.Error("drew nothing named")
 	}
 }
