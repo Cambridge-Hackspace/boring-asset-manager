@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boxSource, copiedSource, extendingSource, iconGroup, shownIcon, splitDiags, suggestIconName, validIconName } from './icons';
+import { boxSource, copiedSource, extendingSource, iconGroup, iconOwner, parseWidths, shownIcon, splitDiags, suggestIconName, validIconName } from './icons';
 import type { Category, CategoryIcon } from './models';
 import { outline } from './isolex/syntax';
 
@@ -63,5 +63,21 @@ describe('starting sources', () => {
   });
   it("group icons under their top category's name", () => {
     expect(iconGroup([cat('net', 'Networking'), cat('sw', 'Switches', 'net')], 'sw')).toBe('networking');
+  });
+});
+
+describe('the settings', () => {
+  it('read stroke widths as typed', () => {
+    expect(parseWidths('1.2, 1.5 2')).toEqual({ widths: [1.2, 1.5, 2] });
+    expect(parseWidths('  ')).toEqual({ widths: [] });
+    expect(parseWidths('1.2, 0')).toEqual({ error: '0 is not a positive number' });
+    expect(parseWidths('thick')).toEqual({ error: 'thick is not a positive number' });
+  });
+  it('know who owns an icon, a variant by its longest name', () => {
+    const icons = [icon('a', 'switch'), icon('b', 'switch-poe')];
+    expect(iconOwner(icons, 'switch')?.category_id).toBe('a');
+    expect(iconOwner(icons, 'switch-down')?.category_id).toBe('a');
+    expect(iconOwner(icons, 'switch-poe-down')?.category_id).toBe('b');
+    expect(iconOwner(icons, 'router')).toBeUndefined();
   });
 });

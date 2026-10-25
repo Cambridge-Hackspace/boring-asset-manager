@@ -25,3 +25,15 @@ Icons paint with the colors of a **palette**, such as *ink* and *body-top*, neve
 **History** lists every version published; any can be loaded back into the editor. An icon can be renamed or deleted only when no other icon still uses it, such as a subcategory's that extends it. A category whose icon others use cannot be deleted until they no longer do.
 
 Whoever may change categories can draw their icons. Changing the palette and the shared library of shapes needs **Manage icons**.
+
+## The Icons page
+
+**Icons**, under **Catalog**, shows every icon, by group, and what **needs attention**: drafts waiting with problems, and warnings. Whoever may **Manage icons** changes there what every icon is drawn with:
+
+- **Library**: shapes icons share and no one category owns, such as a base to extend or a fragment to insert, written and saved as a category's icon is.
+- **Palette**: the colors icons paint with, each named, with a light and a dark color. A color an icon still uses cannot be taken away.
+- **Settings**: the line widths icons may use, the colors only an icon that grants itself one may use, and how much drawing one icon may take.
+
+**Export as a zip** downloads every icon, as the isolex compiler reads them. **Import** takes a zip of .ilx files into the library at once, or none of them if any icon would stop drawing.
+
+Icons are compiled by isolex, the work of Axonibyte Innovations, LLC.
