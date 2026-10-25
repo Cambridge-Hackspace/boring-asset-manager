@@ -20,6 +20,9 @@ VERSION="${VERSION:-$(cd "$ROOT" && git describe --tags --always --dirty 2>/dev/
 TRUST_SRC="git config --global --add safe.directory /src"
 
 "$ROOT/tools/web/build.sh"
+# The icon compiler, which go build embeds; refused unless it matches
+# internal/isolex/wasm.lock.
+"$ROOT/tools/isolex/fetch.sh"
 
 mkdir -p "$ROOT/bin"
 for target in $TARGETS; do

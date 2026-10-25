@@ -17,9 +17,16 @@ export CONTAINER MSYS_NO_PATHCONV=1
 
 step() { printf '\n=== %s\n' "$*"; }
 
+# The icon compiler, checked against internal/isolex/wasm.lock, so that the
+# suites below test the real one: BAM_REQUIRE_ISOLEX fails them without it,
+# where a plain go test skips.
+step "isolex compiler, as wasm.lock pins it"
+"$ROOT/tools/isolex/fetch.sh"
+
 step "Go suites (-race), on SQLite in REAPER_STATE"
 mkdir -p "$REAPER_STATE/uploads"
 "$CONTAINER" run --rm \
+  -e BAM_REQUIRE_ISOLEX=1 \
   -v "$ROOT:/src" -w /src \
   -v "$REAPER_CACHE_GOCACHE:/root/.cache/go-build" \
   -v "$REAPER_CACHE_GOPATH:/go" \

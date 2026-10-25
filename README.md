@@ -23,6 +23,10 @@ BAM! is a single-tenant, API-first web application designed for tracking physica
   - **Pure-Go Rendering:** One layout engine feeds SVG, PNG and PDF backends (§4). Fonts, glyph outlines and rasterization come from `golang.org/x/image` (the embedded Go fonts, OpenType parsing and its vector rasterizer); the PDF writer is a small in-house one so output stays deterministic.
   - **Direct Printing:** Each printer's own command stream (Brother QL, DYMO LabelWriter, TSPL) from pluggable print drivers, sent over raw TCP (port 9100), to a USB device on the server, to a raw IPP/CUPS queue, or through the Windows spooler, with no desktop driver or print dialog.
 - **Barcode & Matrix Engine:** In-house QR Code, Micro QR and Code 128 encoders with per-generator payload and character set validation (§4.2).
+- **Icon compiler:** Icons are written in [isolex](https://forge.axonibyte.com/axonibyte/isolex), a small language for isometric icons. The compiler is isolex's own, built to WebAssembly, and runs in-process under [wazero](https://wazero.io) (pure Go, no cgo), in package `internal/isolex`. Icons are a feature, not a requirement: bam ships no icons except `bam-unknown`, a box with a question mark, drawn in place of an icon that the lexicon does not have.
+  - **Pinned by checksum:** `internal/isolex/wasm.lock` pins an isolex release and the SHA-256 of its module. `tools/isolex/fetch.sh` downloads that module into `internal/isolex/wasm/` (ignored by git), and the release build runs it before `go build`. Anything that does not match the checksum is refused and nothing is written, and the server checks the module it embedded again before using it. A binary built without the module runs with icons switched off.
+  - **Contained:** the module imports nothing, so it is granted nothing: no files, clock or network. Each compile gets a fresh instance, has its memory capped (256 MiB) and its time bounded (10 s), and shares nothing with any other compile.
+  - **The same compiler everywhere:** isolex's own fixture compiles here to isolex's own IR golden, byte for byte (`internal/isolex/testdata`). The IR is read by `internal/isolex/ir`, which has no dependencies, so the label renderer can read it under TinyGo too.
 
 ### Frontend Architecture
 
@@ -1154,6 +1158,18 @@ An MCP server that does everything the API does (#33, §6.6).
 #### Sub-Phase 8.12: Prompts, Confirmations and Help
 * [x] Prompts for the common tasks, confirmations before what cannot be undone, and the Assistants help topic (#45).
 
+### Phase 9: Icons
+Category icons written in isolex and drawn throughout the interface, on labels and, eventually, as scenes of where things are. Planned in units, one pull request each.
+* [x] The compiler: isolex as WebAssembly, fetched against a pinned checksum, run under wazero with a memory cap and a deadline; the IR reader; the `lexicon {}` block bam writes from its palette; the `bam-unknown` icon (§1, "Icon compiler").
+* [ ] Go renderer for the IR, byte-identical to isolex's own.
+* [ ] Icon sources, palette and builds stored, with the API and MCP tools.
+* [ ] The icon editor, and an Icon section on each category's page.
+* [ ] Icons throughout the interface, and as images.
+* [ ] Icons on labels.
+* [ ] Icons that show an asset's state.
+* [ ] Icon parameters bound to asset fields.
+* [ ] Scenes: a location's contents drawn in place, arranged, and exported.
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -1174,7 +1190,7 @@ reaper test      # Syncs uncommitted working tree -> builds -> ZFS state rollbac
 reaper down      # Tears down remote VM (cull daemon provides automatic TTL backstop)
 ```
 
-`reaper test` builds the binary in the pinned Go image, then runs `tools/reaper/run.sh` on the guest: the Go suites with `-race` (the SQLite database and uploads in `$REAPER_STATE`), then `svelte-check` and Vitest, then the Playwright and `axe` battery (§8.4). Each runs in its own pinned container, so the run verb executes on the guest (`exec = "host"`) and starts them with its podman; a containerized verb cannot start containers. The images are listed under `run.images` so reaper pulls them first, and `node_modules`, the npm cache and Go's caches live in reaper's caches rather than on the guest's small root disk. A test (`tools/reaper`) checks that every image the scripts run is in `run.images`, in the digest-only form reaper accepts. The script runs the same way by hand, with `REAPER_STATE` and the `REAPER_CACHE_*` variables pointing at directories of your own.
+`reaper test` builds the binary in the pinned Go image, then runs `tools/reaper/run.sh` on the guest: it fetches the icon compiler as `wasm.lock` pins it (§1), then runs the Go suites with `-race` and `BAM_REQUIRE_ISOLEX=1`, under which the compiler's tests fail without it rather than skip as a plain `go test` does (the SQLite database and uploads in `$REAPER_STATE`), then `svelte-check` and Vitest, then the Playwright and `axe` battery (§8.4). Each runs in its own pinned container, so the run verb executes on the guest (`exec = "host"`) and starts them with its podman; a containerized verb cannot start containers. The images are listed under `run.images` so reaper pulls them first, and `node_modules`, the npm cache and Go's caches live in reaper's caches rather than on the guest's small root disk. A test (`tools/reaper`) checks that every image the scripts run is in `run.images`, in the digest-only form reaper accepts. The script runs the same way by hand, with `REAPER_STATE` and the `REAPER_CACHE_*` variables pointing at directories of your own.
 
 ### 8.2 Testing Portfolio
 Following the "Portfolio of Oracles" methodology:

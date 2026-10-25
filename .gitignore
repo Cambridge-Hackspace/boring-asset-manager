@@ -21,6 +21,7 @@ web/.vite/
 web/test-results/
 web/playwright-report/
 internal/webui/static/app/
+internal/isolex/wasm/isolex.wasm
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

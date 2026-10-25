@@ -1,0 +1,7 @@
+# The isolex compiler as WebAssembly (README §1, "Icon compiler"). tools/isolex/fetch.sh
+# downloads it into wasm/isolex.wasm, which go build embeds; both it and
+# the server refuse a module whose SHA-256 is not this one. To move to
+# another release, change all three lines together.
+version 0.3.0
+url https://forge.axonibyte.com/api/packages/axonibyte/generic/isolex/0.3.0/isolex-0.3.0.wasm
+sha256 249797fc45ff70fce923afcab6c162dfb280ed014431321f154789b632cb2be6

@@ -26,7 +26,7 @@ func TestRunImagesArePulled(t *testing.T) {
 	listed := string(images[1])
 	accepted := regexp.MustCompile(`^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+)(:[0-9]+)?(/[a-z0-9._-]+)+@sha256:[0-9a-f]{64}$`)
 	assignment := regexp.MustCompile(`(?m)^[A-Z_]+_IMAGE="([^"]+)"`)
-	for _, script := range []string{"tools/reaper/run.sh", "tools/web/build.sh", "tools/web/e2e.sh"} {
+	for _, script := range []string{"tools/reaper/run.sh", "tools/web/build.sh", "tools/web/e2e.sh", "tools/isolex/fetch.sh"} {
 		data, err := os.ReadFile(filepath.Join(root, script))
 		if err != nil {
 			t.Fatal(err)
