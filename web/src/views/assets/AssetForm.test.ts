@@ -371,3 +371,80 @@ describe('AssetForm', () => {
     expect(screen.queryByRole('checkbox', { name: 'Add a label to the print queue' })).toBeNull();
   });
 });
+
+describe('AssetForm icons', () => {
+  const drawn = (name: string) => ({ name, category: 'storage', viewbox: [0, 0, 10, 10] as [number, number, number, number], describe: [], grants: [], shapes: [] });
+  // Bins draws Storage's icon, inherited
+  const storage = cat('storage', 'Storage');
+  const bins = { ...cat('bins', 'Bins'), parent_id: 'storage', color_hex: '#aa0000' };
+  const editing = (iconName: string | null): AssetWithDetails => ({
+    asset: { id: 'a1', name: 'Bin', created_at: '', updated_at: '', condition: 'ok', condition_note: '', icon_name: iconName },
+    categories: [bins],
+    generator_keys: [],
+    field_values: {},
+    effective_fields: [],
+    lendable: false,
+    weighed: false,
+    loan: null,
+    links: [],
+    location: [],
+    suggested_relation_type_ids: [],
+    scopes: ['default'],
+    scan_template: { template_id: 'default' },
+    label_template: { template_id: '' },
+    actions: [],
+    photos: [],
+  });
+  let n = 0;
+  function serve(existing: AssetWithDetails) {
+    session.user = { id: `icon-form-${++n}`, email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' };
+    return fakeApi({
+      'GET /categories': () => ({ categories: [storage, bins] }),
+      'GET /generators': () => ({ generators }),
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'GET /assets/a1': () => ({ asset: existing }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'PUT /assets/a1': () => ({ asset: existing }),
+      'GET /icons': () => ({ category_icons: { storage: 'crate', bins: 'crate' } }),
+      'GET /icons/ir': () => ({ ir_version: 1, icons: [drawn('crate'), drawn('crate-down')] }),
+      'GET /icons/palette': () => ({ palette: [] }),
+    });
+  }
+  const put = (sent: { method: string; body: unknown }[]) => sent.find((r) => r.method === 'PUT')?.body as Record<string, unknown>;
+  afterEach(() => {
+    session.user = null;
+  });
+
+  it("shows the icon its categories give it, and sends one of its own only once chosen", async () => {
+    const { sent } = serve(editing(null));
+    render(AssetForm, { params: { id: 'a1' } });
+    expect(await screen.findByText('From Storage.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose another…' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'crate-down' }));
+    expect(screen.getByText(/Its own,/).textContent).toContain('crate-down');
+    expect(screen.queryByRole('group', { name: 'Choose an icon' })).toBeNull();
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(put(sent)).toBeTruthy());
+    expect(put(sent).icon_name).toBe('crate-down');
+  });
+
+  it("leaves an icon of its own alone unless it changes, and drops it for the category's", async () => {
+    const first = serve(editing('gone'));
+    render(AssetForm, { params: { id: 'a1' } });
+    // no longer drawn: said so, and kept as it is when saved
+    expect((await screen.findByText(/Its own,/)).textContent).toContain('no icon is drawn by that name any more');
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(put(first.sent)).toBeTruthy());
+    expect(put(first.sent)).not.toHaveProperty('icon_name');
+
+    cleanup();
+    vi.unstubAllGlobals();
+    const second = serve(editing('crate-down'));
+    render(AssetForm, { params: { id: 'a1' } });
+    await fireEvent.click(await screen.findByRole('button', { name: "Use the category's" }));
+    expect(screen.getByText('From Storage.')).toBeTruthy();
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(put(second.sent)).toBeTruthy());
+    expect(put(second.sent).icon_name).toBeNull();
+  });
+});

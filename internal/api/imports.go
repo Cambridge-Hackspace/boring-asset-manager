@@ -101,6 +101,10 @@ func (s *Server) prepareImport(w http.ResponseWriter, r *http.Request, data []by
 	}
 	opts.ScopesOf = scopesOf
 	opts.May = func(scopes []string) bool { return Allows(r.Context(), rbac.PermAssetsWrite, scopes) }
+	if opts.Icons, err = s.store.BuiltIconNames(); err != nil {
+		writeServerError(w, err, "read the icon build")
+		return nil, false
+	}
 	plan, err := assetcsv.PrepareWith(readableSource{s.store, s, r}, data, mapping, opts)
 	if errors.Is(err, assetcsv.ErrUnreadable) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())

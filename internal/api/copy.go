@@ -19,6 +19,9 @@ type AssetCopy struct {
 	// GeneratorKeys are the next codes in the series of the original's.
 	GeneratorKeys []models.AssetGeneratorKey `json:"generator_keys"`
 	Links         []CopiedLink               `json:"links"`
+	// IconName is the original's own icon, if it has one the build still
+	// draws; empty, the copy is drawn with its categories'.
+	IconName string `json:"icon_name,omitempty"`
 }
 
 // CopiedLink is a link the copy makes as its original has it: to add with
@@ -34,9 +37,9 @@ type CopiedLink struct {
 
 // handleCopyAsset: GET /api/v1/assets/{id}/copy answers with a new asset
 // like this one, made of nothing yet, for a form to fill and a person to
-// change before saving: its name, categories, fields, stock, the next codes
-// in the series of its own, and its links, but for those that would take
-// the other asset from it, as a box's contents would be.
+// change before saving: its name, categories, fields, stock, its own icon,
+// the next codes in the series of its own, and its links, but for those
+// that would take the other asset from it, as a box's contents would be.
 func (s *Server) handleCopyAsset(w http.ResponseWriter, r *http.Request) {
 	a, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite)
 	if !ok {
@@ -54,6 +57,9 @@ func (s *Server) handleCopyAsset(w http.ResponseWriter, r *http.Request) {
 		if v := a.FieldValues[f.Field.Key]; v != "" {
 			out.FieldValues[f.Field.Key] = v
 		}
+	}
+	if ic := a.ResolvedIcon; ic != nil && ic.From == models.IconFromAsset && !ic.Missing {
+		out.IconName = ic.Name
 	}
 	if st := a.Asset.Stock; st != nil {
 		q := st.Quantity

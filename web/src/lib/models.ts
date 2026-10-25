@@ -120,6 +120,24 @@ export interface Asset {
   /** How it is: working, needing maintenance or out of service, with a note saying what is wrong. */
   condition: Condition;
   condition_note: string;
+  /** Its own icon (README §3.7), drawn in place of its categories'; null when it has none. */
+  icon_name?: string | null;
+}
+
+/**
+ * The icon an asset is drawn with (README §3.7): its own, or that of the
+ * nearest category with one, source_category_id, named
+ * source_category_name. missing is set when the
+ * build draws no icon by the name, so the unknown icon is drawn; color is
+ * what the category token paints in.
+ */
+export interface ResolvedIcon {
+  name: string;
+  from: 'asset' | 'category';
+  source_category_id?: string;
+  source_category_name?: string;
+  missing?: boolean;
+  color?: string;
 }
 
 export type Condition = 'ok' | 'needs_maintenance' | 'out_of_service';
@@ -161,7 +179,7 @@ export interface AssetEvent {
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo';
+  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo';
   key?: string;
   label?: string;
   from?: string;
@@ -199,6 +217,8 @@ export interface AssetWithDetails {
   actions: OfferedAction[];
   /** Its photos, in order; the first is the one lists show. */
   photos: AssetPhoto[];
+  /** The icon it is drawn with, and why; null when neither it nor its categories have one. */
+  resolved_icon?: ResolvedIcon | null;
 }
 
 export interface GeneratorInfo {
