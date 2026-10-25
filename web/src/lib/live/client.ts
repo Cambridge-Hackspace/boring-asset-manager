@@ -87,6 +87,15 @@ export class LiveRenderer {
     });
   }
 
+  /**
+   * Gives the renderer the icons labels draw (README §3.7): the build's,
+   * the unknown icon and the palette's light colors, as live.Icons. They
+   * reach it before anything asked for after.
+   */
+  setIcons(json: string) {
+    if (!this.failed()) this.port.postMessage({ type: 'icons', json });
+  }
+
   /** Stops the worker. */
   close() {
     this.port.terminate();

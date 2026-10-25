@@ -166,5 +166,13 @@
    "1234",
    "1234"
   ]
+ },
+ {
+  "file": "icon.png",
+  "payloads": []
+ },
+ {
+  "file": "icon.mono.png",
+  "payloads": []
  }
 ]

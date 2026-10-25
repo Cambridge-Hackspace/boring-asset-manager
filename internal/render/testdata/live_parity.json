@@ -74,12 +74,761 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 945,
   "height": 472,
   "sha256": "69a4eeb8baf3585db711090fafa89e7cf34b4be23f99b121a90f485f30afd0b5"
+ },
+ {
+  "name": "icon",
+  "template": {
+   "id": "icon",
+   "name": "Icon",
+   "units": "mm",
+   "width": 60,
+   "height": 24,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "icon",
+     "x": 1,
+     "y": 1,
+     "width": 24,
+     "height": 22,
+     "icon": "{{asset.icon}}"
+    },
+    {
+     "type": "icon",
+     "x": 26,
+     "y": 2,
+     "width": 12,
+     "height": 12,
+     "icon": "state-down",
+     "shading": "outline",
+     "mirror": "across"
+    },
+    {
+     "type": "icon",
+     "x": 41,
+     "y": 2,
+     "width": 18,
+     "height": 20,
+     "icon": "{{asset.icon}}",
+     "align": "right",
+     "rotation": 90
+    },
+    {
+     "type": "text",
+     "x": 26,
+     "y": 16,
+     "width": 13,
+     "height": 6,
+     "content_binding": "{{asset.icon}}",
+     "font_size": 7,
+     "min_font_size": 4
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
+  },
+  "images": {},
+  "icons": {
+   "colors": {
+    "accent": "#d64545",
+    "accent-dim": "#e8a0a0",
+    "body-left": "#cbd2d9",
+    "body-right": "#9aa5b1",
+    "body-top": "#e4e7eb",
+    "ink": "#1f2933",
+    "ink-muted": "#7b8794",
+    "outline": "#1f2933",
+    "shadow": "#000000",
+    "virt": "#d9e2ec"
+   },
+   "icons": [
+    {
+     "name": "state-down",
+     "category": "state",
+     "canvas": [
+      24,
+      24
+     ],
+     "viewbox": [
+      0,
+      0,
+      24,
+      24
+     ],
+     "describe": [
+      "Red octagon with an X."
+     ],
+     "grants": [],
+     "shapes": [
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         7,
+         2
+        ],
+        [
+         17,
+         2
+        ],
+        [
+         22,
+         7
+        ],
+        [
+         22,
+         17
+        ],
+        [
+         17,
+         22
+        ],
+        [
+         7,
+         22
+        ],
+        [
+         2,
+         17
+        ],
+        [
+         2,
+         7
+        ]
+       ],
+       "fill": "accent",
+       "fill_opacity": 1,
+       "stroke": "none"
+      },
+      {
+       "kind": "path",
+       "d": "M8,8 L16,16 M16,8 L8,16",
+       "fill": "none",
+       "fill_opacity": 1,
+       "stroke": "ink",
+       "stroke_width": 2.2
+      }
+     ]
+    },
+    {
+     "name": "switch-poe",
+     "category": "net",
+     "footprint": [
+      2,
+      1,
+      0.28
+     ],
+     "viewbox": [
+      -42.64101615137755,
+      -19.200000000000003,
+      119.92304845413264,
+      87.2
+     ],
+     "describe": [
+      "Rack-mount slab; the chassis every 19-inch device shares.",
+      "Port row along the front face.",
+      "Layer-2 access switch."
+     ],
+     "grants": [
+      [
+       "accent",
+       "wrong-or-hostile: demo grant for the parser"
+      ]
+     ],
+     "shapes": [
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         -29.444863728670914,
+         19.4
+        ],
+        [
+         -24.595121467478055,
+         22.200000000000003
+        ],
+        [
+         -24.595121467478055,
+         16.6
+        ],
+        [
+         -29.444863728670914,
+         13.799999999999999
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 0.55,
+       "stroke": "none"
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         -21.823840175367856,
+         23.800000000000004
+        ],
+        [
+         -16.974097914174997,
+         26.6
+        ],
+        [
+         -16.974097914174997,
+         21
+        ],
+        [
+         -21.823840175367856,
+         18.200000000000003
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 0.3,
+       "stroke": "none"
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         -14.202816622064795,
+         28.199999999999996
+        ],
+        [
+         -9.35307436087194,
+         31
+        ],
+        [
+         -9.35307436087194,
+         25.4
+        ],
+        [
+         -14.202816622064795,
+         22.599999999999994
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 0.55,
+       "stroke": "none"
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         -6.581793068761732,
+         32.6
+        ],
+        [
+         -1.732050807568875,
+         35.4
+        ],
+        [
+         -1.732050807568875,
+         29.799999999999997
+        ],
+        [
+         -6.581793068761732,
+         27
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 0.3,
+       "stroke": "none"
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         1.0392304845413274,
+         37.00000000000001
+        ],
+        [
+         5.888972745734181,
+         39.8
+        ],
+        [
+         5.888972745734181,
+         34.199999999999996
+        ],
+        [
+         1.0392304845413274,
+         31.400000000000006
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 0.55,
+       "stroke": "none"
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         8.660254037844387,
+         41.4
+        ],
+        [
+         13.509996299037248,
+         44.2
+        ],
+        [
+         13.509996299037248,
+         38.6
+        ],
+        [
+         8.660254037844387,
+         35.8
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 0.3,
+       "stroke": "none"
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         16.281277591147447,
+         45.79999999999999
+        ],
+        [
+         21.131019852340298,
+         48.599999999999994
+        ],
+        [
+         21.131019852340298,
+         42.99999999999999
+        ],
+        [
+         16.281277591147447,
+         40.19999999999999
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 0.55,
+       "stroke": "none"
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         0,
+         0
+        ],
+        [
+         69.2820323027551,
+         40
+        ],
+        [
+         34.64101615137755,
+         60
+        ],
+        [
+         -34.64101615137755,
+         20
+        ]
+       ],
+       "fill": "body-top",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2,
+       "dash": "3 2.5"
+      },
+      {
+       "kind": "path",
+       "d": "M -19.60,15.20 L -19.60,20.00 A 19.60 11.31 0 0 0 19.60,20.00 L 19.60,15.20 Z",
+       "fill": "body-top",
+       "fill_opacity": 0.5,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "ellipse",
+       "cy": 15.2,
+       "rx": 19.59591794226543,
+       "ry": 11.313708498984763,
+       "fill": "body-top",
+       "fill_opacity": 0.5,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         0,
+         0
+        ],
+        [
+         69.2820323027551,
+         40
+        ],
+        [
+         0,
+         20
+        ]
+       ],
+       "fill": "body-top",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "ellipse",
+       "cy": 20,
+       "rx": 16.627687752661224,
+       "ry": 9.6,
+       "fill": "shadow",
+       "fill_opacity": 0.35,
+       "stroke": "none"
+      },
+      {
+       "kind": "path",
+       "d": "M0.00,0.00 L69.28,40.00",
+       "fill": "none",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "path",
+       "d": "M-3.00,0.00 L3.00,0.00",
+       "fill": "none",
+       "fill_opacity": 1,
+       "stroke": "ink",
+       "stroke_width": 1.4
+      },
+      {
+       "kind": "circle",
+       "r": 8,
+       "fill": "none",
+       "fill_opacity": 1,
+       "stroke": "ink",
+       "stroke_width": 1.4
+      },
+      {
+       "kind": "ellipse",
+       "rx": 4.5,
+       "ry": 8,
+       "fill": "none",
+       "fill_opacity": 1,
+       "stroke": "ink-muted",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "rect",
+       "rx": 1.5,
+       "x": -9,
+       "y": -8,
+       "w": 18,
+       "h": 12,
+       "fill": "none",
+       "fill_opacity": 1,
+       "stroke": "ink",
+       "stroke_width": 1.4
+      },
+      {
+       "kind": "path",
+       "d": "M5.50,9.53 A11.00 11.00 0 1 0 5.50,-9.53",
+       "fill": "none",
+       "fill_opacity": 1,
+       "stroke": "ink",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "polygon",
+       "points": [
+        [
+         0,
+         -10
+        ],
+        [
+         -2.351141008,
+         -3.236067976
+        ],
+        [
+         -9.510565159999999,
+         -3.09016994
+        ],
+        [
+         -3.804226064,
+         1.236067976
+        ],
+        [
+         -5.877852519999999,
+         8.090169940000001
+        ],
+        [
+         -0,
+         4
+        ],
+        [
+         5.877852519999999,
+         8.090169940000001
+        ],
+        [
+         3.804226064,
+         1.236067976
+        ],
+        [
+         9.510565159999999,
+         -3.09016994
+        ],
+        [
+         2.351141008,
+         -3.236067976
+        ]
+       ],
+       "fill": "ink",
+       "fill_opacity": 1,
+       "stroke": "none"
+      },
+      {
+       "kind": "circle",
+       "r": 4,
+       "fill": "ink",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "path",
+       "d": "M -12.74,7.20 L -12.74,15.20 A 12.74 7.35 0 0 0 12.74,15.20 L 12.74,7.20 Z",
+       "fill": "body-right",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "ellipse",
+       "cy": 7.199999999999999,
+       "rx": 12.737346662472529,
+       "ry": 7.353910524340095,
+       "fill": "body-top",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "path",
+       "d": "M -12.74,-2.80 L -12.74,5.20 A 12.74 7.35 0 0 0 12.74,5.20 L 12.74,-2.80 Z",
+       "fill": "body-right",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "ellipse",
+       "cy": -2.8000000000000043,
+       "rx": 12.737346662472529,
+       "ry": 7.353910524340095,
+       "fill": "body-top",
+       "fill_opacity": 1,
+       "stroke": "outline",
+       "stroke_width": 1.2
+      },
+      {
+       "kind": "group",
+       "tx": 63.282032302755084,
+       "ty": -17.200000000000003,
+       "scale": 0.5,
+       "shapes": [
+        {
+         "kind": "polygon",
+         "points": [
+          [
+           7,
+           2
+          ],
+          [
+           17,
+           2
+          ],
+          [
+           22,
+           7
+          ],
+          [
+           22,
+           17
+          ],
+          [
+           17,
+           22
+          ],
+          [
+           7,
+           22
+          ],
+          [
+           2,
+           17
+          ],
+          [
+           2,
+           7
+          ]
+         ],
+         "fill": "accent",
+         "fill_opacity": 1,
+         "stroke": "none"
+        },
+        {
+         "kind": "path",
+         "d": "M8,8 L16,16 M16,8 L8,16",
+         "fill": "none",
+         "fill_opacity": 1,
+         "stroke": "ink",
+         "stroke_width": 2.2
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "unknown": {
+    "name": "bam-unknown",
+    "category": "bam",
+    "footprint": [
+     1,
+     1,
+     1
+    ],
+    "viewbox": [
+     -42.64101615137755,
+     -48,
+     85.2820323027551,
+     96
+    ],
+    "describe": [
+     "An icon this lexicon does not have."
+    ],
+    "grants": [],
+    "shapes": [
+     {
+      "kind": "polygon",
+      "points": [
+       [
+        -34.64101615137755,
+        20
+       ],
+       [
+        0,
+        40
+       ],
+       [
+        0,
+        0
+       ],
+       [
+        -34.64101615137755,
+        -20
+       ]
+      ],
+      "fill": "body-left",
+      "fill_opacity": 1,
+      "stroke": "outline",
+      "stroke_width": 1.2
+     },
+     {
+      "kind": "polygon",
+      "points": [
+       [
+        34.64101615137755,
+        20
+       ],
+       [
+        0,
+        40
+       ],
+       [
+        0,
+        0
+       ],
+       [
+        34.64101615137755,
+        -20
+       ]
+      ],
+      "fill": "body-right",
+      "fill_opacity": 1,
+      "stroke": "outline",
+      "stroke_width": 1.2
+     },
+     {
+      "kind": "polygon",
+      "points": [
+       [
+        0,
+        -40
+       ],
+       [
+        34.64101615137755,
+        -20
+       ],
+       [
+        0,
+        0
+       ],
+       [
+        -34.64101615137755,
+        -20
+       ]
+      ],
+      "fill": "body-top",
+      "fill_opacity": 1,
+      "stroke": "outline",
+      "stroke_width": 1.2
+     },
+     {
+      "kind": "path",
+      "d": "M-6.00,-30.00 c0,-12 12,-12 12,-4 c0,6 -6,6 -6,12 v2",
+      "fill": "none",
+      "fill_opacity": 1,
+      "stroke": "ink",
+      "stroke_width": 2.2
+     },
+     {
+      "kind": "circle",
+      "cy": -16,
+      "r": 1.6,
+      "fill": "ink",
+      "fill_opacity": 1,
+      "stroke": "none",
+      "stroke_width": 1.2
+     }
+    ]
+   }
+  },
+  "width": 709,
+  "height": 283,
+  "sha256": "4380fd0d77a5acab2ceed28f956e130b7f41a0881c2f4f7a2c25ee8fe4077637"
  },
  {
   "name": "image_inches",
@@ -141,7 +890,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {
    "7c9e6679-7425-40de-944b-e07fc1f90ae7": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAA9UlEQVR4nOyXsQ1CMQxEkxNzMAcFczAJPaJnEuagYA4WAVFEouArdu6cfFBsCheJfc8OyCD9uG1KoLLt/v4s8Td73Ha5xArLPURHwmCUePYuPQFFccU0sAbxTE70KhSVW/4r9P5cL+lc4k87HNOpxCrLyg4tCfeCeL4P6C3ecrZWqwmAEaS6EwLACFFAQPF8ItxaE6O6r8pBAazBJ8AEmAAEgGK3YXMgcldn3FoTIzvIdl8C0CpEId4FUBupR1DtrPX5NP0ntuwoS+uBBdIjPgyAcS8AogtE50avQlE5aSHsk2KbAeIuLYAVL5mAdyIK0X9lrwEAHAtpPHnwid8AAAAASUVORK5CYII="
@@ -256,7 +1007,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 780,
@@ -331,7 +1084,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {
    "7c9e6679-7425-40de-944b-e07fc1f90ae7": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAA9UlEQVR4nOyXsQ1CMQxEkxNzMAcFczAJPaJnEuagYA4WAVFEouArdu6cfFBsCheJfc8OyCD9uG1KoLLt/v4s8Td73Ha5xArLPURHwmCUePYuPQFFccU0sAbxTE70KhSVW/4r9P5cL+lc4k87HNOpxCrLyg4tCfeCeL4P6C3ecrZWqwmAEaS6EwLACFFAQPF8ItxaE6O6r8pBAazBJ8AEmAAEgGK3YXMgcldn3FoTIzvIdl8C0CpEId4FUBupR1DtrPX5NP0ntuwoS+uBBdIjPgyAcS8AogtE50avQlE5aSHsk2KbAeIuLYAVL5mAdyIK0X9lrwEAHAtpPHnwid8AAAAASUVORK5CYII="
@@ -403,7 +1158,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 591,
@@ -467,7 +1224,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 732,
@@ -579,7 +1338,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
@@ -659,7 +1420,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
@@ -736,7 +1499,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 709,
@@ -833,7 +1598,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
@@ -884,7 +1651,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 472,
@@ -962,7 +1731,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 1063,
@@ -1163,7 +1934,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {},
   "width": 945,
@@ -1362,7 +2135,9 @@
    "quantity": "",
    "unit": "",
    "borrower": "",
-   "due": ""
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309"
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="

@@ -74,6 +74,11 @@ class Iconset {
     return icon ? this.named(icon.name) : undefined;
   }
 
+  /** The icon drawn for a name the build does not draw. */
+  get unknown(): IrIcon | null {
+    return this.#unknown;
+  }
+
   /** Every icon the build draws, by name. */
   get all(): IrIcon[] {
     return [...this.#icons.values()].sort((a, b) => a.name.localeCompare(b.name));

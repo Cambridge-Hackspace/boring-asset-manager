@@ -888,3 +888,57 @@ func TestArrange(t *testing.T) {
 		t.Error("spread out two")
 	}
 }
+
+// TestIcons: an icon element draws the asset's icon or one by name, shaded
+// or as an outline, aligned across its box; what applies to other elements
+// does not apply to it, nor its properties to them.
+func TestIcons(t *testing.T) {
+	doc := func(element string) string {
+		return `{"name":"T","units":"mm","width":40,"height":20,"dpi":300,"layering":"list","elements":[` + element + `]}`
+	}
+	icon := func(props string) string {
+		return `{"type":"icon","x":0,"y":0,"width":10,"height":10,` + props + `}`
+	}
+	tpl, err := Parse([]byte(doc(icon(`"icon":"{{asset.icon}}"`) + `,` + icon(`"icon":"switch-l3","shading":"outline","align":"right","mirror":"across"`) +
+		`,` + icon(`"icon":"switch-l3"`))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tpl.IconNames(); !reflect.DeepEqual(got, []string{"switch-l3"}) {
+		t.Errorf("IconNames: %v", got)
+	}
+	if tpl.Elements[0].TooSmall() != TooSmallHide {
+		t.Error("an icon that does not fit refuses the label")
+	}
+	for _, tc := range []struct {
+		element string
+		want    []string
+	}{
+		{`{"type":"icon","x":0,"y":0,"width":10,"height":10}`, []string{"elements[0].icon"}},
+		{icon(`"icon":"{{asset.name}}"`), []string{"elements[0].icon"}},
+		{icon(`"icon":"bam-unknown"`), []string{"elements[0].icon"}},
+		{icon(`"icon":".hidden"`), []string{"elements[0].icon"}},
+		{icon(`"icon":"crate","shading":"solid","align":"middle"`), []string{"elements[0].align", "elements[0].shading"}},
+		{icon(`"icon":"crate","image_id":"7c9e6679-7425-40de-944b-e07fc1f90ae7","content_binding":"x","font_size":8,"stroke":"black"`),
+			[]string{"elements[0].content_binding", "elements[0].font_size", "elements[0].image_id", "elements[0].stroke"}},
+		{`{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","icon":"crate","shading":"outline"}`, []string{"elements[0].icon", "elements[0].shading"}},
+		{`{"type":"shape","shape":"ellipse","x":0,"y":0,"width":10,"height":10,"icon":"crate"}`, []string{"elements[0].icon"}},
+		{`{"type":"thing","x":0,"y":0,"width":10,"height":10}`, []string{"elements[0].type"}},
+	} {
+		_, err := Parse([]byte(doc(tc.element)))
+		got := problemPaths(t, err)
+		sort.Strings(got)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.element, got, tc.want)
+		}
+	}
+
+	// text binds the icon's name
+	b, err := ParseBinding("{{asset.icon}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := b.Resolve(Data{Icon: "crate"}); got != "crate" {
+		t.Errorf("%q", got)
+	}
+}

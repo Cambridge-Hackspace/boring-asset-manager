@@ -8,6 +8,7 @@ import type { FromWorker, ToWorker } from './protocol';
 
 interface Bamlive {
   addImage(id: string, bytes: Uint8Array): string | null;
+  setIcons(json: string): string | null;
   font(family: string, weight: string): Uint8Array | null;
   render(
     template: string,
@@ -62,6 +63,11 @@ scope.onmessage = async (event) => {
   if (msg.type === 'image') {
     const failure = live.addImage(msg.id, new Uint8Array(msg.bytes));
     if (failure) scope.postMessage({ type: 'image-failed', id: msg.id, message: failure });
+    return;
+  }
+  if (msg.type === 'icons') {
+    // icons it cannot read are left out: labels then draw none
+    live.setIcons(msg.json);
     return;
   }
   // A renderer that stops (WebAssembly traps on a Go panic, and the instance
