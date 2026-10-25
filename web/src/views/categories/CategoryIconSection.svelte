@@ -13,11 +13,12 @@
   import { outline, type Problem } from '../../lib/isolex/syntax';
   import type { Vocabulary } from '../../lib/isolex/complete';
   import { iconNamed, type IrDocument } from '../../lib/isolex/ir';
-  import { paletteCss, type IconColor } from '../../lib/isolex/palette';
+  import type { IconColor } from '../../lib/isolex/palette';
   import { boxSource, copiedSource, extendingSource, iconFile, iconGroup, shownIcon, splitDiags, suggestIconName, validIconName } from '../../lib/icons';
   import IconSourceEditor from '../../components/IconSourceEditor.svelte';
   import IsoIcon from '../../components/IsoIcon.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
+  import IconPaletteStyle from '../../components/IconPaletteStyle.svelte';
 
   interface Props {
     category: Category;
@@ -252,12 +253,9 @@
     return icon ? categories.find((c) => c.id === icon.category_id) : undefined;
   }
 
-  const css = $derived(paletteCss(palette));
 </script>
 
-<svelte:head>
-  {@html `<style data-icon-palette>${css}</style>`}
-</svelte:head>
+<IconPaletteStyle {palette} />
 
 {#snippet tile(iconName: string, height: number, theme: 'light' | 'dark' | 'page', label: string, color: string)}
   {@const icon = iconNamed(doc, iconName)}

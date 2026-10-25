@@ -39,6 +39,7 @@ export function helpFor(path: string): string {
     [/^\/loans/, 'loans'],
     [/^\/spool/, 'spool'],
     [/^\/actions/, 'actions'],
+    [/^\/icons/, 'icons'],
     [/^\/(categories|fields)/, 'categories'],
     [/^\/relations/, 'links'],
     [/^\/(templates|images|printers)/, 'labels'],
