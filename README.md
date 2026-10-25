@@ -1217,7 +1217,8 @@ Category icons written in isolex and drawn throughout the interface, on labels a
 * [x] Go renderer for the IR, byte-identical to isolex's own (§1, "Icon compiler").
 * [x] Icon sources, palette, settings and builds stored: published or drafted, refused when they would break the build, with history (§3.7).
 * [x] The API and MCP tools for icons, and the compiler warmed at startup (§3.7, §6.6).
-* [ ] The icon editor, and an Icon section on each category's page.
+* [x] The source editor (`IconSourceEditor`): isolex colored as typed over a plain textarea, so undo, selection and screen readers are the browser's own; line numbers marking problems, the token at fault underlined, and a list of problems that goes to each; completion of nodes with their arguments, properties, palette tokens, and the icons, parts, fragments and axes the lexicon defines; Tab indents (Esc, then Tab, leaves), Enter keeps the indent, Ctrl+/ comments lines out.
+* [ ] An Icon section on each category's page.
 * [ ] Icons throughout the interface, and as images.
 * [ ] Icons on labels.
 * [ ] Icons that show an asset's state.
