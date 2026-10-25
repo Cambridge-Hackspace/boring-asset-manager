@@ -82,6 +82,8 @@ type ScanAsset struct {
 	// Actions are those its categories offer, when the viewer may press
 	// them.
 	Actions []models.OfferedAction `json:"actions,omitempty"`
+	// Icon is the icon it is drawn with (README §3.7), if any.
+	Icon *models.ResolvedIcon `json:"icon,omitempty"`
 }
 
 // ScanTemplateRef names the template a scan used.
@@ -167,7 +169,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		}
 		result.Sections[i].Actions = kept
 	}
-	out := ScanResponse{Asset: ScanAsset{ID: asset.Asset.ID, Name: asset.Asset.Name}, Template: ref, Result: result}
+	out := ScanResponse{Asset: ScanAsset{ID: asset.Asset.ID, Name: asset.Asset.Name, Icon: asset.ResolvedIcon}, Template: ref, Result: result}
 	if st := asset.Asset.Stock; st != nil {
 		out.Asset.Counted, out.Asset.Unit = true, st.Unit
 	}

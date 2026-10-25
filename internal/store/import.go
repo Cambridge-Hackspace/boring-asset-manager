@@ -29,6 +29,9 @@ type ImportRow struct {
 	// Stock replaces the asset's stock, keeping its quantity when Stock has
 	// none; nil leaves the stock as it is.
 	Stock *StockInput
+	// Icon sets the asset's own icon, "" for its categories'; nil leaves
+	// it as it is.
+	Icon *string
 }
 
 // ImportAssets applies validated rows in one transaction under the
@@ -104,9 +107,9 @@ func (s *Store) ImportAssets(rows []ImportRow, links []ImportLink) ([]string, er
 	return created, nil
 }
 
-// importRow writes one row's name, categories, stock and field values. It
-// returns the function that records a change of the asset's quantity, if
-// there was one, as setStockTx does.
+// importRow writes one row's name, categories, icon, stock and field
+// values. It returns the function that records a change of the asset's
+// quantity, if there was one, as setStockTx does.
 func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) (recordQuantity func() error, err error) {
 	if row.ID == "" {
 		if _, err := s.TxExec(tx, "INSERT INTO assets (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)", id, row.Name, now, now); err != nil {
@@ -122,6 +125,12 @@ func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) (
 		}
 		if n, _ := res.RowsAffected(); n != 1 {
 			return nil, fmt.Errorf("asset %s: %w or archived", id, ErrAssetNotFound)
+		}
+	}
+
+	if row.Icon != nil {
+		if err := s.setAssetIconTx(tx, id, *row.Icon); err != nil {
+			return nil, err
 		}
 	}
 

@@ -8,7 +8,10 @@
   import { session } from '../../lib/session.svelte';
   import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
   import { flattenTree } from '../../lib/tree';
+  import { iconset } from '../../lib/iconset.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
+  import IconPicker from '../../components/IconPicker.svelte';
+  import IsoIcon from '../../components/IsoIcon.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
 
@@ -50,6 +53,9 @@
   let codes = $state<Record<string, string>>({});
   let values = $state<Record<string, string>>({});
   let stock = $state<StockDraft>(stockDraft(null));
+  // Its own icon (README §3.7); '' for its categories'.
+  let ownIcon = $state('');
+  let pickingIcon = $state(false);
   // Where it is: the asset it is in (README §5.3).
   let relationTypes = $state<RelationType[]>([]);
   let place = $state<{ id: string; name: string } | null>(null);
@@ -69,6 +75,27 @@
   const tree = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const kept = $derived(original ? keptValues(original.field_values, effective) : []);
 
+  // The icon its categories give it, as near as the form can tell: the
+  // deepest chosen category drawn with one, and the category above it
+  // whose icon that is (names are unique, so a category inherits exactly
+  // when it shows its parent's). The server settles ties.
+  $effect(() => {
+    void iconset.load();
+  });
+  const categoryIcon = $derived.by(() => {
+    const rows = tree.filter((r) => categoryIds.includes(r.category.id) && iconset.categories[r.category.id]);
+    const deepest = rows.reduce<(typeof rows)[number] | undefined>((best, r) => (!best || r.depth > best.depth ? r : best), undefined);
+    if (!deepest) return null;
+    const name = iconset.categories[deepest.category.id]!;
+    let from = deepest.category;
+    for (let up = categories.find((c) => c.id === from.parent_id); up && iconset.categories[up.id] === name; up = categories.find((c) => c.id === up!.parent_id)) from = up;
+    return { category: from, name };
+  });
+  const shownIcon = $derived(ownIcon ? iconset.named(ownIcon) : categoryIcon ? iconset.named(categoryIcon.name) : undefined);
+  const iconColor = $derived(
+    tree.filter((r) => categoryIds.includes(r.category.id)).reduce<(typeof tree)[number] | undefined>((best, r) => (!best || r.depth > best.depth ? r : best), undefined)?.category.color_hex ?? '',
+  );
+
   onMount(async () => {
     try {
       const [cats, gens, types] = await Promise.all([
@@ -87,6 +114,7 @@
         codes = Object.fromEntries(a.generator_keys.map((k) => [k.generator_type, k.assigned_code]));
         values = { ...a.field_values };
         stock = stockDraft(a.asset.stock);
+        ownIcon = a.asset.icon_name ?? '';
         place = placeOf(a);
       } else if (like) {
         const [c, of] = await Promise.all([
@@ -100,6 +128,7 @@
         categoryIds = copy.category_ids;
         codes = Object.fromEntries(copy.generator_keys.map((k) => [k.generator_type, k.assigned_code]));
         values = { ...copy.field_values };
+        ownIcon = copy.icon_name ?? '';
         stock = copy.stock
           ? { counted: true, quantity: copy.stock.quantity ?? 0, unit: copy.stock.unit, threshold: copy.stock.low_stock_threshold }
           : stockDraft(null);
@@ -206,7 +235,9 @@
     error = '';
     errorFor = null;
     busy = true;
-    const body = assetPayload({ name, categoryIds, codes, values, stock }, effective, original?.asset.stock);
+    // an edit sends its icon only when it changed, so one no longer drawn stays
+    const icon = isNew ? ownIcon || undefined : ownIcon !== (original?.asset.icon_name ?? '') ? ownIcon : undefined;
+    const body = assetPayload({ name, categoryIds, codes, values, stock, icon }, effective, original?.asset.stock);
     try {
       if (isNew) {
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
@@ -297,6 +328,38 @@
           </ul>
         {/if}
       </fieldset>
+      {#if iconset.all.length || ownIcon}
+        <fieldset>
+          <legend class="label">Icon</legend>
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="grid h-14 w-14 shrink-0 place-items-center rounded border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+              {#if shownIcon}<IsoIcon icon={shownIcon} height={44} categoryColor={iconColor} />{/if}
+            </span>
+            <p class="text-sm" id="asset-icon-note">
+              {#if ownIcon}
+                Its own, <span class="font-mono">{ownIcon}</span>{#if !iconset.all.some((i) => i.name === ownIcon)}: no icon is drawn by that name any more{/if}.
+              {:else if categoryIcon}
+                From {categoryIcon.category.name}.
+              {:else}
+                None: none of its categories has an icon.
+              {/if}
+            </p>
+            <button type="button" class="btn-secondary" aria-expanded={pickingIcon} aria-describedby="asset-icon-note" onclick={() => (pickingIcon = !pickingIcon)}>Choose another…</button>
+            {#if ownIcon}<button type="button" class="btn-secondary" onclick={() => (ownIcon = '')}>Use the category's</button>{/if}
+          </div>
+          {#if pickingIcon}
+            <IconPicker
+              value={ownIcon}
+              categoryColor={iconColor}
+              onpick={(n) => {
+                ownIcon = n;
+                pickingIcon = false;
+              }}
+              onclose={() => (pickingIcon = false)}
+            />
+          {/if}
+        </fieldset>
+      {/if}
       {#if locationType}
         <fieldset>
           <legend class="label">Where is it?</legend>

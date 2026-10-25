@@ -76,6 +76,17 @@ type assetDetail struct {
 	Lendable     bool         `json:"lendable"`
 	Scopes       []string     `json:"scopes,omitempty"`
 	ScanURL      string       `json:"scan_url,omitempty" jsonschema:"what its QR labels open"`
+	Icon         *iconView    `json:"icon,omitempty" jsonschema:"the icon it is drawn with, when it or a category has one"`
+}
+
+type iconView struct {
+	Name string `json:"name"`
+	// Own is set for an icon of its own (icon_name on update_asset), and
+	// Category names the category it gets one from otherwise.
+	Own      bool   `json:"own,omitempty" jsonschema:"set when it is its own icon rather than its categories'"`
+	Category *ref   `json:"category,omitempty" jsonschema:"the category it gets its icon from"`
+	Missing  bool   `json:"missing,omitempty" jsonschema:"set when no icon is drawn by this name any more, so the unknown icon is drawn"`
+	Color    string `json:"color,omitempty" jsonschema:"the color the icon's category token paints in"`
 }
 
 type photoView struct {
@@ -163,6 +174,12 @@ func (e *env) detail(ctx context.Context, a *models.AssetWithDetails) (assetDeta
 	}
 	for _, o := range a.Actions {
 		d.Actions = append(d.Actions, actionView{Key: o.Key, Label: o.Label, Confirm: o.Confirm})
+	}
+	if ic := a.ResolvedIcon; ic != nil {
+		d.Icon = &iconView{Name: ic.Name, Own: ic.From == models.IconFromAsset, Missing: ic.Missing, Color: ic.Color}
+		if ic.SourceCategoryID != "" {
+			d.Icon.Category = &ref{ID: ic.SourceCategoryID, Name: ic.SourceCategoryName}
+		}
 	}
 	return d, nil
 }

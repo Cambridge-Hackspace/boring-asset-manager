@@ -2,6 +2,7 @@ package isolex
 
 import (
 	_ "embed"
+	"encoding/json"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
 )
@@ -30,3 +31,17 @@ var unknownIcon = func() ir.Icon {
 // Unknown returns the icon drawn in place of one the lexicon does not
 // have. It is bam's own, the only icon bam ships.
 func Unknown() ir.Icon { return unknownIcon }
+
+// UnknownIR returns the unknown icon as isolex wrote it, for a page to
+// draw: one icon of an IR document's icons.
+func UnknownIR() json.RawMessage { return unknownRaw }
+
+var unknownRaw = func() json.RawMessage {
+	var doc struct {
+		Icons []json.RawMessage `json:"icons"`
+	}
+	if err := json.Unmarshal(unknownIR, &doc); err != nil || len(doc.Icons) != 1 {
+		panic("isolex: unknown.ir.json is not the bam-unknown icon")
+	}
+	return doc.Icons[0]
+}()

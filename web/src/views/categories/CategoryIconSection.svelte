@@ -5,6 +5,7 @@
   published or kept as a draft with its problems, with its history.
 -->
 <script lang="ts">
+  import { iconset } from '../../lib/iconset.svelte';
   import { onMount } from 'svelte';
   import { ApiError, request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
@@ -191,6 +192,7 @@
       await request('DELETE', `/categories/${encodeURIComponent(id)}/icon/draft`);
       editing = false;
       await load();
+      void iconset.refresh();
       reset();
       message = own ? 'The draft is discarded.' : 'The draft is discarded; this category has no icon of its own.';
     } catch (err) {
@@ -217,6 +219,7 @@
     try {
       await request('POST', `/categories/${encodeURIComponent(id)}/icon/rename`, { icon_name: renameTo });
       await load();
+      void iconset.refresh();
       reset();
       message = `Renamed ${renameTo}.`;
     } catch (err) {
@@ -231,6 +234,7 @@
       await request('DELETE', `/categories/${encodeURIComponent(id)}/icon`);
       editing = false;
       await load();
+      void iconset.refresh();
       reset();
       message = 'The icon is deleted.';
     } catch (err) {

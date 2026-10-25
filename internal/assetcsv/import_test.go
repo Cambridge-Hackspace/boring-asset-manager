@@ -449,3 +449,47 @@ func TestStockProblems(t *testing.T) {
 		t.Errorf("%d problems, want 8: %+v", plan.ProblemCount, plan.Problems)
 	}
 }
+
+// TestImportingIcons sets an asset's own icon from the icon column: one the
+// build draws, or the one it has already; blank gives it its categories'.
+func TestImportingIcons(t *testing.T) {
+	w := newWorld(t)
+	drawn := Options{Icons: map[string]bool{"crate": true, "drill": true}}
+	file := "id,name,icon\n" + w.drill.Asset.ID + ",Drill,drill\n" + w.hammer.Asset.ID + ",Hammer,nope\n"
+	plan, err := PrepareWith(w.st, []byte(file), nil, drawn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.ProblemCount != 1 || !hasProblem(plan, 3, "icon", `no icon is drawn by the name "nope"`) {
+		t.Fatalf("%+v", plan.Problems)
+	}
+
+	applyWith(t, w, "id,name,icon\n"+w.drill.Asset.ID+",Drill,drill\n"+w.hammer.Asset.ID+",Hammer,\n", drawn)
+	a, _ := w.st.GetAssetByID(w.drill.Asset.ID)
+	if a.Asset.IconName == nil || *a.Asset.IconName != "drill" {
+		t.Fatalf("%v", a.Asset.IconName)
+	}
+
+	// exported and imported again: nothing changes, even once the build
+	// no longer draws it
+	before := mustList(t, w.st)
+	cats, _ := w.st.ListAllCategories()
+	var b strings.Builder
+	if err := Export(&b, before, NewCategories(cats), nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	plan, err = PrepareWith(w.st, []byte(b.String()), nil, Options{})
+	if err != nil || plan.ProblemCount != 0 || plan.Unchanged != len(before) {
+		t.Fatalf("%+v %v", plan, err)
+	}
+
+	// blank: its categories' again, in its history
+	applyWith(t, w, "id,icon\n"+w.drill.Asset.ID+",\n", Options{})
+	if a, _ := w.st.GetAssetByID(w.drill.Asset.ID); a.Asset.IconName != nil {
+		t.Errorf("%v", *a.Asset.IconName)
+	}
+	events, _, err := w.st.ListAssetEvents(w.drill.Asset.ID, "", 1)
+	if err != nil || len(events) != 1 || len(events[0].Payload.Changes) != 1 || events[0].Payload.Changes[0] != (models.EventChange{What: "icon", From: "drill"}) {
+		t.Errorf("%+v %v", events, err)
+	}
+}

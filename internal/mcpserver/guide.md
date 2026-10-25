@@ -39,6 +39,8 @@ All the icons compile together, as one **lexicon**. A category's icon can `exten
 
 **Saving** publishes a source only if everything still compiles with it and it draws an icon by the category's icon name. Otherwise the source is kept as a **draft**, with the compiler's errors as `file:line:col: message`, and the published icon stays. So check (`check_category_icon`) and fix before you save, and read the errors when a save comes back as a draft. Deleting an icon that another one uses is refused, as is taking a token off the palette while an icon paints with it.
 
+An **asset** is drawn with the icon of its nearest category that has one, chosen as its templates are; `get_asset` says which (`icon`). The odd asset that should look different can have an **icon of its own**: any name the build draws (`icons_overview`), variants included, set with `icon` on `create_asset` or `update_asset`, and dropped with `category_icon`. An icon of its own is checked when it is set; if that icon later goes away, the asset is drawn with the unknown icon (`missing`), not quietly with its categories'. Renaming a category's icon carries along the assets that name it.
+
 ## Places
 
 Where something is, is a link: Shelf A *contains* Bin 3, Bin 3 *contains* the screws. An asset is in one place at a time; its **location** is the chain of places, outermost first (Shelf A › Bin 3). Searching by a place's name finds what is in it, at any depth. Other **link types** (has part, used with) relate assets without placing them.

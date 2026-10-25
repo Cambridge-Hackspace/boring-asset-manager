@@ -234,6 +234,7 @@ type EventLabel struct {
 //   - "stock": To is "counted" when counting by quantity starts, and From
 //     is "counted" when it stops. The quantity has its own events.
 //   - "unit" and "threshold": the stock's unit and low-stock threshold.
+//   - "icon": its own icon's name; an empty one is its categories'.
 //
 // An empty From or To means there was none.
 type EventChange struct {
@@ -343,6 +344,9 @@ type Asset struct {
 	// ConditionOutOfService, with a note saying what is wrong.
 	Condition     string `json:"condition"`
 	ConditionNote string `json:"condition_note"`
+	// IconName is the asset's own icon (README §3.7), drawn in place of its
+	// categories'; nil when it has none.
+	IconName *string `json:"icon_name"`
 }
 
 // AssetStock is an asset's stock, counted by quantity.
@@ -402,6 +406,31 @@ type AssetWithDetails struct {
 	LabelTemplate TemplateChoice `json:"label_template"`
 	// Actions are those its categories offer on it (README §5.4).
 	Actions []OfferedAction `json:"actions"`
+	// ResolvedIcon is the icon it is drawn with, and why; nil when neither
+	// it nor any of its categories has one.
+	ResolvedIcon *ResolvedIcon `json:"resolved_icon"`
+}
+
+// Where an asset's icon comes from (ResolvedIcon.From).
+const (
+	IconFromAsset    = "asset"
+	IconFromCategory = "category"
+)
+
+// ResolvedIcon is the icon an asset is drawn with (README §3.7): its own,
+// From IconFromAsset, or else that of the nearest category up from its
+// categories with one, From IconFromCategory, chosen as its templates are
+// (TemplateChoice), named SourceCategoryName. Missing is set when the current build draws no icon
+// by Name, so the unknown icon is drawn in its place. Color is what the
+// "category" token paints in: the color of its nearest category with one,
+// chosen the same way, or empty for the palette's own.
+type ResolvedIcon struct {
+	Name               string `json:"name"`
+	From               string `json:"from"`
+	SourceCategoryID   string `json:"source_category_id,omitempty"`
+	SourceCategoryName string `json:"source_category_name,omitempty"`
+	Missing            bool   `json:"missing,omitempty"`
+	Color              string `json:"color,omitempty"`
 }
 
 // TemplateChoice is the scan template (README §6.4) or label template

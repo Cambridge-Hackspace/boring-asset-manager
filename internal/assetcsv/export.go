@@ -21,6 +21,7 @@ const (
 	ColumnUnit       = "unit"
 	ColumnThreshold  = "low_stock_threshold"
 	ColumnLinks      = "links"
+	ColumnIcon       = "icon"
 	CodePrefix       = "code."
 	FieldPrefix      = "field."
 )
@@ -58,14 +59,17 @@ func Undefuse(s string) string {
 
 // Export writes assets as CSV: id, name, categories, a code column for each
 // generator type, the stock columns when any asset's stock is counted
-// by quantity, a field column for every field any asset has a value for,
+// by quantity, an icon column when any asset has an icon of its own (blank
+// for those drawn with their categories'), a field column for every field
+// any asset has a value for,
 // by key, and, when any asset has links and refs is given, a links column,
 // naming other assets as refs does.
 func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs) error {
-	stocked, linked := false, false
+	stocked, linked, iconed := false, false, false
 	keys := map[string]bool{}
 	for _, a := range assets {
 		stocked = stocked || a.Asset.Stock != nil
+		iconed = iconed || a.Asset.IconName != nil
 		linked = linked || (refs != nil && len(a.Links) > 0)
 		for k, v := range a.FieldValues {
 			if v != "" {
@@ -85,6 +89,9 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 	}
 	if stocked {
 		header = append(header, ColumnQuantity, ColumnUnit, ColumnThreshold)
+	}
+	if iconed {
+		header = append(header, ColumnIcon)
 	}
 	for _, k := range fieldKeys {
 		header = append(header, FieldPrefix+k)
@@ -112,6 +119,13 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 		}
 		if stocked {
 			row = append(row, stockCells(a.Asset.Stock)...)
+		}
+		if iconed {
+			icon := ""
+			if a.Asset.IconName != nil {
+				icon = *a.Asset.IconName
+			}
+			row = append(row, Defuse(icon))
 		}
 		for _, k := range fieldKeys {
 			row = append(row, Defuse(a.FieldValues[k]))

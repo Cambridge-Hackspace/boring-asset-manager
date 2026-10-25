@@ -36,6 +36,8 @@ export interface AssetCopy {
   /** The next codes in the series of the original's. */
   generator_keys: GeneratorKey[];
   links: CopiedLink[];
+  /** The original's own icon, when the build still draws it. */
+  icon_name?: string;
 }
 
 export interface AssetDraft {
@@ -46,6 +48,8 @@ export interface AssetDraft {
   /** Values by field key. */
   values: Record<string, string>;
   stock?: StockDraft;
+  /** Its own icon; '' for its categories', and absent to leave it as it is. */
+  icon?: string;
 }
 
 /**
@@ -53,7 +57,8 @@ export interface AssetDraft {
  * is sent, so clearing an input removes its value; values kept from earlier
  * categories are not sent, so they stay. Category and code lists are always
  * sent in full: an empty list clears them. Stock is sent as stockPayload
- * says, given the asset's stock before the edit.
+ * says, given the asset's stock before the edit, and the icon when the
+ * draft has one to say: null for its categories'.
  */
 export function assetPayload(draft: AssetDraft, effective: EffectiveField[], originalStock?: AssetStock | null) {
   const generator_keys: GeneratorKey[] = Object.entries(draft.codes)
@@ -66,6 +71,7 @@ export function assetPayload(draft: AssetDraft, effective: EffectiveField[], ori
     const stock = stockPayload(draft.stock, originalStock);
     if (stock !== undefined) body.stock = stock;
   }
+  if (draft.icon !== undefined) body.icon_name = draft.icon === '' ? null : draft.icon;
   return body;
 }
 
@@ -208,6 +214,9 @@ export function describeChange(c: AssetChange, kind: string): string {
       return fromTo('Low-stock threshold', c);
     case 'photo':
       return c.to ? `Photo added: ${c.to}` : `Photo removed: ${c.from}`;
+    case 'icon':
+      if (!c.to) return `Own icon ${c.from} dropped: drawn with its categories' again`;
+      return fromTo('Own icon', c);
     case 'link': {
       const label = c.label ?? 'linked to';
       return c.to ? `${capitalized(label)} ${c.to}` : `No longer ${label} ${c.from}`;

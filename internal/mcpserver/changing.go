@@ -33,6 +33,7 @@ type newAsset struct {
 	AssignNextCode []string          `json:"assign_next_code,omitempty" jsonschema:"code types to give it the next free code of, such as [\"qr\"]"`
 	Where          string            `json:"where,omitempty" jsonschema:"the asset it is in, by ID or code, such as a shelf or bin"`
 	Stock          *stockIn          `json:"stock,omitempty" jsonschema:"count it by quantity"`
+	Icon           string            `json:"icon,omitempty" jsonschema:"an icon of its own, by name (icons_overview lists them); empty to be drawn with its categories'"`
 }
 
 type createIn struct {
@@ -77,6 +78,8 @@ type updateIn struct {
 	RemoveCodes       []string          `json:"remove_codes,omitempty" jsonschema:"code types to remove its codes of"`
 	Stock             *stockIn          `json:"stock,omitempty" jsonschema:"count it by quantity, or change how"`
 	StopCountingStock bool              `json:"stop_counting_stock,omitempty" jsonschema:"stop counting it by quantity"`
+	Icon              string            `json:"icon,omitempty" jsonschema:"give it an icon of its own, by name (icons_overview lists them)"`
+	CategoryIcon      bool              `json:"category_icon,omitempty" jsonschema:"draw it with its categories' icon again, dropping one of its own"`
 }
 
 type moveIn struct {
@@ -236,7 +239,7 @@ func changingTools() []tool {
 		}),
 		define(&mcp.Tool{
 			Name: "copy_asset",
-			Description: "Add an asset like another, such as one more spool like this one: the same categories, field values, stock and place, " +
+			Description: "Add an asset like another, such as one more spool like this one: the same categories, field values, stock, icon and place, " +
 				"the next codes in the series of its own (after SP-014, SP-015), and its links, but not links that would take the other asset " +
 				"from it (what a box contains), nor its condition, loans or history. Change what differs with name, fields, codes and quantity; " +
 				"photos copies its photos too.",
@@ -254,6 +257,7 @@ func changingTools() []tool {
 						FieldValues   map[string]string          `json:"field_values"`
 						Stock         *stockIn                   `json:"stock"`
 						GeneratorKeys []models.AssetGeneratorKey `json:"generator_keys"`
+						IconName      string                     `json:"icon_name"`
 						Links         []struct {
 							TypeID   string             `json:"type_id"`
 							Label    string             `json:"label"`
@@ -286,6 +290,9 @@ func changingTools() []tool {
 					}
 				}
 				body := map[string]any{"name": c.Name, "category_ids": c.CategoryIDs, "generator_keys": keys, "field_values": c.FieldValues}
+				if c.IconName != "" {
+					body["icon_name"] = c.IconName
+				}
 				if c.Stock != nil {
 					if in.Quantity != nil {
 						c.Stock.Quantity = in.Quantity
@@ -340,7 +347,7 @@ func changingTools() []tool {
 			}),
 		define(&mcp.Tool{
 			Name: "update_asset",
-			Description: "Change an asset: its name, categories, field values, codes or stock. Only what is given changes; " +
+			Description: "Change an asset: its name, categories, field values, codes, stock or icon. Only what is given changes; " +
 				"categories, fields and codes not named are kept.",
 			Annotations: changes("Change an asset", true),
 		}, []string{"PUT /api/v1/assets/{id}"}, []string{rbac.PermAssetsWrite}, func(ctx context.Context, e *env, in updateIn) (reply[assetOut], error) {
@@ -391,8 +398,16 @@ func changingTools() []tool {
 			case in.Stock != nil:
 				body["stock"] = stockBody(in.Stock)
 			}
+			switch {
+			case in.CategoryIcon && in.Icon != "":
+				return reply[assetOut]{}, fmt.Errorf("give icon or category_icon, not both")
+			case in.CategoryIcon:
+				body["icon_name"] = nil
+			case in.Icon != "":
+				body["icon_name"] = in.Icon
+			}
 			if len(body) == 0 {
-				return reply[assetOut]{}, fmt.Errorf("nothing to change: give a name, categories, fields, codes or stock")
+				return reply[assetOut]{}, fmt.Errorf("nothing to change: give a name, categories, fields, codes, stock or icon")
 			}
 			var res apiAsset
 			if err := e.call(ctx, http.MethodPut, assetPath(a.Asset.ID), body, &res); err != nil {
@@ -702,6 +717,9 @@ func (e *env) createOne(ctx context.Context, a newAsset) (assetSummary, error) {
 	body := map[string]any{"name": a.Name, "category_ids": a.CategoryIDs, "generator_keys": keys, "field_values": a.Fields}
 	if a.Stock != nil {
 		body["stock"] = stockBody(a.Stock)
+	}
+	if a.Icon != "" {
+		body["icon_name"] = a.Icon
 	}
 	var res apiAsset
 	if err := e.call(ctx, http.MethodPost, "/api/v1/assets", body, &res); err != nil {

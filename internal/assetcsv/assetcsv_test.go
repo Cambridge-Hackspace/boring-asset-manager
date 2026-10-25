@@ -170,3 +170,28 @@ func TestExportingStock(t *testing.T) {
 		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
 	}
 }
+
+// TestExportingIcons adds the icon column only when some asset has an icon
+// of its own, blank for those drawn with their categories'.
+func TestExportingIcons(t *testing.T) {
+	crate := "=crate"
+	assets := []models.AssetWithDetails{
+		{Asset: models.Asset{ID: "a1", Name: "Bin", IconName: &crate}},
+		{Asset: models.Asset{ID: "a2", Name: "Drill"}},
+	}
+	var b strings.Builder
+	if err := Export(&b, assets, NewCategories(tree), nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	want := BOM + "id,name,categories,icon\r\n" + "a1,Bin,,'=crate\r\n" + "a2,Drill,,\r\n"
+	if b.String() != want {
+		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
+	}
+	b.Reset()
+	if err := Export(&b, assets[1:], NewCategories(tree), nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if want := BOM + "id,name,categories\r\n" + "a2,Drill,\r\n"; b.String() != want {
+		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
+	}
+}

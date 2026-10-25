@@ -23,6 +23,9 @@ type CreateAssetRequest struct {
 	FieldValues   map[string]string          `json:"field_values,omitempty"`
 	// Stock counts the asset's stock by quantity; absent or null does not.
 	Stock *StockRequest `json:"stock,omitempty"`
+	// IconName is its own icon (README §3.7), one the build draws; absent or
+	// empty, it is drawn with its categories'.
+	IconName string `json:"icon_name,omitempty"`
 }
 
 // UpdateAssetRequest defines the payload for modifying an asset. Omitted parts
@@ -30,12 +33,15 @@ type CreateAssetRequest struct {
 // the current value, while an empty list clears it. field_values only changes
 // the keys it names; an empty value removes one. An absent stock keeps the
 // asset's, null stops counting it by quantity, and an object replaces it.
+// An absent icon_name keeps the asset's own icon; null or "" draws it with
+// its categories', and a name gives it that one.
 type UpdateAssetRequest struct {
 	Name          string                     `json:"name,omitempty"`
 	CategoryIDs   []string                   `json:"category_ids,omitempty"`
 	GeneratorKeys []models.AssetGeneratorKey `json:"generator_keys,omitempty"`
 	FieldValues   map[string]string          `json:"field_values,omitempty"`
 	Stock         json.RawMessage            `json:"stock,omitempty"`
+	IconName      json.RawMessage            `json:"icon_name,omitempty"`
 }
 
 // StockRequest is an asset's stock (README §5.1). An absent quantity keeps
@@ -64,6 +70,21 @@ func (r UpdateAssetRequest) stockUpdate() (*store.StockUpdate, error) {
 		return nil, err
 	}
 	return &store.StockUpdate{Stock: req.input()}, nil
+}
+
+// iconUpdate reads an update's icon: nil when absent.
+func (r UpdateAssetRequest) iconUpdate() (*store.IconUpdate, error) {
+	if len(r.IconName) == 0 {
+		return nil, nil
+	}
+	var name *string
+	if err := json.Unmarshal(r.IconName, &name); err != nil {
+		return nil, err
+	}
+	if name == nil {
+		return &store.IconUpdate{}, nil
+	}
+	return &store.IconUpdate{Name: *name}, nil
 }
 
 // QuantityRequest changes an asset's quantity: by adjust (negative to use
@@ -184,7 +205,7 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 	if !s.mayPlace(w, r, rbac.PermAssetsWrite, req.CategoryIDs) {
 		return
 	}
-	asset, err := s.actingStore(r).CreateAssetWithStock(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input())
+	asset, err := s.actingStore(r).CreateAssetWithIcon(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input(), req.IconName)
 	if errors.Is(err, store.ErrGeneratorCodeExists) {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return
@@ -216,6 +237,11 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Invalid stock")
 		return
 	}
+	icon, err := req.iconUpdate()
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "icon_name is an icon's name, or null")
+		return
+	}
 
 	if _, ok := s.assetFor(w, r, id, rbac.PermAssetsWrite); !ok {
 		return
@@ -224,7 +250,7 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 	if req.CategoryIDs != nil && !s.mayPlace(w, r, rbac.PermAssetsWrite, req.CategoryIDs) {
 		return
 	}
-	asset, err := s.actingStore(r).UpdateAssetWithStock(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, stock)
+	asset, err := s.actingStore(r).UpdateAssetWithIcon(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, stock, icon)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 		return

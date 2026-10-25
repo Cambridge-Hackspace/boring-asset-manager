@@ -20,9 +20,15 @@ The editor checks what you write as you type, and shows it beside the editor, in
 
 Icons paint with the colors of a **palette**, such as *ink* and *body-top*, never with a color of their own, so they suit light and dark mode alike. The color *category* paints in the category's own color.
 
+## Assets' icons
+
+An asset shows the icon of its nearest category with one: beside its name on its page and when it is scanned, and in lists, in place of a photo or, on one, in its corner. Its **Details** say which category it comes from.
+
+To draw one asset differently, edit it and, under **Icon**, choose **Choose another…**: any icon there is can be picked, such as a broken variant of its usual one. **Use the category's** gives it back its categories' icon. If the icon it was given is later taken away, it shows a question mark, and says so, until it is given another.
+
 ## History, renaming and deleting
 
-**History** lists every version published; any can be loaded back into the editor. An icon can be renamed or deleted only when no other icon still uses it, such as a subcategory's that extends it. A category whose icon others use cannot be deleted until they no longer do.
+**History** lists every version published; any can be loaded back into the editor. Renaming an icon renames it for the assets given it too. An icon can be renamed or deleted only when no other icon still uses it, such as a subcategory's that extends it. A category whose icon others use cannot be deleted until they no longer do.
 
 Whoever may change categories can draw their icons. Changing the palette and the shared library of shapes needs **Manage icons**.
 

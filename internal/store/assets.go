@@ -111,6 +111,15 @@ func (s *Store) CreateAsset(name string, categoryIDs []string, generatorKeys []m
 // CreateAssetWithStock creates an asset as CreateAsset does, counting its
 // stock by quantity when stock is not nil.
 func (s *Store) CreateAssetWithStock(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockInput) (*models.AssetWithDetails, error) {
+	return s.CreateAssetWithIcon(name, categoryIDs, generatorKeys, fieldValues, stock, "")
+}
+
+// CreateAssetWithIcon creates an asset as CreateAssetWithStock does, with
+// its own icon when icon is not empty: one the build draws.
+func (s *Store) CreateAssetWithIcon(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockInput, icon string) (*models.AssetWithDetails, error) {
+	if err := s.checkAssetIcon(icon, nil); err != nil {
+		return nil, err
+	}
 	if stock != nil {
 		if err := stock.normalize(); err != nil {
 			return nil, err
@@ -172,6 +181,11 @@ func (s *Store) CreateAssetWithStock(name string, categoryIDs []string, generato
 	err = s.withInventory(func(ic *inventoryChange) error {
 		if err := s.insertAsset(ic.tx, assetID, name, now, cats, generatorKeys, resolvedValues); err != nil {
 			return err
+		}
+		if icon != "" {
+			if err := s.setAssetIconTx(ic.tx, assetID, icon); err != nil {
+				return err
+			}
 		}
 		var recordQuantity func() error
 		if stock != nil {
@@ -237,12 +251,13 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 // readAsset reads an asset as GetAssetByID does, taking what it needs from
 // whole tables from ctx, which a list shares across its assets.
 func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetails, error) {
-	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, ` + stockColumns + ` FROM assets WHERE id = ?`
+	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, icon_name, ` + stockColumns + ` FROM assets WHERE id = ?`
 	var (
-		a  models.Asset
-		sc stockScan
+		a    models.Asset
+		sc   stockScan
+		icon sql.NullString
 	)
-	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt, &a.Condition, &a.ConditionNote}, sc.dest()...)...)
+	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt, &a.Condition, &a.ConditionNote, &icon}, sc.dest()...)...)
 	if err == sql.ErrNoRows {
 		return nil, ErrAssetNotFound
 	}
@@ -250,6 +265,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 		return nil, fmt.Errorf("querying asset: %w", err)
 	}
 	a.Stock = sc.stock()
+	if icon.Valid {
+		a.IconName = &icon.String
+	}
 
 	// Categories
 	catQuery := `
@@ -359,6 +377,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	}
 	details.Actions = traits.offered(catIDs)
 	if details.ScanTemplate, err = s.contextScan(ctx, catIDs); err != nil {
+		return nil, err
+	}
+	if details.ResolvedIcon, err = s.contextIcon(ctx, a.IconName, catIDs); err != nil {
 		return nil, err
 	}
 	return details, nil
@@ -535,6 +556,13 @@ type StockUpdate struct {
 // UpdateAssetWithStock updates an asset as UpdateAsset does, and replaces its
 // stock when stock is not nil.
 func (s *Store) UpdateAssetWithStock(id, name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockUpdate) (*models.AssetWithDetails, error) {
+	return s.UpdateAssetWithIcon(id, name, categoryIDs, generatorKeys, fieldValues, stock, nil)
+}
+
+// UpdateAssetWithIcon updates an asset as UpdateAssetWithStock does, and
+// sets its own icon when icon is not nil. A new icon must be one the build
+// draws; one it has already is kept even if the build no longer does.
+func (s *Store) UpdateAssetWithIcon(id, name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockUpdate, icon *IconUpdate) (*models.AssetWithDetails, error) {
 	if stock != nil && stock.Stock != nil {
 		if err := stock.Stock.normalize(); err != nil {
 			return nil, err
@@ -546,6 +574,11 @@ func (s *Store) UpdateAssetWithStock(id, name string, categoryIDs []string, gene
 	}
 	if existing.Asset.ArchivedAt != nil {
 		return nil, ErrAssetArchived
+	}
+	if icon != nil {
+		if err := s.checkAssetIcon(icon.Name, existing.Asset.IconName); err != nil {
+			return nil, err
+		}
 	}
 
 	name = strings.TrimSpace(name)
@@ -617,6 +650,11 @@ func (s *Store) UpdateAssetWithStock(id, name string, categoryIDs []string, gene
 		}
 		if err := s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues); err != nil {
 			return err
+		}
+		if icon != nil {
+			if err := s.setAssetIconTx(ic.tx, id, icon.Name); err != nil {
+				return err
+			}
 		}
 		var recordQuantity func() error
 		if stock != nil {

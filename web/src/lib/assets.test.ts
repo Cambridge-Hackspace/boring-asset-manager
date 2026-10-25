@@ -32,6 +32,12 @@ describe('asset form helpers', () => {
     expect(assetPayload({ name: 'x', categoryIds: [], codes: {}, values: {} }, [])).toMatchObject({ category_ids: [], generator_keys: [] });
   });
 
+  it("sends its own icon only when the draft says, null for its categories'", () => {
+    expect(assetPayload({ name: 'x', categoryIds: [], codes: {}, values: {} }, [])).not.toHaveProperty('icon_name');
+    expect(assetPayload({ name: 'x', categoryIds: [], codes: {}, values: {}, icon: 'crate' }, [])).toMatchObject({ icon_name: 'crate' });
+    expect(assetPayload({ name: 'x', categoryIds: [], codes: {}, values: {}, icon: '' }, [])).toMatchObject({ icon_name: null });
+  });
+
   it('lists values kept from former categories', () => {
     expect(keptValues({ serial: '42', old: 'x', blank: '' }, [ef('serial')])).toEqual([['old', 'x']]);
   });
@@ -187,6 +193,14 @@ describe('links', () => {
       ['contains', true, false],
       ['contained in', false, false],
     ]);
+  });
+});
+
+describe('icons in history', () => {
+  it('names the icon given, changed or dropped', () => {
+    expect(describeChange({ what: 'icon', to: 'crate' }, 'asset.edited')).toBe('Own icon: crate');
+    expect(describeChange({ what: 'icon', from: 'crate', to: 'crate-down' }, 'asset.edited')).toBe('Own icon: crate → crate-down');
+    expect(describeChange({ what: 'icon', from: 'crate' }, 'asset.edited')).toBe("Own icon crate dropped: drawn with its categories' again");
   });
 });
 
