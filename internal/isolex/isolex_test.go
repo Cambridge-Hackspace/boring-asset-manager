@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/svg"
 )
 
 var (
@@ -303,5 +305,20 @@ func TestTheUnknownIconNeedsNoCompiler(t *testing.T) {
 	icon := Unknown()
 	if icon.Name != UnknownName || icon.Footprint == nil || len(icon.Shapes) < 4 {
 		t.Errorf("%+v", icon)
+	}
+}
+
+// The whole chain: isolex's sample compiled by the module and drawn by
+// package svg is isolex's own SVG for it.
+func TestTheCompiledSampleDrawsAsIsolexDraws(t *testing.T) {
+	c := compiler(t, Options{})
+	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/sample.ilx")})
+	want := readFile(t, "testdata/sample.svg.golden")
+	for i := range r.Doc.Icons {
+		icon := &r.Doc.Icons[i]
+		got := "== " + icon.Name + ".svg ==\n" + svg.Icon(icon, svg.Palette(svg.IsolexPalette))
+		if !strings.Contains(want, got) {
+			t.Errorf("%s is not drawn as isolex draws it:\n%s", icon.Name, got)
+		}
 	}
 }
