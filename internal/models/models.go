@@ -140,6 +140,10 @@ const (
 	// EventAssetAction records an action pressed on an asset, with its
 	// Action; channels and live connections can subscribe to it.
 	EventAssetAction = "asset.action"
+	// EventCategoryIconChanged records a new published version of a
+	// category's icon (README §3.7), so that what shows it can redraw; it
+	// is for history.
+	EventCategoryIconChanged = "category.icon_changed"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -147,7 +151,7 @@ const (
 func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
-		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted:
+		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged:
 		return true
 	}
 	return false
@@ -792,4 +796,81 @@ type ActionReply struct {
 	OK        bool      `json:"ok"`
 	Message   string    `json:"message"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// IconDiag is an error or warning the icon compiler reported, at a line
+// and column of a file of the build (README §3.7).
+type IconDiag struct {
+	File    string `json:"file"`
+	Line    int    `json:"line"`
+	Col     int    `json:"col"`
+	Message string `json:"message"`
+}
+
+// CategoryIcon is a category's isolex source (README §3.7). Source is
+// the published version, nil until one has compiled; Draft is a later
+// edit that has not, with the errors that stopped it.
+type CategoryIcon struct {
+	CategoryID  string     `json:"category_id"`
+	IconName    string     `json:"icon_name"`
+	Source      *string    `json:"source"`
+	Draft       *string    `json:"draft"`
+	DraftErrors []IconDiag `json:"draft_errors"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// IconLibraryFile is isolex source that no one category owns: bases,
+// fragments and axes icons share. Source and Draft as for CategoryIcon.
+type IconLibraryFile struct {
+	ID          string     `json:"id"`
+	Path        string     `json:"path"`
+	Source      *string    `json:"source"`
+	Draft       *string    `json:"draft"`
+	DraftErrors []IconDiag `json:"draft_errors"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+// IconColor is a palette entry: a theme token and what it is painted
+// with in light and dark mode.
+type IconColor struct {
+	Token string `json:"token"`
+	Light string `json:"light"`
+	Dark  string `json:"dark"`
+}
+
+// IconSettings is the rest of the lexicon block bam writes for every
+// build: the stroke widths allowed (none means any), the tokens only a
+// grant may paint with, and the compiler's limits by name (0 for none).
+type IconSettings struct {
+	StrokeWidths []float64       `json:"stroke_widths"`
+	Reserved     []string        `json:"reserved"`
+	Limits       map[string]int64 `json:"limits"`
+}
+
+// IconBuild is the last build that compiled clean: what icons are drawn
+// from. Hash identifies its inputs, the isolex version among them.
+type IconBuild struct {
+	Hash          string          `json:"hash"`
+	IsolexVersion string          `json:"isolex_version"`
+	IR            json.RawMessage `json:"ir"`
+	Warnings      []IconDiag      `json:"warnings"`
+	BuiltAt       time.Time       `json:"built_at"`
+}
+
+// IconRevision is one published version of a source.
+type IconRevision struct {
+	ID        string    `json:"id"`
+	Source    string    `json:"source"`
+	ActorID   *string   `json:"actor_user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// IconSave is the outcome of saving a source: published, with the build
+// it made, or kept as a draft with the errors that stopped it, wherever
+// in the lexicon they are. Warnings never stop a save.
+type IconSave struct {
+	Published bool       `json:"published"`
+	Errors    []IconDiag `json:"errors"`
+	Warnings  []IconDiag `json:"warnings"`
+	Build     *IconBuild `json:"build,omitempty"`
 }
