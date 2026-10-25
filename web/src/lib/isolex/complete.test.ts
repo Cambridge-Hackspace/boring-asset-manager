@@ -29,7 +29,7 @@ describe('complete', () => {
   });
 
   it('offers the palette for paint, as typed in quotes or not', () => {
-    expect(at('icon "a" {\n  part "p" { box 0 0 0 1 1 1 fill="|" }\n}')).toEqual(['ink', 'body-top', 'accent', 'category', 'none']);
+    expect(at('icon "a" {\n  part "p" { tile 0 0 0 1 1 fill="|" }\n}')).toEqual(['ink', 'body-top', 'accent', 'category', 'none']);
     expect(at('  tile 0 0 0 1 1 stroke="ac|')).toEqual(['accent']);
     const c = complete('tile 0 0 0 1 1 fill=bo', 22, vocab)!;
     expect(c.items[0]).toMatchObject({ label: 'body-top', insert: '"body-top"' });
@@ -50,8 +50,21 @@ describe('complete', () => {
   });
 
   it('offers properties after a node, and finds words inside names too', () => {
-    expect(at('  box 0 0 0 1 1 1 fi|')).toEqual(['fill=', 'fills=']);
+    expect(at('  tile 0 0 0 1 1 fi|')).toEqual(['fill=']);
     expect(at('  tile 0 0 0 1 1 fill="dy|"')).toEqual(['body-top']);
+  });
+
+  it('offers only the properties the node takes, as isolex checks them', () => {
+    // a box paints its faces with fills=; isolex refuses fill= on one
+    expect(at('  box 0 0 0 1 1 1 fi|')).toEqual(['fills=']);
+    expect(at('  cylinder 0.5 0.5 0 0.4 1 s|')).toEqual(['side=']);
+    expect(at('  shadow 0.5 0.5 0.48 0.48 o|')).toEqual([]);
+    expect(at('  rect "x" "y" 4 4 r|')).toEqual(['rx=', 'stroke=']);
+    expect(at('icon "a" {\n  part "p" { box 0 0 0 1 1 1 w|')).toEqual(['when=']);
+    expect(at('icon "a" e|')).toEqual(['extends=']);
+    expect(at('  grant "accent" r|')).toEqual(['reason=']);
+    // a fragment's params are its own
+    expect(at('  insert "glyph" w|')).toEqual([]);
   });
 
   it('inserts a node with its arguments, the first selected to type over', () => {

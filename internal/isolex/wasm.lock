@@ -3,6 +3,6 @@
 # tools/isolex/fetch.sh downloads it into wasm/isolex.wasm, which go build
 # embeds; both it and the server refuse a module whose SHA-256 is not this
 # one. To move to another release, change all three lines together.
-version 0.3.0
-url https://forge.axonibyte.com/api/packages/axonibyte/generic/isolex/0.3.0/isolex-0.3.0.wasm
-sha256 249797fc45ff70fce923afcab6c162dfb280ed014431321f154789b632cb2be6
+version 0.3.1
+url https://forge.axonibyte.com/api/packages/axonibyte/generic/isolex/0.3.1/isolex-0.3.1.wasm
+sha256 e6a7e326bc509b4396069e71bbea1c893f6c2693ceaa5642292bb45d7ad81dc6

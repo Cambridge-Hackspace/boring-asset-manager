@@ -8,7 +8,7 @@ import { paletteCss, tokenVar } from '../lib/isolex/palette';
 
 afterEach(() => cleanup());
 
-// isolex's own sample, its IR and its SVG, vendored from isolex 0.3.0
+// isolex's own sample, its IR and its SVG, vendored from isolex 0.3.1
 // beside the Go renderer that is held to the same bytes.
 // (Vitest runs in web/.)
 const testdata = resolve(process.cwd(), '../internal/isolex/testdata');
