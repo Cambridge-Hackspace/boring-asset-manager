@@ -12,6 +12,7 @@
 - **Lendable**: its assets can be lent. See [Lending](/help/loans).
 - **Suggested links**: the kinds of link offered first for its assets.
 - **Scan template**: what scanning its assets shows. See [Scanning](/help/scanning).
+- **Icon**: a small drawing of what its assets are, which its subcategories inherit. See [Icons](/help/icons).
 - **Who can see its assets**: its scopes, which decide who can see and change its assets; **public** lets anyone see them, even signed out. See [People and permissions](/help/people).
 
 ## Duplicating one
