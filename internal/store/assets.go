@@ -418,6 +418,9 @@ type AssetFilter struct {
 	Loan string
 	// Icon is an icon's name: the assets that have it as their own.
 	Icon string
+	// Within is an asset's ID: the assets in it, through location links,
+	// directly.
+	Within string
 }
 
 // FilterAssets lists the assets a filter matches: active ones newest first,
@@ -440,6 +443,11 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 	if f.Icon != "" {
 		whereClauses = append(whereClauses, "a.icon_name = ?")
 		args = append(args, f.Icon)
+	}
+	if f.Within != "" {
+		whereClauses = append(whereClauses, `a.id IN (SELECT l.to_asset_id FROM asset_links l
+			JOIN relation_types t ON t.id = l.relation_type_id AND t.is_location = TRUE WHERE l.from_asset_id = ?)`)
+		args = append(args, f.Within)
 	}
 	if categoryID != "" {
 		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_categories WHERE category_id = ?)")

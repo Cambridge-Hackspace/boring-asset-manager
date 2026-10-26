@@ -8,6 +8,7 @@ import type { NavGroup } from './lib/nav';
 import Home from './views/Home.svelte';
 import AssetsPage from './views/assets/AssetsPage.svelte';
 import AssetPage from './views/assets/AssetPage.svelte';
+import ScenePage from './views/assets/ScenePage.svelte';
 import AssetForm from './views/assets/AssetForm.svelte';
 import ImportPage from './views/assets/ImportPage.svelte';
 import CategoriesPage from './views/categories/CategoriesPage.svelte';
@@ -60,6 +61,7 @@ export const routes: Route[] = [
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'], public: true },
   { pattern: '/scan', component: ScanLookupPage, title: 'Scan', permissions: ['assets.scan'], nav: 'Scan', public: true },
   { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true },
+  { pattern: '/assets/:id/scene', component: ScenePage, title: 'Scene', permissions: ['assets.read'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
   { pattern: '/spool', component: SpoolPage, title: 'Print queue', permissions: ['labels.print'], nav: 'Print queue' },
