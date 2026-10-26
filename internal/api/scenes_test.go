@@ -1,8 +1,13 @@
 package api
 
 import (
+	"bytes"
+	"image/png"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -206,5 +211,94 @@ func TestArrangingScenes(t *testing.T) {
 	callTool(t, cs, "place_asset", map[string]any{"asset": bench.Asset.ID, "clear": true})
 	if at, _ := st.Placements(room.Asset.ID); len(at) != 1 {
 		t.Errorf("cleared %v", at)
+	}
+}
+
+// A scene drawn as an image: as SVG or PNG, as high as asked, each thing
+// in it moved to where it stands, one shown outlined in the accent color,
+// what the caller cannot read left out; and drawn for an assistant.
+func TestSceneImages(t *testing.T) {
+	requireIcons(t)
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	st := srv.store
+	ctx := t.Context()
+	rooms, _ := st.CreateCategoryFrom(store.CategoryInput{Name: "Rooms"})
+	if save, err := st.SaveCategoryIcon(ctx, srv.icons, rooms.ID, "room", `icon "room" { category "places"; footprint 3 2 2; part "floor" { tile 0 0 0 3 2 } }`); err != nil || !save.Published {
+		t.Fatalf("%+v %v", save, err)
+	}
+	servers, _ := st.CreateCategoryFrom(store.CategoryInput{Name: "Servers", ColorHex: "#2266aa"})
+	if save, err := st.SaveCategoryIcon(ctx, srv.icons, servers.ID, "server", `icon "server" { category "compute"; footprint 2 1 0.5; part "box" { box 0 0 0 2 1 0.5; tile 0 0 0.5 2 1 fill="category" } }`); err != nil || !save.Published {
+		t.Fatalf("%+v %v", save, err)
+	}
+	secret, _ := st.CreateScope("secret")
+	vault, _ := st.CreateCategory("Vault", nil, "", false, false)
+	if _, err := st.SetCategoryScopes(vault.ID, []string{secret.ID}); err != nil {
+		t.Fatal(err)
+	}
+	room, _ := st.CreateAsset("Lab", []string{rooms.ID}, nil, nil)
+	web, _ := st.CreateAsset("Web", []string{servers.ID}, nil, nil)
+	safe, _ := st.CreateAsset("Safe", []string{vault.ID}, nil, nil)
+	for _, a := range []string{web.Asset.ID, safe.Asset.ID} {
+		if _, err := st.AddLink(room.Asset.ID, containsType, a, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	palette, _ := st.GetIconPalette()
+	accent := ""
+	for _, c := range palette {
+		if c.Token == "accent" {
+			accent = c.Light
+		}
+	}
+	path := "/api/v1/assets/" + room.Asset.ID + "/scene/image"
+
+	rec := doJSON(t, srv, cookie, "GET", path, "")
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/svg+xml" || !strings.Contains(body, `height="512.00"`) ||
+		!strings.Contains(body, "<title>Lab</title>") || strings.Count(body, "<g transform=") != 2 || strings.Contains(body, `stroke="`+accent+`"`) {
+		t.Fatalf("%d %s", rec.Code, body)
+	}
+	// the server's top paints in its category's color
+	if !strings.Contains(body, `fill="#2266aa"`) {
+		t.Errorf("no category color: %s", body)
+	}
+	if body := doJSON(t, srv, cookie, "GET", path+"?show="+web.Asset.ID, "").Body.String(); !strings.Contains(body, `stroke="`+accent+`" stroke-width="3.00"`) {
+		t.Errorf("not outlined: %s", body)
+	}
+	rec = doJSON(t, srv, cookie, "GET", path+"?format=png&height=100&theme=dark", "")
+	if img, err := png.Decode(bytes.NewReader(rec.Body.Bytes())); rec.Code != http.StatusOK || err != nil || img.Bounds().Dy() != 100 {
+		t.Errorf("png: %d %v", rec.Code, err)
+	}
+	for _, bad := range []string{"?format=gif", "?height=3000", "?theme=sepia"} {
+		if rec := doJSON(t, srv, cookie, "GET", path+bad, ""); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d", bad, rec.Code)
+		}
+	}
+
+	// one who cannot see the vault does not see the safe drawn
+	role, _ := st.CreateRole(store.RoleInput{Name: "Visitors", Permissions: []string{rbac.DefaultScope + ":" + rbac.PermAssetsRead}})
+	visitor, _ := st.CreateNamedUser("visitor@hackspace.org", "Visitor", "UserSecret123!", true)
+	if err := st.SetUserRoles(visitor.ID, []string{role.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if body := doJSON(t, srv, sessionCookie(t, srv, visitor.ID), "GET", path, "").Body.String(); strings.Count(body, "<g transform=") != 1 {
+		t.Errorf("a visitor sees %s", body)
+	}
+
+	// an assistant draws it, showing the server
+	cs := mcpSession(t, srv, tokenWith(t, srv, admin.ID, "assistant", rbac.PermAssetsRead))
+	res := callTool(t, cs, "render_scene", map[string]any{"asset": room.Asset.ID, "show": web.Asset.ID, "height": 64})
+	var image *mcp.ImageContent
+	for _, c := range res.Content {
+		if ic, ok := c.(*mcp.ImageContent); ok {
+			image = ic
+		}
+	}
+	if res.IsError || image == nil || image.MIMEType != "image/png" || !strings.Contains(toolText(res), "outlined") {
+		t.Fatalf("render_scene: %s", toolText(res))
+	}
+	if img, err := png.Decode(bytes.NewReader(image.Data)); err != nil || img.Bounds().Dy() != 64 {
+		t.Errorf("%v", err)
 	}
 }

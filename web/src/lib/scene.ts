@@ -139,3 +139,11 @@ export function overlapNote(item: Pick<SceneItem, 'overlaps'>, items: Pick<Scene
   const names = (item.overlaps ?? []).map((id) => items.find((i) => i.id === id)?.name ?? id);
   return names.length ? `Overlaps ${names.join(', ')}.` : '';
 }
+
+/** A location's scene as an image to save: SVG, or PNG drawn 1,024 pixels high; with show outlined. */
+export function sceneImage(id: string, format: 'svg' | 'png', show?: string | null): string {
+  const q = new URLSearchParams({ format });
+  if (format === 'png') q.set('height', '1024');
+  if (show) q.set('show', show);
+  return `/api/v1/assets/${encodeURIComponent(id)}/scene/image?${q}`;
+}
