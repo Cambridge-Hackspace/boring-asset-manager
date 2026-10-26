@@ -116,20 +116,28 @@ func (s *Server) handleAssetScene(w http.ResponseWriter, r *http.Request) {
 
 // writeScene answers with a location's scene, as the caller may see it.
 func (s *Server) writeScene(w http.ResponseWriter, r *http.Request, a *models.AssetWithDetails) {
+	out, _, err := s.sceneFor(r, a)
+	if err != nil {
+		writeServerError(w, err, "lay out the scene")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// sceneFor lays out a location's scene as the caller may see it, with the
+// build's icons it is drawn with.
+func (s *Server) sceneFor(r *http.Request, a *models.AssetWithDetails) (*SceneResponse, map[string]*ir.Icon, error) {
 	contents, err := s.store.FilterAssets(store.AssetFilter{Within: a.Asset.ID})
 	if err != nil {
-		writeServerError(w, err, "read what is in it")
-		return
+		return nil, nil, err
 	}
 	placements, err := s.store.Placements(a.Asset.ID)
 	if err != nil {
-		writeServerError(w, err, "read where things stand")
-		return
+		return nil, nil, err
 	}
 	icons, err := s.builtIcons()
 	if err != nil {
-		writeServerError(w, err, "read the icons")
-		return
+		return nil, nil, err
 	}
 	byID := map[string]*models.AssetWithDetails{}
 	var items []scene.Item
@@ -164,7 +172,60 @@ func (s *Server) writeScene(w http.ResponseWriter, r *http.Request, a *models.As
 		}
 		out.Items = append(out.Items, item)
 	}
-	writeJSON(w, http.StatusOK, out)
+	return &out, icons, nil
+}
+
+// defaultSceneHeight is how high a scene's image is drawn unless asked,
+// and maxSceneHeight the most it may be asked to be.
+const (
+	defaultSceneHeight = 512
+	maxSceneHeight     = 2048
+)
+
+// GET /api/v1/assets/{id}/scene/image: a location's scene drawn as an
+// image, as its page draws it, in format svg or png, theme light or dark,
+// height pixels high, with show, an asset's ID, outlined.
+func (s *Server) handleSceneImage(w http.ResponseWriter, r *http.Request) {
+	opts, ok := imageOptionsOf(w, r, defaultSceneHeight, maxSceneHeight)
+	if !ok {
+		return
+	}
+	a, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsRead)
+	if !ok {
+		return
+	}
+	laid, icons, err := s.sceneFor(r, a)
+	if err != nil {
+		writeServerError(w, err, "lay out the scene")
+		return
+	}
+	colors, err := s.themeColors(opts.theme)
+	if err != nil {
+		writeServerError(w, err, "read the icon palette")
+		return
+	}
+	drawn := make([]scene.Drawn, len(laid.Items))
+	for i, it := range laid.Items {
+		d := scene.Drawn{Placed: it.Placed, Shapes: it.Shapes, Color: colors["ink-muted"]}
+		if it.Icon != nil {
+			if icon := icons[it.Icon.Name]; icon != nil && it.Shapes == nil {
+				d.Shapes = icon.Shapes
+			}
+			if it.Icon.Color != "" {
+				d.Color = it.Icon.Color
+			}
+		}
+		drawn[i] = d
+	}
+	picture, own := scene.Picture(a.Asset.Name, laid.Floor, laid.Viewbox, drawn, r.URL.Query().Get("show"))
+	for token, c := range own {
+		colors[token] = c
+	}
+	hash := "none"
+	if b, err := s.store.CurrentIconBuild(); err == nil && b != nil {
+		hash = b.Hash
+	}
+	writeIconImage(w, r, hash, picture, colors, opts)
 }
 
 // PlacementRequest places an asset in a location's scene, at X, Y and Z in

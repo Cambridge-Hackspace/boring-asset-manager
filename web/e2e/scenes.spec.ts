@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { readFileSync } from 'node:fs';
 import { expect, test, unique } from './fixtures';
 
 // Scenes (README §3.7): what is in a location, drawn where it stands; one
@@ -78,6 +79,14 @@ test('a location is seen from inside, things in it chosen, entered, and one show
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Inside ${rack.name}`);
   await expect(page.locator(`[data-outline="${disk.id}"]`)).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Chosen' }).getByRole('heading')).toHaveText(disk.name);
+  // and saved as a picture, the disk outlined in it
+  const [png] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Save as PNG' }).click()]);
+  expect(png.suggestedFilename()).toBe(`${rack.name}.png`);
+  expect(png.url()).toContain(`show=${disk.id}`);
+  const bytes = readFileSync((await png.path())!);
+  expect(bytes.subarray(1, 4).toString()).toBe('PNG');
+  const [svg] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Save as SVG' }).click()]);
+  expect(readFileSync((await svg.path())!, 'utf8')).toContain(`<title>${rack.name}</title>`);
 
   // a double click goes inside what holds things, and opens the rest
   await page.goto(`/assets/${lab.id}/scene`);
