@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -34,10 +35,54 @@ func isIconSourcePath(path string) bool {
 		(strings.HasPrefix(path, "/api/v1/categories/") && (strings.HasSuffix(path, "/icon") || strings.HasSuffix(path, "/icon/check")))
 }
 
+// iconSettle is how long RunIcons waits after a change for others that
+// come with it, such as the rows of an import, before building.
+const iconSettle = 500 * time.Millisecond
+
+// markingIcons runs h, then has RunIcons see whether the icons' inputs
+// changed.
+func (s *Server) markingIcons(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r)
+		select {
+		case s.iconsDirty <- struct{}{}:
+		default:
+		}
+	})
+}
+
+// withIconParams builds the icons, when params are bound to fields, if an
+// asset's change leaves their inputs other than the build's, and then reads
+// it again, so that whoever changed it sees it drawn with its values at
+// once; changes made otherwise wait for RunIcons.
+func (s *Server) withIconParams(r *http.Request, a *models.AssetWithDetails) *models.AssetWithDetails {
+	if !s.icons.Available() {
+		return a
+	}
+	bound, err := s.store.IconParamsBound()
+	if err != nil || !bound {
+		return a
+	}
+	before, err := s.store.CurrentIconBuild()
+	if err != nil {
+		return a
+	}
+	save, err := s.store.RebuildIcons(r.Context(), s.icons)
+	if err != nil || save.Build == nil || (before != nil && before.Hash == save.Build.Hash) {
+		return a
+	}
+	if again, err := s.store.GetAssetByID(a.Asset.ID); err == nil {
+		return again
+	}
+	return a
+}
+
 // RunIcons warms the icon compiler, which takes seconds to compile to
 // machine code, so that the first save does not wait for it; then builds
 // the icons if what is published was last built by another isolex, or
-// not at all.
+// not at all. Then, until ctx ends, it builds them again whenever a change
+// leaves their inputs different from the build's: an asset's value of a
+// field an icon's param is bound to, say.
 func (s *Server) RunIcons(ctx context.Context) {
 	if !s.icons.Available() {
 		log.Printf("icons: the compiler is not built into this binary; icons are off")
@@ -48,13 +93,37 @@ func (s *Server) RunIcons(ctx context.Context) {
 		log.Printf("icons: the compiler does not start: %v", err)
 		return
 	}
+	s.rebuildIcons(ctx, v)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.iconsDirty:
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(iconSettle):
+		}
+		// changes during the wait are in this build
+		select {
+		case <-s.iconsDirty:
+		default:
+		}
+		s.rebuildIcons(ctx, v)
+	}
+}
+
+// rebuildIcons builds the icons if their inputs are not what the current
+// build was made of, saying why it could not.
+func (s *Server) rebuildIcons(ctx context.Context, version string) {
 	save, err := s.store.RebuildIcons(ctx, s.icons)
 	switch {
-	case err != nil:
-		log.Printf("icons: building with isolex %s: %v", v, err)
-	case !save.Published:
+	case err != nil && ctx.Err() == nil:
+		log.Printf("icons: building with isolex %s: %v", version, err)
+	case err == nil && !save.Published:
 		log.Printf("icons: isolex %s does not compile what is published (%d errors, the first %s:%d:%d: %s); the last good build stays",
-			v, len(save.Errors), save.Errors[0].File, save.Errors[0].Line, save.Errors[0].Col, save.Errors[0].Message)
+			version, len(save.Errors), save.Errors[0].File, save.Errors[0].Line, save.Errors[0].Col, save.Errors[0].Message)
 	}
 }
 
@@ -124,8 +193,15 @@ func (s *Server) handleIcons(w http.ResponseWriter, r *http.Request) {
 			writeServerError(w, err, "read the icon build")
 			return
 		}
+		// the wrappers drawing assets' params are the build's, not icons anyone drew
+		icons := doc.Icons[:0]
+		for _, i := range doc.Icons {
+			if !store.IsIconWrapper(i.Name) {
+				icons = append(icons, i)
+			}
+		}
 		body["build"] = map[string]any{"hash": b.Hash, "isolex_version": b.IsolexVersion, "built_at": b.BuiltAt,
-			"warnings": b.Warnings, "icons": doc.Icons}
+			"warnings": b.Warnings, "icons": icons}
 	}
 	writeJSON(w, http.StatusOK, body)
 }
@@ -346,6 +422,38 @@ func (s *Server) handleRenameCategoryIcon(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"icon": icon, "save": save})
+}
+
+// GET /api/v1/categories/{id}/icon/params: the params of the category's
+// icon bound to fields.
+func (s *Server) handleCategoryIconParams(w http.ResponseWriter, r *http.Request) {
+	bindings, err := s.store.IconParamBindings(r.PathValue("id"))
+	if err != nil {
+		writeServerError(w, err, "read the icon's params")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"params": bindings})
+}
+
+// PUT /api/v1/categories/{id}/icon/params with {"params": {param: field_id}}
+// replaces them, and builds the icons with them.
+func (s *Server) handleSetCategoryIconParams(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Params map[string]string `json:"params"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	bindings, save, err := s.actingStore(r).SetIconParamBindings(r.Context(), s.icons, r.PathValue("id"), req.Params)
+	if errors.Is(err, store.ErrInvalidIconParams) {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		writeIconError(w, err, "bind the icon's params")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"params": bindings, "save": save})
 }
 
 // DELETE /api/v1/categories/{id}/icon

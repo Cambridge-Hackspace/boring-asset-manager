@@ -417,6 +417,7 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
     * `GET /api/v1/icons/ir` is that build's IR, which pages draw icons from. Its `ETag` is the build's hash, so `If-None-Match` answers `304` until a build lands.
     * `GET /api/v1/icons/palette` and `GET /api/v1/icons/settings` give the palette and the settings.
     * `GET /api/v1/icons/states` gives the asset states, worst first, the variant each is drawn with (`variants`), bam's defaults, and `starter`, a library file drawing them.
+    * `GET /api/v1/categories/{id}/icon/params` gives the params of a category's icon bound to fields (`[{"param", "field_id", "field_key", "field_label"}]`).
     * `GET /api/v1/category-icons`, `GET /api/v1/categories/{id}/icon` and `/icon/revisions`, `GET /api/v1/icon-library`, and `GET /api/v1/icon-library/{id}` and `/revisions` give the sources and their published versions.
   * **A category's own icon** (`categories.manage`):
     * `PUT /api/v1/categories/{id}/icon` with `{"icon_name", "source"}` answers `{"icon", "save"}`. In `save`, `published` says whether the source was published, and `errors` and `warnings` give the compiler's diagnostics as `{"file", "line", "col", "message"}`. A draft is still a `200`.
@@ -424,6 +425,7 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
     * `POST …/icon/rename` with `{"icon_name"}`.
     * `DELETE …/icon`.
     * `DELETE …/icon/draft`.
+    * `PUT …/icon/params` with `{"params": {param: field_id}}` replaces the bindings, each to a number field (`400` otherwise), and builds the icons with them.
   * **What every icon is drawn with** (`icons.manage`):
     * `POST /api/v1/icon-library` with `{"path", "source"}` (`201`).
     * `PUT /api/v1/icon-library/{id}` with `{"source"}`.
@@ -466,6 +468,11 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
     * It is checked against the build when it is set. It is not tied to the build after that: if the build stops drawing it, the asset is drawn with the unknown icon and says so (`missing`), never quietly with its categories'. An edit that leaves it as it is keeps it.
     * Renaming a category's icon carries assets along: those naming it, and those naming one of its variants that the renamed build draws under the new name. A name that is some category's own icon never moves.
     * A copy (`GET …/copy`) has the original's, while the build still draws it. Its history records it (`asset.edited`, `"what": "icon"`). The CSV has an `icon` column when any asset has one (§6.1): blank for its categories', and checked as an edit is.
+  * **Its fields** can set its icon's params (`icon_param_bindings`, migration `038`). A category's own icon may bind any of its params, its own or inherited, to a number field, on the category's page under **Parameters**: `u` to "Rack units", say. An asset drawn with it is then drawn with each param set to its value of the field. Params are late bound, so the geometry of the icons it extends sees them: a server with 2 in Rack units is drawn 2 units high.
+    * Each build generates, for each icon with bindings, a wrapper for each distinct set of values the active assets that may be drawn with it have (those with it as their own, and those in a category it is drawn for), at most 256 an icon: `icon "bam--server--u_2" extends="server" { param u 2 }`, a `-` in a value written `m`. A wrapper has the icon's variants too. The wrappers are part of the build's inputs, so a value changed makes a new build; they are left out of the export and of every list of icons, and no asset can be given one as its own.
+    * An asset with no number in a bound field is drawn with the param's default; so is one whose wrapper is not yet built. A change to an asset through `POST` or `PUT /api/v1/assets` builds before it answers; any other change through the API is followed, half a second after the last, by a build if the inputs changed.
+    * A wrapper never stops a build: one with errors on its own line is left out, and if a value only breaks the icon it extends (`1 / (u - 3)` for 3), those that do are found by halving them, and a warning says how many were left out. Their assets are drawn plain.
+    * `resolved_icon` then has `bound`, the wrapper, and `params`, and `base` is the icon by its name. Labels draw the wrapper; `{{asset.icon}}` as text prints the icon's name.
   * **Its state** shows in it. An asset that is `out_of_service`, `needs_maintenance`, `overdue`, `on_loan`, `out_of_stock` or `low_stock` (running low), worst first, is drawn as its icon's variant for the worst of them that the build draws: `<icon>-<variant>`, an isolex axis variant, its own icon's as well as its categories'. With none drawn, it is drawn plain, so nothing changes until an icon has variants.
     * The variants are chosen on the Icons page under **Asset states** (`icon_settings.states`, migration `037`): `down`, `maintenance`, `overdue`, `lent`, `empty` and `low` unless chosen otherwise, and any can be none.
     * An icon has them by opting into an axis with them: `axes "state"`. **Start the state badges**, in the library, starts `shared/states.ilx` from the server's `starter`: the `state` axis, with a variant for each state's that puts a badge in the icon's top right corner, and the badges, drawn at a stroke width the settings allow and granting the reserved colors they paint with.
@@ -1282,7 +1289,7 @@ Category icons written in isolex and drawn throughout the interface, on labels a
 * [x] Icons as images: SVG, and PNG drawn by bam's own rasterizer, held to Chromium's drawing of the SVG; a report of the icons assets have as their own that nothing draws, with the assets found by them (§3.7).
 * [x] Icons on labels: an `icon` element, each asset's icon or one by name, shaded in grays or as an outline, placed as an image is, through every backend and printer, and drawn live in the editor as it prints (§4.1).
 * [x] Icons that show an asset's state: each state drawn as an icon's variant, chosen on the Icons page, with a starter of badges for the library; on labels when asked (§3.7, §4.1).
-* [ ] Icon parameters bound to asset fields.
+* [x] Icon parameters bound to asset fields: each asset drawn with its values, through wrapper icons each build makes, rebuilt as values change (§3.7).
 * [ ] Scenes: a location's contents drawn in place, arranged, and exported.
 
 ### Upcoming Features

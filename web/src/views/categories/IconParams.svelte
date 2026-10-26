@@ -1,0 +1,106 @@
+<!--
+  An icon's params bound to asset fields (README §3.7): each param the
+  category's icon has, its own or inherited, set for each asset drawn
+  with it to its value of a number field, so that a server with 2 rack
+  units is drawn 2 units high. Those with no number there are drawn with
+  the param's default.
+-->
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { request } from '../../lib/api';
+  import { messageOf } from '../../lib/errors';
+  import type { Field, IconParamBinding } from '../../lib/models';
+  import type { Definition } from '../../lib/isolex/syntax';
+  import { iconParams } from '../../lib/icons';
+  import { iconset } from '../../lib/iconset.svelte';
+
+  interface Props {
+    categoryId: string;
+    iconName: string;
+    /** What every source defines, for the params the icon has. */
+    definitions: Definition[];
+    canEdit: boolean;
+  }
+  let { categoryId, iconName, definitions, canEdit }: Props = $props();
+
+  let fields = $state<Field[]>([]);
+  let bound = $state<Record<string, string>>({});
+  let saved = $state<Record<string, string>>({});
+  let error = $state('');
+  let status = $state('');
+  let saving = $state(false);
+  let loaded = $state(false);
+
+  const params = $derived(iconParams(definitions, iconName));
+  const numbers = $derived(fields.filter((f) => f.validation_type === 'number'));
+  // a param bound before the icon stopped having it is still listed, to unbind
+  const listed = $derived([...params, ...Object.keys(saved).filter((p) => !params.includes(p)).sort()]);
+  const changed = $derived(listed.some((p) => (bound[p] ?? '') !== (saved[p] ?? '')));
+
+  onMount(() => {
+    void load();
+  });
+
+  function asMap(list: IconParamBinding[]): Record<string, string> {
+    return Object.fromEntries(list.map((b) => [b.param, b.field_id]));
+  }
+
+  async function load() {
+    try {
+      const [f, b] = await Promise.all([
+        request<{ fields: Field[] }>('GET', '/fields'),
+        request<{ params: IconParamBinding[] }>('GET', `/categories/${encodeURIComponent(categoryId)}/icon/params`),
+      ]);
+      fields = f.fields ?? [];
+      saved = asMap(b.params ?? []);
+      bound = { ...saved };
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      loaded = true;
+    }
+  }
+
+  async function save(event: SubmitEvent) {
+    event.preventDefault();
+    error = status = '';
+    saving = true;
+    const out = Object.fromEntries(Object.entries(bound).filter(([p, f]) => f && listed.includes(p)));
+    try {
+      const res = await request<{ params: IconParamBinding[] }>('PUT', `/categories/${encodeURIComponent(categoryId)}/icon/params`, { params: out });
+      saved = asMap(res.params ?? []);
+      bound = { ...saved };
+      status = 'Saved: each asset is drawn with its values.';
+      void iconset.refresh();
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      saving = false;
+    }
+  }
+</script>
+
+{#if loaded && (listed.length || error)}
+  <section class="card mt-3 max-w-2xl" aria-labelledby="icon-params-heading">
+    <h3 id="icon-params-heading" class="text-sm font-medium">Parameters</h3>
+    <p class="mb-2 text-xs text-zinc-600 dark:text-zinc-400">
+      Draw each asset with a param set to its value of a number field, such as its height from its rack units. An asset with no number there is drawn with the
+      param's default.
+    </p>
+    <form class="space-y-2" onsubmit={save}>
+      <div class="grid items-center gap-x-3 gap-y-2 sm:grid-cols-[auto_1fr]">
+        {#each listed as p (p)}
+          <label class="font-mono text-sm" for="icon-param-{p}">{p}</label>
+          <select id="icon-param-{p}" class="input-sm w-full max-w-xs" bind:value={bound[p]} disabled={!canEdit}>
+            <option value="">Its default</option>
+            {#each numbers as f (f.id)}<option value={f.id}>{f.label}</option>{/each}
+          </select>
+        {/each}
+      </div>
+      {#if !numbers.length}<p class="text-xs text-zinc-600 dark:text-zinc-400">There are no number fields to bind a param to yet.</p>{/if}
+      {#if error}<p role="alert" class="text-sm text-red-700 dark:text-red-400">{error}</p>{/if}
+      {#if status}<p role="status" class="text-sm text-green-700 dark:text-green-400">{status}</p>{/if}
+      {#if canEdit}<button class="btn-secondary" disabled={saving || !changed}>{saving ? 'Saving…' : 'Save the parameters'}</button>{/if}
+    </form>
+  </section>
+{/if}

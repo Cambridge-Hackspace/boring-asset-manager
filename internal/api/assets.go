@@ -214,6 +214,7 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err, "create the asset")
 		return
 	}
+	asset = s.withIconParams(r, asset)
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"asset": s.shown(r, asset),
@@ -263,6 +264,7 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err, "update the asset")
 		return
 	}
+	asset = s.withIconParams(r, asset)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"asset": s.shown(r, asset),

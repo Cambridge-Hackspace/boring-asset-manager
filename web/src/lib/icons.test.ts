@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boxSource, copiedSource, extendingSource, iconGroup, iconOwner, parseWidths, shownIcon, splitDiags, suggestIconName, validIconName } from './icons';
+import { boxSource, copiedSource, extendingSource, iconGroup, iconOwner, iconParams, isWrapper, parseWidths, shownIcon, splitDiags, suggestIconName, validIconName } from './icons';
 import type { Category, CategoryIcon } from './models';
 import { outline } from './isolex/syntax';
 
@@ -79,5 +79,24 @@ describe('the settings', () => {
     expect(iconOwner(icons, 'switch-down')?.category_id).toBe('a');
     expect(iconOwner(icons, 'switch-poe-down')?.category_id).toBe('b');
     expect(iconOwner(icons, 'router')).toBeUndefined();
+  });
+});
+
+describe('iconParams', () => {
+  it('collects an icon’s params up its chain, root first', () => {
+    const defs = outline(`base "rack-unit" { param u 1; param depth 2 }
+base "switch" { extends "rack-unit"; param ports 12; param u 1 }
+icon "switch-l2" extends="switch" { }
+icon "loop-a" extends="loop-b" { param a 1 }
+icon "loop-b" extends="loop-a" { param b 1 }`);
+    expect(iconParams(defs, 'switch-l2')).toEqual(['u', 'depth', 'ports']);
+    expect(iconParams(defs, 'nothing')).toEqual([]);
+    expect(iconParams(defs, 'loop-a')).toEqual(['b', 'a']);
+  });
+
+  it('knows a wrapper by its name', () => {
+    expect(isWrapper('bam--server--u_2')).toBe(true);
+    expect(isWrapper('bam-unknown')).toBe(false);
+    expect(isWrapper('server')).toBe(false);
   });
 });

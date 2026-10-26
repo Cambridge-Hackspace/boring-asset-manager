@@ -58,8 +58,8 @@ func (s *Server) handleCopyAsset(w http.ResponseWriter, r *http.Request) {
 			out.FieldValues[f.Field.Key] = v
 		}
 	}
-	if ic := a.ResolvedIcon; ic != nil && ic.From == models.IconFromAsset && !ic.Missing {
-		out.IconName = ic.Plain()
+	if ic := a.ResolvedIcon; ic != nil && ic.From == models.IconFromAsset && !ic.Missing && a.Asset.IconName != nil {
+		out.IconName = *a.Asset.IconName
 	}
 	if st := a.Asset.Stock; st != nil {
 		q := st.Quantity

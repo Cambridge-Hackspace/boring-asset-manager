@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -281,10 +282,24 @@ func TestRunIconsBuildsAtStartup(t *testing.T) {
 	if _, err := srv.store.Exec(`DELETE FROM icon_build`); err != nil {
 		t.Fatal(err)
 	}
-	srv.RunIcons(context.Background())
-	if b, err := srv.store.CurrentIconBuild(); err != nil || b == nil || !strings.Contains(string(b.IR), `"crate"`) {
-		t.Errorf("after startup: %+v %v", b, err)
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		srv.RunIcons(ctx)
+		close(done)
+	}()
+	for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		b, err := srv.store.CurrentIconBuild()
+		if err == nil && b != nil && strings.Contains(string(b.IR), `"crate"`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after startup: %+v %v", b, err)
+		}
 	}
+	// it runs until stopped
+	stop()
+	<-done
 }
 
 // An assistant writes icons, and is told what the compiler said.
