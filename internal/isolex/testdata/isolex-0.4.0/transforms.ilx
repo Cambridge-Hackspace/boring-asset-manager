@@ -1,0 +1,259 @@
+// Transforms (SPEC §4, §7): screen-space transforms, chained and laid
+// on faces, nested through fragments and badges, held to their frames;
+// and tile-space turns, mirrors and views. Its IR and SVG are goldens.
+
+lexicon {
+  tokens "body-top" "body-left" "body-right" "outline" "ink" "ink-muted" "accent" "virt" "shadow"
+  stroke-widths 1.2 1.4 2
+}
+
+// a blade, pointing right from the middle of a 24-unit canvas
+fragment "blade" {
+  part "b" {
+    poly fill="ink" { pt 12 12; pt 21 10; pt 21 14 }
+  }
+}
+
+// a blade and its mirror image: a transform inside a fragment, which
+// multiplies out with any transform it is inserted in
+fragment "blade-pair" {
+  part "b" {
+    insert "blade"
+    transform mirror="across" origin="12 12" {
+      insert "blade"
+    }
+  }
+}
+
+// rotate, about an origin
+icon "fan" {
+  category "screen"
+  canvas 24 24
+  part "hub" { at 0 0 0 { circle 12 12 2 fill="ink-muted" stroke="none" } }
+  part "blades" {
+    at 0 0 0 {
+      transform rotate=90 origin="12 12" { insert "blade-pair" }
+    }
+  }
+}
+
+// mirror: the same bank of ports for the other side
+icon "ports" {
+  category "screen"
+  canvas 32 16
+  part "left" {
+    at 0 0 0 {
+      rect 2 4 10 8 stroke="ink" width=1.4
+      line 4 6 8 6
+    }
+  }
+  part "right" {
+    at 0 0 0 {
+      transform mirror="across" origin="16 0" {
+        rect 2 4 10 8 stroke="ink" width=1.4
+        line 4 6 8 6
+      }
+    }
+  }
+}
+
+// skew: an italic stroke
+icon "italic" {
+  category "screen"
+  canvas 24 24
+  part "a" {
+    at 0 0 0 {
+      transform skew-x=-12 origin="12 12" {
+        path d="M7,19 L12,5 L17,19 M9,14 H15" stroke="ink" width=2
+      }
+    }
+  }
+}
+
+// a chain of steps, applied in order
+icon "chained" {
+  category "screen"
+  canvas 24 24
+  part "a" {
+    transform origin="12 12" {
+      steps {
+        rotate 90
+        skew-x -12
+        translate 1 0
+      }
+      at 0 0 0 { rect 8 6 8 12 stroke="ink" width=1.4 }
+    }
+  }
+}
+
+// flat artwork laid on the faces of a box
+icon "labelled" {
+  category "faces"
+  footprint 1 1 0.5
+  part "body" { box 0 0 0 1 1 0.5 }
+  part "top" {
+    transform onto="top" of="box 0 0 0 1 1 0.5" {
+      at 0 0 0 { rect 8 8 24 24 fill="accent" }
+    }
+  }
+  part "front" {
+    transform onto="front" of="box 0 0 0 1 1 0.5" {
+      at 0 0 0 { line 6 6 34 6 stroke="ink" width=2 }
+    }
+  }
+  part "right" {
+    transform onto="right" of="box 0 0 0 1 1 0.5" {
+      at 0 0 0 { circle 20 10 4 fill="ink" stroke="none" }
+    }
+  }
+}
+
+// a transform about its anchor, in 2-D
+icon "turned-glyph" {
+  category "screen"
+  footprint 1 1 1
+  part "body" { box 0 0 0 1 1 1 }
+  part "glyph" {
+    at 0.5 0.5 1 {
+      transform rotate=45 origin="x y" {
+        rect "x - 6" "y - 6" 12 12 fill="accent"
+      }
+    }
+  }
+}
+
+// a badge, and a badge inside a transform, folded into one matrix
+icon "mark" {
+  category "state"
+  canvas 24 24
+  part "g" {
+    at 0 0 0 {
+      transform strokes="fixed" scale=0.8 origin="12 12" {
+        poly fill="accent" stroke="outline" width=1.2 { pt 2 2; pt 22 2; pt 12 22 }
+      }
+    }
+  }
+}
+icon "badged" {
+  category "state"
+  footprint 1 1 1
+  part "body" { box 0 0 0 1 1 1 }
+  part "mark" { badge "mark" corner="ne" }
+  part "flipped" {
+    transform rotate=180 origin="0 0" { badge "mark" corner="ne" }
+  }
+}
+
+// bounds: grown, scaled, clipped, and the icon's own default
+icon "grown" {
+  category "bounds"
+  canvas 24 24
+  part "a" {
+    transform translate="10 0" bounds="grow" {
+      at 0 0 0 { rect 4 4 16 16 fill="ink" }
+    }
+  }
+}
+icon "scaled" {
+  category "bounds"
+  canvas 24 24
+  part "a" {
+    transform rotate=45 origin="12 12" bounds="scale" {
+      at 0 0 0 { rect 2 2 20 20 fill="ink" }
+    }
+  }
+}
+icon "clipped" {
+  category "bounds"
+  canvas 24 24
+  part "a" {
+    transform translate="6 0" bounds="clip" {
+      at 0 0 0 { rect 2 2 20 20 fill="ink" }
+    }
+  }
+}
+icon "clipped-by-default" {
+  category "bounds"
+  canvas 24 24
+  transform-bounds "clip"
+  part "a" {
+    transform scale=1.5 origin="12 12" strokes="fixed" {
+      at 0 0 0 { circle 12 12 9 stroke="ink" width=1.4 }
+    }
+  }
+}
+
+// tile-space turns: the box turns, the face rect on the wall it
+// turns onto moves with it, and the one turned away is not drawn
+base "chassis-base" {
+  category "turns"
+  part "body" {
+    box 0 0 0 2 1 1
+    facerect "front" 0.2 1 0.2 0.6 0.6
+    facerect "right" 2 0.2 0.2 0.6 0.6
+  }
+}
+icon "chassis" {
+  extends "chassis-base"
+  footprint 2 1 1
+}
+icon "chassis-90" {
+  extends "chassis-base"
+  footprint 1 2 1
+  replace "body" {
+    turn 90 origin="0.5 0.5" {
+      box 0 0 0 2 1 1
+      facerect "front" 0.2 1 0.2 0.6 0.6
+      facerect "right" 2 0.2 0.2 0.6 0.6
+    }
+  }
+}
+icon "chassis-180" {
+  extends "chassis-base"
+  footprint 2 1 1
+  replace "body" {
+    turn 180 origin="1 0.5" {
+      box 0 0 0 2 1 1
+      facerect "front" 0.2 1 0.2 0.6 0.6
+      facerect "right" 2 0.2 0.2 0.6 0.6
+    }
+  }
+}
+icon "chassis-270" {
+  extends "chassis-base"
+  footprint 1 2 1
+  replace "body" {
+    turn 270 origin="1 1" {
+      box 0 0 0 2 1 1
+      facerect "front" 0.2 1 0.2 0.6 0.6
+      facerect "right" 2 0.2 0.2 0.6 0.6
+    }
+  }
+}
+icon "chassis-mirrored" {
+  extends "chassis-base"
+  footprint 1 2 1
+  replace "body" {
+    mirror-diagonal {
+      shadow 1 0.5 1 0.4
+      box 0 0 0 2 1 1
+      facerect "front" 0.2 1 0.2 0.6 0.6
+      facerect "right" 2 0.2 0.2 0.6 0.6
+    }
+  }
+}
+
+// one source, drawn from more than one corner; painter order stays the
+// document's, so what stands on top is drawn after what it stands on
+axis "side" {
+  variant "quarter" { view 90 }
+  variant "back" { view 180 }
+}
+icon "press" {
+  category "turns"
+  footprint 2 1 1
+  axes "side"
+  part "body" { box 0 0 0 2 1 0.5 }
+  part "head" { box 1.2 0.2 0.5 0.6 0.6 0.5 }
+  part "label" { facerect "front" 0.2 1 0.1 0.8 0.3 fill="accent" }
+}

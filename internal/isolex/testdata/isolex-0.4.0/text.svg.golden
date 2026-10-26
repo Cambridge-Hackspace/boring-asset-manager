@@ -1,0 +1,265 @@
+<!-- port-label -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0.00 0.00 48.00 24.00" width="48.00" height="24.00">
+<title>port-label</title>
+  <rect x="2.00" y="2.00" width="44.00" height="20.00" rx="3.00" fill="#e4e7eb" stroke="#1f2933" stroke-width="1.20"/>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 8.75 14.00)">
+    <path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 14.25 14.00)">
+    <path d="M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 19.75 14.00)">
+    <path d="M4,7 H0 V0 H4 M0,3.5 H3" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 28.25 14.00)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 33.75 14.00)">
+    <path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+</svg>
+<!-- rack-unit -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-42.64 -28.00 119.92 96.00" width="119.92" height="96.00">
+<title>rack-unit</title>
+  <polygon points="-34.64,20.00 34.64,60.00 34.64,40.00 -34.64,0.00" fill="#cbd2d9" stroke="#1f2933" stroke-width="1.20"/>
+  <polygon points="69.28,40.00 34.64,60.00 34.64,40.00 69.28,20.00" fill="#9aa5b1" stroke="#1f2933" stroke-width="1.20"/>
+  <polygon points="0.00,-20.00 69.28,20.00 34.64,40.00 -34.64,0.00" fill="#e4e7eb" stroke="#1f2933" stroke-width="1.20"/>
+  <g transform="matrix(0.87 0.50 0.00 -1.00 -29.44 18.00)">
+    <path d="M0,7 V2 Q0,0 2,0 Q4,0 4,2 V7" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.87 0.50 0.00 -1.00 -24.68 20.75)">
+    <path d="M1,6 L2,7 V0 M1,0 H3" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.87 0.50 0.00 -1.00 -19.92 23.50)">
+    <path d="M0,6 Q0,7 2,7 Q4,7 4,5.5 Q4,4 0,0 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+</svg>
+<!-- styles -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0.00 0.00 80.00 64.00" width="80.00" height="64.00">
+<title>styles</title>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 4.00 12.00)">
+    <path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 9.50 12.00)">
+    <path d="M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 15.00 12.00)">
+    <path d="M4,7 H0 V0 H4 M0,3.5 H3" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 23.50 12.00)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 29.00 12.00)">
+    <path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 4.00 26.00)">
+    <path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 9.50 26.00)">
+    <path d="M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 15.00 26.00)">
+    <path d="M4,7 H0 V0 H4 M0,3.5 H3" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 23.50 26.00)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 29.00 26.00)">
+    <path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 4.00 40.00)">
+    <path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 9.50 40.00)">
+    <path d="M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 15.00 40.00)">
+    <path d="M4,7 H0 V0 H4 M0,3.5 H3" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 23.50 40.00)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 29.00 40.00)">
+    <path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 4.00 54.00)">
+    <path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 9.50 54.00)">
+    <path d="M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 15.00 54.00)">
+    <path d="M4,7 H0 V0 H4 M0,3.5 H3" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 23.50 54.00)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.21 -1.00 29.00 54.00)">
+    <path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" fill="none" stroke="#1f2933" stroke-width="1.80"/>
+  </g>
+  <g transform="matrix(1.20 0.00 0.00 -1.20 50.00 26.00)">
+    <path d="M0,0 H5 V7 H0 Z M1.2,1.2 V5.8 H3.8 V1.2 Z" fill="#1f2933" stroke="#1f2933" stroke-width="0.00"/>
+  </g>
+  <g transform="matrix(1.20 0.00 0.00 -1.20 57.20 26.00)">
+    <path d="M0,0 H1.2 V2.8 L3.6,0 H5 L2.2,3.4 L5,7 H3.6 L1.2,4 V7 H0 Z" fill="#1f2933" stroke="#1f2933" stroke-width="0.00"/>
+  </g>
+  <g transform="matrix(1.20 0.00 0.00 -1.20 50.00 44.00)">
+    <path d="M0,0 H5 V7 H0 Z M1.2,1.2 V5.8 H3.8 V1.2 Z" fill="#1f2933" stroke="#1f2933" stroke-width="0.80"/>
+  </g>
+  <g transform="matrix(1.20 0.00 0.00 -1.20 57.20 44.00)">
+    <path d="M0,0 H1.2 V2.8 L3.6,0 H5 L2.2,3.4 L5,7 H3.6 L1.2,4 V7 H0 Z" fill="#1f2933" stroke="#1f2933" stroke-width="0.80"/>
+  </g>
+  <g transform="matrix(1.20 0.00 0.00 -1.20 67.40 44.00)">
+    <polygon points="0.00,0.00 1.40,0.00 1.40,7.00 0.00,7.00" fill="#1f2933" stroke="#1f2933" stroke-width="0.80"/>
+  </g>
+</svg>
+<!-- shaping -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0.00 0.00 64.00 48.00" width="64.00" height="48.00">
+<title>shaping</title>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 4.00 12.00)">
+    <path d="M0,0 L2,7 L4,0 M0.8,2.5 H3.2" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 8.50 12.00)">
+    <path d="M0,7 L2,0 L4,7" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 17.00 12.00)">
+    <path d="M0,7 H4 M2,7 V0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 21.70 12.00)">
+    <path d="M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 4.00 26.00)">
+    <path d="M0,0 L2,7 L4,0 M0.8,2.5 H3.2" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 9.50 26.00)">
+    <path d="M0.50,3.00 L8.50,3.00" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 18.50 26.00)">
+    <path d="M0,7 L2,0 L4,7" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 27.00 26.00)">
+    <path d="M0,0 L2,7 L4,0 M0.8,2.5 H3.2" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 32.50 26.00)">
+    <path d="M0.50,3.00 L3.50,3.00" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 37.50 26.00)">
+    <path d="M0,7 L2,0 L4,7" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 4.00 40.00)">
+    <path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(1.00 0.00 0.00 -1.00 9.50 40.00)">
+    <path d="M0,0 H4 V7 H0 Z M0,0 L4,7 M0,7 L4,0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+</svg>
+<!-- aligned -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0.00 0.00 64.00 64.00" width="64.00" height="64.00">
+<title>aligned</title>
+  <path d="M32.00,0.00 L32.00,64.00" fill="none" stroke="#1f2933" stroke-width="0.40"/>
+  <path d="M0.00,32.00 L64.00,32.00" fill="none" stroke="#1f2933" stroke-width="0.40"/>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 32.00 15.60)">
+    <path d="M1,6 L2,7 V0 M1,0 H3" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 36.40 15.60)">
+    <path d="M0,6 Q0,7 2,7 Q4,7 4,5.5 Q4,4 0,0 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 40.80 15.60)">
+    <path d="M0,7 H4 L2,4 Q4,4 4,2 Q4,0 2,0 Q0,0 0,1" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 25.40 33.60)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 29.80 33.60)">
+    <path d="M4,7 H0 V4 H2 Q4,4 4,2 Q4,0 2,0 H0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 34.20 33.60)">
+    <path d="M3.5,7 Q0,7 0,3 V2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Q0,4 0,2.5" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 18.80 51.60)">
+    <path d="M0,7 H4 L1.5,0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 23.20 51.60)">
+    <path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 27.60 51.60)">
+    <path d="M0.5,0 Q4,0 4,4 V5 Q4,7 2,7 Q0,7 0,5 Q0,3 2,3 Q4,3 4,4.5" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 30.00 62.00)">
+    <path d="M1,6 L2,7 V0 M1,0 H3" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 33.00 62.00)">
+    <path d="M0,6 Q0,7 2,7 Q4,7 4,5.5 Q4,4 0,0 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 36.00 62.00)">
+    <path d="M0,7 H4 L2,4 Q4,4 4,2 Q4,0 2,0 Q0,0 0,1" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 39.00 62.00)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 42.00 62.00)">
+    <path d="M4,7 H0 V4 H2 Q4,4 4,2 Q4,0 2,0 H0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 45.00 62.00)">
+    <path d="M3.5,7 Q0,7 0,3 V2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Q0,4 0,2.5" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 48.00 62.00)">
+    <path d="M0,7 H4 L1.5,0" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 51.00 62.00)">
+    <path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 54.00 62.00)">
+    <path d="M0.5,0 Q4,0 4,4 V5 Q4,7 2,7 Q0,7 0,5 Q0,3 2,3 Q4,3 4,4.5" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.55 0.00 0.00 -0.55 57.00 62.00)">
+    <path d="M0,0 H4 V7 H0 Z M0,0 L4,7" fill="none" stroke="#1f2933" stroke-width="1.00"/>
+  </g>
+</svg>
+<!-- tagged-a -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0.00 0.00 48.00 24.00" width="48.00" height="24.00">
+<title>tagged-a</title>
+  <g transform="matrix(1.00 0.00 0.00 1.00 4.00 4.00)">
+    <rect x="0.00" y="0.00" width="40.00" height="16.00" rx="2.00" fill="#9aa5b1" stroke="#1f2933" stroke-width="1.20"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 13.20 13.60)">
+    <path d="M0,0 L2,7 L4,0 M0.8,2.5 H3.2" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 17.60 13.60)">
+    <path d="M0,7 H4 L1.5,0" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 22.00 13.60)">
+    <path d="M0.50,3.00 L3.50,3.00" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 26.00 13.60)">
+    <path d="M1,6 L2,7 V0 M1,0 H3" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 30.40 13.60)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+</svg>
+<!-- tagged-b -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0.00 0.00 48.00 24.00" width="48.00" height="24.00">
+<title>tagged-b</title>
+  <g transform="matrix(1.00 0.00 0.00 1.00 4.00 4.00)">
+    <rect x="0.00" y="0.00" width="40.00" height="16.00" rx="2.00" fill="#9aa5b1" stroke="#1f2933" stroke-width="1.20"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 11.00 13.60)">
+    <path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 15.40 13.60)">
+    <path d="M1,6 L2,7 V0 M1,0 H3" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 19.80 13.60)">
+    <path d="M0,0 H4 V7 H0 Z M0,0 L4,7" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 24.20 13.60)">
+    <path d="M0.50,3.00 L3.50,3.00" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 28.20 13.60)">
+    <path d="M1,6 L2,7 V0 M1,0 H3" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+  <g transform="matrix(0.80 0.00 0.00 -0.80 32.60 13.60)">
+    <path d="M3,0 V7 L0,2 H4" fill="none" stroke="#d64545" stroke-width="1.00"/>
+  </g>
+</svg>
