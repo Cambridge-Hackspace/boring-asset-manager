@@ -1,7 +1,8 @@
 # Builds and publishes a release for each version tag, such as v1.2.0 (README
 # §2.2): the Go suites run first, then tools/release/build.sh builds the
-# binaries and their SHA256SUMS, which become the release's files. A tag with
-# a suffix, such as v1.2.0-rc.1, is published as a pre-release, which
+# binaries and their SHA256SUMS, which become the release's files, under the
+# notes in tools/release/notes/<tag>.md if there are any. A tag with a
+# suffix, such as v1.2.0-rc.1, is published as a pre-release, which
 # bam-update does not install.
 name: release
 
@@ -36,5 +37,8 @@ jobs:
         run: |
           prerelease=
           case "$TAG" in *-*) prerelease=--prerelease ;; esac
+          # notes written for the release, if any, go above GitHub's list
+          notes=tools/release/notes/$TAG.md
+          [ -f "$notes" ] || notes=/dev/null
           gh release create "$TAG" bin/bam-* bin/SHA256SUMS \
-            --verify-tag --title "$TAG" --generate-notes $prerelease
+            --verify-tag --title "$TAG" --notes-file "$notes" --generate-notes $prerelease
