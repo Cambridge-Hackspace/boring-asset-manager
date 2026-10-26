@@ -281,7 +281,11 @@ func (s *Store) linkDetails(a *models.AssetWithDetails, ctx *assetContext) error
 	if err != nil {
 		return err
 	}
+	a.Holds = 0
 	for _, l := range links {
+		if l.location && l.from.ID == a.Asset.ID && l.to.ID != a.Asset.ID && !l.to.Archived {
+			a.Holds++
+		}
 		al := models.AssetLink{ID: l.id, TypeID: l.typeID, Label: l.inverse, Asset: l.from, Outgoing: l.from.ID == a.Asset.ID}
 		if al.Outgoing {
 			al.Label, al.Asset = l.name, l.to

@@ -169,6 +169,34 @@ func findingTools() []tool {
 			return say(d, "%s. Its page: %s", text, d.URL)
 		}),
 		define(&mcp.Tool{
+			Name: "get_scene",
+			Description: "What is in a location, as its scene lays it out: each asset in it directly, where it stands on the floor in tiles " +
+				"(x, y, z, and the room it takes, size), its code, condition, icon, and how many things are in it (holds), drawn back to front; " +
+				"and the way down to the location, outermost first. Contents laid out in rows, by name, unless placed.",
+			Annotations: readOnly("Get a scene"),
+		}, []string{"GET /api/v1/assets/{id}/scene"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in assetIn) (reply[map[string]any], error) {
+			id, err := e.assetID(ctx, in.Asset)
+			if err != nil {
+				return reply[map[string]any]{}, err
+			}
+			out := map[string]any{}
+			if err := e.call(ctx, http.MethodGet, assetPath(id, "/scene"), nil, &out); err != nil {
+				return reply[map[string]any]{}, err
+			}
+			// for drawing it, which a person's page does
+			delete(out, "viewbox")
+			items, _ := out["items"].([]any)
+			for _, it := range items {
+				if m, ok := it.(map[string]any); ok {
+					delete(m, "tx")
+					delete(m, "ty")
+					delete(m, "shapes")
+				}
+			}
+			loc, _ := out["location"].(map[string]any)
+			return say(out, "%d things in %v.", len(items), loc["name"])
+		}),
+		define(&mcp.Tool{
 			Name: "look_up_code",
 			Description: "Look up a code as scanning a label does, and get the asset's scan page: the details, contents and quick actions " +
 				"its scan template lays out for you.",

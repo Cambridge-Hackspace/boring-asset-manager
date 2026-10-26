@@ -394,6 +394,9 @@ type AssetWithDetails struct {
 	Links                    []AssetLink   `json:"links"`
 	Location                 []LinkedAsset `json:"location"`
 	SuggestedRelationTypeIDs []string      `json:"suggested_relation_type_ids"`
+	// Holds is how many active assets are in it, through location links,
+	// directly: what its scene shows.
+	Holds int `json:"holds"`
 	// Photos are its photos, in order.
 	Photos []AssetPhoto `json:"photos"`
 	// Scopes are the scopes it is in: those of its categories and their

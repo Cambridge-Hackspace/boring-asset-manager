@@ -211,6 +211,7 @@
           <button type="button" class="btn-primary" disabled={busy} onclick={restore}>Restore</button>
         {/if}
       {:else}
+        {#if asset.holds}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/scene">See inside</a>{/if}
         {#if session.canOn(asset.scopes, 'assets.write')}
           <a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>
           <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(id)}" title="A new asset like this one, to change before it is created">Duplicate…</a>
@@ -302,6 +303,7 @@
         <dd>
           {#if asset.location.length}
             {#each asset.location as place, i (place.id)}{#if i > 0}{' › '}{/if}<a class="underline" href="/assets/{encodeURIComponent(place.id)}">{place.name}</a>{/each}
+            {' '}<a class="underline" href="/assets/{encodeURIComponent(asset.location.at(-1)!.id)}/scene?show={encodeURIComponent(id)}">Show in place</a>
           {:else}
             <span class="text-zinc-600 dark:text-zinc-400">Not set</span>
           {/if}

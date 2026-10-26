@@ -36,6 +36,12 @@ An asset's icon can show what state it is in: **out of service**, **needs mainte
 
 To start, on the **Icons** page, under **Library**, choose **Start the state badges** and save: it draws a badge for each state. Then add `axes "state"` to an icon, or to the one it extends, and it has a variant for each. Under **Asset states**, choose which variant each state is drawn with, or none.
 
+## Seeing where things are
+
+Anything that holds other things, such as a room, a rack or a shelf, can be seen from inside: on its page, choose **See inside**. What is in it is drawn standing on its floor, each with its icon, or as a plain box if it has none, laid out in rows by name. Scroll or use **+** and **−** to zoom, drag to look around, and **Fit** to see it all. Choose something to see what it is, with **Open** and, if things are in it too, **Look inside**; double-click to do the same. The links above lead back out.
+
+On any asset's page, **Show in place**, beside where it is, shows it in its place, outlined, with the rest faded.
+
 ## On labels
 
 A label template can print icons too: add an **Icon** in the template editor, for each asset's icon or one you choose. See **Labels**.
