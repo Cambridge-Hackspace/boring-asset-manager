@@ -67,6 +67,8 @@ export interface TemplateElement {
   icon?: string;
   /** Shaded, its faces in grays (absent), or an outline, its strokes alone. */
   shading?: 'shaded' | 'outline';
+  /** Draws the asset's icon as the variant its state is drawn with, as the label is printed; only with ICON_OF_ASSET. */
+  state?: boolean;
   /** Flipped in its box, before it is turned: across, down or both. A mirrored code does not scan from the side the label is read from. */
   mirror?: Mirror;
   /** The group it is in, moved, resized and turned as one in the editor. */

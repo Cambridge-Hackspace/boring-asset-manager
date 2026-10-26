@@ -424,6 +424,10 @@ const (
 // by Name, so the unknown icon is drawn in its place. Color is what the
 // "category" token paints in: the color of its nearest category with one,
 // chosen the same way, or empty for the palette's own.
+//
+// When the asset is in a state (IconState*) whose variant the build draws
+// for its icon, Name is that variant, <Base>-<Variant>, and State says
+// which; Base is the icon it is a variant of, and is empty otherwise.
 type ResolvedIcon struct {
 	Name               string `json:"name"`
 	From               string `json:"from"`
@@ -431,6 +435,44 @@ type ResolvedIcon struct {
 	SourceCategoryName string `json:"source_category_name,omitempty"`
 	Missing            bool   `json:"missing,omitempty"`
 	Color              string `json:"color,omitempty"`
+	Base               string `json:"base,omitempty"`
+	State              string `json:"state,omitempty"`
+	Variant            string `json:"variant,omitempty"`
+}
+
+// Plain is the icon without its state: Base, or Name when no state is
+// shown.
+func (r *ResolvedIcon) Plain() string {
+	if r.Base != "" {
+		return r.Base
+	}
+	return r.Name
+}
+
+// The states an asset's icon can show (README §3.7), worst first: an
+// asset in several shows the first whose variant its icon has.
+const (
+	IconStateOutOfService     = "out_of_service"
+	IconStateNeedsMaintenance = "needs_maintenance"
+	IconStateOverdue          = "overdue"
+	IconStateOnLoan           = "on_loan"
+	IconStateOutOfStock       = "out_of_stock"
+	IconStateLowStock         = "low_stock"
+)
+
+// IconStates are the states, worst first.
+var IconStates = []string{IconStateOutOfService, IconStateNeedsMaintenance, IconStateOverdue,
+	IconStateOnLoan, IconStateOutOfStock, IconStateLowStock}
+
+// DefaultIconVariants are the variants each state is drawn with until
+// someone chooses others.
+var DefaultIconVariants = map[string]string{
+	IconStateOutOfService:     "down",
+	IconStateNeedsMaintenance: "maintenance",
+	IconStateOverdue:          "overdue",
+	IconStateOnLoan:           "lent",
+	IconStateOutOfStock:       "empty",
+	IconStateLowStock:         "low",
 }
 
 // TemplateChoice is the scan template (README §6.4) or label template

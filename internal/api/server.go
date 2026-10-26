@@ -143,6 +143,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/icons/palette", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleSetIconPalette)))
 	handle("GET /api/v1/icons/settings", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconSettings)))
 	handle("PUT /api/v1/icons/settings", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleSetIconSettings)))
+	handle("GET /api/v1/icons/states", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIconStates)))
+	handle("PUT /api/v1/icons/states", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleSetIconStates)))
 	handle("GET /api/v1/category-icons", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListCategoryIcons)))
 	handle("GET /api/v1/categories/{id}/icon", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategoryIcon)))
 	handle("PUT /api/v1/categories/{id}/icon", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveCategoryIcon)))

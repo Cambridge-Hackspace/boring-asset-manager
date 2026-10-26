@@ -21,9 +21,11 @@
     vocabulary: Vocabulary;
     categories: Category[];
     icons: CategoryIcon[];
+    /** A file drawing the asset states to start from, if any. */
+    starter?: string;
     onsaved: () => void | Promise<void>;
   }
-  let { files, canManage, vocabulary, categories, icons, onsaved }: Props = $props();
+  let { files, canManage, vocabulary, categories, icons, starter = '', onsaved }: Props = $props();
 
   // the file open: its ID, 'new', or none
   let open = $state<string | null>(null);
@@ -51,6 +53,16 @@
     const split = splitDiags(libFile(path), f?.draft ? f.draft_errors : [], []);
     problems = split.here;
     elsewhere = split.elsewhere;
+  }
+
+  // the state axis, once a file has it, is drawn there
+  const hasStates = $derived(files.some((f) => /^\s*axis\s+"state"/mu.test(f.draft ?? f.source ?? '')));
+
+  /** A new file drawing the asset states, from the starter. */
+  function startStates() {
+    show(null);
+    path = 'shared/states.ilx';
+    text = starter;
   }
 
   function refused(err: unknown) {
@@ -130,7 +142,12 @@
   {:else}
     <p class="mb-3 text-sm">The library is empty.</p>
   {/if}
-  {#if canManage && open === null}<button type="button" class="btn-secondary" onclick={() => show(null)}>New file</button>{/if}
+  {#if canManage && open === null}
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="btn-secondary" onclick={() => show(null)}>New file</button>
+      {#if starter && !hasStates}<button type="button" class="btn-secondary" onclick={startStates}>Start the state badges</button>{/if}
+    </div>
+  {/if}
   {#if status && open === null}<p role="status" class="mt-2 text-sm text-green-700 dark:text-green-400">{status}</p>{/if}
 
   {#if open !== null}

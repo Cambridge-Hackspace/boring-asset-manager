@@ -1225,4 +1225,14 @@ test("draw an icon on the label: each asset's, or one chosen, drawn as it prints
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
   const saved = await api.call('GET', `/templates/${template.id}`);
   expect(saved.template.elements).toMatchObject([{ type: 'icon', icon: crate, shading: 'outline' }]);
+
+  // each asset's again, drawn in the state it is in when printed
+  const state = page.getByRole('checkbox', { name: "Show the asset's state, as it is when printed" });
+  await expect(state).toHaveCount(0);
+  await page.getByRole('radio', { name: "Each asset's icon" }).check();
+  await state.check();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect.poll(async () => (await api.call('GET', `/templates/${template.id}`)).template.elements).toMatchObject([
+    { type: 'icon', icon: '{{asset.icon}}', state: true },
+  ]);
 });

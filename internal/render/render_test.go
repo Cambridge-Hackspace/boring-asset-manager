@@ -989,6 +989,31 @@ func TestIconElements(t *testing.T) {
 	if s, err := Layout(doc(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"gone"}`), testData, memImages{}); err != nil || len(s.Items) != 1 {
 		t.Errorf("unknown: %v", err)
 	}
+
+	// an asset in a state: drawn as the variant only when asked
+	down := testData
+	down.StateIcon = "switch-poe-down"
+	drawn := func(element string, data labels.Data) []byte {
+		t.Helper()
+		s, err := Layout(doc(element), data, memImages{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s.Raster(false).Pix
+	}
+	variant := drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"switch-poe-down"}`, testData)
+	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","state":true}`, down), variant) {
+		t.Error("state: not drawn as the variant")
+	}
+	if !bytes.Equal(drawn(el, down), shaded.Raster(false).Pix) {
+		t.Error("no state: not drawn as the plain icon")
+	}
+	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","state":true}`, testData), shaded.Raster(false).Pix) {
+		t.Error("state, in none: not drawn as the plain icon")
+	}
+	if bytes.Equal(variant, shaded.Raster(false).Pix) {
+		t.Error("the variant draws as the plain icon")
+	}
 }
 
 func TestGray(t *testing.T) {

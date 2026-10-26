@@ -559,6 +559,9 @@ type assetContext struct {
 	suggestions map[string][]string
 	// iconNames holds the names the current build draws, once read.
 	iconNames map[string]bool
+	// iconVariants maps each state to the variant it is drawn with, once
+	// read.
+	iconVariants map[string]string
 }
 
 // contextTraits returns the category traits, reading them the first time.

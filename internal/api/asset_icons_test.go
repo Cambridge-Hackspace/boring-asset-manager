@@ -386,3 +386,124 @@ func TestLabelsDrawIcons(t *testing.T) {
 		t.Errorf("an asset's: %s", rec.Body)
 	}
 }
+
+// An asset's icon shows its state, by the variants chosen under Icons; a
+// label shows it only when asked, and a copy takes the plain icon.
+func TestIconStatesThroughTheAPI(t *testing.T) {
+	requireIcons(t)
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ctx := t.Context()
+	if _, save, err := srv.store.CreateIconLibraryFile(ctx, srv.icons, "state.ilx",
+		`axis "state" { variant "down" { part "flag" { tile 0 0 1 0.6 0.6 fill="accent" } } }`); err != nil || !save.Published {
+		t.Fatalf("%+v %v", save, err)
+	}
+	tools, err := srv.store.CreateCategoryFrom(store.CategoryInput{Name: "Tools", ColorHex: "#336699"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if save, err := srv.store.SaveCategoryIcon(ctx, srv.icons, tools.ID, "drill",
+		`icon "drill" { category "tools"; footprint 1 1 1; axes "state"; part "box" { box 0 0 0 1 1 1 } }`); err != nil || !save.Published {
+		t.Fatalf("%+v %v", save, err)
+	}
+
+	type states struct {
+		States   []string          `json:"states"`
+		Variants map[string]string `json:"variants"`
+		Starter  string            `json:"starter"`
+	}
+	var got states
+	decodeBody(t, doJSON(t, srv, cookie, "GET", "/api/v1/icons/states", "").Body.Bytes(), &got)
+	if len(got.States) != 6 || got.States[0] != models.IconStateOutOfService || got.Variants[models.IconStateOutOfService] != "down" ||
+		!strings.Contains(got.Starter, `variant "down"`) {
+		t.Errorf("the defaults: %+v", got)
+	}
+	if rec := doJSON(t, srv, cookie, "PUT", "/api/v1/icons/states", `{"variants":{"broken":"down"}}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("an unknown state: %d %s", rec.Code, rec.Body)
+	}
+
+	own := "drill"
+	drill, err := srv.store.CreateAssetWithIcon("Drill", []string{tools.ID}, nil, nil, nil, own)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := drill.Asset.ID
+	if rec := doJSON(t, srv, cookie, "PUT", "/api/v1/assets/"+id+"/condition", `{"condition":"out_of_service","note":"smoking"}`); rec.Code != http.StatusOK {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	var a assetAnswer
+	decodeBody(t, doJSON(t, srv, cookie, "GET", "/api/v1/assets/"+id, "").Body.Bytes(), &a)
+	if ic := a.Asset.ResolvedIcon; ic == nil || ic.Name != "drill-down" || ic.Base != "drill" || ic.State != models.IconStateOutOfService || ic.Variant != "down" {
+		t.Errorf("out of service: %+v", ic)
+	}
+	var copied struct {
+		Copy AssetCopy `json:"copy"`
+	}
+	decodeBody(t, doJSON(t, srv, cookie, "GET", "/api/v1/assets/"+id+"/copy", "").Body.Bytes(), &copied)
+	if copied.Copy.IconName != "drill" {
+		t.Errorf("a copy takes %q", copied.Copy.IconName)
+	}
+	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/templates/preview-data", `{"asset_id":"`+id+`"}`); !strings.Contains(rec.Body.String(), `"icon":"drill"`) ||
+		!strings.Contains(rec.Body.String(), `"state_icon":"drill-down"`) {
+		t.Errorf("preview data: %s", rec.Body)
+	}
+
+	label := func(state bool) []byte {
+		t.Helper()
+		el := map[string]any{"type": "icon", "x": 0, "y": 0, "width": 20, "height": 20, "icon": "{{asset.icon}}", "state": state}
+		body, _ := json.Marshal(map[string]any{"name": "Tool", "units": "mm", "width": 20, "height": 20, "dpi": 203, "layering": "list", "elements": []any{el}})
+		rec := doJSON(t, srv, cookie, "POST", "/api/v1/templates", string(body))
+		var created struct {
+			Template struct {
+				ID string `json:"id"`
+			} `json:"template"`
+		}
+		decodeBody(t, rec.Body.Bytes(), &created)
+		rec = doJSON(t, srv, cookie, "GET", "/api/v1/assets/"+id+"/label?format=png&template_id="+created.Template.ID, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%d %s", rec.Code, rec.Body)
+		}
+		return rec.Body.Bytes()
+	}
+	withState, without := label(true), label(false)
+	if bytes.Equal(withState, without) {
+		t.Error("the label drew the state either way")
+	}
+
+	// with no variant for out of service, it is drawn plain everywhere
+	decodeBody(t, doJSON(t, srv, cookie, "PUT", "/api/v1/icons/states", `{"variants":{"needs_maintenance":"down"}}`).Body.Bytes(), &got)
+	if got.Variants[models.IconStateOutOfService] != "" || got.Variants[models.IconStateNeedsMaintenance] != "down" {
+		t.Errorf("chosen: %+v", got)
+	}
+	var plain assetAnswer
+	decodeBody(t, doJSON(t, srv, cookie, "GET", "/api/v1/assets/"+id, "").Body.Bytes(), &plain)
+	if ic := plain.Asset.ResolvedIcon; ic == nil || ic.Name != "drill" || ic.State != "" {
+		t.Errorf("no variant: %+v", ic)
+	}
+	if !bytes.Equal(label(true), without) {
+		t.Error("a label of an asset in no state drawn differs")
+	}
+
+	// an assistant chooses them back, and sees the asset drawn down
+	cs := mcpSession(t, srv, tokenWith(t, srv, admin.ID, "assistant", rbac.PermAssetsRead, rbac.PermIconsManage))
+	if res := callTool(t, cs, "set_icon_states", map[string]any{"variants": map[string]string{"out_of_service": "down"}}); res.IsError {
+		t.Fatalf("set: %s", toolText(res))
+	}
+	var overview struct {
+		States   []string          `json:"states"`
+		Variants map[string]string `json:"state_variants"`
+	}
+	structured(t, callTool(t, cs, "icons_overview", map[string]any{}), &overview)
+	if len(overview.States) != 6 || overview.Variants[models.IconStateOutOfService] != "down" || overview.Variants[models.IconStateNeedsMaintenance] != "" {
+		t.Errorf("overview: %+v", overview)
+	}
+	var view struct {
+		Icon struct {
+			Name, Base, State string
+		} `json:"icon"`
+	}
+	structured(t, callTool(t, cs, "get_asset", map[string]any{"asset": id}), &view)
+	if view.Icon.Name != "drill-down" || view.Icon.Base != "drill" || view.Icon.State != models.IconStateOutOfService {
+		t.Errorf("get_asset: %+v", view.Icon)
+	}
+}
