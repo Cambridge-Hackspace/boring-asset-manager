@@ -172,7 +172,8 @@ func findingTools() []tool {
 			Name: "get_scene",
 			Description: "What is in a location, as its scene lays it out: each asset in it directly, where it stands on the floor in tiles " +
 				"(x, y, z, and the room it takes, size), its code, condition, icon, and how many things are in it (holds), drawn back to front; " +
-				"and the way down to the location, outermost first. Contents laid out in rows, by name, unless placed.",
+				"and the way down to the location, outermost first. Contents are packed in rows, by name, around those placed (arranged); " +
+				"overlaps lists the IDs of the others one shares space with.",
 			Annotations: readOnly("Get a scene"),
 		}, []string{"GET /api/v1/assets/{id}/scene"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in assetIn) (reply[map[string]any], error) {
 			id, err := e.assetID(ctx, in.Asset)
@@ -195,6 +196,54 @@ func findingTools() []tool {
 			}
 			loc, _ := out["location"].(map[string]any)
 			return say(out, "%d things in %v.", len(items), loc["name"])
+		}),
+		define(&mcp.Tool{
+			Name: "place_asset",
+			Description: "Place an asset in its location's scene, x, y and z tiles from the floor's corner (get_scene), " +
+				"or with clear, leave it to be packed with the rest again. Things may be placed on others, or even through them; " +
+				"get_scene says what overlaps. Answers with the scene.",
+			Annotations: changes("Place an asset", true),
+		}, []string{"PUT /api/v1/assets/{id}/placement", "DELETE /api/v1/assets/{id}/placement"}, []string{rbac.PermAssetsWrite}, func(ctx context.Context, e *env, in struct {
+			Asset string  `json:"asset" jsonschema:"the asset's ID, or one of its codes"`
+			X     float64 `json:"x,omitempty" jsonschema:"tiles along the floor's width"`
+			Y     float64 `json:"y,omitempty" jsonschema:"tiles along the floor's depth"`
+			Z     float64 `json:"z,omitempty" jsonschema:"tiles above the floor"`
+			Clear bool    `json:"clear,omitempty" jsonschema:"pack it with the rest again"`
+		}) (reply[map[string]any], error) {
+			id, err := e.assetID(ctx, in.Asset)
+			if err != nil {
+				return reply[map[string]any]{}, err
+			}
+			out := map[string]any{}
+			if in.Clear {
+				err = e.call(ctx, http.MethodDelete, assetPath(id, "/placement"), nil, &out)
+			} else {
+				err = e.call(ctx, http.MethodPut, assetPath(id, "/placement"), map[string]any{"x": in.X, "y": in.Y, "z": in.Z}, &out)
+			}
+			if err != nil {
+				return reply[map[string]any]{}, err
+			}
+			delete(out, "viewbox")
+			var overlaps []any
+			items, _ := out["items"].([]any)
+			for _, it := range items {
+				if m, ok := it.(map[string]any); ok {
+					delete(m, "tx")
+					delete(m, "ty")
+					delete(m, "shapes")
+					if m["id"] == id {
+						overlaps, _ = m["overlaps"].([]any)
+					}
+				}
+			}
+			loc, _ := out["location"].(map[string]any)
+			if in.Clear {
+				return say(out, "Packed with the rest in %v again.", loc["name"])
+			}
+			if len(overlaps) > 0 {
+				return say(out, "Placed in %v at %v, %v, %v; it overlaps %d other things.", loc["name"], in.X, in.Y, in.Z, len(overlaps))
+			}
+			return say(out, "Placed in %v at %v, %v, %v.", loc["name"], in.X, in.Y, in.Z)
 		}),
 		define(&mcp.Tool{
 			Name: "look_up_code",

@@ -88,3 +88,78 @@ test('a location is seen from inside, things in it chosen, entered, and one show
   await page.getByRole('button', { name: `${chair.name}, out of service` }).dispatchEvent('dblclick');
   await expect(page).toHaveURL(new RegExp(`/assets/${chair.id}$`));
 });
+
+test('a location is arranged: things dragged, nudged, lifted, flagged where they overlap, and put back', async ({ signedIn: page, api }) => {
+  const { category: rooms } = await api.call('POST', '/categories', { name: unique('Rooms') });
+  const room = unique('room').toLowerCase();
+  await api.call('PUT', `/categories/${rooms.id}/icon`, { icon_name: room, source: `icon "${room}" { category "places"; footprint 4 3 2; part "floor" { tile 0 0 0 4 3 } }` });
+  const lab = (await api.call('POST', '/assets', { name: unique('Lab'), category_ids: [rooms.id] })).asset.asset;
+  const bench = (await api.call('POST', '/assets', { name: unique('Bench') })).asset.asset;
+  const crate = (await api.call('POST', '/assets', { name: unique('Crate') })).asset.asset;
+  const { relation_types } = await api.call('GET', '/relation-types');
+  const contains = (relation_types as { id: string; name: string }[]).find((t) => t.name === 'contains')!;
+  for (const id of [bench.id, crate.id]) await api.call('POST', `/assets/${lab.id}/links`, { type_id: contains.id, asset_id: id, outgoing: true });
+  const where = async (id: string) => {
+    const scene = await api.call('GET', `/assets/${lab.id}/scene`);
+    const it = (scene.items as { id: string; x: number; y: number; z: number; arranged?: boolean }[]).find((i) => i.id === id)!;
+    return `${it.x},${it.y},${it.z}${it.arranged ? '' : ' packed'}`;
+  };
+
+  await page.goto(`/assets/${lab.id}/scene`);
+  const drawing = page.locator('svg[aria-label$="drawn where they stand"]');
+  const crateItem = page.getByRole('button', { name: crate.name });
+  await expect(crateItem).toBeVisible();
+  expect(await where(crate.id)).toBe('1,0,0 packed');
+  const arrange = page.getByRole('button', { name: 'Arrange' });
+  await arrange.click();
+  await expect(arrange).toHaveAttribute('aria-pressed', 'true');
+
+  // dragged two tiles along the floor's depth: down and to the left
+  const scale = await drawing.evaluate((svg) => (svg as SVGSVGElement).getScreenCTM()!.a);
+  const box = (await crateItem.boundingBox())!;
+  const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx - 2 * 34.641 * scale, cy + 2 * 20 * scale, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(() => where(crate.id)).toBe('1,2,0');
+  const chosen = page.getByRole('complementary', { name: 'Chosen' });
+  await expect(chosen.locator('[data-at]')).toHaveText('1, 2, 0');
+
+  // the keyboard nudges it a tile, and lifts it a step
+  await crateItem.focus();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('PageUp');
+  await expect.poll(() => where(crate.id)).toBe('0,2,0.25');
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(' ')).join('; ')})`)).toEqual([]);
+
+  // its handle lifts it a tile
+  const handle = (await page.locator('[data-lift] circle').boundingBox())!;
+  const [hx, hy] = [handle.x + handle.width / 2, handle.y + handle.height / 2];
+  await page.mouse.move(hx, hy);
+  await page.mouse.down();
+  await page.mouse.move(hx, hy - 40 * scale, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => where(crate.id)).toBe('0,2,1.25');
+
+  // put where the crate is, the bench overlaps it: both are flagged
+  await api.call('PUT', `/assets/${bench.id}/placement`, { x: 0, y: 2, z: 1 });
+  await page.reload();
+  await expect(page.locator(`[data-overlap="${crate.id}"]`)).toBeVisible();
+  await expect(page.locator(`[data-overlap="${bench.id}"]`)).toBeVisible();
+  await page.getByRole('button', { name: crate.name }).focus();
+  await expect(chosen).toContainText(`Overlaps ${bench.name}.`);
+
+  // put back, it is packed with the rest again
+  await page.getByRole('button', { name: 'Arrange' }).click();
+  await chosen.getByRole('button', { name: 'Put back' }).click();
+  await expect(chosen.locator('[data-at]')).toContainText('packed with the rest');
+  expect(await where(crate.id)).toContain('packed');
+  await expect(page.locator(`[data-overlap="${crate.id}"]`)).toHaveCount(0);
+
+  // and its history says where it went
+  await page.goto(`/assets/${crate.id}`);
+  await expect(page.getByText(`Moved in ${lab.name}: 1, 2, 0 → 0, 2, 0.25`)).toBeVisible();
+  await expect(page.getByText(`Put back with the rest in ${lab.name}`)).toBeVisible();
+});

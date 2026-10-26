@@ -227,6 +227,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/assets/import", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImport)))
 	handle("POST /api/v1/assets", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleCreateAsset)))
 	handle("GET /api/v1/assets/{id}/scene", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetScene)))
+	handle("PUT /api/v1/assets/{id}/placement", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handlePlaceAsset)))
+	handle("DELETE /api/v1/assets/{id}/placement", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handlePlaceAsset)))
 	handle("GET /api/v1/assets/{id}/copy", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleCopyAsset)))
 	handle("GET /api/v1/assets/{id}", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetAsset))))
 	handle("PUT /api/v1/assets/{id}", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUpdateAsset)))

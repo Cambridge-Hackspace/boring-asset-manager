@@ -30,24 +30,30 @@ func P(x, y, z float64) (float64, float64) {
 }
 
 // Item is something in the location: its footprint in tiles, width,
-// depth and height, zero for none (drawn as a box of one tile).
+// depth and height, zero for none (drawn as a box of one tile), and At,
+// where someone placed it, if they did.
 type Item struct {
 	ID, Name string
 	Size     [3]float64
+	At       *[3]float64
 }
 
 // Placed is an item where it stands: its corner nearest the floor's
 // origin at X, Y, Z in tiles, the space it takes, Size, and where its
-// icon is drawn, translated to TX, TY.
+// icon is drawn, translated to TX, TY. Arranged is set when it stands
+// where someone placed it, rather than where it was packed, and Overlaps
+// lists the items it shares space with, by name and then ID.
 type Placed struct {
-	ID     string     `json:"id"`
-	X      float64    `json:"x"`
-	Y      float64    `json:"y"`
-	Z      float64    `json:"z"`
-	Size   [3]float64 `json:"size"`
-	TX     float64    `json:"tx"`
-	TY     float64    `json:"ty"`
-	center float64
+	ID       string     `json:"id"`
+	X        float64    `json:"x"`
+	Y        float64    `json:"y"`
+	Z        float64    `json:"z"`
+	Size     [3]float64 `json:"size"`
+	TX       float64    `json:"tx"`
+	TY       float64    `json:"ty"`
+	Arranged bool       `json:"arranged,omitempty"`
+	Overlaps []string   `json:"overlaps,omitempty"`
+	center   float64
 }
 
 // Scene is a location laid out: its floor, Width by Depth tiles, the
@@ -59,10 +65,12 @@ type Scene struct {
 	Viewbox [4]float64 `json:"viewbox"`
 }
 
-// Layout packs items onto a floor in rows, by name and then ID: as wide as
-// floor's width when it is given, and otherwise near square, but never
-// narrower than the widest item; and as deep as it is given or the rows
-// take. Each takes whole tiles, its footprint rounded up.
+// Layout lays items out on a floor. Those placed stand where they were
+// placed. The rest are packed in rows, by name and then ID, around them:
+// as wide as floor's width when it is given, and otherwise near square,
+// but never narrower than the widest item; and as deep as it is given or
+// the rows take. The floor grows to take anything placed beyond it. Each
+// takes whole tiles, its footprint rounded up.
 func Layout(floor *[3]float64, items []Item) Scene {
 	sorted := append([]Item(nil), items...)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -77,6 +85,12 @@ func Layout(floor *[3]float64, items []Item) Scene {
 			return 1
 		}
 		return math.Ceil(v - 1e-9)
+	}
+	at := func(v float64) float64 {
+		if !(v > 0) || math.IsInf(v, 0) {
+			return 0
+		}
+		return v
 	}
 	var width, depth, area, widest float64
 	sizes := make([][3]float64, len(sorted))
@@ -97,13 +111,44 @@ func Layout(floor *[3]float64, items []Item) Scene {
 	width = math.Max(width, widest)
 
 	placed := make([]Placed, len(sorted))
+	// taken is the floor space placed items stand over, at any height
+	var taken []Placed
+	for i, it := range sorted {
+		if it.At == nil {
+			continue
+		}
+		p := Placed{ID: it.ID, X: at(it.At[0]), Y: at(it.At[1]), Z: at(it.At[2]), Size: sizes[i], Arranged: true}
+		placed[i] = p
+		taken = append(taken, p)
+		width = math.Max(width, math.Ceil(p.X+p.Size[0]-1e-9))
+		depth = math.Max(depth, math.Ceil(p.Y+p.Size[1]-1e-9))
+	}
+	free := func(x, y, w, d float64) bool {
+		for _, o := range taken {
+			if x < o.X+o.Size[0]-1e-9 && o.X < x+w-1e-9 && y < o.Y+o.Size[1]-1e-9 && o.Y < y+d-1e-9 {
+				return false
+			}
+		}
+		return true
+	}
 	var x, y, row float64
 	for i, it := range sorted {
+		if it.At != nil {
+			continue
+		}
 		w, d := sizes[i][0], sizes[i][1]
-		if x > 0 && x+w > width {
-			x, y, row = 0, y+row, 0
+		for {
+			if x > 0 && x+w > width {
+				x, y, row = 0, y+math.Max(row, 1), 0
+				continue
+			}
+			if free(x, y, w, d) {
+				break
+			}
+			x++
 		}
 		placed[i] = Placed{ID: it.ID, X: x, Y: y, Size: sizes[i]}
+		taken = append(taken, placed[i])
 		x += w
 		row = math.Max(row, d)
 	}
@@ -111,7 +156,25 @@ func Layout(floor *[3]float64, items []Item) Scene {
 	if width == 0 && depth == 0 {
 		width, depth = 1, 1
 	}
+	for i := range placed {
+		for j := range placed {
+			if i != j && overlap(placed[i], placed[j]) {
+				placed[i].Overlaps = append(placed[i].Overlaps, placed[j].ID)
+			}
+		}
+	}
 	return finish([2]float64{width, depth}, placed)
+}
+
+// overlap says whether two items share space: more than a face.
+func overlap(a, b Placed) bool {
+	const e = 1e-9
+	for k, c := range [3][2]float64{{a.X, b.X}, {a.Y, b.Y}, {a.Z, b.Z}} {
+		if c[0]+a.Size[k] <= c[1]+e || c[1]+b.Size[k] <= c[0]+e {
+			return false
+		}
+	}
+	return true
 }
 
 // finish orders placed items back to front and works out where each is

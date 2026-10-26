@@ -197,7 +197,7 @@ export interface AssetEvent {
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo';
+  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo' | 'place';
   key?: string;
   label?: string;
   from?: string;

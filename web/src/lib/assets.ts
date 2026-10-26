@@ -217,6 +217,9 @@ export function describeChange(c: AssetChange, kind: string): string {
     case 'icon':
       if (!c.to) return `Own icon ${c.from} dropped: drawn with its categories' again`;
       return fromTo('Own icon', c);
+    case 'place':
+      if (!c.to) return `Put back with the rest in ${c.label}`;
+      return c.from ? `Moved in ${c.label}: ${c.from} → ${c.to}` : `Placed in ${c.label} at ${c.to}`;
     case 'link': {
       const label = c.label ?? 'linked to';
       return c.to ? `${capitalized(label)} ${c.to}` : `No longer ${label} ${c.from}`;

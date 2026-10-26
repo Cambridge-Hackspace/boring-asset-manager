@@ -204,6 +204,14 @@ describe('icons in history', () => {
   });
 });
 
+describe('placements in history', () => {
+  it('says where a thing was placed, moved or put back', () => {
+    expect(describeChange({ what: 'place', label: 'Lab', to: '1, 2, 0' }, 'asset.edited')).toBe('Placed in Lab at 1, 2, 0');
+    expect(describeChange({ what: 'place', label: 'Lab', from: '1, 2, 0', to: '0, 2, 0.25' }, 'asset.edited')).toBe('Moved in Lab: 1, 2, 0 → 0, 2, 0.25');
+    expect(describeChange({ what: 'place', label: 'Lab', from: '1, 2, 0' }, 'asset.edited')).toBe('Put back with the rest in Lab');
+  });
+});
+
 describe('photos in history', () => {
   it('names the photo added or removed', () => {
     expect(describeChange({ what: 'photo', key: 'p1', to: 'front.jpg' }, 'asset.edited')).toBe('Photo added: front.jpg');

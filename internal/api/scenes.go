@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 
@@ -56,6 +58,8 @@ type SceneItem struct {
 	Shapes    []ir.Shape           `json:"shapes,omitempty"`
 	// Holds is how many things are in it, to look inside.
 	Holds int `json:"holds"`
+	// Movable is set when the caller may arrange it.
+	Movable bool `json:"movable,omitempty"`
 }
 
 // SceneResponse is a location's scene: the location, the way down to it,
@@ -107,9 +111,19 @@ func (s *Server) handleAssetScene(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.writeScene(w, r, a)
+}
+
+// writeScene answers with a location's scene, as the caller may see it.
+func (s *Server) writeScene(w http.ResponseWriter, r *http.Request, a *models.AssetWithDetails) {
 	contents, err := s.store.FilterAssets(store.AssetFilter{Within: a.Asset.ID})
 	if err != nil {
 		writeServerError(w, err, "read what is in it")
+		return
+	}
+	placements, err := s.store.Placements(a.Asset.ID)
+	if err != nil {
+		writeServerError(w, err, "read where things stand")
 		return
 	}
 	icons, err := s.builtIcons()
@@ -129,6 +143,9 @@ func (s *Server) handleAssetScene(w http.ResponseWriter, r *http.Request) {
 		if f := footprint(icons, c.ResolvedIcon); f != nil {
 			item.Size = *f
 		}
+		if at, ok := placements[c.Asset.ID]; ok {
+			item.At = &at
+		}
 		items = append(items, item)
 	}
 	laid := scene.Layout(footprint(icons, a.ResolvedIcon), items)
@@ -140,11 +157,61 @@ func (s *Server) handleAssetScene(w http.ResponseWriter, r *http.Request) {
 	out.Items = make([]SceneItem, 0, len(laid.Items))
 	for _, p := range laid.Items {
 		c := byID[p.ID]
-		item := SceneItem{Placed: p, Name: c.Asset.Name, Code: firstCode(c), Condition: c.Asset.Condition, Icon: c.ResolvedIcon, Holds: c.Holds}
+		item := SceneItem{Placed: p, Name: c.Asset.Name, Code: firstCode(c), Condition: c.Asset.Condition, Icon: c.ResolvedIcon, Holds: c.Holds,
+			Movable: Allows(r.Context(), rbac.PermAssetsWrite, c.Scopes)}
 		if footprint(icons, c.ResolvedIcon) == nil {
 			item.Shapes = scene.Box(p.Size)
 		}
 		out.Items = append(out.Items, item)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// PlacementRequest places an asset in a location's scene, at X, Y and Z in
+// tiles from the floor's corner: in the location In, or with none, the
+// one it was put in first.
+type PlacementRequest struct {
+	In string  `json:"in,omitempty"`
+	X  float64 `json:"x"`
+	Y  float64 `json:"y"`
+	Z  float64 `json:"z"`
+}
+
+// PUT /api/v1/assets/{id}/placement: place an asset where it stands in
+// its location's scene; DELETE leaves it to be packed again (?in= names
+// the location). Either answers with the location's scene.
+func (s *Server) handlePlaceAsset(w http.ResponseWriter, r *http.Request) {
+	var at *[3]float64
+	in := r.URL.Query().Get("in")
+	if r.Method == http.MethodPut {
+		var req PlacementRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "x, y and z are required")
+			return
+		}
+		at, in = &[3]float64{req.X, req.Y, req.Z}, req.In
+	}
+	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
+		return
+	}
+	placeID, err := s.actingStore(r).PlaceAsset(r.PathValue("id"), in, at)
+	switch {
+	case errors.Is(err, store.ErrAssetNotFound):
+		writeJSONError(w, http.StatusNotFound, "Asset not found")
+		return
+	case errors.Is(err, store.ErrInvalidPlacement):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	case errors.Is(err, store.ErrNotInLocation), errors.Is(err, store.ErrAssetArchived):
+		writeJSONError(w, http.StatusConflict, err.Error())
+		return
+	case err != nil:
+		writeStoreError(w, err, "place the asset")
+		return
+	}
+	place, ok := s.assetFor(w, r, placeID, rbac.PermAssetsRead)
+	if !ok {
+		return
+	}
+	s.writeScene(w, r, place)
 }
