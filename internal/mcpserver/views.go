@@ -87,6 +87,10 @@ type iconView struct {
 	Category *ref   `json:"category,omitempty" jsonschema:"the category it gets its icon from"`
 	Missing  bool   `json:"missing,omitempty" jsonschema:"set when no icon is drawn by this name any more, so the unknown icon is drawn"`
 	Color    string `json:"color,omitempty" jsonschema:"the color the icon's category token paints in"`
+	// Base and State are set when Name is the variant of Base its state is
+	// drawn with.
+	Base  string `json:"base,omitempty" jsonschema:"the icon this is the variant of, when the asset's state is drawn with one"`
+	State string `json:"state,omitempty" jsonschema:"the state the variant shows: out_of_service, needs_maintenance, overdue, on_loan, out_of_stock or low_stock"`
 }
 
 type photoView struct {
@@ -176,7 +180,7 @@ func (e *env) detail(ctx context.Context, a *models.AssetWithDetails) (assetDeta
 		d.Actions = append(d.Actions, actionView{Key: o.Key, Label: o.Label, Confirm: o.Confirm})
 	}
 	if ic := a.ResolvedIcon; ic != nil {
-		d.Icon = &iconView{Name: ic.Name, Own: ic.From == models.IconFromAsset, Missing: ic.Missing, Color: ic.Color}
+		d.Icon = &iconView{Name: ic.Name, Own: ic.From == models.IconFromAsset, Missing: ic.Missing, Color: ic.Color, Base: ic.Base, State: ic.State}
 		if ic.SourceCategoryID != "" {
 			d.Icon.Category = &ref{ID: ic.SourceCategoryID, Name: ic.SourceCategoryName}
 		}

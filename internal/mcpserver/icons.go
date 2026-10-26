@@ -77,23 +77,28 @@ func iconTools() []tool {
 	icons := []string{rbac.PermIconsManage}
 	return []tool{
 		define(&mcp.Tool{Name: "icons_overview", Description: "How icons stand: whether this server can compile them, the current build (its icons, by name and isolex category, and its warnings), " +
-			"the palette (the tokens icons may paint with, besides category, which paints in the category's color) and the lexicon settings. " +
+			"the palette (the tokens icons may paint with, besides category, which paints in the category's color), the lexicon settings, " +
+			"and the variant each asset state is drawn with (an asset in a state is drawn as <icon>-<variant> when the build draws that). " +
 			"Icons are written in isolex, a KDL 2.0 language for isometric icons; the guide resource explains how bam uses it.",
 			Annotations: readOnly("Icons overview")},
-			[]string{"GET /api/v1/icons", "GET /api/v1/icons/palette", "GET /api/v1/icons/settings"}, read,
+			[]string{"GET /api/v1/icons", "GET /api/v1/icons/palette", "GET /api/v1/icons/settings", "GET /api/v1/icons/states"}, read,
 			func(ctx context.Context, e *env, _ none) (reply[map[string]any], error) {
 				out := map[string]any{}
 				if err := e.call(ctx, http.MethodGet, "/api/v1/icons", nil, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}
-				var palette, settings map[string]any
+				var palette, settings, states map[string]any
 				if err := e.call(ctx, http.MethodGet, "/api/v1/icons/palette", nil, &palette); err != nil {
 					return reply[map[string]any]{}, err
 				}
 				if err := e.call(ctx, http.MethodGet, "/api/v1/icons/settings", nil, &settings); err != nil {
 					return reply[map[string]any]{}, err
 				}
+				if err := e.call(ctx, http.MethodGet, "/api/v1/icons/states", nil, &states); err != nil {
+					return reply[map[string]any]{}, err
+				}
 				out["palette"], out["settings"] = palette["palette"], settings["settings"]
+				out["state_variants"], out["states"] = states["variants"], states["states"]
 				// for pages to draw; draw_icon draws it for an assistant
 				delete(out, "unknown")
 				build, _ := out["build"].(map[string]any)
@@ -319,7 +324,19 @@ func iconTools() []tool {
 				return request{path: "/api/v1/icons/settings", body: in}, nil
 			},
 			func(models.IconSettings, map[string]any) string { return "Saved the icon settings." }),
+		simple(&mcp.Tool{Name: "set_icon_states", Description: "Replace the variant each asset state is drawn with: out_of_service, needs_maintenance, overdue, on_loan, out_of_stock and low_stock, " +
+			"worst first. An asset in a state is drawn as <icon>-<variant>, an isolex axis variant, when the build draws it, and as its plain icon otherwise; " +
+			"one in several states shows the worst its icon has. An empty variant, or a state left out, draws none.",
+			Annotations: changes("Set the icon states", true)}, "PUT /api/v1/icons/states", icons,
+			func(in iconStatesIn) (request, error) {
+				return request{path: "/api/v1/icons/states", body: in}, nil
+			},
+			func(iconStatesIn, map[string]any) string { return "Saved the icon states." }),
 	}
+}
+
+type iconStatesIn struct {
+	Variants map[string]string `json:"variants" jsonschema:"each state's variant name by state, such as down for out_of_service"`
 }
 
 type drawIconIn struct {

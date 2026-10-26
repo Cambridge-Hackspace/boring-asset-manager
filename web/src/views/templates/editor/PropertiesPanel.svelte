@@ -371,12 +371,19 @@
         </label>
         {#if !own && !pickingIcon}<button type="button" class="underline" onclick={() => (pickingIcon = true)}>Choose another…</button>{/if}
       </fieldset>
+      {#if own}
+        <label class="flex items-start gap-1 text-xs" title="A label outlives the state it was printed in">
+          <input type="checkbox" class="mt-0.5" checked={!!e.state} onchange={(ev) => update(withProp(e, 'state', ev.currentTarget.checked || undefined))} />
+          <span>Show the asset's state, as it is when printed</span>
+        </label>
+      {/if}
       {#if pickingIcon}
         <IconPicker
           value={own ? '' : (e.icon ?? '')}
           onpick={(name) => {
             pickingIcon = false;
-            set('icon', name);
+            // one icon has no state to show
+            update(withProp(withProp(e, 'icon', name), 'state', undefined));
           }}
           onclose={() => (pickingIcon = false)}
         />

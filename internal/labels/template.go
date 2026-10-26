@@ -304,9 +304,13 @@ type Element struct {
 	ImageID string `json:"image_id,omitempty"`
 	// icon: IconOfAsset, or an icon's name; and Shading, ShadingShaded (or
 	// empty) or ShadingOutline. Align places it across its box, centered
-	// when empty, and Mirror flips it as it does an image.
+	// when empty, and Mirror flips it as it does an image. State draws the
+	// asset's icon as the variant its state is drawn with, if it has one,
+	// as the label is printed; a label outlives its asset's state, so it
+	// is drawn without unless asked.
 	Icon    string `json:"icon,omitempty"`
 	Shading string `json:"shading,omitempty"`
+	State   bool   `json:"state,omitempty"`
 	// Mirror flips the element in its box, before it is turned: across
 	// (left for right), down (top for bottom) or both. A mirrored code does
 	// not scan from the side the label is read from.
@@ -650,7 +654,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"d":             e.D != "",
 		"fill_rule":     e.FillRule != "",
 	}
-	iconProps := map[string]bool{"icon": e.Icon != "", "shading": e.Shading != ""}
+	iconProps := map[string]bool{"icon": e.Icon != "", "shading": e.Shading != "", "state": e.State}
 	textProps := map[string]bool{
 		"font_size":     e.FontSize != 0,
 		"font_weight":   e.FontWeight != "",
@@ -758,6 +762,9 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		}
 		if e.Shading != "" && e.Shading != ShadingShaded && e.Shading != ShadingOutline {
 			v.add(at("shading"), `must be "shaded" or "outline"`)
+		}
+		if e.State && e.Icon != IconOfAsset {
+			v.add(at("state"), `shows the state of the asset's icon only: icon must be "`+IconOfAsset+`"`)
 		}
 		if e.Align != "" && e.Align != AlignLeft && e.Align != AlignCenter && e.Align != AlignRight {
 			v.add(at("align"), `must be "left", "center" or "right"`)
