@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeItem, gridLines, hull, panBy, project, zoomAt, type ViewBox } from './scene';
+import { describeItem, floorDelta, gridLines, hull, liftTo, moveTo, overlapNote, position, panBy, project, zoomAt, type ViewBox } from './scene';
 
 describe('scenes', () => {
   it('projects as isolex does', () => {
@@ -36,5 +36,40 @@ describe('scenes', () => {
   it('says what an item is', () => {
     expect(describeItem({ name: 'Web', code: 'SRV-1', condition: 'out_of_service', holds: 0 })).toBe('Web, SRV-1, out of service');
     expect(describeItem({ name: 'Rack', condition: 'ok', holds: 3 })).toBe('Rack, holds 3');
+  });
+
+  it('turns a move across the page into tiles across the floor', () => {
+    const [dx, dy] = project(2, 1, 0);
+    const [x, y] = floorDelta(dx, dy);
+    expect(x).toBeCloseTo(2);
+    expect(y).toBeCloseTo(1);
+  });
+
+  it('moves onto whole tiles, on the floor', () => {
+    const item = { size: [2, 1, 1] as [number, number, number] };
+    expect(moveTo(item, [1, 1], 0.6, -0.4, [4, 3])).toEqual([2, 1]);
+    expect(moveTo(item, [1, 1], 5, 5, [4, 3])).toEqual([2, 2]);
+    expect(moveTo(item, [1, 1], -5, -5, [4, 3])).toEqual([0, 0]);
+  });
+
+  it('lifts onto what is under it, or onto a step', () => {
+    const bench = { id: 'b', x: 0, y: 0, z: 0, size: [2, 1, 0.8] as [number, number, number] };
+    const far = { id: 'f', x: 3, y: 0, z: 0, size: [1, 1, 3] as [number, number, number] };
+    const box = { id: 'x', x: 1, y: 0, size: [1, 1, 1] as [number, number, number] };
+    expect(liftTo([bench, far], box, 0.85)).toBe(0.8);
+    expect(liftTo([bench, far], box, 1.4)).toBe(1.5);
+    expect(liftTo([bench, far], box, 2.95)).toBe(3);
+    expect(liftTo([bench, far], box, -1)).toBe(0);
+  });
+
+  it('says where an item stands', () => {
+    expect(position({ x: 1, y: 2, z: 0.25 })).toBe('1, 2, 0.25');
+    expect(position({ x: 0, y: 0, z: 1 / 3 })).toBe('0, 0, 0.333');
+  });
+
+  it('names what an item overlaps', () => {
+    const items = [{ id: 'a', name: 'Bench' }, { id: 'b', name: 'Crate' }];
+    expect(overlapNote({ overlaps: ['a', 'b'] }, items)).toBe('Overlaps Bench, Crate.');
+    expect(overlapNote({}, items)).toBe('');
   });
 });
