@@ -3,7 +3,9 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
@@ -80,26 +82,134 @@ func (s *Store) ShownCategoryIcons() (map[string]string, error) {
 }
 
 // contextIcon resolves the icon of an asset with its own icon own, if not
-// nil, in these categories.
-func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs []string) (*models.ResolvedIcon, error) {
+// nil, in these categories and in these states, worst first.
+func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs, states []string) (*models.ResolvedIcon, error) {
 	traits, err := s.contextTraits(ctx)
 	if err != nil {
 		return nil, err
 	}
 	icon := traits.chooseIcon(categoryIDs)
-	if own != nil {
-		if ctx.iconNames == nil {
-			if ctx.iconNames, err = s.BuiltIconNames(); err != nil {
-				return nil, err
-			}
+	if icon == nil && own == nil {
+		return nil, nil
+	}
+	if ctx.iconNames == nil {
+		if ctx.iconNames, err = s.BuiltIconNames(); err != nil {
+			return nil, err
 		}
+	}
+	if own != nil {
 		icon = &models.ResolvedIcon{Name: *own, From: models.IconFromAsset, Missing: !ctx.iconNames[*own]}
 	}
-	if icon != nil {
-		icon.Color = traits.choose(traits.colors, categoryIDs, "").TemplateID
+	icon.Color = traits.choose(traits.colors, categoryIDs, "").TemplateID
+	if icon.Missing || len(states) == 0 {
+		return icon, nil
 	}
+	if ctx.iconVariants == nil {
+		if ctx.iconVariants, err = s.IconStateVariants(); err != nil {
+			return nil, err
+		}
+	}
+	showState(icon, states, ctx.iconVariants, ctx.iconNames)
 	return icon, nil
 }
+
+// showState draws icon as the variant of the first of states, worst first,
+// that drawn draws for it, by variants; it is left as it is when none.
+func showState(icon *models.ResolvedIcon, states []string, variants map[string]string, drawn map[string]bool) {
+	for _, st := range states {
+		v := variants[st]
+		if v == "" || !drawn[icon.Name+"-"+v] {
+			continue
+		}
+		icon.Base, icon.State, icon.Variant = icon.Name, st, v
+		icon.Name += "-" + v
+		return
+	}
+}
+
+// assetStates are the states an asset is in that its icon can show, worst
+// first.
+func assetStates(d *models.AssetWithDetails) []string {
+	var in []string
+	switch d.Asset.Condition {
+	case models.ConditionOutOfService:
+		in = append(in, models.IconStateOutOfService)
+	case models.ConditionNeedsMaintenance:
+		in = append(in, models.IconStateNeedsMaintenance)
+	}
+	if l := d.Loan; l != nil {
+		if l.Overdue {
+			in = append(in, models.IconStateOverdue)
+		}
+		in = append(in, models.IconStateOnLoan)
+	}
+	if st := d.Asset.Stock; st != nil {
+		if st.Quantity <= 0 {
+			in = append(in, models.IconStateOutOfStock)
+		}
+		if st.IsRunningLow {
+			in = append(in, models.IconStateLowStock)
+		}
+	}
+	return in
+}
+
+// variantPattern is a variant's name: what isolex accepts after the '-'
+// it joins an icon's name and its variant's with.
+var variantPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,31}$`)
+
+// IconStateVariants maps each state (models.IconStates) to the variant it
+// is drawn with, "" for none: bam's defaults, but for those chosen.
+func (s *Store) IconStateVariants() (map[string]string, error) {
+	variants := make(map[string]string, len(models.IconStates))
+	for _, st := range models.IconStates {
+		variants[st] = models.DefaultIconVariants[st]
+	}
+	var stored sql.NullString
+	err := s.QueryRow(`SELECT states FROM icon_settings WHERE id = 'icons'`).Scan(&stored)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("reading icon states: %w", err)
+	}
+	if stored.Valid {
+		var chosen map[string]string
+		if err := json.Unmarshal([]byte(stored.String), &chosen); err != nil {
+			return nil, fmt.Errorf("reading icon states: %w", err)
+		}
+		for st, v := range chosen {
+			if _, known := variants[st]; known {
+				variants[st] = v
+			}
+		}
+	}
+	return variants, nil
+}
+
+// SetIconStateVariants replaces the variants states are drawn with; a state
+// left out is drawn with none. It needs no build: which icons have each
+// variant is read from the build as assets are drawn.
+func (s *Store) SetIconStateVariants(variants map[string]string) (map[string]string, error) {
+	out := make(map[string]string, len(models.IconStates))
+	for _, st := range models.IconStates {
+		out[st] = ""
+	}
+	for st, v := range variants {
+		if _, known := out[st]; !known {
+			return nil, fmt.Errorf("%w: there is no state %q", ErrInvalidIconStates, st)
+		}
+		if v != "" && !variantPattern.MatchString(v) {
+			return nil, fmt.Errorf("%w: a variant's name is 1 to 32 letters, digits, '-', '_' and '.', starting with a letter, digit or '_'", ErrInvalidIconStates)
+		}
+		out[st] = v
+	}
+	text, _ := json.Marshal(out)
+	if _, err := s.Exec(`UPDATE icon_settings SET states = ? WHERE id = 'icons'`, string(text)); err != nil {
+		return nil, fmt.Errorf("saving icon states: %w", err)
+	}
+	return out, nil
+}
+
+// ErrInvalidIconStates is a state's variant refused.
+var ErrInvalidIconStates = errors.New("invalid icon states")
 
 // MissingIcon is a name assets give themselves as their icon that the
 // current build does not draw, so they are drawn with the unknown icon.

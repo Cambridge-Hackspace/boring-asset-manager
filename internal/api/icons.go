@@ -218,6 +218,50 @@ func (s *Server) handleSetIconSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"settings": settings, "save": save})
 }
 
+// GET /api/v1/icons/states: the variant each asset state is drawn with,
+// and the states, worst first, with a library file drawing them to start
+// from.
+func (s *Server) handleIconStates(w http.ResponseWriter, r *http.Request) {
+	s.answerIconStates(w)
+}
+
+// answerIconStates answers with the states, the variants they are drawn
+// with, bam's defaults, and a library file to start drawing them from.
+func (s *Server) answerIconStates(w http.ResponseWriter) {
+	variants, err := s.store.IconStateVariants()
+	if err != nil {
+		writeServerError(w, err, "read the icon states")
+		return
+	}
+	starter, err := s.store.IconStateStarter()
+	if err != nil {
+		writeServerError(w, err, "read the icon states")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"states": models.IconStates, "variants": variants, "defaults": models.DefaultIconVariants, "starter": starter})
+}
+
+// PUT /api/v1/icons/states with {"variants": {state: variant}}; "" or a
+// state left out draws none.
+func (s *Server) handleSetIconStates(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Variants map[string]string `json:"variants"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	_, err := s.actingStore(r).SetIconStateVariants(req.Variants)
+	if errors.Is(err, store.ErrInvalidIconStates) {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		writeServerError(w, err, "change the icon states")
+		return
+	}
+	s.answerIconStates(w)
+}
+
 // GET /api/v1/category-icons
 func (s *Server) handleListCategoryIcons(w http.ResponseWriter, r *http.Request) {
 	icons, err := s.store.ListCategoryIcons()

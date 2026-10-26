@@ -138,7 +138,14 @@ export interface ResolvedIcon {
   source_category_name?: string;
   missing?: boolean;
   color?: string;
+  /** Set when name is the variant of base its state is drawn with. */
+  base?: string;
+  state?: IconState;
+  variant?: string;
 }
+
+/** The states an asset's icon can show, worst first (README §3.7). */
+export type IconState = 'out_of_service' | 'needs_maintenance' | 'overdue' | 'on_loan' | 'out_of_stock' | 'low_stock';
 
 export type Condition = 'ok' | 'needs_maintenance' | 'out_of_service';
 

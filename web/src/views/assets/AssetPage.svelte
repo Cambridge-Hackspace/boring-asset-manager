@@ -9,6 +9,7 @@
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import AssetIcon from '../../components/AssetIcon.svelte';
+  import { plainIcon, stateNote } from '../../lib/iconStates';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -322,10 +323,11 @@
           <dt class="font-medium">Icon</dt>
           <dd>
             {#if icon.from === 'asset'}
-              Its own, <span class="font-mono">{icon.name}</span>{#if icon.missing}: no icon is drawn by that name any more, so it shows as unknown{/if}.
+              Its own, <span class="font-mono">{plainIcon(icon)}</span>{#if icon.missing}: no icon is drawn by that name any more, so it shows as unknown{/if}.
             {:else}
               From <a class="underline" href="/categories/{encodeURIComponent(icon.source_category_id ?? '')}">{icon.source_category_name}</a>.
             {/if}
+            {#if stateNote(icon)}<span data-icon-state>{stateNote(icon)}</span>{/if}
           </dd>
         {/if}
         {#if asset.scopes && !(asset.scopes.length === 1 && asset.scopes[0] === DEFAULT_SCOPE)}

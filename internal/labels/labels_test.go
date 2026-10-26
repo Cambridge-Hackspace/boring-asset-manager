@@ -899,7 +899,7 @@ func TestIcons(t *testing.T) {
 	icon := func(props string) string {
 		return `{"type":"icon","x":0,"y":0,"width":10,"height":10,` + props + `}`
 	}
-	tpl, err := Parse([]byte(doc(icon(`"icon":"{{asset.icon}}"`) + `,` + icon(`"icon":"switch-l3","shading":"outline","align":"right","mirror":"across"`) +
+	tpl, err := Parse([]byte(doc(icon(`"icon":"{{asset.icon}}","state":true`) + `,` + icon(`"icon":"switch-l3","shading":"outline","align":"right","mirror":"across"`) +
 		`,` + icon(`"icon":"switch-l3"`))))
 	if err != nil {
 		t.Fatal(err)
@@ -921,7 +921,10 @@ func TestIcons(t *testing.T) {
 		{icon(`"icon":"crate","shading":"solid","align":"middle"`), []string{"elements[0].align", "elements[0].shading"}},
 		{icon(`"icon":"crate","image_id":"7c9e6679-7425-40de-944b-e07fc1f90ae7","content_binding":"x","font_size":8,"stroke":"black"`),
 			[]string{"elements[0].content_binding", "elements[0].font_size", "elements[0].image_id", "elements[0].stroke"}},
-		{`{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","icon":"crate","shading":"outline"}`, []string{"elements[0].icon", "elements[0].shading"}},
+		{`{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","icon":"crate","shading":"outline","state":true}`,
+			[]string{"elements[0].icon", "elements[0].shading", "elements[0].state"}},
+		// only the asset's icon has a state to show
+		{icon(`"icon":"crate","state":true`), []string{"elements[0].state"}},
 		{`{"type":"shape","shape":"ellipse","x":0,"y":0,"width":10,"height":10,"icon":"crate"}`, []string{"elements[0].icon"}},
 		{`{"type":"thing","x":0,"y":0,"width":10,"height":10}`, []string{"elements[0].type"}},
 	} {
@@ -938,7 +941,7 @@ func TestIcons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := b.Resolve(Data{Icon: "crate"}); got != "crate" {
+	if got := b.Resolve(Data{Icon: "crate", StateIcon: "crate-down"}); got != "crate" {
 		t.Errorf("%q", got)
 	}
 }

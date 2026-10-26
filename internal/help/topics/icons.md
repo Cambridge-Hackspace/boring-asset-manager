@@ -26,6 +26,12 @@ An asset shows the icon of its nearest category with one: beside its name on its
 
 To draw one asset differently, edit it and, under **Icon**, choose **Choose another…**: any icon there is can be picked, such as a broken variant of its usual one. **Use the category's** gives it back its categories' icon. If the icon it was given is later taken away, it shows a question mark, and says so, until it is given another.
 
+## States
+
+An asset's icon can show what state it is in: **out of service**, **needs maintenance**, **overdue**, **on loan**, **out of stock** or **running low**. An icon shows a state by having a **variant** for it, such as *switch-down*, a switch with a red badge; an asset in that state is drawn with it, everywhere its icon is. An asset in several states shows the first in that list that its icon has. Icons with no variants are drawn as they always are.
+
+To start, on the **Icons** page, under **Library**, choose **Start the state badges** and save: it draws a badge for each state. Then add `axes "state"` to an icon, or to the one it extends, and it has a variant for each. Under **Asset states**, choose which variant each state is drawn with, or none.
+
 ## On labels
 
 A label template can print icons too: add an **Icon** in the template editor, for each asset's icon or one you choose. See **Labels**.
@@ -43,6 +49,7 @@ Whoever may change categories can draw their icons. Changing the palette and the
 - **Library**: shapes icons share and no one category owns, such as a base to extend or a fragment to insert, written and saved as a category's icon is.
 - **Palette**: the colors icons paint with, each named, with a light and a dark color. A color an icon still uses cannot be taken away.
 - **Settings**: the line widths icons may use, the colors only an icon that grants itself one may use, and how much drawing one icon may take.
+- **Asset states**: the variant each state is drawn with (see **States**).
 
 **Export as a zip** downloads every icon, as the isolex compiler reads them. **Import** takes a zip of .ilx files into the library at once, or none of them if any icon would stop drawing.
 

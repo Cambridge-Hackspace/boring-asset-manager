@@ -32,6 +32,9 @@ func (s *Scene) placeIcon(e *labels.Element, box image.Rectangle, data labels.Da
 	name, tint := e.Icon, ""
 	if name == labels.IconOfAsset {
 		name, tint = data.Icon, data.IconColor
+		if e.State && data.StateIcon != "" {
+			name = data.StateIcon
+		}
 	}
 	icons, ok := images.(IconSource)
 	if name == "" || !ok {

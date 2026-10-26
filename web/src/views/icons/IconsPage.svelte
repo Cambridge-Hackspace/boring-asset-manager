@@ -22,6 +22,8 @@
   import LibrarySection from './LibrarySection.svelte';
   import PaletteSection from './PaletteSection.svelte';
   import SettingsSection from './SettingsSection.svelte';
+  import StatesSection from './StatesSection.svelte';
+  import type { IconStates } from '../../lib/iconStates';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -41,6 +43,7 @@
   let settings = $state<{ stroke_widths: number[]; reserved: string[]; limits: Record<string, number> }>({ stroke_widths: [], reserved: [], limits: {} });
   let icons = $state<CategoryIcon[]>([]);
   let library = $state<IconLibraryFile[]>([]);
+  let states = $state<IconStates | null>(null);
   let categories = $state<Category[]>([]);
   let search = $state('');
 
@@ -48,7 +51,7 @@
 
   async function load() {
     try {
-      const [s, ir, pal, set, list, lib, cats] = await Promise.all([
+      const [s, ir, pal, set, list, lib, cats, st] = await Promise.all([
         request<Status>('GET', '/icons'),
         request<IrDocument>('GET', '/icons/ir'),
         request<{ palette: IconColor[] }>('GET', '/icons/palette'),
@@ -56,6 +59,7 @@
         request<{ icons: CategoryIcon[] }>('GET', '/category-icons'),
         request<{ files: IconLibraryFile[] }>('GET', '/icon-library'),
         request<{ categories: Category[] }>('GET', '/categories'),
+        request<IconStates>('GET', '/icons/states'),
       ]);
       status = s;
       build = ir;
@@ -64,6 +68,7 @@
       icons = list.icons ?? [];
       library = lib.files ?? [];
       categories = cats.categories ?? [];
+      states = st;
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -241,7 +246,10 @@
       {/if}
     </section>
 
-    <LibrarySection files={library} {canManage} {vocabulary} {categories} {icons} onsaved={changed} />
+    {#if states}
+      <StatesSection {states} names={build?.icons.map((i) => i.name) ?? []} canManage={session.can('icons.manage')} onsaved={changed} />
+    {/if}
+    <LibrarySection files={library} {canManage} {vocabulary} {categories} {icons} starter={states?.starter ?? ''} onsaved={changed} />
     <PaletteSection {palette} {canManage} {categories} {icons} onsaved={changed} />
     <SettingsSection {settings} tokens={palette.map((c) => c.token)} {canManage} {categories} {icons} onsaved={changed} />
 

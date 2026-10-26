@@ -128,3 +128,57 @@ test("an asset's own icon that nothing draws any more needs attention, and finds
   // drawn as the unknown icon, beside its name
   await expect(page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) }).locator('svg[data-icon="bam-unknown"]')).toBeVisible();
 });
+
+test("an asset's icon shows its state: the badges start in the library, and each state's variant is chosen", async ({ signedIn: page, api }) => {
+  await page.goto('/icons');
+  const library = section(page, 'Library');
+  await library.getByRole('button', { name: 'Start the state badges' }).click();
+  await expect(library.getByLabel('Its path')).toHaveValue('shared/states.ilx');
+  await expect(library.getByRole('textbox', { name: 'New library file source' })).toHaveValue(/axis "state"/);
+  await library.getByRole('button', { name: 'Save' }).click();
+  await expect(library.getByText('Published.', { exact: true })).toBeVisible();
+  // the axis is drawn now, so it is not offered again
+  await expect(library.getByRole('button', { name: 'Start the state badges' })).toHaveCount(0);
+
+  // a category's icon opts in, and an asset in it goes out of service
+  const { category } = await api.call('POST', '/categories', { name: unique('Drills') });
+  const iconName = unique('drill').toLowerCase();
+  const saved = await api.call('PUT', `/categories/${category.id}/icon`, {
+    icon_name: iconName,
+    source: `icon "${iconName}" { category "tools"; footprint 1 1 1; axes "state"; part "box" { box 0 0 0 1 1 1 } }`,
+  });
+  expect(saved.save.published).toBe(true);
+  const { asset } = await api.call('POST', '/assets', { name: unique('Drill'), category_ids: [category.id] });
+  await api.call('PUT', `/assets/${asset.asset.id}/condition`, { condition: 'out_of_service', note: 'Smoking' });
+
+  await page.goto(`/assets/${asset.asset.id}`);
+  await expect(page.locator('[data-icon-state]')).toHaveText(`Drawn as ${iconName}-down: out of service.`);
+
+  await page.goto('/icons');
+  const states = section(page, 'Asset states');
+  await expect(states.getByLabel('Out of service')).toHaveValue('down');
+  await expect(states.getByText(new RegExp(`icons?: .*${iconName}-down`))).toBeVisible();
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(' ')).join('; ')})`)).toEqual([]);
+
+  // drawn with none, it is drawn plain
+  await states.getByLabel('Out of service').fill('');
+  await expect(states.getByText('Drawn plain.').first()).toBeVisible();
+  await states.getByRole('button', { name: 'Save the states' }).click();
+  await expect(states.getByText('The states are saved.')).toBeVisible();
+  await page.goto(`/assets/${asset.asset.id}`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('[data-icon-state]')).toHaveCount(0);
+
+  await page.goto('/icons');
+  await section(page, 'Asset states').getByRole('button', { name: "Use bam's defaults" }).click();
+  await expect(section(page, 'Asset states').getByLabel('Out of service')).toHaveValue('down');
+  await section(page, 'Asset states').getByRole('button', { name: 'Save the states' }).click();
+  await expect(section(page, 'Asset states').getByText('The states are saved.')).toBeVisible();
+
+  // as they were, for the rest
+  await api.call('DELETE', `/categories/${category.id}/icon`);
+  const { files } = await api.call('GET', '/icon-library');
+  const file = files.find((f: { path: string }) => f.path === 'shared/states.ilx');
+  await api.call('DELETE', `/icon-library/${file.id}`);
+});
