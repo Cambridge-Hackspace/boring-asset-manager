@@ -425,19 +425,42 @@ const (
 // "category" token paints in: the color of its nearest category with one,
 // chosen the same way, or empty for the palette's own.
 //
-// When the asset is in a state (IconState*) whose variant the build draws
-// for its icon, Name is that variant, <Base>-<Variant>, and State says
-// which; Base is the icon it is a variant of, and is empty otherwise.
+// When params of its icon are bound to fields it has numbers in (README
+// §3.7), Bound is the wrapper drawing the icon with them, Params, and
+// Name is that. When the asset is in a state (IconState*) whose variant
+// the build draws for that, Name is the variant, <Bound or Base>-<Variant>,
+// and State says which. Base is the icon as it is named, with neither,
+// set whenever Name is not it.
 type ResolvedIcon struct {
-	Name               string `json:"name"`
-	From               string `json:"from"`
-	SourceCategoryID   string `json:"source_category_id,omitempty"`
-	SourceCategoryName string `json:"source_category_name,omitempty"`
-	Missing            bool   `json:"missing,omitempty"`
-	Color              string `json:"color,omitempty"`
-	Base               string `json:"base,omitempty"`
-	State              string `json:"state,omitempty"`
-	Variant            string `json:"variant,omitempty"`
+	Name               string             `json:"name"`
+	From               string             `json:"from"`
+	SourceCategoryID   string             `json:"source_category_id,omitempty"`
+	SourceCategoryName string             `json:"source_category_name,omitempty"`
+	Missing            bool               `json:"missing,omitempty"`
+	Color              string             `json:"color,omitempty"`
+	Base               string             `json:"base,omitempty"`
+	Bound              string             `json:"bound,omitempty"`
+	Params             map[string]float64 `json:"params,omitempty"`
+	State              string             `json:"state,omitempty"`
+	Variant            string             `json:"variant,omitempty"`
+}
+
+// Shape is what the asset is drawn as but for its state: Bound, or Base,
+// or Name.
+func (r *ResolvedIcon) Shape() string {
+	if r.Bound != "" {
+		return r.Bound
+	}
+	return r.Plain()
+}
+
+// IconParamBinding is a param of a category's icon bound to a number
+// field (README §3.7).
+type IconParamBinding struct {
+	Param      string `json:"param"`
+	FieldID    string `json:"field_id"`
+	FieldKey   string `json:"field_key"`
+	FieldLabel string `json:"field_label"`
 }
 
 // Plain is the icon without its state: Base, or Name when no state is

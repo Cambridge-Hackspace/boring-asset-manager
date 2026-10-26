@@ -13,7 +13,7 @@
   import type { IconColor } from '../../lib/isolex/palette';
   import { outline } from '../../lib/isolex/syntax';
   import type { Vocabulary } from '../../lib/isolex/complete';
-  import { iconOwner } from '../../lib/icons';
+  import { iconOwner, isWrapper } from '../../lib/icons';
   import { iconset } from '../../lib/iconset.svelte';
   import IsoIcon from '../../components/IsoIcon.svelte';
   import IconPaletteStyle from '../../components/IconPaletteStyle.svelte';
@@ -100,6 +100,7 @@
     const q = search.trim().toLowerCase();
     const by = new Map<string, NonNullable<IrDocument>['icons']>();
     for (const icon of build?.icons ?? []) {
+      if (isWrapper(icon.name)) continue;
       if (q && !icon.name.toLowerCase().includes(q) && !icon.describe.join(' ').toLowerCase().includes(q)) continue;
       by.set(icon.category, [...(by.get(icon.category) ?? []), icon]);
     }
@@ -247,7 +248,7 @@
     </section>
 
     {#if states}
-      <StatesSection {states} names={build?.icons.map((i) => i.name) ?? []} canManage={session.can('icons.manage')} onsaved={changed} />
+      <StatesSection {states} names={build?.icons.map((i) => i.name).filter((n) => !isWrapper(n)) ?? []} canManage={session.can('icons.manage')} onsaved={changed} />
     {/if}
     <LibrarySection files={library} {canManage} {vocabulary} {categories} {icons} starter={states?.starter ?? ''} onsaved={changed} />
     <PaletteSection {palette} {canManage} {categories} {icons} onsaved={changed} />

@@ -2,12 +2,15 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -51,7 +54,7 @@ func TestAssetIconsThroughTheAPI(t *testing.T) {
 	var got assetAnswer
 	decodeBody(t, rec.Body.Bytes(), &got)
 	want := models.ResolvedIcon{Name: "crate", From: models.IconFromCategory, SourceCategoryID: storage, SourceCategoryName: "Storage", Color: "#aa0000"}
-	if rec.Code != http.StatusCreated || got.Asset.ResolvedIcon == nil || *got.Asset.ResolvedIcon != want || got.Asset.Asset.IconName != nil {
+	if rec.Code != http.StatusCreated || got.Asset.ResolvedIcon == nil || !reflect.DeepEqual(*got.Asset.ResolvedIcon, want) || got.Asset.Asset.IconName != nil {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
 	path := "/api/v1/assets/" + got.Asset.Asset.ID
@@ -505,5 +508,105 @@ func TestIconStatesThroughTheAPI(t *testing.T) {
 	structured(t, callTool(t, cs, "get_asset", map[string]any{"asset": id}), &view)
 	if view.Icon.Name != "drill-down" || view.Icon.Base != "drill" || view.Icon.State != models.IconStateOutOfService {
 		t.Errorf("get_asset: %+v", view.Icon)
+	}
+}
+
+// An icon's params bound to a field draw each asset with its value: at once
+// for a change made to the asset, and soon after for others, as RunIcons
+// builds; the wrappers are drawn but not listed as icons.
+func TestIconParamsThroughTheAPI(t *testing.T) {
+	requireIcons(t)
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	go srv.RunIcons(ctx)
+
+	servers, err := srv.store.CreateCategoryFrom(store.CategoryInput{Name: "Servers"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if save, err := srv.store.SaveCategoryIcon(ctx, srv.icons, servers.ID, "server",
+		`icon "server" { category "compute"; param u 1; footprint 1 1 "u * 0.5"; part "box" { box 0 0 0 1 1 "u * 0.5" } }`); err != nil || !save.Published {
+		t.Fatalf("%+v %v", save, err)
+	}
+	field, err := srv.store.CreateField("rack_units", "Rack units", "number", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notes, _ := srv.store.CreateField("notes", "Notes", "text", nil)
+	path := "/api/v1/categories/" + servers.ID + "/icon/params"
+	if rec := doJSON(t, srv, cookie, "PUT", path, `{"params":{"u":"`+notes.ID+`"}}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a text field: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, cookie, "PUT", path, `{"params":{"u":"`+field.ID+`"}}`); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"field_key":"rack_units"`) {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, cookie, "GET", path, ""); !strings.Contains(rec.Body.String(), `"param":"u"`) {
+		t.Errorf("read back: %s", rec.Body)
+	}
+
+	// made with a value: drawn with it at once
+	rec := doJSON(t, srv, cookie, "POST", "/api/v1/assets", `{"name":"Web","category_ids":["`+servers.ID+`"],"field_values":{"rack_units":"2"}}`)
+	var a assetAnswer
+	decodeBody(t, rec.Body.Bytes(), &a)
+	if ic := a.Asset.ResolvedIcon; rec.Code != http.StatusCreated || ic == nil || ic.Name != "bam--server--u_2" || ic.Base != "server" || ic.Params["u"] != 2 {
+		t.Fatalf("%d %+v", rec.Code, a.Asset.ResolvedIcon)
+	}
+	id := a.Asset.Asset.ID
+	var changed assetAnswer
+	decodeBody(t, doJSON(t, srv, cookie, "PUT", "/api/v1/assets/"+id, `{"field_values":{"rack_units":"4"}}`).Body.Bytes(), &changed)
+	if ic := changed.Asset.ResolvedIcon; ic == nil || ic.Name != "bam--server--u_4" {
+		t.Errorf("changed: %+v", ic)
+	}
+
+	// changed otherwise, as a copy made by an import would be: soon
+	other, err := srv.store.CreateAsset("Db", []string{servers.ID}, nil, map[string]string{"rack_units": "3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doJSON(t, srv, cookie, "PUT", "/api/v1/assets/"+other.Asset.ID+"/condition", `{"condition":"ok"}`)
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		var got assetAnswer
+		decodeBody(t, doJSON(t, srv, cookie, "GET", "/api/v1/assets/"+other.Asset.ID, "").Body.Bytes(), &got)
+		if ic := got.Asset.ResolvedIcon; ic != nil && ic.Name == "bam--server--u_3" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("not built: %+v", got.Asset.ResolvedIcon)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// the wrappers are drawn, not listed
+	if body := doJSON(t, srv, cookie, "GET", "/api/v1/icons", "").Body.String(); strings.Contains(body, "bam--server") || !strings.Contains(body, `"name":"server"`) {
+		t.Errorf("overview: %s", body)
+	}
+	if body := doJSON(t, srv, cookie, "GET", "/api/v1/icons/ir", "").Body.String(); !strings.Contains(body, `"name":"bam--server--u_4"`) {
+		t.Error("not in the IR")
+	}
+	// labels draw it, and print its plain name
+	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/templates/preview-data", `{"asset_id":"`+id+`"}`); !strings.Contains(rec.Body.String(), `"icon":"server"`) ||
+		!strings.Contains(rec.Body.String(), `"bound_icon":"bam--server--u_4"`) {
+		t.Errorf("preview data: %s", rec.Body)
+	}
+
+	// an assistant reads and binds them
+	cs := mcpSession(t, srv, tokenWith(t, srv, admin.ID, "assistant", rbac.PermAssetsRead, rbac.PermCategoriesManage))
+	var icon struct {
+		Params []models.IconParamBinding `json:"params"`
+	}
+	structured(t, callTool(t, cs, "get_category_icon", map[string]any{"category_id": servers.ID}), &icon)
+	if len(icon.Params) != 1 || icon.Params[0].FieldLabel != "Rack units" {
+		t.Errorf("get_category_icon: %+v", icon)
+	}
+	if res := callTool(t, cs, "bind_icon_params", map[string]any{"category_id": servers.ID}); res.IsError {
+		t.Fatalf("unbind: %s", toolText(res))
+	}
+	var plain assetAnswer
+	decodeBody(t, doJSON(t, srv, cookie, "GET", "/api/v1/assets/"+id, "").Body.Bytes(), &plain)
+	if ic := plain.Asset.ResolvedIcon; ic == nil || ic.Name != "server" {
+		t.Errorf("unbound: %+v", ic)
 	}
 }

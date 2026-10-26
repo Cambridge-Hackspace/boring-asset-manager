@@ -91,3 +91,39 @@ test('a subcategory inherits its parent’s icon, extends it, and keeps it from 
   const res = await page.request.delete(`/api/v1/categories/${parent.id}`);
   expect(res.status()).toBe(409);
 });
+
+test("an icon's params are bound to asset fields, and each asset drawn with its values", async ({ signedIn: page, api }) => {
+  const name = unique('Servers');
+  const { category } = await api.call('POST', '/categories', { name });
+  const iconName = unique('server').toLowerCase();
+  await api.call('PUT', `/categories/${category.id}/icon`, {
+    icon_name: iconName,
+    source: `base "${iconName}-unit" { category "compute"; param u 1; footprint 1 1 "u * 0.5"; part "box" { box 0 0 0 1 1 "u * 0.5" } }
+icon "${iconName}" extends="${iconName}-unit" { }`,
+  });
+  const label = unique('Rack units');
+  const { field } = await api.call('POST', '/fields', { key: unique('rack_units').replace(/-/g, '_'), label, validation_type: 'number' });
+  await api.call('POST', `/categories/${category.id}/fields`, { field_id: field.id, is_required: false });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Web'), category_ids: [category.id], field_values: { [field.key]: '2' } });
+
+  await page.goto(`/categories/${category.id}`);
+  const params = page.getByRole('region', { name: 'Parameters' });
+  // the param it inherits is offered
+  await params.getByLabel('u', { exact: true }).selectOption({ label });
+  await noViolations(page);
+  await params.getByRole('button', { name: 'Save the parameters' }).click();
+  await expect(params.getByText('Saved: each asset is drawn with its values.')).toBeVisible();
+
+  await page.goto(`/assets/${asset.asset.id}`);
+  await expect(page.locator('[data-icon-params]')).toHaveText('Drawn with u 2, from its fields.');
+  // and drawn, as its wrapper
+  await expect(page.locator('h1 svg')).toBeVisible();
+
+  // the wrapper is not offered as an icon of one's own
+  await page.goto('/icons');
+  await page.getByRole('searchbox', { name: 'Search icons' }).fill(iconName);
+  await expect(page.getByRole('region', { name: 'Every icon' }).getByRole('img')).toHaveCount(1);
+
+  // unbound, for the rest
+  await api.call('PUT', `/categories/${category.id}/icon/params`, { params: {} });
+});

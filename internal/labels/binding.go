@@ -155,11 +155,13 @@ type Data struct {
 	Due        string `json:"due"`
 	// Icon is the name of the icon the asset is drawn with (README §3.7),
 	// its own or its categories', empty when it has none; IconColor is
-	// what its category token paints in. StateIcon is the variant of it
-	// the asset's state is drawn with, empty when it is in none its icon
-	// has.
+	// what its category token paints in. BoundIcon is the icon drawn with
+	// its params set to the asset's fields, when they are bound to some it
+	// has. StateIcon is the variant the asset's state is drawn with, empty
+	// when it is in none its icon has.
 	Icon      string `json:"icon"`
 	IconColor string `json:"icon_color"`
+	BoundIcon string `json:"bound_icon,omitempty"`
 	StateIcon string `json:"state_icon,omitempty"`
 }
 

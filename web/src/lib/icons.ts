@@ -3,7 +3,26 @@
 // compiler's diagnostics belong.
 
 import type { Category, CategoryIcon, IconDiag } from './models';
-import type { Problem } from './isolex/syntax';
+import type { Definition, Problem } from './isolex/syntax';
+
+/** Whether a name is a wrapper's, drawing an icon with params set to assets' fields: the build's, not anyone's to choose. */
+export const isWrapper = (name: string) => name.startsWith('bam--');
+
+/** The params an icon has, its own and those it inherits, root first, from what the sources define. */
+export function iconParams(definitions: Definition[], name: string): string[] {
+  const chain: Definition[] = [];
+  const seen = new Set<string>();
+  for (let at: string | undefined = name; at && !seen.has(at); ) {
+    seen.add(at);
+    const def = definitions.find((d) => d.name === at && (d.kind === 'icon' || d.kind === 'base'));
+    if (!def) break;
+    chain.unshift(def);
+    at = def.extends;
+  }
+  const params: string[] = [];
+  for (const d of chain) for (const p of d.params) if (!params.includes(p)) params.push(p);
+  return params;
+}
 
 /** The file a category's icon is in a build, as diagnostics name it. */
 export const iconFile = (name: string) => `categories/${name}.ilx`;

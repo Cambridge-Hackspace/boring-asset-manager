@@ -19,6 +19,7 @@
   import IconSourceEditor from '../../components/IconSourceEditor.svelte';
   import IsoIcon from '../../components/IsoIcon.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
+  import IconParams from './IconParams.svelte';
   import IconPaletteStyle from '../../components/IconPaletteStyle.svelte';
 
   interface Props {
@@ -324,6 +325,10 @@
           <button type="button" class="btn-secondary" onclick={() => start(savedText)}>{own.draft ? 'Edit the draft' : 'Edit the icon'}</button>
         {/if}
       </div>
+
+      {#if own?.source}
+        <IconParams categoryId={id} iconName={own.icon_name} definitions={[...vocabulary.definitions, ...outline(own.source)]} canEdit={session.can('categories.manage') && available} />
+      {/if}
 
       {#if canEdit && !own}
         <div class="mt-3 max-w-2xl">

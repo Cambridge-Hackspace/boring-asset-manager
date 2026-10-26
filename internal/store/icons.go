@@ -137,6 +137,8 @@ type iconInputs struct {
 	settings models.IconSettings
 	library  []iconSource // by path
 	icons    []iconSource // by icon name
+	// wrappers draw icons with params bound to asset fields, by name.
+	wrappers []iconWrapper
 }
 
 func (in iconInputs) clone() iconInputs {
@@ -144,6 +146,7 @@ func (in iconInputs) clone() iconInputs {
 	out.palette = append([]models.IconColor(nil), in.palette...)
 	out.library = append([]iconSource(nil), in.library...)
 	out.icons = append([]iconSource(nil), in.icons...)
+	out.wrappers = append([]iconWrapper(nil), in.wrappers...)
 	return out
 }
 
@@ -153,7 +156,7 @@ func (in *iconInputs) sort() {
 }
 
 // files are the build's sources: the lexicon block, then the library by
-// path, then the categories' icons by name.
+// path, then the categories' icons by name, then the wrappers.
 func (in iconInputs) files() ([]isolex.File, error) {
 	tokens := make([]string, 0, len(in.palette)+1)
 	for _, c := range in.palette {
@@ -175,6 +178,9 @@ func (in iconInputs) files() ([]isolex.File, error) {
 	}
 	for _, i := range in.icons {
 		files = append(files, isolex.File{Name: categoryIconFile(i.name), Text: i.source})
+	}
+	if len(in.wrappers) > 0 {
+		files = append(files, isolex.File{Name: paramsFile, Text: paramsSource(in.wrappers)})
 	}
 	return files, nil
 }
@@ -233,6 +239,9 @@ func (s *Store) readIconInputs(q querier) (iconInputs, error) {
 	}
 	if in.icons, err = read(`SELECT category_id, icon_name, source FROM category_icons WHERE source IS NOT NULL`); err != nil {
 		return in, fmt.Errorf("reading category icons: %w", err)
+	}
+	if in.wrappers, err = readIconWrappers(q); err != nil {
+		return in, err
 	}
 	in.sort()
 	return in, nil
@@ -326,11 +335,7 @@ func (s *Store) changeIcons(ctx context.Context, c IconCompiler, ch iconChange) 
 			}
 			after.sort()
 		}
-		files, err := after.files()
-		if err != nil {
-			return nil, err
-		}
-		res, err := compile(ctx, c, files)
+		res, err := s.compileInputs(ctx, c, after)
 		if err != nil {
 			return nil, err
 		}
@@ -472,6 +477,8 @@ func (s *Store) CheckCategoryIcon(ctx context.Context, c IconCompiler, categoryI
 		return nil, err
 	}
 	setCategoryIcon(&in, categoryID, name, source)
+	// what an editor checks is the icons, not the values assets give them
+	in.wrappers = nil
 	in.sort()
 	files, err := in.files()
 	if err != nil {
@@ -1209,5 +1216,7 @@ func (s *Store) IconLexiconFiles() ([]isolex.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	// the wrappers are made from assets' values, by each build
+	in.wrappers = nil
 	return in.files()
 }
