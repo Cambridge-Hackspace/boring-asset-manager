@@ -562,6 +562,9 @@ type assetContext struct {
 	// iconVariants maps each state to the variant it is drawn with, once
 	// read.
 	iconVariants map[string]string
+	// iconBindings maps each icon with params bound to fields to them,
+	// once read.
+	iconBindings map[string][]iconBinding
 }
 
 // contextTraits returns the category traits, reading them the first time.

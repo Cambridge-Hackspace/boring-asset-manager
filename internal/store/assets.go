@@ -379,7 +379,7 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	if details.ScanTemplate, err = s.contextScan(ctx, catIDs); err != nil {
 		return nil, err
 	}
-	if details.ResolvedIcon, err = s.contextIcon(ctx, a.IconName, catIDs, assetStates(details)); err != nil {
+	if details.ResolvedIcon, err = s.contextIcon(ctx, a.IconName, catIDs, fieldValues, assetStates(details)); err != nil {
 		return nil, err
 	}
 	return details, nil

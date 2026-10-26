@@ -138,10 +138,21 @@ export interface ResolvedIcon {
   source_category_name?: string;
   missing?: boolean;
   color?: string;
-  /** Set when name is the variant of base its state is drawn with. */
+  /** The icon as it is named, set whenever name is not it: drawn with its params, or in a state. */
   base?: string;
+  /** The icon drawn with params set to the asset's fields, and those params. */
+  bound?: string;
+  params?: Record<string, number>;
   state?: IconState;
   variant?: string;
+}
+
+/** A param of a category's icon bound to a number field (README §3.7). */
+export interface IconParamBinding {
+  param: string;
+  field_id: string;
+  field_key: string;
+  field_label: string;
 }
 
 /** The states an asset's icon can show, worst first (README §3.7). */

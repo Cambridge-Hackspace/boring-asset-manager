@@ -10,6 +10,7 @@ import type { IrDocument, IrIcon } from './isolex/ir';
 import type { IconColor } from './isolex/palette';
 import type { ResolvedIcon } from './models';
 import { session } from './session.svelte';
+import { isWrapper } from './icons';
 
 interface Overview {
   category_icons?: Record<string, string>;
@@ -79,9 +80,9 @@ class Iconset {
     return this.#unknown;
   }
 
-  /** Every icon the build draws, by name. */
+  /** Every icon the build draws, by name, but the wrappers drawing assets' params. */
   get all(): IrIcon[] {
-    return [...this.#icons.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...this.#icons.values()].filter((i) => !isWrapper(i.name)).sort((a, b) => a.name.localeCompare(b.name));
   }
 }
 

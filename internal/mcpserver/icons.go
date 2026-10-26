@@ -193,9 +193,10 @@ func iconTools() []tool {
 				out := map[string]any{"category_icons": icons["icons"], "library": files["files"]}
 				return say(out, "%d category icons and %d library files.", count(icons, "icons"), count(files, "files"))
 			}),
-		define(&mcp.Tool{Name: "get_category_icon", Description: "A category's icon: its name, published source, any draft with its errors, and every published version, newest first.",
+		define(&mcp.Tool{Name: "get_category_icon", Description: "A category's icon: its name, published source, any draft with its errors, every published version, newest first, " +
+			"and its params bound to asset fields (params).",
 			Annotations: readOnly("Get a category's icon")},
-			[]string{"GET /api/v1/categories/{id}/icon", "GET /api/v1/categories/{id}/icon/revisions"}, read,
+			[]string{"GET /api/v1/categories/{id}/icon", "GET /api/v1/categories/{id}/icon/revisions", "GET /api/v1/categories/{id}/icon/params"}, read,
 			func(ctx context.Context, e *env, in categoryIDIn) (reply[map[string]any], error) {
 				out := map[string]any{}
 				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/categories/{id}/icon", in.CategoryID), nil, &out); err != nil {
@@ -206,6 +207,11 @@ func iconTools() []tool {
 					return reply[map[string]any]{}, err
 				}
 				out["revisions"] = revs["revisions"]
+				var params map[string]any
+				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/categories/{id}/icon/params", in.CategoryID), nil, &params); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				out["params"] = params["params"]
 				return say(out, "%d published versions.", count(revs, "revisions"))
 			}),
 		simple(&mcp.Tool{Name: "check_category_icon", Description: "Compile the icons with this source as a category's icon, and keep nothing: the errors and warnings, and the IR if it is clean. " +
@@ -237,6 +243,20 @@ func iconTools() []tool {
 				return request{path: pathOf("/api/v1/categories/{id}/icon/rename", in.CategoryID), body: map[string]string{"icon_name": in.IconName}}, need(in.CategoryID, "category_id")
 			},
 			func(in renameIconIn, _ map[string]any) string { return fmt.Sprintf("Renamed it %q.", in.IconName) }),
+		simple(&mcp.Tool{Name: "bind_icon_params", Description: "Bind params of a category's icon, its own or inherited, to number fields by ID, replacing those bound: " +
+			"each asset drawn with the icon is then drawn with each param set to its value of the field, so a server with 2 in Rack units is drawn 2 units high. " +
+			"An asset with no number in the field is drawn with the param's default. Bind none to unbind them all.",
+			Annotations: changes("Bind an icon's params", true)}, "PUT /api/v1/categories/{id}/icon/params", manage,
+			func(in iconParamsIn) (request, error) {
+				params := in.Params
+				if params == nil {
+					params = map[string]string{}
+				}
+				return request{path: pathOf("/api/v1/categories/{id}/icon/params", in.CategoryID), body: map[string]any{"params": params}}, need(in.CategoryID, "category_id")
+			},
+			func(_ iconParamsIn, out map[string]any) string {
+				return fmt.Sprintf("%d params bound.", count(out, "params"))
+			}),
 		simple(&mcp.Tool{Name: "delete_category_icon", Description: "Delete a category's icon and its history. Refused if another icon uses it.",
 			Annotations: destroys("Delete a category's icon", true)}, "DELETE /api/v1/categories/{id}/icon", manage,
 			func(in categoryIDIn) (request, error) {
@@ -333,6 +353,11 @@ func iconTools() []tool {
 			},
 			func(iconStatesIn, map[string]any) string { return "Saved the icon states." }),
 	}
+}
+
+type iconParamsIn struct {
+	CategoryID string            `json:"category_id" jsonschema:"the category whose own icon it is"`
+	Params     map[string]string `json:"params,omitempty" jsonschema:"each param's name, to the ID of the number field that sets it"`
 }
 
 type iconStatesIn struct {

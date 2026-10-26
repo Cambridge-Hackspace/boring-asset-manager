@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
@@ -41,6 +42,10 @@ type Server struct {
 	registrations registrations
 	// icons compiles icon sources (README §3.7).
 	icons iconCompiler
+	// iconsDirty is signalled after every change made through the API,
+	// for RunIcons to build the icons again if their inputs changed:
+	// those with params bound to asset fields follow the assets' values.
+	iconsDirty chan struct{}
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -48,18 +53,22 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux := http.NewServeMux()
 
 	s := &Server{
-		cfg:       cfg,
-		store:     st,
-		images:    filestore.NewImages(cfg.Storage.LocalPath),
-		photos:    filestore.NewPhotos(cfg.Storage.LocalPath),
-		transport: printers.NewDispatcher(cfg.Printers.Devices),
-		spool:     newSpooler(),
-		presses:   newPressLimiter(),
-		live:      newLiveHub(),
-		icons:     isolex.Default(),
+		cfg:        cfg,
+		store:      st,
+		images:     filestore.NewImages(cfg.Storage.LocalPath),
+		photos:     filestore.NewPhotos(cfg.Storage.LocalPath),
+		transport:  printers.NewDispatcher(cfg.Printers.Devices),
+		spool:      newSpooler(),
+		presses:    newPressLimiter(),
+		live:       newLiveHub(),
+		icons:      isolex.Default(),
+		iconsDirty: make(chan struct{}, 1),
 	}
 	handle := func(pattern string, h http.Handler) {
 		s.routes = append(s.routes, pattern)
+		if !strings.HasPrefix(pattern, "GET ") {
+			h = s.markingIcons(h)
+		}
 		mux.Handle(pattern, h)
 	}
 	handleFunc := func(pattern string, h http.HandlerFunc) { handle(pattern, h) }
@@ -153,6 +162,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("DELETE /api/v1/categories/{id}/icon", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategoryIcon)))
 	handle("DELETE /api/v1/categories/{id}/icon/draft", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDiscardCategoryIconDraft)))
 	handle("GET /api/v1/categories/{id}/icon/revisions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryIconRevisions)))
+	handle("GET /api/v1/categories/{id}/icon/params", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryIconParams)))
+	handle("PUT /api/v1/categories/{id}/icon/params", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryIconParams)))
 	handle("GET /api/v1/icons/export", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportIcons)))
 	handle("POST /api/v1/icon-library/import", RequirePermission(rbac.PermIconsManage)(http.HandlerFunc(s.handleImportIcons)))
 	handle("GET /api/v1/icon-library", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListIconLibrary)))

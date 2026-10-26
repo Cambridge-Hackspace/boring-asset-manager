@@ -152,7 +152,7 @@ test("an asset's icon shows its state: the badges start in the library, and each
   await api.call('PUT', `/assets/${asset.asset.id}/condition`, { condition: 'out_of_service', note: 'Smoking' });
 
   await page.goto(`/assets/${asset.asset.id}`);
-  await expect(page.locator('[data-icon-state]')).toHaveText(`Drawn as ${iconName}-down: out of service.`);
+  await expect(page.locator('[data-icon-state]')).toHaveText('Drawn as its down variant: out of service.');
 
   await page.goto('/icons');
   const states = section(page, 'Asset states');

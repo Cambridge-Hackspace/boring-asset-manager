@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
@@ -82,8 +83,9 @@ func (s *Store) ShownCategoryIcons() (map[string]string, error) {
 }
 
 // contextIcon resolves the icon of an asset with its own icon own, if not
-// nil, in these categories and in these states, worst first.
-func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs, states []string) (*models.ResolvedIcon, error) {
+// nil, in these categories, with these field values by key, and in these
+// states, worst first.
+func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs []string, fieldValues map[string]string, states []string) (*models.ResolvedIcon, error) {
 	traits, err := s.contextTraits(ctx)
 	if err != nil {
 		return nil, err
@@ -101,7 +103,21 @@ func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs, states 
 		icon = &models.ResolvedIcon{Name: *own, From: models.IconFromAsset, Missing: !ctx.iconNames[*own]}
 	}
 	icon.Color = traits.choose(traits.colors, categoryIDs, "").TemplateID
-	if icon.Missing || len(states) == 0 {
+	if icon.Missing {
+		return icon, nil
+	}
+	wrapper, params, err := s.contextWrapper(ctx, icon.Name, fieldValues)
+	if err != nil {
+		return nil, err
+	}
+	if wrapper != "" {
+		icon.Base, icon.Bound, icon.Name = icon.Name, wrapper, wrapper
+		icon.Params = make(map[string]float64, len(params))
+		for _, p := range params {
+			icon.Params[p.param], _ = strconv.ParseFloat(p.value, 64)
+		}
+	}
+	if len(states) == 0 {
 		return icon, nil
 	}
 	if ctx.iconVariants == nil {
@@ -121,7 +137,10 @@ func showState(icon *models.ResolvedIcon, states []string, variants map[string]s
 		if v == "" || !drawn[icon.Name+"-"+v] {
 			continue
 		}
-		icon.Base, icon.State, icon.Variant = icon.Name, st, v
+		if icon.Base == "" {
+			icon.Base = icon.Name
+		}
+		icon.State, icon.Variant = st, v
 		icon.Name += "-" + v
 		return
 	}
@@ -270,6 +289,9 @@ func (s *Store) BuiltIconNames() (map[string]bool, error) {
 func (s *Store) checkAssetIcon(name string, current *string) error {
 	if name == "" || (current != nil && *current == name) {
 		return nil
+	}
+	if IsIconWrapper(name) {
+		return fmt.Errorf("%q draws an icon for some assets' field values, and cannot be given as one's own", name)
 	}
 	names, err := s.BuiltIconNames()
 	if err != nil {

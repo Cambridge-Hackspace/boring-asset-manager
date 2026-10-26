@@ -1014,6 +1014,17 @@ func TestIconElements(t *testing.T) {
 	if bytes.Equal(variant, shaded.Raster(false).Pix) {
 		t.Error("the variant draws as the plain icon")
 	}
+
+	// params bound to fields: drawn as the wrapper, in its state too
+	bound := testData
+	bound.BoundIcon = "switch-l3"
+	if !bytes.Equal(drawn(el, bound), drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"switch-l3"}`, testData)) {
+		t.Error("bound: not drawn as the wrapper")
+	}
+	bound.StateIcon = "switch-poe-down"
+	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","state":true}`, bound), variant) {
+		t.Error("bound, in a state: not drawn as its variant")
+	}
 }
 
 func TestGray(t *testing.T) {

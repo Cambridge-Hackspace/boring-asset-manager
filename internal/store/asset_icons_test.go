@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -62,7 +63,7 @@ func TestAnAssetIsDrawnWithItsCategoriesIcon(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := models.ResolvedIcon{Name: "switch", From: models.IconFromCategory, SourceCategoryID: w.networking, SourceCategoryName: "Networking", Color: "#445566"}
-	if got := router.ResolvedIcon; got == nil || *got != want {
+	if got := router.ResolvedIcon; got == nil || !reflect.DeepEqual(*got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 	plain, err := w.st.CreateAsset("Chair", nil, nil, nil)
@@ -83,7 +84,7 @@ func TestAnAssetIsDrawnWithItsCategoriesIcon(t *testing.T) {
 
 	// a list reads the same
 	list, err := w.st.ListAssets(w.routers, "")
-	if err != nil || len(list) != 1 || list[0].ResolvedIcon == nil || *list[0].ResolvedIcon != want {
+	if err != nil || len(list) != 1 || list[0].ResolvedIcon == nil || !reflect.DeepEqual(*list[0].ResolvedIcon, want) {
 		t.Errorf("%+v %v", list, err)
 	}
 }
@@ -101,7 +102,7 @@ func TestAnAssetsOwnIcon(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := models.ResolvedIcon{Name: "switch-down", From: models.IconFromAsset, Color: "#445566"}
-	if got := a.ResolvedIcon; got == nil || *got != want || a.Asset.IconName == nil || *a.Asset.IconName != "switch-down" {
+	if got := a.ResolvedIcon; got == nil || !reflect.DeepEqual(*got, want) || a.Asset.IconName == nil || *a.Asset.IconName != "switch-down" {
 		t.Errorf("got %+v (%v), want %+v", got, a.Asset.IconName, want)
 	}
 	id := a.Asset.ID

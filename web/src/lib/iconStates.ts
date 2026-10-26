@@ -35,6 +35,13 @@ export const plainIcon = (icon: ResolvedIcon) => icon.base || icon.name;
 
 /** Says which state an asset's icon shows, if any. */
 export function stateNote(icon: ResolvedIcon): string {
-  if (!icon.state || !icon.base) return '';
-  return `Drawn as ${icon.name}: ${iconStateNames[icon.state].toLowerCase()}.`;
+  if (!icon.state || !icon.variant) return '';
+  return `Drawn as its ${icon.variant} variant: ${iconStateNames[icon.state].toLowerCase()}.`;
+}
+
+/** Says which params an asset's icon is drawn with, from its fields, if any. */
+export function paramsNote(icon: ResolvedIcon): string {
+  const params = Object.entries(icon.params ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  if (!params.length) return '';
+  return `Drawn with ${params.map(([p, v]) => `${p} ${v}`).join(', ')}, from its fields.`;
 }

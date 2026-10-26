@@ -163,8 +163,8 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 		d.Quantity, d.Unit = strconv.Itoa(st.Quantity), st.Unit
 	}
 	if ic := a.ResolvedIcon; ic != nil {
-		d.Icon, d.IconColor = ic.Plain(), ic.Color
-		if ic.Base != "" {
+		d.Icon, d.IconColor, d.BoundIcon = ic.Plain(), ic.Color, ic.Bound
+		if ic.State != "" {
 			d.StateIcon = ic.Name
 		}
 	}
