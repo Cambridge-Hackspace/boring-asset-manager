@@ -226,6 +226,8 @@ export interface AssetWithDetails {
   links: AssetLink[];
   location: LinkedAsset[];
   suggested_relation_type_ids: string[];
+  /** How many active assets are in it, through location links, directly: what its scene shows. */
+  holds?: number;
   /** The scopes it is in, from its categories and theirs, or default. */
   scopes: string[];
   scan_template: TemplateChoice;
