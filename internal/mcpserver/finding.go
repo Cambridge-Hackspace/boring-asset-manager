@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -196,6 +197,47 @@ func findingTools() []tool {
 			}
 			loc, _ := out["location"].(map[string]any)
 			return say(out, "%d things in %v.", len(items), loc["name"])
+		}),
+		define(&mcp.Tool{
+			Name: "render_scene",
+			Description: "Draw a location's scene as a PNG, to show the person where things are: what is in it, standing where it stands, " +
+				"each with its icon, as its page draws it. Give show, an asset in it, to outline that one: " +
+				"\"where is the spare switch?\" is answered by its location's scene with it shown.",
+			Annotations: readOnly("Draw a scene"),
+		}, []string{"GET /api/v1/assets/{id}/scene/image"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in struct {
+			Asset  string `json:"asset" jsonschema:"the location: an asset's ID, or one of its codes"`
+			Show   string `json:"show,omitempty" jsonschema:"an asset in it to outline: its ID, or one of its codes"`
+			Dark   bool   `json:"dark,omitempty" jsonschema:"draw it in the dark theme's colors"`
+			Height int    `json:"height,omitempty" jsonschema:"how high to draw it, in pixels, 1 to 2048; 512 unless given"`
+		}) (reply[map[string]any], error) {
+			id, err := e.assetID(ctx, in.Asset)
+			if err != nil {
+				return reply[map[string]any]{}, err
+			}
+			q := url.Values{"format": {"png"}}
+			if in.Show != "" {
+				shown, err := e.assetID(ctx, in.Show)
+				if err != nil {
+					return reply[map[string]any]{}, err
+				}
+				q.Set("show", shown)
+			}
+			if in.Dark {
+				q.Set("theme", "dark")
+			}
+			if in.Height != 0 {
+				q.Set("height", strconv.Itoa(in.Height))
+			}
+			res := e.api(ctx, http.MethodGet, assetPath(id, "/scene/image")+"?"+q.Encode(), nil, "")
+			if res.Status != http.StatusOK {
+				return reply[map[string]any]{}, apiError(res)
+			}
+			r, _ := say(map[string]any{"location": id}, "The scene.")
+			if in.Show != "" {
+				r, _ = say(map[string]any{"location": id, "shown": q.Get("show")}, "The scene, with the one asked about outlined.")
+			}
+			r.extra = []mcp.Content{&mcp.ImageContent{Data: res.Body, MIMEType: "image/png"}}
+			return r, nil
 		}),
 		define(&mcp.Tool{
 			Name: "place_asset",

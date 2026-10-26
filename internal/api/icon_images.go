@@ -47,30 +47,9 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "give one of name, category or asset")
 		return
 	}
-	format := q.Get("format")
-	if format == "" {
-		format = "svg"
-	}
-	if format != "svg" && format != "png" {
-		writeJSONError(w, http.StatusBadRequest, "format is svg or png")
+	opts, ok := imageOptionsOf(w, r, defaultIconHeight, maxIconHeight)
+	if !ok {
 		return
-	}
-	theme := q.Get("theme")
-	if theme == "" {
-		theme = "light"
-	}
-	if theme != "light" && theme != "dark" {
-		writeJSONError(w, http.StatusBadRequest, "theme is light or dark")
-		return
-	}
-	height := defaultIconHeight
-	if v := q.Get("height"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > maxIconHeight {
-			writeJSONError(w, http.StatusBadRequest, "height is a whole number of pixels, 1 to "+strconv.Itoa(maxIconHeight))
-			return
-		}
-		height = n
 	}
 	color := q.Get("color")
 	if color != "" && !hexColor.MatchString(color) {
@@ -152,10 +131,61 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Icon-Missing", name)
 	}
 
-	palette, err := s.store.GetIconPalette()
+	colors, err := s.themeColors(opts.theme)
 	if err != nil {
 		writeServerError(w, err, "read the icon palette")
 		return
+	}
+	// a category with no color paints as muted ink
+	if color == "" {
+		color = colors["ink-muted"]
+	}
+	colors[store.CategoryToken] = color
+	writeIconImage(w, r, hash, icon, colors, opts)
+}
+
+// imageOptions is how an image is asked to be drawn: format svg or png,
+// theme light or dark, and height in pixels.
+type imageOptions struct {
+	format, theme string
+	height        int
+}
+
+// imageOptionsOf reads an image's format, theme and height from the
+// query, answering a bad one itself.
+func imageOptionsOf(w http.ResponseWriter, r *http.Request, defaultHeight, maxHeight int) (imageOptions, bool) {
+	q := r.URL.Query()
+	opts := imageOptions{format: q.Get("format"), theme: q.Get("theme"), height: defaultHeight}
+	if opts.format == "" {
+		opts.format = "svg"
+	}
+	if opts.format != "svg" && opts.format != "png" {
+		writeJSONError(w, http.StatusBadRequest, "format is svg or png")
+		return opts, false
+	}
+	if opts.theme == "" {
+		opts.theme = "light"
+	}
+	if opts.theme != "light" && opts.theme != "dark" {
+		writeJSONError(w, http.StatusBadRequest, "theme is light or dark")
+		return opts, false
+	}
+	if v := q.Get("height"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > maxHeight {
+			writeJSONError(w, http.StatusBadRequest, "height is a whole number of pixels, 1 to "+strconv.Itoa(maxHeight))
+			return opts, false
+		}
+		opts.height = n
+	}
+	return opts, true
+}
+
+// themeColors is the palette's color for each token in a theme.
+func (s *Server) themeColors(theme string) (map[string]string, error) {
+	palette, err := s.store.GetIconPalette()
+	if err != nil {
+		return nil, err
 	}
 	colors := map[string]string{}
 	for _, c := range palette {
@@ -164,22 +194,22 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 			colors[c.Token] = c.Dark
 		}
 	}
-	// a category with no color paints as muted ink
-	if color == "" {
-		color = colors["ink-muted"]
-	}
-	colors[store.CategoryToken] = color
+	return colors, nil
+}
 
+// writeIconImage draws an icon in colors as opts ask, tagged by the build
+// it is drawn from and what is drawn.
+func writeIconImage(w http.ResponseWriter, r *http.Request, hash string, icon *ir.Icon, colors map[string]string, opts imageOptions) {
 	var body bytes.Buffer
 	contentType := "image/svg+xml"
-	if format == "png" {
+	if opts.format == "png" {
 		contentType = "image/png"
-		if err := raster.Encode(&body, icon, svg.Palette(colors), height); err != nil {
-			writeServerError(w, err, "draw the icon")
+		if err := raster.Encode(&body, icon, svg.Palette(colors), opts.height); err != nil {
+			writeServerError(w, err, "draw the image")
 			return
 		}
 	} else {
-		body.WriteString(svg.Sized(icon, svg.Palette(colors), float64(height)))
+		body.WriteString(svg.Sized(icon, svg.Palette(colors), float64(opts.height)))
 	}
 	sum := sha256.Sum256(append([]byte(hash+"\x00"), body.Bytes()...))
 	etag := `"` + hex.EncodeToString(sum[:16]) + `"`

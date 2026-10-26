@@ -7,7 +7,8 @@
   Arranging, for those who may change what is in it: dragging a thing
   moves it a tile at a time, the chosen one's handle lifts it, and the
   arrow keys and Page Up and Page Down do the same; each move is saved.
-  What overlaps is outlined, and named when chosen.
+  What overlaps is outlined, and named when chosen. Save as SVG or PNG
+  downloads it drawn by the server, as the page draws it.
 -->
 <script lang="ts">
   import { untrack } from 'svelte';
@@ -17,7 +18,7 @@
   import { formatNumber as n } from '../../lib/isolex/ir';
   import { iconset } from '../../lib/iconset.svelte';
   import { navigate, router } from '../../lib/router.svelte';
-  import { describeItem, floorDelta, gridLines, hull, liftTo, LIFT_STEP, moveTo, overlapNote, panBy, position, project, S, zoomAt, type Scene, type SceneItem, type ViewBox } from '../../lib/scene';
+  import { describeItem, floorDelta, gridLines, hull, liftTo, LIFT_STEP, moveTo, overlapNote, panBy, position, project, S, sceneImage, zoomAt, type Scene, type SceneItem, type ViewBox } from '../../lib/scene';
   import IsoShapes from '../../components/IsoShapes.svelte';
   import IconPaletteStyle from '../../components/IconPaletteStyle.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -235,6 +236,8 @@
     <h1 class="text-2xl font-bold">Inside {scene.location.name}</h1>
     <div class="flex flex-wrap items-center gap-2">
       <a class="btn-secondary" href="/assets/{encodeURIComponent(scene.location.id)}">Open {scene.location.name}</a>
+      <a class="btn-secondary" href={sceneImage(scene.location.id, 'svg', shown)} download="{scene.location.name}.svg">Save as SVG</a>
+      <a class="btn-secondary" href={sceneImage(scene.location.id, 'png', shown)} download="{scene.location.name}.png">Save as PNG</a>
       {#if canArrange}
         <button type="button" class="btn-secondary" aria-pressed={arranging} onclick={() => (arranging = !arranging)}>Arrange</button>
       {/if}

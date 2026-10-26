@@ -42,6 +42,8 @@ Anything that holds other things, such as a room, a rack or a shelf, can be seen
 
 On any asset's page, **Show in place**, beside where it is, shows it in its place, outlined, with the rest faded.
 
+**Save as SVG** and **Save as PNG** save the picture, to print or to share. Something shown in place is outlined in it too.
+
 ## Arranging what is in a place
 
 If you can edit what is in a place, choose **Arrange** to move things where they really are. Drag something to move it across the floor, a tile at a time. To stack things, as on a shelf or in a rack, choose one and drag the handle above it up or down: it stops on the top of whatever is under it. The arrow keys move the chosen thing too, and Page Up and Page Down lift and lower it. Every move is saved and shown in the thing's history. **Put back** returns it to being laid out with the rest.

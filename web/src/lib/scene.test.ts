@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeItem, floorDelta, gridLines, hull, liftTo, moveTo, overlapNote, position, panBy, project, zoomAt, type ViewBox } from './scene';
+import { describeItem, floorDelta, gridLines, hull, liftTo, moveTo, overlapNote, position, sceneImage, panBy, project, zoomAt, type ViewBox } from './scene';
 
 describe('scenes', () => {
   it('projects as isolex does', () => {
@@ -71,5 +71,10 @@ describe('scenes', () => {
     const items = [{ id: 'a', name: 'Bench' }, { id: 'b', name: 'Crate' }];
     expect(overlapNote({ overlaps: ['a', 'b'] }, items)).toBe('Overlaps Bench, Crate.');
     expect(overlapNote({}, items)).toBe('');
+  });
+
+  it('names the image of a scene to save', () => {
+    expect(sceneImage('a b', 'svg')).toBe('/api/v1/assets/a%20b/scene/image?format=svg');
+    expect(sceneImage('a', 'png', 'x')).toBe('/api/v1/assets/a/scene/image?format=png&height=1024&show=x');
   });
 });
