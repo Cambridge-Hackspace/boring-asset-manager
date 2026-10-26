@@ -21,6 +21,12 @@ export interface SceneItem {
   tx: number;
   ty: number;
   holds: number;
+  /** Where someone placed it, rather than packed. */
+  arranged?: boolean;
+  /** The IDs of the items it shares space with. */
+  overlaps?: string[];
+  /** Whether the caller may arrange it. */
+  movable?: boolean;
 }
 
 export interface Scene {
@@ -35,7 +41,7 @@ export interface Scene {
 export type ViewBox = [number, number, number, number];
 
 // isolex's projection (its SPEC, §7)
-const S = 40;
+export const S = 40;
 const COS = 0.8660254037844387;
 const SIN = 0.5;
 
@@ -90,4 +96,46 @@ export function describeItem(item: Pick<SceneItem, 'name' | 'code' | 'condition'
   if (item.condition !== 'ok') parts.push(item.condition.replaceAll('_', ' '));
   if (item.holds) parts.push(`holds ${item.holds}`);
   return parts.join(', ');
+}
+
+/** How far apart heights are lifted to, in tiles. */
+export const LIFT_STEP = 0.25;
+
+/** A move across the page, dx, dy, as tiles across a floor: x and y. */
+export function floorDelta(dx: number, dy: number): [number, number] {
+  const a = dx / (COS * S); // x - y
+  const b = dy / (SIN * S); // x + y
+  return [(a + b) / 2, (b - a) / 2];
+}
+
+/** Where an item dragged from (x, y) by dx, dy tiles comes to rest: on whole tiles, on the floor. */
+export function moveTo(item: Pick<SceneItem, 'size'>, from: [number, number], dx: number, dy: number, floor: [number, number]): [number, number] {
+  const clamp = (v: number, max: number) => Math.min(Math.max(Math.round(v), 0), Math.max(max, 0));
+  return [clamp(from[0] + dx, floor[0] - item.size[0]), clamp(from[1] + dy, floor[1] - item.size[1])];
+}
+
+/**
+ * The height an item lifted to z comes to rest at: on top of something
+ * under it when near enough, and otherwise on a step; never below the floor.
+ */
+export function liftTo(items: Pick<SceneItem, 'id' | 'x' | 'y' | 'z' | 'size'>[], item: Pick<SceneItem, 'id' | 'x' | 'y' | 'size'>, z: number): number {
+  const under = (o: Pick<SceneItem, 'x' | 'y' | 'size'>) =>
+    o.x < item.x + item.size[0] && item.x < o.x + o.size[0] && o.y < item.y + item.size[1] && item.y < o.y + o.size[1];
+  for (const o of items) {
+    if (o.id === item.id || !under(o)) continue;
+    const top = o.z + o.size[2];
+    if (Math.abs(z - top) < LIFT_STEP / 2) return top;
+  }
+  return Math.max(0, Math.round(z / LIFT_STEP) * LIFT_STEP);
+}
+
+/** Where an item stands, as its history says it: "1, 2, 0.25". */
+export function position(item: Pick<SceneItem, 'x' | 'y' | 'z'>): string {
+  return [item.x, item.y, item.z].map((v) => String(Math.round(v * 1000) / 1000)).join(', ');
+}
+
+/** What an item overlaps, said in a line, or nothing. */
+export function overlapNote(item: Pick<SceneItem, 'overlaps'>, items: Pick<SceneItem, 'id' | 'name'>[]): string {
+  const names = (item.overlaps ?? []).map((id) => items.find((i) => i.id === id)?.name ?? id);
+  return names.length ? `Overlaps ${names.join(', ')}.` : '';
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,6 +34,13 @@ func TestGoldenScenes(t *testing.T) {
 			{ID: "3", Name: "Server", Size: [3]float64{2, 1, 0.56}},
 			{ID: "4", Name: "Unknown"},
 			{ID: "5", Name: "Wide table", Size: [3]float64{5, 2, 1}},
+		}},
+		{"a room partly arranged", &[3]float64{3, 2, 2}, []Item{
+			{ID: "1", Name: "Bench", Size: [3]float64{2, 1, 1}, At: &[3]float64{1, 0, 0}},
+			{ID: "2", Name: "Box", Size: [3]float64{1, 1, 1}},
+			{ID: "3", Name: "Lamp", Size: [3]float64{1, 1, 0.5}, At: &[3]float64{1, 0, 1}},
+			{ID: "4", Name: "Stool", Size: [3]float64{1, 1, 1}},
+			{ID: "5", Name: "Trolley", Size: [3]float64{1, 1, 1}, At: &[3]float64{4, 1, 0}},
 		}},
 	}
 	got := map[string]Scene{}
@@ -106,5 +114,45 @@ func TestStackedBoxesAreDrawnBottomUp(t *testing.T) {
 	}
 	if x, y := P(1, 0, 0); x != 34.64101615137755 || y != 20 {
 		t.Errorf("P(1,0,0) = %v, %v", x, y)
+	}
+}
+
+// Placed items stand where they were placed, and may share space, which is
+// flagged on both; the rest pack around them, never into them; and the
+// floor grows to take what was placed beyond it.
+func TestPlacedItemsStayAndOverlapsAreFlagged(t *testing.T) {
+	s := Layout(&[3]float64{3, 2, 2}, []Item{
+		{ID: "bench", Name: "Bench", Size: [3]float64{2, 1, 1}, At: &[3]float64{1, 0, 0}},
+		{ID: "box", Name: "Box", Size: [3]float64{1, 1, 1}},
+		{ID: "crate", Name: "Crate", Size: [3]float64{1, 1, 1}, At: &[3]float64{2, 0, 0.5}},
+		{ID: "lamp", Name: "Lamp", Size: [3]float64{1, 1, 0.5}, At: &[3]float64{1, 0, 1}},
+		{ID: "stool", Name: "Stool", Size: [3]float64{1, 1, 1}},
+		{ID: "trolley", Name: "Trolley", Size: [3]float64{1, 1, 1}, At: &[3]float64{4, 1, 0}},
+		{ID: "odd", Name: "Odd", At: &[3]float64{-2, math.Inf(1), math.NaN()}},
+	})
+	by := map[string]Placed{}
+	for _, p := range s.Items {
+		by[p.ID] = p
+	}
+	if b := by["bench"]; b.X != 1 || b.Y != 0 || !b.Arranged || fmt.Sprint(b.Overlaps) != "[crate]" {
+		t.Errorf("bench %+v", b)
+	}
+	if c := by["crate"]; fmt.Sprint(c.Overlaps) != "[bench]" {
+		t.Errorf("crate %+v", c)
+	}
+	// on the bench, not in it
+	if l := by["lamp"]; l.Z != 1 || l.Overlaps != nil {
+		t.Errorf("lamp %+v", l)
+	}
+	if o := by["odd"]; o.X != 0 || o.Y != 0 || o.Z != 0 {
+		t.Errorf("odd %+v", o)
+	}
+	// packed into what is left, on the floor as wide as the trolley makes
+	// it: past the odd one, the bench and the crate
+	if b, st := by["box"], by["stool"]; b.Arranged || b.X != 3 || b.Y != 0 || st.X != 4 || st.Y != 0 || b.Overlaps != nil {
+		t.Errorf("box %+v stool %+v", b, st)
+	}
+	if s.Floor != [2]float64{5, 2} {
+		t.Errorf("floor %v", s.Floor)
 	}
 }
