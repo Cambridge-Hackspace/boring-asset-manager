@@ -43,6 +43,11 @@ var moduleDir embed.FS
 // with one that does not match wasm.lock.
 var ErrUnavailable = errors.New("the icon compiler is not built into this binary (tools/isolex/fetch.sh)")
 
+// ErrRequest is CompileOne asked for what the lexicon does not have: an
+// icon it does not emit, or a param the icon does not have or of another
+// type.
+var ErrRequest = errors.New("isolex: the lexicon cannot answer this")
+
 // Lock is what wasm.lock pins.
 type Lock struct {
 	Version string
@@ -237,15 +242,141 @@ func (c *Compiler) callVersion(ctx context.Context) (string, error) {
 // compiler failed, ran out of time or memory, or is unavailable; a
 // lexicon with mistakes in it is a Result with Errors, not an error.
 func (c *Compiler) Compile(ctx context.Context, files []File) (*Result, error) {
+	out, err := c.call(ctx, struct {
+		Files []File `json:"files"`
+	}{orNone(files)})
+	if err != nil {
+		return nil, err
+	}
+	return decode(out, false)
+}
+
+// CompileOne compiles one icon the lexicon emits, a variant's name
+// included, with params set on it as a child's values would be: each a
+// float64 for a number param or a string for a text one. Only that icon
+// is drawn, and those it badges; the IR holds it alone, and the same
+// inputs always give the same IR. A request the lexicon cannot answer is
+// ErrRequest; a lexicon with errors of its own compiles to them, as
+// Compile does.
+func (c *Compiler) CompileOne(ctx context.Context, files []File, icon string, params map[string]any) (*Result, error) {
+	if icon == "" {
+		return nil, fmt.Errorf("%w: no icon named", ErrRequest)
+	}
+	if params == nil {
+		params = map[string]any{}
+	}
+	out, err := c.call(ctx, struct {
+		Files  []File         `json:"files"`
+		Icon   string         `json:"icon"`
+		Params map[string]any `json:"params"`
+	}{orNone(files), icon, params})
+	if err != nil {
+		return nil, err
+	}
+	return decode(out, true)
+}
+
+// Request is one icon of CompileMany's, as CompileOne names it and its
+// params.
+type Request struct {
+	Icon   string         `json:"icon"`
+	Params map[string]any `json:"params,omitempty"`
+}
+
+// Many is what compiling many icons came to: the lexicon's own outcome,
+// and when it compiles, a result for each request.
+type Many struct {
+	// OK, Errors and Warnings are the lexicon's parsing and resolving; a
+	// request's results have no warnings of their own.
+	OK       bool
+	Errors   []Diag
+	Warnings []Diag
+	// Results are the requests', in order, when OK: each what CompileOne
+	// gives for it, or Refused.
+	Results []One
+}
+
+// One is a request's result: its Result, or why the lexicon cannot
+// answer it.
+type One struct {
+	*Result
+	Refused string
+}
+
+// CompileMany compiles icons of a lexicon, each with its params, from one
+// parse: each as CompileOne would, but the lexicon is parsed and resolved
+// once for all of them, which is most of the work when it holds a font.
+func (c *Compiler) CompileMany(ctx context.Context, files []File, requests []Request) (*Many, error) {
+	for _, r := range requests {
+		if r.Icon == "" {
+			return nil, fmt.Errorf("%w: no icon named", ErrRequest)
+		}
+	}
+	if requests == nil {
+		requests = []Request{}
+	}
+	out, err := c.call(ctx, struct {
+		Files    []File    `json:"files"`
+		Requests []Request `json:"requests"`
+	}{orNone(files), requests})
+	if err != nil {
+		return nil, err
+	}
+	var o struct {
+		OK         bool              `json:"ok"`
+		InputError string            `json:"input_error"`
+		Errors     []Diag            `json:"errors"`
+		Warnings   []Diag            `json:"warnings"`
+		Results    []json.RawMessage `json:"results"`
+	}
+	if err := json.Unmarshal(out, &o); err != nil {
+		return nil, fmt.Errorf("isolex: unreadable output from the compiler: %w", err)
+	}
+	if o.InputError != "" {
+		return nil, fmt.Errorf("isolex: the compiler could not read its input: %s", o.InputError)
+	}
+	m := &Many{OK: o.OK, Errors: o.Errors, Warnings: o.Warnings}
+	if m.Errors == nil {
+		m.Errors = []Diag{}
+	}
+	if m.Warnings == nil {
+		m.Warnings = []Diag{}
+	}
+	if !m.OK {
+		return m, nil
+	}
+	if len(o.Results) != len(requests) {
+		return nil, fmt.Errorf("isolex: the compiler answered %d of %d requests; is it older than 0.5.0?", len(o.Results), len(requests))
+	}
+	m.Results = make([]One, len(o.Results))
+	for i, raw := range o.Results {
+		r, err := decode(raw, true)
+		if errors.Is(err, ErrRequest) {
+			m.Results[i].Refused = strings.TrimPrefix(err.Error(), ErrRequest.Error()+": ")
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		m.Results[i].Result = r
+	}
+	return m, nil
+}
+
+// orNone is files, or none rather than null.
+func orNone(files []File) []File {
+	if files == nil {
+		return []File{}
+	}
+	return files
+}
+
+// call runs the compiler on input, as JSON, and returns its output.
+func (c *Compiler) call(ctx context.Context, in any) ([]byte, error) {
 	if err := c.init(); err != nil {
 		return nil, err
 	}
-	if files == nil {
-		files = []File{}
-	}
-	input, err := json.Marshal(struct {
-		Files []File `json:"files"`
-	}{files})
+	input, err := json.Marshal(in)
 	if err != nil {
 		return nil, err
 	}
@@ -272,11 +403,7 @@ func (c *Compiler) Compile(ctx context.Context, files []File) (*Result, error) {
 	if err != nil {
 		return nil, c.failure(ctx, err)
 	}
-	out, err := read(mod, res[0])
-	if err != nil {
-		return nil, err
-	}
-	return decode(out)
+	return read(mod, res[0])
 }
 
 // failure names why a compile stopped: the deadline, or the compiler
@@ -299,7 +426,9 @@ func read(mod api.Module, packed uint64) ([]byte, error) {
 	return bytes.Clone(b), nil
 }
 
-func decode(out []byte) (*Result, error) {
+// decode reads the compiler's output. An input error answers a request
+// for one icon (one) the lexicon cannot; otherwise it is bam's mistake.
+func decode(out []byte, one bool) (*Result, error) {
 	var o struct {
 		OK         bool            `json:"ok"`
 		InputError string          `json:"input_error"`
@@ -309,6 +438,9 @@ func decode(out []byte) (*Result, error) {
 	}
 	if err := json.Unmarshal(out, &o); err != nil {
 		return nil, fmt.Errorf("isolex: unreadable output from the compiler: %w", err)
+	}
+	if o.InputError != "" && one {
+		return nil, fmt.Errorf("%w: %s", ErrRequest, o.InputError)
 	}
 	if o.InputError != "" {
 		return nil, fmt.Errorf("isolex: the compiler could not read its input: %s", o.InputError)

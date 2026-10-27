@@ -102,7 +102,7 @@ var testIcons = func() map[string]*ir.Icon {
 		icons[doc.Icons[i].Name] = &doc.Icons[i]
 	}
 	// and isolex 0.4's transforms, in IR version 2
-	data, err = os.ReadFile("../isolex/testdata/isolex-0.4.0/transforms.ir.golden.json")
+	data, err = os.ReadFile("../isolex/testdata/isolex-0.5.0/transforms.ir.golden.json")
 	if err != nil {
 		panic(err)
 	}
