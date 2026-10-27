@@ -110,18 +110,18 @@ func TestTheModuleIsThePinnedVersion(t *testing.T) {
 
 // isolex's own fixtures compile here to isolex's own goldens, byte for
 // byte: the module is the compiler, not an approximation of it. They are
-// the pinned release's (testdata/isolex-0.4.0): its sample, and its
+// the pinned release's (testdata/isolex-0.5.0): its sample, and its
 // transforms and text, in IR version 2.
 func TestTheSampleCompilesToIsolexsGolden(t *testing.T) {
 	c := compiler(t, Options{})
 	var r *Result
 	for _, fixture := range []string{"sample", "transforms", "text"} {
-		got := compile(t, c, File{fixture + ".ilx", readFile(t, "testdata/isolex-0.4.0/"+fixture+".ilx")})
+		got := compile(t, c, File{fixture + ".ilx", readFile(t, "testdata/isolex-0.5.0/"+fixture+".ilx")})
 		if !got.OK || len(got.Errors) != 0 {
 			t.Fatalf("%s: errors: %+v", fixture, got.Errors)
 		}
 		var want bytes.Buffer
-		if err := json.Compact(&want, []byte(readFile(t, "testdata/isolex-0.4.0/"+fixture+".ir.golden.json"))); err != nil {
+		if err := json.Compact(&want, []byte(readFile(t, "testdata/isolex-0.5.0/"+fixture+".ir.golden.json"))); err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got.IR, want.Bytes()) {
@@ -140,6 +140,67 @@ func TestTheSampleCompilesToIsolexsGolden(t *testing.T) {
 	// the sample grants accent and reserves nothing, which isolex warns of
 	if len(r.Warnings) != 1 || r.Warnings[0] != (Diag{File: "sample.ilx", Line: 82, Col: 3, Message: r.Warnings[0].Message}) {
 		t.Errorf("warnings: %+v", r.Warnings)
+	}
+}
+
+// One icon compiles alone with params set on it, as a child setting them
+// would draw it; many compile from one parse, each as it would alone, and
+// a request the lexicon cannot answer is refused on its own.
+func TestOneIconAndManyFromOneParse(t *testing.T) {
+	c := compiler(t, Options{})
+	ctx := context.Background()
+	src := readFile(t, "testdata/isolex-0.5.0/text.ilx")
+	files := []File{{"text.ilx", src}}
+
+	one, err := c.CompileOne(ctx, files, "port-label", map[string]any{"ports": 24.0})
+	if err != nil || !one.OK || len(one.Doc.Icons) != 1 {
+		t.Fatalf("%+v %v", one, err)
+	}
+	child := compile(t, c, File{"text.ilx", strings.Replace(src, "param ports 48", "param ports 24", 1)})
+	got, _ := json.Marshal(one.Doc.Icons[0])
+	want, _ := json.Marshal(child.Doc.Icon("port-label"))
+	if string(got) != string(want) {
+		t.Errorf("port-label with 24:\n got %.200s\nwant %.200s", got, want)
+	}
+	for _, icon := range []string{"nope", ""} {
+		if _, err := c.CompileOne(ctx, files, icon, nil); !errors.Is(err, ErrRequest) {
+			t.Errorf("%q: %v", icon, err)
+		}
+	}
+
+	m, err := c.CompileMany(ctx, files, []Request{
+		{Icon: "port-label", Params: map[string]any{"ports": 24.0}},
+		{Icon: "tagged-a", Params: map[string]any{"tag": "X"}},
+		{Icon: "nope"},
+		{Icon: "port-label", Params: map[string]any{"ports": "24"}},
+	})
+	if err != nil || !m.OK || len(m.Results) != 4 {
+		t.Fatalf("%+v %v", m, err)
+	}
+	if !bytes.Equal(m.Results[0].IR, one.IR) {
+		t.Errorf("the first differs from it alone:\n got %.200s\nwant %.200s", m.Results[0].IR, one.IR)
+	}
+	alone, _ := c.CompileOne(ctx, files, "tagged-a", map[string]any{"tag": "X"})
+	if m.Results[1].Result == nil || !bytes.Equal(m.Results[1].IR, alone.IR) {
+		t.Errorf("the second differs from it alone")
+	}
+	if r := m.Results[2]; r.Result != nil || r.Refused != "the lexicon emits no icon 'nope'" {
+		t.Errorf("an icon it does not emit: %+v", r)
+	}
+	if r := m.Results[3]; r.Result != nil || r.Refused != "param 'ports' of icon 'port-label' is a number; give it a number" {
+		t.Errorf("a param of the other kind: %+v", r)
+	}
+
+	// a lexicon with errors: they, and no results; none asked, none given
+	m, err = c.CompileMany(ctx, []File{{"a.ilx", "icon \"a\" {\n  patr \"p\" { }\n}\n"}}, []Request{{Icon: "a"}})
+	if err != nil || m.OK || len(m.Errors) == 0 || m.Results != nil {
+		t.Errorf("%+v %v", m, err)
+	}
+	if m, err := c.CompileMany(ctx, files, nil); err != nil || !m.OK || len(m.Results) != 0 {
+		t.Errorf("none: %+v %v", m, err)
+	}
+	if _, err := c.CompileMany(ctx, files, []Request{{}}); !errors.Is(err, ErrRequest) {
+		t.Errorf("no icon named: %v", err)
 	}
 }
 
@@ -323,8 +384,8 @@ func TestTheUnknownIconNeedsNoCompiler(t *testing.T) {
 // package svg is isolex's own SVG for it.
 func TestTheCompiledSampleDrawsAsIsolexDraws(t *testing.T) {
 	c := compiler(t, Options{})
-	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/isolex-0.4.0/sample.ilx")})
-	want := readFile(t, "testdata/isolex-0.4.0/sample.svg.golden")
+	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/isolex-0.5.0/sample.ilx")})
+	want := readFile(t, "testdata/isolex-0.5.0/sample.svg.golden")
 	for i := range r.Doc.Icons {
 		icon := &r.Doc.Icons[i]
 		got := "== " + icon.Name + ".svg ==\n" + svg.Icon(icon, svg.Palette(svg.IsolexPalette))

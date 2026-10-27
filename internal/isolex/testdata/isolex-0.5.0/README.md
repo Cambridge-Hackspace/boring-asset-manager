@@ -1,5 +1,6 @@
 These are isolex's own fixtures and goldens, copied unmodified from
-isolex at tag `0.4.0` (commit `d0aa66f`, `tests/fixtures/`): its sample,
+isolex at tag `0.5.0` (commit `822122c`, `tests/fixtures/`), where they
+are as they were at `0.4.0` (commit `d0aa66f`): its sample,
 transforms and text lexicons, the IR version 2 each compiles to, and the
 SVG isolex's reference renderer draws from that IR with its built-in
 palette. They are the work of Axonibyte Innovations, LLC, under the

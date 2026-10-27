@@ -58,7 +58,7 @@ func TestSampleMatchesIsolexsGolden(t *testing.T) {
 // and fixed strokes, as its tests string each icon together in order.
 func TestVersionTwoMatchesIsolexsGoldens(t *testing.T) {
 	read := func(name string) []byte {
-		data, err := os.ReadFile("../testdata/isolex-0.4.0/" + name)
+		data, err := os.ReadFile("../testdata/isolex-0.5.0/" + name)
 		if err != nil {
 			t.Fatal(err)
 		}

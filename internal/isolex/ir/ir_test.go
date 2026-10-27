@@ -43,7 +43,7 @@ func TestParseReadsIsolexsGolden(t *testing.T) {
 // isolex 0.4's IR, version 2: groups drawn through a matrix, a clip and
 // fixed strokes.
 func TestParseReadsVersionTwo(t *testing.T) {
-	data, err := os.ReadFile("../testdata/isolex-0.4.0/transforms.ir.golden.json")
+	data, err := os.ReadFile("../testdata/isolex-0.5.0/transforms.ir.golden.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestParseReadsVersionTwo(t *testing.T) {
 		t.Fatalf("groups %d, clipped %d, fixed %d", matrices, clipped, fixed)
 	}
 	// a badge is a matrix of its scale and place
-	data, err = os.ReadFile("../testdata/isolex-0.4.0/sample.ir.golden.json")
+	data, err = os.ReadFile("../testdata/isolex-0.5.0/sample.ir.golden.json")
 	if err != nil {
 		t.Fatal(err)
 	}
