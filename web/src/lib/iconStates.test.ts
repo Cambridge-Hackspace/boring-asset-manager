@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawnIn, paramsNote, plainIcon, stateNote } from './iconStates';
+import { drawnIn, paramsNote, plainIcon, stateNote, textsNote } from './iconStates';
 
 describe('icon states', () => {
   it('finds the icons drawn in a variant', () => {
@@ -23,5 +23,10 @@ describe('icon states', () => {
     expect(plainIcon(tall)).toBe('server');
     expect(paramsNote(tall)).toBe('Drawn with ports 8, u 2, from its fields.');
     expect(paramsNote({ name: 'server', from: 'category' })).toBe('');
+  });
+
+  it('says what texts of its own an asset is written with', () => {
+    expect(textsNote({ name: 'tag', from: 'category', texts: { note: 'Spare', label: 'Drill 3' } })).toBe('Written with label “Drill 3”, note “Spare”.');
+    expect(textsNote({ name: 'tag', from: 'category' })).toBe('');
   });
 });

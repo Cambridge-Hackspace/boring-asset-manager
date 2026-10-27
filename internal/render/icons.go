@@ -46,6 +46,12 @@ func (s *Scene) placeIcon(e *labels.Element, box image.Rectangle, data labels.Da
 		return nil
 	}
 	icon := icons.LabelIcon(name)
+	// the asset's, drawn with its own texts
+	if raw := data.DrawnIcons[name]; raw != nil && e.Icon == labels.IconOfAsset {
+		if drawn, err := ir.ParseIcon(raw); err == nil {
+			icon = drawn
+		}
+	}
 	if icon == nil || !(icon.Viewbox[2] > 0 && icon.Viewbox[3] > 0) {
 		return nil
 	}

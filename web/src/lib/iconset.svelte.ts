@@ -70,9 +70,10 @@ class Iconset {
     return name ? this.named(name) : undefined;
   }
 
-  /** The icon an asset is drawn with, as the server resolved it, if any. */
+  /** The icon an asset is drawn with, as the server resolved it, if any: drawn with its own texts, when it has them. */
   forAsset(icon: ResolvedIcon | null | undefined): IrIcon | undefined {
-    return icon ? this.named(icon.name) : undefined;
+    if (!icon) return undefined;
+    return icon.drawn?.[icon.name] ?? this.named(icon.name);
   }
 
   /** The icon drawn for a name the build does not draw. */
