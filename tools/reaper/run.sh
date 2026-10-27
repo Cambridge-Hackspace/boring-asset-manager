@@ -24,6 +24,10 @@ step "isolex compiler, as wasm.lock pins it"
 "$ROOT/tools/isolex/fetch.sh"
 
 step "Go suites (-race), on SQLite in REAPER_STATE"
+# go test gives each package 10 minutes by default. Under the race detector
+# the largest (internal/assetcsv's seeded imports) takes a third of that on
+# a workstation, and reaper's guest is several times slower; 30 minutes
+# still catches a test that hangs.
 mkdir -p "$REAPER_STATE/uploads"
 "$CONTAINER" run --rm \
   -e BAM_REQUIRE_ISOLEX=1 \
@@ -34,7 +38,7 @@ mkdir -p "$REAPER_STATE/uploads"
   -e BAM_DB_PATH=/state/bam_test.db \
   -e BAM_STORAGE_PATH=/state/uploads \
   "$GO_IMAGE" \
-  go test -race ./...
+  go test -race -timeout 30m ./...
 
 # The web scripts keep node_modules, the npm cache and Go's caches in
 # reaper's caches rather than in named volumes on the guest's small root disk.

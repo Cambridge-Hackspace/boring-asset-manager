@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -30,7 +29,7 @@ func setupTestStore(t testing.TB) *store.Store {
 		t.Cleanup(cleanup)
 		st = ephemeral
 	} else {
-		opened, err := store.Open(&config.DatabaseConfig{Type: "sqlite", DSN: ":memory:"})
+		opened, err := store.OpenMigratedSQLite(":memory:")
 		if err != nil {
 			t.Fatalf("opening test store: %v", err)
 		}
