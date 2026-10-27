@@ -104,28 +104,61 @@ func Sized(icon *ir.Icon, colors Colors, height float64) string {
 	b.WriteString(Number(v[0]) + " " + Number(v[1]) + " " + Number(v[2]) + " " + Number(v[3]))
 	b.WriteString(`" width="` + Number(width) + `" height="` + Number(height) + "\">\n")
 	b.WriteString("<title>" + escape(icon.Name) + "</title>\n")
-	shapes(&b, icon.Shapes, colors, 1)
+	w := writer{b: &b, colors: colors, icon: icon.Name}
+	w.shapes(icon.Shapes, 1, false)
 	b.WriteString("</svg>\n")
 	return b.String()
 }
 
-func shapes(b *strings.Builder, ss []ir.Shape, colors Colors, depth int) {
+// writer draws one icon's shapes, counting the clip paths it declares.
+type writer struct {
+	b      *strings.Builder
+	colors Colors
+	icon   string
+	clips  int
+}
+
+// shapes draws ss indented depth deep. A version 2 group is drawn as
+// isolex 0.4 draws it: a clip path declared where it stands, named for the
+// icon and numbered in order, around a group drawn through its matrix,
+// so the clip is in the coordinates the group is drawn in; in a group
+// with fixed strokes, every stroke keeps its width. A version 1 group is
+// drawn as isolex 0.3 drew a badge.
+func (w *writer) shapes(ss []ir.Shape, depth int, fixed bool) {
+	b := w.b
 	indent := strings.Repeat("  ", depth)
 	for i := range ss {
 		s := &ss[i]
 		b.WriteString(indent)
 		switch s.Kind {
 		case ir.KindGroup:
-			b.WriteString(`<g transform="translate(` + Number(s.TX) + " " + Number(s.TY) + ") scale(" + Number(s.Scale) + ")\">\n")
-			shapes(b, s.Shapes, colors, depth+1)
-			b.WriteString(indent + "</g>\n")
+			if s.Matrix == nil {
+				b.WriteString(`<g transform="translate(` + Number(s.TX) + " " + Number(s.TY) + ") scale(" + Number(s.Scale) + ")\">\n")
+				w.shapes(s.Shapes, depth+1, fixed)
+				b.WriteString(indent + "</g>\n")
+				continue
+			}
+			inside, deeper := indent, depth+1
+			if s.Clip != nil {
+				w.clips++
+				id := escape("clip-" + w.icon + "-" + strconv.Itoa(w.clips))
+				b.WriteString(`<clipPath id="` + id + `"><polygon points="` + points(s.Clip) + "\"/></clipPath>\n")
+				b.WriteString(indent + `<g clip-path="url(#` + id + ")\">\n")
+				inside += "  "
+				deeper++
+				b.WriteString(inside)
+			}
+			m := s.Matrix
+			b.WriteString(`<g transform="matrix(` + Number(m[0]) + " " + Number(m[1]) + " " + Number(m[2]) + " " +
+				Number(m[3]) + " " + Number(m[4]) + " " + Number(m[5]) + ")\">\n")
+			w.shapes(s.Shapes, deeper, s.FixedStrokes())
+			b.WriteString(inside + "</g>\n")
+			if s.Clip != nil {
+				b.WriteString(indent + "</g>\n")
+			}
 			continue
 		case ir.KindPolygon:
-			points := make([]string, len(s.Points))
-			for j, p := range s.Points {
-				points[j] = Number(p[0]) + "," + Number(p[1])
-			}
-			b.WriteString(`<polygon points="` + strings.Join(points, " ") + `"`)
+			b.WriteString(`<polygon points="` + points(s.Points) + `"`)
 		case ir.KindPath:
 			b.WriteString(`<path d="` + escape(s.D) + `"`)
 		case ir.KindEllipse:
@@ -138,9 +171,20 @@ func shapes(b *strings.Builder, ss []ir.Shape, colors Colors, depth int) {
 				b.WriteString(` rx="` + Number(s.RX) + `"`)
 			}
 		}
-		paint(b, s, colors)
+		paint(b, s, w.colors)
+		if fixed && s.Stroke != "none" {
+			b.WriteString(` vector-effect="non-scaling-stroke"`)
+		}
 		b.WriteString("/>\n")
 	}
+}
+
+func points(ps [][2]float64) string {
+	out := make([]string, len(ps))
+	for j, p := range ps {
+		out[j] = Number(p[0]) + "," + Number(p[1])
+	}
+	return strings.Join(out, " ")
 }
 
 // paint writes fill and stroke, always in this order; an opacity of one,

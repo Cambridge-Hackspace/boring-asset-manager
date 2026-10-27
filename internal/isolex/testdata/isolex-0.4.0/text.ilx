@@ -1,0 +1,181 @@
+// Text inside icons (#42): a stroke-built font and an outline font, with
+// bold and italic styles as axis variants; text laid out with kerning,
+// a ligature and notdef, aligned, fitted and recolored; text params,
+// late-bound and passed to fragments; and text laid on a box's face.
+
+// A stroke-built font: glyphs drawn along their middles at `weight`, on
+// a cap height of 7 in an em of 10.
+font "plain" {
+  describe "A small stroke-built face for labels."
+  em 10
+  ascent 7
+  descent 3
+  kind "stroke"
+  param weight 1
+  axes "weight" "slope"
+  glyph " " advance=3
+  glyph "0" advance=5.5 { path d="M0,0 H4 V7 H0 Z M0,0 L4,7" width="weight" }
+  glyph "1" advance=5.5 { path d="M1,6 L2,7 V0 M1,0 H3" width="weight" }
+  glyph "2" advance=5.5 { path d="M0,6 Q0,7 2,7 Q4,7 4,5.5 Q4,4 0,0 H4" width="weight" }
+  glyph "3" advance=5.5 { path d="M0,7 H4 L2,4 Q4,4 4,2 Q4,0 2,0 Q0,0 0,1" width="weight" }
+  glyph "4" advance=5.5 { path d="M3,0 V7 L0,2 H4" width="weight" }
+  glyph "5" advance=5.5 { path d="M4,7 H0 V4 H2 Q4,4 4,2 Q4,0 2,0 H0" width="weight" }
+  glyph "6" advance=5.5 { path d="M3.5,7 Q0,7 0,3 V2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Q0,4 0,2.5" width="weight" }
+  glyph "7" advance=5.5 { path d="M0,7 H4 L1.5,0" width="weight" }
+  glyph "8" advance=5.5 { path d="M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z" width="weight" }
+  glyph "9" advance=5.5 { path d="M0.5,0 Q4,0 4,4 V5 Q4,7 2,7 Q0,7 0,5 Q0,3 2,3 Q4,3 4,4.5" width="weight" }
+  glyph "A" advance=5.5 { path d="M0,0 L2,7 L4,0 M0.8,2.5 H3.2" width="weight" }
+  glyph "E" advance=5.5 { path d="M4,7 H0 V0 H4 M0,3.5 H3" width="weight" }
+  glyph "P" advance=5.5 { path d="M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0" width="weight" }
+  glyph "T" advance=5.5 { path d="M0,7 H4 M2,7 V0" width="weight" }
+  glyph "U" advance=5.5 { path d="M0,7 V2 Q0,0 2,0 Q4,0 4,2 V7" width="weight" }
+  glyph "V" advance=5.5 { path d="M0,7 L2,0 L4,7" width="weight" }
+  glyph "o" advance=5.5 { path d="M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z" width="weight" }
+  glyph "-" advance=5 { line 0.5 3 3.5 3 width="weight" }
+  // a ligature: two hyphens are one long dash
+  glyph "--" advance=9 { line 0.5 3 8.5 3 width="weight" }
+  notdef advance=5.5 { path d="M0,0 H4 V7 H0 Z M0,0 L4,7 M0,7 L4,0" width="weight" }
+  kern "A" "V" -1
+  kern "T" "o" -0.8
+}
+
+// Bold restates the weight; italic slants: styles of any font that opts
+// into these axes, each on an axis of its own so a text can ask for both.
+axis "weight" {
+  variant "bold" { param weight 1.8 }
+}
+
+axis "slope" {
+  variant "italic" { slant -12 }
+}
+
+// An outline font: filled glyphs, with a synthesized bold that strokes
+// the outline in its own color.
+font "block" {
+  em 10
+  ascent 7
+  descent 0
+  kind "outline"
+  param embolden 0
+  axes "block-weight"
+  glyph " " advance=2.5
+  glyph "O" advance=6 { path d="M0,0 H5 V7 H0 Z M1.2,1.2 V5.8 H3.8 V1.2 Z" fill="ink" stroke="ink" width="embolden" }
+  glyph "K" advance=6 { path d="M0,0 H1.2 V2.8 L3.6,0 H5 L2.2,3.4 L5,7 H3.6 L1.2,4 V7 H0 Z" fill="ink" stroke="ink" width="embolden" }
+  glyph "I" advance=2.6 {
+    poly stroke="ink" width="embolden" { pt 0 0; pt 1.4 0; pt 1.4 7; pt 0 7 }
+  }
+}
+
+axis "block-weight" {
+  variant "bold" { param embolden 0.8 }
+}
+
+// A port count, from a number param, centered on a plate.
+icon "port-label" {
+  category "text"
+  canvas 48 24
+  param ports 48
+  part "plate" {
+    at 0 0 0 {
+      rect 2 2 44 20 rx=3 fill="body-top" stroke="outline" width=1.2
+      text 24 12 "PoE {ports}" font="plain" size=10 anchor="middle" baseline="middle"
+    }
+  }
+}
+
+// A rack position laid on the front face of a box.
+icon "rack-unit" {
+  category "text"
+  footprint 2 1 0.5
+  param u 12
+  part "chassis" {
+    box 0 0 0 2 1 0.5
+    transform onto="front" of="box 0 0 0 2 1 0.5" {
+      at 0 0 0 { text 6 15 "U{u}" font="plain" size=10 fill="ink" }
+    }
+  }
+}
+
+// Every style of the stroke font, and of the outline font.
+icon "styles" {
+  category "text"
+  canvas 80 64
+  part "lines" {
+    at 0 0 0 {
+      text 4 12 "PoE 48" font="plain" size=10
+      text 4 26 "PoE 48" font="plain" size=10 style="bold"
+      text 4 40 "PoE 48" font="plain" size=10 style="italic"
+      text 4 54 "PoE 48" font="plain" size=10 style="italic bold"
+      text 50 26 "OK" font="block" size=12
+      text 50 44 "OK I" font="block" size=12 style="bold"
+    }
+  }
+}
+
+// Kerning, a ligature and notdef, side by side with what they replace.
+icon "shaping" {
+  category "text"
+  canvas 64 48
+  part "lines" {
+    at 0 0 0 {
+      text 4 12 "AV To" font="plain" size=10
+      text 4 26 "A--V A-V" font="plain" size=10
+      text 4 40 "PÅ" font="plain" size=10
+    }
+  }
+}
+
+// Anchors and baselines about one point, and a long text fitted to a
+// width.
+icon "aligned" {
+  category "text"
+  canvas 64 64
+  part "guides" {
+    at 0 0 0 {
+      line 32 0 32 64 stroke="outline" width=0.4
+      line 0 32 64 32 stroke="outline" width=0.4
+    }
+  }
+  part "lines" {
+    at 0 0 0 {
+      text 32 10 "123" font="plain" size=8 anchor="start" baseline="top"
+      text 32 32 "456" font="plain" size=8 anchor="middle" baseline="middle"
+      text 32 54 "789" font="plain" size=8 anchor="end" baseline="bottom"
+      text 60 62 "1234567890" font="plain" size=10 anchor="end" max-width=30
+    }
+  }
+}
+
+// Text params: a default from other params, overridden down the chain
+// and passed to a fragment.
+fragment "plate" {
+  param label (text)"?"
+  param w 40
+  part "plate" {
+    rect 0 0 "w" 16 rx=2 fill="body-right" stroke="outline" width=1.2
+    text "w / 2" 8 "{label}" font="plain" size=8 anchor="middle" baseline="middle" fill="accent"
+  }
+}
+
+base "tagged" {
+  category "text"
+  canvas 48 24
+  param n 7
+  param tag (text)"A{n}"
+  part "tag" {
+    at 0 0 0 {
+      transform translate="4 4" {
+        insert "plate" label=(text)"{tag}-{n * 2}"
+      }
+    }
+  }
+}
+
+icon "tagged-a" {
+  extends "tagged"
+}
+
+icon "tagged-b" {
+  extends "tagged"
+  param tag (text)"P{n + 3}"
+}

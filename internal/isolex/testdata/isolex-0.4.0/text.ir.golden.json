@@ -1,0 +1,1877 @@
+{
+  "ir_version": 2,
+  "icons": [
+    {
+      "name": "port-label",
+      "category": "text",
+      "canvas": [
+        48.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        48.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "rect",
+          "x": 2.0,
+          "y": 2.0,
+          "w": 44.0,
+          "h": 20.0,
+          "rx": 3.0,
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            8.75,
+            14.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            14.25,
+            14.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            19.75,
+            14.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M4,7 H0 V0 H4 M0,3.5 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            28.25,
+            14.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            33.75,
+            14.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "rack-unit",
+      "category": "text",
+      "footprint": [
+        2.0,
+        1.0,
+        0.5
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -28.0,
+        119.92304845413264,
+        96.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              69.2820323027551,
+              40.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              69.2820323027551,
+              20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -20.0
+            ],
+            [
+              69.2820323027551,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8660254037844387,
+            0.5,
+            0.0,
+            -1.0,
+            -29.444863728670917,
+            18.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 V2 Q0,0 2,0 Q4,0 4,2 V7",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8660254037844387,
+            0.5,
+            0.0,
+            -1.0,
+            -24.681724007856502,
+            20.75
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M1,6 L2,7 V0 M1,0 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8660254037844387,
+            0.5,
+            0.0,
+            -1.0,
+            -19.91858428704209,
+            23.5
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,6 Q0,7 2,7 Q4,7 4,5.5 Q4,4 0,0 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "styles",
+      "category": "text",
+      "canvas": [
+        80.0,
+        64.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        80.0,
+        64.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            4.0,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            9.5,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            15.0,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M4,7 H0 V0 H4 M0,3.5 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            23.5,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            29.0,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            4.0,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            9.5,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            15.0,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M4,7 H0 V0 H4 M0,3.5 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            23.5,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            29.0,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            4.0,
+            40.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            9.5,
+            40.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            15.0,
+            40.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M4,7 H0 V0 H4 M0,3.5 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            23.5,
+            40.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            29.0,
+            40.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            4.0,
+            54.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            9.5,
+            54.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            15.0,
+            54.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M4,7 H0 V0 H4 M0,3.5 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            23.5,
+            54.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.21255656179848875,
+            -1.0,
+            29.0,
+            54.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.2,
+            0.0,
+            0.0,
+            -1.2,
+            50.0,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 H5 V7 H0 Z M1.2,1.2 V5.8 H3.8 V1.2 Z",
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 0.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.2,
+            0.0,
+            0.0,
+            -1.2,
+            57.2,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 H1.2 V2.8 L3.6,0 H5 L2.2,3.4 L5,7 H3.6 L1.2,4 V7 H0 Z",
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 0.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.2,
+            0.0,
+            0.0,
+            -1.2,
+            50.0,
+            44.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 H5 V7 H0 Z M1.2,1.2 V5.8 H3.8 V1.2 Z",
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 0.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.2,
+            0.0,
+            0.0,
+            -1.2,
+            57.2,
+            44.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 H1.2 V2.8 L3.6,0 H5 L2.2,3.4 L5,7 H3.6 L1.2,4 V7 H0 Z",
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 0.8
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.2,
+            0.0,
+            0.0,
+            -1.2,
+            67.4,
+            44.0
+          ],
+          "shapes": [
+            {
+              "kind": "polygon",
+              "points": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.4,
+                  0.0
+                ],
+                [
+                  1.4,
+                  7.0
+                ],
+                [
+                  0.0,
+                  7.0
+                ]
+              ],
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 0.8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "shaping",
+      "category": "text",
+      "canvas": [
+        64.0,
+        48.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        64.0,
+        48.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            4.0,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 L2,7 L4,0 M0.8,2.5 H3.2",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            8.5,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 L2,0 L4,7",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            17.0,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 H4 M2,7 V0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            21.7,
+            12.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,0 Q0,0 0,2.5 Q0,5 2,5 Q4,5 4,2.5 Q4,0 2,0 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            4.0,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 L2,7 L4,0 M0.8,2.5 H3.2",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            9.5,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0.50,3.00 L8.50,3.00",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            18.5,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 L2,0 L4,7",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            27.0,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 L2,7 L4,0 M0.8,2.5 H3.2",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            32.5,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0.50,3.00 L3.50,3.00",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            37.5,
+            26.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 L2,0 L4,7",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            4.0,
+            40.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            -1.0,
+            9.5,
+            40.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 H4 V7 H0 Z M0,0 L4,7 M0,7 L4,0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "aligned",
+      "category": "text",
+      "canvas": [
+        64.0,
+        64.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        64.0,
+        64.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "path",
+          "d": "M32.00,0.00 L32.00,64.00",
+          "fill": "none",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 0.4
+        },
+        {
+          "kind": "path",
+          "d": "M0.00,32.00 L64.00,32.00",
+          "fill": "none",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 0.4
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            32.0,
+            15.600000000000001
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M1,6 L2,7 V0 M1,0 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            36.4,
+            15.600000000000001
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,6 Q0,7 2,7 Q4,7 4,5.5 Q4,4 0,0 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            40.8,
+            15.600000000000001
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 H4 L2,4 Q4,4 4,2 Q4,0 2,0 Q0,0 0,1",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            25.4,
+            33.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            29.799999999999997,
+            33.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M4,7 H0 V4 H2 Q4,4 4,2 Q4,0 2,0 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            34.2,
+            33.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3.5,7 Q0,7 0,3 V2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Q0,4 0,2.5",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            18.799999999999997,
+            51.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 H4 L1.5,0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            23.199999999999996,
+            51.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            27.599999999999998,
+            51.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0.5,0 Q4,0 4,4 V5 Q4,7 2,7 Q0,7 0,5 Q0,3 2,3 Q4,3 4,4.5",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            30.000000000000004,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M1,6 L2,7 V0 M1,0 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            33.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,6 Q0,7 2,7 Q4,7 4,5.5 Q4,4 0,0 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            36.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 H4 L2,4 Q4,4 4,2 Q4,0 2,0 Q0,0 0,1",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            39.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            42.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M4,7 H0 V4 H2 Q4,4 4,2 Q4,0 2,0 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            45.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3.5,7 Q0,7 0,3 V2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Q0,4 0,2.5",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            48.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 H4 L1.5,0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            51.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M2,4 Q0,4 0,5.5 Q0,7 2,7 Q4,7 4,5.5 Q4,4 2,4 Q0,4 0,2 Q0,0 2,0 Q4,0 4,2 Q4,4 2,4 Z",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            54.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0.5,0 Q4,0 4,4 V5 Q4,7 2,7 Q0,7 0,5 Q0,3 2,3 Q4,3 4,4.5",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.5454545454545454,
+            0.0,
+            0.0,
+            -0.5454545454545454,
+            57.0,
+            62.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 H4 V7 H0 Z M0,0 L4,7",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tagged-a",
+      "category": "text",
+      "canvas": [
+        48.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        48.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            4.0,
+            4.0
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 0.0,
+              "y": 0.0,
+              "w": 40.0,
+              "h": 16.0,
+              "rx": 2.0,
+              "fill": "body-right",
+              "fill_opacity": 1.0,
+              "stroke": "outline",
+              "stroke_width": 1.2
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            13.2,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 L2,7 L4,0 M0.8,2.5 H3.2",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            17.6,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,7 H4 L1.5,0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            22.0,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0.50,3.00 L3.50,3.00",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            26.0,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M1,6 L2,7 V0 M1,0 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            30.4,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tagged-b",
+      "category": "text",
+      "canvas": [
+        48.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        48.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            4.0,
+            4.0
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 0.0,
+              "y": 0.0,
+              "w": 40.0,
+              "h": 16.0,
+              "rx": 2.0,
+              "fill": "body-right",
+              "fill_opacity": 1.0,
+              "stroke": "outline",
+              "stroke_width": 1.2
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            11.0,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 V7 H2.5 Q4,7 4,5.25 Q4,3.5 2.5,3.5 H0",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            15.4,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M1,6 L2,7 V0 M1,0 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            19.8,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0,0 H4 V7 H0 Z M0,0 L4,7",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            24.200000000000003,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M0.50,3.00 L3.50,3.00",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            28.2,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M1,6 L2,7 V0 M1,0 H3",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            -0.8,
+            32.6,
+            13.6
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M3,0 V7 L0,2 H4",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "accent",
+              "stroke_width": 1.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

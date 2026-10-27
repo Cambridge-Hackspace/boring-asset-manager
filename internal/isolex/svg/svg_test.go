@@ -52,6 +52,67 @@ func TestSampleMatchesIsolexsGolden(t *testing.T) {
 	}
 }
 
+// isolex 0.4's goldens, IR version 2, drawn here as isolex draws them:
+// its sample, whose badges are matrices, as its CLI writes one file per
+// icon; and its transforms and text fixtures, groups with matrices, clips
+// and fixed strokes, as its tests string each icon together in order.
+func TestVersionTwoMatchesIsolexsGoldens(t *testing.T) {
+	read := func(name string) []byte {
+		data, err := os.ReadFile("../testdata/isolex-0.4.0/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	same := func(name, got string) {
+		want := string(read(name))
+		if got == want {
+			return
+		}
+		g, w := strings.Split(got, "\n"), strings.Split(want, "\n")
+		for i := 0; i < len(g) && i < len(w); i++ {
+			if g[i] != w[i] {
+				t.Fatalf("%s: line %d differs from isolex's golden:\n got %s\nwant %s", name, i+1, g[i], w[i])
+			}
+		}
+		t.Fatalf("%s: %d lines, isolex's golden has %d", name, len(g), len(w))
+	}
+
+	doc, err := ir.Parse(read("sample.ir.golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{}
+	for i := range doc.Icons {
+		files[doc.Icons[i].Name+".svg"] = Icon(&doc.Icons[i], Palette(IsolexPalette))
+	}
+	names := make([]string, 0, len(files))
+	for n := range files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var got strings.Builder
+	for _, n := range names {
+		got.WriteString("== " + n + " ==\n" + files[n])
+	}
+	same("sample.svg.golden", got.String())
+
+	for _, fixture := range []string{"transforms", "text"} {
+		doc, err := ir.Parse(read(fixture + ".ir.golden.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if missing := Missing(doc.Icons, IsolexPalette); len(missing) != 0 {
+			t.Fatalf("isolex's palette lacks %v", missing)
+		}
+		var got strings.Builder
+		for i := range doc.Icons {
+			got.WriteString("<!-- " + doc.Icons[i].Name + " -->\n" + Icon(&doc.Icons[i], Palette(IsolexPalette)))
+		}
+		same(fixture+".svg.golden", got.String())
+	}
+}
+
 // isolex's renderer tests, ported: the same input must come out the same.
 func TestNumbersTakeTwoDecimalsTiesToEven(t *testing.T) {
 	for v, want := range map[float64]string{
