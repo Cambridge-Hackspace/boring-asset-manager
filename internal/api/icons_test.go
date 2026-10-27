@@ -130,7 +130,7 @@ func TestCategoryIconsThroughTheAPI(t *testing.T) {
 	}
 	rec = doJSON(t, srv, cookie, "GET", "/api/v1/icons/ir", "")
 	etag := rec.Header().Get("ETag")
-	if rec.Code != http.StatusOK || etag != `"`+hash+`"` || !strings.Contains(rec.Body.String(), `"ir_version":1`) {
+	if rec.Code != http.StatusOK || etag != `"`+hash+`"` || !strings.Contains(rec.Body.String(), `"ir_version":2`) {
 		t.Fatalf("ir: %d %q %.200s", rec.Code, etag, rec.Body)
 	}
 	req := httptest.NewRequest("GET", "/api/v1/icons/ir", nil)

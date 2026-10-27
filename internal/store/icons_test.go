@@ -1,7 +1,9 @@
 package store
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"sort"
@@ -10,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
@@ -394,6 +397,68 @@ func TestRebuildOnlyWhenTheInputsChanged(t *testing.T) {
 	}
 	if third, _ := st.RebuildIcons(ctx, c); third.Build.Hash != first.Build.Hash {
 		t.Errorf("rebuilt to %s, want %s", third.Build.Hash, first.Build.Hash)
+	}
+}
+
+// refuser is a compiler of the same version that compiles nothing: a new
+// isolex that does not take what is published.
+type refuser struct{ IconCompiler }
+
+func (refuser) Compile(context.Context, []isolex.File) (*isolex.Result, error) {
+	return &isolex.Result{Errors: []isolex.Diag{{File: "crate.ilx", Line: 1, Col: 1, Message: "refused"}}, Warnings: []isolex.Diag{}}, nil
+}
+
+// A build an older isolex made, in IR version 1, is drawn until a new
+// isolex's build replaces it, and stays when the new one does not compile
+// what is published (README §3.7).
+func TestABuildOfAnOlderIsolexIsDrawnUntilReplaced(t *testing.T) {
+	st := setupTestStore(t)
+	c := compilerFor(t)
+	ctx := context.Background()
+	saveIcon(t, st, c, newCategory(t, st, "Storage"), "crate", crate)
+
+	// as 0.3.1 left it: its IR, its version, inputs that no longer match
+	old, err := os.ReadFile("../isolex/testdata/sample.ir.golden.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v1 bytes.Buffer
+	if err := json.Compact(&v1, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Exec(`UPDATE icon_build SET ir = ?, isolex_version = '0.3.1', source_hash = 'old'`, v1.String()); err != nil {
+		t.Fatal(err)
+	}
+	drawn := func() *ir.Document {
+		t.Helper()
+		b, err := st.CurrentIconBuild()
+		if err != nil || b == nil {
+			t.Fatalf("%+v %v", b, err)
+		}
+		doc, err := ir.Parse(b.IR)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return doc
+	}
+	if doc := drawn(); doc.IRVersion != 1 || doc.Icon("switch-l3") == nil {
+		t.Fatalf("the old build is not drawn: version %d", doc.IRVersion)
+	}
+
+	refused, err := st.RebuildIcons(ctx, refuser{c})
+	if err != nil || refused.Published || len(refused.Errors) != 1 {
+		t.Fatalf("%+v %v", refused, err)
+	}
+	if doc := drawn(); doc.IRVersion != 1 {
+		t.Fatalf("a refused rebuild replaced the old build: version %d", doc.IRVersion)
+	}
+
+	rebuilt, err := st.RebuildIcons(ctx, c)
+	if err != nil || !rebuilt.Published || rebuilt.Build.IsolexVersion != isolex.Pinned().Version {
+		t.Fatalf("%+v %v", rebuilt, err)
+	}
+	if doc := drawn(); doc.IRVersion != ir.Version || doc.Icon("crate") == nil {
+		t.Fatalf("not rebuilt: version %d", doc.IRVersion)
 	}
 }
 

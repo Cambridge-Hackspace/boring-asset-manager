@@ -62,7 +62,9 @@ test("an asset is drawn with its category's icon, and given one of its own", asy
 });
 
 // The server draws an icon as an image two ways; Chromium drawing the SVG
-// is the reference the PNG is held to, pixel for pixel, near enough.
+// is the reference the PNG is held to, pixel for pixel, near enough. The
+// icon has what isolex 0.4 draws in groups too: a plate laid on a face,
+// its strokes fixed, and a disc cut at the frame's edge.
 test('an icon drawn as a PNG is drawn as its SVG is', async ({ signedIn: page, api }) => {
   const { category } = await api.call('POST', '/categories', { name: unique('Drums'), color_hex: '#b45309' });
   const name = unique('drum').toLowerCase();
@@ -78,6 +80,16 @@ test('an icon drawn as a PNG is drawn as its SVG is', async ({ signedIn: page, a
     at 0.5 0.5 1 {
       circle "x" "y" 5 fill="ink" stroke="outline" width=1.2
       path d="M{x-8},{y+6} q8,-12 16,0" stroke="ink" width=1.4 fill="none"
+    }
+  }
+  part "plate" {
+    transform onto="front" of="box 0 0 0 1 1 0.5" strokes="fixed" {
+      at 0 0 0 { rect 6 5 22 10 rx=2 fill="accent" stroke="ink" width=1.2 }
+    }
+    at 0.5 0.5 1 {
+      transform translate="38 0" rotate=20 origin="x y" bounds="clip" {
+        circle "x" "y" 7 fill="accent" stroke="ink" width=1.2
+      }
     }
   }
 }`;

@@ -108,20 +108,31 @@ func TestTheModuleIsThePinnedVersion(t *testing.T) {
 	}
 }
 
-// isolex's own fixture compiles here to isolex's own golden, byte for
-// byte: the module is the compiler, not an approximation of it.
+// isolex's own fixtures compile here to isolex's own goldens, byte for
+// byte: the module is the compiler, not an approximation of it. They are
+// the pinned release's (testdata/isolex-0.4.0): its sample, and its
+// transforms and text, in IR version 2.
 func TestTheSampleCompilesToIsolexsGolden(t *testing.T) {
 	c := compiler(t, Options{})
-	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/sample.ilx")})
-	if !r.OK || len(r.Errors) != 0 {
-		t.Fatalf("errors: %+v", r.Errors)
-	}
-	var want bytes.Buffer
-	if err := json.Compact(&want, []byte(readFile(t, "testdata/sample.ir.golden.json"))); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(r.IR, want.Bytes()) {
-		t.Errorf("the IR differs from isolex's golden:\n got %.300s\nwant %.300s", r.IR, want.Bytes())
+	var r *Result
+	for _, fixture := range []string{"sample", "transforms", "text"} {
+		got := compile(t, c, File{fixture + ".ilx", readFile(t, "testdata/isolex-0.4.0/"+fixture+".ilx")})
+		if !got.OK || len(got.Errors) != 0 {
+			t.Fatalf("%s: errors: %+v", fixture, got.Errors)
+		}
+		var want bytes.Buffer
+		if err := json.Compact(&want, []byte(readFile(t, "testdata/isolex-0.4.0/"+fixture+".ir.golden.json"))); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got.IR, want.Bytes()) {
+			t.Errorf("%s: the IR differs from isolex's golden:\n got %.300s\nwant %.300s", fixture, got.IR, want.Bytes())
+		}
+		if got.Doc.IRVersion != 2 {
+			t.Errorf("%s: IR version %d", fixture, got.Doc.IRVersion)
+		}
+		if fixture == "sample" {
+			r = got
+		}
 	}
 	if len(r.Doc.Icons) == 0 || r.Doc.Icon("switch-l3") == nil {
 		t.Errorf("parsed %d icons, without switch-l3", len(r.Doc.Icons))
@@ -312,8 +323,8 @@ func TestTheUnknownIconNeedsNoCompiler(t *testing.T) {
 // package svg is isolex's own SVG for it.
 func TestTheCompiledSampleDrawsAsIsolexDraws(t *testing.T) {
 	c := compiler(t, Options{})
-	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/sample.ilx")})
-	want := readFile(t, "testdata/sample.svg.golden")
+	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/isolex-0.4.0/sample.ilx")})
+	want := readFile(t, "testdata/isolex-0.4.0/sample.svg.golden")
 	for i := range r.Doc.Icons {
 		icon := &r.Doc.Icons[i]
 		got := "== " + icon.Name + ".svg ==\n" + svg.Icon(icon, svg.Palette(svg.IsolexPalette))

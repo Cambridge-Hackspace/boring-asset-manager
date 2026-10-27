@@ -10,6 +10,8 @@ Icons are written, not drawn: each is a short text in **isolex**, a language for
 - **Start from a box**, a plain cube to build on.
 - **Copy** another category's icon.
 
+A part can be turned a quarter at a time, mirrored, rotated, slanted or laid flat on a face of a box, and an icon can carry words, such as a rack position or a port count, set in a font kept in the **Library**.
+
 The editor checks what you write as you type, and shows it beside the editor, in light and in dark, with the icons of the category's subcategories. A mistake is underlined, and listed under **Problems**; choose one to go to it. **Ctrl+Space** suggests what can go where the cursor is, such as a shape or a color. **Tab** indents; to leave the editor with the keyboard, press **Esc**, then **Tab**.
 
 ## Saving
@@ -64,7 +66,7 @@ Whoever may change categories can draw their icons. Changing the palette and the
 
 **Icons**, under **Catalog**, shows every icon, by group, each with **SVG** and **PNG** links to download it as an image, and what **needs attention**: drafts waiting with problems, warnings, and icons that assets were given that no longer exist; follow one to the assets, to give them another. Whoever may **Manage icons** changes there what every icon is drawn with:
 
-- **Library**: shapes icons share and no one category owns, such as a base to extend or a fragment to insert, written and saved as a category's icon is.
+- **Library**: shapes icons share and no one category owns, such as a base to extend or a fragment to insert, written and saved as a category's icon is; and fonts, for the words icons carry. isolex can convert a TrueType or OpenType font into one, if the font's license allows it; the converted font keeps its license.
 - **Palette**: the colors icons paint with, each named, with a light and a dark color. A color an icon still uses cannot be taken away.
 - **Settings**: the line widths icons may use, the colors only an icon that grants itself one may use, and how much drawing one icon may take.
 - **Asset states**: the variant each state is drawn with (see **States**).
