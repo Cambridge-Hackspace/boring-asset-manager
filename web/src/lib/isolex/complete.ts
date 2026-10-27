@@ -48,6 +48,7 @@ const topNodes: NodeSpec[] = [
   node('base', 'Geometry icons extend, never drawn itself', '"$name$" {\n  \n}'),
   node('fragment', 'Geometry inserted into icons, with its own params', '"$name$" {\n  \n}'),
   node('axis', 'Variants every icon that opts in gets', '"$name$" {\n  variant "v" {\n    \n  }\n}'),
+  node('font', 'Glyphs that text is set in', '"$name$" {\n  em 10\n  ascent 7\n  descent 3\n  kind "stroke"\n}'),
 ];
 
 /** Nodes inside a definition. */
@@ -57,7 +58,7 @@ const defNodes: NodeSpec[] = [
   node('canvas', 'A flat frame instead: width and height', '$24$ 24'),
   node('describe', 'What it is, in words', '"$…$"'),
   node('extends', 'The icon or base it builds on', '"$name$"'),
-  node('param', 'A value, which those extending it can set', '$name$ 1'),
+  node('param', 'A value, a number or (text)"…", which those extending it can set', '$name$ 1'),
   node('part', 'Named geometry, which others can replace', '"$name$" {\n  \n}'),
   node('replace', 'Draw a part of what it extends differently', '"$part$" {\n  \n}'),
   node('remove', 'Leave out a part of what it extends', '"$part$"'),
@@ -66,6 +67,23 @@ const defNodes: NodeSpec[] = [
   node('badge', 'Another icon, small, in a corner', '"$icon$" corner="ne" scale=0.5'),
   node('variant', 'One variant of an axis', '"$name$" {\n  \n}'),
   node('emit-base', 'Whether the icon without a variant is drawn too', '#$false$'),
+  node('view', 'The corner it is drawn from: a quarter-turn of all of it', '$90$'),
+  node('transform-bounds', "What its transforms do past its frame: error, grow, scale or clip", '"$grow$"'),
+];
+
+/** Nodes inside a font. */
+const fontNodes: NodeSpec[] = [
+  node('em', 'Its design grid: units to the em', '$10$'),
+  node('ascent', 'How far it reaches above the baseline', '$7$'),
+  node('descent', 'How far it reaches below the baseline', '$3$'),
+  node('kind', 'Drawn along its middles (stroke) or filled (outline)', '"$stroke$"'),
+  node('slant', 'A lean, in degrees: -12 leans right', '$-12$'),
+  node('glyph', 'The glyph for some text, drawn in the em grid, y up', '"$A$" advance=6 {\n  \n}'),
+  node('notdef', 'Drawn for a character no glyph draws', 'advance=$6$ {\n  \n}'),
+  node('kern', 'Space between two glyphs side by side', '"$A$" "V" -0.5'),
+  node('describe', 'What it is, in words', '"$…$"'),
+  node('param', 'A value its styles can set, such as a weight', '$weight$ 1'),
+  node('axes', 'The axes its styles come from', '"$weight$"'),
 ];
 
 /** Geometry. */
@@ -88,6 +106,10 @@ const shapeNodes: NodeSpec[] = [
   node('pt', 'A point of a polygon', '$0$ 0 0'),
   node('repeat', 'The same, several times, counting in a variable', '$3$ "i" {\n  \n}'),
   node('insert', 'A fragment, with its params', '"$fragment$"'),
+  node('transform', 'Rotated, scaled, skewed or mirrored on the screen, or laid on a face', 'rotate=$90$ origin="0 0" {\n  \n}'),
+  node('turn', 'Turned in tile space by a quarter-turn', '$90$ origin="0.5 0.5" {\n  \n}'),
+  node('mirror-diagonal', 'Mirrored in tile space across x = y', 'origin="$0.5 0.5$" {\n  \n}'),
+  node('text', 'A line of text in a font: x y, what it says', '"$x$" "y" "…" font="" size=8'),
 ];
 
 /** Properties, by what takes them. */
@@ -103,10 +125,28 @@ const properties: Record<string, string> = {
   when: 'Draw it only when this holds',
   extends: 'The icon or base it builds on',
   corner: "A badge's corner: ne, nw, se or sw",
-  scale: "A badge's size",
+  scale: "A badge's size, or a transform's scale",
   reason: 'Why a grant is needed',
   rx: "A rectangle's corner radius",
   d: 'The path, in SVG path data',
+  origin: 'What it turns, scales and mirrors about: "x y"',
+  translate: 'Moved by "x y"',
+  rotate: 'Turned clockwise, in degrees',
+  'skew-x': 'Leaned along x, in degrees',
+  'skew-y': 'Leaned along y, in degrees',
+  mirror: 'Mirrored: across or down',
+  matrix: 'The whole map: "a b c d e f"',
+  onto: "Laid on a box's face: top, front or right",
+  of: 'The box its face is: "box x y z w d h"',
+  bounds: 'What it does past the frame: error, grow, scale or clip',
+  strokes: 'Strokes that scale with it, or stay fixed',
+  font: 'The font it is set in',
+  style: "The font's styles, such as bold italic",
+  size: 'Its em, in output units',
+  anchor: 'Where x falls along it: start, middle or end',
+  baseline: 'Where y falls on it: alphabetic, top, middle or bottom',
+  'max-width': 'Scaled down to fit this width',
+  advance: 'How far it moves the pen',
 };
 
 /**
@@ -128,6 +168,12 @@ const takes: Record<string, string[]> = {
   shadow: ['when'],
   at: ['when'],
   repeat: ['when'],
+  transform: ['origin', 'translate', 'rotate', 'scale', 'skew-x', 'skew-y', 'mirror', 'matrix', 'onto', 'of', 'bounds', 'strokes', 'when'],
+  turn: ['origin', 'when'],
+  'mirror-diagonal': ['origin', 'when'],
+  text: ['font', 'style', 'size', 'anchor', 'baseline', 'max-width', 'fill', 'bounds', 'when'],
+  glyph: ['advance'],
+  notdef: ['advance'],
   ...Object.fromEntries(['tile', 'poly3d', 'seg', 'line', 'circle', 'ellipse', 'arc', 'poly'].map((n) => [n, style])),
 };
 
@@ -168,7 +214,10 @@ export function complete(text: string, caret: number, vocab: Vocabulary): Comple
 
   if (/^\s*$/u.test(lead) || /[{;]\s*$/u.test(lead)) {
     const depth = depthAt(text, start);
-    const specs = depth === 0 ? topNodes : [...(depth === 1 ? defNodes : []), ...shapeNodes];
+    // a font holds its own nodes, and its glyphs shapes
+    const inFont = enclosingKind(text, start) === 'font';
+    const own = inFont ? fontNodes : defNodes;
+    const specs = depth === 0 ? topNodes : depth === 1 ? (inFont ? own : [...own, ...shapeNodes]) : shapeNodes;
     return finish(start, caret, typed, specs.map(snippet));
   }
 
@@ -219,6 +268,18 @@ function depthAt(text: string, at: number): number {
     if (t.kind === 'punct' && text[t.start] === '}') depth = Math.max(0, depth - 1);
   }
   return depth;
+}
+
+/** The kind of top-level definition a caret is inside. */
+function enclosingKind(text: string, at: number): string | undefined {
+  let depth = 0;
+  let kind: string | undefined;
+  for (const t of tokenize(text.slice(0, at))) {
+    if (t.kind === 'punct' && text[t.start] === '{') depth++;
+    if (t.kind === 'punct' && text[t.start] === '}') depth = Math.max(0, depth - 1);
+    if (depth === 0 && t.kind === 'node') kind = text.slice(t.start, t.end);
+  }
+  return depth > 0 ? kind : undefined;
 }
 
 /** The definition a caret is inside. */
@@ -290,6 +351,25 @@ function valuesFor(what: string, isProp: boolean, text: string, caret: number, d
       return named(inheritedParts(enclosing(text, caret), defs), 'part of what it extends');
     case 'facerect':
       return named(['front', 'right'], 'face');
+    case 'font':
+      return named(defs.filter((d) => d.kind === 'font').map((d) => d.name), 'font');
+    case 'style':
+      return named(defs.filter((d) => d.kind === 'axis').flatMap((d) => d.variants), 'style');
+    case 'anchor':
+      return named(['start', 'middle', 'end'], 'where x falls');
+    case 'baseline':
+      return named(['alphabetic', 'top', 'middle', 'bottom'], 'where y falls');
+    case 'bounds':
+    case 'transform-bounds':
+      return named(['error', 'grow', 'scale', 'clip'], 'past the frame');
+    case 'strokes':
+      return named(['scale', 'fixed'], 'strokes');
+    case 'mirror':
+      return named(['across', 'down'], 'mirror');
+    case 'onto':
+      return named(['top', 'front', 'right'], 'face');
+    case 'kind':
+      return named(['stroke', 'outline'], 'kind of font');
   }
   return [];
 }
