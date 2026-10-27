@@ -1,0 +1,2123 @@
+{
+  "ir_version": 2,
+  "icons": [
+    {
+      "name": "fan",
+      "category": "screen",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        24.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "circle",
+          "cx": 12.0,
+          "cy": 12.0,
+          "r": 2.0,
+          "fill": "ink-muted",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.0,
+            1.0,
+            -1.0,
+            0.0,
+            24.0,
+            0.0
+          ],
+          "shapes": [
+            {
+              "kind": "polygon",
+              "points": [
+                [
+                  12.0,
+                  12.0
+                ],
+                [
+                  21.0,
+                  10.0
+                ],
+                [
+                  21.0,
+                  14.0
+                ]
+              ],
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 0.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.0,
+            -1.0,
+            -1.0,
+            0.0,
+            24.0,
+            24.0
+          ],
+          "shapes": [
+            {
+              "kind": "polygon",
+              "points": [
+                [
+                  12.0,
+                  12.0
+                ],
+                [
+                  21.0,
+                  10.0
+                ],
+                [
+                  21.0,
+                  14.0
+                ]
+              ],
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 0.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ports",
+      "category": "screen",
+      "canvas": [
+        32.0,
+        16.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        32.0,
+        16.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "rect",
+          "x": 2.0,
+          "y": 4.0,
+          "w": 10.0,
+          "h": 8.0,
+          "rx": 0.0,
+          "fill": "none",
+          "fill_opacity": 1.0,
+          "stroke": "ink",
+          "stroke_width": 1.4
+        },
+        {
+          "kind": "path",
+          "d": "M4.00,6.00 L8.00,6.00",
+          "fill": "none",
+          "fill_opacity": 1.0,
+          "stroke": "ink",
+          "stroke_width": 1.4
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            -1.0,
+            0.0,
+            0.0,
+            1.0,
+            32.0,
+            0.0
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 2.0,
+              "y": 4.0,
+              "w": 10.0,
+              "h": 8.0,
+              "rx": 0.0,
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.4
+            },
+            {
+              "kind": "path",
+              "d": "M4.00,6.00 L8.00,6.00",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "italic",
+      "category": "screen",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        24.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            -0.21255656179848875,
+            1.0,
+            2.5506787415818657,
+            0.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M7,19 L12,5 L17,19 M9,14 H15",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 2.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chained",
+      "category": "screen",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        24.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            -0.21255656179848875,
+            1.0,
+            -1.0,
+            0.0,
+            27.550678741581866,
+            0.0
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 8.0,
+              "y": 6.0,
+              "w": 8.0,
+              "h": 12.0,
+              "rx": 0.0,
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "labelled",
+      "category": "faces",
+      "footprint": [
+        1.0,
+        1.0,
+        0.5
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -28.0,
+        85.2820323027551,
+        76.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              0.0,
+              40.0
+            ],
+            [
+              0.0,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              0.0,
+              40.0
+            ],
+            [
+              0.0,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -20.0
+            ],
+            [
+              34.64101615137755,
+              0.0
+            ],
+            [
+              0.0,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8660254037844387,
+            0.5,
+            -0.8660254037844387,
+            0.5,
+            0.0,
+            -20.0
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 8.0,
+              "y": 8.0,
+              "w": 24.0,
+              "h": 24.0,
+              "rx": 0.0,
+              "fill": "accent",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 1.4
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8660254037844387,
+            0.5,
+            0.0,
+            1.0,
+            -34.64101615137755,
+            0.0
+          ],
+          "shapes": [
+            {
+              "kind": "path",
+              "d": "M6.00,6.00 L34.00,6.00",
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 2.0
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.8660254037844387,
+            -0.5,
+            0.0,
+            1.0,
+            0.0,
+            20.0
+          ],
+          "shapes": [
+            {
+              "kind": "circle",
+              "cx": 20.0,
+              "cy": 10.0,
+              "r": 4.0,
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 1.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "turned-glyph",
+      "category": "screen",
+      "footprint": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -48.0,
+        85.2820323027551,
+        96.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              0.0,
+              40.0
+            ],
+            [
+              0.0,
+              0.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              0.0,
+              40.0
+            ],
+            [
+              0.0,
+              0.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -40.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ],
+            [
+              0.0,
+              0.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.707106781,
+            0.707106781,
+            -0.707106781,
+            0.707106781,
+            -14.142135620000001,
+            -5.857864379999999
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": -6.0,
+              "y": -26.0,
+              "w": 12.0,
+              "h": 12.0,
+              "rx": 0.0,
+              "fill": "accent",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 1.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mark",
+      "category": "state",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        24.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            0.8,
+            0.0,
+            0.0,
+            0.8,
+            2.3999999999999986,
+            2.3999999999999986
+          ],
+          "strokes": "fixed",
+          "shapes": [
+            {
+              "kind": "polygon",
+              "points": [
+                [
+                  2.0,
+                  2.0
+                ],
+                [
+                  22.0,
+                  2.0
+                ],
+                [
+                  12.0,
+                  22.0
+                ]
+              ],
+              "fill": "accent",
+              "fill_opacity": 1.0,
+              "stroke": "outline",
+              "stroke_width": 1.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "badged",
+      "category": "state",
+      "footprint": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -48.0,
+        85.2820323027551,
+        96.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              0.0,
+              40.0
+            ],
+            [
+              0.0,
+              0.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              0.0,
+              40.0
+            ],
+            [
+              0.0,
+              0.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -40.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ],
+            [
+              0.0,
+              0.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            0.4,
+            0.0,
+            0.0,
+            0.4,
+            29.84101615137755,
+            -44.8
+          ],
+          "strokes": "fixed",
+          "shapes": [
+            {
+              "kind": "polygon",
+              "points": [
+                [
+                  2.0,
+                  2.0
+                ],
+                [
+                  22.0,
+                  2.0
+                ],
+                [
+                  12.0,
+                  22.0
+                ]
+              ],
+              "fill": "accent",
+              "fill_opacity": 1.0,
+              "stroke": "outline",
+              "stroke_width": 1.2
+            }
+          ]
+        },
+        {
+          "kind": "group",
+          "matrix": [
+            -0.4,
+            0.0,
+            0.0,
+            -0.4,
+            -29.84101615137755,
+            44.8
+          ],
+          "strokes": "fixed",
+          "shapes": [
+            {
+              "kind": "polygon",
+              "points": [
+                [
+                  2.0,
+                  2.0
+                ],
+                [
+                  22.0,
+                  2.0
+                ],
+                [
+                  12.0,
+                  22.0
+                ]
+              ],
+              "fill": "accent",
+              "fill_opacity": 1.0,
+              "stroke": "outline",
+              "stroke_width": 1.2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "grown",
+      "category": "bounds",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        30.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            10.0,
+            0.0
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 4.0,
+              "y": 4.0,
+              "w": 16.0,
+              "h": 16.0,
+              "rx": 0.0,
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 1.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "scaled",
+      "category": "bounds",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        24.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            0.6,
+            0.6,
+            -0.6,
+            0.6,
+            12.0,
+            -2.3999999999999986
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 2.0,
+              "y": 2.0,
+              "w": 20.0,
+              "h": 20.0,
+              "rx": 0.0,
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 1.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clipped",
+      "category": "bounds",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        24.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            6.0,
+            0.0
+          ],
+          "clip": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              24.0,
+              0.0
+            ],
+            [
+              24.0,
+              24.0
+            ],
+            [
+              0.0,
+              24.0
+            ]
+          ],
+          "shapes": [
+            {
+              "kind": "rect",
+              "x": 2.0,
+              "y": 2.0,
+              "w": 20.0,
+              "h": 20.0,
+              "rx": 0.0,
+              "fill": "ink",
+              "fill_opacity": 1.0,
+              "stroke": "none",
+              "stroke_width": 1.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "clipped-by-default",
+      "category": "bounds",
+      "canvas": [
+        24.0,
+        24.0
+      ],
+      "viewbox": [
+        0.0,
+        0.0,
+        24.0,
+        24.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "group",
+          "matrix": [
+            1.5,
+            0.0,
+            0.0,
+            1.5,
+            -6.0,
+            -6.0
+          ],
+          "clip": [
+            [
+              0.0,
+              0.0
+            ],
+            [
+              24.0,
+              0.0
+            ],
+            [
+              24.0,
+              24.0
+            ],
+            [
+              0.0,
+              24.0
+            ]
+          ],
+          "strokes": "fixed",
+          "shapes": [
+            {
+              "kind": "circle",
+              "cx": 12.0,
+              "cy": 12.0,
+              "r": 9.0,
+              "fill": "none",
+              "fill_opacity": 1.0,
+              "stroke": "ink",
+              "stroke_width": 1.4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chassis",
+      "category": "turns",
+      "footprint": [
+        2.0,
+        1.0,
+        1.0
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              69.2820323027551,
+              40.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -40.0
+            ],
+            [
+              69.2820323027551,
+              0.0
+            ],
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -27.712812921102042,
+              16.0
+            ],
+            [
+              -6.928203230275508,
+              28.0
+            ],
+            [
+              -6.928203230275508,
+              4.0
+            ],
+            [
+              -27.712812921102042,
+              -8.0
+            ]
+          ],
+          "fill": "ink",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 0.0
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              62.35382907247959,
+              36.0
+            ],
+            [
+              41.569219381653056,
+              48.0
+            ],
+            [
+              41.569219381653056,
+              24.0
+            ],
+            [
+              62.35382907247959,
+              12.0
+            ]
+          ],
+          "fill": "ink",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 0.0
+        }
+      ]
+    },
+    {
+      "name": "chassis-90",
+      "category": "turns",
+      "footprint": [
+        1.0,
+        2.0,
+        1.0
+      ],
+      "viewbox": [
+        -77.2820323027551,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -69.2820323027551,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              -69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -40.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              -69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -62.35382907247959,
+              36.0
+            ],
+            [
+              -41.569219381653056,
+              48.0
+            ],
+            [
+              -41.569219381653056,
+              24.0
+            ],
+            [
+              -62.35382907247959,
+              12.0
+            ]
+          ],
+          "fill": "ink",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 0.0
+        }
+      ]
+    },
+    {
+      "name": "chassis-180",
+      "category": "turns",
+      "footprint": [
+        2.0,
+        1.0,
+        1.0
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              69.2820323027551,
+              40.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -40.0
+            ],
+            [
+              69.2820323027551,
+              0.0
+            ],
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        }
+      ]
+    },
+    {
+      "name": "chassis-270",
+      "category": "turns",
+      "footprint": [
+        1.0,
+        2.0,
+        1.0
+      ],
+      "viewbox": [
+        -77.2820323027551,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -69.2820323027551,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              -69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -40.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              -69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -6.928203230275508,
+              36.0
+            ],
+            [
+              -27.71281292110203,
+              48.0
+            ],
+            [
+              -27.71281292110203,
+              24.0
+            ],
+            [
+              -6.928203230275508,
+              12.0
+            ]
+          ],
+          "fill": "ink",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 0.0
+        }
+      ]
+    },
+    {
+      "name": "chassis-mirrored",
+      "category": "turns",
+      "footprint": [
+        1.0,
+        2.0,
+        1.0
+      ],
+      "viewbox": [
+        -77.2820323027551,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "ellipse",
+          "cx": -17.320508075688775,
+          "cy": 30.0,
+          "rx": 13.856406460551021,
+          "ry": 20.0,
+          "fill": "shadow",
+          "fill_opacity": 0.35,
+          "stroke": "none",
+          "stroke_width": 0.0
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -69.2820323027551,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              -69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -40.0
+            ],
+            [
+              34.64101615137755,
+              -20.0
+            ],
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              -69.2820323027551,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              27.712812921102042,
+              16.0
+            ],
+            [
+              6.928203230275508,
+              28.0
+            ],
+            [
+              6.928203230275508,
+              4.0
+            ],
+            [
+              27.712812921102042,
+              -8.0
+            ]
+          ],
+          "fill": "ink",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 0.0
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -62.35382907247959,
+              36.0
+            ],
+            [
+              -41.569219381653056,
+              48.0
+            ],
+            [
+              -41.569219381653056,
+              24.0
+            ],
+            [
+              -62.35382907247959,
+              12.0
+            ]
+          ],
+          "fill": "ink",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 0.0
+        }
+      ]
+    },
+    {
+      "name": "press",
+      "category": "turns",
+      "footprint": [
+        2.0,
+        1.0,
+        1.0
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              69.2820323027551,
+              40.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              69.2820323027551,
+              20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -20.0
+            ],
+            [
+              69.2820323027551,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              13.856406460551016,
+              20.0
+            ],
+            [
+              34.64101615137754,
+              31.999999999999993
+            ],
+            [
+              34.64101615137754,
+              11.999999999999993
+            ],
+            [
+              13.856406460551016,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              55.42562584220407,
+              19.999999999999993
+            ],
+            [
+              34.64101615137754,
+              31.999999999999993
+            ],
+            [
+              34.64101615137754,
+              11.999999999999993
+            ],
+            [
+              55.42562584220407,
+              -7.105427357601002e-15
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              -12.0
+            ],
+            [
+              55.42562584220407,
+              -7.105427357601002e-15
+            ],
+            [
+              34.64101615137754,
+              11.999999999999993
+            ],
+            [
+              13.856406460551016,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -27.712812921102042,
+              20.0
+            ],
+            [
+              0.0,
+              36.0
+            ],
+            [
+              0.0,
+              24.0
+            ],
+            [
+              -27.712812921102042,
+              8.0
+            ]
+          ],
+          "fill": "accent",
+          "fill_opacity": 1.0,
+          "stroke": "none",
+          "stroke_width": 0.0
+        }
+      ]
+    },
+    {
+      "name": "press-quarter",
+      "category": "turns",
+      "footprint": [
+        1.0,
+        2.0,
+        1.0
+      ],
+      "viewbox": [
+        -77.2820323027551,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -69.2820323027551,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              40.0
+            ],
+            [
+              -69.2820323027551,
+              20.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              34.64101615137755,
+              20.0
+            ],
+            [
+              -34.64101615137755,
+              60.0
+            ],
+            [
+              -34.64101615137755,
+              40.0
+            ],
+            [
+              34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -20.0
+            ],
+            [
+              34.64101615137755,
+              0.0
+            ],
+            [
+              -34.64101615137755,
+              40.0
+            ],
+            [
+              -69.2820323027551,
+              20.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -55.42562584220407,
+              19.999999999999993
+            ],
+            [
+              -34.64101615137754,
+              31.999999999999993
+            ],
+            [
+              -34.64101615137754,
+              11.999999999999993
+            ],
+            [
+              -55.42562584220407,
+              -7.105427357601002e-15
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -13.856406460551016,
+              20.0
+            ],
+            [
+              -34.64101615137754,
+              31.999999999999993
+            ],
+            [
+              -34.64101615137754,
+              11.999999999999993
+            ],
+            [
+              -13.856406460551016,
+              0.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              -12.0
+            ],
+            [
+              -13.856406460551016,
+              0.0
+            ],
+            [
+              -34.64101615137754,
+              11.999999999999993
+            ],
+            [
+              -55.42562584220407,
+              -7.105427357601002e-15
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        }
+      ]
+    },
+    {
+      "name": "press-back",
+      "category": "turns",
+      "footprint": [
+        2.0,
+        1.0,
+        1.0
+      ],
+      "viewbox": [
+        -42.64101615137755,
+        -48.0,
+        119.92304845413264,
+        116.0
+      ],
+      "describe": [],
+      "grants": [],
+      "shapes": [
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -34.64101615137755,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              69.2820323027551,
+              40.0
+            ],
+            [
+              34.64101615137755,
+              60.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              69.2820323027551,
+              20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              0.0,
+              -20.0
+            ],
+            [
+              69.2820323027551,
+              20.0
+            ],
+            [
+              34.64101615137755,
+              40.0
+            ],
+            [
+              -34.64101615137755,
+              0.0
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              -20.784609690826525,
+              3.552713678800501e-15
+            ],
+            [
+              0.0,
+              12.0
+            ],
+            [
+              0.0,
+              -8.0
+            ],
+            [
+              -20.784609690826525,
+              -19.999999999999996
+            ]
+          ],
+          "fill": "body-left",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              20.784609690826528,
+              0.0
+            ],
+            [
+              0.0,
+              12.0
+            ],
+            [
+              0.0,
+              -8.0
+            ],
+            [
+              20.784609690826528,
+              -20.0
+            ]
+          ],
+          "fill": "body-right",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        },
+        {
+          "kind": "polygon",
+          "points": [
+            [
+              7.691850745534256e-15,
+              -31.999999999999996
+            ],
+            [
+              20.784609690826528,
+              -20.0
+            ],
+            [
+              0.0,
+              -8.0
+            ],
+            [
+              -20.784609690826525,
+              -19.999999999999996
+            ]
+          ],
+          "fill": "body-top",
+          "fill_opacity": 1.0,
+          "stroke": "outline",
+          "stroke_width": 1.2
+        }
+      ]
+    }
+  ]
+}

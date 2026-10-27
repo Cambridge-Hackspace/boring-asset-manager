@@ -1,0 +1,150 @@
+// Exercises every construct the parser accepts: this fixture plus its
+// golden JSON is the parser's contract.
+
+lexicon {
+  tokens "ink" "ink-muted" "outline" "body-top" "body-left" "body-right" "shadow" "accent"
+  stroke-widths 1.2 1.4 1.5 2.2
+}
+
+base "rack-unit" {
+  category "net"
+  param u 1
+  footprint 2 1 "u * 0.28"
+  describe "Rack-mount slab; the chassis every 19-inch device shares."
+  part "chassis" {
+    box 0 0 0 2 1 "u * 0.28"
+  }
+}
+
+base "switch" {
+  extends "rack-unit"
+  param ports 12
+  describe "Port row along the front face."
+  part "ports" {
+    repeat "ports" "i" {
+      facerect "front" "0.1 + i * (1.8 / ports)" 1 0.09 0.11 0.11 \
+               fill="ink" opacity=0.55
+    }
+  }
+}
+
+icon "switch-l2" {
+  extends "switch"
+  describe "Layer-2 access switch."
+}
+
+icon "switch-l3" {
+  extends "switch-l2"
+  describe "Adds the routing-arrows badge on the top face."
+  part "routing-badge" {
+    at 1 0.5 0.28 {
+      path d="M{x-10},{y} h20 M{x+14},{y-3} l6,3 -6,3" stroke="ink" width=1.5
+    }
+  }
+}
+
+icon "switch-poe" {
+  extends "switch-l2"
+  replace "ports" {
+    repeat 8 "i" {
+      facerect "front" "0.15 + i * 0.22" 1 0.09 0.14 0.14 fill="ink" \
+               opacity="if(i % 2 == 0, 0.55, 0.3)" when="i < 7"
+    }
+  }
+  remove "chassis"
+  part "everything-else" {
+    tile 0 0 0 2 1 fill="body-top" dash="3 2.5"
+    cylinder 0.5 0.5 0 0.4 0.12 top="body-top" side="body-top" opacity=0.5
+    poly3d fill="body-top" {
+      pt 0 0 0
+      pt 2 0 0
+      pt 1 1 "u * 0.5"
+    }
+    shadow 0.5 0.5 0.48 0.48
+    seg 0 0 0 2 0 0 stroke="outline" width=1.2
+    at 0.5 0.5 0.6 {
+      line -3 0 3 0 stroke="ink" width=1.4
+      circle 0 0 8 stroke="ink" width=1.4
+      ellipse 0 0 4.5 8 stroke="ink-muted" width=1.2
+      rect -9 -8 18 12 rx=1.5 stroke="ink" width=1.4
+      arc 0 0 11 300 60 stroke="ink" width=1.2
+      poly fill="ink" {
+        repeat 10 "k" {
+          pt "if(k % 2 == 0, 10, 4) * cos(90 + k * 36)" \
+             "0 - if(k % 2 == 0, 10, 4) * sin(90 + k * 36)"
+        }
+      }
+      insert "mini-glyph" size=4
+    }
+    insert "disk-stack" cx=0.5 cy=0.5 z=0.12 n=2 when="ports > 4"
+    badge "state-down" corner="ne" scale=0.5
+  }
+  grant "accent" reason="wrong-or-hostile: demo grant for the parser"
+  axes "state"
+}
+
+fragment "disk-stack" {
+  param cx 0.5
+  param cy 0.5
+  param z 0
+  param n 3
+  part "stack" {
+    repeat "n" "k" {
+      cylinder "cx" "cy" "z + k * 0.25" 0.26 0.2
+    }
+  }
+}
+
+axis "state" {
+  emit-base #true
+  variant "down" {
+    part "state-badge" {
+      badge "state-down" corner="ne"
+    }
+  }
+  variant "planned" {
+    describe "dashed placeholder"
+    part "state-badge" {
+      badge "state-planned" corner="ne"
+    }
+  }
+}
+
+fragment "mini-glyph" {
+  param size 3
+  part "dot" {
+    circle 0 0 "size" fill="ink"
+  }
+}
+
+icon "state-down" {
+  category "state"
+  canvas 24 24
+  describe "Red octagon with an X."
+  part "octagon" {
+    at 0 0 0 {
+      poly fill="accent" {
+        pt 7 2
+        pt 17 2
+        pt 22 7
+        pt 22 17
+        pt 17 22
+        pt 7 22
+        pt 2 17
+        pt 2 7
+      }
+      path d="M8,8 L16,16 M16,8 L8,16" stroke="ink" width=2.2
+    }
+  }
+}
+
+icon "state-planned" {
+  category "state"
+  canvas 24 24
+  describe "Dashed placeholder square."
+  part "outline" {
+    at 0 0 0 {
+      rect 3 3 18 18 rx=3 stroke="ink-muted" width=1.5 dash="3 2.5"
+    }
+  }
+}
