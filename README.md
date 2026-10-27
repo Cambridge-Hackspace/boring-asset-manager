@@ -451,7 +451,7 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
   * **The preview** shows the icon light and dark, large and as in lists, its variants, and the icons of its subcategories, all from the check, so an edit is seen where it spreads. A source that does not compile shows the published icon, saying so.
   * **Saving** publishes it, or keeps it as a draft with its problems, which can be discarded.
   * **History** loads any published version back into the editor. Renaming and deleting show what still uses the icon when they are refused.
-  * **Drawing:** icons are drawn in the page by `IsoIcon`, from the build's IR, every token painted with a CSS property, `--iso-<token>`, from the palette (`lib/isolex/palette`), so dark mode needs no redraw. Its shapes match isolex's own SVG for isolex's sample, attribute for attribute.
+  * **Drawing:** icons are drawn in the page by `IsoIcon`, from the build's IR, every token painted with a CSS property, `--iso-<token>`, from the palette (`lib/isolex/palette`), so dark mode needs no redraw. Its shapes match isolex's own SVG, attribute for attribute, for isolex 0.3.1's sample and for isolex 0.4.0's sample, transforms and text, whose IR version 2 groups it draws through their matrices, cut to their clips, with strokes that keep their width; a clip path is named for the drawing, so an icon shown many times on one page, as in a list or a scene, cuts each copy to its own.
   * **Help:** the help topic **Icons** explains it all.
 * **The Icons page** (`/icons`, under Catalog, for those who manage categories or icons) shows:
   * **The build**, with export and import.
