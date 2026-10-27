@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -27,7 +26,7 @@ func openStore(t *testing.T) *store.Store {
 		t.Cleanup(cleanup)
 		st = s
 	} else {
-		s, err := store.Open(&config.DatabaseConfig{Type: "sqlite", DSN: filepath.Join(t.TempDir(), "test.db")})
+		s, err := store.OpenMigratedSQLite(filepath.Join(t.TempDir(), "test.db"))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 )
 
 // setupTestStore opens a migrated, seeded store. It uses a temporary SQLite file
@@ -26,7 +25,7 @@ func setupTestStore(t *testing.T) *Store {
 		st = ephemeral
 	} else {
 		dbPath := filepath.Join(t.TempDir(), "test.db")
-		opened, err := Open(&config.DatabaseConfig{Type: "sqlite", DSN: dbPath})
+		opened, err := OpenMigratedSQLite(dbPath)
 		if err != nil {
 			t.Fatalf("opening store: %v", err)
 		}

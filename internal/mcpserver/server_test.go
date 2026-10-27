@@ -14,13 +14,18 @@ import (
 
 // connect serves the tools to an in-memory client, as the caller, with a
 // backend that answers every request with the status and body given.
+// schemas is shared by the servers tests connect to, as Handler shares one
+// between requests: inferring every tool's schemas again for each takes a
+// fuzz seed most of a second under the race detector.
+var schemas = mcp.NewSchemaCache()
+
 func connect(t *testing.T, c Caller, tools []tool, status int, body string) (*mcp.ClientSession, *env) {
 	t.Helper()
 	e := &env{caller: c, changes: newChangeLimiter(), version: "test",
 		api: func(context.Context, string, string, []byte, string) Response {
 			return Response{Status: status, Body: []byte(body)}
 		}}
-	s := newServer(e, mcp.NewSchemaCache(), tools)
+	s := newServer(e, schemas, tools)
 	st, ct := mcp.NewInMemoryTransports()
 	if _, err := s.Connect(context.Background(), st, nil); err != nil {
 		t.Fatal(err)
