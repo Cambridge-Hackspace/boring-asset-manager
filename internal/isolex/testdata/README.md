@@ -5,7 +5,7 @@ Innovations, LLC, under the Apache License 2.0 (`../NOTICE`). They are
 kept as IR version 1, which bam still reads: a build an older isolex
 made is drawn until a new one replaces it.
 
-`isolex-0.4.0/` holds the fixtures and goldens of the release wasm.lock
+`isolex-0.5.0/` holds the fixtures and goldens of the release wasm.lock
 pins, which the module must compile to byte for byte (see its README);
 when the pin moves, copy the new tag's into a directory of its own.
 
