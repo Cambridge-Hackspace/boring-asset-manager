@@ -1301,10 +1301,14 @@ Category icons written in isolex and drawn throughout the interface, on labels a
 * [x] Scenes to look at: a location's contents laid out on its floor and drawn with their icons, entered, and shown in place (§3.7).
 * [x] Scenes arranged: things dragged, nudged and lifted into place, overlaps flagged, and each move in history (§3.7).
 * [x] Scenes exported: as SVG or PNG, and drawn for assistants (§3.7).
+* [x] isolex's IR version 2 read and drawn: by the Go reader and SVG writer, byte for byte as isolex 0.4 draws it, and in PNGs, on labels, in scenes, in the live preview and in the web interface, version 1 still read (§1, §3.7).
+* [x] Icons compiled with isolex 0.4.0: parts turned, mirrored, skewed or laid on a face, and words set in fonts the lexicon defines; offered by the editor's completion (§3.7).
 
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
+
+* **An asset's own text on its icon** (#110): a text param bound to an asset's name, code or a text field, compiled per asset with isolex's `compile_one` and cached by its values, once its cost under wazero is measured.
 
 #### Deferred
 * **QR codes linking to an asset's page:** a QR code's content is a binding template authors choose; `{{scan_url}}` (§6.4) gives the asset's scan page for it, so no generator of its own is needed.
