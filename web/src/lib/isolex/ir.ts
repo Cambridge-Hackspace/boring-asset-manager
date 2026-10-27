@@ -19,6 +19,13 @@ export interface IrShape {
   stroke?: string;
   stroke_width?: number;
   dash?: string;
+  // A group (IR version 2, isolex 0.4): drawn through a matrix, as SVG's
+  // matrix(a b c d e f); cut to a convex clip polygon in the coordinates
+  // the group stands in; its strokes kept at their width when fixed.
+  matrix?: [number, number, number, number, number, number];
+  clip?: [number, number][];
+  strokes?: 'fixed';
+  // A group in IR version 1, a badge's: moved by (tx, ty) and scaled.
   tx?: number;
   ty?: number;
   scale?: number;
