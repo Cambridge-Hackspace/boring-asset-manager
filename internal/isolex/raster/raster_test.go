@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
@@ -169,6 +170,85 @@ func TestGroupsAndSizes(t *testing.T) {
 	}
 }
 
+func matrix(m ...float64) *[6]float64 {
+	var out [6]float64
+	copy(out[:], m)
+	return &out
+}
+
+// IR version 2's groups: drawn through a matrix, cut to a clip outside
+// it, their strokes scaled with it unless fixed.
+func TestVersionTwoGroups(t *testing.T) {
+	fill := func(pts [][2]float64) ir.Shape {
+		return ir.Shape{Kind: ir.KindPolygon, Points: pts, Fill: "ink", FillOpacity: 1, Stroke: "none"}
+	}
+	// a quarter-turn, (x, y) to (10 - y, x): the top strip is the right one
+	a := alpha(paint(t, icon(ir.Shape{Kind: ir.KindGroup, Matrix: matrix(0, 1, -1, 0, 10, 0), Shapes: []ir.Shape{
+		fill(square(0, 0, 10, 2)),
+	}}), 10))
+	if a[5][9] != 255 || a[5][1] != 0 || a[0][5] != 0 {
+		t.Errorf("turned: %v", a)
+	}
+
+	// a clip in the coordinates the group stands in, not those inside its
+	// matrix: moved 5 right, cut at 8
+	a = alpha(paint(t, icon(ir.Shape{Kind: ir.KindGroup, Matrix: matrix(1, 0, 0, 1, 5, 0), Clip: square(0, 0, 8, 10), Shapes: []ir.Shape{
+		fill(square(0, 0, 10, 10)),
+	}}), 10))
+	if a[5][6] != 255 || a[5][9] != 0 || a[5][2] != 0 {
+		t.Errorf("clipped: %v", a)
+	}
+	// a clip inside a clip is cut to both
+	a = alpha(paint(t, icon(ir.Shape{Kind: ir.KindGroup, Matrix: matrix(1, 0, 0, 1, 0, 0), Clip: square(0, 0, 6, 10), Shapes: []ir.Shape{
+		{Kind: ir.KindGroup, Matrix: matrix(1, 0, 0, 1, 0, 0), Clip: square(4, 0, 10, 10), Shapes: []ir.Shape{fill(square(0, 0, 10, 10))}},
+	}}), 10))
+	if a[5][5] != 255 || a[5][2] != 0 || a[5][7] != 0 {
+		t.Errorf("clipped twice: %v", a)
+	}
+
+	// a version 1 badge around a version 2 group: the group's map first
+	a = alpha(paint(t, icon(ir.Shape{Kind: ir.KindGroup, TX: 5, TY: 0, Scale: 0.5, Shapes: []ir.Shape{
+		{Kind: ir.KindGroup, Matrix: matrix(1, 0, 0, 1, 0, 10), Shapes: []ir.Shape{fill(square(0, 0, 2, 2))}},
+	}}), 10))
+	if a[5][5] != 255 || a[0][5] != 0 {
+		t.Errorf("composed: %v", a)
+	}
+
+	// a line 2 wide along y = 2, drawn three times as tall: its stroke too,
+	// 6 wide about y = 6, unless fixed, when it is 2 pixels wide
+	line := func(fixed string) *ir.Icon {
+		return icon(ir.Shape{Kind: ir.KindGroup, Matrix: matrix(1, 0, 0, 3, 0, 0), Strokes: fixed, Shapes: []ir.Shape{
+			{Kind: ir.KindPath, D: "M1,2 L9,2", Fill: "none", FillOpacity: 1, Stroke: "ink", StrokeWidth: 2},
+		}})
+	}
+	rows := func(img *image.NRGBA, x int) (covered []int) {
+		for y := 0; y < img.Bounds().Dy(); y++ {
+			if img.NRGBAAt(x, y).A == 255 {
+				covered = append(covered, y)
+			}
+		}
+		return covered
+	}
+	if got := rows(paint(t, line(""), 10), 5); len(got) != 6 || got[0] != 3 {
+		t.Errorf("scaled: rows %v", got)
+	}
+	if got := rows(paint(t, line("fixed"), 10), 5); len(got) != 2 || got[0] != 5 {
+		t.Errorf("fixed: rows %v", got)
+	}
+	// ten times the size: a fixed stroke is still 2 pixels, as Chromium
+	// draws it, or, for a label, ten times its width as written
+	if got := rows(paint(t, line("fixed"), 100), 50); len(got) != 2 || got[0] != 59 {
+		t.Errorf("fixed at 100: rows %v", got)
+	}
+	img, err := DrawWith(line("fixed"), black, 100, Options{ScaleFixedStrokes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rows(img, 50); len(got) != 20 || got[0] != 50 {
+		t.Errorf("fixed, scaled with the icon: rows %v", got)
+	}
+}
+
 func TestCurvesAndRoundShapes(t *testing.T) {
 	for _, s := range []ir.Shape{
 		{Kind: ir.KindCircle, CX: 5, CY: 5, R: 4},
@@ -189,9 +269,22 @@ func TestCurvesAndRoundShapes(t *testing.T) {
 	}
 }
 
-// isolex's sample, every icon of it, drawn and written as a PNG.
+// isolex's sample, every icon of it, drawn and written as a PNG; and
+// isolex 0.4's, with its transforms and text, in IR version 2.
 func TestTheSampleDraws(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "testdata", "sample.ir.golden.json"))
+	for _, file := range []string{
+		"sample.ir.golden.json",
+		filepath.Join("isolex-0.4.0", "sample.ir.golden.json"),
+		filepath.Join("isolex-0.4.0", "transforms.ir.golden.json"),
+		filepath.Join("isolex-0.4.0", "text.ir.golden.json"),
+	} {
+		drawsAll(t, file)
+	}
+}
+
+func drawsAll(t *testing.T, file string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "testdata", file))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +311,12 @@ func TestTheSampleDraws(t *testing.T) {
 				}
 			}
 		}
-		if bounds.Dy() != 96 || painted < bounds.Dx()*bounds.Dy()/20 {
+		// a clipped icon may draw little; every other draws a twentieth
+		least := bounds.Dx() * bounds.Dy() / 20
+		if strings.HasPrefix(doc.Icons[i].Name, "clipped") || doc.IRVersion == 2 && strings.Contains(file, "text") {
+			least = 1
+		}
+		if bounds.Dy() != 96 || painted < least {
 			t.Errorf("%s: %v, %d painted", doc.Icons[i].Name, bounds, painted)
 		}
 		if os.Getenv("RASTER_DUMP") != "" {

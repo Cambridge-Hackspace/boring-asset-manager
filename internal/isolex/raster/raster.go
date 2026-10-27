@@ -4,7 +4,11 @@
 // (isolex is Axonibyte Innovations, LLC's, see ../NOTICE): each shape's
 // fill, then its stroke, in order, fills by the nonzero rule, strokes with
 // miter joins (bevelled past SVG's miter limit of 4), butt caps and their
-// dashes, at the shape's opacity, on a transparent background.
+// dashes, at the shape's opacity, on a transparent background. Groups
+// draw through their matrices, cut to their clips; a stroke in a group
+// scales with its matrix as SVG's do, and one with fixed strokes keeps its
+// written width in pixels, as Chromium draws vector-effect
+// non-scaling-stroke.
 package raster
 
 import (
@@ -39,19 +43,33 @@ type polyline struct {
 	closed bool
 }
 
-// transform maps a point p of the icon to s·p + t, in pixels.
-type transform struct {
-	s  float64
-	tx float64
-	ty float64
+// mapping is the map from a shape's coordinates to pixels, as SVG's
+// matrix(), with how many pixels a unit of its coordinates is at most,
+// for how finely to draw its curves.
+type mapping struct {
+	m [6]float64
+	k float64
 }
 
-func (x transform) apply(p point) point { return point{p[0]*x.s + x.tx, p[1]*x.s + x.ty} }
+func newMapping(m [6]float64) mapping {
+	return mapping{m: m, k: math.Max(math.Hypot(m[0], m[1]), math.Hypot(m[2], m[3]))}
+}
 
-// then is x after a group's translate(tx ty) scale(sc).
-func (x transform) then(tx, ty, sc float64) transform {
-	t := x.apply(point{tx, ty})
-	return transform{s: x.s * sc, tx: t[0], ty: t[1]}
+func (x mapping) apply(p point) point { return ir.Apply(x.m, p) }
+
+// then is x after a group's map.
+func (x mapping) then(g [6]float64) mapping { return newMapping(ir.Mul(x.m, g)) }
+
+func (x mapping) lines(lines []polyline) []polyline {
+	out := make([]polyline, len(lines))
+	for i, l := range lines {
+		pts := make([]point, len(l.pts))
+		for j, p := range l.pts {
+			pts[j] = x.apply(p)
+		}
+		out[i] = polyline{pts: pts, closed: l.closed}
+	}
+	return out
 }
 
 // Draw draws an icon height pixels high, its width in proportion, painting
@@ -66,6 +84,10 @@ type Options struct {
 	// Outline draws strokes only, every one in Ink: no fills.
 	Outline bool
 	Ink     color.NRGBA
+	// ScaleFixedStrokes draws a fixed stroke as wide as it is at the icon's
+	// own size, enlarged with the icon, as a label prints it, rather than
+	// its width in pixels, as a browser draws it.
+	ScaleFixedStrokes bool
 }
 
 // DrawWith draws an icon as Draw does, as opts say.
@@ -80,8 +102,11 @@ func DrawWith(icon *ir.Icon, colors svg.Colors, height int, opts Options) (*imag
 	s := float64(height) / vb[3]
 	width := max(1, int(math.Round(vb[2]*s)))
 	img := image.NewNRGBA(image.Rect(0, 0, width, height))
-	d := drawer{img: img, colors: colors, opts: opts}
-	if err := d.shapes(icon.Shapes, transform{s: s, tx: -vb[0] * s, ty: -vb[1] * s}); err != nil {
+	d := drawer{img: img, colors: colors, opts: opts, fixed: 1}
+	if opts.ScaleFixedStrokes {
+		d.fixed = s
+	}
+	if err := d.shapes(icon.Shapes, newMapping([6]float64{s, 0, 0, s, -vb[0] * s, -vb[1] * s}), nil, false); err != nil {
 		return nil, fmt.Errorf("icon %q: %w", icon.Name, err)
 	}
 	return img, nil
@@ -100,36 +125,69 @@ type drawer struct {
 	img    *image.NRGBA
 	colors svg.Colors
 	opts   Options
+	// fixed is how many pixels wide a fixed stroke of width one is.
+	fixed float64
 }
 
-func (d drawer) shapes(shapes []ir.Shape, x transform) error {
+// shapes draws shapes through x, cut to clip where it is not nil; fixed
+// says their strokes keep their width.
+func (d drawer) shapes(shapes []ir.Shape, x mapping, clip *image.Alpha, fixed bool) error {
 	for i := range shapes {
 		s := &shapes[i]
 		if s.Kind == ir.KindGroup {
-			if err := d.shapes(s.Shapes, x.then(s.TX, s.TY, s.Scale)); err != nil {
+			// a group's clip is in the coordinates it is drawn in, outside
+			// its matrix
+			inner := clip
+			if s.Clip != nil {
+				inner = d.clipped(clip, x.lines([]polyline{{pts: s.Clip, closed: true}}))
+			}
+			if err := d.shapes(s.Shapes, x.then(s.Map()), inner, fixed || s.FixedStrokes()); err != nil {
 				return err
 			}
 			continue
 		}
-		lines, err := outline(s, x)
+		lines, err := outline(s, x.k)
 		if err != nil {
 			return err
 		}
 		if c, ok := d.paint(s.Fill, s.FillOpacity); ok && !d.opts.Outline {
-			d.fill(lines, c)
+			d.fill(x.lines(lines), c, clip)
 		}
 		c, ok := d.paint(s.Stroke, s.FillOpacity)
 		if d.opts.Outline && s.Stroke != "" && s.Stroke != "none" {
 			c, ok = d.opts.Ink, true
 		}
 		if ok && s.StrokeWidth > 0 {
-			if s.Dash != nil {
-				lines = dashed(lines, dashes(*s.Dash, x.s))
+			if fixed {
+				// drawn in pixels, its width and dashes too
+				lines = x.lines(lines)
+				if s.Dash != nil {
+					lines = dashed(lines, dashes(*s.Dash, d.fixed))
+				}
+				d.fill(stroke(lines, s.StrokeWidth*d.fixed), c, clip)
+			} else {
+				// drawn in the shape's own coordinates, then mapped, so a
+				// stroke scales, skews and turns with its shape
+				if s.Dash != nil {
+					lines = dashed(lines, dashes(*s.Dash, 1))
+				}
+				d.fill(x.lines(stroke(lines, s.StrokeWidth)), c, clip)
 			}
-			d.fill(stroke(lines, s.StrokeWidth*x.s), c)
 		}
 	}
 	return nil
+}
+
+// clipped is the area both clip, where it is not nil, and the polygon
+// cover.
+func (d drawer) clipped(clip *image.Alpha, polygon []polyline) *image.Alpha {
+	mask := d.mask(polygon)
+	if clip != nil {
+		for i := range mask.Pix {
+			mask.Pix[i] = min(mask.Pix[i], clip.Pix[i])
+		}
+	}
+	return mask
 }
 
 // paint is a token's color at an opacity, or false for none.
@@ -145,9 +203,11 @@ func (d drawer) paint(token string, opacity float64) (color.NRGBA, bool) {
 	return c, c.A > 0
 }
 
-// fill paints the area the outlines enclose, by the nonzero rule.
-func (d drawer) fill(lines []polyline, c color.NRGBA) {
+// mask is the area the outlines enclose, by the nonzero rule, as each
+// pixel's coverage.
+func (d drawer) mask(lines []polyline) *image.Alpha {
 	b := d.img.Bounds()
+	mask := image.NewAlpha(b)
 	z := vector.NewRasterizer(b.Dx(), b.Dy())
 	drawn := false
 	for _, l := range lines {
@@ -161,31 +221,36 @@ func (d drawer) fill(lines []polyline, c color.NRGBA) {
 		z.ClosePath()
 		drawn = true
 	}
-	if !drawn {
-		return
+	if drawn {
+		z.Draw(mask, b, image.Opaque, image.Point{})
 	}
-	mask := image.NewAlpha(b)
-	z.Draw(mask, b, image.Opaque, image.Point{})
+	return mask
+}
+
+// fill paints the area the outlines enclose, by the nonzero rule, cut to
+// clip where it is not nil.
+func (d drawer) fill(lines []polyline, c color.NRGBA, clip *image.Alpha) {
+	mask := d.clipped(clip, lines)
+	b := d.img.Bounds()
 	draw.DrawMask(d.img, b, &image.Uniform{C: c}, image.Point{}, mask, image.Point{}, draw.Over)
 }
 
-// outline flattens a shape into polylines, in pixels.
-func outline(s *ir.Shape, x transform) ([]polyline, error) {
+// outline flattens a shape into polylines in its own coordinates, its
+// curves as finely as k pixels to a unit of them needs.
+func outline(s *ir.Shape, k float64) ([]polyline, error) {
 	switch s.Kind {
 	case ir.KindPolygon:
 		pts := make([]point, len(s.Points))
-		for i, p := range s.Points {
-			pts[i] = x.apply(p)
-		}
+		copy(pts, s.Points)
 		return []polyline{{pts: pts, closed: true}}, nil
 	case ir.KindEllipse:
-		return []polyline{ellipse(s.CX, s.CY, s.RX, s.RY, x)}, nil
+		return []polyline{ellipse(s.CX, s.CY, s.RX, s.RY, k)}, nil
 	case ir.KindCircle:
-		return []polyline{ellipse(s.CX, s.CY, s.R, s.R, x)}, nil
+		return []polyline{ellipse(s.CX, s.CY, s.R, s.R, k)}, nil
 	case ir.KindRect:
-		return []polyline{rect(s, x)}, nil
+		return []polyline{rect(s, k)}, nil
 	case ir.KindPath:
-		return path(s.D, x)
+		return path(s.D, k)
 	}
 	return nil, fmt.Errorf("a shape of unknown kind %q", s.Kind)
 }
@@ -194,36 +259,36 @@ func outline(s *ir.Shape, x transform) ([]polyline, error) {
 // drawn in.
 func pieces(length float64) int { return max(4, min(256, int(length/2)+1)) }
 
-func ellipse(cx, cy, rx, ry float64, x transform) polyline {
+func ellipse(cx, cy, rx, ry float64, k float64) polyline {
 	if rx <= 0 || ry <= 0 {
 		return polyline{}
 	}
-	n := pieces(2 * math.Pi * math.Max(rx, ry) * x.s)
+	n := pieces(2 * math.Pi * math.Max(rx, ry) * k)
 	pts := make([]point, n)
 	for i := range pts {
 		a := 2 * math.Pi * float64(i) / float64(n)
-		pts[i] = x.apply(point{cx + rx*math.Cos(a), cy + ry*math.Sin(a)})
+		pts[i] = point{cx + rx*math.Cos(a), cy + ry*math.Sin(a)}
 	}
 	return polyline{pts: pts, closed: true}
 }
 
 // rect is a rectangle, its corners rounded by rx as SVG rounds them, ry
 // taking rx's value.
-func rect(s *ir.Shape, x transform) polyline {
+func rect(s *ir.Shape, k float64) polyline {
 	if s.W <= 0 || s.H <= 0 {
 		return polyline{}
 	}
 	r := math.Min(s.RX, math.Min(s.W, s.H)/2)
 	x0, y0, x1, y1 := s.X, s.Y, s.X+s.W, s.Y+s.H
 	if r <= 0 {
-		return polyline{pts: []point{x.apply(point{x0, y0}), x.apply(point{x1, y0}), x.apply(point{x1, y1}), x.apply(point{x0, y1})}, closed: true}
+		return polyline{pts: []point{{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}}, closed: true}
 	}
 	var pts []point
 	corner := func(cx, cy, from float64) {
-		n := pieces(math.Pi / 2 * r * x.s)
+		n := pieces(math.Pi / 2 * r * k)
 		for i := 0; i <= n; i++ {
 			a := from + math.Pi/2*float64(i)/float64(n)
-			pts = append(pts, x.apply(point{cx + r*math.Cos(a), cy + r*math.Sin(a)}))
+			pts = append(pts, point{cx + r*math.Cos(a), cy + r*math.Sin(a)})
 		}
 	}
 	corner(x1-r, y0+r, -math.Pi/2)
@@ -234,7 +299,7 @@ func rect(s *ir.Shape, x transform) polyline {
 }
 
 // path flattens SVG path data, each subpath a polyline.
-func path(d string, x transform) ([]polyline, error) {
+func path(d string, k float64) ([]polyline, error) {
 	segs, err := labels.ParsePathData(d)
 	if err != nil {
 		return nil, err
@@ -252,23 +317,23 @@ func path(d string, x transform) ([]polyline, error) {
 		switch sg.Op {
 		case labels.SegMove:
 			flush()
-			at = x.apply(sg.Pts[0])
+			at = sg.Pts[0]
 			cur.pts = []point{at}
 		case labels.SegLine:
-			at = x.apply(sg.Pts[0])
+			at = sg.Pts[0]
 			cur.pts = append(cur.pts, at)
 		case labels.SegQuad, labels.SegCubic:
-			c1, end := x.apply(sg.Pts[0]), x.apply(sg.End())
+			c1, end := sg.Pts[0], sg.End()
 			c2 := c1
 			if sg.Op == labels.SegCubic {
-				c2 = x.apply(sg.Pts[1])
+				c2 = sg.Pts[1]
 			} else {
 				// the quadratic as the cubic it is
 				q := c1
 				c1 = point{at[0] + 2.0/3*(q[0]-at[0]), at[1] + 2.0/3*(q[1]-at[1])}
 				c2 = point{end[0] + 2.0/3*(q[0]-end[0]), end[1] + 2.0/3*(q[1]-end[1])}
 			}
-			n := pieces(dist(at, c1) + dist(c1, c2) + dist(c2, end))
+			n := pieces((dist(at, c1) + dist(c1, c2) + dist(c2, end)) * k)
 			for k := 1; k <= n; k++ {
 				t := float64(k) / float64(n)
 				u := 1 - t
