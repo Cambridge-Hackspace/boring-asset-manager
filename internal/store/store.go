@@ -44,6 +44,9 @@ type Store struct {
 	actorToken string
 	// via is the assistant changes are made through; see Via.
 	via string
+	// texts keeps icons drawn with assets' texts, for every view of the
+	// store.
+	texts *iconTexts
 }
 
 // Open initializes and connects to the database based on configuration.
@@ -115,6 +118,7 @@ func Open(cfg *config.DatabaseConfig) (*Store, error) {
 	return &Store{
 		DB:      db,
 		Dialect: cfg.Type,
+		texts:   newIconTexts(),
 	}, nil
 }
 

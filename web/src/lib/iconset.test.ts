@@ -56,6 +56,10 @@ describe('iconset', () => {
     expect(iconset.forCategory('chairs')).toBeUndefined();
     expect(iconset.forAsset(null)).toBeUndefined();
     expect(iconset.forAsset({ name: 'switch-l3', from: 'asset' })?.name).toBe('switch-l3');
+    // drawn with its own texts, by the name it is drawn under
+    const written = { ...doc.icons[1]!, name: 'switch-l3', describe: ['written'] };
+    expect(iconset.forAsset({ name: 'switch-l3', from: 'asset', texts: { label: 'A' }, drawn: { 'switch-l3': written } })).toBe(written);
+    expect(iconset.forAsset({ name: 'switch-l3', from: 'asset', drawn: { 'switch-l2': written } })?.describe).not.toEqual(['written']);
     expect(iconset.palette).toEqual([{ token: 'ink', light: '#111111', dark: '#eeeeee' }]);
     expect(iconset.all.map((i) => i.name)).toEqual([...doc.icons.map((i) => i.name)].sort());
   });

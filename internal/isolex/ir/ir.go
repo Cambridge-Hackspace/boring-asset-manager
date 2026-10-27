@@ -137,6 +137,19 @@ func Parse(data []byte) (*Document, error) {
 	return &doc, nil
 }
 
+// ParseIcon reads one icon of an IR document of this build's version, as
+// the compiler draws one icon by itself.
+func ParseIcon(data []byte) (*Icon, error) {
+	var icon Icon
+	if err := json.Unmarshal(data, &icon); err != nil {
+		return nil, fmt.Errorf("isolex IR: %w", err)
+	}
+	if err := checkKinds(icon.Name, icon.Shapes, Version); err != nil {
+		return nil, err
+	}
+	return &icon, nil
+}
+
 func checkKinds(icon string, shapes []Shape, version int) error {
 	for _, s := range shapes {
 		switch s.Kind {

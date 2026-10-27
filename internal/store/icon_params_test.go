@@ -211,7 +211,7 @@ func TestAWrapperErringOnItsLineIsLeftOut(t *testing.T) {
 	}
 	ghost := []paramValue{{"u", "1"}}
 	in.wrappers = append([]iconWrapper{{name: wrapperName("ghost", ghost), icon: "ghost", params: ghost}}, in.wrappers...)
-	res, err := w.st.compileInputs(ctx, w.c, in)
+	res, _, err := w.st.compileInputs(ctx, w.c, in)
 	if err != nil || !res.OK {
 		t.Fatalf("%+v %v", res, err)
 	}

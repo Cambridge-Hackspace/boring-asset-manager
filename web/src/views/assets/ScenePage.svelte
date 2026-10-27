@@ -81,7 +81,7 @@
 
   function drawn(item: SceneItem) {
     if (item.shapes) return item.shapes;
-    const icon = item.icon ? iconset.named(item.icon.name) : undefined;
+    const icon = iconset.forAsset(item.icon);
     return icon?.shapes ?? [];
   }
 

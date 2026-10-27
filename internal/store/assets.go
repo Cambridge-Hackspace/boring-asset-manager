@@ -245,7 +245,11 @@ func (s *Store) insertAsset(tx *sql.Tx, assetID, name string, now time.Time, cat
 
 // GetAssetByID retrieves an asset and resolves its assigned categories, generator keys, and field values.
 func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
-	return s.readAsset(id, &assetContext{})
+	a, err := s.readAsset(id, &assetContext{})
+	if err == nil {
+		s.drawTexts([]*models.AssetWithDetails{a})
+	}
+	return a, err
 }
 
 // readAsset reads an asset as GetAssetByID does, taking what it needs from
@@ -382,6 +386,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	if details.ResolvedIcon, err = s.contextIcon(ctx, a.IconName, catIDs, fieldValues, assetStates(details)); err != nil {
 		return nil, err
 	}
+	if err := s.contextTexts(ctx, details); err != nil {
+		return nil, err
+	}
 	return details, nil
 }
 
@@ -511,8 +518,17 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 		}
 		results = append(results, *detail)
 	}
-
+	s.drawTexts(pointersTo(results))
 	return results, nil
+}
+
+// pointersTo points at each of assets.
+func pointersTo(assets []models.AssetWithDetails) []*models.AssetWithDetails {
+	out := make([]*models.AssetWithDetails, len(assets))
+	for i := range assets {
+		out[i] = &assets[i]
+	}
+	return out
 }
 
 // MatchesSearch reports whether an asset's name, one of its codes, or the

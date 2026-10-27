@@ -32,6 +32,8 @@ To draw one asset differently, edit it and, under **Icon**, choose **Choose anot
 
 An icon can be drawn from an asset's own values. If its source has a **param**, such as `param u 1` for how many rack units high it is, open its category and, under **Parameters**, choose a number field to set it from, such as **Rack units**. Each asset is then drawn with its own value: a server with 2 rack units twice as tall as one with 1. An asset with nothing in the field is drawn with the param's default. A change shows once the icons are built again, a moment later.
 
+An icon can carry an asset's own words, too: its name, its code, or what a field says. Give its source a **text param**, such as `param label (text)"Label"`, and write it with `text`, in a font from the **Library**; then, under **Parameters**, choose what sets it: **The asset's name**, **Its code**, or a field. Each asset is then written with its own, wherever its icon is drawn: in lists, on its page, on labels and in scenes.
+
 ## States
 
 An asset's icon can show what state it is in: **out of service**, **needs maintenance**, **overdue**, **on loan**, **out of stock** or **running low**. An icon shows a state by having a **variant** for it, such as *switch-down*, a switch with a red badge; an asset in that state is drawn with it, everywhere its icon is. An asset in several states shows the first in that list that its icon has. Icons with no variants are drawn as they always are.

@@ -417,7 +417,7 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
     * `GET /api/v1/icons/ir` is that build's IR, which pages draw icons from. Its `ETag` is the build's hash, so `If-None-Match` answers `304` until a build lands.
     * `GET /api/v1/icons/palette` and `GET /api/v1/icons/settings` give the palette and the settings.
     * `GET /api/v1/icons/states` gives the asset states, worst first, the variant each is drawn with (`variants`), bam's defaults, and `starter`, a library file drawing them.
-    * `GET /api/v1/categories/{id}/icon/params` gives the params of a category's icon bound to fields (`[{"param", "field_id", "field_key", "field_label"}]`).
+    * `GET /api/v1/categories/{id}/icon/params` gives the params of a category's icon bound to what assets have (`[{"param", "source", "field_id", "field_key", "field_label"}]`, `source` being `field`, `name` or `code`).
     * `GET /api/v1/category-icons`, `GET /api/v1/categories/{id}/icon` and `/icon/revisions`, `GET /api/v1/icon-library`, and `GET /api/v1/icon-library/{id}` and `/revisions` give the sources and their published versions.
   * **A category's own icon** (`categories.manage`):
     * `PUT /api/v1/categories/{id}/icon` with `{"icon_name", "source"}` answers `{"icon", "save"}`. In `save`, `published` says whether the source was published, and `errors` and `warnings` give the compiler's diagnostics as `{"file", "line", "col", "message"}`. A draft is still a `200`.
@@ -473,6 +473,9 @@ A category may carry an icon, written in isolex (§1, "Icon compiler"). With no 
     * An asset with no number in a bound field is drawn with the param's default; so is one whose wrapper is not yet built. A change to an asset through `POST` or `PUT /api/v1/assets` builds before it answers; any other change through the API is followed, half a second after the last, by a build if the inputs changed.
     * A wrapper never stops a build: one with errors on its own line is left out, and if a value only breaks the icon it extends (`1 / (u - 3)` for 3), those that do are found by halving them, and a warning says how many were left out. Their assets are drawn plain.
     * `resolved_icon` then has `bound`, the wrapper, and `params`, and `base` is the icon by its name. Labels draw the wrapper; `{{asset.icon}}` as text prints the icon's name.
+  * **Its own texts** can be written on it (`icon_text_bindings`, migration `040`). A text param, `param label (text)"?"`, is bound under **Parameters** to the asset's name, its first code (its QR code, else its Micro QR, else its Code 128, else whichever it has) or a field's value; `PUT …/icon/params` takes `name` or `code` in place of a field's ID. A binding is checked against the icon: a param it has, a text param to a text and a number param to a number field.
+    * Texts differ asset by asset, so they get no wrappers. Each asset is compiled alone with its texts, as isolex's `compile_one` compiles one icon, from the files the current build was made from, which builds keep (`icon_build.inputs`); every read of assets compiles those it holds in one call to isolex's `compile_many`, which parses the lexicon and builds each font once. What is drawn is kept in memory, at most 4,096, by the build, the icon and the texts, so it is compiled again only when one of them changes. Measured under wazero with Noto Sans (102 glyphs) and 10 to 200 icons: one icon alone takes 25 to 48 ms, and in one call, 1 to 3 ms each, so 300 assets take 0.3 to 1 s the first time they are read.
+    * `resolved_icon` then has `texts`, by param, and `drawn`, the icon drawn with them by the name it is drawn under, and when that shows a state, without it too. Pages, images (`?asset=`), labels (through `drawn_icons` in their data, so the live preview draws them too), scenes and MCP's `texts` use it in place of the build's. An asset with no value there is drawn with the param's default; so is one whose icon does not draw with its texts, or cannot be drawn now, or whose build was made before builds kept their files, until it is made again, which a server does when it starts.
   * **Its state** shows in it. An asset that is `out_of_service`, `needs_maintenance`, `overdue`, `on_loan`, `out_of_stock` or `low_stock` (running low), worst first, is drawn as its icon's variant for the worst of them that the build draws: `<icon>-<variant>`, an isolex axis variant, its own icon's as well as its categories'. With none drawn, it is drawn plain, so nothing changes until an icon has variants.
     * The variants are chosen on the Icons page under **Asset states** (`icon_settings.states`, migration `037`): `down`, `maintenance`, `overdue`, `lent`, `empty` and `low` unless chosen otherwise, and any can be none.
     * An icon has them by opting into an axis with them: `axes "state"`. **Start the state badges**, in the library, starts `shared/states.ilx` from the server's `starter`: the `state` axis, with a variant for each state's that puts a badge in the icon's top right corner, and the badges, drawn at a stroke width the settings allow and granting the reserved colors they paint with.
@@ -1303,12 +1306,13 @@ Category icons written in isolex and drawn throughout the interface, on labels a
 * [x] Scenes exported: as SVG or PNG, and drawn for assistants (§3.7).
 * [x] isolex's IR version 2 read and drawn: by the Go reader and SVG writer, byte for byte as isolex 0.4 draws it, and in PNGs, on labels, in scenes, in the live preview and in the web interface, version 1 still read (§1, §3.7).
 * [x] Icons compiled with isolex 0.4.0: parts turned, mirrored, skewed or laid on a face, and words set in fonts the lexicon defines; offered by the editor's completion (§3.7).
+* [x] An asset's own text on its icon: a text param bound to its name, its code or a field, each asset compiled with its own, a list's together, and kept (§3.7).
 
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
 
-* **An asset's own text on its icon** (#110): a text param bound to an asset's name, code or a text field, compiled per asset with isolex's `compile_one` and cached by its values, once its cost under wazero is measured.
+* Nothing at present.
 
 #### Deferred
 * **QR codes linking to an asset's page:** a QR code's content is a binding template authors choose; `{{scan_url}}` (§6.4) gives the asset's scan page for it, so no generator of its own is needed.

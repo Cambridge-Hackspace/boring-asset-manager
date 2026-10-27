@@ -167,6 +167,7 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 		if ic.State != "" {
 			d.StateIcon = ic.Name
 		}
+		d.DrawnIcons = ic.Drawn
 	}
 	if l := a.Loan; l != nil {
 		// By name only; a borrower hidden from the request (no ID) is blank.

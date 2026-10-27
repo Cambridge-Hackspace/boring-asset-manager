@@ -168,6 +168,8 @@ export interface Definition {
   parts: string[];
   /** Its params, by name. */
   params: string[];
+  /** Those of its params that are text: param name (text)"…". */
+  textParams?: string[];
   /** For an axis, its variants. */
   variants: string[];
 }
@@ -211,7 +213,10 @@ export function outline(text: string): Definition[] {
     if (name === 'variant' && arg !== undefined) current.variants.push(arg);
     if (name === 'param' && tokens[k + 1]) {
       const p = tokens[k + 1]!;
-      current.params.push(p.value ?? text.slice(p.start, p.end));
+      const param = p.value ?? text.slice(p.start, p.end);
+      current.params.push(param);
+      const type = tokens[k + 2];
+      if (type?.kind === 'ident' && text.slice(type.start, type.end) === '(text)') (current.textParams ??= []).push(param);
     }
   }
   return defs;

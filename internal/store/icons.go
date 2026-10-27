@@ -335,7 +335,7 @@ func (s *Store) changeIcons(ctx context.Context, c IconCompiler, ch iconChange) 
 			}
 			after.sort()
 		}
-		res, err := s.compileInputs(ctx, c, after)
+		res, files, err := s.compileInputs(ctx, c, after)
 		if err != nil {
 			return nil, err
 		}
@@ -348,7 +348,7 @@ func (s *Store) changeIcons(ctx context.Context, c IconCompiler, ch iconChange) 
 			return nil, &IconBuildError{Errors: errs}
 		}
 
-		save, retry, err := s.keepIconChange(ch, was, version, after, res, published, errs)
+		save, retry, err := s.keepIconChange(ch, was, version, after, compiled{res, files}, published, errs)
 		if err != nil {
 			return nil, err
 		}
@@ -359,7 +359,14 @@ func (s *Store) changeIcons(ctx context.Context, c IconCompiler, ch iconChange) 
 	return nil, ErrIconsChanging
 }
 
-func (s *Store) keepIconChange(ch iconChange, was, version string, after iconInputs, res *isolex.Result, published bool, errs []models.IconDiag) (*models.IconSave, bool, error) {
+// compiled is a compile's result and the files it was compiled from.
+type compiled struct {
+	res   *isolex.Result
+	files []isolex.File
+}
+
+func (s *Store) keepIconChange(ch iconChange, was, version string, after iconInputs, out compiled, published bool, errs []models.IconDiag) (*models.IconSave, bool, error) {
+	res := out.res
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return nil, false, fmt.Errorf("beginning transaction: %w", err)
@@ -384,7 +391,7 @@ func (s *Store) keepIconChange(ch iconChange, was, version string, after iconInp
 		if err != nil {
 			return nil, false, err
 		}
-		if save.Build, err = s.writeIconBuild(tx, hash, version, res); err != nil {
+		if save.Build, err = s.writeIconBuild(tx, hash, version, out); err != nil {
 			return nil, false, err
 		}
 	}
@@ -394,8 +401,15 @@ func (s *Store) keepIconChange(ch iconChange, was, version string, after iconInp
 	return save, false, nil
 }
 
-func (s *Store) writeIconBuild(tx *sql.Tx, hash, version string, res *isolex.Result) (*models.IconBuild, error) {
+// writeIconBuild keeps a build: its IR, and the files it was compiled
+// from, from which an asset's own text is drawn on its icon.
+func (s *Store) writeIconBuild(tx *sql.Tx, hash, version string, out compiled) (*models.IconBuild, error) {
+	res := out.res
 	warnings, err := json.Marshal(iconDiags(res.Warnings))
+	if err != nil {
+		return nil, err
+	}
+	inputs, err := json.Marshal(out.files)
 	if err != nil {
 		return nil, err
 	}
@@ -403,8 +417,8 @@ func (s *Store) writeIconBuild(tx *sql.Tx, hash, version string, res *isolex.Res
 	if _, err := s.TxExec(tx, `DELETE FROM icon_build WHERE id = ?`, iconBuildID); err != nil {
 		return nil, err
 	}
-	_, err = s.TxExec(tx, `INSERT INTO icon_build (id, source_hash, isolex_version, ir, warnings, built_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		iconBuildID, b.Hash, b.IsolexVersion, string(b.IR), string(warnings), b.BuiltAt)
+	_, err = s.TxExec(tx, `INSERT INTO icon_build (id, source_hash, isolex_version, ir, warnings, built_at, inputs) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		iconBuildID, b.Hash, b.IsolexVersion, string(b.IR), string(warnings), b.BuiltAt, string(inputs))
 	if err != nil {
 		return nil, fmt.Errorf("saving the icon build: %w", err)
 	}
@@ -450,7 +464,15 @@ func (s *Store) RebuildIcons(ctx context.Context, c IconCompiler) (*models.IconS
 	if b, err := s.CurrentIconBuild(); err != nil {
 		return nil, err
 	} else if b != nil && b.Hash == hash {
-		return &models.IconSave{Published: true, Errors: []models.IconDiag{}, Warnings: b.Warnings, Build: b}, nil
+		// a build made before builds kept their files is made again,
+		// so that assets' texts can be drawn from them
+		var kept int
+		if err := s.QueryRow(`SELECT COUNT(*) FROM icon_build WHERE id = ? AND inputs IS NOT NULL`, iconBuildID).Scan(&kept); err != nil {
+			return nil, err
+		}
+		if kept > 0 {
+			return &models.IconSave{Published: true, Errors: []models.IconDiag{}, Warnings: b.Warnings, Build: b}, nil
+		}
 	}
 	return s.changeIcons(ctx, c, iconChange{keep: func(*sql.Tx, bool, []models.IconDiag) error { return nil }})
 }

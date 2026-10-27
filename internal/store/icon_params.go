@@ -285,16 +285,17 @@ const maxWrapperCompiles = 64
 // those with errors on their line, and then, should errors remain that
 // leaving out every wrapper clears (a value the icon it extends cannot be
 // drawn with is reported there), those found by halving the wrappers,
-// with a warning saying how many were left out.
-func (s *Store) compileInputs(ctx context.Context, c IconCompiler, in iconInputs) (*isolex.Result, error) {
+// with a warning saying how many were left out. It returns the files the
+// result was compiled from, which a build keeps.
+func (s *Store) compileInputs(ctx context.Context, c IconCompiler, in iconInputs) (*isolex.Result, []isolex.File, error) {
 	for {
 		files, err := in.files()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		res, err := compile(ctx, c, files)
 		if err != nil || res.OK || len(in.wrappers) == 0 {
-			return res, err
+			return res, files, err
 		}
 		bad := map[int]bool{}
 		for _, d := range res.Errors {
@@ -314,18 +315,19 @@ func (s *Store) compileInputs(ctx context.Context, c IconCompiler, in iconInputs
 			continue
 		}
 		// errors elsewhere: the wrappers' doing, if the icons compile without
-		with := func(ws []iconWrapper) (*isolex.Result, error) {
+		with := func(ws []iconWrapper) (*isolex.Result, []isolex.File, error) {
 			try := in
 			try.wrappers = ws
 			files, err := try.files()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			return compile(ctx, c, files)
+			res, err := compile(ctx, c, files)
+			return res, files, err
 		}
-		alone, err := with(nil)
+		alone, aloneFiles, err := with(nil)
 		if err != nil || !alone.OK {
-			return res, err
+			return res, files, err
 		}
 		budget := maxWrapperCompiles
 		var good func(ws []iconWrapper) ([]iconWrapper, error)
@@ -334,7 +336,7 @@ func (s *Store) compileInputs(ctx context.Context, c IconCompiler, in iconInputs
 				return nil, nil
 			}
 			budget--
-			r, err := with(ws)
+			r, _, err := with(ws)
 			if err != nil || r.OK {
 				return ws, err
 			}
@@ -350,14 +352,14 @@ func (s *Store) compileInputs(ctx context.Context, c IconCompiler, in iconInputs
 		}
 		kept, err := good(in.wrappers)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		out := alone
+		out, outFiles := alone, aloneFiles
 		if len(kept) > 0 {
-			if r, err := with(kept); err != nil {
-				return nil, err
+			if r, keptFiles, err := with(kept); err != nil {
+				return nil, nil, err
 			} else if r.OK {
-				out = r
+				out, outFiles = r, keptFiles
 			} else {
 				kept = nil
 			}
@@ -366,7 +368,7 @@ func (s *Store) compileInputs(ctx context.Context, c IconCompiler, in iconInputs
 		out.Warnings = append(out.Warnings, isolex.Diag{File: paramsFile, Line: 1, Col: 1,
 			Message: fmt.Sprintf("%d of %d icons drawn for assets' field values are left out, as those values do not draw, and those assets are drawn plain: %s:%d:%d: %s",
 				len(in.wrappers)-len(kept), len(in.wrappers), first.File, first.Line, first.Col, first.Message)})
-		return out, nil
+		return out, outFiles, nil
 	}
 }
 
@@ -377,11 +379,14 @@ func (s *Store) IconParamsBound() (bool, error) {
 	return n > 0, err
 }
 
-// IconParamBindings lists the params of a category's icon bound to
-// fields, by param.
+// IconParamBindings lists the params of a category's icon bound to an
+// asset's fields, or for a text param, to its name or code, by param.
 func (s *Store) IconParamBindings(categoryID string) ([]models.IconParamBinding, error) {
-	rows, err := s.Query(`SELECT b.param, f.id, f.field_key, f.label FROM icon_param_bindings b
-		JOIN fields f ON f.id = b.field_id WHERE b.category_id = ? ORDER BY b.param`, categoryID)
+	rows, err := s.Query(`SELECT b.param, 'field', f.id, f.field_key, f.label FROM icon_param_bindings b
+		JOIN fields f ON f.id = b.field_id WHERE b.category_id = ?
+		UNION ALL
+		SELECT t.param, t.source, COALESCE(f.id, ''), COALESCE(f.field_key, ''), COALESCE(f.label, '') FROM icon_text_bindings t
+		LEFT JOIN fields f ON f.id = t.field_id WHERE t.category_id = ?`, categoryID, categoryID)
 	if err != nil {
 		return nil, fmt.Errorf("reading icon params: %w", err)
 	}
@@ -389,51 +394,108 @@ func (s *Store) IconParamBindings(categoryID string) ([]models.IconParamBinding,
 	out := []models.IconParamBinding{}
 	for rows.Next() {
 		var b models.IconParamBinding
-		if err := rows.Scan(&b.Param, &b.FieldID, &b.FieldKey, &b.FieldLabel); err != nil {
+		if err := rows.Scan(&b.Param, &b.Source, &b.FieldID, &b.FieldKey, &b.FieldLabel); err != nil {
 			return nil, err
 		}
 		out = append(out, b)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Param < out[j].Param })
 	return out, rows.Err()
 }
 
-// SetIconParamBindings replaces the bindings of a category's icon, param to
-// field ID, each field a number field; then builds the icons with them.
+// SetIconParamBindings replaces the bindings of a category's icon, by
+// param: a number field's ID for a number param, or for a text param, a
+// field's ID, TextFromName or TextFromCode. A compiler that can draw one
+// icon checks each param is the icon's, and of that kind. Then it builds
+// the icons with them.
 func (s *Store) SetIconParamBindings(ctx context.Context, c IconCompiler, categoryID string, bindings map[string]string) ([]models.IconParamBinding, *models.IconSave, error) {
-	var exists int
-	err := s.QueryRow(`SELECT COUNT(*) FROM category_icons WHERE category_id = ? AND source IS NOT NULL`, categoryID).Scan(&exists)
+	var icon string
+	err := s.QueryRow(`SELECT icon_name FROM category_icons WHERE category_id = ? AND source IS NOT NULL`, categoryID).Scan(&icon)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, fmt.Errorf("%w: the category has no published icon of its own", ErrInvalidIconParams)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
-	if exists == 0 {
-		return nil, nil, fmt.Errorf("%w: the category has no published icon of its own", ErrInvalidIconParams)
+	type binding struct {
+		param, source, field string
+		number               bool
 	}
-	for param, field := range bindings {
+	var all []binding
+	for param, value := range bindings {
 		if !paramPattern.MatchString(param) || param == "x" || param == "y" {
 			return nil, nil, fmt.Errorf("%w: %q is not a param's name: a letter or _, then letters, digits and _", ErrInvalidIconParams, param)
 		}
-		var kind string
-		err := s.QueryRow(`SELECT validation_type FROM fields WHERE id = ?`, field).Scan(&kind)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil, fmt.Errorf("%w: there is no field %q", ErrInvalidIconParams, field)
+		b := binding{param: param, source: value}
+		if value != TextFromName && value != TextFromCode {
+			var kind string
+			err := s.QueryRow(`SELECT validation_type FROM fields WHERE id = ?`, value).Scan(&kind)
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil, fmt.Errorf("%w: there is no field %q; bind a param to a field, %q or %q", ErrInvalidIconParams, value, TextFromName, TextFromCode)
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			b.source, b.field, b.number = TextFromField, value, kind == "number"
 		}
+		all = append(all, b)
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].param < all[j].param })
+
+	// the icon's own params, of the kind each is bound as
+	if d, ok := c.(IconDrawer); ok && len(all) > 0 {
+		in, err := s.readIconInputs(s.Query)
 		if err != nil {
 			return nil, nil, err
 		}
-		if kind != "number" {
-			return nil, nil, fmt.Errorf("%w: only a number field can set a param", ErrInvalidIconParams)
+		in.wrappers = nil
+		files, err := in.files()
+		if err != nil {
+			return nil, nil, err
+		}
+		params := map[string]any{}
+		for _, b := range all {
+			if b.number {
+				params[b.param] = 1.0
+			} else {
+				params[b.param] = "?"
+			}
+		}
+		many, err := d.CompileMany(ctx, files, []isolex.Request{{Icon: icon, Params: params}})
+		switch {
+		case errors.Is(err, isolex.ErrUnavailable):
+		case err != nil:
+			return nil, nil, err
+		case many.OK && len(many.Results) == 1 && many.Results[0].Refused != "":
+			why := strings.NewReplacer(
+				"; give it a string", "; bind it to the asset's name, a code or a field that is not a number",
+				"; give it a number", "; bind it to a number field",
+			).Replace(many.Results[0].Refused)
+			return nil, nil, fmt.Errorf("%w: %s", ErrInvalidIconParams, why)
 		}
 	}
+
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return nil, nil, err
 	}
 	defer tx.Rollback()
-	if _, err := s.TxExec(tx, `DELETE FROM icon_param_bindings WHERE category_id = ?`, categoryID); err != nil {
-		return nil, nil, err
+	for _, table := range []string{"icon_param_bindings", "icon_text_bindings"} {
+		if _, err := s.TxExec(tx, `DELETE FROM `+table+` WHERE category_id = ?`, categoryID); err != nil {
+			return nil, nil, err
+		}
 	}
-	for param, field := range bindings {
-		if _, err := s.TxExec(tx, `INSERT INTO icon_param_bindings (category_id, param, field_id) VALUES (?, ?, ?)`, categoryID, param, field); err != nil {
+	for _, b := range all {
+		if b.number {
+			_, err = s.TxExec(tx, `INSERT INTO icon_param_bindings (category_id, param, field_id) VALUES (?, ?, ?)`, categoryID, b.param, b.field)
+		} else {
+			var field any
+			if b.field != "" {
+				field = b.field
+			}
+			_, err = s.TxExec(tx, `INSERT INTO icon_text_bindings (category_id, param, source, field_id) VALUES (?, ?, ?, ?)`, categoryID, b.param, b.source, field)
+		}
+		if err != nil {
 			return nil, nil, err
 		}
 	}

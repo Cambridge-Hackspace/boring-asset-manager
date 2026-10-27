@@ -57,8 +57,9 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// which icon, and its category's color
+	// which icon, and its category's color; an asset's drawn with its texts
 	var name, own string
+	var drawn []byte
 	switch {
 	case q.Get("asset") != "":
 		a, ok := s.assetFor(w, r, q.Get("asset"), rbac.PermAssetsRead)
@@ -70,6 +71,7 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		name, own = a.ResolvedIcon.Name, a.ResolvedIcon.Color
+		drawn = a.ResolvedIcon.Drawn[name]
 	case q.Get("category") != "":
 		cat, err := s.store.GetCategoryByID(q.Get("category"))
 		if errors.Is(err, store.ErrCategoryNotFound) {
@@ -124,6 +126,11 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		icon = doc.Icon(name)
+	}
+	if drawn != nil {
+		if d, err := ir.ParseIcon(drawn); err == nil {
+			icon = d
+		}
 	}
 	if icon == nil {
 		unknown := isolex.Unknown()
