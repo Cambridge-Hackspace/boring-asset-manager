@@ -160,7 +160,7 @@ function stringValue(s: string): string {
 
 /** The definitions sources hold, for completion. */
 export interface Definition {
-  kind: 'icon' | 'base' | 'fragment' | 'axis';
+  kind: 'icon' | 'base' | 'fragment' | 'axis' | 'font';
   name: string;
   /** What it extends, if it says. */
   extends?: string;
@@ -172,7 +172,7 @@ export interface Definition {
   variants: string[];
 }
 
-const defKinds = new Set(['icon', 'base', 'fragment', 'axis']);
+const defKinds = new Set(['icon', 'base', 'fragment', 'axis', 'font']);
 
 /** Reads the top-level definitions of a source. */
 export function outline(text: string): Definition[] {
