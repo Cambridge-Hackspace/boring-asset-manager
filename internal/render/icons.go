@@ -27,7 +27,9 @@ const categoryToken = "category"
 // placeIcon draws an icon element in its box: the asset's icon or the one
 // named, nothing when there is none or no icons to draw it from. Shaded,
 // each token prints as the gray of its light color; as an outline, the
-// strokes alone print, in black.
+// strokes alone print, in black. A stroke an icon keeps the width of
+// prints as wide as it is at the icon's own size, enlarged with the rest,
+// so a hairline is still seen at a printer's resolution.
 func (s *Scene) placeIcon(e *labels.Element, box image.Rectangle, data labels.Data, images ImageSource) error {
 	name, tint := e.Icon, ""
 	if name == labels.IconOfAsset {
@@ -63,7 +65,9 @@ func (s *Scene) placeIcon(e *labels.Element, box image.Rectangle, data labels.Da
 	aspect := icon.Viewbox[2] / icon.Viewbox[3]
 	h := min(box.Dy(), int(math.Floor(float64(box.Dx())/aspect)))
 	h = min(max(h, 1), raster.MaxHeight)
-	img, err := raster.DrawWith(icon, colors, h, raster.Options{Outline: e.Shading == labels.ShadingOutline, Ink: color.NRGBA{A: 255}})
+	img, err := raster.DrawWith(icon, colors, h, raster.Options{
+		Outline: e.Shading == labels.ShadingOutline, Ink: color.NRGBA{A: 255}, ScaleFixedStrokes: true,
+	})
 	if err != nil {
 		return err
 	}

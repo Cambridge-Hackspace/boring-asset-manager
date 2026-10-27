@@ -40,6 +40,20 @@ func TestPicture(t *testing.T) {
 	if icon, _ := Picture("Lab", s.Floor, s.Viewbox, items, ""); len(icon.Shapes) != 8 {
 		t.Errorf("nothing shown: %d shapes", len(icon.Shapes))
 	}
+	// an icon of IR version 2 is placed whole, its groups inside the item's,
+	// and every clip of the scene its own
+	turned := [6]float64{0, 1, -1, 0, 0, 0}
+	clipped := []ir.Shape{{Kind: ir.KindGroup, Matrix: &turned, Clip: [][2]float64{{0, 0}, {1, 0}, {0, 1}}, Strokes: "fixed", Shapes: []ir.Shape{
+		{Kind: ir.KindPolygon, Points: [][2]float64{{0, 0}, {1, 0}, {0, 1}}, Fill: "ink", FillOpacity: 1, Stroke: "ink", StrokeWidth: 1},
+	}}}
+	two, _ := Picture("Lab", s.Floor, s.Viewbox, []Drawn{{Placed: s.Items[0], Shapes: clipped}, {Placed: s.Items[1], Shapes: clipped}}, "")
+	drawn := svg.Icon(two, svg.Palette(map[string]string{"ink": "#000"}))
+	for _, want := range []string{`<clipPath id="clip-Lab-1">`, `<clipPath id="clip-Lab-2">`, `<g transform="matrix(0.00 1.00 -1.00 0.00 0.00 0.00)">`, `vector-effect="non-scaling-stroke"`} {
+		if !strings.Contains(drawn, want) {
+			t.Errorf("no %s in\n%s", want, drawn)
+		}
+	}
+
 	out := svg.Icon(icon, svg.Palette(map[string]string{"bam-category-0": "#123456"}))
 	if !strings.Contains(out, `fill="#123456"`) || !strings.Contains(out, "<title>Lab</title>") || !strings.Contains(out, `<path d="M0.00 0.00 L-34.64 20.00"`) {
 		t.Errorf("%s", out)
