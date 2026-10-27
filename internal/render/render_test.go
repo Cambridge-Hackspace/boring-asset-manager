@@ -22,6 +22,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/raster"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/svg"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
@@ -99,6 +100,18 @@ var testIcons = func() map[string]*ir.Icon {
 	icons := map[string]*ir.Icon{}
 	for i := range doc.Icons {
 		icons[doc.Icons[i].Name] = &doc.Icons[i]
+	}
+	// and isolex 0.4's transforms, in IR version 2
+	data, err = os.ReadFile("../isolex/testdata/isolex-0.4.0/transforms.ir.golden.json")
+	if err != nil {
+		panic(err)
+	}
+	v2, err := ir.Parse(data)
+	if err != nil {
+		panic(err)
+	}
+	for i := range v2.Icons {
+		icons[v2.Icons[i].Name] = &v2.Icons[i]
 	}
 	return icons
 }()
@@ -1024,6 +1037,33 @@ func TestIconElements(t *testing.T) {
 	bound.StateIcon = "switch-poe-down"
 	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","state":true}`, bound), variant) {
 		t.Error("bound, in a state: not drawn as its variant")
+	}
+}
+
+// An icon of IR version 2 prints, its fixed strokes as wide as they are
+// at its own size, enlarged with it.
+func TestVersionTwoIconsPrint(t *testing.T) {
+	s, err := Layout(mustTemplate(t, `{"name":"T","units":"mm","width":10,"height":10,"dpi":300,"layering":"list","elements":[`+
+		`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"mark"}]}`), testData, memImages{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Items) != 1 || s.Items[0].Image == nil {
+		t.Fatalf("%d items", len(s.Items))
+	}
+	p := s.Items[0].Image
+	want, err := raster.DrawWith(testIcons["mark"], func(token string) string { return gray(svg.IsolexPalette[token]) }, p.H,
+		raster.Options{Ink: color.NRGBA{A: 255}, ScaleFixedStrokes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(p.Image.(*image.NRGBA).Pix, want.Pix) {
+		t.Error("the label's icon is not the icon with its fixed strokes scaled")
+	}
+	browser, _ := raster.DrawWith(testIcons["mark"], func(token string) string { return gray(svg.IsolexPalette[token]) }, p.H,
+		raster.Options{Ink: color.NRGBA{A: 255}})
+	if bytes.Equal(browser.Pix, want.Pix) {
+		t.Error("a fixed stroke prints as a browser draws it")
 	}
 }
 
