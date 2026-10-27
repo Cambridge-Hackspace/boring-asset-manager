@@ -565,6 +565,9 @@ type assetContext struct {
 	// iconBindings maps each icon with params bound to fields to them,
 	// once read.
 	iconBindings map[string][]iconBinding
+	// textBindings maps each icon with text params bound to an asset's
+	// texts to them, once read.
+	textBindings map[string][]textBinding
 }
 
 // contextTraits returns the category traits, reading them the first time.

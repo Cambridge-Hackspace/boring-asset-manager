@@ -631,6 +631,7 @@ func (s *Store) AssetsByIDs(ids []string) ([]models.AssetWithDetails, error) {
 		}
 		out = append(out, *a)
 	}
+	s.drawTexts(pointersTo(out))
 	return out, nil
 }
 

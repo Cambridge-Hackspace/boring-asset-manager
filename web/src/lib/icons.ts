@@ -24,6 +24,20 @@ export function iconParams(definitions: Definition[], name: string): string[] {
   return params;
 }
 
+/** Those params of an icon, its own or inherited, that are text. */
+export function iconTextParams(definitions: Definition[], name: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let at: string | undefined = name; at && !seen.has(at); ) {
+    seen.add(at);
+    const def = definitions.find((d) => d.name === at && (d.kind === 'icon' || d.kind === 'base'));
+    if (!def) break;
+    for (const p of def.textParams ?? []) if (!out.includes(p)) out.push(p);
+    at = def.extends;
+  }
+  return out;
+}
+
 /** The file a category's icon is in a build, as diagnostics name it. */
 export const iconFile = (name: string) => `categories/${name}.ilx`;
 

@@ -90,19 +90,7 @@ func footprint(icons map[string]*ir.Icon, ic *models.ResolvedIcon) *[3]float64 {
 
 // firstCode is an asset's code to show: its first, by the order codes are
 // listed.
-func firstCode(a *models.AssetWithDetails) string {
-	for _, t := range []string{"qr", "micro_qr", "code128"} {
-		for _, k := range a.GeneratorKeys {
-			if k.GeneratorType == t {
-				return k.AssignedCode
-			}
-		}
-	}
-	if len(a.GeneratorKeys) > 0 {
-		return a.GeneratorKeys[0].AssignedCode
-	}
-	return ""
-}
+func firstCode(a *models.AssetWithDetails) string { return a.FirstCode() }
 
 // GET /api/v1/assets/{id}/scene: what is in an asset, laid out on its
 // floor; contents the caller cannot read are left out.
@@ -210,6 +198,12 @@ func (s *Server) handleSceneImage(w http.ResponseWriter, r *http.Request) {
 		if it.Icon != nil {
 			if icon := icons[it.Icon.Name]; icon != nil && it.Shapes == nil {
 				d.Shapes = icon.Shapes
+			}
+			// drawn with its own texts
+			if raw := it.Icon.Drawn[it.Icon.Name]; raw != nil && it.Shapes == nil {
+				if icon, err := ir.ParseIcon(raw); err == nil {
+					d.Shapes = icon.Shapes
+				}
 			}
 			if it.Icon.Color != "" {
 				d.Color = it.Icon.Color

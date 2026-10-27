@@ -112,7 +112,7 @@ icon "${iconName}" extends="${iconName}-unit" { }`,
   await params.getByLabel('u', { exact: true }).selectOption({ label });
   await noViolations(page);
   await params.getByRole('button', { name: 'Save the parameters' }).click();
-  await expect(params.getByText('Saved: each asset is drawn with its values.')).toBeVisible();
+  await expect(params.getByText('Saved: each asset is drawn with its own.')).toBeVisible();
 
   await page.goto(`/assets/${asset.asset.id}`);
   await expect(page.locator('[data-icon-params]')).toHaveText('Drawn with u 2, from its fields.');
@@ -125,5 +125,39 @@ icon "${iconName}" extends="${iconName}-unit" { }`,
   await expect(page.getByRole('region', { name: 'Every icon' }).getByRole('img')).toHaveCount(1);
 
   // unbound, for the rest
+  await api.call('PUT', `/categories/${category.id}/icon/params`, { params: {} });
+});
+
+test("an icon's text param is bound to the asset's name, and each asset written with its own", async ({ signedIn: page, api }) => {
+  const { category } = await api.call('POST', '/categories', { name: unique('Tags') });
+  const iconName = unique('tag').toLowerCase();
+  const font = unique('mini').toLowerCase();
+  // a font of one glyph, W, and a tag that writes its label in it
+  await api.call('PUT', `/categories/${category.id}/icon`, {
+    icon_name: iconName,
+    source: `font "${font}" { em 10; ascent 7; descent 3; kind "stroke"
+  glyph "W" advance=6 { path d="M0,7 L1.5,0 L3,4 L4.5,0 L6,7" }
+  notdef advance=5 { path d="M0,0 H4 V7 H0 Z" }
+}
+icon "${iconName}" { category "labels"; footprint 1 1 0.5
+  param label (text)"?"
+  part "box" { box 0 0 0 1 1 0.5 }
+  part "label" { at 0.5 0.5 0.5 { text 0 0 "{label}" font="${font}" size=8 } }
+}`,
+  });
+  const { asset } = await api.call('POST', '/assets', { name: 'WWW', category_ids: [category.id] });
+
+  await page.goto(`/categories/${category.id}`);
+  const params = page.getByRole('region', { name: 'Parameters' });
+  await params.getByLabel('label text', { exact: true }).selectOption({ label: "The asset's name" });
+  await noViolations(page);
+  await params.getByRole('button', { name: 'Save the parameters' }).click();
+  await expect(params.getByText('Saved: each asset is drawn with its own.')).toBeVisible();
+
+  await page.goto(`/assets/${asset.asset.id}`);
+  await expect(page.locator('[data-icon-texts]')).toHaveText('Written with label “WWW”.');
+  // three Ws, each a glyph of its own
+  await expect(page.locator('h1 svg path[d="M0,7 L1.5,0 L3,4 L4.5,0 L6,7"]')).toHaveCount(3);
+
   await api.call('PUT', `/categories/${category.id}/icon/params`, { params: {} });
 });

@@ -243,9 +243,11 @@ func iconTools() []tool {
 				return request{path: pathOf("/api/v1/categories/{id}/icon/rename", in.CategoryID), body: map[string]string{"icon_name": in.IconName}}, need(in.CategoryID, "category_id")
 			},
 			func(in renameIconIn, _ map[string]any) string { return fmt.Sprintf("Renamed it %q.", in.IconName) }),
-		simple(&mcp.Tool{Name: "bind_icon_params", Description: "Bind params of a category's icon, its own or inherited, to number fields by ID, replacing those bound: " +
-			"each asset drawn with the icon is then drawn with each param set to its value of the field, so a server with 2 in Rack units is drawn 2 units high. " +
-			"An asset with no number in the field is drawn with the param's default. Bind none to unbind them all.",
+		simple(&mcp.Tool{Name: "bind_icon_params", Description: "Bind params of a category's icon, its own or inherited, to what each asset has, replacing those bound: " +
+			"a number param to a number field by ID, so a server with 2 in Rack units is drawn 2 units high; a text param to \"name\" (the asset's name), " +
+			"\"code\" (its first code) or a field by ID, so a tag is written with the asset's own name. " +
+			"An asset with no value there is drawn with the param's default. Refused for a param the icon does not have, or bound to the other kind. " +
+			"Bind none to unbind them all.",
 			Annotations: changes("Bind an icon's params", true)}, "PUT /api/v1/categories/{id}/icon/params", manage,
 			func(in iconParamsIn) (request, error) {
 				params := in.Params
@@ -357,7 +359,7 @@ func iconTools() []tool {
 
 type iconParamsIn struct {
 	CategoryID string            `json:"category_id" jsonschema:"the category whose own icon it is"`
-	Params     map[string]string `json:"params,omitempty" jsonschema:"each param's name, to the ID of the number field that sets it"`
+	Params     map[string]string `json:"params,omitempty" jsonschema:"each param's name, to what sets it: a field's ID, or for a text param name or code"`
 }
 
 type iconStatesIn struct {

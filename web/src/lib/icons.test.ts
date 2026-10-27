@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boxSource, copiedSource, extendingSource, iconGroup, iconOwner, iconParams, isWrapper, parseWidths, shownIcon, splitDiags, suggestIconName, validIconName } from './icons';
+import { boxSource, copiedSource, extendingSource, iconGroup, iconOwner, iconParams, iconTextParams, isWrapper, parseWidths, shownIcon, splitDiags, suggestIconName, validIconName } from './icons';
 import type { Category, CategoryIcon } from './models';
 import { outline } from './isolex/syntax';
 
@@ -92,6 +92,15 @@ icon "loop-b" extends="loop-a" { param b 1 }`);
     expect(iconParams(defs, 'switch-l2')).toEqual(['u', 'depth', 'ports']);
     expect(iconParams(defs, 'nothing')).toEqual([]);
     expect(iconParams(defs, 'loop-a')).toEqual(['b', 'a']);
+  });
+
+  it('knows which of them are text, its own or inherited', () => {
+    const defs = outline(`base "tag" { param label (text)"?"; param n 1 }
+icon "port-tag" extends="tag" { param port (text)"A{n}"; param n 2 }
+icon "plain" { param u 1 }`);
+    expect(iconParams(defs, 'port-tag')).toEqual(['label', 'n', 'port']);
+    expect(iconTextParams(defs, 'port-tag')).toEqual(['port', 'label']);
+    expect(iconTextParams(defs, 'plain')).toEqual([]);
   });
 
   it('knows a wrapper by its name', () => {

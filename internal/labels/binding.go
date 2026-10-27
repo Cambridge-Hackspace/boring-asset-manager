@@ -1,6 +1,7 @@
 package labels
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -163,6 +164,10 @@ type Data struct {
 	IconColor string `json:"icon_color"`
 	BoundIcon string `json:"bound_icon,omitempty"`
 	StateIcon string `json:"state_icon,omitempty"`
+	// DrawnIcons holds the icon drawn with the asset's own texts (its
+	// name, a code), by the name it is drawn under, as isolex's IR has
+	// it; an icon it lacks is drawn as the build draws it.
+	DrawnIcons map[string]json.RawMessage `json:"drawn_icons,omitempty"`
 }
 
 // Resolve substitutes every placeholder. Missing codes and field values

@@ -1,5 +1,7 @@
 // Types mirroring internal/models as the API returns them.
 
+import type { IrIcon } from './isolex/ir';
+
 export type Permission =
   | 'assets.read'
   | 'assets.write'
@@ -145,11 +147,16 @@ export interface ResolvedIcon {
   params?: Record<string, number>;
   state?: IconState;
   variant?: string;
+  /** The asset's own texts its icon's text params are set to, by param: its name, a code, a field's value. */
+  texts?: Record<string, string>;
+  /** The icon drawn with texts, by the name it is drawn under; one it lacks is drawn as the build draws it. */
+  drawn?: Record<string, IrIcon>;
 }
 
-/** A param of a category's icon bound to a number field (README §3.7). */
+/** A param of a category's icon bound to what an asset has (README §3.7): a field's value, or for a text param its name or first code. */
 export interface IconParamBinding {
   param: string;
+  source: 'field' | 'name' | 'code';
   field_id: string;
   field_key: string;
   field_label: string;

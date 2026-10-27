@@ -40,6 +40,13 @@ export function stateNote(icon: ResolvedIcon): string {
 }
 
 /** Says which params an asset's icon is drawn with, from its fields, if any. */
+/** What texts of its own an asset's icon is written with, if any. */
+export function textsNote(icon: ResolvedIcon): string {
+  const texts = Object.entries(icon.texts ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  if (!texts.length) return '';
+  return `Written with ${texts.map(([p, v]) => `${p} “${v}”`).join(', ')}.`;
+}
+
 export function paramsNote(icon: ResolvedIcon): string {
   const params = Object.entries(icon.params ?? {}).sort(([a], [b]) => a.localeCompare(b));
   if (!params.length) return '';

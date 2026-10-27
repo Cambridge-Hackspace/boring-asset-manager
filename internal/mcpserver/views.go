@@ -91,6 +91,8 @@ type iconView struct {
 	// drawn with.
 	Base  string `json:"base,omitempty" jsonschema:"the icon this is the variant of, when the asset's state is drawn with one"`
 	State string `json:"state,omitempty" jsonschema:"the state the variant shows: out_of_service, needs_maintenance, overdue, on_loan, out_of_stock or low_stock"`
+	// Texts are what its text params are set to.
+	Texts map[string]string `json:"texts,omitempty" jsonschema:"the asset's own texts written on its icon, by param: its name, a code or a field's value"`
 }
 
 type photoView struct {
@@ -180,7 +182,7 @@ func (e *env) detail(ctx context.Context, a *models.AssetWithDetails) (assetDeta
 		d.Actions = append(d.Actions, actionView{Key: o.Key, Label: o.Label, Confirm: o.Confirm})
 	}
 	if ic := a.ResolvedIcon; ic != nil {
-		d.Icon = &iconView{Name: ic.Name, Own: ic.From == models.IconFromAsset, Missing: ic.Missing, Color: ic.Color, Base: ic.Base, State: ic.State}
+		d.Icon = &iconView{Name: ic.Name, Own: ic.From == models.IconFromAsset, Missing: ic.Missing, Color: ic.Color, Base: ic.Base, State: ic.State, Texts: ic.Texts}
 		if ic.SourceCategoryID != "" {
 			d.Icon.Category = &ref{ID: ic.SourceCategoryID, Name: ic.SourceCategoryName}
 		}

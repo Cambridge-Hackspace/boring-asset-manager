@@ -446,6 +446,29 @@ type ResolvedIcon struct {
 	Params             map[string]float64 `json:"params,omitempty"`
 	State              string             `json:"state,omitempty"`
 	Variant            string             `json:"variant,omitempty"`
+	// Texts are the asset's own texts its icon's text params are set to,
+	// by param: its name, a code, a field's value (README §3.7).
+	Texts map[string]string `json:"texts,omitempty"`
+	// Drawn holds the icon drawn with Texts, by the name it is drawn
+	// under: Name, and, when that shows a state, Shape too. A name it
+	// lacks is drawn as the build draws it.
+	Drawn map[string]json.RawMessage `json:"drawn,omitempty"`
+}
+
+// FirstCode is the code an asset is known by where one is shown: its QR
+// code, else its Micro QR, else its Code 128, else whichever it has.
+func (a *AssetWithDetails) FirstCode() string {
+	for _, t := range []string{"qr", "micro_qr", "code128"} {
+		for _, k := range a.GeneratorKeys {
+			if k.GeneratorType == t {
+				return k.AssignedCode
+			}
+		}
+	}
+	if len(a.GeneratorKeys) > 0 {
+		return a.GeneratorKeys[0].AssignedCode
+	}
+	return ""
 }
 
 // Shape is what the asset is drawn as but for its state: Bound, or Base,
@@ -457,10 +480,12 @@ func (r *ResolvedIcon) Shape() string {
 	return r.Plain()
 }
 
-// IconParamBinding is a param of a category's icon bound to a number
-// field (README §3.7).
+// IconParamBinding is a param of a category's icon bound to what an asset
+// has (README §3.7): a field's value, Source "field", or for a text param,
+// its name ("name") or first code ("code"), with no field.
 type IconParamBinding struct {
 	Param      string `json:"param"`
+	Source     string `json:"source"`
 	FieldID    string `json:"field_id"`
 	FieldKey   string `json:"field_key"`
 	FieldLabel string `json:"field_label"`
