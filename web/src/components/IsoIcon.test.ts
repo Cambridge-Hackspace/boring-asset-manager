@@ -23,11 +23,17 @@ function goldenSvg(name: string): Element {
 }
 
 /** An element as compared: its tag, and its attributes, colors read only
-    as painted or not, since isolex paints hex and this a property. */
+    as painted or not, since isolex paints hex and this a property, and a
+    clip path's name only as one, since this names them for the page. */
 function shape(e: Element): string {
   const attrs = [...e.attributes]
     .filter((a) => a.name !== 'xmlns')
-    .map((a) => [a.name, a.name === 'fill' || a.name === 'stroke' ? (a.value === 'none' ? 'none' : 'paint') : a.value])
+    .map((a) => {
+      if (a.name === 'fill' || a.name === 'stroke') return [a.name, a.value === 'none' ? 'none' : 'paint'];
+      if (a.name === 'id') return [a.name, 'clip'];
+      if (a.name === 'clip-path') return [a.name, 'url(#clip)'];
+      return [a.name, a.value];
+    })
     .sort(([a], [b]) => a!.localeCompare(b!));
   return `<${e.tagName.toLowerCase()} ${attrs.map(([k, v]) => `${k}="${v}"`).join(' ')}>` + [...e.children].map(shape).join('') + `</>`;
 }
@@ -45,6 +51,62 @@ describe('IsoIcon', () => {
       expect(ours, icon.name).toEqual(theirs);
       unmount();
     }
+  });
+
+  // isolex 0.4's sample, transforms and text, in IR version 2: groups
+  // drawn through matrices, cut to clips, with strokes that keep their
+  // width; each drawn here as isolex 0.4.0 draws it.
+  it("draws IR version 2 as isolex 0.4 does", () => {
+    const v2 = resolve(testdata, 'isolex-0.4.0');
+    const fixtures: [string, (name: string, golden: string) => string][] = [
+      ['sample', (name, golden) => {
+        const start = golden.indexOf(`== ${name}.svg ==\n`);
+        return golden.slice(golden.indexOf('\n', start) + 1, golden.indexOf('</svg>', start) + 6);
+      }],
+      ['transforms', (name, golden) => {
+        const start = golden.indexOf(`<!-- ${name} -->\n`);
+        return golden.slice(golden.indexOf('\n', start) + 1, golden.indexOf('</svg>', start) + 6);
+      }],
+      ['text', (name, golden) => {
+        const start = golden.indexOf(`<!-- ${name} -->\n`);
+        return golden.slice(golden.indexOf('\n', start) + 1, golden.indexOf('</svg>', start) + 6);
+      }],
+    ];
+    let clipped = 0;
+    let fixed = 0;
+    for (const [fixture, svgOf] of fixtures) {
+      const doc = JSON.parse(readFileSync(resolve(v2, `${fixture}.ir.golden.json`), 'utf8')) as IrDocument;
+      const golden = readFileSync(resolve(v2, `${fixture}.svg.golden`), 'utf8');
+      expect(doc.ir_version).toBe(2);
+      for (const icon of doc.icons) {
+        const { container, unmount } = render(IsoIcon, { icon, label: icon.name });
+        const svg = container.querySelector('svg')!;
+        const want = new DOMParser().parseFromString(svgOf(icon.name, golden), 'image/svg+xml').documentElement;
+        const ours = [...svg.children].filter((c) => c.tagName !== 'title').map(shape);
+        const theirs = [...want.children].filter((c) => c.tagName !== 'title').map(shape);
+        expect(ours, `${fixture} ${icon.name}`).toEqual(theirs);
+        // each clip path is named once, and used by the group it cuts
+        for (const clip of svg.querySelectorAll('clipPath')) {
+          clipped++;
+          expect(svg.querySelectorAll(`[clip-path="url(#${clip.id})"]`).length).toBe(1);
+        }
+        fixed += svg.querySelectorAll('[vector-effect="non-scaling-stroke"]').length;
+        unmount();
+      }
+    }
+    expect(clipped).toBeGreaterThan(0);
+    expect(fixed).toBeGreaterThan(0);
+  });
+
+  it('names the clip paths of an icon drawn twice apart', () => {
+    const doc = JSON.parse(readFileSync(resolve(testdata, 'isolex-0.4.0/transforms.ir.golden.json'), 'utf8')) as IrDocument;
+    const icon = doc.icons.find((i) => i.name === 'clipped')!;
+    // both on one page, as a list draws the same icon twice
+    render(IsoIcon, { icon });
+    render(IsoIcon, { icon });
+    const ids = [...document.querySelectorAll('clipPath')].map((c) => c.id);
+    expect(ids.length).toBe(2);
+    expect(new Set(ids).size).toBe(2);
   });
 
   it('paints tokens with the palette, and category with the color given', () => {
