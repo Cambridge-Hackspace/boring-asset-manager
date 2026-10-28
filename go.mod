@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/go-sql-driver/mysql v1.8.1
+	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -18,7 +19,6 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
