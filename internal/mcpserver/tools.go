@@ -2,11 +2,14 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sync"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -41,11 +44,40 @@ func say[Out any](out Out, format string, args ...any) (reply[Out], error) {
 	return reply[Out]{out: out, text: fmt.Sprintf(format, args...)}, nil
 }
 
+// schemaOptions infer a tool's schemas from its Go types, as the SDK would,
+// except that a json.RawMessage is any JSON value. Left to the SDK it is a
+// []byte's schema, an array of integers, and a tool answering one (a select
+// field's options, a report's spec) fails its own output check.
+var schemaOptions = &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{
+	reflect.TypeFor[json.RawMessage](): {},
+}}
+
+// schemaFor is the schema of T, or of what T points to, as the SDK takes it.
+func schemaFor[T any]() *jsonschema.Schema {
+	rt := reflect.TypeFor[T]()
+	if rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
+	s, err := jsonschema.ForType(rt, schemaOptions)
+	if err != nil {
+		panic(fmt.Sprintf("schema of %v: %v", rt, err))
+	}
+	return s
+}
+
 // define makes a tool from a typed handler. A tool that changes things
 // (ReadOnlyHint false) counts against the caller's change limit.
 func define[In, Out any](def *mcp.Tool, routes, needs []string, h func(context.Context, *env, In) (reply[Out], error)) tool {
 	if def.Annotations == nil {
 		panic("tool " + def.Name + " has no annotations")
+	}
+	// Inferred once, here, so every server's copy shares the schemas, and the
+	// SDK's cache, keyed by the schema, resolves each only once.
+	if def.InputSchema == nil {
+		def.InputSchema = schemaFor[In]()
+	}
+	if def.OutputSchema == nil {
+		def.OutputSchema = schemaFor[Out]()
 	}
 	return tool{def: def, routes: routes, needs: needs, add: func(s *mcp.Server, e *env) {
 		d := *def // AddTool fills in schemas; each server gets its own copy
