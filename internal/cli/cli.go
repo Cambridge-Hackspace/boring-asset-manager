@@ -428,6 +428,10 @@ type RestoreOptions struct {
 	// staging directory.
 	Replace  bool
 	BackupTo string
+	// Wipe empties the database first, to put an instance back as the
+	// archive has it whatever was done since (bam-update, after an update
+	// fails).
+	Wipe bool
 }
 
 // Restore puts a backup made by Backup back. It tells the two kinds apart
@@ -448,8 +452,8 @@ func Restore(configPath, from string, opts RestoreOptions) error {
 		return err
 	}
 	if kind == "sqlite" {
-		if opts.Only != nil || opts.Check || opts.Replace {
-			return errors.New("--only, --check and --replace are for archives; this is a copy of a SQLite database, put back whole")
+		if opts.Only != nil || opts.Check || opts.Replace || opts.Wipe {
+			return errors.New("--only, --check, --replace and --wipe are for archives; this is a copy of a SQLite database, put back whole")
 		}
 		if err := store.RestoreSQLite(&cfg.Database, from); err != nil {
 			return err
@@ -489,9 +493,12 @@ func Restore(configPath, from string, opts RestoreOptions) error {
 		}
 		fmt.Printf("Backed up what it replaces to %s.\n", path)
 	}
-	sum, err := archive.Restore(context.Background(), st, blobs, open, archive.RestoreOptions{Kinds: opts.Only, Secrets: true, Replace: opts.Replace})
+	sum, err := archive.Restore(context.Background(), st, blobs, open, archive.RestoreOptions{Kinds: opts.Only, Secrets: true, Replace: opts.Replace, Wipe: opts.Wipe})
 	if err != nil {
 		return err
+	}
+	if err := keepOwners(st, cfg); err != nil {
+		return fmt.Errorf("restored, but giving the files it made to their directories' owners: %w", err)
 	}
 	for _, w := range sum.Warnings {
 		fmt.Println("Note: " + w + ".")
@@ -632,3 +639,22 @@ func sortedKeys(m map[string]int) []string {
 	return out
 }
 
+// keepOwners gives what a restore run as root made, the database's files
+// and the uploaded files, the owners of the directories they are in, so the
+// service, running as its own user, can use them (bam-update restores as
+// root, README §2.2). The store is closed first, so SQLite's journals are.
+func keepOwners(st *store.Store, cfg *config.Config) error {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	_ = st.Close()
+	if path, err := store.SQLiteFile(&cfg.Database); err == nil {
+		if err := store.OwnLike(filepath.Dir(path)); err != nil {
+			return err
+		}
+	}
+	if cfg.Storage.Backend == config.StorageLocal {
+		return store.OwnLike(cfg.Storage.LocalPath)
+	}
+	return nil
+}

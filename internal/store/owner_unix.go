@@ -4,6 +4,7 @@ package store
 
 import (
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -22,4 +23,23 @@ func sameOwner(path string, info os.FileInfo) error {
 		return nil
 	}
 	return os.Chown(path, int(st.Uid), int(st.Gid))
+}
+
+// OwnLike gives root, and everything below it, root's owner and group: for
+// files a restore run as root made where the service keeps its own (README
+// §2.3). A root that is not there is left alone.
+func OwnLike(root string) error {
+	info, err := os.Stat(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return filepath.Walk(root, func(path string, _ os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		return sameOwner(path, info)
+	})
 }

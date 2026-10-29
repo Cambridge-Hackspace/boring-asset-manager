@@ -30,7 +30,8 @@ Available Commands:
   storage sweep Remove uploaded files no row names, older than a day, and list rows whose file is missing (--dry-run removes nothing)
   storage copy  Copy every uploaded file to the store another config file's [storage] names, checking each (requires --to)
   restore       Restore an archive into an instance not yet in use, or put a .db copy back (requires --from;
-                --only <kinds>, --check; --replace [--backup-to <file>] replaces kinds in one in use; stop BAM first)
+                --only <kinds>, --check; --replace [--backup-to <file>] replaces kinds in one in use;
+                --wipe empties the database first; stop BAM first)
   mcp           Relay MCP between stdio and a server, for assistants (requires --url; API token in $BAM_TOKEN)
   version       Print version information
 
@@ -117,6 +118,7 @@ func main() {
 		check := cmd.Bool("check", false, "Check the archive and say what restoring it would do, changing nothing (restore)")
 		replace := cmd.Bool("replace", false, "Replace the kinds chosen in an instance in use with the archive's, backing them up first (restore)")
 		backupTo := cmd.String("backup-to", "", "Where --replace backs up what it replaces; by default, the staging directory (restore)")
+		wipe := cmd.Bool("wipe", false, "Drop every table of the database first, putting the instance back as the archive has it (restore)")
 		_ = cmd.Parse(os.Args[2:])
 
 		var err error
@@ -129,7 +131,7 @@ func main() {
 				err = cli.Backup(*configPath, *to, opts)
 			}
 		} else {
-			opts := cli.RestoreOptions{Check: *check, Replace: *replace, BackupTo: *backupTo}
+			opts := cli.RestoreOptions{Check: *check, Replace: *replace, BackupTo: *backupTo, Wipe: *wipe}
 			if *only != "" {
 				opts.Only, err = cli.ParseKinds(*only)
 			}

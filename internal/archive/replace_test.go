@@ -201,3 +201,36 @@ func TestReplacingEverythingMakesTheBackupAgain(t *testing.T) {
 	sameContents(t, want, contents(t, backup(t, st, blobs, Options{})))
 }
 
+// TestRestoringWithAWipe puts an instance back as it was, though it was
+// changed since, its schema too.
+func TestRestoringWithAWipe(t *testing.T) {
+	ctx := context.Background()
+	st := migratedStore(t, envDialect())
+	blobs := filestore.NewLocal(t.TempDir())
+	s := richSeed(t, st, blobs)
+	b := backup(t, st, blobs, Options{Secrets: true})
+	want := contents(t, b)
+
+	// Changed since, as an update that failed would: a user added, a
+	// table made, a photo's file removed.
+	if _, err := st.CreateUser("upgraded@example.com", "a long marker password", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Exec("CREATE TABLE from_a_newer_bam (id VARCHAR(36) PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := blobs.Delete(ctx, "photos/"+s.photo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Restore(ctx, st, blobs, opener(b), RestoreOptions{Secrets: true, Wipe: true}); err != nil {
+		t.Fatal(err)
+	}
+	sameContents(t, want, contents(t, backup(t, st, blobs, Options{Secrets: true})))
+	exist, err := existingTables(ctx, st)
+	if err != nil || exist["from_a_newer_bam"] {
+		t.Errorf("the newer table is still there (%v)", err)
+	}
+	if _, err := Restore(ctx, st, blobs, opener(b), RestoreOptions{Wipe: true, Replace: true}); err == nil {
+		t.Error("wiped and replaced at once")
+	}
+}

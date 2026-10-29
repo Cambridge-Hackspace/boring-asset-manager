@@ -257,7 +257,13 @@ sha256sum -c --ignore-missing SHA256SUMS
 
 `packaging/bam-update` installs the latest release when it is newer than the installed one, on both systems. It verifies the download against the release's `SHA256SUMS` and checks that the new binary reports the release's version. Then it stops the service, backs up the database, swaps the binary (keeping the old one as `bam.previous`), starts the service, and waits up to 30 seconds for it to answer its health check. If it does not, the service is stopped, the database restored from the backup, so that changes the new version made (such as its migrations) are undone, and the old binary started again. It leaves alone an installation that is up to date, newer than the latest release, or not a release at all (a build from source reports `git describe` or `dev`; `bam-update --force` replaces it). `bam-update --check` only reports. Each run logs to syslog with the tag `bam-update`, and cron mails what it prints when something goes wrong. Pre-releases are never installed.
 
-**Backups before updating.** A SQLite database is copied with `bam backup` into `/var/backups/bam` (readable by root only), and the newest 5 backups are kept (`BAM_UPDATE_KEEP_BACKUPS`). BAM does not back up PostgreSQL or MariaDB itself, so for those the updater refuses to update until you give it commands for both directions in `update.conf`. Each command is run by `sh` with the backup's path in `$BAM_BACKUP_FILE`, for example:
+**Backups before updating.** The installed bam backs the instance up with `bam backup` into `/var/backups/bam` (readable by root only), as an archive (§2.3): its rows, authentication included, and its uploaded files, whatever the database (SQLite, PostgreSQL or MariaDB) and wherever the files are kept. The newest 5 backups are kept (`BAM_UPDATE_KEEP_BACKUPS`). If the update fails, the previous bam puts the instance back from it with `bam restore --wipe`, which empties the database first, so what the new version changed (its migrations, and anything it wrote) goes, and gives what it restored back to the service's user. To do the same by hand, with BAM stopped:
+
+```sh
+bam restore --config /etc/bam/config.toml --from /var/backups/bam/bam-v1.2.3-20261029T041700Z.bam.tar.gz --wipe
+```
+
+An installed bam from before archives (v0.14.0 and earlier) copies a SQLite database instead, and for PostgreSQL and MariaDB the updater refuses to update until you give it commands for both directions in `update.conf`. Commands set there are always used in place of `bam backup`. Each is run by `sh` with the backup's path in `$BAM_BACKUP_FILE`, for example:
 
 ```sh
 BAM_UPDATE_BACKUP_COMMAND='pg_dump -Fc -f "$BAM_BACKUP_FILE" bam'
@@ -283,7 +289,7 @@ install -m 0644 packaging/freebsd/bam-update.cron /usr/local/etc/cron.d/bam-upda
 
 Both run it nightly at 04:17; change the minute in the cron file, so that every installation does not ask GitHub at once. Settings (the repository, the binary, the health check URL) are listed at the top of the script; put any in `/etc/bam/update.conf` (`/usr/local/etc/bam/update.conf` on FreeBSD) as `NAME=value` lines. If BAM listens on another port, set `BAM_UPDATE_HEALTH_URL` there.
 
-`tools/service/check-update.sh` checks the updater in a Debian container booted with systemd, against fake releases served from files. It must update to a newer release, leave an up-to-date installation running, and ignore an older release. It must refuse a download that does not match its checksum, and roll back a release that does not come up, together with the change that release made to the database. It must refuse to update a database it cannot back up, run backup and restore commands when given them, and keep only the newest backups. It must leave a build that is not a release alone until forced.
+`tools/service/check-update.sh` checks the updater in a Debian container booted with systemd, against fake releases served from files. It must update to a newer release, leave an up-to-date installation running, and ignore an older release. It must refuse a download that does not match its checksum, and roll back a release that does not come up, together with the changes that release made to the database and the uploaded files, on SQLite and on PostgreSQL, leaving what it restored the service's. Its first release is built from v0.14.0, so the first update backs up as an installation from before archives does. It must refuse to update a database it cannot back up, run backup and restore commands when given them, and keep only the newest backups. It must leave a build that is not a release alone until forced.
 
 ### 2.3 Backups & Archives
 
