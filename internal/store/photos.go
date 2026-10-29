@@ -244,3 +244,33 @@ func (s *Store) positionPhotosTx(tx *sql.Tx, ids []string) error {
 	}
 	return nil
 }
+
+// StoredFiles lists the keys of the files rows name in the file store
+// (filestore.Images): each photo and its thumbnail, as photos/<id>, and
+// each label image, as images/<id>.
+func (s *Store) StoredFiles() (map[string]bool, error) {
+	out := map[string]bool{}
+	for query, prefixes := range map[string][]string{
+		"SELECT id, thumb_id FROM asset_photos": {"photos/", "photos/"},
+		"SELECT id, id FROM images":             {"images/", "images/"},
+	} {
+		rows, err := s.Query(query)
+		if err != nil {
+			return nil, fmt.Errorf("reading stored files: %w", err)
+		}
+		for rows.Next() {
+			var a, b string
+			if err := rows.Scan(&a, &b); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scanning a stored file: %w", err)
+			}
+			out[prefixes[0]+a], out[prefixes[1]+b] = true, true
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}

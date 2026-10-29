@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -178,5 +181,66 @@ func TestBackupAndRestoreCommands(t *testing.T) {
 	}
 	if err := Backup(configPath, filepath.Join(dir, "pg.db")); !errors.Is(err, store.ErrBackupUnsupported) {
 		t.Errorf("a PostgreSQL backup: %v", err)
+	}
+}
+
+// TestStorageCommands: bam storage copy moves every file to the store
+// another configuration names, and bam storage sweep reports and removes
+// what no row names.
+func TestStorageCommands(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.toml")
+	cfg := config.DefaultConfig()
+	cfg.Database.DSN = filepath.Join(dir, "bam.db")
+	cfg.Storage.LocalPath = filepath.Join(dir, "uploads")
+	if err := cfg.SaveTOML(configPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(configPath); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	from := filestore.NewLocal(cfg.Storage.LocalPath)
+	old := time.Now().Add(-2 * filestore.SweepGrace)
+	for _, key := range []string{"photos/00000000-0000-4000-8000-000000000001", "images/00000000-0000-4000-8000-000000000002"} {
+		if err := from.Put(ctx, key, strings.NewReader("x"), 1, ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(filepath.Join(cfg.Storage.LocalPath, filepath.FromSlash(key)), old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	toPath := filepath.Join(dir, "to.toml")
+	toCfg := *cfg
+	toCfg.Storage.LocalPath = filepath.Join(dir, "elsewhere")
+	if err := toCfg.SaveTOML(toPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := StorageCopy(configPath, ""); err == nil {
+		t.Error("copied without --to")
+	}
+	if err := StorageCopy(configPath, configPath); err == nil || !strings.Contains(err.Error(), "both configurations") {
+		t.Errorf("copying onto itself: %v", err)
+	}
+	if err := StorageCopy(configPath, toPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "elsewhere", "images", "00000000-0000-4000-8000-000000000002")); err != nil {
+		t.Errorf("not copied: %v", err)
+	}
+
+	// No row names either file: a dry run keeps them, a sweep removes them.
+	if err := StorageSweep(configPath, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Storage.LocalPath, "photos", "00000000-0000-4000-8000-000000000001")); err != nil {
+		t.Errorf("a dry run removed a file: %v", err)
+	}
+	if err := StorageSweep(configPath, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Storage.LocalPath, "photos", "00000000-0000-4000-8000-000000000001")); !os.IsNotExist(err) {
+		t.Errorf("a sweep kept a file no row names: %v", err)
 	}
 }
