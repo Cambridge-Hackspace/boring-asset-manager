@@ -10,6 +10,7 @@ const old: APIToken = {
   id: 't1',
   name: 'Old script',
   role_ids: ['counters'],
+  roles: [{ role_id: 'counters', scope_ids: [] }],
   created_at: '2026-01-01T00:00:00Z',
   expires_at: null,
   last_used_at: null,
@@ -31,8 +32,8 @@ describe('TokensPage', () => {
       'GET /tokens': () => ({ tokens }),
       'GET /roles': () => ({ roles }),
       'POST /tokens': (body) => {
-        const b = body as { name: string; role_ids: string[]; expires_at: string | null };
-        const t: APIToken = { ...old, id: 't2', name: b.name, role_ids: b.role_ids, expires_at: b.expires_at, revoked_at: null };
+        const b = body as { name: string; roles: APIToken['roles']; expires_at: string | null };
+        const t: APIToken = { ...old, id: 't2', name: b.name, role_ids: b.roles.map((a) => a.role_id), roles: b.roles, expires_at: b.expires_at, revoked_at: null };
         tokens = [t, ...tokens];
         return { status: 201, body: { token: t, secret: 'bam_secret' } };
       },
@@ -54,7 +55,7 @@ describe('TokensPage', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
 
     expect(((await screen.findByLabelText('The new token')) as HTMLInputElement).value).toBe('bam_secret');
-    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ name: 'Dashboard', role_ids: ['counters'], expires_at: null });
+    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ name: 'Dashboard', roles: [{ role_id: 'counters', scope_ids: [] }], expires_at: null });
     const row = (await screen.findByRole('cell', { name: 'Dashboard' })).closest('tr')!;
     expect(row.textContent).toContain('Never expires');
     await fireEvent.click(screen.getByRole('button', { name: 'Done' }));

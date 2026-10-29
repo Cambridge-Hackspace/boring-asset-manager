@@ -3,22 +3,25 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Role, UserWithRoles } from '../../lib/models';
+  import type { Role, RoleAssignment, Scope, UserWithRoles } from '../../lib/models';
+  import { describeAssignment } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import RolePicker from '../../components/RolePicker.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let users = $state<UserWithRoles[]>([]);
   let roles = $state<Role[]>([]);
+  let scopes = $state<Scope[]>([]);
   let loading = $state(true);
   let error = $state('');
   let status = $state('');
   let editingRoles = $state<string | null>(null);
   let renaming = $state<string | null>(null);
   let nameDraft = $state('');
-  let roleDraft = $state<string[]>([]);
+  let roleDraft = $state<RoleAssignment[]>([]);
   // Setting someone's password, for one who has forgotten theirs.
   let settingPassword = $state<string | null>(null);
   let passwordDraft = $state('');
@@ -28,15 +31,19 @@
   let newEmail = $state('');
   let newName = $state('');
   let newPassword = $state('');
-  let newRoles = $state<string[]>([]);
+  let newRoles = $state<RoleAssignment[]>([]);
 
   const roleName = (id: string) => roles.find((r) => r.id === id)?.name ?? id;
+  const scopeName = (id: string) => scopes.find((s) => s.id === id)?.name ?? id;
+  const described = (a: RoleAssignment) => describeAssignment(roleName(a.role_id), a.scope_ids.map(scopeName));
 
   async function load() {
     try {
-      [users, roles] = await Promise.all([
+      [users, roles, scopes] = await Promise.all([
         request<{ users: UserWithRoles[] }>('GET', '/users').then((r) => r.users ?? []),
         request<{ roles: Role[] }>('GET', '/roles').then((r) => (r.roles ?? []).filter((role) => !role.public)), // everyone holds the public role
+        // Extra: without scopes, roles are given in every scope.
+        request<{ scopes: Scope[] }>('GET', '/scopes').then((r) => r.scopes ?? [], () => []),
       ]);
     } catch (err) {
       error = messageOf(err);
@@ -70,7 +77,7 @@
     event.preventDefault();
     await act(async () => {
       const res = await request<{ user: { id: string } }>('POST', '/users', { email: newEmail, name: newName, password: newPassword });
-      if (newRoles.length) await request('PUT', `/users/${encodeURIComponent(res.user.id)}/roles`, { role_ids: newRoles });
+      if (newRoles.length) await request('PUT', `/users/${encodeURIComponent(res.user.id)}/roles`, { roles: newRoles });
       creating = false;
       newEmail = newName = newPassword = '';
       newRoles = [];
@@ -101,7 +108,7 @@
 
   function startRoles(u: UserWithRoles) {
     editingRoles = u.id;
-    roleDraft = [...u.role_ids];
+    roleDraft = u.roles.map((a) => ({ ...a, scope_ids: [...a.scope_ids] }));
   }
 </script>
 
@@ -131,12 +138,7 @@
         <p id="new-password-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">8-72 characters. They can change it after signing in.</p>
       </div>
     </div>
-    <fieldset>
-      <legend class="label">Roles</legend>
-      {#each roles as r (r.id)}
-        <label class="mr-4 inline-flex items-center gap-2 text-sm"><input type="checkbox" value={r.id} bind:group={newRoles} /> {r.name}</label>
-      {/each}
-    </fieldset>
+    <RolePicker id="new-roles" {roles} {scopes} bind:value={newRoles} />
     <div class="flex gap-2">
       <button type="submit" class="btn-primary">Create user</button>
       <button type="button" class="btn-secondary" onclick={() => (creating = false)}>Cancel</button>
@@ -177,18 +179,13 @@
             <td class="py-2 pr-4">{u.is_active ? 'Active' : 'Disabled'}</td>
             <td class="py-2 pr-4">
               {#if editingRoles === u.id}
-                <fieldset class="space-y-1">
-                  <legend class="sr-only">Roles for {u.email}</legend>
-                  {#each roles as r (r.id)}
-                    <label class="flex items-center gap-2"><input type="checkbox" value={r.id} bind:group={roleDraft} /> {r.name}</label>
-                  {/each}
-                  <div class="flex gap-2 pt-1">
-                    <button type="button" class="btn-primary" onclick={() => act(async () => { await request('PUT', `/users/${encodeURIComponent(u.id)}/roles`, { role_ids: roleDraft }); if (editingRoles === u.id) editingRoles = null; }, `Roles updated for ${u.email}.`)}>Save roles</button>
-                    <button type="button" class="btn-secondary" onclick={() => (editingRoles = null)}>Cancel</button>
-                  </div>
-                </fieldset>
+                <RolePicker id="roles-{u.id}" legend="Roles for {u.email}" {roles} {scopes} bind:value={roleDraft} />
+                <div class="flex gap-2 pt-1">
+                  <button type="button" class="btn-primary" onclick={() => act(async () => { await request('PUT', `/users/${encodeURIComponent(u.id)}/roles`, { roles: roleDraft }); if (editingRoles === u.id) editingRoles = null; }, `Roles updated for ${u.email}.`)}>Save roles</button>
+                  <button type="button" class="btn-secondary" onclick={() => (editingRoles = null)}>Cancel</button>
+                </div>
               {:else}
-                {u.role_ids.map(roleName).join(', ') || 'None'}
+                {u.roles.map(described).join(', ') || 'None'}
               {/if}
             </td>
             <td class="py-2 text-right">
@@ -231,7 +228,10 @@
     </table>
   </div>
 
-  <p class="mt-6 text-sm">What each role allows is set on the <a class="underline" href="/roles">Roles</a> page.</p>
+  <p class="mt-6 text-sm">
+    What each role allows is set on the <a class="underline" href="/roles">Roles</a> page. A role given in some scopes only acts on those
+    scopes' assets, and allows nothing else.
+  </p>
   <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
     <strong>Disable</strong> stops someone signing in until they are enabled again. <strong>Archive</strong> removes them for good; what they did stays in history.
   </p>

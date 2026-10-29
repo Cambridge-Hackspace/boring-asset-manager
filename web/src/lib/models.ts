@@ -34,6 +34,8 @@ export interface Scope {
   reserved: boolean;
   category_count: number;
   role_count: number;
+  /** How many roles of users and API tokens are narrowed to it. */
+  assignment_count: number;
 }
 
 export interface User {
@@ -53,6 +55,8 @@ export interface Me {
   permissions: PermissionKey[];
   /** The names of the roles the user holds. */
   roles?: string[];
+  /** The names of the scopes each role narrowed to some holds, by role name. */
+  role_scopes?: Record<string, string[]>;
 }
 
 export const fieldTypes = ['text', 'number', 'date', 'url', 'select'] as const;
@@ -362,8 +366,15 @@ export interface Role {
   public: boolean;
 }
 
+/** A role as a user or token holds it: in every scope, or, when scope_ids names any, narrowed to those (README §3.3). */
+export interface RoleAssignment {
+  role_id: string;
+  scope_ids: string[];
+}
+
 export interface UserWithRoles extends User {
   role_ids: string[];
+  roles: RoleAssignment[];
 }
 
 export interface ImageInfo {
@@ -487,6 +498,8 @@ export interface APIToken {
   id: string;
   name: string;
   role_ids: string[];
+  /** Its roles, with the scopes each is narrowed to. */
+  roles: RoleAssignment[];
   /** Set on a personal token, which acts as this user, for an assistant. */
   user_id?: string;
   user_name?: string;

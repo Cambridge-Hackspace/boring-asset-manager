@@ -9,6 +9,8 @@ class Session {
   permissions = $state<PermissionKey[]>([]);
   /** The names of the roles the signed-in user holds. */
   roles = $state<string[]>([]);
+  /** The scopes of each role narrowed to some, by role name. */
+  roleScopes = $state<Record<string, string[]>>({});
   /** False until the first /auth/me answer, so the app does not flash sign-in. */
   loaded = $state(false);
 
@@ -61,12 +63,14 @@ class Session {
     this.user = me.user;
     this.permissions = me.permissions ?? [];
     this.roles = me.roles ?? [];
+    this.roleScopes = me.role_scopes ?? {};
   }
 
   private clear(): void {
     this.user = null;
     this.permissions = [];
     this.roles = [];
+    this.roleScopes = {};
   }
 }
 

@@ -1,4 +1,5 @@
 import zlib from 'node:zlib';
+import AxeBuilder from '@axe-core/playwright';
 import { request as playwrightRequest } from '@playwright/test';
 import { ADMIN_EMAIL, expect, goTo, signIn, test, unique } from './fixtures';
 
@@ -313,6 +314,48 @@ test('scopes: a keeper of the tools edits the tools and nothing else', async ({ 
   await page.goto(`/assets/${other.asset.id}`);
   await expect(page.getByRole('heading', { name: other.asset.name })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
+});
+
+test('users: a role given in one scope only acts there, and allows nothing else', async ({ signedIn: page, api }) => {
+  const scope = unique('bench');
+  const { scope: made } = await api.call('POST', '/scopes', { name: scope });
+  const { category } = await api.call('POST', '/categories', { name: unique('Bench'), color_hex: '#15803d' });
+  await api.call('PUT', `/categories/${category.id}/scopes`, { scope_ids: [made.id] });
+  const { asset: tool } = await api.call('POST', '/assets', { name: unique('Vise'), category_ids: [category.id] });
+  const { asset: other } = await api.call('POST', '/assets', { name: unique('Mug') });
+  const editors = unique('Editors');
+  await api.call('POST', '/roles', { name: editors, permissions: ['assets.read', 'assets.write', 'labels.print'] });
+  const readers = unique('Readers');
+  await api.call('POST', '/roles', { name: readers, permissions: ['assets.read'] });
+  const email = `${unique('cy')}@hackspace.org`;
+  await api.call('POST', '/users', { email, name: 'Cy', password: 'CyPass123!' });
+
+  await goTo(page, 'Users');
+  await page.getByRole('button', { name: `Change roles for ${email}` }).click();
+  const row = page.getByRole('row').filter({ hasText: email });
+  await row.getByRole('checkbox', { name: editors }).check();
+  await row.getByRole('checkbox', { name: readers }).check();
+  const where = row.getByRole('group', { name: 'Only in these scopes' }).first();
+  await expect(where).toContainText('None ticked: in every scope');
+  await where.getByRole('checkbox', { name: scope }).check();
+  await expect(where).toContainText('Leaves out: Print labels.');
+  const results = await new AxeBuilder({ page }).include('table').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  await row.getByRole('button', { name: 'Save roles' }).click();
+  await expect(page.getByRole('status')).toHaveText(`Roles updated for ${email}.`);
+  await expect(row).toContainText(`${editors} in ${scope}, ${readers}`);
+
+  // Signed in, they edit what is on the bench and only read the rest.
+  await page.context().clearCookies();
+  await signIn(page, email, 'CyPass123!');
+  await page.goto(`/assets/${tool.asset.id}`);
+  await expect(page.getByRole('heading', { name: tool.asset.name })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit' })).toBeVisible();
+  await page.goto(`/assets/${other.asset.id}`);
+  await expect(page.getByRole('heading', { name: other.asset.name })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
+  await page.goto('/account');
+  await expect(page.getByText(`Your roles: ${editors} in ${scope}, ${readers}.`)).toBeVisible();
 });
 
 test('users: set a password for someone who forgot theirs, who is told on sign-in whom to ask', async ({ signedIn: page, api, browser }) => {
