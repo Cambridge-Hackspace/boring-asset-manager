@@ -12,9 +12,13 @@
 # it stops the service, backs up the database, swaps the binary, starts the
 # service and waits for it to answer its health check. If it does not, the
 # database is restored from the backup, the previous binary put back and the
-# service started again. A SQLite database is backed up with `bam backup`;
-# PostgreSQL and MariaDB need BAM_UPDATE_BACKUP_COMMAND and
-# BAM_UPDATE_RESTORE_COMMAND, or the update is refused.
+# service started again. The installed bam backs up the instance with
+# `bam backup`, as an archive of its rows and uploaded files, whatever its
+# database and wherever its files are, and puts it back with
+# `bam restore --wipe`. One installed before archives copies a SQLite
+# database instead, and for PostgreSQL and MariaDB needs
+# BAM_UPDATE_BACKUP_COMMAND and BAM_UPDATE_RESTORE_COMMAND. Commands set are
+# always used in place of `bam backup`.
 #
 # Settings, from the environment or from /etc/bam/update.conf
 # (/usr/local/etc/bam/update.conf on FreeBSD), as NAME=value lines:
@@ -27,7 +31,7 @@
 #   BAM_UPDATE_BACKUP_DIR       Database backups, readable by root only [/var/backups/bam]
 #   BAM_UPDATE_KEEP_BACKUPS     How many backups to keep [5]
 #   BAM_UPDATE_BACKUP_COMMAND   Backs up the database to the path in $BAM_BACKUP_FILE,
-#                               in place of `bam backup` (for PostgreSQL and MariaDB)
+#                               in place of `bam backup`
 #   BAM_UPDATE_RESTORE_COMMAND  Restores the backup at $BAM_BACKUP_FILE
 #   BAM_UPDATE_BACKUP           "off" updates without a backup, which is not recommended
 set -eu
@@ -121,7 +125,7 @@ service_do() {
 }
 
 # back_up: stores the database before the update, setting backup_file and
-# backup_kind (sqlite, hook or none). The service must be stopped, so
+# backup_kind (archive, sqlite, hook or none). The service must be stopped, so
 # nothing changes between the backup and the update.
 backup_file=""
 backup_kind=none
@@ -143,7 +147,18 @@ back_up() {
       return 1
     fi
     backup_kind=hook
+  elif "$BIN" restore -h 2>&1 | grep -q -- '-wipe'; then
+    # The installed bam makes the archive, as it knows the schema its
+    # database is at, and puts it back if the update fails.
+    backup_file="$backup_file.bam.tar.gz"
+    if ! "$BIN" backup --config "$CONFIG" --to "$backup_file" >/dev/null 2>"$work/backup.err"; then
+      say "the backup failed: $(cat "$work/backup.err"); fix that, or set BAM_UPDATE_BACKUP_COMMAND and BAM_UPDATE_RESTORE_COMMAND in $conf to back it up another way (or BAM_UPDATE_BACKUP=off)"
+      rm -f "$backup_file" "$backup_file.partial"
+      return 1
+    fi
+    backup_kind=archive
   else
+    # Installed before archives: a copy of a SQLite database.
     backup_file="$backup_file.db"
     rc=0
     "$work/bam" backup --config "$CONFIG" --to "$backup_file" >/dev/null 2>"$work/backup.err" || rc=$?
@@ -170,6 +185,7 @@ back_up() {
 # restore: puts the database back from the backup, with the service stopped.
 restore() {
   case "$backup_kind" in
+    archive) "$BIN.previous" restore --config "$CONFIG" --from "$backup_file" --wipe >/dev/null ;;
     sqlite) "$work/bam" restore --config "$CONFIG" --from "$backup_file" >/dev/null ;;
     hook) BAM_BACKUP_FILE="$backup_file" sh -c "$RESTORE_COMMAND" ;;
     *) return 0 ;;
