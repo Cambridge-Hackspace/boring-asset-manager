@@ -41,6 +41,35 @@ type RoleWithPermissions struct {
 	Public bool `json:"public"`
 }
 
+// RoleAssignment is a role as a user or an API token holds it: in every
+// scope its permissions name, or, when ScopeIDs names any, narrowed to those
+// scopes (README §3.3).
+type RoleAssignment struct {
+	RoleID   string   `json:"role_id"`
+	ScopeIDs []string `json:"scope_ids"`
+}
+
+// SetRoles sets a token's roles, and RoleIDs from them.
+func (t *APIToken) SetRoles(roles []RoleAssignment) {
+	if roles == nil {
+		roles = []RoleAssignment{}
+	}
+	t.Roles = roles
+	t.RoleIDs = make([]string, 0, len(roles))
+	for _, a := range roles {
+		t.RoleIDs = append(t.RoleIDs, a.RoleID)
+	}
+}
+
+// Unrestricted assigns each of these roles in every scope.
+func Unrestricted(roleIDs []string) []RoleAssignment {
+	out := make([]RoleAssignment, 0, len(roleIDs))
+	for _, id := range roleIDs {
+		out = append(out, RoleAssignment{RoleID: id, ScopeIDs: []string{}})
+	}
+	return out
+}
+
 // Permission represents a granular permission key.
 type Permission struct {
 	ID          string `json:"id"`
@@ -285,6 +314,8 @@ type APIToken struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
 	RoleIDs []string `json:"role_ids"`
+	// Roles are its roles with the scopes each is narrowed to.
+	Roles []RoleAssignment `json:"roles"`
 	// UserID is set on a personal token: it holds no roles and acts as this
 	// user, named UserName.
 	UserID   string `json:"user_id,omitempty"`
@@ -726,9 +757,11 @@ type Scope struct {
 	CreatedAt time.Time `json:"created_at"`
 	Reserved  bool      `json:"reserved"`
 	// CategoryCount and RoleCount count the categories it labels and the
-	// roles holding a permission in it.
-	CategoryCount int `json:"category_count"`
-	RoleCount     int `json:"role_count"`
+	// roles holding a permission in it; AssignmentCount, the roles of users
+	// and API tokens narrowed to it.
+	CategoryCount   int `json:"category_count"`
+	RoleCount       int `json:"role_count"`
+	AssignmentCount int `json:"assignment_count"`
 }
 
 // Spool destinations (README §6.2): DestinationDownload, or

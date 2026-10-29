@@ -89,6 +89,41 @@ func TestScopedPermissions(t *testing.T) {
 	}
 }
 
+// TestNarrow is the intersection table of #118: a role's permission in every
+// scope, or in some, against the scopes an assignment names.
+func TestNarrow(t *testing.T) {
+	role := []string{PermAssetsRead, "tools:" + PermAssetsWrite, "kitchen:" + PermAssetsWrite, PermUsersManage, PermLabelsPrint}
+	cases := []struct {
+		name   string
+		scopes []string
+		want   []string
+		out    []string
+	}{
+		{"unrestricted", nil, role, nil},
+		{"every scope × one", []string{"tools"},
+			[]string{"tools:" + PermAssetsRead, "tools:" + PermAssetsWrite}, []string{PermLabelsPrint, PermUsersManage}},
+		{"some scopes × overlapping", []string{"tools", "workshop"},
+			[]string{"tools:" + PermAssetsRead, "tools:" + PermAssetsWrite, "workshop:" + PermAssetsRead}, []string{PermLabelsPrint, PermUsersManage}},
+		{"some scopes × disjoint", []string{"workshop"},
+			[]string{"workshop:" + PermAssetsRead}, []string{PermAssetsWrite, PermLabelsPrint, PermUsersManage}},
+		{"the reserved scopes", []string{DefaultScope, PublicScope},
+			[]string{DefaultScope + ":" + PermAssetsRead, PublicScope + ":" + PermAssetsRead}, []string{PermAssetsWrite, PermLabelsPrint, PermUsersManage}},
+	}
+	for _, c := range cases {
+		if got := Narrow(role, c.scopes); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: Narrow = %v, want %v", c.name, got, c.want)
+		}
+		if got := NarrowedOut(role, c.scopes); !reflect.DeepEqual(got, c.out) {
+			t.Errorf("%s: NarrowedOut = %v, want %v", c.name, got, c.out)
+		}
+	}
+	// What a narrowed assignment grants is checked as any other grant.
+	perms := ResolveUnionPermissions(Narrow(role, []string{"tools"}))
+	if !Allows(perms, PermAssetsWrite, []string{"tools"}) || Allows(perms, PermAssetsRead, []string{"kitchen"}) || HasPermission(perms, PermUsersManage) {
+		t.Errorf("narrowed to tools: %v", perms)
+	}
+}
+
 func TestEffectiveScopes(t *testing.T) {
 	parents := map[string]string{"drills": "tools", "tools": "", "food": ""}
 	own := map[string][]string{"tools": {"workshop"}, "drills": {"power", "workshop"}}

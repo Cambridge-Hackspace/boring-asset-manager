@@ -18,8 +18,8 @@ var (
 	// public scope, or labeling a category with the default one: assets are
 	// in it when they are in no other.
 	ErrScopeReserved = errors.New("the default and public scopes are built in and cannot be renamed or deleted; default, where assets in no other scope are, cannot be put on categories")
-	// ErrScopeInUse is returned for deleting a scope that labels categories
-	// or that roles hold permissions in.
+	// ErrScopeInUse is returned for deleting a scope that labels categories,
+	// that roles hold permissions in, or that roles are assigned in.
 	ErrScopeInUse = errors.New("scope in use")
 	// ErrInvalidScope is returned for a name that cannot name a scope.
 	ErrInvalidScope = errors.New("a scope name is 1 to 64 lowercase letters, digits, - and _, starting with a letter or digit")
@@ -54,8 +54,26 @@ func (s *Store) ListScopes() ([]models.Scope, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Assignments of users who have left, and of tokens revoked for good,
+	// hold nothing, and go when the scope does.
+	assignments := map[string]int{}
+	for _, query := range []string{
+		`SELECT urs.scope_id, COUNT(*) FROM user_role_scopes urs JOIN users u ON u.id = urs.user_id
+			WHERE u.archived_at IS NULL GROUP BY urs.scope_id`,
+		`SELECT ats.scope_id, COUNT(*) FROM api_token_role_scopes ats JOIN api_tokens t ON t.id = ats.token_id
+			WHERE t.revoked_at IS NULL GROUP BY ats.scope_id`,
+	} {
+		counts, err := s.countBy(query)
+		if err != nil {
+			return nil, err
+		}
+		for id, n := range counts {
+			assignments[id] += n
+		}
+	}
 	for i := range scopes {
-		scopes[i].CategoryCount, scopes[i].RoleCount = categories[scopes[i].ID], roles[scopes[i].ID]
+		id := scopes[i].ID
+		scopes[i].CategoryCount, scopes[i].RoleCount, scopes[i].AssignmentCount = categories[id], roles[id], assignments[id]
 	}
 	return scopes, nil
 }
@@ -106,7 +124,8 @@ func (s *Store) CreateScope(name string) (*models.Scope, error) {
 	return s.GetScope(id)
 }
 
-// RenameScope renames a scope; roles' permissions in it follow.
+// RenameScope renames a scope; roles' permissions in it, and roles
+// assigned in it, follow.
 func (s *Store) RenameScope(id, name string) (*models.Scope, error) {
 	name = strings.TrimSpace(name)
 	if !rbac.ValidScopeName(name) {
@@ -121,7 +140,7 @@ func (s *Store) RenameScope(id, name string) (*models.Scope, error) {
 	return s.GetScope(id)
 }
 
-// DeleteScope deletes a scope no category or role uses.
+// DeleteScope deletes a scope no category, role or assignment uses.
 func (s *Store) DeleteScope(id string) error {
 	if err := s.editableScope(id); err != nil {
 		return err
@@ -130,8 +149,9 @@ func (s *Store) DeleteScope(id string) error {
 	if err != nil {
 		return err
 	}
-	if sc.CategoryCount > 0 || sc.RoleCount > 0 {
-		return fmt.Errorf("%w: it labels %d categories and %d roles hold permissions in it", ErrScopeInUse, sc.CategoryCount, sc.RoleCount)
+	if sc.CategoryCount > 0 || sc.RoleCount > 0 || sc.AssignmentCount > 0 {
+		return fmt.Errorf("%w: it labels %d categories, %d roles hold permissions in it, and %d roles of users and tokens are narrowed to it",
+			ErrScopeInUse, sc.CategoryCount, sc.RoleCount, sc.AssignmentCount)
 	}
 	if _, err := s.Exec("DELETE FROM scopes WHERE id = ?", id); err != nil {
 		return fmt.Errorf("deleting scope: %w", err)
@@ -328,39 +348,15 @@ func (s *Store) AssetScopes(ids []string) (map[string][]string, error) {
 func grantedKeys(q interface {
 	Query(string, ...any) (*sql.Rows, error)
 }, roles string, args ...any) (map[string]bool, error) {
-	keys := map[string]bool{}
-	rows, err := q.Query(`SELECT DISTINCT p.permission_key FROM role_permissions rp
-		JOIN permissions p ON p.id = rp.permission_id
-		WHERE rp.role_id IN (`+roles+`)`, args...)
+	byRole, err := roleKeys(q, roles, args...)
 	if err != nil {
-		return nil, fmt.Errorf("querying permissions: %w", err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, fmt.Errorf("scanning permission key: %w", err)
-		}
-		keys[key] = true
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rows.Close()
-	scoped, err := q.Query(`SELECT DISTINCT sc.name, p.permission_key FROM role_permission_scopes rps
-		JOIN permissions p ON p.id = rps.permission_id
-		JOIN scopes sc ON sc.id = rps.scope_id
-		WHERE rps.role_id IN (`+roles+`)`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("querying scoped permissions: %w", err)
-	}
-	defer scoped.Close()
-	for scoped.Next() {
-		var scope, key string
-		if err := scoped.Scan(&scope, &key); err != nil {
-			return nil, fmt.Errorf("scanning scoped permission: %w", err)
+	keys := map[string]bool{}
+	for _, ks := range byRole {
+		for _, k := range ks {
+			keys[k] = true
 		}
-		keys[scope+rbac.ScopeSeparator+key] = true
 	}
-	return keys, scoped.Err()
+	return keys, nil
 }

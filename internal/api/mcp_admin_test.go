@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 func TestMCPAdminTools(t *testing.T) {
@@ -46,6 +47,23 @@ func TestMCPAdminTools(t *testing.T) {
 	}
 	if u, _ := srv.store.GetUserByID(grace); u.Name != "Grace Hopper" {
 		t.Errorf("renamed: %+v", u)
+	}
+	// A role narrowed to a scope, beside one held everywhere.
+	tools, err := srv.store.CreateScope("tools")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readers, err := srv.store.CreateRole(store.RoleInput{Name: "Readers", Permissions: []string{"assets.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	structured(t, callTool(t, cs, "set_user_roles", map[string]any{"id": grace, "role_ids": []string{readers.ID},
+		"roles": []map[string]any{{"role_id": members, "scope_ids": []string{tools.ID}}}}), &out)
+	if roles, _ := out["roles"].([]any); len(roles) != 2 {
+		t.Errorf("set_user_roles, narrowed: %v", out)
+	}
+	if perms, _ := srv.store.GetUserPermissions(grace); !perms["tools:assets.borrow"] || perms["assets.borrow"] || !perms["assets.read"] {
+		t.Errorf("narrowed over MCP: %v", perms)
 	}
 	// The anti-lockout rule holds over MCP as anywhere.
 	if msg := toolError(t, cs, "archive_user", map[string]any{"id": admin.ID}); !strings.Contains(msg, "anti-lockout") {
