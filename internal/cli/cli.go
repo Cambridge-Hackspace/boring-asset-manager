@@ -157,6 +157,15 @@ func Serve(configPath string) error {
 	}
 
 	server := api.NewServer(cfg, st)
+	// A store that cannot be reached or written is found now, rather than
+	// at the first upload.
+	checkCtx, cancelCheck := context.WithTimeout(context.Background(), 30*time.Second)
+	where, err := server.CheckStorage(checkCtx)
+	cancelCheck()
+	if err != nil {
+		return fmt.Errorf("checking the storage for uploaded files, %s: %w", where, err)
+	}
+	log.Printf("Uploaded files are kept in %s", where)
 
 	// Send queued notifications until the server stops.
 	workerCtx, stopWorker := context.WithCancel(context.Background())

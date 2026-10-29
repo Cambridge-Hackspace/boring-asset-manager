@@ -77,6 +77,11 @@ func NewLocal(root string) *Local {
 	return &Local{root: root}
 }
 
+// String says which store this is, for the log.
+func (l *Local) String() string {
+	return "the directory " + l.root
+}
+
 // tempPrefix starts the temporary files a write leaves when it is cut
 // short; List does not list them.
 const tempPrefix = ".upload-"

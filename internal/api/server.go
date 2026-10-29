@@ -60,7 +60,6 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	s := &Server{
 		cfg:        cfg,
 		store:      st,
-		blobs:      filestore.NewLocal(cfg.Storage.LocalPath),
 		transport:  printers.NewDispatcher(cfg.Printers.Devices),
 		spool:      newSpooler(),
 		presses:    newPressLimiter(),
@@ -68,7 +67,14 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		icons:      isolex.Default(),
 		iconsDirty: make(chan struct{}, 1),
 	}
-	s.images, s.photos = filestore.NewImages(s.blobs), filestore.NewPhotos(s.blobs)
+	// The settings were checked as they loaded, so the store opens; one
+	// that does not reach, or cannot be written, is found by CheckStorage.
+	blobs, err := filestore.Open(cfg.Storage)
+	if err != nil {
+		panic(err)
+	}
+	s.blobs = blobs
+	s.images, s.photos = filestore.NewImages(blobs), filestore.NewPhotos(blobs)
 	handle := func(pattern string, h http.Handler) {
 		s.routes = append(s.routes, pattern)
 		if !strings.HasPrefix(pattern, "GET ") {
@@ -370,6 +376,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	}
 
 	return s
+}
+
+// CheckStorage says which store holds uploaded files, and checks that it
+// can be reached and written.
+func (s *Server) CheckStorage(ctx context.Context) (string, error) {
+	return fmt.Sprint(s.blobs), filestore.Check(ctx, s.blobs)
 }
 
 // Handler returns the underlying http.Handler (useful for httptest).

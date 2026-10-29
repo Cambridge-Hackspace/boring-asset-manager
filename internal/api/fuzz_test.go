@@ -247,7 +247,7 @@ type fuzzer struct {
 func newFuzzer(tb testing.TB) *fuzzer {
 	tb.Helper()
 	cfg := config.DefaultConfig()
-	cfg.Storage.LocalPath = tb.TempDir()
+	testStorage(tb, cfg)
 	st := setupTestStore(tb)
 	admin, err := st.CreateAdminUser("admin@test.org", "AdminSecret123!")
 	if err != nil {
