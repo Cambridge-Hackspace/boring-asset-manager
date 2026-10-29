@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -233,5 +234,23 @@ func TestFlowsOverMCP(t *testing.T) {
 	}
 	if res := callTool(t, admin, "delete_flow", map[string]any{"slug": "leave"}); res.IsError {
 		t.Errorf("delete_flow: %s", toolText(res))
+	}
+}
+
+// TestAFlowsPosterCode: the QR code on a flow's poster opens /f/<slug>, on
+// the server's own address.
+func TestAFlowsPosterCode(t *testing.T) {
+	w := newWoodShop(t)
+	w.saveFlow(t, "leave", "Leave something", flows.Starters([]string{w.short.ID})[0].Definition)
+	w.srv.cfg.Server.BaseURL = "https://bam.example.org/"
+	if got := w.srv.flowURL(httptest.NewRequest(http.MethodGet, "/", nil), "leave"); got != "https://bam.example.org/f/leave" {
+		t.Errorf("its address: %s", got)
+	}
+	rec := doJSON(t, w.srv, sessionCookie(t, w.srv, w.sam.ID), http.MethodGet, "/api/v1/flows/leave/qr.svg", "")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/svg+xml" || !strings.HasPrefix(rec.Body.String(), "<svg") || !strings.Contains(rec.Body.String(), "h1v1h-1z") {
+		t.Errorf("its code: %d %s %.80s", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
+	}
+	if rec := doJSON(t, w.srv, sessionCookie(t, w.srv, w.sam.ID), http.MethodGet, "/api/v1/flows/nope/qr.svg", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("no such flow: %d", rec.Code)
 	}
 }

@@ -80,6 +80,7 @@ var fuzzRoutes = []route{
 	{method: "GET", path: "/api/v1/flow-starters", query: map[string][]string{"category_ids": {"x,y"}}},
 	{method: "GET", path: "/api/v1/flows/{flow}"},
 	{method: "PUT", path: "/api/v1/flows/{flow}", body: `{"slug":"moved-{n}","name":"Moved {n}","enabled":false,"definition":{"version":1,"category_ids":["{category}"],"steps":[{"id":"kind","kind":"choose_category"},{"id":"about","kind":"form","ask_name":true},{"id":"file","kind":"create","name":"{name}"},{"id":"done","kind":"done"}]}}`},
+	{method: "GET", path: "/api/v1/flows/{flow}/qr.svg"},
 	{method: "DELETE", path: "/api/v1/flows/{flow}"},
 	{method: "POST", path: "/api/v1/flows/{flow}/runs"},
 	{method: "GET", path: "/api/v1/flows/{flow}/runs/{run}", query: map[string][]string{"search": {"a"}}},

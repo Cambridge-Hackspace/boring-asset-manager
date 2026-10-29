@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/flows"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -505,4 +507,56 @@ func (s *Server) handleEndFlowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Run ended"})
+}
+
+// flowURL is the address of a flow's pages, /f/<slug>, on this server: under
+// its configured base URL, or the one the request came to.
+func (s *Server) flowURL(r *http.Request, slug string) string {
+	base := strings.TrimRight(s.cfg.Server.BaseURL, "/")
+	if base == "" {
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		base = scheme + "://" + r.Host
+	}
+	return base + "/f/" + url.PathEscape(slug)
+}
+
+// handleFlowQR draws the QR code of a flow's address, for its poster:
+// GET /api/v1/flows/{slug}/qr.svg
+func (s *Server) handleFlowQR(w http.ResponseWriter, r *http.Request) {
+	f, ok := s.flowFor(w, r)
+	if !ok {
+		return
+	}
+	g, err := generators.Lookup(generators.TypeQR)
+	if err == nil {
+		var sym generators.Symbol
+		if sym, err = g.Encode(s.flowURL(r, f.Slug), ""); err == nil {
+			w.Header().Set("Content-Type", "image/svg+xml")
+			w.Header().Set("Cache-Control", "no-cache")
+			_, _ = w.Write(symbolSVG(sym))
+			return
+		}
+	}
+	writeServerError(w, err, "draw the flow's code")
+}
+
+// symbolSVG draws a barcode's modules as an SVG, dark on light, with its
+// quiet zone, one unit a module, to be scaled as the page needs.
+func symbolSVG(sym generators.Symbol) []byte {
+	q := sym.QuietZone
+	w, h := sym.Cols+2*q, sym.Rows+2*q
+	var b strings.Builder
+	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" shape-rendering="crispEdges"><rect width="%d" height="%d" fill="#fff"/><path fill="#000" d="`, w, h, w, h)
+	for y := 0; y < sym.Rows; y++ {
+		for x := 0; x < sym.Cols; x++ {
+			if sym.Dark[y*sym.Cols+x] {
+				fmt.Fprintf(&b, "M%d %dh1v1h-1z", x+q, y+q)
+			}
+		}
+	}
+	b.WriteString(`"/></svg>`)
+	return []byte(b.String())
 }
