@@ -20,3 +20,13 @@ func Open(cfg config.StorageConfig) (Blobs, error) {
 	}
 	return nil, fmt.Errorf("filestore: unknown storage backend %q", cfg.Backend)
 }
+
+// OpenStaging returns where uploads are staged: in the bucket blobs is,
+// with the s3 backend, otherwise in the storage settings' staging
+// directory.
+func OpenStaging(cfg config.StorageConfig, blobs Blobs) Staging {
+	if s3, ok := blobs.(*S3); ok {
+		return NewS3Staging(s3)
+	}
+	return NewLocalStaging(cfg.StagingDir())
+}

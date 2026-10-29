@@ -30,15 +30,19 @@ type Server struct {
 	store *store.Store
 	// blobs holds uploaded files (README §2); images and photos are kinds
 	// of them.
-	blobs      filestore.Blobs
-	images     *filestore.Images
-	photos     *filestore.Images
-	transport  printers.Transport
-	spool      *spooler
-	presses    *pressLimiter
-	live       *liveHub
-	sample     sampleCache
-	httpServer *http.Server
+	blobs  filestore.Blobs
+	images *filestore.Images
+	photos *filestore.Images
+	// staging keeps archives uploaded through the web (#141), and
+	// uploadLocks takes their parts one at a time.
+	staging     filestore.Staging
+	uploadLocks uploadLocks
+	transport   printers.Transport
+	spool       *spooler
+	presses     *pressLimiter
+	live        *liveHub
+	sample      sampleCache
+	httpServer  *http.Server
 	// routes are every API route, for the test that MCP reaches each (#33).
 	routes []string
 	// registrations limits OAuth clients registering (README §6.6).
@@ -75,6 +79,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	}
 	s.blobs = blobs
 	s.images, s.photos = filestore.NewImages(blobs), filestore.NewPhotos(blobs)
+	s.staging = filestore.OpenStaging(cfg.Storage, blobs)
 	handle := func(pattern string, h http.Handler) {
 		s.routes = append(s.routes, pattern)
 		if !strings.HasPrefix(pattern, "GET ") {
@@ -118,6 +123,14 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))
 	handle("PUT /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateRole)))
 	handle("DELETE /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteRole)))
+
+	// Archives uploaded in parts, resumably (README §2.3, #141), for
+	// replacing an instance with a backup.
+	manageSettings := RequirePermission(rbac.PermSettingsManage)
+	handle("POST /api/v1/uploads", manageSettings(http.HandlerFunc(s.handleCreateUpload)))
+	handle("GET /api/v1/uploads/{id}", manageSettings(http.HandlerFunc(s.handleGetUpload)))
+	handle("PUT /api/v1/uploads/{id}", manageSettings(http.HandlerFunc(s.handlePutUploadPart)))
+	handle("DELETE /api/v1/uploads/{id}", manageSettings(http.HandlerFunc(s.handleDeleteUpload)))
 
 	// Scopes (README §3.3): who may see and change assets is users.manage's
 	// to decide; category managers read them to see what labels are there.
@@ -370,8 +383,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
 		Handler:      rootHandler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  requestTimeout,
+		WriteTimeout: requestTimeout,
 		IdleTimeout:  60 * time.Second,
 	}
 

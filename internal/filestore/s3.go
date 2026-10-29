@@ -49,6 +49,10 @@ type S3Options struct {
 type S3 struct {
 	opts S3Options
 	base *url.URL
+	// stream sends requests whose bodies take as long as they take to
+	// move, as staged uploads (Staging): with no deadline but their
+	// context.
+	stream *http.Client
 }
 
 // MaxS3Object is the largest object bam writes in one request: far over any
@@ -73,7 +77,7 @@ func NewS3(opts S3Options) (*S3, error) {
 	if opts.Region == "" {
 		opts.Region = "us-east-1"
 	}
-	return &S3{opts: opts, base: u}, nil
+	return &S3{opts: opts, base: u, stream: &http.Client{Transport: opts.Client.Transport}}, nil
 }
 
 // String says which store this is, for the log, without its keys.

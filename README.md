@@ -80,6 +80,11 @@ dsn = "data/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 # Environment: BAM_STORAGE_BACKEND, BAM_STORAGE_LOCAL_PATH.
 backend = "local"
 local_path = "./data/uploads"
+# Where archives uploaded through the web wait until they are used (§2.3),
+# with the local backend; empty is a directory named staging beside
+# local_path. With s3, they wait in the bucket. Environment:
+# BAM_STORAGE_STAGING_PATH.
+# staging_path = ""
 
 # Only with backend = "s3". Environment: BAM_STORAGE_S3_ENDPOINT, _REGION,
 # _BUCKET, _PREFIX, _PATH_STYLE (true or false), _ACCESS_KEY_ID and
@@ -330,6 +335,7 @@ The tables are listed, and restored, in that order: each after those its rows na
 - `flow_runs`: runs under way, dropped when left 12 hours.
 - `action_replies`: devices' answers to an action, for the moment it is pressed.
 - `notification_deliveries`: the queue of notices to send, which a restore must not send again.
+- `uploads` and `upload_parts`: archives being uploaded through the web, staged apart from the files and removed after a day.
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys. `tools/archive/tables.py` writes it from a migrated database, and a test fails when a migration changes the schema without it, on every dialect.
 
@@ -355,7 +361,14 @@ The tables are listed, and restored, in that order: each after those its rows na
 - **Schemas.** An archive from an older bam is restored into an empty database, migrated first to the archive's schema, and then to this bam's. One from a newer bam, or a newer format, is refused.
 - **Parts.** A set's first part restores the rows. Each later part adds the files its rows name that the store does not yet have, so a part applied twice changes nothing, and one from another set is refused. Until every part is in, `bam storage sweep --dry-run` lists the files still to come.
 
-**Memory** does not grow with the size of an instance: rows are written as they are read, and files streamed. Only the list of files to copy is kept, a few dozen bytes for each. A restore inserts rows in batches as it reads them, and streams files into the store. Tests write and restore 256 MiB of files, generated as they go, and check the heap; `BAM_TEST_ARCHIVE_BYTES=21474836480 go test ./internal/archive -run Memory` does 20 GiB.
+**Through the web.** Archives of any size move over ordinary connections that drop, and neither the browser nor the server holds one in memory:
+
+- **Uploads arrive in parts,** each its own request, and resume where they stopped. `POST /api/v1/uploads` with the file's `filename`, `size` and `sha256` (which the browser works out from slices of the file) begins one and answers its `id` and `part_size`: 8 MiB, or more for an upload so large that it would need more than 10,000 parts. `PUT /api/v1/uploads/{id}` with `Content-Range: bytes <first>-<last>/<size>` and `Content-Type: application/octet-stream` sends the next part, which must start where the upload has got to and be `part_size` long, but the last; one out of order, sent again or overlapping is answered `409` with where to go on from, and one of the wrong length or past the end `400`. `GET` or `HEAD` says how much has arrived (`received`, and the `Upload-Offset` header). When the last part is in, the whole file is checked against its SHA-256, and one that differs is removed (`422`). `DELETE` cancels one. Each needs `settings.manage`, and an upload is its own person's alone: anyone else is told it is not found.
+- **Staged where the files are kept:** with the `local` backend, in `storage.staging_path` (an upload that will not fit in its free space is refused when it begins, `507`); with `s3`, in the bucket, as a multipart upload under `staging/`, so nothing is kept on bam's own disk. An upload neither added to nor used for a day is removed, finished or not.
+- **Deadlines that last while bytes move.** Every route gives a request 15 seconds to arrive and its answer 15 to be written, and takes bodies of at most 1 MiB, but the routes that move archives: their deadlines run two minutes from the last bytes moved, however long the whole takes.
+- **In the browser,** one upload control hashes the file a slice at a time, sends its parts in turn with their progress, pauses and resumes, and retries a part that fails with growing waits. Leaving the page asks first while an upload is under way. An unfinished one is remembered, and choosing its file again carries on where it stopped. The parts of a split backup are each an upload of their own.
+
+**Memory** does not grow with the size of an instance: rows are written as they are read, and files streamed. Only the list of files to copy is kept, a few dozen bytes for each. A restore inserts rows in batches as it reads them, and streams files into the store. Tests write and restore 256 MiB of files, generated as they go, and check the heap; `BAM_TEST_ARCHIVE_BYTES=21474836480 go test ./internal/archive -run Memory` does 20 GiB. An upload of 256 MiB goes over HTTP in parts the same way, and `BAM_TEST_UPLOAD_BYTES` sends more (`go test ./internal/api -run LargeUpload`).
 
 ---
 
