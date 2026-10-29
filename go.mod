@@ -12,7 +12,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/crypto v0.52.0
-	golang.org/x/image v0.30.0
+	golang.org/x/image v0.41.0
 	modernc.org/sqlite v1.34.0
 )
 
