@@ -6,3 +6,7 @@
 # platform they are checked out on.
 packaging/** text eol=lf
 *.sh text eol=lf
+
+# Read line by line by tools/isolex/fetch.sh, which a carriage return on
+# each line would break.
+internal/isolex/wasm.lock text eol=lf
