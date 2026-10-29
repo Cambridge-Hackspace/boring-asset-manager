@@ -254,3 +254,41 @@ func TestAFlowsPosterCode(t *testing.T) {
 		t.Errorf("no such flow: %d", rec.Code)
 	}
 }
+
+// TestThingsPastTheirDateAreListed: what a flow filed and left past its
+// date to collect by comes back with the flow, and is marked when found.
+func TestThingsPastTheirDateAreListed(t *testing.T) {
+	w := newWoodShop(t)
+	srv, st := w.srv, w.srv.store
+	leave := flows.Starters([]string{w.long.ID})[0].Definition
+	leave.LeaveUntil = "until"
+	lf := w.saveFlow(t, "leave", "Leave something", leave)
+	oak, _ := st.CreateAsset("Oak", []string{w.long.ID}, nil, map[string]string{"owner": "Sam", "until": "2020-01-01"})
+	pine, _ := st.CreateAsset("Pine", []string{w.long.ID}, nil, map[string]string{"owner": "Sam", "until": "2999-01-01"})
+	for _, a := range []*models.AssetWithDetails{oak, pine} {
+		if err := st.RecordFiling(lf.ID, a.Asset.ID, w.sam.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sam := sessionCookie(t, srv, w.sam.ID)
+	body := doJSON(t, srv, sam, http.MethodGet, "/api/v1/flows/leave", "").Body.String()
+	if !strings.Contains(body, `"overdue":[{"asset_id":"`+oak.Asset.ID+`","name":"Oak","until":"2020-01-01"}]`) {
+		t.Errorf("the flow: %s", body)
+	}
+	if body := doJSON(t, srv, sam, http.MethodGet, "/api/v1/flows", "").Body.String(); !strings.Contains(body, `"`+lf.ID+`":[{"asset_id":"`+oak.Asset.ID+`"`) {
+		t.Errorf("the list: %s", body)
+	}
+	collect := flows.Starters([]string{w.wood.ID})[1].Definition
+	collect.Steps[0].FiledBy = lf.ID
+	w.saveFlow(t, "collect", "Collect it", collect)
+	rec := doJSON(t, srv, sam, http.MethodPost, "/api/v1/flows/collect/runs", "")
+	var v FlowRunView
+	_ = json.Unmarshal(rec.Body.Bytes(), &v)
+	marked := map[string]string{}
+	for _, a := range v.Prompt.Assets {
+		marked[a.Name] = a.Overdue
+	}
+	if marked["Oak"] != "2020-01-01" || marked["Pine"] != "" || len(marked) != 2 {
+		t.Errorf("found: %v", marked)
+	}
+}

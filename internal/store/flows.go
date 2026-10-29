@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -170,7 +171,7 @@ func (s *Store) DeleteFlow(id string) error {
 // fields are those an asset in any of them records, own or inherited.
 func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 	c := flows.Catalog{
-		Flows: map[string]bool{}, Categories: map[string]bool{}, Fields: map[string]bool{}, Templates: map[string]bool{},
+		Flows: map[string]bool{}, Categories: map[string]bool{}, DateFields: map[string]bool{}, Fields: map[string]bool{}, Templates: map[string]bool{},
 		Destinations: map[string]bool{}, Actions: map[string]bool{},
 		Asset: func(id string) bool {
 			a, err := s.GetAssetByID(id)
@@ -201,6 +202,9 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 		}
 		for _, f := range fields {
 			c.Fields[f.Field.Key] = true
+			if f.Field.ValidationType == "date" {
+				c.DateFields[f.Field.Key] = true
+			}
 		}
 	}
 	templates, err := s.ListTemplates()
@@ -390,4 +394,135 @@ func (s *Store) FiledBy(flowID string) (map[string]bool, error) {
 		out[id] = true
 	}
 	return out, rows.Err()
+}
+
+// FlowOverdue is something a flow filed that is past its date to collect
+// by.
+type FlowOverdue struct {
+	AssetID string `json:"asset_id"`
+	Name    string `json:"name"`
+	Until   string `json:"until"`
+}
+
+// filingDue is a filing of a flow with a date to collect by: the asset,
+// still active, its date, and whether it has been announced.
+type filingDue struct {
+	flow             models.Flow
+	asset, name, due string
+	notified         bool
+}
+
+// filingsDue reads the active assets each flow with a date to collect by
+// filed, with their dates, where they have one.
+func (s *Store) filingsDue() ([]filingDue, error) {
+	all, err := s.ListFlows()
+	if err != nil {
+		return nil, err
+	}
+	var out []filingDue
+	for _, f := range all {
+		if f.Definition.LeaveUntil == "" {
+			continue
+		}
+		rows, err := s.Query(`SELECT a.id, a.name, v.value, ff.overdue_notified_at IS NOT NULL
+			FROM flow_filings ff
+			JOIN assets a ON a.id = ff.asset_id AND a.archived_at IS NULL
+			JOIN fields fd ON fd.field_key = ?
+			JOIN asset_field_values v ON v.asset_id = a.id AND v.field_id = fd.id
+			WHERE ff.flow_id = ?`, f.Definition.LeaveUntil, f.ID)
+		if err != nil {
+			return nil, fmt.Errorf("reading what %s filed: %w", f.Slug, err)
+		}
+		for rows.Next() {
+			d := filingDue{flow: f}
+			if err := rows.Scan(&d.asset, &d.name, &d.due, &d.notified); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scanning a filing: %w", err)
+			}
+			out = append(out, d)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// pastDue reports whether a date to collect by, as a date field holds it
+// (2026-11-06), has passed by now: the day after it has begun, in UTC.
+func pastDue(due string, now time.Time) bool {
+	d, err := time.Parse("2006-01-02", strings.TrimSpace(due))
+	return err == nil && !now.UTC().Before(d.AddDate(0, 0, 1))
+}
+
+// OverdueFilings lists, for each flow with a date to collect by, by its
+// ID, what it filed that is past that date, oldest date first.
+func (s *Store) OverdueFilings(now time.Time) (map[string][]FlowOverdue, error) {
+	due, err := s.filingsDue()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]FlowOverdue{}
+	for _, d := range due {
+		if pastDue(d.due, now) {
+			out[d.flow.ID] = append(out[d.flow.ID], FlowOverdue{AssetID: d.asset, Name: d.name, Until: d.due})
+		}
+	}
+	for _, list := range out {
+		sort.Slice(list, func(i, j int) bool { return list[i].Until < list[j].Until })
+	}
+	return out, nil
+}
+
+// RecordOverdueFilings records asset.flow_overdue once for each thing a
+// flow filed that has gone past its date to collect by, and forgets that it
+// did for any whose date has been moved on, so it is announced again if
+// that passes too. It returns how many it recorded.
+func (s *Store) RecordOverdueFilings(now time.Time) (int, error) {
+	due, err := s.filingsDue()
+	if err != nil {
+		return 0, err
+	}
+	recorded := 0
+	for _, d := range due {
+		switch past := pastDue(d.due, now); {
+		case past && !d.notified:
+			ok, err := s.recordFilingOverdue(d, now)
+			if err != nil {
+				return recorded, err
+			}
+			if ok {
+				recorded++
+			}
+		case !past && d.notified:
+			if _, err := s.Exec("UPDATE flow_filings SET overdue_notified_at = NULL WHERE flow_id = ? AND asset_id = ?", d.flow.ID, d.asset); err != nil {
+				return recorded, fmt.Errorf("clearing a filing's overdue mark: %w", err)
+			}
+		}
+	}
+	return recorded, nil
+}
+
+func (s *Store) recordFilingOverdue(d filingDue, now time.Time) (bool, error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return false, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := s.TxExec(tx, "UPDATE flow_filings SET overdue_notified_at = ? WHERE flow_id = ? AND asset_id = ? AND overdue_notified_at IS NULL", now, d.flow.ID, d.asset)
+	if err != nil {
+		return false, fmt.Errorf("marking a filing overdue: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		// Another server announced it meanwhile.
+		return false, err
+	}
+	at, _ := time.Parse("2006-01-02", strings.TrimSpace(d.due))
+	payload := models.EventPayload{Trigger: models.TriggerSchedule, DueAt: &at, Flow: &models.EventFlow{Slug: d.flow.Slug, Name: d.flow.Name}}
+	if err := s.recordAssetEvent(tx, models.EventFlowOverdue, d.asset, payload); err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
 }

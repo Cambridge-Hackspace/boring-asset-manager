@@ -28,3 +28,7 @@ Whoever manages flows makes them on the **Flows** page, with **New flow**: choos
 - **Confirm** and **Done** say what will happen, and what did.
 
 Any step can be shown **only when** an earlier answer is something, such as only for long boards. A flow can only do what its maker may do. Its **Poster** has its name, its QR code and its one line of instructions, to print and put up, or to make into a label template.
+
+## Left past its date
+
+A flow can name a date to collect by, such as **Leave until**. Once that date has passed, what was left is listed on the **Flows** page as past its date, marked when someone looks for it, and announced once to the notification channels that follow it. Moving the date on clears it.

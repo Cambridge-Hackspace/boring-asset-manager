@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/flows"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
@@ -56,16 +57,50 @@ func (s *Server) flowFor(w http.ResponseWriter, r *http.Request) (*models.Flow, 
 	return f, true
 }
 
+// overdueFor lists, by flow ID, what each flow filed that is past its date
+// to collect by, among the assets the request may read.
+func (s *Server) overdueFor(r *http.Request) (map[string][]store.FlowOverdue, error) {
+	all, err := s.store.OverdueFilings(time.Now())
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, list := range all {
+		for _, o := range list {
+			ids = append(ids, o.AssetID)
+		}
+	}
+	scopes, err := s.store.AssetScopes(ids)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]store.FlowOverdue{}
+	for flow, list := range all {
+		for _, o := range list {
+			if Allows(r.Context(), rbac.PermAssetsRead, scopes[o.AssetID]) {
+				out[flow] = append(out[flow], o)
+			}
+		}
+	}
+	return out, nil
+}
+
 // handleListFlows lists flows: every one for those who manage them, and
-// otherwise those the requester may run: GET /api/v1/flows
+// otherwise those the requester may run, with what each filed that is past
+// its date to collect by: GET /api/v1/flows
 func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 	all, err := s.store.ListFlows()
 	if err != nil {
 		writeServerError(w, err, "list flows")
 		return
 	}
+	overdue, err := s.overdueFor(r)
+	if err != nil {
+		writeServerError(w, err, "list flows")
+		return
+	}
 	if HasPermission(r.Context(), rbac.PermFlowsManage) {
-		writeJSON(w, http.StatusOK, map[string]any{"flows": all})
+		writeJSON(w, http.StatusOK, map[string]any{"flows": all, "overdue": overdue})
 		return
 	}
 	runnable := []models.Flow{}
@@ -79,14 +114,32 @@ func (s *Server) handleListFlows(w http.ResponseWriter, r *http.Request) {
 			runnable = append(runnable, all[i])
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"flows": runnable})
+	kept := map[string][]store.FlowOverdue{}
+	for _, f := range runnable {
+		if list := overdue[f.ID]; list != nil {
+			kept[f.ID] = list
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"flows": runnable, "overdue": kept})
 }
 
-// handleGetFlow reads one flow: GET /api/v1/flows/{slug}
+// handleGetFlow reads one flow, with what it filed that is past its date to
+// collect by: GET /api/v1/flows/{slug}
 func (s *Server) handleGetFlow(w http.ResponseWriter, r *http.Request) {
-	if f, ok := s.flowFor(w, r); ok {
-		writeJSON(w, http.StatusOK, map[string]any{"flow": f})
+	f, ok := s.flowFor(w, r)
+	if !ok {
+		return
 	}
+	overdue, err := s.overdueFor(r)
+	if err != nil {
+		writeServerError(w, err, "read the flow")
+		return
+	}
+	list := overdue[f.ID]
+	if list == nil {
+		list = []store.FlowOverdue{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"flow": f, "overdue": list})
 }
 
 // handleFlowStarters gives the ready-made flows to adjust, over the
@@ -201,12 +254,13 @@ type FlowChoice struct {
 }
 
 // FlowAsset is an asset as a run shows it: one found or made, or offered
-// to find.
+// to find, marked when it is past a flow's date to collect by.
 type FlowAsset struct {
 	ID         string   `json:"id"`
 	Name       string   `json:"name"`
 	Code       string   `json:"code,omitempty"`
 	Categories []string `json:"categories"`
+	Overdue    string   `json:"overdue,omitempty"`
 }
 
 // FlowPrompt is what the step a run is on asks for, and shows.
@@ -316,11 +370,23 @@ func (f *flowRunner) prompt(run *models.FlowRun, search string) (FlowPrompt, err
 			if err != nil {
 				return p, err
 			}
+			overdue, err := f.s.store.OverdueFilings(time.Now())
+			if err != nil {
+				return p, err
+			}
+			since := map[string]string{}
+			for _, list := range overdue {
+				for _, o := range list {
+					since[o.AssetID] = o.Until
+				}
+			}
 			for i := range found {
 				if i == maxFlowAssets {
 					break
 				}
-				p.Assets = append(p.Assets, flowAsset(&found[i]))
+				fa := flowAsset(&found[i])
+				fa.Overdue = since[fa.ID]
+				p.Assets = append(p.Assets, fa)
 			}
 		}
 	case flows.KindCreate:

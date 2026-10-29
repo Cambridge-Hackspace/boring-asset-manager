@@ -343,6 +343,23 @@ func TestDiscordOverdueEmbed(t *testing.T) {
 	}
 }
 
+func TestDiscordFlowOverdueEmbed(t *testing.T) {
+	due := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
+	n := Notification{BaseURL: "https://bam.example", Event: models.Event{
+		Kind: models.EventFlowOverdue,
+		Payload: models.EventPayload{
+			Asset:   &models.EventAsset{ID: "a1", Name: "Sam's oak"},
+			Trigger: models.TriggerSchedule,
+			Flow:    &models.EventFlow{Slug: "leave", Name: "Leave_something"},
+			DueAt:   &due,
+		},
+	}}
+	e := discordPayload(n).Embeds[0]
+	if e.Title != "Past its date: Sam's oak" || e.Description != `Left through Leave\_something, to be collected by 6 November 2026.` || e.Color != discordWarning {
+		t.Errorf("past its date: %+v", e)
+	}
+}
+
 func TestDiscordActionEmbed(t *testing.T) {
 	n := Notification{BaseURL: "https://bam.example", Event: models.Event{
 		Kind: models.EventAssetAction,

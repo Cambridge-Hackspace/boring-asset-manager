@@ -67,6 +67,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventAssetRestocked, Label: "An asset counted by quantity is restocked"},
 	{Kind: models.EventAssetConditionChanged, Label: "An asset needs maintenance, is out of service, or is working again"},
 	{Kind: models.EventAssetOverdue, Label: "A loan is overdue"},
+	{Kind: models.EventFlowOverdue, Label: "Something left through a flow is past its date"},
 	{Kind: models.EventAssetAction, Label: "An action, such as Identify, is pressed on an asset"},
 }
 

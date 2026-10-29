@@ -164,6 +164,10 @@ const (
 	EventAssetCheckedOut = "asset.checked_out"
 	EventAssetCheckedIn  = "asset.checked_in"
 	EventAssetOverdue    = "asset.overdue"
+	// EventFlowOverdue records once that something a flow filed is past
+	// its date to collect by (README §6.7), with the Flow and the date as
+	// DueAt; channels can subscribe to it.
+	EventFlowOverdue = "asset.flow_overdue"
 	// EventAssetLabelPrinted records labels of an asset sent to a printer or
 	// downloaded from the spool, with its Label; it is for history.
 	EventAssetLabelPrinted = "asset.label_printed"
@@ -185,6 +189,12 @@ func HistoryOnly(kind string) bool {
 		return true
 	}
 	return false
+}
+
+// EventFlow is a flow, as an event names it.
+type EventFlow struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
 }
 
 // Event triggers: what caused an event.
@@ -236,6 +246,8 @@ type EventPayload struct {
 	// the loan is due back, if ever.
 	Borrower *EventActor `json:"borrower,omitempty"`
 	DueAt    *time.Time  `json:"due_at,omitempty"`
+	// Flow is the flow that filed the asset, for EventFlowOverdue.
+	Flow *EventFlow `json:"flow,omitempty"`
 	// Label is what a label printed event printed.
 	Label *EventLabel `json:"label,omitempty"`
 	// Action is the action an action event pressed, and what a device
