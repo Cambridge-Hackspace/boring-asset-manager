@@ -30,6 +30,7 @@ type saveFlowIn struct {
 type runFlowIn struct {
 	Slug   string          `json:"slug" jsonschema:"the flow's address, from list_flows"`
 	RunID  string          `json:"run_id,omitempty" jsonschema:"the run to go on with; empty to start one"`
+	From   string          `json:"from_asset_id,omitempty" jsonschema:"starting: an asset to start from, for a flow that begins by finding something; it starts with that found"`
 	Answer json.RawMessage `json:"answer,omitempty" jsonschema:"the answer to the step the run is on, naming it: {step, category_id | name, fields, answers | asset_id | code | place_code}; just {step} tries a step that failed again"`
 	Search string          `json:"search,omitempty" jsonschema:"with run_id and no answer: narrows a Find step's list"`
 	End    bool            `json:"end,omitempty" jsonschema:"true to give the run up"`
@@ -50,7 +51,11 @@ func flowTools() []tool {
 			runs := pathOf("/api/v1/flows/{slug}/runs", in.Slug)
 			switch {
 			case in.RunID == "":
-				if err := e.call(ctx, http.MethodPost, runs, nil, &out); err != nil {
+				var body any
+				if in.From != "" {
+					body = map[string]string{"asset_id": in.From}
+				}
+				if err := e.call(ctx, http.MethodPost, runs, body, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}
 			case in.End:
@@ -75,12 +80,20 @@ func flowTools() []tool {
 		})
 	run.person = true
 	return []tool{
-		define(&mcp.Tool{Name: "list_flows", Description: "Flows: with flows.manage every one, with its steps; otherwise those your person may run. With slug, the one flow.",
-			Annotations: readOnly("List flows")}, []string{"GET /api/v1/flows", "GET /api/v1/flows/{slug}"}, see,
+		define(&mcp.Tool{Name: "list_flows", Description: "Flows: with flows.manage every one, with its steps; otherwise those your person may run; each with what it filed that is past its date to collect by. " +
+			"With slug, the one flow; with asset_id, the flows your person may start from that asset (run_flow with from_asset_id).",
+			Annotations: readOnly("List flows")}, []string{"GET /api/v1/flows", "GET /api/v1/flows/{slug}", "GET /api/v1/assets/{id}/flows"}, see,
 			func(ctx context.Context, e *env, in struct {
-				Slug string `json:"slug,omitempty" jsonschema:"one flow, by its address"`
+				Slug    string `json:"slug,omitempty" jsonschema:"one flow, by its address"`
+				AssetID string `json:"asset_id,omitempty" jsonschema:"an asset: the flows that start from it"`
 			}) (reply[map[string]any], error) {
 				out := map[string]any{}
+				if in.AssetID != "" {
+					if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/assets/{id}/flows", in.AssetID), nil, &out); err != nil {
+						return reply[map[string]any]{}, err
+					}
+					return say(out, "%d flows start from it.", count(out, "flows"))
+				}
 				if in.Slug != "" {
 					if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/flows/{slug}", in.Slug), nil, &out); err != nil {
 						return reply[map[string]any]{}, err

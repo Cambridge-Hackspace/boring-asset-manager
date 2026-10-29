@@ -84,6 +84,8 @@ type ScanAsset struct {
 	Actions []models.OfferedAction `json:"actions,omitempty"`
 	// Icon is the icon it is drawn with (README §3.7), if any.
 	Icon *models.ResolvedIcon `json:"icon,omitempty"`
+	// Flows are the flows the viewer may start from it (README §6.7).
+	Flows []FlowLink `json:"flows,omitempty"`
 }
 
 // ScanTemplateRef names the template a scan used.
@@ -157,6 +159,12 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	may := s.scanActionsFor(r, asset)
+	offered, err := s.flowsFrom(r, asset)
+	if err != nil {
+		writeServerError(w, err, "find the flows that start from it")
+		return
+	}
+	may["flows"] = len(offered) > 0
 	for i := range result.Sections {
 		if result.Sections[i].Type != "actions" {
 			continue
@@ -169,7 +177,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		}
 		result.Sections[i].Actions = kept
 	}
-	out := ScanResponse{Asset: ScanAsset{ID: asset.Asset.ID, Name: asset.Asset.Name, Icon: asset.ResolvedIcon}, Template: ref, Result: result}
+	out := ScanResponse{Asset: ScanAsset{ID: asset.Asset.ID, Name: asset.Asset.Name, Icon: asset.ResolvedIcon, Flows: offered}, Template: ref, Result: result}
 	if st := asset.Asset.Stock; st != nil {
 		out.Asset.Counted, out.Asset.Unit = true, st.Unit
 	}
