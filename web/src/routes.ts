@@ -26,6 +26,7 @@ import ReportView from './views/reports/ReportView.svelte';
 import ReportEditor from './views/reports/ReportEditor.svelte';
 import ScanTemplateEditor from './views/reports/ScanTemplateEditor.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
+import BackupsPage from './views/admin/BackupsPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import OAuthConsentPage from './views/OAuthConsentPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
@@ -96,6 +97,7 @@ export const routes: Route[] = [
   { pattern: '/roles', component: RolesPage, title: 'Roles', permissions: ['users.manage'], nav: 'Roles', group: 'Admin' },
   { pattern: '/tokens', component: TokensPage, title: 'API tokens', permissions: ['users.manage'], nav: 'API tokens', group: 'Admin' },
   { pattern: '/notifications', component: NotificationsPage, title: 'Notifications', permissions: ['settings.manage'], nav: 'Notifications', group: 'Admin' },
+  { pattern: '/backups', component: BackupsPage, title: 'Backups', permissions: ['settings.manage'], nav: 'Backups', group: 'Admin' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },
   { pattern: '/oauth/consent', component: OAuthConsentPage, title: 'Connect an assistant' },
   // Help is for everyone, signed in or not (README §6.5).

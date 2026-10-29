@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -422,6 +423,11 @@ type RestoreOptions struct {
 	Only []archive.Kind
 	// Check only checks the archive, and says what a restore would do.
 	Check bool
+	// Replace replaces the kinds chosen in an instance in use (§2.3), after
+	// backing up what it replaces to BackupTo: by default, a file in the
+	// staging directory.
+	Replace  bool
+	BackupTo string
 }
 
 // Restore puts a backup made by Backup back. It tells the two kinds apart
@@ -442,8 +448,8 @@ func Restore(configPath, from string, opts RestoreOptions) error {
 		return err
 	}
 	if kind == "sqlite" {
-		if opts.Only != nil || opts.Check {
-			return errors.New("--only and --check are for archives; this is a copy of a SQLite database")
+		if opts.Only != nil || opts.Check || opts.Replace {
+			return errors.New("--only, --check and --replace are for archives; this is a copy of a SQLite database, put back whole")
 		}
 		if err := store.RestoreSQLite(&cfg.Database, from); err != nil {
 			return err
@@ -476,7 +482,14 @@ func Restore(configPath, from string, opts RestoreOptions) error {
 	if err != nil {
 		return err
 	}
-	sum, err := archive.Restore(context.Background(), st, blobs, open, archive.RestoreOptions{Kinds: opts.Only, Secrets: true})
+	if opts.Replace {
+		path, err := backupBeforeReplacing(st, blobs, cfg.Storage.StagingDir(), opts)
+		if err != nil {
+			return fmt.Errorf("backing up what it replaces, so replacing nothing: %w", err)
+		}
+		fmt.Printf("Backed up what it replaces to %s.\n", path)
+	}
+	sum, err := archive.Restore(context.Background(), st, blobs, open, archive.RestoreOptions{Kinds: opts.Only, Secrets: true, Replace: opts.Replace})
 	if err != nil {
 		return err
 	}
@@ -493,6 +506,14 @@ func Restore(configPath, from string, opts RestoreOptions) error {
 		rows += n
 	}
 	fmt.Printf("Restored %d rows and %d files (%d bytes) of %s, from %s.\n", rows, sum.Files, sum.FileBytes, kindList(sum.Kinds), from)
+	for _, removed := range []struct {
+		what   string
+		counts map[string]int
+	}{{"the archive did not have", sum.Removed}, {"that named only what was removed", sum.Lost}} {
+		for _, table := range sortedKeys(removed.counts) {
+			fmt.Printf("Removed %d rows of %s %s.\n", removed.counts[table], table, removed.what)
+		}
+	}
 	if sum.Migrated {
 		fmt.Printf("The archive's schema, version %d, was migrated to this bam's.\n", sum.Header.SchemaVersion)
 	}
@@ -574,3 +595,40 @@ func printChecked(c *archive.Checked) {
 	}
 	fmt.Println("Restoring it replaces those kinds in an instance not yet in use, and migrates it if its schema is older.")
 }
+
+// backupBeforeReplacing backs up the kinds a replace will replace, all of
+// them unless some are chosen, authentication included, and returns where.
+func backupBeforeReplacing(st *store.Store, blobs filestore.Blobs, stagingDir string, opts RestoreOptions) (string, error) {
+	path := opts.BackupTo
+	if path == "" {
+		if err := os.MkdirAll(stagingDir, 0o700); err != nil {
+			return "", err
+		}
+		path = filepath.Join(stagingDir, fmt.Sprintf("before-replace-%s.bam.tar.gz", time.Now().UTC().Format("20060102-150405")))
+	}
+	f, err := os.OpenFile(path+".partial", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return "", err
+	}
+	_, err = archive.Write(context.Background(), st, blobs, func(int) (io.WriteCloser, error) { return f, nil },
+		archive.Options{BamVersion: api.Version, Kinds: opts.Only, Secrets: true})
+	f.Close()
+	if err == nil {
+		err = os.Rename(path+".partial", path)
+	}
+	if err != nil {
+		_ = os.Remove(path + ".partial")
+		return "", err
+	}
+	return path, nil
+}
+
+func sortedKeys(m map[string]int) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+

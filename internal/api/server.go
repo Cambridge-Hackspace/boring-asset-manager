@@ -37,12 +37,14 @@ type Server struct {
 	// uploadLocks takes their parts one at a time.
 	staging     filestore.Staging
 	uploadLocks uploadLocks
-	transport   printers.Transport
-	spool       *spooler
-	presses     *pressLimiter
-	live        *liveHub
-	sample      sampleCache
-	httpServer  *http.Server
+	// backupJobs are the checks and replaces of backups under way (#142).
+	backupJobs backupJobs
+	transport  printers.Transport
+	spool      *spooler
+	presses    *pressLimiter
+	live       *liveHub
+	sample     sampleCache
+	httpServer *http.Server
 	// routes are every API route, for the test that MCP reaches each (#33).
 	routes []string
 	// registrations limits OAuth clients registering (README §6.6).
@@ -131,6 +133,16 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/uploads/{id}", manageSettings(http.HandlerFunc(s.handleGetUpload)))
 	handle("PUT /api/v1/uploads/{id}", manageSettings(http.HandlerFunc(s.handlePutUploadPart)))
 	handle("DELETE /api/v1/uploads/{id}", manageSettings(http.HandlerFunc(s.handleDeleteUpload)))
+	handle("GET /api/v1/uploads/{id}/content", manageSettings(http.HandlerFunc(s.handleUploadContent)))
+	// Backups from the web, and replacing the instance with one (#142):
+	// people's and settings' managers both.
+	manageBackups := func(h http.HandlerFunc) http.Handler {
+		return RequirePermission(rbac.PermUsersManage)(RequirePermission(rbac.PermSettingsManage)(h))
+	}
+	handle("GET /api/v1/backup", manageBackups(s.handleDownloadBackup))
+	handle("POST /api/v1/backup/check", manageBackups(s.handleCheckBackup))
+	handle("POST /api/v1/backup/replace", manageBackups(s.handleReplaceBackup))
+	handle("GET /api/v1/backup/jobs/{id}", manageBackups(s.handleBackupJob))
 
 	// Scopes (README §3.3): who may see and change assets is users.manage's
 	// to decide; category managers read them to see what labels are there.

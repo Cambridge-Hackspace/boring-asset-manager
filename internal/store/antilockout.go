@@ -71,3 +71,20 @@ func (s *Store) countActiveAdmins(tx *sql.Tx) (int, error) {
 	}
 	return count, nil
 }
+
+// ActiveAdminsTx counts the active users who can manage users, within tx,
+// for a change made outside this file (a replace, internal/archive) to keep
+// the anti-lockout rule.
+func (s *Store) ActiveAdminsTx(tx *sql.Tx) (int, error) {
+	return s.countActiveAdmins(tx)
+}
+
+// CanManageUsersTx reports whether a user is active and holds users.manage,
+// within tx.
+func (s *Store) CanManageUsersTx(tx *sql.Tx, userID string) (bool, error) {
+	var count int
+	if err := s.TxQueryRow(tx, activeAdminsQuery+" AND u.id = ?", rbac.PermUsersManage, userID).Scan(&count); err != nil {
+		return false, fmt.Errorf("checking a user's access: %w", err)
+	}
+	return count > 0, nil
+}

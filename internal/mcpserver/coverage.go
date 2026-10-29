@@ -24,8 +24,13 @@ var Refused = map[string]string{
 	// Archives move between a person's own computer and the server;
 	// replacing an instance stays with a signed-in person, as making tokens
 	// does (#43, #117).
-	"POST /api/v1/uploads":        "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
-	"GET /api/v1/uploads/{id}":    "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
-	"PUT /api/v1/uploads/{id}":    "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
-	"DELETE /api/v1/uploads/{id}": "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"POST /api/v1/uploads":             "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"GET /api/v1/uploads/{id}":         "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"PUT /api/v1/uploads/{id}":         "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"DELETE /api/v1/uploads/{id}":      "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"GET /api/v1/uploads/{id}/content": "a backup taken before a replace, for a person to download to their own computer",
+	"GET /api/v1/backup":               "a backup of the whole instance, for a person to download and keep safe; never an assistant's to carry off",
+	"POST /api/v1/backup/check":        "checking an archive uploaded to replace the instance with; replacing stays with a signed-in person (#117)",
+	"POST /api/v1/backup/replace":      "replacing the instance with a backup stays with a signed-in person, as making tokens does (#43, #117)",
+	"GET /api/v1/backup/jobs/{id}":     "the progress of a check or replace a signed-in person began (#117)",
 }
