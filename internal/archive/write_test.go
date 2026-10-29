@@ -140,15 +140,6 @@ func TestTheRegistryMatchesTheSchema(t *testing.T) {
 	}
 }
 
-func colIndexOK(t *Table, name string) int {
-	for i, c := range t.Columns {
-		if c.Name == name {
-			return i
-		}
-	}
-	return -1
-}
-
 func TestTheReadmeDocumentsEveryTable(t *testing.T) {
 	b, err := os.ReadFile("../../README.md")
 	if err != nil {

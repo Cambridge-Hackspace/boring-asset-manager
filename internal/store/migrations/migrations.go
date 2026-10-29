@@ -389,6 +389,13 @@ func Latest() int {
 
 // Migrate executes all pending embedded SQL migrations idempotently inside a transaction.
 func Migrate(db *sql.DB, dialect string) error {
+	return MigrateTo(db, dialect, 0)
+}
+
+// MigrateTo runs the migrations Migrate does up to version, and no later;
+// every one, when version is 0. A restore brings an empty database to the
+// schema its archive was written from first (internal/archive).
+func MigrateTo(db *sql.DB, dialect string, version int) error {
 	entries, err := MigrationFiles.ReadDir(".")
 	if err != nil {
 		return fmt.Errorf("reading embedded migrations: %w", err)
@@ -443,6 +450,9 @@ func Migrate(db *sql.DB, dialect string) error {
 	}
 
 	for _, m := range migrationList {
+		if version > 0 && m.version > version {
+			break
+		}
 		var exists int
 		checkQuery := rebind("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", dialect)
 		err := db.QueryRow(checkQuery, m.version).Scan(&exists)
