@@ -292,3 +292,50 @@ func TestThingsPastTheirDateAreListed(t *testing.T) {
 		t.Errorf("found: %v", marked)
 	}
 }
+
+// TestStartingAFlowFromAnAsset: scanning what Leave something filed offers
+// Collect it, to someone who may run it, and starting it there skips the
+// finding.
+func TestStartingAFlowFromAnAsset(t *testing.T) {
+	w := newWoodShop(t)
+	srv, st := w.srv, w.srv.store
+	lf := w.saveFlow(t, "leave", "Leave something", flows.Starters([]string{w.short.ID})[0].Definition)
+	collect := flows.Starters([]string{w.wood.ID})[1].Definition
+	collect.Steps[0].FiledBy = lf.ID
+	w.saveFlow(t, "collect", "Collect it", collect)
+	oak, _ := st.CreateAsset("Oak", []string{w.short.ID}, []models.AssetGeneratorKey{{GeneratorType: "qr", AssignedCode: "WOOD-9"}}, map[string]string{"owner": "Sam"})
+	unfiled, _ := st.CreateAsset("Birch", []string{w.short.ID}, nil, map[string]string{"owner": "Sam"})
+	if err := st.RecordFiling(lf.ID, oak.Asset.ID, w.sam.ID); err != nil {
+		t.Fatal(err)
+	}
+	sam := sessionCookie(t, srv, w.sam.ID)
+
+	var scanned ScanResponse
+	_ = json.Unmarshal(doJSON(t, srv, sam, http.MethodGet, "/api/v1/scan/WOOD-9", "").Body.Bytes(), &scanned)
+	if len(scanned.Asset.Flows) != 1 || scanned.Asset.Flows[0].Slug != "collect" {
+		t.Errorf("scanned: %+v", scanned.Asset.Flows)
+	}
+	if body := doJSON(t, srv, sam, http.MethodGet, "/api/v1/assets/"+unfiled.Asset.ID+"/flows", "").Body.String(); body != `{"flows":[]}`+"\n" {
+		t.Errorf("what Leave something did not file: %s", body)
+	}
+	// Someone who may not run it is offered nothing.
+	reader := userWithPermissions(t, srv, "rae@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsScan)
+	if body := doJSON(t, srv, reader, http.MethodGet, "/api/v1/scan/WOOD-9", "").Body.String(); strings.Contains(body, `"flows"`) {
+		t.Errorf("a reader is offered flows: %s", body)
+	}
+
+	rec := doJSON(t, srv, sam, http.MethodPost, "/api/v1/flows/collect/runs", `{"asset_id":"`+oak.Asset.ID+`"}`)
+	var v FlowRunView
+	_ = json.Unmarshal(rec.Body.Bytes(), &v)
+	if rec.Code != http.StatusCreated || v.Prompt.Kind != flows.KindConfirm || v.Prompt.Asset == nil || v.Prompt.Asset.ID != oak.Asset.ID {
+		t.Fatalf("started from the oak: %d %+v", rec.Code, v)
+	}
+	// From what it would not find, it starts, and says so.
+	rec = doJSON(t, srv, sam, http.MethodPost, "/api/v1/flows/collect/runs", `{"asset_id":"`+unfiled.Asset.ID+`"}`)
+	if _ = json.Unmarshal(rec.Body.Bytes(), &v); rec.Code != http.StatusBadRequest || v.Prompt.Kind != flows.KindFind {
+		t.Errorf("started from the birch: %d %+v", rec.Code, v)
+	}
+	if rec := doJSON(t, srv, sam, http.MethodPost, "/api/v1/flows/leave/runs", `{"asset_id":"`+oak.Asset.ID+`"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("a flow that does not start by finding: %d", rec.Code)
+	}
+}

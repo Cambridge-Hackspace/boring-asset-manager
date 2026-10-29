@@ -296,3 +296,16 @@ func TestThingsLeftPastTheirDate(t *testing.T) {
 		t.Errorf("collected, still listed: %v", listed)
 	}
 }
+
+// Migration 045 offers flows on the built-in scan template, as seeded.
+func TestTheScanTemplateOffersFlows(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	r, err := st.GetReport("bc4e2a6d-8f0b-4d5c-9e9a-d15c7d9f1a22")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(r.Spec), `"actions":["open","use","borrow","return","report","flows"]`) {
+		t.Errorf("spec: %s", r.Spec)
+	}
+}

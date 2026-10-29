@@ -118,4 +118,13 @@ describe('FlowRunPage', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 
+  it('starts from an asset once, when started from its page', async () => {
+    history.replaceState(null, '', '/f/collect?asset=a1');
+    const confirm: Prompt = { step: 'confirm', kind: 'confirm', asset: { id: 'a1', name: 'Oak', categories: [] }, coming: ['Archive Oak: it is taken off the lists.'] };
+    const { sent } = fakeApi({ 'POST /flows/collect/runs': () => ({ status: 201, body: { ...view(1, confirm), flow: 'collect' } }) });
+    render(FlowRunPage, { params: { slug: 'collect' } });
+    await screen.findByRole('heading', { name: 'Is this right?' });
+    expect(sent[0]!.body).toEqual({ asset_id: 'a1' });
+    expect(location.search).toBe('');
+  });
 });

@@ -493,17 +493,42 @@ func writeFlowError(w http.ResponseWriter, err error, action string) {
 	writeServerError(w, err, action)
 }
 
+// StartFlowRequest starts a run, optionally from an asset: a flow whose
+// first step is a Find then starts with it found.
+type StartFlowRequest struct {
+	AssetID string `json:"asset_id,omitempty"`
+}
+
 // handleStartFlowRun starts a run of a flow: POST /api/v1/flows/{slug}/runs
 func (s *Server) handleStartFlowRun(w http.ResponseWriter, r *http.Request) {
 	f, ok := s.flowFor(w, r)
 	if !ok {
 		return
 	}
+	var req StartFlowRequest
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+	}
 	runner := &flowRunner{s: s, r: r, flow: f}
+	if req.AssetID != "" && runner.firstFind() == nil {
+		writeJSONError(w, http.StatusBadRequest, "This flow does not start by finding something")
+		return
+	}
 	run, err := runner.startRun()
 	if run == nil {
 		writeFlowError(w, err, "start the run")
 		return
+	}
+	if req.AssetID != "" && err == nil {
+		// Found already: answer its Find with it.
+		var found *models.FlowRun
+		found, err = runner.answer(run, FlowAnswer{Step: f.Definition.Steps[run.Step].ID, AssetID: req.AssetID})
+		if found != nil {
+			run = found
+		}
 	}
 	s.runView(w, runner, run, "", err, http.StatusCreated)
 }
@@ -625,4 +650,61 @@ func symbolSVG(sym generators.Symbol) []byte {
 	}
 	b.WriteString(`"/></svg>`)
 	return []byte(b.String())
+}
+
+// FlowLink names a flow to start.
+type FlowLink struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+// flowsFrom lists the flows the request may start from an asset (README
+// §6.7): those turned on whose first step is a Find that would find it, so
+// that starting one skips the finding.
+func (s *Server) flowsFrom(r *http.Request, a *models.AssetWithDetails) ([]FlowLink, error) {
+	if CurrentUser(r.Context()) == nil || !HasPermission(r.Context(), rbac.PermFlowsRun) {
+		return nil, nil
+	}
+	all, err := s.store.ListFlows()
+	if err != nil {
+		return nil, err
+	}
+	out := []FlowLink{}
+	for i := range all {
+		f := &all[i]
+		if !f.Enabled {
+			continue
+		}
+		runner := &flowRunner{s: s, r: r, flow: f}
+		step := runner.firstFind()
+		if step == nil {
+			continue
+		}
+		found, err := runner.candidates(step, runner.startValues(), "")
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range found {
+			if c.Asset.ID == a.Asset.ID {
+				out = append(out, FlowLink{Slug: f.Slug, Name: f.Name})
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// handleAssetFlows lists the flows the requester may start from an asset:
+// GET /api/v1/assets/{id}/flows
+func (s *Server) handleAssetFlows(w http.ResponseWriter, r *http.Request) {
+	a, ok := s.assetFor(w, r, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	offered, err := s.flowsFrom(r, a)
+	if err != nil {
+		writeServerError(w, err, "find the flows that start from it")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"flows": offered})
 }

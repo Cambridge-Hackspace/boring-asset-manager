@@ -199,6 +199,17 @@ export async function runRequest(method: 'GET' | 'POST', path: string, body?: un
   }
 }
 
+/** A flow to start, as an asset or scan page offers it. */
+export interface FlowLink {
+  slug: string;
+  name: string;
+}
+
+/** The address of a flow's page, started from an asset when one is given. */
+export function flowHref(slug: string, assetID?: string): string {
+  return `/f/${encodeURIComponent(slug)}${assetID ? `?asset=${encodeURIComponent(assetID)}` : ''}`;
+}
+
 /** The address of a flow's runs, or of one of them. */
 export function runsPath(slug: string, runID?: string): string {
   const base = `/flows/${encodeURIComponent(slug)}/runs`;

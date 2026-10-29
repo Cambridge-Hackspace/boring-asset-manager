@@ -83,6 +83,8 @@ var fuzzRoutes = []route{
 	{method: "GET", path: "/api/v1/flows/{flow}/qr.svg"},
 	{method: "DELETE", path: "/api/v1/flows/{flow}"},
 	{method: "POST", path: "/api/v1/flows/{flow}/runs"},
+	{method: "POST", path: "/api/v1/flows/{flow}/runs", body: `{"asset_id":"{asset}"}`},
+	{method: "GET", path: "/api/v1/assets/{asset}/flows"},
 	{method: "GET", path: "/api/v1/flows/{flow}/runs/{run}", query: map[string][]string{"search": {"a"}}},
 	{method: "POST", path: "/api/v1/flows/{flow}/runs/{run}", body: `{"step":"find","asset_id":"{asset}"}`},
 	{method: "DELETE", path: "/api/v1/flows/{flow}/runs/{run}"},

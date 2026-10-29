@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { flowHref, type FlowLink } from '../lib/flows';
   import { onMount, untrack } from 'svelte';
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
@@ -21,7 +22,7 @@
   const code = untrack(() => params.code ?? '');
 
   interface Scan {
-    asset: { id: string; name: string; counted: boolean; unit?: string; actions?: OfferedAction[]; icon?: ResolvedIcon };
+    asset: { id: string; name: string; counted: boolean; unit?: string; actions?: OfferedAction[]; icon?: ResolvedIcon; flows?: FlowLink[] };
     template: { id: string; name: string };
     result: ReportResult;
   }
@@ -126,6 +127,10 @@
               <ActionButtons assetId={scan!.asset.id} actions={scan!.asset.actions} />
             {:else if action === 'add_similar'}
               <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(scan!.asset.id)}">{scanActionLabel(action)}</a>
+            {:else if action === 'flows'}
+              {#each scan!.asset.flows ?? [] as f (f.slug)}
+                <a class="btn-primary" href={flowHref(f.slug, scan!.asset.id)}>{f.name}</a>
+              {/each}
             {:else if action === 'add_inside'}
               <a class="btn-secondary" href="/assets/new?in={encodeURIComponent(scan!.asset.id)}">{scanActionLabel(action)}</a>
             {:else if action === 'report'}

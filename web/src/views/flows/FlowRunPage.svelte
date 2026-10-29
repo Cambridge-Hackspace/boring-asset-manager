@@ -37,7 +37,11 @@
     busy = true;
     pendingPhoto = null;
     try {
-      show(await runRequest('POST', runsPath(slug)));
+      // Started from an asset, a flow that begins by finding starts with it,
+      // once: starting again is for the next person, and the next thing.
+      const from = new URLSearchParams(location.search).get('asset');
+      if (from) history.replaceState(history.state, '', location.pathname);
+      show(await runRequest('POST', runsPath(slug), from ? { asset_id: from } : undefined));
     } catch (err) {
       view = null;
       error = messageOf(err);

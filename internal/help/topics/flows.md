@@ -32,3 +32,7 @@ Any step can be shown **only when** an earlier answer is something, such as only
 ## Left past its date
 
 A flow can name a date to collect by, such as **Leave until**. Once that date has passed, what was left is listed on the **Flows** page as past its date, marked when someone looks for it, and announced once to the notification channels that follow it. Moving the date on clears it.
+
+## Starting from the thing itself
+
+A flow that starts by finding something, such as **Collect it**, is offered on the pages of what it would find: scan the QR code on what you left, and **Collect it** is there, with it already found.

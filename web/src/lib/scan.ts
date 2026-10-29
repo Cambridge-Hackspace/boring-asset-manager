@@ -12,6 +12,7 @@ const actionLabels: Record<ScanAction, string> = {
   actions: 'Its actions, such as Identify',
   add_similar: 'Add another like it',
   add_inside: 'Put something in it',
+  flows: 'Its flows, such as Collect it',
 };
 
 /** A quick action's name, as editors and previews show it. */

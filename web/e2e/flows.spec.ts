@@ -114,3 +114,24 @@ test.describe('the flow editor', () => {
     await expect(page.getByRole('heading', { name: 'Filed' })).toBeVisible();
   });
 });
+
+test('flows: scanning what was left offers Collect it, which starts with it found', async ({ signedIn: page, api }) => {
+  const { category } = await api.call('POST', '/categories', { name: unique('Bench'), color_hex: '#0f766e' });
+  const { starters } = await api.call('GET', `/flow-starters?category_ids=${category.id}`);
+  const leaveSlug = unique('bench-leave').toLowerCase();
+  const { flow: leave } = await api.call('POST', '/flows', { slug: leaveSlug, name: 'Leave on the bench', definition: starters[0].definition });
+  const collect = starters[1].definition;
+  collect.steps[0].filed_by = leave.id;
+  await api.call('POST', '/flows', { slug: unique('bench-collect').toLowerCase(), name: 'Collect from the bench', definition: collect });
+
+  const name = unique('Project');
+  const { run } = await api.call('POST', `/flows/${leaveSlug}/runs`);
+  await api.call('POST', `/flows/${leaveSlug}/runs/${run.id}`, { step: 'about', name });
+  const { assets } = await api.call('GET', `/assets?search=${encodeURIComponent(name)}`);
+
+  await page.goto(`/scan/${assets[0].asset.id}`);
+  await page.getByRole('link', { name: 'Collect from the bench' }).click();
+  await expect(page.getByRole('heading', { name: 'Collect it?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Yes, go ahead' }).click();
+  await expect(page.getByText(`Archived ${name}.`)).toBeVisible();
+});

@@ -152,15 +152,7 @@ func (f *flowRunner) startRun() (*models.FlowRun, error) {
 	} else if !may || !f.flow.Enabled {
 		return nil, &flowError{Status: http.StatusNotFound, Message: "Flow not found"}
 	}
-	fc, err := f.s.flowCategories()
-	if err != nil {
-		return nil, err
-	}
-	name := u.Name
-	if name == "" {
-		name = "Unnamed user"
-	}
-	st := store.FlowRunState{Values: flows.Start(f.flow.Name, name, time.Now(), &f.flow.Definition, fc.name), Done: []models.FlowDone{}}
+	st := store.FlowRunState{Values: f.startValues(), Done: []models.FlowDone{}}
 	st.Step = f.flow.Definition.Next(0, st.Values)
 	run, err := f.s.store.CreateFlowRun(f.flow.ID, u.ID, st)
 	if err != nil {
@@ -178,6 +170,28 @@ func (f *flowRunner) startRun() (*models.FlowRun, error) {
 		return nil, err
 	}
 	return run, stepErr
+}
+
+// startValues are the values a run of the flow by the requester starts
+// with.
+func (f *flowRunner) startValues() flows.Values {
+	name := "Unnamed user"
+	if u := CurrentUser(f.r.Context()); u != nil && u.Name != "" {
+		name = u.Name
+	}
+	fc, _ := f.s.flowCategories()
+	return flows.Start(f.flow.Name, name, time.Now(), &f.flow.Definition, fc.name)
+}
+
+// firstFind is the flow's first step, if it is a Find: a flow that starts
+// by finding something can be started from it (README §6.7).
+func (f *flowRunner) firstFind() *flows.Step {
+	d := &f.flow.Definition
+	i := d.Next(0, f.startValues())
+	if i < len(d.Steps) && d.Steps[i].Kind == flows.KindFind {
+		return &d.Steps[i]
+	}
+	return nil
 }
 
 // FlowAnswer answers the step a run is on. Step names it, so an answer
