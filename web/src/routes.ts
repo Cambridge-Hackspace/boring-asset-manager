@@ -36,6 +36,8 @@ import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
 import ActionsPage from './views/ActionsPage.svelte';
 import IconsPage from './views/icons/IconsPage.svelte';
+import FlowsPage from './views/flows/FlowsPage.svelte';
+import FlowRunPage from './views/flows/FlowRunPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -63,6 +65,8 @@ export const routes: Route[] = [
   { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true },
   { pattern: '/assets/:id/scene', component: ScenePage, title: 'Scene', permissions: ['assets.read'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
+  { pattern: '/flows', component: FlowsPage, title: 'Flows', permissions: ['flows.run', 'flows.manage'], nav: 'Flows' },
+  { pattern: '/f/:slug', component: FlowRunPage, title: 'Flow', permissions: ['flows.run'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
   { pattern: '/spool', component: SpoolPage, title: 'Print queue', permissions: ['labels.print'], nav: 'Print queue' },
   { pattern: '/reports', component: ReportsPage, title: 'Reports', permissions: ['assets.read'], nav: 'Reports' },

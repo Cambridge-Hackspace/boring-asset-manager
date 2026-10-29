@@ -54,6 +54,19 @@
 @utility error-text {
   @apply text-sm text-red-700 dark:text-red-400;
 }
+/* Flow pages' large controls (README §6.7), for phones and tablets. */
+@utility flow-input {
+  @apply input min-h-12 text-lg;
+}
+@utility flow-button-primary {
+  @apply btn-primary min-h-13 min-w-32 text-lg;
+}
+@utility flow-button-secondary {
+  @apply btn-secondary min-h-13 min-w-32 text-lg;
+}
+@utility flow-choice {
+  @apply flex min-h-16 w-full items-center gap-3 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-left text-lg font-semibold hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800;
+}
 /* The template editor's dense controls, as a desktop editor's. */
 @utility input-sm {
   @apply block w-full min-w-0 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-950;
