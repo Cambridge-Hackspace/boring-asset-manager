@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,18 +63,18 @@ func (s *Server) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
 		ByteSize:    int64(len(prepared.Full)),
 		CreatedAt:   time.Now().UTC(),
 	}
-	if err := s.photos.Save(p.ID, prepared.Full); err != nil {
+	if err := s.photos.Save(r.Context(), p.ID, prepared.Full); err != nil {
 		writeServerError(w, err, "store the photo")
 		return
 	}
-	if err := s.photos.Save(p.ThumbID, prepared.Thumb); err != nil {
-		s.removePhotoFiles(p)
+	if err := s.photos.Save(r.Context(), p.ThumbID, prepared.Thumb); err != nil {
+		s.removePhotoFiles(r.Context(), p)
 		writeServerError(w, err, "store the photo")
 		return
 	}
 	asset, err := s.actingStore(r).AddPhoto(r.PathValue("id"), p)
 	if err != nil {
-		s.removePhotoFiles(p)
+		s.removePhotoFiles(r.Context(), p)
 		writePhotoError(w, err, "add the photo")
 		return
 	}
@@ -95,7 +96,7 @@ func (s *Server) handleGetPhoto(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("size") == "thumb" {
 		file = p.ThumbID
 	}
-	data, err := s.photos.Read(file)
+	data, err := s.photos.Read(r.Context(), file)
 	if err != nil {
 		writeServerError(w, err, "read the photo file")
 		return
@@ -116,7 +117,7 @@ func (s *Server) handleRemovePhoto(w http.ResponseWriter, r *http.Request) {
 		writePhotoError(w, err, "remove the photo")
 		return
 	}
-	s.removePhotoFiles(*removed)
+	s.removePhotoFiles(r.Context(), *removed)
 	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
@@ -162,19 +163,19 @@ func (s *Server) handleCopyPhotos(w http.ResponseWriter, r *http.Request) {
 	copies := make([]models.AssetPhoto, 0, len(from.Photos))
 	undo := func() {
 		for _, p := range copies {
-			s.removePhotoFiles(p)
+			s.removePhotoFiles(r.Context(), p)
 		}
 	}
 	for _, p := range from.Photos {
 		c := p
 		c.ID, c.ThumbID, c.CreatedAt = uuid.NewString(), uuid.NewString(), time.Now().UTC()
 		for to, of := range map[string]string{c.ID: p.ID, c.ThumbID: p.ThumbID} {
-			data, err := s.photos.Read(of)
+			data, err := s.photos.Read(r.Context(), of)
 			if err == nil {
-				err = s.photos.Save(to, data)
+				err = s.photos.Save(r.Context(), to, data)
 			}
 			if err != nil {
-				s.removePhotoFiles(c)
+				s.removePhotoFiles(r.Context(), c)
 				undo()
 				writeServerError(w, err, "copy the photo files")
 				return
@@ -193,9 +194,9 @@ func (s *Server) handleCopyPhotos(w http.ResponseWriter, r *http.Request) {
 
 // removePhotoFiles removes a photo's files. A file left behind wastes space
 // but harms nothing, so a failure is logged rather than reported.
-func (s *Server) removePhotoFiles(p models.AssetPhoto) {
+func (s *Server) removePhotoFiles(ctx context.Context, p models.AssetPhoto) {
 	for _, id := range []string{p.ID, p.ThumbID} {
-		if err := s.photos.Remove(id); err != nil {
+		if err := s.photos.Remove(ctx, id); err != nil {
 			log.Printf("removing photo file %s: %v", id, err)
 		}
 	}

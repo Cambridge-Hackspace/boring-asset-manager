@@ -398,7 +398,7 @@ func (s *Server) handleTestPrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	images := s.newLabelImages()
+	images := s.newLabelImages(r.Context())
 	var scene *render.Scene
 	var problem *LabelProblem
 	if req.AssetID == "" {
