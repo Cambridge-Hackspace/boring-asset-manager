@@ -14,3 +14,17 @@ Open **Flows**, or scan the QR code on a flow's poster, and follow the steps. Ea
 When it's done, it says what it did, and shows the label to put on it if it made one. **Start again** is for the next person.
 
 What a flow does, it does as you: it can only do what you're allowed to, and history records it as yours, made through the flow.
+
+## Making a flow
+
+Whoever manages flows makes them on the **Flows** page, with **New flow**: choose the categories it files into or takes from, start from **Leave something** or **Collect it**, and adjust its steps. Each step is a card, in order; the preview beside them shows the step chosen as a phone shows it.
+
+- **Choose category** offers the flow's categories, or always uses one.
+- **Form** asks for the fields the chosen category records. For each field you can hide it, rename it, add help, give it a default such as `{user}` or `{today}`, make it required, and move it. A field the category requires is always asked. It can also ask for the thing's name, a photo, and questions of its own, used in names and text as `{what}`.
+- **Find** finds something already here, by its code, by search or from a list, optionally only what another flow filed, or whose field matches, such as its owner being `{user}`.
+- **Create** files it, named from the answers, as `{owner}: {what}`, and can put it in a place.
+- **Label** shows its label, adds it to the print queue, or prints it.
+- **Change** archives it, sets its condition, lends or returns it, moves it, sets its fields, or presses an action.
+- **Confirm** and **Done** say what will happen, and what did.
+
+Any step can be shown **only when** an earlier answer is something, such as only for long boards. A flow can only do what its maker may do. Its **Poster** has its name, its QR code and its one line of instructions, to print and put up, or to make into a label template.

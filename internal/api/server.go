@@ -214,6 +214,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/flows/{slug}", seeFlows(http.HandlerFunc(s.handleGetFlow)))
 	handle("PUT /api/v1/flows/{slug}", manageFlows(http.HandlerFunc(s.handleSaveFlow)))
 	handle("DELETE /api/v1/flows/{slug}", manageFlows(http.HandlerFunc(s.handleDeleteFlow)))
+	handle("GET /api/v1/flows/{slug}/qr.svg", seeFlows(http.HandlerFunc(s.handleFlowQR)))
 	handle("POST /api/v1/flows/{slug}/runs", runFlows(http.HandlerFunc(s.handleStartFlowRun)))
 	handle("GET /api/v1/flows/{slug}/runs/{id}", runFlows(http.HandlerFunc(s.handleGetFlowRun)))
 	handle("POST /api/v1/flows/{slug}/runs/{id}", runFlows(http.HandlerFunc(s.handleAnswerFlowRun)))
