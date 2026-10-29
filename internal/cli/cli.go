@@ -4,15 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/archive"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
@@ -287,9 +292,12 @@ func StorageCopy(configPath, toPath string) error {
 	return nil
 }
 
-// Backup copies the configured SQLite database to dest (README §2.2). Other
-// databases return store.ErrBackupUnsupported.
-func Backup(configPath, dest string) error {
+// Backup writes an archive of the instance to dest (README §2.3): its rows,
+// from any database, and the uploaded files they name, with authentication
+// unless opts leave it out. A dest ending in .db is a copy of a SQLite
+// database instead, as before archives (§2.2); other databases return
+// store.ErrBackupUnsupported for it.
+func Backup(configPath, dest string, opts BackupOptions) error {
 	if dest == "" {
 		return errors.New("--to is required")
 	}
@@ -297,11 +305,113 @@ func Backup(configPath, dest string) error {
 	if err != nil {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
-	if err := store.BackupSQLite(&cfg.Database, dest); err != nil {
+	if strings.EqualFold(filepath.Ext(dest), ".db") {
+		// Scripts written before archives keep the copy they asked for.
+		if opts.WithoutSecrets || opts.Split > 0 {
+			return errors.New("--without-secrets and --split are for archives; a --to ending in .db makes a copy of a SQLite database")
+		}
+		if err := store.BackupSQLite(&cfg.Database, dest); err != nil {
+			return err
+		}
+		fmt.Printf("Copied the SQLite database to %s (a --to ending in .db makes a copy, not an archive)\n", dest)
+		return nil
+	}
+
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
 		return err
 	}
-	fmt.Printf("Backed up the database to %s\n", dest)
+	defer st.Close()
+	blobs, err := filestore.Open(cfg.Storage)
+	if err != nil {
+		return err
+	}
+	var names []string
+	open := func(part int) (io.WriteCloser, error) {
+		name := PartName(dest, part, opts.Split > 0)
+		names = append(names, name)
+		return os.OpenFile(name+".partial", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	}
+	sum, err := archive.Write(context.Background(), st, blobs, open, archive.Options{
+		BamVersion: api.Version,
+		Secrets:    !opts.WithoutSecrets,
+		Split:      opts.Split,
+	})
+	if err != nil {
+		for _, name := range names {
+			_ = os.Remove(name + ".partial")
+		}
+		return err
+	}
+	// Each part takes its name once all are written, so a name never
+	// holds a part of a backup that failed.
+	for _, name := range names {
+		if err := os.Rename(name+".partial", name); err != nil {
+			return err
+		}
+	}
+
+	rows := 0
+	for _, n := range sum.Tables {
+		rows += n
+	}
+	fmt.Printf("Backed up %d rows and %d files (%d bytes) to %s\n", rows, sum.Files, sum.FileBytes, strings.Join(names, ", "))
+	if opts.WithoutSecrets {
+		fmt.Println("Authentication is left out: restoring it keeps the instance's own users' passwords, sessions and tokens.")
+	} else {
+		fmt.Println("It holds password hashes, sessions and tokens: keep it as carefully as the database.")
+	}
+	if len(sum.Missing) > 0 {
+		fmt.Printf("%d files rows name were not in the file store, and are listed in the manifest; bam storage sweep --dry-run lists them too.\n", len(sum.Missing))
+	}
 	return nil
+}
+
+// BackupOptions are bam backup's choices beyond where to write it.
+type BackupOptions struct {
+	// WithoutSecrets leaves authentication out.
+	WithoutSecrets bool
+	// Split is the most bytes a part may hold; 0 writes one archive.
+	Split int64
+}
+
+// PartName is where part n of a backup to dest is written: dest itself,
+// unless it is split, when .partN goes before its extension, as in
+// bam.part2.bam.tar.gz.
+func PartName(dest string, n int, split bool) string {
+	if !split {
+		return dest
+	}
+	part := ".part" + strconv.Itoa(n)
+	for _, ext := range []string{".bam.tar.gz", ".tar.gz", ".tgz"} {
+		if strings.HasSuffix(strings.ToLower(dest), ext) {
+			return dest[:len(dest)-len(ext)] + part + dest[len(dest)-len(ext):]
+		}
+	}
+	return dest + part
+}
+
+// ParseSize reads a size such as 500MB, 4GiB or 1048576 (bytes).
+func ParseSize(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	i := len(s)
+	for i > 0 && (s[i-1] < '0' || s[i-1] > '9') {
+		i--
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(s[:i]), 10, 64)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("size %q: a whole number of bytes, or of KB, MB, GB, TB, KiB, MiB, GiB or TiB", s)
+	}
+	units := map[string]int64{
+		"": 1, "b": 1,
+		"kb": 1e3, "mb": 1e6, "gb": 1e9, "tb": 1e12,
+		"kib": 1 << 10, "mib": 1 << 20, "gib": 1 << 30, "tib": 1 << 40,
+	}
+	unit, ok := units[strings.ToLower(strings.TrimSpace(s[i:]))]
+	if !ok || n > math.MaxInt64/unit {
+		return 0, fmt.Errorf("size %q: a whole number of bytes, or of KB, MB, GB, TB, KiB, MiB, GiB or TiB", s)
+	}
+	return n * unit, nil
 }
 
 // Restore puts a backup made by Backup in place of the configured SQLite

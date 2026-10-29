@@ -25,7 +25,8 @@ Available Commands:
   admin create  Provision an initial superuser account (requires --email and --password; --name optional)
   admin password Set an account's password, signing it out everywhere (requires --email and --password)
   serve         Start the HTTP daemon
-  backup        Copy a SQLite database (requires --to); exits 3 for other databases
+  backup        Write an archive of the instance, files included (requires --to; --split <size>, --without-secrets);
+                a --to ending in .db copies a SQLite database instead, and exits 3 for other databases
   storage sweep Remove uploaded files no row names, older than a day, and list rows whose file is missing (--dry-run removes nothing)
   storage copy  Copy every uploaded file to the store another config file's [storage] names, checking each (requires --to)
   restore       Replace a SQLite database with a backup (requires --from; stop BAM first)
@@ -107,13 +108,21 @@ func main() {
 	case "backup", "restore":
 		cmd := flag.NewFlagSet(command, flag.ExitOnError)
 		configPath := cmd.String("config", "config.toml", "Path to configuration file")
-		to := cmd.String("to", "", "File to write the backup to (backup)")
+		to := cmd.String("to", "", "File to write the backup to: an archive, or a copy of a SQLite database if it ends in .db (backup)")
 		from := cmd.String("from", "", "Backup to restore (restore)")
+		withoutSecrets := cmd.Bool("without-secrets", false, "Leave authentication out: password hashes, sessions, tokens, OAuth and notification channels' secrets (backup)")
+		split := cmd.String("split", "", "Write the archive in parts of at most this size, such as 4GiB (backup)")
 		_ = cmd.Parse(os.Args[2:])
 
 		var err error
 		if command == "backup" {
-			err = cli.Backup(*configPath, *to)
+			opts := cli.BackupOptions{WithoutSecrets: *withoutSecrets}
+			if *split != "" {
+				opts.Split, err = cli.ParseSize(*split)
+			}
+			if err == nil {
+				err = cli.Backup(*configPath, *to, opts)
+			}
 		} else {
 			err = cli.Restore(*configPath, *from)
 		}

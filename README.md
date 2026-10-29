@@ -142,8 +142,10 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 # Start the daemon
 ./bam serve --config ./config.toml
 
-# Back up a SQLite database (safe while running), and put a backup back
-# (with BAM stopped); see §2.2
+# Back up the instance, files and all, on any database (safe while running;
+# §2.3); a --to ending in .db copies a SQLite database instead, and restore
+# puts such a copy back (with BAM stopped; §2.2)
+./bam backup --config ./config.toml --to ./bam-backup.bam.tar.gz
 ./bam backup --config ./config.toml --to ./bam-backup.db
 ./bam restore --config ./config.toml --from ./bam-backup.db
 
@@ -256,7 +258,7 @@ BAM_UPDATE_BACKUP_COMMAND='pg_dump -Fc -f "$BAM_BACKUP_FILE" bam'
 BAM_UPDATE_RESTORE_COMMAND='pg_restore --clean --if-exists -d bam "$BAM_BACKUP_FILE"'
 ```
 
-`BAM_UPDATE_BACKUP=off` updates without a backup, which leaves a failed update's changes to the database in place. If the backup fails, nothing is changed and the old version is started again. Outside the updater, `bam backup --config <file> --to <file>` copies a SQLite database at any time, even while BAM runs, and `bam restore --config <file> --from <file>` puts one back while BAM is stopped. Neither copies uploaded files: label images and asset photos live under `storage.local_path`, or in a bucket (§2), so back that up as well.
+`BAM_UPDATE_BACKUP=off` updates without a backup, which leaves a failed update's changes to the database in place. If the backup fails, nothing is changed and the old version is started again. Outside the updater, `bam backup --config <file> --to <file>.db` copies a SQLite database at any time, even while BAM runs, and `bam restore --config <file> --from <file>.db` puts one back while BAM is stopped. Such a copy holds no uploaded files: label images and asset photos live under `storage.local_path`, or in a bucket (§2). An archive (§2.3) holds both, from any database.
 
 On Linux (cron must be installed; on Arch, `cronie`):
 
@@ -276,6 +278,63 @@ install -m 0644 packaging/freebsd/bam-update.cron /usr/local/etc/cron.d/bam-upda
 Both run it nightly at 04:17; change the minute in the cron file, so that every installation does not ask GitHub at once. Settings (the repository, the binary, the health check URL) are listed at the top of the script; put any in `/etc/bam/update.conf` (`/usr/local/etc/bam/update.conf` on FreeBSD) as `NAME=value` lines. If BAM listens on another port, set `BAM_UPDATE_HEALTH_URL` there.
 
 `tools/service/check-update.sh` checks the updater in a Debian container booted with systemd, against fake releases served from files. It must update to a newer release, leave an up-to-date installation running, and ignore an older release. It must refuse a download that does not match its checksum, and roll back a release that does not come up, together with the change that release made to the database. It must refuse to update a database it cannot back up, run backup and restore commands when given them, and keep only the newest backups. It must leave a build that is not a release alone until forced.
+
+### 2.3 Backups & Archives
+
+`bam backup --to <file>` writes an **archive** of the whole instance, on SQLite, PostgreSQL and MariaDB alike: every row that is information, and the uploaded files rows name (asset photos and their thumbnails, label images), wherever they are kept (§2). It is safe while BAM runs. The rows are read in one transaction, so they are as they were at one moment however much changes meanwhile; the files are copied after, and one removed by then is listed as missing rather than failing the backup. The file is readable only by its owner.
+
+```bash
+# Everything, authentication included
+./bam backup --config ./config.toml --to ./bam-2026-10-29.bam.tar.gz
+# Leaving authentication out
+./bam backup --config ./config.toml --to ./bam.bam.tar.gz --without-secrets
+# In parts of at most 4 GiB: bam.part1.bam.tar.gz, bam.part2.bam.tar.gz, ...
+./bam backup --config ./config.toml --to ./bam.bam.tar.gz --split 4GiB
+```
+
+A `--to` ending in `.db` still makes a copy of a SQLite database, as before archives (§2.2), so scripts written for that keep working. The schema must be current (`bam migrate`): a backup describes the tables this version of bam makes.
+
+**The format.** An archive is a gzipped tar, readable with `tar` and any JSON parser; nothing in it needs bam to read. Its members, in order:
+
+- `header.json`, first: `format` (`"bam-archive"`), `format_version` (1, the format's own, apart from bam's), `type` (`"backup"`), `bam_version`, `schema_version` (the last migration the database had run), `created_at`, the `dialect` it was written from, the `kinds` of information it holds, `secrets` (whether it holds authentication), and `set`: its `id`, this `part`, and in parts after the first how many `parts` there are.
+- `README.txt`: what each member is, for whoever opens it without bam.
+- `data/<table>/0001.jsonl`, `0002.jsonl`, …: each table's rows as JSON Lines, one object a row, in the order of the table's key, at most 8 MiB a member. A table with no rows has no members.
+- `auth/<table>/…`: authentication, in the same form (below).
+- `files/photos/<id>` and `files/images/<id>`: the uploaded files, as stored.
+- `manifest.json`, last, once everything else is written: the header again (with `set.parts`), the rows of each table (`tables`), the files and their bytes, the files rows name that the store did not have (`missing_files`), the size and SHA-256 of every other member (`members`), and whether this is the last part of its set (`last`).
+
+**Values** are written one way, whatever the dialect: text as strings, numbers as numbers, booleans as `true` and `false`, times as RFC 3339 in UTC to the microsecond (`2026-10-29T12:00:00.123456Z`), and columns that hold JSON as JSON, not as strings of it. NULL is `null`. Grants of permissions (`role_permissions`, `role_permission_scopes`) name a permission by its `permission_key`, which is the same on every instance, where the database has its ID, which is not.
+
+**Authentication** is password hashes and second factors (`users.password_hash`, `users.totp_secret`), sessions, API tokens, OAuth, and notification channels' options, which hold their passwords and webhook addresses. It is kept apart, in `auth/`: the tables that are nothing else whole, and the secret columns of the others with their key, so it can be left out or skipped whole. Only the command line writes it, and leaves it out with `--without-secrets`; a backup from the web never holds it. Keep an archive that holds it as carefully as the database.
+
+**Kinds of information.** An archive holds, and a restore chooses among, these kinds, each with its tables:
+
+- **Reports** (`reports`): `reports`.
+- **The catalog** (`catalog`): `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`.
+- **Labels** (`labels`): `templates`, `images` and their files, `category_label_templates`.
+- **Icons** (`icons`): `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings`.
+- **People and roles** (`people`): `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`.
+- **Assets** (`assets`): `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, `asset_photos` and their files, and their history, `events`.
+- **Flows** (`flows`): `flows`, `flow_filings`.
+- **Settings** (`settings`): `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`.
+- **Authentication** (`auth`): `sessions`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, and the secret columns above.
+
+The tables are listed, and restored, in that order: each after those its rows name. Left out, as not information or made again:
+
+- `schema_migrations`: the schema's version is in the header, and a restore migrates.
+- `app_locks`: rows that serialize changes.
+- `permissions`: the same on every instance by key; grants are archived by key.
+- `icon_build`: made again from the icon sources when the server starts.
+- `live_connections`: connections open now, gone when the server stops.
+- `flow_runs`: runs under way, dropped when left 12 hours.
+- `action_replies`: devices' answers to an action, for the moment it is pressed.
+- `notification_deliveries`: the queue of notices to send, which a restore must not send again.
+
+`internal/archive/tables.go` lists the tables, their kinds, columns and keys. `tools/archive/tables.py` writes it from a migrated database, and a test fails when a migration changes the schema without it, on every dialect.
+
+**In parts.** With `--split <size>` (such as `500MB` or `4GiB`), a backup is a **set** of archives, each complete with its own header and manifest: the first holds the rows and the files that fit, and the rest hold the rest of the files, none over the size (a single file larger than it has a part of its own). Parts are named with `.partN` before the extension. A very large instance can then be moved, and uploaded, a part at a time.
+
+**Memory** does not grow with the size of an instance: rows are written as they are read, and files streamed. Only the list of files to copy is kept, a few dozen bytes for each. A test writes 256 MiB of files, generated as it goes, and checks the heap; `BAM_TEST_ARCHIVE_BYTES=21474836480 go test ./internal/archive -run Memory` writes 20 GiB.
 
 ---
 
