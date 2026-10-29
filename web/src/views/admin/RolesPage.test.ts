@@ -7,8 +7,8 @@ import type { Role, Scope } from '../../lib/models';
 
 const admin: Role = { id: 'admin', name: 'admin', description: 'Everything', permissions: ['assets.read', 'users.manage'], user_count: 1, protected: true, public: false };
 const stores: Role = { id: 'stores', name: 'Stores', description: '', permissions: ['assets.read', 'stock.record'], user_count: 2, protected: false, public: false };
-const defaultScope: Scope = { id: 'd', name: 'default', created_at: '', reserved: true, category_count: 0, role_count: 0 };
-const tools: Scope = { id: 't', name: 'tools', created_at: '', reserved: false, category_count: 1, role_count: 1 };
+const defaultScope: Scope = { id: 'd', name: 'default', created_at: '', reserved: true, category_count: 0, role_count: 0, assignment_count: 0 };
+const tools: Scope = { id: 't', name: 'tools', created_at: '', reserved: false, category_count: 1, role_count: 1, assignment_count: 0 };
 
 beforeEach(() => {
   session.permissions = ['users.manage'];

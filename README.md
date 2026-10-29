@@ -1246,6 +1246,9 @@ Running BAM for real, and keeping it honest. In priority order:
 * [x] Phones: a one-row header with a menu, tables as cards, folded filters and help topics, and touch-sized editor handles (§1).
 * [x] Plainer words (the Print queue, Link types, Code type, the roll loaded, printer models by make), creating with New, the category page's unsaved changes and its assets, and empty lists that say what to do (§1).
 
+#### Sub-Phase 7.26: Roles Given in Some Scopes
+* [x] A role given to someone, or to an API token, in some scopes only, holding its asset permissions there and none of its others; picked under each role on the Users and API tokens pages, with what it leaves out (§3.3, #118).
+
 ### Phase 8: Assistants
 
 An MCP server that does everything the API does (#33, §6.6).

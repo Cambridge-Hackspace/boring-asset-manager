@@ -2,14 +2,17 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { APIToken, LiveConnection, Role } from '../../lib/models';
+  import type { APIToken, LiveConnection, Role, RoleAssignment, Scope } from '../../lib/models';
+  import { describeAssignment } from '../../lib/permissions';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import RolePicker from '../../components/RolePicker.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let tokens = $state<APIToken[]>([]);
   let roles = $state<Role[]>([]);
+  let scopes = $state<Scope[]>([]);
   let loading = $state(true);
   let error = $state('');
   let status = $state('');
@@ -17,7 +20,7 @@
   // Making a token, and the secret of the one just made, shown once.
   let creating = $state(false);
   let name = $state('');
-  let roleIds = $state<string[]>([]);
+  let assigned = $state<RoleAssignment[]>([]);
   let lifetime = $state('90');
   let made = $state<{ name: string; secret: string } | null>(null);
   let copied = $state(false);
@@ -30,6 +33,8 @@
   ];
 
   const roleName = (id: string) => roles.find((r) => r.id === id)?.name ?? id;
+  const scopeName = (id: string) => scopes.find((s) => s.id === id)?.name ?? id;
+  const described = (a: RoleAssignment) => describeAssignment(roleName(a.role_id), a.scope_ids.map(scopeName));
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '');
 
   // Live connections each token holds open now, on any server (README §5.4).
@@ -38,9 +43,11 @@
 
   async function load() {
     try {
-      [tokens, roles, connections] = await Promise.all([
+      [tokens, roles, scopes, connections] = await Promise.all([
         request<{ tokens: APIToken[] }>('GET', '/tokens').then((r) => r.tokens ?? []),
         request<{ roles: Role[] }>('GET', '/roles').then((r) => (r.roles ?? []).filter((role) => !role.public)), // everyone holds the public role
+        // Extra: without scopes, roles are given in every scope.
+        request<{ scopes: Scope[] }>('GET', '/scopes').then((r) => r.scopes ?? [], () => []),
         // Extra: the tokens show without it.
         request<{ connections: LiveConnection[] }>('GET', '/tokens/connections').then((r) => r.connections ?? [], () => []),
       ]);
@@ -69,12 +76,12 @@
     const days = Number(lifetime);
     const expires_at = lifetime ? new Date(Date.now() + days * 86_400_000).toISOString() : null;
     try {
-      const res = await request<{ token: APIToken; secret: string }>('POST', '/tokens', { name, role_ids: roleIds, expires_at });
+      const res = await request<{ token: APIToken; secret: string }>('POST', '/tokens', { name, roles: assigned, expires_at });
       made = { name: res.token.name, secret: res.secret };
       copied = false;
       creating = false;
       name = '';
-      roleIds = [];
+      assigned = [];
       await load();
     } catch (err) {
       error = messageOf(err);
@@ -143,12 +150,7 @@
         </select>
       </div>
     </div>
-    <fieldset>
-      <legend class="label">Roles</legend>
-      {#each roles as r (r.id)}
-        <label class="mr-4 inline-flex items-center gap-2 text-sm"><input type="checkbox" value={r.id} bind:group={roleIds} /> {r.name}</label>
-      {/each}
-    </fieldset>
+    <RolePicker id="token-roles" {roles} {scopes} bind:value={assigned} />
     <div class="flex gap-2">
       <button type="submit" class="btn-primary">Create token</button>
       <button type="button" class="btn-secondary" onclick={() => (creating = false)}>Cancel</button>
@@ -177,7 +179,7 @@
         {#each tokens as t (t.id)}
           <tr class="border-b border-zinc-200 dark:border-zinc-800">
             <td class="py-2 pr-4 font-medium">{t.name}</td>
-            <td class="py-2 pr-4">{t.user_id ? `Personal: acts as ${t.user_name || 'Unnamed user'}` : t.role_ids.map(roleName).join(', ') || 'None'}</td>
+            <td class="py-2 pr-4">{t.user_id ? `Personal: acts as ${t.user_name || 'Unnamed user'}` : t.roles.map(described).join(', ') || 'None'}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{when(t.created_at)}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{when(t.last_used_at) || 'Never'}</td>
             <td class="py-2 pr-4 whitespace-nowrap">

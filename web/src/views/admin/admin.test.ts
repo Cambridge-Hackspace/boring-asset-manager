@@ -147,8 +147,8 @@ describe('UsersPage', () => {
     return fakeApi({
       'GET /users': () => ({
         users: [
-          { id: 'me', email: 'me@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '', role_ids: ['admin'] },
-          { id: 'u2', email: 'bo@hackspace.org', name: 'Bo', is_active: true, created_at: '', updated_at: '', role_ids: [] },
+          { id: 'me', email: 'me@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '', role_ids: ['admin'], roles: [{ role_id: 'admin', scope_ids: [] }] },
+          { id: 'u2', email: 'bo@hackspace.org', name: 'Bo', is_active: true, created_at: '', updated_at: '', role_ids: [], roles: [] },
         ],
       }),
       'GET /roles': () => ({
@@ -172,7 +172,7 @@ describe('UsersPage', () => {
     await fireEvent.click(within(bo).getByRole('checkbox', { name: 'viewer' }));
     await fireEvent.click(within(bo).getByRole('button', { name: 'Save roles' }));
     await vi.waitFor(() => expect(sent.some((r) => r.path === '/users/u2/roles')).toBe(true));
-    expect(sent.find((r) => r.path === '/users/u2/roles')!.body).toEqual({ role_ids: ['viewer'] });
+    expect(sent.find((r) => r.path === '/users/u2/roles')!.body).toEqual({ roles: [{ role_id: 'viewer', scope_ids: [] }] });
     await screen.findByText('Roles updated for bo@hackspace.org.');
 
     const me = screen.getByRole('cell', { name: 'me@hackspace.org (you)' }).closest('tr')!;
@@ -180,6 +180,46 @@ describe('UsersPage', () => {
     await fireEvent.click(within(me).getByRole('checkbox', { name: 'admin' }));
     await fireEvent.click(within(me).getByRole('button', { name: 'Save roles' }));
     expect((await screen.findByRole('alert')).textContent).toContain('would remove the last one');
+  });
+
+  it('gives a role in some scopes only, saying what that leaves out', async () => {
+    const { sent } = fakeApi({
+      'GET /users': () => ({
+        users: [{ id: 'u2', email: 'bo@hackspace.org', name: 'Bo', is_active: true, created_at: '', updated_at: '', role_ids: ['viewer'], roles: [{ role_id: 'viewer', scope_ids: ['s-tools'] }] }],
+      }),
+      'GET /roles': () => ({
+        roles: [
+          { id: 'viewer', name: 'viewer', description: '', permissions: ['assets.read'] },
+          { id: 'editor', name: 'editor', description: '', permissions: ['assets.write', 'labels.print'] },
+        ],
+      }),
+      'GET /scopes': () => ({ scopes: [{ id: 's-tools', name: 'tools' }, { id: 's-kitchen', name: 'kitchen' }] }),
+      'PUT /users/u2/roles': () => ({}),
+    });
+    render(UsersPage, { params: {} });
+
+    const bo = (await screen.findByRole('cell', { name: 'bo@hackspace.org' })).closest('tr')!;
+    expect(bo.textContent).toContain('viewer in tools');
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Change roles for bo@hackspace.org' }));
+    // What it holds now is ticked, and only a ticked role offers scopes.
+    const viewerScopes = within(bo).getAllByRole('group', { name: 'Only in these scopes' });
+    expect(viewerScopes).toHaveLength(1);
+    expect((within(viewerScopes[0]!).getByRole('checkbox', { name: 'tools' }) as HTMLInputElement).checked).toBe(true);
+
+    await fireEvent.click(within(bo).getByRole('checkbox', { name: 'editor' }));
+    const editorScopes = within(bo).getAllByRole('group', { name: 'Only in these scopes' })[1]!;
+    expect(editorScopes.textContent).toContain('None ticked: in every scope');
+    await fireEvent.click(within(editorScopes).getByRole('checkbox', { name: 'kitchen' }));
+    expect(editorScopes.textContent).toContain('Leaves out: Print labels.');
+
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Save roles' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.path === '/users/u2/roles')).toBe(true));
+    expect(sent.find((r) => r.path === '/users/u2/roles')!.body).toEqual({
+      roles: [
+        { role_id: 'viewer', scope_ids: ['s-tools'] },
+        { role_id: 'editor', scope_ids: ['s-kitchen'] },
+      ],
+    });
   });
 
   it('shows names, and renames someone in place', async () => {

@@ -2,7 +2,7 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import type { User } from '../lib/models';
-  import { describeHeld } from '../lib/permissions';
+  import { describeAssignment, describeHeld } from '../lib/permissions';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import AssistantsSection from './AssistantsSection.svelte';
@@ -60,7 +60,7 @@
 <section class="card mb-6 max-w-2xl space-y-3" aria-labelledby="allowed-heading">
   <h2 id="allowed-heading" class="text-lg font-semibold">What you may do</h2>
   <p class="text-sm">
-    {#if session.roles.length}Your roles: <strong>{session.roles.join(', ')}</strong>.{:else}You hold no roles yet.{/if}
+    {#if session.roles.length}Your roles: <strong>{session.roles.map((r) => describeAssignment(r, session.roleScopes[r] ?? [])).join(', ')}</strong>.{:else}You hold no roles yet.{/if}
     Whoever manages users here can change them.
   </p>
   {#if describeHeld(session.permissions).length}
