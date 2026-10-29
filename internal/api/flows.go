@@ -231,9 +231,12 @@ type FlowPrompt struct {
 	// Done: what the run did.
 	Done []models.FlowDone `json:"done,omitempty"`
 	// Asset is the asset the run has found or made, if any; ShowLabel is
-	// set when a Label step said to show its code.
-	Asset     *FlowAsset `json:"asset,omitempty"`
-	ShowLabel bool       `json:"show_label,omitempty"`
+	// set when a Label step said to show its label, drawn with
+	// LabelTemplateID (the step's, or else its category's), when it has
+	// one.
+	Asset           *FlowAsset `json:"asset,omitempty"`
+	ShowLabel       bool       `json:"show_label,omitempty"`
+	LabelTemplateID string     `json:"label_template_id,omitempty"`
 }
 
 // maxFlowAssets is the most assets a Find step lists at once; a search
@@ -260,15 +263,20 @@ func (f *flowRunner) prompt(run *models.FlowRun, search string) (FlowPrompt, err
 	}
 	step := &d.Steps[run.Step]
 	p := FlowPrompt{Step: step.ID, Kind: step.Kind, Title: flows.Render(step.Title, run.Values), Text: flows.Render(step.Text, run.Values)}
+	var asset *models.AssetWithDetails
 	if id := run.Values[flows.ValueAssetID]; id != "" {
 		if a, err := f.s.store.GetAssetByID(id); err == nil {
+			asset = a
 			fa := flowAsset(a)
 			p.Asset = &fa
 		}
 	}
 	for _, s := range d.Steps[:run.Step] {
-		if s.Kind == flows.KindLabel && s.Label != nil && s.Label.Mode == flows.LabelShow && s.When.Holds(run.Values) {
-			p.ShowLabel = true
+		if s.Kind == flows.KindLabel && s.Label != nil && s.Label.Mode == flows.LabelShow && s.When.Holds(run.Values) && asset != nil {
+			p.ShowLabel, p.LabelTemplateID = true, s.Label.TemplateID
+			if p.LabelTemplateID == "" {
+				p.LabelTemplateID = asset.LabelTemplate.TemplateID
+			}
 		}
 	}
 	switch step.Kind {
