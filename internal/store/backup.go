@@ -126,3 +126,7 @@ func RestoreSQLite(cfg *config.DatabaseConfig, from string) error {
 	}
 	return os.Rename(tmp, path)
 }
+
+// SQLiteFile is the file a SQLite database is kept in; ErrBackupUnsupported
+// for another database.
+func SQLiteFile(cfg *config.DatabaseConfig) (string, error) { return sqliteFile(cfg) }

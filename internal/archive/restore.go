@@ -40,6 +40,10 @@ type RestoreOptions struct {
 	// Keep, with Replace, is a user who must still be active, and able to
 	// manage users, after: the person replacing.
 	Keep string
+	// Wipe drops every table of the database once the archive checks out,
+	// and restores into it empty: an instance put back as it was, whatever
+	// was done to it since (README §2.2).
+	Wipe bool
 }
 
 // RestoreSummary is what Restore did.
@@ -134,6 +138,14 @@ func Restore(ctx context.Context, st *store.Store, blobs filestore.Blobs, open f
 		sum.Warnings = append(sum.Warnings, "people are restored without their passwords: set one with bam admin password")
 	}
 
+	if opts.Wipe {
+		if opts.Replace || opts.Kinds != nil {
+			return sum, errors.New("a restore that wipes the database restores everything, replacing nothing")
+		}
+		if err := st.DropAllTables(ctx); err != nil {
+			return sum, fmt.Errorf("emptying the database: %w", err)
+		}
+	}
 	version := checked.Header.SchemaVersion
 	current, err := schemaVersion(st)
 	if err != nil {
