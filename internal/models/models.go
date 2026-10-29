@@ -1079,3 +1079,22 @@ type FlowDone struct {
 	Kind string `json:"kind"`
 	Said string `json:"said"`
 }
+
+// Upload is an archive being uploaded through the web in parts, or one
+// uploaded, staged until it is used (README §2.3, #141).
+type Upload struct {
+	ID       string `json:"id"`
+	UserID   string `json:"-"`
+	Filename string `json:"filename"`
+	Size     int64  `json:"size"`
+	SHA256   string `json:"sha256"`
+	PartSize int64  `json:"part_size"`
+	Received int64  `json:"received"`
+	// HashState is the SHA-256 of what has arrived, as Go's hash state.
+	HashState []byte `json:"-"`
+	// StagingToken is what the staging needs to add to it: S3's upload ID.
+	StagingToken string    `json:"-"`
+	Complete     bool      `json:"complete"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}

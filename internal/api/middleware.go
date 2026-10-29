@@ -296,6 +296,9 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 		limit := int64(MaxRequestBytes)
 		if (r.Method == http.MethodPost || r.Method == http.MethodPut) && isIconSourcePath(r.URL.Path) {
 			limit = iconBodyLimit
+		} else if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/uploads/") {
+			// A part of an upload, which its handler holds to its size.
+			limit = MaxUploadSize
 		} else if r.Method == http.MethodPost {
 			switch r.URL.Path {
 			case "/api/v1/images":
@@ -324,7 +327,8 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 // contain either (README §3.5), so such a request cannot name anything that
 // exists; handed on, PostgreSQL would answer a lookup with an error rather
 // than "not found". Multipart bodies (uploads and imports) are left to their
-// handlers, which report problems in the file itself.
+// handlers, which report problems in the file itself, as are raw bytes
+// (parts of uploads, #141), which are not text.
 func RefuseUnstorableText(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		refuse := func() {
@@ -346,7 +350,8 @@ func RefuseUnstorableText(next http.Handler) http.Handler {
 				}
 			}
 		}
-		if r.Body == nil || r.Body == http.NoBody || strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		if r.Body == nil || r.Body == http.NoBody || strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") ||
+			r.Header.Get("Content-Type") == "application/octet-stream" {
 			next.ServeHTTP(w, r)
 			return
 		}

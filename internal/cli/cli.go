@@ -184,6 +184,8 @@ func Serve(configPath string) error {
 	go server.RunIcons(workerCtx)
 	// Keep the file store in step with the database.
 	go server.RunSweep(workerCtx)
+	// Remove archives uploaded and left unused for a day.
+	go server.RunUploads(workerCtx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)

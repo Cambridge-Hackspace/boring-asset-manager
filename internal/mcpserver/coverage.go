@@ -21,4 +21,11 @@ var Refused = map[string]string{
 	"GET /api/v1/icons/export":            "a zip of the icons, for people to download; over MCP, list_icon_sources reads every source",
 	"POST /api/v1/icon-library/import":    "a zip uploaded by people; over MCP, save_icon_library_file saves each source",
 	"GET /api/v1/flows/{slug}/qr.svg":     "the picture on a flow's printed poster; over MCP, a flow is reached at /f/<slug>, and run with run_flow",
+	// Archives move between a person's own computer and the server;
+	// replacing an instance stays with a signed-in person, as making tokens
+	// does (#43, #117).
+	"POST /api/v1/uploads":        "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"GET /api/v1/uploads/{id}":    "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"PUT /api/v1/uploads/{id}":    "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
+	"DELETE /api/v1/uploads/{id}": "an archive uploaded in parts from a person's own computer, to replace an instance with; that stays with a signed-in person (#117)",
 }
