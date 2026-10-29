@@ -20,7 +20,9 @@ export type Permission =
   | 'assets.track'
   | 'assets.scan'
   | 'assets.act'
-  | 'events.read';
+  | 'events.read'
+  | 'flows.manage'
+  | 'flows.run';
 
 /** A permission held in every scope, or in one as scope:permission (README §3.3). */
 export type PermissionKey = Permission | `${string}:${Permission}`;

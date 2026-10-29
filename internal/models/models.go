@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/flows"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 )
 
@@ -1028,4 +1029,41 @@ type IconSave struct {
 	Errors    []IconDiag `json:"errors"`
 	Warnings  []IconDiag `json:"warnings"`
 	Build     *IconBuild `json:"build,omitempty"`
+}
+
+// Flow is a guided page for doing one everyday thing with assets (README
+// §6.7): its address, /f/<slug>, its name, and what it does.
+type Flow struct {
+	ID         string           `json:"id"`
+	Slug       string           `json:"slug"`
+	Name       string           `json:"name"`
+	Enabled    bool             `json:"enabled"`
+	Definition flows.Definition `json:"definition"`
+	CreatedBy  string           `json:"created_by,omitempty"`
+	CreatedAt  time.Time        `json:"created_at"`
+	UpdatedAt  time.Time        `json:"updated_at"`
+}
+
+// FlowRun is someone working through a flow: the step they are on, the
+// run's values, and what the steps done so far did.
+type FlowRun struct {
+	ID        string       `json:"id"`
+	FlowID    string       `json:"flow_id"`
+	UserID    string       `json:"user_id"`
+	Step      int          `json:"step"`
+	Values    flows.Values `json:"values"`
+	Done      []FlowDone   `json:"done"`
+	Finished  bool         `json:"finished"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
+	// Fields and Progress are kept for the run's own use (store.FlowRunState).
+	Fields   map[string]string `json:"-"`
+	Progress map[string]int    `json:"-"`
+}
+
+// FlowDone is what one step of a run did, in words, for Done to show.
+type FlowDone struct {
+	Step string `json:"step"`
+	Kind string `json:"kind"`
+	Said string `json:"said"`
 }

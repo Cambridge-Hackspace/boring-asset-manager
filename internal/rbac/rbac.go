@@ -41,6 +41,10 @@ const (
 	PermAssetsAct = "assets.act"
 	// PermEventsRead receives events live, as devices do (README §5.4).
 	PermEventsRead = "events.read"
+	// PermFlowsManage makes and changes flows (README §6.7).
+	PermFlowsManage = "flows.manage"
+	// PermFlowsRun runs flows, in the scopes of their categories.
+	PermFlowsRun = "flows.run"
 )
 
 var (
@@ -69,6 +73,8 @@ func AllPermissions() []string {
 		PermAssetsScan,
 		PermAssetsAct,
 		PermEventsRead,
+		PermFlowsManage,
+		PermFlowsRun,
 	}
 }
 
@@ -131,7 +137,7 @@ const ScopeSeparator = ":"
 const DefaultScope = "default"
 
 // scopable are the permissions a role may hold in some scopes only: those
-// acting on assets.
+// acting on assets, and running flows, which act on them.
 var scopable = map[string]bool{
 	PermAssetsRead: true, PermAssetsWrite: true, PermAssetsDelete: true,
 	PermAssetsReport: true, PermAssetsBorrow: true, PermAssetsLend: true,
@@ -140,6 +146,7 @@ var scopable = map[string]bool{
 	PermAssetsAct:   true,
 	PermEventsRead:  true,
 	PermStockRecord: true,
+	PermFlowsRun:    true,
 }
 
 // Scopable reports whether perm may be held in some scopes only.

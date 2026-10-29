@@ -14,7 +14,9 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'assets.write', label: 'Edit assets', description: 'Create, edit and import assets, and mark them working again.' },
   { key: 'assets.delete', label: 'Archive assets', description: 'Archive and restore assets.' },
   { key: 'labels.print', label: 'Print labels', description: 'Send labels to printers.' },
+  { key: 'flows.run', label: 'Run flows', description: 'Run the guided pages that file things into categories or finish with them, in the scopes of their categories.' },
   { key: 'events.read', label: 'Receive events live', description: 'Be sent events as they happen over a live connection, as devices such as a cabinet that lights drawers are.' },
+  { key: 'flows.manage', label: 'Manage flows', description: 'Make and change flows, offering no more than they may do themselves.' },
   { key: 'categories.manage', label: 'Manage categories', description: 'Create and edit categories and fields, and draw their icons.' },
   { key: 'icons.manage', label: 'Manage icons', description: 'Change what every icon is drawn with: the shared icon library, the palette and the icon settings.' },
   { key: 'templates.manage', label: 'Manage templates', description: 'Design label templates and upload their images.' },
@@ -29,7 +31,7 @@ export function permissionLabel(key: string): string {
 }
 
 /** The permissions a role may hold in some scopes only: those acting on assets. */
-export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.act', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete'];
+export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.act', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run'];
 
 /**
  * The permissions of a role that assigning it in these scopes only leaves
