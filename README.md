@@ -115,6 +115,8 @@ Asset photos, their thumbnails and label images are files, kept through one inte
 * **`s3`:** objects in a bucket of any S3-compatible store (AWS, MinIO, Garage, Ceph, Backblaze B2, Cloudflare R2), each named `prefix` and its key, so that one bucket can hold more than bam's. Requests are signed with AWS Signature Version 4 by bam's own small client, with no SDK. `path_style` puts the bucket in the path (`endpoint/bucket/key`), as most stores but AWS expect; otherwise it goes in the host name. `region` is `us-east-1` when empty. The keys are never logged.
 * **Checked at startup:** `bam serve` writes, reads back and deletes a small object, so a store that cannot be reached or written stops it with a plain error, rather than failing the first upload, and says in its log which store it uses ("Uploaded files are kept in S3 bucket bam at https://…").
 * With PostgreSQL or MariaDB and `s3`, an instance keeps nothing on its own disk: it can move hosts, or run as more than one copy, without copying a directory.
+* **Kept in step with the database:** a file and its row cannot be written in one transaction, so a file is written before its row and deleted after it, and a sweep tidies what a failure part way leaves. It removes each file no row names (an asset photo, its thumbnail, a label image) once it is a day old, so as never to take an upload under way, and reports the rows whose file is missing. `bam serve` sweeps at startup and every six hours, logging what it finds; `bam storage sweep` sweeps once, listing what it removes, or with `--dry-run` would remove, what it keeps for now, and what is missing.
+* **Moving between stores:** `bam storage copy --to <file>` copies every uploaded file to the store the `[storage]` table of another configuration file names, reading each back to check it is the same, and refuses to copy a store onto itself. Stop BAM, copy, then point the configuration at the new store.
 
 ### CLI Bootstrap Tooling
 
@@ -144,6 +146,13 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 # (with BAM stopped); see §2.2
 ./bam backup --config ./config.toml --to ./bam-backup.db
 ./bam restore --config ./config.toml --from ./bam-backup.db
+
+# Keep uploaded files in step with the database: remove those no row names,
+# older than a day, and list rows whose file is missing (--dry-run removes
+# nothing); and copy every uploaded file to the store another configuration
+# file's [storage] names, as from a directory to a bucket (§2)
+./bam storage sweep --config ./config.toml --dry-run
+./bam storage copy --config ./config.toml --to ./config.s3.toml
 
 # Relay an assistant that starts local programs to a server's MCP endpoint,
 # as the API token in $BAM_TOKEN (§6.6)
@@ -247,7 +256,7 @@ BAM_UPDATE_BACKUP_COMMAND='pg_dump -Fc -f "$BAM_BACKUP_FILE" bam'
 BAM_UPDATE_RESTORE_COMMAND='pg_restore --clean --if-exists -d bam "$BAM_BACKUP_FILE"'
 ```
 
-`BAM_UPDATE_BACKUP=off` updates without a backup, which leaves a failed update's changes to the database in place. If the backup fails, nothing is changed and the old version is started again. Outside the updater, `bam backup --config <file> --to <file>` copies a SQLite database at any time, even while BAM runs, and `bam restore --config <file> --from <file>` puts one back while BAM is stopped. Neither copies uploaded files: label images and asset photos live under `storage.local_path`, so back that directory up as well.
+`BAM_UPDATE_BACKUP=off` updates without a backup, which leaves a failed update's changes to the database in place. If the backup fails, nothing is changed and the old version is started again. Outside the updater, `bam backup --config <file> --to <file>` copies a SQLite database at any time, even while BAM runs, and `bam restore --config <file> --from <file>` puts one back while BAM is stopped. Neither copies uploaded files: label images and asset photos live under `storage.local_path`, or in a bucket (§2), so back that up as well.
 
 On Linux (cron must be installed; on Arch, `cronie`):
 
@@ -1375,7 +1384,7 @@ Guided pages that file assets into categories, or finish with them (#121, §6.7)
 Where uploaded files live, and moving an instance's contents in and out (#116, #117).
 * [x] Uploaded files through one interface, `filestore.Blobs`, with the directory as one adapter and a conformance suite every adapter passes (§2).
 * [x] An S3-compatible adapter, chosen in `[storage]`, checked at startup, with the suites run on it (§2, §8.3).
-* [ ] Keeping the database and the store in step: a sweep for orphaned objects and missing ones, and copying between stores (#116).
+* [x] Keeping the database and the store in step: a sweep for orphaned files and missing ones, at startup, every six hours and as `bam storage sweep`, and `bam storage copy` between stores (§2).
 
 ### Upcoming Features
 
