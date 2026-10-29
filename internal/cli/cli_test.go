@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -162,10 +163,10 @@ func TestBackupAndRestoreCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	backup := filepath.Join(dir, "backup.db")
-	if err := Backup(configPath, ""); err == nil {
+	if err := Backup(configPath, "", BackupOptions{}); err == nil {
 		t.Error("backed up without --to")
 	}
-	if err := Backup(configPath, backup); err != nil {
+	if err := Backup(configPath, backup, BackupOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := Restore(configPath, ""); err == nil {
@@ -179,8 +180,83 @@ func TestBackupAndRestoreCommands(t *testing.T) {
 	if err := cfg.SaveTOML(configPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := Backup(configPath, filepath.Join(dir, "pg.db")); !errors.Is(err, store.ErrBackupUnsupported) {
+	if err := Backup(configPath, filepath.Join(dir, "pg.db"), BackupOptions{}); !errors.Is(err, store.ErrBackupUnsupported) {
 		t.Errorf("a PostgreSQL backup: %v", err)
+	}
+}
+
+// TestBackupWritesAnArchive: a --to not ending in .db is an archive,
+// readable only by its owner, in parts when split; the flags for archives
+// are refused for a .db copy.
+func TestBackupWritesAnArchive(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.toml")
+	cfg := config.DefaultConfig()
+	cfg.Database.DSN = filepath.Join(dir, "bam.db")
+	cfg.Storage.LocalPath = filepath.Join(dir, "uploads")
+	if err := cfg.SaveTOML(configPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(configPath); err != nil {
+		t.Fatal(err)
+	}
+
+	dest := filepath.Join(dir, "bam.bam.tar.gz")
+	if err := Backup(configPath, dest, BackupOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(dest); len(b) < 2 || b[0] != 0x1f || b[1] != 0x8b {
+		t.Error("the backup is not gzipped")
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+		t.Errorf("the backup's mode is %v", info.Mode().Perm())
+	}
+
+	split := filepath.Join(dir, "split.bam.tar.gz")
+	if err := Backup(configPath, split, BackupOptions{Split: 1 << 30, WithoutSecrets: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "split.part1.bam.tar.gz")); err != nil {
+		t.Error(err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "*.partial")); len(left) != 0 {
+		t.Errorf("left behind: %v", left)
+	}
+
+	if err := Backup(configPath, filepath.Join(dir, "x.db"), BackupOptions{WithoutSecrets: true}); err == nil {
+		t.Error("--without-secrets was taken for a .db copy")
+	}
+}
+
+func TestPartNamesAndSizes(t *testing.T) {
+	for _, c := range []struct {
+		dest  string
+		split bool
+		want  string
+	}{
+		{"b.bam.tar.gz", false, "b.bam.tar.gz"},
+		{"b.bam.tar.gz", true, "b.part2.bam.tar.gz"},
+		{"b.tar.gz", true, "b.part2.tar.gz"},
+		{"b.TGZ", true, "b.part2.TGZ"},
+		{"backup", true, "backup.part2"},
+	} {
+		if got := PartName(c.dest, 2, c.split); got != c.want {
+			t.Errorf("PartName(%q, 2, %v) = %q, want %q", c.dest, c.split, got, c.want)
+		}
+	}
+	for in, want := range map[string]int64{"1048576": 1 << 20, "500MB": 500e6, "4 GiB": 4 << 30, "2tb": 2e12, "10KiB": 10 << 10} {
+		if got, err := ParseSize(in); err != nil || got != want {
+			t.Errorf("ParseSize(%q) = %d, %v; want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"", "0", "-5MB", "5 parsecs", "MB", "9999999TiB"} {
+		if _, err := ParseSize(in); err == nil {
+			t.Errorf("ParseSize(%q) took it", in)
+		}
 	}
 }
 

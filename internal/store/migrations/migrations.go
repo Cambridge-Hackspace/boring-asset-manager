@@ -369,6 +369,24 @@ func foreignKeys(ctx context.Context, conn *sql.Conn) ([]foreignKey, error) {
 	return keys, nil
 }
 
+// Latest is the version of the last migration: a database's schema is
+// current when it has run it.
+func Latest() int {
+	latest := 0
+	entries, _ := MigrationFiles.ReadDir(".")
+	for _, entry := range entries {
+		if v, err := strconv.Atoi(strings.SplitN(entry.Name(), "_", 2)[0]); err == nil && v > latest {
+			latest = v
+		}
+	}
+	for _, m := range codeMigrations {
+		if m.version > latest {
+			latest = m.version
+		}
+	}
+	return latest
+}
+
 // Migrate executes all pending embedded SQL migrations idempotently inside a transaction.
 func Migrate(db *sql.DB, dialect string) error {
 	entries, err := MigrationFiles.ReadDir(".")
