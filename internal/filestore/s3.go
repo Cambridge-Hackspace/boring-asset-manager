@@ -186,14 +186,16 @@ func (s *S3) Delete(ctx context.Context, key string) error {
 // listResult is the part of a ListObjectsV2 answer List reads.
 type listResult struct {
 	Contents []struct {
-		Key string `xml:"Key"`
+		Key          string    `xml:"Key"`
+		Size         int64     `xml:"Size"`
+		LastModified time.Time `xml:"LastModified"`
 	} `xml:"Contents"`
 	IsTruncated           bool   `xml:"IsTruncated"`
 	NextContinuationToken string `xml:"NextContinuationToken"`
 }
 
 // List pages through ListObjectsV2, whose keys come in order.
-func (s *S3) List(ctx context.Context, prefix string, fn func(key string) error) error {
+func (s *S3) List(ctx context.Context, prefix string, fn func(Object) error) error {
 	token := ""
 	for {
 		q := url.Values{"list-type": {"2"}, "prefix": {s.opts.Prefix + prefix}}
@@ -219,7 +221,7 @@ func (s *S3) List(ctx context.Context, prefix string, fn func(key string) error)
 			return fmt.Errorf("reading the list of %s: %w", prefix, err)
 		}
 		for _, c := range page.Contents {
-			if err := fn(strings.TrimPrefix(c.Key, s.opts.Prefix)); err != nil {
+			if err := fn(Object{Key: strings.TrimPrefix(c.Key, s.opts.Prefix), Size: c.Size, Modified: c.LastModified}); err != nil {
 				return err
 			}
 		}

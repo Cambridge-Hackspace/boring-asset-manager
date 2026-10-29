@@ -41,7 +41,7 @@ func TestS3ListsPageByPage(t *testing.T) {
 		}
 	}
 	var got []string
-	if err := s.List(ctx, "photos/", func(k string) error { got = append(got, k); return nil }); err != nil {
+	if err := s.List(ctx, "photos/", func(o filestore.Object) error { got = append(got, o.Key); return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
@@ -118,5 +118,28 @@ func TestS3NeverSaysItsSecret(t *testing.T) {
 		AccessKeyID: "AK", SecretAccessKey: "very-secret"})
 	if got := s.String(); strings.Contains(got, "very-secret") || got != "S3 bucket bam/site/ at http://minio:9000" {
 		t.Errorf("String: %s", got)
+	}
+}
+
+// TestCopyIntoS3: an instance moves from a directory to a bucket.
+func TestCopyIntoS3(t *testing.T) {
+	to, ok := testS3(t, fmt.Sprintf("copy-%d/", time.Now().UnixNano()))
+	if !ok {
+		t.Skip("BAM_TEST_S3_ENDPOINT is not set")
+	}
+	ctx := context.Background()
+	from := filestore.NewLocal(t.TempDir())
+	for _, k := range []string{"photos/a", "photos/b", "images/c"} {
+		if err := from.Put(ctx, k, strings.NewReader("data of "+k), int64(len("data of "+k)), ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := filestore.Copy(ctx, from, to, nil); err != nil || n != 3 {
+		t.Fatalf("copied %d: %v", n, err)
+	}
+	var keys []string
+	_ = to.List(ctx, "", func(o filestore.Object) error { keys = append(keys, o.Key); return nil })
+	if strings.Join(keys, ",") != "images/c,photos/a,photos/b" {
+		t.Errorf("in the bucket: %v", keys)
 	}
 }

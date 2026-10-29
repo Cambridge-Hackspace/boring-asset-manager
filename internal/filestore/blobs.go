@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Blobs stores files by key, a path of segments separated by "/", such as
@@ -28,9 +29,17 @@ type Blobs interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	// Delete removes what key holds. A key holding nothing is not an error.
 	Delete(ctx context.Context, key string) error
-	// List calls fn with each key starting with prefix, in order, until fn
-	// returns an error, which List returns.
-	List(ctx context.Context, prefix string, fn func(key string) error) error
+	// List calls fn with each object whose key starts with prefix, in
+	// order of key, until fn returns an error, which List returns.
+	List(ctx context.Context, prefix string, fn func(Object) error) error
+}
+
+// Object is a file as List finds it: its key, its size in bytes, and when
+// it was last written.
+type Object struct {
+	Key      string
+	Size     int64
+	Modified time.Time
 }
 
 var (
@@ -163,7 +172,7 @@ func (l *Local) Delete(ctx context.Context, key string) error {
 // List walks the files below the directory prefix names, or, for a prefix
 // ending part way through a segment, below its parent, keeping those that
 // start with it.
-func (l *Local) List(ctx context.Context, prefix string, fn func(key string) error) error {
+func (l *Local) List(ctx context.Context, prefix string, fn func(Object) error) error {
 	start := l.root
 	if dir := prefix[:strings.LastIndex(prefix, "/")+1]; dir != "" {
 		if !ValidKey(strings.TrimSuffix(dir, "/")) {
@@ -171,7 +180,7 @@ func (l *Local) List(ctx context.Context, prefix string, fn func(key string) err
 		}
 		start = filepath.Join(l.root, filepath.FromSlash(dir))
 	}
-	var keys []string
+	var objects []Object
 	err := filepath.WalkDir(start, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -189,17 +198,26 @@ func (l *Local) List(ctx context.Context, prefix string, fn func(key string) err
 		if err != nil {
 			return err
 		}
-		if key := filepath.ToSlash(rel); strings.HasPrefix(key, prefix) {
-			keys = append(keys, key)
+		key := filepath.ToSlash(rel)
+		if !strings.HasPrefix(key, prefix) {
+			return nil
 		}
+		info, err := d.Info()
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // removed meanwhile
+		}
+		if err != nil {
+			return err
+		}
+		objects = append(objects, Object{Key: key, Size: info.Size(), Modified: info.ModTime()})
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		if err := fn(k); err != nil {
+	sort.Slice(objects, func(i, j int) bool { return objects[i].Key < objects[j].Key })
+	for _, o := range objects {
+		if err := fn(o); err != nil {
 			return err
 		}
 	}

@@ -35,7 +35,7 @@ func TestLocalKeepsTheLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	var keys []string
-	_ = filestore.NewLocal(root).List(ctx, "images/", func(k string) error { keys = append(keys, k); return nil })
+	_ = filestore.NewLocal(root).List(ctx, "images/", func(o filestore.Object) error { keys = append(keys, o.Key); return nil })
 	if len(keys) != 1 || keys[0] != "images/"+id {
 		t.Errorf("listed: %v", keys)
 	}

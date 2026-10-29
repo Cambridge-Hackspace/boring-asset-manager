@@ -14,6 +14,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -176,6 +177,8 @@ func Serve(configPath string) error {
 	// Send live connections the events they ask for.
 	go server.RunLive(workerCtx)
 	go server.RunIcons(workerCtx)
+	// Keep the file store in step with the database.
+	go server.RunSweep(workerCtx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)
@@ -201,6 +204,86 @@ func Serve(configPath string) error {
 		log.Println("BAM! daemon stopped cleanly.")
 	}
 
+	return nil
+}
+
+// StorageSweep sweeps the configured file store once (README §2): it
+// removes the files no row names, older than a day, and lists the rows
+// whose file is missing. A dry run removes nothing.
+func StorageSweep(configPath string, dryRun bool) error {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
+		return fmt.Errorf("opening database (%s): %w", cfg.Database.Type, err)
+	}
+	defer st.Close()
+	server := api.NewServer(cfg, st)
+	res, err := server.SweepStorage(context.Background(), dryRun)
+	if err != nil {
+		return err
+	}
+	verb := "Removed"
+	if dryRun {
+		verb = "Would remove"
+	}
+	fmt.Printf("%s %d files no row names.\n", verb, len(res.Removed))
+	if dryRun {
+		for _, k := range res.Removed {
+			fmt.Println("  " + k)
+		}
+	}
+	if len(res.Kept) > 0 {
+		fmt.Printf("Kept %d files no row names yet, as uploads may be under way; they go once a day old.\n", len(res.Kept))
+	}
+	if len(res.Missing) > 0 {
+		fmt.Printf("%d files rows name are missing from the store:\n", len(res.Missing))
+		for _, k := range res.Missing {
+			fmt.Println("  " + k)
+		}
+	}
+	return nil
+}
+
+// StorageCopy copies every uploaded file from the configured store to the
+// one the [storage] table of another configuration file names, reading each
+// back to check it (README §2), so an instance can move from a directory to
+// a bucket and back. Change the configuration to the new store after.
+func StorageCopy(configPath, toPath string) error {
+	if toPath == "" {
+		return errors.New("--to is required: a configuration file whose [storage] names the store to copy to")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	toCfg, err := config.Load(toPath)
+	if err != nil {
+		return fmt.Errorf("loading %s: %w", toPath, err)
+	}
+	from, err := filestore.Open(cfg.Storage)
+	if err != nil {
+		return err
+	}
+	to, err := filestore.Open(toCfg.Storage)
+	if err != nil {
+		return err
+	}
+	if fmt.Sprint(from) == fmt.Sprint(to) {
+		return fmt.Errorf("both configurations keep files in %s", from)
+	}
+	ctx := context.Background()
+	if err := filestore.Check(ctx, to); err != nil {
+		return fmt.Errorf("checking %s: %w", to, err)
+	}
+	fmt.Printf("Copying from %s to %s...\n", from, to)
+	n, err := filestore.Copy(ctx, from, to, nil)
+	if err != nil {
+		return fmt.Errorf("after copying %d files: %w", n, err)
+	}
+	fmt.Printf("Copied and checked %d files.\n", n)
 	return nil
 }
 

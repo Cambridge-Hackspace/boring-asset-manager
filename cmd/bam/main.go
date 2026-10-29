@@ -26,6 +26,8 @@ Available Commands:
   admin password Set an account's password, signing it out everywhere (requires --email and --password)
   serve         Start the HTTP daemon
   backup        Copy a SQLite database (requires --to); exits 3 for other databases
+  storage sweep Remove uploaded files no row names, older than a day, and list rows whose file is missing (--dry-run removes nothing)
+  storage copy  Copy every uploaded file to the store another config file's [storage] names, checking each (requires --to)
   restore       Replace a SQLite database with a backup (requires --from; stop BAM first)
   mcp           Relay MCP between stdio and a server, for assistants (requires --url; API token in $BAM_TOKEN)
   version       Print version information
@@ -122,6 +124,27 @@ func main() {
 			if errors.Is(err, store.ErrBackupUnsupported) {
 				os.Exit(3)
 			}
+			os.Exit(1)
+		}
+
+	case "storage":
+		if len(os.Args) < 3 || (os.Args[2] != "sweep" && os.Args[2] != "copy") {
+			fmt.Fprintf(os.Stderr, "Usage: bam storage sweep [--dry-run] [--config <path>]\n       bam storage copy --to <config> [--config <path>]\n")
+			os.Exit(1)
+		}
+		cmd := flag.NewFlagSet("storage "+os.Args[2], flag.ExitOnError)
+		configPath := cmd.String("config", "config.toml", "Path to configuration file")
+		dryRun := cmd.Bool("dry-run", false, "List what would be removed, removing nothing (sweep)")
+		to := cmd.String("to", "", "Configuration file whose [storage] names the store to copy to (copy)")
+		_ = cmd.Parse(os.Args[3:])
+		var err error
+		if os.Args[2] == "sweep" {
+			err = cli.StorageSweep(*configPath, *dryRun)
+		} else {
+			err = cli.StorageCopy(*configPath, *to)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 

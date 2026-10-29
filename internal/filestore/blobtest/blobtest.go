@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 )
@@ -42,7 +43,7 @@ func Run(t *testing.T, b filestore.Blobs) {
 	list := func(t *testing.T, prefix string) []string {
 		t.Helper()
 		var keys []string
-		if err := b.List(ctx, prefix, func(k string) error { keys = append(keys, k); return nil }); err != nil {
+		if err := b.List(ctx, prefix, func(o filestore.Object) error { keys = append(keys, o.Key); return nil }); err != nil {
 			t.Fatalf("List(%q): %v", prefix, err)
 		}
 		return keys
@@ -101,8 +102,20 @@ func Run(t *testing.T, b filestore.Blobs) {
 		}
 		stop := errors.New("stop")
 		n := 0
-		if err := b.List(ctx, "run/list/", func(string) error { n++; return stop }); !errors.Is(err, stop) || n != 1 {
+		if err := b.List(ctx, "run/list/", func(filestore.Object) error { n++; return stop }); !errors.Is(err, stop) || n != 1 {
 			t.Errorf("stopping: %v after %d", err, n)
+		}
+	})
+
+	t.Run("listing gives sizes and times", func(t *testing.T) {
+		before := time.Now().Add(-time.Hour)
+		put(t, "run/sized/one", []byte("12345"))
+		var got []filestore.Object
+		if err := b.List(ctx, "run/sized/", func(o filestore.Object) error { got = append(got, o); return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].Size != 5 || got[0].Modified.Before(before) || got[0].Modified.After(time.Now().Add(time.Hour)) {
+			t.Errorf("listed %+v", got)
 		}
 	})
 
