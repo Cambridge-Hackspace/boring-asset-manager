@@ -520,13 +520,11 @@ func (f *flowRunner) find(st *store.FlowRunState, step *flows.Step, a FlowAnswer
 		if !slices.Contains(step.FindBy, flows.FindScan) {
 			return refuseStep("This step does not find by scanning")
 		}
-		var scanned struct {
-			Asset models.AssetWithDetails `json:"asset"`
-		}
+		var scanned ScanResponse
 		if err := f.call(http.MethodGet, "/api/v1/scan/"+url.PathEscape(strings.TrimSpace(a.Code)), nil, &scanned); err != nil {
 			return &flowError{Status: http.StatusBadRequest, Message: "Nothing has the code " + strings.TrimSpace(a.Code)}
 		}
-		id = scanned.Asset.Asset.ID
+		id = scanned.Asset.ID
 	}
 	if id == "" {
 		return refuseStep("Choose what to find, or scan its code")
@@ -580,13 +578,11 @@ func (f *flowRunner) create(st *store.FlowRunState, step *flows.Step, placeCode 
 			if strings.TrimSpace(placeCode) == "" {
 				return refuseStep("Scan where you put it")
 			}
-			var scanned struct {
-				Asset models.AssetWithDetails `json:"asset"`
-			}
+			var scanned ScanResponse
 			if err := f.call(http.MethodGet, "/api/v1/scan/"+url.PathEscape(strings.TrimSpace(placeCode)), nil, &scanned); err != nil {
 				return refuseStep("Nothing has the code %s", strings.TrimSpace(placeCode))
 			}
-			place = scanned.Asset.Asset.ID
+			place = scanned.Asset.ID
 		}
 	}
 	if progress(st, step) > 0 {

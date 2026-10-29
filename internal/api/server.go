@@ -203,6 +203,22 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/events", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleListEvents)))
 	handle("POST /api/v1/events/{id}/reply", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleReplyToEvent)))
 
+	// Flows (README §6.7): flows.manage makes them; flows.run runs them, in
+	// the scopes of their categories, which each handler checks.
+	seeFlows := RequireAnyPermission(rbac.PermFlowsManage, rbac.PermFlowsRun)
+	manageFlows := RequirePermission(rbac.PermFlowsManage)
+	runFlows := RequirePermission(rbac.PermFlowsRun)
+	handle("GET /api/v1/flows", seeFlows(http.HandlerFunc(s.handleListFlows)))
+	handle("POST /api/v1/flows", manageFlows(http.HandlerFunc(s.handleSaveFlow)))
+	handle("GET /api/v1/flow-starters", manageFlows(http.HandlerFunc(s.handleFlowStarters)))
+	handle("GET /api/v1/flows/{slug}", seeFlows(http.HandlerFunc(s.handleGetFlow)))
+	handle("PUT /api/v1/flows/{slug}", manageFlows(http.HandlerFunc(s.handleSaveFlow)))
+	handle("DELETE /api/v1/flows/{slug}", manageFlows(http.HandlerFunc(s.handleDeleteFlow)))
+	handle("POST /api/v1/flows/{slug}/runs", runFlows(http.HandlerFunc(s.handleStartFlowRun)))
+	handle("GET /api/v1/flows/{slug}/runs/{id}", runFlows(http.HandlerFunc(s.handleGetFlowRun)))
+	handle("POST /api/v1/flows/{slug}/runs/{id}", runFlows(http.HandlerFunc(s.handleAnswerFlowRun)))
+	handle("DELETE /api/v1/flows/{slug}/runs/{id}", runFlows(http.HandlerFunc(s.handleEndFlowRun)))
+
 	// Reports: anyone who reads assets runs them; reports.manage edits them.
 	handle("GET /api/v1/reports", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListReports)))
 	handle("POST /api/v1/reports", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleSaveReport)))
