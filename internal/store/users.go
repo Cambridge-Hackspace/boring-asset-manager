@@ -89,10 +89,11 @@ func (s *Store) ListUsers() ([]models.User, error) {
 }
 
 // GetUserPermissions returns the effective permission set for a user by computing
-// the strict union across all assigned roles: keys held in every scope, and
-// those held in some as scope:key.
+// the strict union across all assigned roles, each narrowed to the scopes its
+// assignment names: keys held in every scope, and those held in some as
+// scope:key.
 func (s *Store) GetUserPermissions(userID string) (map[string]bool, error) {
-	return grantedKeys(storeQuerier{s}, `SELECT ur.role_id FROM user_roles ur JOIN users u ON u.id = ur.user_id
+	return assignedKeys(storeQuerier{s}, userAssignments, userID, `SELECT ur.role_id FROM user_roles ur JOIN users u ON u.id = ur.user_id
 		WHERE ur.user_id = ? AND u.is_active = TRUE AND u.archived_at IS NULL`, userID)
 }
 

@@ -13,9 +13,12 @@ import (
 // CreateTokenRequest makes an API token. ExpiresAt is optional; without it
 // the token works until it is revoked.
 type CreateTokenRequest struct {
-	Name      string     `json:"name"`
-	RoleIDs   []string   `json:"role_ids"`
-	ExpiresAt *time.Time `json:"expires_at"`
+	Name string `json:"name"`
+	// Roles are its roles, each in every scope or narrowed to some; RoleIDs,
+	// as before, each in every scope.
+	Roles     []models.RoleAssignment `json:"roles"`
+	RoleIDs   []string                `json:"role_ids"`
+	ExpiresAt *time.Time              `json:"expires_at"`
 }
 
 // handleListTokens lists every token, revoked ones included:
@@ -37,9 +40,14 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body (expires_at, if given, is an RFC 3339 time)")
 		return
 	}
-	t, secret, err := s.store.CreateToken(req.Name, req.RoleIDs, req.ExpiresAt, CurrentUser(r.Context()).ID)
+	roles := req.Roles
+	if roles == nil {
+		roles = models.Unrestricted(req.RoleIDs)
+	}
+	t, secret, err := s.store.CreateTokenWithRoles(req.Name, roles, req.ExpiresAt, CurrentUser(r.Context()).ID)
 	switch {
-	case errors.Is(err, store.ErrInvalidToken), errors.Is(err, store.ErrRoleNotFound):
+	case errors.Is(err, store.ErrInvalidToken), errors.Is(err, store.ErrRoleNotFound),
+		errors.Is(err, store.ErrScopeNotFound), errors.Is(err, store.ErrInvalidAssignment):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case err != nil:
 		writeStoreError(w, err, "create the token")

@@ -145,6 +145,67 @@ var scopable = map[string]bool{
 // Scopable reports whether perm may be held in some scopes only.
 func Scopable(perm string) bool { return scopable[perm] }
 
+// Narrow gives what a role's keys grant through an assignment narrowed to
+// scopes (README §3.3): a scopable permission held in every scope is held in
+// each of those scopes; one held in some scopes, in those both name; and a
+// permission that is not scopable is dropped, so a role narrowed to a scope
+// never manages what lies outside it. No scopes leaves keys as they are.
+func Narrow(keys []string, scopes []string) []string {
+	if len(scopes) == 0 {
+		return keys
+	}
+	in := map[string]bool{}
+	for _, s := range scopes {
+		in[s] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(k string) {
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	for _, k := range keys {
+		scope, perm := SplitKey(k)
+		switch {
+		case !Scopable(perm):
+		case scope == "":
+			for _, s := range scopes {
+				add(s + ScopeSeparator + perm)
+			}
+		case in[scope]:
+			add(k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// NarrowedOut lists the keys of a role that an assignment narrowed to
+// scopes leaves out entirely: those not scopable, and those held only in
+// scopes it does not name.
+func NarrowedOut(keys []string, scopes []string) []string {
+	if len(scopes) == 0 {
+		return nil
+	}
+	kept := map[string]bool{}
+	for _, k := range Narrow(keys, scopes) {
+		_, perm := SplitKey(k)
+		kept[perm] = true
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, k := range keys {
+		if _, perm := SplitKey(k); !kept[perm] && !seen[perm] {
+			seen[perm] = true
+			out = append(out, perm)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // SplitKey splits a role's permission key into its scope, empty for every
 // scope, and its permission.
 func SplitKey(key string) (scope, perm string) {

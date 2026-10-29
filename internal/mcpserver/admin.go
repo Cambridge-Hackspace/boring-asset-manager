@@ -15,6 +15,15 @@ type userIn struct {
 	ID string `json:"id" jsonschema:"the user, from list_users"`
 }
 
+type userRolesIn struct {
+	ID      string   `json:"id" jsonschema:"the user, from list_users"`
+	RoleIDs []string `json:"role_ids,omitempty" jsonschema:"roles held in every scope their permissions name"`
+	Roles   []struct {
+		RoleID   string   `json:"role_id"`
+		ScopeIDs []string `json:"scope_ids,omitempty" jsonschema:"scopes from list_scopes to narrow the role to; none for every scope"`
+	} `json:"roles,omitempty" jsonschema:"roles each narrowed to some scopes; the same role twice is held over both's scopes"`
+}
+
 type roleIn struct {
 	ID          string   `json:"id,omitempty" jsonschema:"the role to change; empty to make one"`
 	Name        *string  `json:"name,omitempty"`
@@ -36,7 +45,7 @@ func adminTools() []tool {
 	settings := []string{rbac.PermSettingsManage}
 	return []tool{
 		// People.
-		simple(&mcp.Tool{Name: "list_users", Description: "Every user who is not archived: name, email, whether active, and their roles.",
+		simple(&mcp.Tool{Name: "list_users", Description: "Every user who is not archived: name, email, whether active, and their roles, with the scopes any is narrowed to.",
 			Annotations: readOnly("List users")}, "GET /api/v1/users", users,
 			func(none) (request, error) { return request{path: "/api/v1/users"}, nil },
 			func(_ none, out map[string]any) string { return fmt.Sprintf("%d users.", count(out, "users")) }),
@@ -109,23 +118,25 @@ func adminTools() []tool {
 			}, map[string]any) string {
 				return "Set; they are signed out everywhere."
 			}),
-		simple(&mcp.Tool{Name: "set_user_roles", Description: "The roles someone holds, the whole list. Refused if no one active could manage users after.",
+		simple(&mcp.Tool{Name: "set_user_roles", Description: "The roles someone holds, the whole list, each in every scope or narrowed to some: narrowed, a role grants its asset permissions " +
+			"in those scopes only, and none of its others (users.manage, labels.print, …). Refused if no one active could manage users after.",
 			Annotations: destroys("Set roles", true)}, "PUT /api/v1/users/{id}/roles", users,
-			func(in struct {
-				ID      string   `json:"id"`
-				RoleIDs []string `json:"role_ids"`
-			}) (request, error) {
-				ids := in.RoleIDs
-				if ids == nil {
-					ids = []string{}
+			func(in userRolesIn) (request, error) {
+				roles := make([]map[string]any, 0, len(in.RoleIDs)+len(in.Roles))
+				for _, id := range in.RoleIDs {
+					roles = append(roles, map[string]any{"role_id": id, "scope_ids": []string{}})
 				}
-				return request{path: pathOf("/api/v1/users/{id}/roles", in.ID), body: map[string]any{"role_ids": ids}}, need(in.ID, "id")
+				for _, a := range in.Roles {
+					scopes := a.ScopeIDs
+					if scopes == nil {
+						scopes = []string{}
+					}
+					roles = append(roles, map[string]any{"role_id": a.RoleID, "scope_ids": scopes})
+				}
+				return request{path: pathOf("/api/v1/users/{id}/roles", in.ID), body: map[string]any{"roles": roles}}, need(in.ID, "id")
 			},
-			func(in struct {
-				ID      string   `json:"id"`
-				RoleIDs []string `json:"role_ids"`
-			}, _ map[string]any) string {
-				return fmt.Sprintf("They hold %d roles.", len(in.RoleIDs))
+			func(_ userRolesIn, out map[string]any) string {
+				return fmt.Sprintf("They hold %d roles.", count(out, "roles"))
 			}),
 
 		// Roles and scopes.
@@ -173,11 +184,11 @@ func adminTools() []tool {
 				return request{path: pathOf("/api/v1/roles/{id}", in.ID)}, need(in.ID, "id")
 			},
 			func(idIn, map[string]any) string { return "Deleted the role." }),
-		simple(&mcp.Tool{Name: "list_scopes", Description: "The scopes: labels on categories that roles hold permissions in, with how many categories and roles use each.",
+		simple(&mcp.Tool{Name: "list_scopes", Description: "The scopes: labels on categories that roles hold permissions in, with how many categories and roles use each, and how many roles of users and tokens are narrowed to each.",
 			Annotations: readOnly("List scopes")}, "GET /api/v1/scopes", []string{rbac.PermUsersManage, rbac.PermCategoriesManage},
 			func(none) (request, error) { return request{path: "/api/v1/scopes"}, nil },
 			func(_ none, out map[string]any) string { return fmt.Sprintf("%d scopes.", count(out, "scopes")) }),
-		define(&mcp.Tool{Name: "save_scope", Description: "Make a scope, or rename one (its permissions in roles follow): 1 to 64 lowercase letters, digits, - and _.",
+		define(&mcp.Tool{Name: "save_scope", Description: "Make a scope, or rename one (its permissions in roles, and roles narrowed to it, follow): 1 to 64 lowercase letters, digits, - and _.",
 			Annotations: changes("Save a scope", true)}, []string{"POST /api/v1/scopes", "PUT /api/v1/scopes/{id}"}, users,
 			func(ctx context.Context, e *env, in struct {
 				ID   string `json:"id,omitempty"`
@@ -193,7 +204,7 @@ func adminTools() []tool {
 				}
 				return say(out, "Saved the scope %q.", nameOf(out, "scope"))
 			}),
-		simple(&mcp.Tool{Name: "delete_scope", Description: "Delete a scope no category or role uses.", Annotations: destroys("Delete a scope", true)}, "DELETE /api/v1/scopes/{id}", users,
+		simple(&mcp.Tool{Name: "delete_scope", Description: "Delete a scope no category, role, user or token uses.", Annotations: destroys("Delete a scope", true)}, "DELETE /api/v1/scopes/{id}", users,
 			func(in idIn) (request, error) {
 				return request{path: pathOf("/api/v1/scopes/{id}", in.ID)}, need(in.ID, "id")
 			},

@@ -98,11 +98,16 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(permsList)
 
-	// The roles they hold, by name, for their account page.
-	roles := []string{}
+	// The roles they hold, by name, for their account page, and the scopes
+	// of those narrowed to some.
+	roles, roleScopes := []string{}, map[string][]string{}
 	if user != nil {
 		names, err := s.store.RoleNamesOf(user.ID)
 		if err != nil {
+			writeServerError(w, err, "read the user's roles")
+			return
+		}
+		if roleScopes, err = s.store.RoleScopesOf(user.ID); err != nil {
 			writeServerError(w, err, "read the user's roles")
 			return
 		}
@@ -112,6 +117,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		"user":        user,
 		"permissions": permsList,
 		"roles":       roles,
+		"role_scopes": roleScopes,
 	})
 }
 

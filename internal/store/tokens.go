@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -45,7 +44,7 @@ func scanToken(row interface{ Scan(...any) error }) (models.APIToken, error) {
 	)
 	err := row.Scan(&t.ID, &t.Name, &createdBy, &t.CreatedAt, &t.ExpiresAt, &t.LastUsedAt, &t.RevokedAt, &userID, &userNm, &client, &t.RefreshExpiresAt)
 	t.CreatedBy, t.UserID, t.UserName, t.OAuthClient = createdBy.String, userID.String, userNm.String, client.String
-	t.RoleIDs = []string{}
+	t.SetRoles(nil)
 	return t, err
 }
 
@@ -53,7 +52,13 @@ func scanToken(row interface{ Scan(...any) error }) (models.APIToken, error) {
 // and returns it with its secret, which is shown once and not stored. A nil
 // expiresAt never expires.
 func (s *Store) CreateToken(name string, roleIDs []string, expiresAt *time.Time, createdBy string) (*models.APIToken, string, error) {
-	return s.createToken(name, roleIDs, expiresAt, createdBy, "")
+	return s.createToken(name, models.Unrestricted(roleIDs), expiresAt, createdBy, "")
+}
+
+// CreateTokenWithRoles creates a token as CreateToken does, its roles each
+// in every scope or narrowed to some (README §3.3).
+func (s *Store) CreateTokenWithRoles(name string, roles []models.RoleAssignment, expiresAt *time.Time, createdBy string) (*models.APIToken, string, error) {
+	return s.createToken(name, roles, expiresAt, createdBy, "")
 }
 
 // CreatePersonalToken creates a personal token for a user, for an assistant:
@@ -63,7 +68,7 @@ func (s *Store) CreatePersonalToken(userID, name string, expiresAt *time.Time) (
 	return s.createToken(name, nil, expiresAt, userID, userID)
 }
 
-func (s *Store) createToken(name string, roleIDs []string, expiresAt *time.Time, createdBy, userID string) (*models.APIToken, string, error) {
+func (s *Store) createToken(name string, roles []models.RoleAssignment, expiresAt *time.Time, createdBy, userID string) (*models.APIToken, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, "", fmt.Errorf("%w: a name is required", ErrInvalidToken)
@@ -103,22 +108,12 @@ func (s *Store) createToken(name string, roleIDs []string, expiresAt *time.Time,
 	if err != nil {
 		return nil, "", fmt.Errorf("inserting token: %w", err)
 	}
-	seen := map[string]bool{}
-	for _, roleID := range roleIDs {
-		if seen[roleID] {
-			continue
-		}
-		seen[roleID] = true
-		var n int
-		if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM roles WHERE id = ?", roleID).Scan(&n); err != nil {
-			return nil, "", fmt.Errorf("checking role: %w", err)
-		}
-		if n == 0 {
-			return nil, "", fmt.Errorf("%w: %s", ErrRoleNotFound, roleID)
-		}
-		if _, err := s.TxExec(tx, "INSERT INTO api_token_roles (token_id, role_id) VALUES (?, ?)", id, roleID); err != nil {
-			return nil, "", fmt.Errorf("assigning role: %w", err)
-		}
+	merged, err := s.mergeAssignments(tx, roles)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := s.insertAssignmentsTx(tx, tokenAssignments, id, merged); err != nil {
+		return nil, "", err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, "", fmt.Errorf("committing: %w", err)
@@ -164,14 +159,12 @@ func (s *Store) listTokens(userID string) ([]models.APIToken, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	roles, err := s.tokenRoleIDs()
+	roles, err := s.readAssignments(tokenAssignments)
 	if err != nil {
 		return nil, err
 	}
 	for i := range tokens {
-		if ids := roles[tokens[i].ID]; ids != nil {
-			tokens[i].RoleIDs = ids
-		}
+		tokens[i].SetRoles(roles[tokens[i].ID])
 	}
 	return tokens, nil
 }
@@ -185,35 +178,18 @@ func (s *Store) GetToken(id string) (*models.APIToken, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading token: %w", err)
 	}
-	roles, err := s.tokenRoleIDs()
+	roles, err := s.readAssignments(tokenAssignments)
 	if err != nil {
 		return nil, err
 	}
-	if ids := roles[id]; ids != nil {
-		t.RoleIDs = ids
-	}
+	t.SetRoles(roles[id])
 	return &t, nil
 }
 
-// tokenRoleIDs maps each token with roles to their IDs, sorted.
-func (s *Store) tokenRoleIDs() (map[string][]string, error) {
-	rows, err := s.Query("SELECT token_id, role_id FROM api_token_roles")
-	if err != nil {
-		return nil, fmt.Errorf("reading token roles: %w", err)
-	}
-	defer rows.Close()
-	out := map[string][]string{}
-	for rows.Next() {
-		var tokenID, roleID string
-		if err := rows.Scan(&tokenID, &roleID); err != nil {
-			return nil, fmt.Errorf("scanning token role: %w", err)
-		}
-		out[tokenID] = append(out[tokenID], roleID)
-	}
-	for _, ids := range out {
-		sort.Strings(ids)
-	}
-	return out, rows.Err()
+// tokenKeys reads what a token's roles grant, each narrowed to the scopes
+// its assignment names.
+func (s *Store) tokenKeys(id string) (map[string]bool, error) {
+	return assignedKeys(storeQuerier{s}, tokenAssignments, id, "SELECT role_id FROM api_token_roles WHERE token_id = ?", id)
 }
 
 // RevokeToken stops a token working for good. Revoking one already revoked
@@ -255,7 +231,7 @@ func (s *Store) AuthenticateToken(secret string) (*models.APIToken, map[string]b
 	if t.UserID != "" {
 		perms, err = s.GetUserPermissions(t.UserID)
 	} else {
-		perms, err = grantedKeys(storeQuerier{s}, "SELECT role_id FROM api_token_roles WHERE token_id = ?", t.ID)
+		perms, err = s.tokenKeys(t.ID)
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading token permissions: %w", err)
