@@ -290,7 +290,7 @@
                 ? `Built in: what everyone, signed in or not, may see. Put it on categories to make their assets public. On ${count(s.category_count, 'category', 'categories')}.`
                 : s.reserved
                 ? 'Built in: assets in no other scope.'
-                : `On ${count(s.category_count, 'category', 'categories')}; used by ${count(s.role_count, 'role', 'roles')}.`}
+                : `On ${count(s.category_count, 'category', 'categories')}; used by ${count(s.role_count, 'role', 'roles')}${s.assignment_count ? `; given to people and tokens in it ${count(s.assignment_count, 'time', 'times')}` : ''}.`}
             </p>
           </div>
           {#if !s.reserved}

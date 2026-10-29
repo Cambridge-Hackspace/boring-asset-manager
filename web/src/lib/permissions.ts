@@ -31,6 +31,29 @@ export function permissionLabel(key: string): string {
 /** The permissions a role may hold in some scopes only: those acting on assets. */
 export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.act', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete'];
 
+/**
+ * The permissions of a role that assigning it in these scopes only leaves
+ * out entirely, as the server narrows it (README §3.3): those not scopable,
+ * and those the role holds only in other scopes. None when no scopes are
+ * named, the role then holding everything it grants.
+ */
+export function narrowedOut(keys: readonly string[], scopes: readonly string[]): Permission[] {
+  if (scopes.length === 0) return [];
+  return permissions
+    .map((p) => p.key)
+    .filter((p) => {
+      const where = heldIn(keys, p);
+      if (where !== 'all' && where.length === 0) return false; // not held at all
+      if (!scopable.includes(p)) return true;
+      return where !== 'all' && !where.some((s) => scopes.includes(s));
+    });
+}
+
+/** A role as held, in words: its name, and the scopes it is narrowed to, if any. */
+export function describeAssignment(role: string, scopes: readonly string[]): string {
+  return scopes.length ? `${role} in ${scopes.join(', ')}` : role;
+}
+
 /** The reserved scope of assets that no category puts in another. */
 export const DEFAULT_SCOPE = 'default';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeHeld, describeKey, heldIn, setHeld } from './permissions';
+import { describeAssignment, describeHeld, describeKey, heldIn, narrowedOut, setHeld } from './permissions';
 
 describe('scoped permissions', () => {
   it('reads where a role holds a permission', () => {
@@ -29,5 +29,22 @@ describe('describeHeld', () => {
       { label: 'Borrow', description: expect.stringContaining('Check lendable'), where: [] },
       { label: 'Manage users', description: expect.stringContaining('Create and archive'), where: [] },
     ]);
+  });
+});
+
+// The same table as the server's TestNarrow (internal/rbac).
+describe('narrowedOut', () => {
+  const role = ['assets.read', 'tools:assets.write', 'kitchen:assets.write', 'users.manage', 'labels.print'];
+  it('leaves nothing out of a role in every scope', () => {
+    expect(narrowedOut(role, [])).toEqual([]);
+  });
+  it('leaves out what is not scopable, and what the role holds only elsewhere', () => {
+    expect(narrowedOut(role, ['tools'])).toEqual(['labels.print', 'users.manage']);
+    expect(narrowedOut(role, ['tools', 'workshop'])).toEqual(['labels.print', 'users.manage']);
+    expect(narrowedOut(role, ['workshop'])).toEqual(['assets.write', 'labels.print', 'users.manage']);
+  });
+  it('describes a role as held', () => {
+    expect(describeAssignment('Editor', [])).toBe('Editor');
+    expect(describeAssignment('Editor', ['tools', 'kitchen'])).toBe('Editor in tools, kitchen');
   });
 });
