@@ -38,6 +38,8 @@ import ActionsPage from './views/ActionsPage.svelte';
 import IconsPage from './views/icons/IconsPage.svelte';
 import FlowsPage from './views/flows/FlowsPage.svelte';
 import FlowRunPage from './views/flows/FlowRunPage.svelte';
+import FlowEditor from './views/flows/FlowEditor.svelte';
+import FlowPosterPage from './views/flows/FlowPosterPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -66,6 +68,9 @@ export const routes: Route[] = [
   { pattern: '/assets/:id/scene', component: ScenePage, title: 'Scene', permissions: ['assets.read'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
   { pattern: '/flows', component: FlowsPage, title: 'Flows', permissions: ['flows.run', 'flows.manage'], nav: 'Flows' },
+  { pattern: '/flows/new', component: FlowEditor, title: 'New flow', permissions: ['flows.manage'] },
+  { pattern: '/flows/:slug/edit', component: FlowEditor, title: 'Edit flow', permissions: ['flows.manage'] },
+  { pattern: '/flows/:slug/poster', component: FlowPosterPage, title: 'Flow poster', permissions: ['flows.manage', 'flows.run'] },
   { pattern: '/f/:slug', component: FlowRunPage, title: 'Flow', permissions: ['flows.run'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
   { pattern: '/spool', component: SpoolPage, title: 'Print queue', permissions: ['labels.print'], nav: 'Print queue' },

@@ -20,4 +20,5 @@ var Refused = map[string]string{
 	"GET /api/v1/events/live":             "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
 	"GET /api/v1/icons/export":            "a zip of the icons, for people to download; over MCP, list_icon_sources reads every source",
 	"POST /api/v1/icon-library/import":    "a zip uploaded by people; over MCP, save_icon_library_file saves each source",
+	"GET /api/v1/flows/{slug}/qr.svg":     "the picture on a flow's printed poster; over MCP, a flow is reached at /f/<slug>, and run with run_flow",
 }

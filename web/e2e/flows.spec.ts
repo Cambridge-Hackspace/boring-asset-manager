@@ -75,3 +75,42 @@ test('flows: leave wood in one of two kinds, the form changing to fit, then coll
   const { asset } = await api.call('GET', `/assets/${assets[0].asset.id}`);
   expect(asset.asset.archived_at).toBeTruthy();
 });
+
+test.describe('the flow editor', () => {
+  test.use({ viewport: { width: 1400, height: 1000 } });
+
+  test('make a flow from a starter, adjust its form, save it, print its poster, and run it', async ({ signedIn: page, api }) => {
+    const shelfName = unique('Shelf');
+    await api.call('POST', '/categories', { name: shelfName, color_hex: '#7c3aed' });
+    const flowName = unique('Drop off');
+
+    await page.goto('/flows');
+    await page.getByRole('link', { name: 'New flow' }).click();
+    await page.getByLabel('Name', { exact: true }).first().fill(flowName);
+    await page.getByRole('checkbox', { name: shelfName }).check();
+    await page.getByLabel('Start from').selectOption('leave');
+    await page.getByRole('button', { name: 'Use this starter' }).click();
+    // One category: nothing to choose, so it starts with its form.
+    const steps = page.getByRole('list', { name: 'Steps' });
+    await expect(steps.getByRole('heading').first()).toHaveText('1. Form: About it');
+    await steps.getByRole('button', { name: 'Add a question' }).click();
+    await steps.getByLabel('Key of question 1').fill('note');
+    await steps.getByRole('textbox', { name: 'Question 1', exact: true }).fill('Anything else?');
+    await expect(page.getByRole('figure', { name: 'Preview, as a phone shows it' })).toContainText('Anything else?');
+    const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(results.violations.map((v) => `${v.id}: ${v.help}`), 'the editor').toEqual([]);
+    await page.getByRole('button', { name: 'Save flow' }).click();
+    await expect(page.getByRole('status')).toHaveText(`Saved ${flowName}.`);
+
+    await page.getByRole('link', { name: 'Poster' }).click();
+    await expect(page.getByRole('heading', { name: flowName })).toBeVisible();
+    await expect(page.getByRole('img', { name: `QR code opening ${flowName}` })).toBeVisible();
+
+    await page.goto('/flows');
+    await page.getByRole('link', { name: new RegExp(flowName) }).first().click();
+    await page.getByLabel('What is it?').fill(unique('Parcel'));
+    await page.getByLabel('Anything else?').fill('fragile');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByRole('heading', { name: 'Filed' })).toBeVisible();
+  });
+});
