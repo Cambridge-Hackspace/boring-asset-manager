@@ -220,6 +220,10 @@ func (s *S3Staging) Part(ctx context.Context, id, token string, n int, _ int64, 
 		return "", err
 	}
 	req.ContentLength = size
+	if size == 0 {
+		// Sent with a length of 0, not chunked, which S3 refuses.
+		req.Body = http.NoBody
+	}
 	s.s3.sign(req, "UNSIGNED-PAYLOAD", s.s3.opts.Now().UTC())
 	res, err := s.s3.stream.Do(req)
 	if err != nil {
@@ -322,3 +326,49 @@ func (s *S3Staging) Remove(ctx context.Context, id, token string) error {
 
 // emptyHash is the SHA-256 of nothing, a body-less request's payload hash.
 const emptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+// StreamPartSize is the part size StageFrom stages in: with S3's 10,000
+// parts, up to 320 GiB, holding one part at a time.
+const StreamPartSize = 32 << 20
+
+// StageFrom stages what r holds, its size not known before, as upload id:
+// in parts of StreamPartSize, each read whole before it is sent. It
+// returns the token and size, once complete.
+func StageFrom(ctx context.Context, st Staging, id string, r io.Reader) (string, int64, error) {
+	token, err := st.Begin(ctx, id, 0)
+	if err != nil {
+		return "", 0, err
+	}
+	fail := func(err error) (string, int64, error) {
+		_ = st.Remove(context.WithoutCancel(ctx), id, token)
+		return "", 0, err
+	}
+	buf := make([]byte, StreamPartSize)
+	var tags []string
+	var size int64
+	for n := 1; ; n++ {
+		got, err := io.ReadFull(r, buf)
+		if got == 0 && n > 1 && (err == io.EOF || err == io.ErrUnexpectedEOF) {
+			break
+		}
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			return fail(err)
+		}
+		if n > MaxParts {
+			return fail(fmt.Errorf("%w: over %d parts", ErrNoSpace, MaxParts))
+		}
+		tag, perr := st.Part(ctx, id, token, n, size, bytes.NewReader(buf[:got]), int64(got))
+		if perr != nil {
+			return fail(perr)
+		}
+		tags = append(tags, tag)
+		size += int64(got)
+		if err != nil {
+			break
+		}
+	}
+	if err := st.Complete(ctx, id, token, tags); err != nil {
+		return fail(err)
+	}
+	return token, size, nil
+}

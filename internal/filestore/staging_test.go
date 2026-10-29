@@ -123,3 +123,34 @@ func TestLocalStagingRefusesWhatWillNotFit(t *testing.T) {
 		t.Errorf("began an upload named ../escape: %v", err)
 	}
 }
+
+// TestStagingAStream stages what is read, of a size not known before, in
+// parts, and reads it back.
+func TestStagingAStream(t *testing.T) {
+	ctx := context.Background()
+	for name, st := range stagings(t) {
+		t.Run(name, func(t *testing.T) {
+			for _, size := range []int{0, 1000, filestore.StreamPartSize, filestore.StreamPartSize + 5} {
+				data := make([]byte, size)
+				rand.New(rand.NewSource(int64(size))).Read(data)
+				id := uuid.NewString()
+				token, n, err := filestore.StageFrom(ctx, st, id, bytes.NewReader(data))
+				if err != nil || n != int64(size) {
+					t.Fatalf("%d bytes: staged %d, %v", size, n, err)
+				}
+				rc, err := st.Open(ctx, id)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, _ := io.ReadAll(rc)
+				rc.Close()
+				if !bytes.Equal(got, data) {
+					t.Errorf("%d bytes: read back %d", size, len(got))
+				}
+				if err := st.Remove(ctx, id, token); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+	}
+}
