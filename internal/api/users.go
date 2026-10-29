@@ -32,18 +32,14 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list users")
 		return
 	}
-	roleIDs, err := s.store.UserRoleIDs()
+	assignments, err := s.store.UserRoleAssignments()
 	if err != nil {
 		writeServerError(w, err, "list user roles")
 		return
 	}
 	list := make([]userWithRoles, 0, len(users))
 	for _, u := range users {
-		ids := roleIDs[u.ID]
-		if ids == nil {
-			ids = []string{}
-		}
-		list = append(list, userWithRoles{User: u, RoleIDs: ids})
+		list = append(list, withRoles(u, assignments[u.ID]))
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -153,15 +149,42 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// userWithRoles is a user as the user list returns it.
+// userWithRoles is a user as the user list returns it: their roles, and
+// the scopes each is narrowed to.
 type userWithRoles struct {
 	models.User
-	RoleIDs []string `json:"role_ids"`
+	RoleIDs []string                `json:"role_ids"`
+	Roles   []models.RoleAssignment `json:"roles"`
 }
 
-// SetUserRolesRequest replaces a user's roles.
+func withRoles(u models.User, assignments []models.RoleAssignment) userWithRoles {
+	out := userWithRoles{User: u, RoleIDs: []string{}, Roles: assignments}
+	if out.Roles == nil {
+		out.Roles = []models.RoleAssignment{}
+	}
+	for _, a := range out.Roles {
+		out.RoleIDs = append(out.RoleIDs, a.RoleID)
+	}
+	return out
+}
+
+// SetUserRolesRequest replaces a user's roles: Roles, each in every scope
+// or narrowed to some, or RoleIDs, each in every scope, as before.
 type SetUserRolesRequest struct {
-	RoleIDs []string `json:"role_ids"`
+	Roles   []models.RoleAssignment `json:"roles"`
+	RoleIDs []string                `json:"role_ids"`
+}
+
+// assignments are the roles a request gives, from Roles or else RoleIDs;
+// false when it gives neither.
+func (req SetUserRolesRequest) assignments() ([]models.RoleAssignment, bool) {
+	switch {
+	case req.Roles != nil:
+		return req.Roles, true
+	case req.RoleIDs != nil:
+		return models.Unrestricted(req.RoleIDs), true
+	}
+	return nil, false
 }
 
 // handleListRoles lists roles with their permissions: GET /api/v1/roles
@@ -177,33 +200,33 @@ func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"roles": roles})
 }
 
-// handleSetUserRoles replaces a user's roles under the anti-lockout guard:
-// PUT /api/v1/users/{id}/roles
+// handleSetUserRoles replaces a user's roles, each in every scope or
+// narrowed to some, under the anti-lockout guard: PUT /api/v1/users/{id}/roles
 func (s *Server) handleSetUserRoles(w http.ResponseWriter, r *http.Request) {
 	var req SetUserRolesRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RoleIDs == nil {
-		writeJSONError(w, http.StatusBadRequest, "role_ids is required")
+	err := json.NewDecoder(r.Body).Decode(&req)
+	assignments, given := req.assignments()
+	if err != nil || !given {
+		writeJSONError(w, http.StatusBadRequest, "roles is required: a list of {role_id, scope_ids}, or role_ids")
 		return
 	}
-	err := s.store.SetUserRoles(r.PathValue("id"), req.RoleIDs)
+	err = s.store.SetUserRoleAssignments(r.PathValue("id"), assignments)
 	switch {
 	case errors.Is(err, store.ErrUserNotFound):
 		writeJSONError(w, http.StatusNotFound, "User not found")
-	case errors.Is(err, store.ErrRoleNotFound), errors.Is(err, rbac.ErrAntiLockoutTriggered):
+	case errors.Is(err, store.ErrRoleNotFound), errors.Is(err, store.ErrScopeNotFound),
+		errors.Is(err, store.ErrInvalidAssignment), errors.Is(err, rbac.ErrAntiLockoutTriggered):
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case err != nil:
 		writeStoreError(w, err, "set the roles")
 	default:
-		ids, err := s.store.UserRoleIDs()
+		all, err := s.store.UserRoleAssignments()
 		if err != nil {
 			writeServerError(w, err, "read roles")
 			return
 		}
-		roleIDs := ids[r.PathValue("id")]
-		if roleIDs == nil {
-			roleIDs = []string{}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"role_ids": roleIDs})
+		u := withRoles(models.User{}, all[r.PathValue("id")])
+		writeJSON(w, http.StatusOK, map[string]any{"role_ids": u.RoleIDs, "roles": u.Roles})
 	}
 }
 

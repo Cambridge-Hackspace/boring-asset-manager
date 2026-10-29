@@ -15,8 +15,14 @@ const containsType = "0d3f1c6a-5b2e-4f7a-9c8d-1e2f3a4b5c15"
 
 // TestScopedAccessToAssets follows a keeper of the tools, who reads and
 // edits the assets in the tools scope only, through every way of reaching
-// an asset.
+// an asset: once holding a role whose permissions are in the tools scope,
+// and once a role holding them everywhere, assigned in the tools scope only.
 func TestScopedAccessToAssets(t *testing.T) {
+	t.Run("a scoped role", func(t *testing.T) { scopedAccessToAssets(t, false) })
+	t.Run("a role narrowed to the scope", func(t *testing.T) { scopedAccessToAssets(t, true) })
+}
+
+func scopedAccessToAssets(t *testing.T, narrowed bool) {
 	srv, admin, _ := setupTestServer(t)
 	adminCookie := sessionCookie(t, srv, admin.ID)
 	st := srv.store
@@ -41,17 +47,15 @@ func TestScopedAccessToAssets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	role, err := st.CreateRole(store.RoleInput{Name: "Tool keepers", Permissions: []string{
-		"tools:" + rbac.PermAssetsRead, "tools:" + rbac.PermAssetsWrite, "tools:" + rbac.PermAssetsTrack, rbac.PermLabelsPrint,
-	}})
+	perms := []string{"tools:" + rbac.PermAssetsRead, "tools:" + rbac.PermAssetsWrite, "tools:" + rbac.PermAssetsTrack, rbac.PermLabelsPrint}
+	if narrowed {
+		perms = []string{rbac.PermAssetsRead, rbac.PermAssetsWrite, rbac.PermAssetsTrack}
+	}
+	role, err := st.CreateRole(store.RoleInput{Name: "Tool keepers", Permissions: perms})
 	if err != nil {
 		t.Fatal(err)
 	}
 	keeperUser, _ := st.CreateNamedUser("keeper@hackspace.org", "Keeper", "UserSecret123!", true)
-	if err := st.SetUserRoles(keeperUser.ID, []string{role.ID}); err != nil {
-		t.Fatal(err)
-	}
-	keeper := sessionCookie(t, srv, keeperUser.ID)
 	expect := func(what string, cookie *http.Cookie, method, path, body string, want int) string {
 		t.Helper()
 		rec := doJSON(t, srv, cookie, method, path, body)
@@ -60,10 +64,28 @@ func TestScopedAccessToAssets(t *testing.T) {
 		}
 		return rec.Body.String()
 	}
+	// assign gives the keeper the tool keepers' role, narrowed when the
+	// role holds its permissions everywhere, and other roles unrestricted.
+	assign := func(others ...string) {
+		t.Helper()
+		keepers := `{"role_id":"` + role.ID + `","scope_ids":[]}`
+		if narrowed {
+			keepers = `{"role_id":"` + role.ID + `","scope_ids":["` + tools.ID + `"]}`
+		}
+		roles := []string{keepers}
+		for _, id := range others {
+			roles = append(roles, `{"role_id":"`+id+`"}`)
+		}
+		expect("assigning roles", adminCookie, http.MethodPut, "/api/v1/users/"+keeperUser.ID+"/roles", `{"roles":[`+strings.Join(roles, ",")+`]}`, http.StatusOK)
+	}
+	assign()
+	keeper := sessionCookie(t, srv, keeperUser.ID)
 	d, k := "/api/v1/assets/"+drill.Asset.ID, "/api/v1/assets/"+kettle.Asset.ID
 
 	// What they hold, as the web app learns it.
-	if body := expect("me", keeper, http.MethodGet, "/api/v1/auth/me", "", http.StatusOK); !strings.Contains(body, `"tools:assets.write"`) {
+	if body := expect("me", keeper, http.MethodGet, "/api/v1/auth/me", "", http.StatusOK); !strings.Contains(body, `"tools:assets.write"`) ||
+		strings.Contains(body, `"assets.read"`) || strings.Contains(body, `"labels.print"`) == narrowed {
+		// Narrowed, the role grants nothing but its asset permissions.
 		t.Errorf("me: %s", body)
 	}
 
@@ -127,9 +149,7 @@ func TestScopedAccessToAssets(t *testing.T) {
 	// One who reads everything but writes the tools only is told no, not
 	// that the kettle is missing.
 	readers, _ := st.CreateRole(store.RoleInput{Name: "Readers", Permissions: []string{rbac.PermAssetsRead}})
-	if err := st.SetUserRoles(keeperUser.ID, []string{role.ID, readers.ID}); err != nil {
-		t.Fatal(err)
-	}
+	assign(readers.ID)
 	expect("editing the kettle, seen", keeper, http.MethodPut, k, `{"name":"Teapot"}`, http.StatusForbidden)
 	if body := expect("the drill, seeing everything", keeper, http.MethodGet, d, "", http.StatusOK); !strings.Contains(body, "Kettle") {
 		t.Errorf("a reader of everything sees the kettle: %s", body)
@@ -241,4 +261,64 @@ func TestManagingScopesThroughTheAPI(t *testing.T) {
 	expect("a scoped role", adminCookie, http.MethodPost, "/api/v1/roles", `{"name":"Keepers","permissions":["workshop:assets.read"]}`, http.StatusCreated)
 	expect("an unknown scope in a role", adminCookie, http.MethodPost, "/api/v1/roles", `{"name":"Others","permissions":["kitchen:assets.read"]}`, http.StatusBadRequest)
 	expect("a scoped unscopable permission", adminCookie, http.MethodPost, "/api/v1/roles", `{"name":"Others","permissions":["workshop:users.manage"]}`, http.StatusBadRequest)
+}
+
+// TestNarrowingRolesThroughTheAPI covers the shapes of #118: roles given
+// with scopes, and role_ids as before; what the user list, auth/me and API
+// tokens report; and a scope an assignment uses.
+func TestNarrowingRolesThroughTheAPI(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	adminCookie := sessionCookie(t, srv, admin.ID)
+	st := srv.store
+	tools, _ := st.CreateScope("tools")
+	editors, _ := st.CreateRole(store.RoleInput{Name: "Editors", Permissions: []string{rbac.PermAssetsRead, rbac.PermAssetsWrite, rbac.PermLabelsPrint}})
+	readers, _ := st.CreateRole(store.RoleInput{Name: "Readers", Permissions: []string{rbac.PermAssetsRead}})
+	u, _ := st.CreateNamedUser("grace@hackspace.org", "Grace", "UserSecret123!", true)
+	grace := sessionCookie(t, srv, u.ID)
+	expect := func(what string, cookie *http.Cookie, method, path, body string, want int) string {
+		t.Helper()
+		rec := doJSON(t, srv, cookie, method, path, body)
+		if rec.Code != want {
+			t.Errorf("%s: %d, want %d: %s", what, rec.Code, want, rec.Body)
+		}
+		return rec.Body.String()
+	}
+	path := "/api/v1/users/" + u.ID + "/roles"
+
+	// role_ids, as before: every scope.
+	if body := expect("role_ids", adminCookie, http.MethodPut, path, `{"role_ids":["`+readers.ID+`"]}`, http.StatusOK); !strings.Contains(body, `"roles":[{"role_id":"`+readers.ID+`","scope_ids":[]}]`) {
+		t.Errorf("role_ids: %s", body)
+	}
+	expect("neither", adminCookie, http.MethodPut, path, `{}`, http.StatusBadRequest)
+
+	narrowed := `{"roles":[{"role_id":"` + editors.ID + `","scope_ids":["` + tools.ID + `"]},{"role_id":"` + readers.ID + `"}]}`
+	expect("narrowed", adminCookie, http.MethodPut, path, narrowed, http.StatusOK)
+	body := expect("the user list", adminCookie, http.MethodGet, "/api/v1/users", "", http.StatusOK)
+	if !strings.Contains(body, `{"role_id":"`+editors.ID+`","scope_ids":["`+tools.ID+`"]}`) || !strings.Contains(body, `"role_ids":[`) {
+		t.Errorf("the user list: %s", body)
+	}
+	body = expect("me", grace, http.MethodGet, "/api/v1/auth/me", "", http.StatusOK)
+	if !strings.Contains(body, `"role_scopes":{"Editors":["tools"]}`) || !strings.Contains(body, `"tools:assets.write"`) || strings.Contains(body, `"labels.print"`) {
+		t.Errorf("me: %s", body)
+	}
+
+	expect("an unknown scope", adminCookie, http.MethodPut, path, `{"roles":[{"role_id":"`+editors.ID+`","scope_ids":["nope"]}]}`, http.StatusBadRequest)
+	public, _ := st.GetRoleByName(rbac.PublicRole)
+	expect("narrowing the public role", adminCookie, http.MethodPut, path, `{"roles":[{"role_id":"`+public.ID+`","scope_ids":["`+tools.ID+`"]}]}`, http.StatusBadRequest)
+	adminRole, _ := st.GetRoleByName(store.AdminRoleName)
+	expect("narrowing the last admin", adminCookie, http.MethodPut, "/api/v1/users/"+admin.ID+"/roles",
+		`{"roles":[{"role_id":"`+adminRole.ID+`","scope_ids":["`+tools.ID+`"]}]}`, http.StatusBadRequest)
+
+	// A token narrowed as a user is.
+	body = expect("a narrowed token", adminCookie, http.MethodPost, "/api/v1/tokens", `{"name":"Dashboard","roles":[{"role_id":"`+readers.ID+`","scope_ids":["`+tools.ID+`"]}]}`, http.StatusCreated)
+	if !strings.Contains(body, `"roles":[{"role_id":"`+readers.ID+`","scope_ids":["`+tools.ID+`"]}]`) {
+		t.Errorf("a narrowed token: %s", body)
+	}
+	expect("a token, role_ids", adminCookie, http.MethodPost, "/api/v1/tokens", `{"name":"Old","role_ids":["`+readers.ID+`"]}`, http.StatusCreated)
+
+	// The scope is in use until no one's roles are narrowed to it.
+	if body := expect("scopes", adminCookie, http.MethodGet, "/api/v1/scopes", "", http.StatusOK); !strings.Contains(body, `"assignment_count":2`) {
+		t.Errorf("scopes: %s", body)
+	}
+	expect("deleting in use", adminCookie, http.MethodDelete, "/api/v1/scopes/"+tools.ID, "", http.StatusConflict)
 }

@@ -50,7 +50,8 @@ func (s *Store) withAdminGuard(change func(tx *sql.Tx) error) error {
 	return nil
 }
 
-// activeAdminsQuery counts active users holding the permission given.
+// activeAdminsQuery counts active users holding the permission given, which
+// is not scopable: a role narrowed to scopes does not grant it.
 const activeAdminsQuery = `
 	SELECT COUNT(DISTINCT u.id)
 	FROM users u
@@ -58,6 +59,7 @@ const activeAdminsQuery = `
 	JOIN role_permissions rp ON ur.role_id = rp.role_id
 	JOIN permissions p ON rp.permission_id = p.id
 	WHERE u.is_active = TRUE AND u.archived_at IS NULL AND p.permission_key = ?
+	AND NOT EXISTS (SELECT 1 FROM user_role_scopes urs WHERE urs.user_id = ur.user_id AND urs.role_id = ur.role_id)
 `
 
 // countActiveAdmins counts active users holding users.manage, within tx.

@@ -774,7 +774,7 @@ func (s *Store) TokenPermissions(id string) (*models.APIToken, map[string]bool, 
 	if t.RevokedAt != nil || (t.ExpiresAt != nil && !t.ExpiresAt.After(time.Now())) {
 		return nil, nil, ErrTokenNotFound
 	}
-	perms, err := grantedKeys(storeQuerier{s}, "SELECT role_id FROM api_token_roles WHERE token_id = ?", id)
+	perms, err := s.tokenKeys(id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("reading token permissions: %w", err)
 	}

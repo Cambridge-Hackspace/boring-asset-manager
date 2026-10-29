@@ -135,62 +135,47 @@ func (s *Store) RoleNamesOf(userID string) ([]string, error) {
 	return names, rows.Err()
 }
 
-// UserRoleIDs maps each user with roles to their role IDs, sorted.
-func (s *Store) UserRoleIDs() (map[string][]string, error) {
-	rows, err := s.Query("SELECT user_id, role_id FROM user_roles")
+// RoleScopesOf maps the name of each role a user holds narrowed to scopes
+// to the names of those scopes, sorted.
+func (s *Store) RoleScopesOf(userID string) (map[string][]string, error) {
+	rows, err := s.Query(`SELECT r.name, sc.name FROM user_role_scopes urs
+		JOIN roles r ON r.id = urs.role_id JOIN scopes sc ON sc.id = urs.scope_id
+		WHERE urs.user_id = ? ORDER BY r.name, sc.name`, userID)
 	if err != nil {
-		return nil, fmt.Errorf("querying user roles: %w", err)
+		return nil, fmt.Errorf("querying the user's narrowed roles: %w", err)
 	}
 	defer rows.Close()
-	result := map[string][]string{}
+	out := map[string][]string{}
 	for rows.Next() {
-		var userID, roleID string
-		if err := rows.Scan(&userID, &roleID); err != nil {
-			return nil, fmt.Errorf("scanning user role: %w", err)
+		var role, scope string
+		if err := rows.Scan(&role, &scope); err != nil {
+			return nil, fmt.Errorf("scanning narrowed role: %w", err)
 		}
-		result[userID] = append(result[userID], roleID)
+		out[role] = append(out[role], scope)
 	}
-	for _, ids := range result {
-		sort.Strings(ids)
-	}
-	return result, rows.Err()
+	return out, rows.Err()
 }
 
-// SetUserRoles replaces a user's roles with roleIDs, under the anti-lockout
-// guard. Unknown roles are refused with ErrRoleNotFound.
+// UserRoleIDs maps each user with roles to their role IDs, sorted.
+func (s *Store) UserRoleIDs() (map[string][]string, error) {
+	assignments, err := s.UserRoleAssignments()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]string{}
+	for user, list := range assignments {
+		for _, a := range list {
+			out[user] = append(out[user], a.RoleID)
+		}
+	}
+	return out, nil
+}
+
+// SetUserRoles replaces a user's roles with roleIDs, each in every scope,
+// under the anti-lockout guard. Unknown roles are refused with
+// ErrRoleNotFound.
 func (s *Store) SetUserRoles(userID string, roleIDs []string) error {
-	return s.withAdminGuard(func(tx *sql.Tx) error {
-		archived, err := s.userArchived(tx, userID)
-		if err != nil {
-			return err
-		}
-		if archived {
-			return ErrUserNotFound
-		}
-		seen := map[string]bool{}
-		for _, id := range roleIDs {
-			if seen[id] {
-				continue
-			}
-			seen[id] = true
-			var n int
-			if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM roles WHERE id = ?", id).Scan(&n); err != nil {
-				return fmt.Errorf("checking role: %w", err)
-			}
-			if n == 0 {
-				return fmt.Errorf("%w: %s", ErrRoleNotFound, id)
-			}
-		}
-		if _, err := s.TxExec(tx, "DELETE FROM user_roles WHERE user_id = ?", userID); err != nil {
-			return fmt.Errorf("clearing roles: %w", err)
-		}
-		for id := range seen {
-			if _, err := s.TxExec(tx, "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", userID, id); err != nil {
-				return fmt.Errorf("assigning role: %w", err)
-			}
-		}
-		return nil
-	})
+	return s.SetUserRoleAssignments(userID, models.Unrestricted(roleIDs))
 }
 
 // ChangePassword sets a user's password after checking their current one,
