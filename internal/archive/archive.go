@@ -98,6 +98,8 @@ var Excluded = map[string]string{
 	"flow_runs":               "runs under way, dropped when left 12 hours",
 	"action_replies":          "devices' answers to an action, for the moment it is pressed",
 	"notification_deliveries": "the queue of notices to send, which a restore must not send again",
+	"uploads":                 "archives being uploaded, staged apart from the files and gone after a day",
+	"upload_parts":            "the parts of uploads under way",
 }
 
 // Header is header.json, the first member: what the archive is, before

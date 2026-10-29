@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -40,9 +41,22 @@ type DatabaseConfig struct {
 // S3-compatible store.
 type StorageConfig struct {
 	// Backend is "local" (the default, also when empty) or "s3".
-	Backend   string   `toml:"backend"`
-	LocalPath string   `toml:"local_path"`
-	S3        S3Config `toml:"s3"`
+	Backend   string `toml:"backend"`
+	LocalPath string `toml:"local_path"`
+	// StagingPath is where archives uploaded through the web are kept while
+	// they arrive and until they are used, with the local backend (#141);
+	// empty is a directory named staging beside LocalPath. With s3 they are
+	// staged in the bucket.
+	StagingPath string   `toml:"staging_path"`
+	S3          S3Config `toml:"s3"`
+}
+
+// StagingDir is where uploads are staged with the local backend.
+func (s StorageConfig) StagingDir() string {
+	if s.StagingPath != "" {
+		return s.StagingPath
+	}
+	return filepath.Join(filepath.Dir(filepath.Clean(s.LocalPath)), "staging")
 }
 
 // S3Config reaches a bucket of an S3-compatible store: AWS, MinIO, Garage,
@@ -164,6 +178,9 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	if storagePath := os.Getenv("BAM_STORAGE_PATH"); storagePath != "" {
 		cfg.Storage.LocalPath = storagePath
+	}
+	if staging := os.Getenv("BAM_STORAGE_STAGING_PATH"); staging != "" {
+		cfg.Storage.StagingPath = staging
 	}
 	if backend := os.Getenv("BAM_STORAGE_BACKEND"); backend != "" {
 		cfg.Storage.Backend = backend
