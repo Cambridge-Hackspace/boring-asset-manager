@@ -43,6 +43,9 @@ type Definition struct {
 	Description string   `json:"description,omitempty"`
 	CategoryIDs []string `json:"category_ids"`
 	Steps       []Step   `json:"steps"`
+	// LeaveUntil is the key of a date field: what the flow files is
+	// overdue once that date has passed, and announced as such once.
+	LeaveUntil string `json:"leave_until,omitempty"`
 }
 
 // Step is one step of a flow. Which of its settings apply depends on its
@@ -358,6 +361,7 @@ type Catalog struct {
 	Flows        map[string]bool
 	Categories   map[string]bool
 	Fields       map[string]bool
+	DateFields   map[string]bool
 	Templates    map[string]bool
 	Destinations map[string]bool
 	Actions      map[string]bool
@@ -410,6 +414,9 @@ func (d *Definition) Check(c Catalog) []Problem {
 	}
 	if len(d.Steps) > MaxSteps {
 		flowWide("a flow has at most %d steps", MaxSteps)
+	}
+	if d.LeaveUntil != "" && !c.DateFields[d.LeaveUntil] {
+		flowWide("its date to collect by, %q, is not a date field its categories record", d.LeaveUntil)
 	}
 
 	// What is set so far, as the steps go: names the run has from the

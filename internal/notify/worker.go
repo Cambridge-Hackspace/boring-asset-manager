@@ -60,8 +60,12 @@ func (w *Worker) Run(ctx context.Context) {
 	ticker := time.NewTicker(w.Poll)
 	defer ticker.Stop()
 	for {
-		// Loans past due become events first, so their notices go out now.
+		// Loans past due, and things left past their date, become events
+		// first, so their notices go out now.
 		if _, err := w.Store.RecordOverdueLoans(w.Now()); err != nil {
+			log.Printf("notifications: %v", err)
+		}
+		if _, err := w.Store.RecordOverdueFilings(w.Now()); err != nil {
 			log.Printf("notifications: %v", err)
 		}
 		for {

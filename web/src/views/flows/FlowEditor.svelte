@@ -201,6 +201,16 @@
             {/each}
           </div>
         </fieldset>
+        <div>
+          <label class="label" for="flow-until">A date to collect by</label>
+          <select id="flow-until" class="input" bind:value={def.leave_until} aria-describedby="flow-until-help">
+            <option value="">None</option>
+            {#each fields.filter((f) => f.validation_type === 'date') as f (f.key)}<option value={f.key}>{f.label}</option>{/each}
+          </select>
+          <p id="flow-until-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            What it files is overdue the day after this date, listed here, and announced once to the channels that follow it.
+          </p>
+        </div>
         <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={enabled} /> Turned on: listed, and runnable</label>
         {#each flowProblems as m, i (i)}<p class="error-text">{m}</p>{/each}
         {#if !editing}
