@@ -241,6 +241,16 @@ func discordPayload(n Notification) discordMessage {
 			embed.Description += ", due back " + p.DueAt.UTC().Format("2 January 2006") + " (UTC)"
 		}
 		embed.Description += "."
+	case e.Kind == models.EventFlowOverdue:
+		embed.Title, embed.Color = "Past its date: "+name, discordWarning
+		embed.Description = "Left"
+		if p.Flow != nil {
+			embed.Description += " through " + escapeMarkdown(truncate(p.Flow.Name, 200))
+		}
+		if p.DueAt != nil {
+			embed.Description += ", to be collected by " + p.DueAt.UTC().Format("2 January 2006")
+		}
+		embed.Description += "."
 	case e.Kind == models.EventAssetAction:
 		label := "Action"
 		if p.Action != nil {

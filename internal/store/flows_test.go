@@ -206,3 +206,93 @@ func TestFlowPermissionsAreGrantedByMigration(t *testing.T) {
 		}
 	}
 }
+
+// TestThingsLeftPastTheirDate: what a flow with a date to collect by filed
+// is overdue the day after that date, announced once; moving the date on
+// clears it, and collecting it ends it.
+func TestThingsLeftPastTheirDate(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	cat, _ := st.CreateCategory("Wood", nil, "", false, false)
+	until, err := st.CreateField("until", "Until", "date", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AssignCategoryField(cat.ID, until.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	def := flows.Starters([]string{cat.ID})[0].Definition
+	def.LeaveUntil = "until"
+	c, _ := st.FlowCatalog([]string{cat.ID})
+	if problems := def.Check(c); len(problems) != 0 {
+		t.Fatalf("checked: %v", problems)
+	}
+	if bad := (flows.Definition{Version: 1, CategoryIDs: []string{cat.ID}, LeaveUntil: "colour", Steps: []flows.Step{{ID: "done", Kind: flows.KindDone}}}); len(bad.Check(c)) != 1 {
+		t.Errorf("a date to collect by that is not a date field: %v", bad.Check(c))
+	}
+	f, err := st.CreateFlow(FlowInput{Slug: "leave", Name: "Leave something", Enabled: true, Definition: def}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oak, _ := st.CreateAsset("Sam's oak", []string{cat.ID}, nil, map[string]string{"until": "2026-11-06"})
+	pine, _ := st.CreateAsset("Pine", []string{cat.ID}, nil, map[string]string{"until": "2026-12-01"})
+	undated, _ := st.CreateAsset("Undated", []string{cat.ID}, nil, nil)
+	for _, a := range []*models.AssetWithDetails{oak, pine, undated} {
+		if err := st.RecordFiling(f.ID, a.Asset.ID, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events := func() int {
+		var n int
+		if err := st.QueryRow("SELECT COUNT(*) FROM events WHERE kind = ?", models.EventFlowOverdue).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	day := func(s string) time.Time {
+		at, _ := time.Parse("2006-01-02 15:04", s)
+		return at
+	}
+
+	// On its date it is not yet overdue.
+	if n, err := st.RecordOverdueFilings(day("2026-11-06 23:59")); err != nil || n != 0 {
+		t.Errorf("on its date: %d %v", n, err)
+	}
+	// The day after, it is, once.
+	for i := 0; i < 2; i++ {
+		if n, err := st.RecordOverdueFilings(day("2026-11-07 00:00")); err != nil || n != 1-i {
+			t.Errorf("the day after, sweep %d: %d %v", i, n, err)
+		}
+	}
+	if events() != 1 {
+		t.Errorf("events: %d", events())
+	}
+	listed, err := st.OverdueFilings(day("2026-11-07 09:00"))
+	if err != nil || len(listed[f.ID]) != 1 || listed[f.ID][0].Name != "Sam's oak" || listed[f.ID][0].Until != "2026-11-06" {
+		t.Errorf("listed: %v %v", listed, err)
+	}
+	var payload string
+	_ = st.QueryRow("SELECT payload FROM events WHERE kind = ?", models.EventFlowOverdue).Scan(&payload)
+	if !strings.Contains(payload, `"flow":{"slug":"leave","name":"Leave something"}`) || !strings.Contains(payload, `"due_at":"2026-11-06T00:00:00Z"`) {
+		t.Errorf("payload: %s", payload)
+	}
+
+	// Moved on a week, it is no longer overdue; when that passes too, it
+	// is announced again.
+	if _, err := st.UpdateAsset(oak.Asset.ID, "", nil, nil, map[string]string{"until": "2026-11-13"}); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := st.RecordOverdueFilings(day("2026-11-08 00:00")); n != 0 {
+		t.Errorf("moved on: %d", n)
+	}
+	if n, _ := st.RecordOverdueFilings(day("2026-11-14 00:00")); n != 1 {
+		t.Errorf("past the new date: %d", n)
+	}
+	// Collected (archived), it is no longer listed.
+	if err := st.DeleteAsset(oak.Asset.ID); err != nil {
+		t.Fatal(err)
+	}
+	if listed, _ := st.OverdueFilings(day("2026-11-14 00:00")); len(listed[f.ID]) != 0 {
+		t.Errorf("collected, still listed: %v", listed)
+	}
+}

@@ -75,6 +75,15 @@ export interface Definition {
   description?: string;
   category_ids: string[];
   steps: Step[];
+  /** The key of a date field: what the flow files is overdue once it has passed. */
+  leave_until?: string;
+}
+
+/** Something a flow filed that is past its date to collect by. */
+export interface Overdue {
+  asset_id: string;
+  name: string;
+  until: string;
 }
 
 export interface Flow {
@@ -115,6 +124,8 @@ export interface FlowAsset {
   name: string;
   code?: string;
   categories: string[];
+  /** Set, to its date, when it is past a flow's date to collect by. */
+  overdue?: string;
 }
 
 export interface FlowDone {

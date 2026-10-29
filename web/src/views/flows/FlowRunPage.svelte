@@ -247,6 +247,7 @@
                 <span class="flex flex-col items-start text-left">
                   <span>{a.name}</span>
                   <span class="text-sm text-zinc-600 dark:text-zinc-400">{[a.code, ...a.categories].filter(Boolean).join(' · ')}</span>
+                  {#if a.overdue}<span class="text-sm text-amber-800 dark:text-amber-400">Past its date, {a.overdue}</span>{/if}
                 </span>
               </button>
             </li>

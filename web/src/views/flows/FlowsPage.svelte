@@ -5,13 +5,14 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { session } from '../../lib/session.svelte';
-  import type { Flow } from '../../lib/flows';
+  import type { Flow, Overdue } from '../../lib/flows';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let flows = $state<Flow[]>([]);
+  let overdue = $state<Record<string, Overdue[]>>({});
   let loading = $state(true);
   let error = $state('');
   let status = $state('');
@@ -19,7 +20,9 @@
 
   async function load() {
     try {
-      flows = (await request<{ flows: Flow[] }>('GET', '/flows')).flows ?? [];
+      const res = await request<{ flows: Flow[]; overdue?: Record<string, Overdue[]> }>('GET', '/flows');
+      flows = res.flows ?? [];
+      overdue = res.overdue ?? {};
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -89,6 +92,16 @@
             <div>
               <h3 class="font-semibold">{f.name}{#if !f.enabled}{' '}<span class="text-sm font-normal text-zinc-600 dark:text-zinc-400">(turned off)</span>{/if}</h3>
               <p class="font-mono text-xs text-zinc-600 dark:text-zinc-400">/f/{f.slug} · {f.definition.steps.length} steps</p>
+              {#if overdue[f.id]?.length}
+                <details class="mt-1 text-sm">
+                  <summary class="text-amber-800 dark:text-amber-400">{overdue[f.id]!.length} past {overdue[f.id]!.length === 1 ? 'its' : 'their'} date</summary>
+                  <ul class="mt-1 space-y-0.5">
+                    {#each overdue[f.id]! as o (o.asset_id)}
+                      <li><a class="underline" href="/assets/{o.asset_id}">{o.name}</a>, due {o.until}</li>
+                    {/each}
+                  </ul>
+                </details>
+              {/if}
             </div>
             <span class="flex flex-wrap gap-2">
               <a class="btn-secondary" href="/flows/{encodeURIComponent(f.slug)}/edit" aria-label="Edit {f.name}">Edit</a>
