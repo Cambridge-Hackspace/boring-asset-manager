@@ -7,8 +7,6 @@ import (
 	"image/color"
 	"image/jpeg"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -93,8 +91,7 @@ func TestAssetPhotosAPI(t *testing.T) {
 
 	// Removing it removes its files.
 	files := func() int {
-		entries, _ := os.ReadDir(filepath.Join(srv.cfg.Storage.LocalPath, "photos"))
-		return len(entries)
+		return storedFiles(t, srv, "photos/")
 	}
 	if n := files(); n != 4 {
 		t.Errorf("%d files for two photos", n)
@@ -146,8 +143,7 @@ func TestCopyingPhotos(t *testing.T) {
 		}
 	}
 	files := func() int {
-		entries, _ := os.ReadDir(filepath.Join(srv.cfg.Storage.LocalPath, "photos"))
-		return len(entries)
+		return storedFiles(t, srv, "photos/")
 	}
 	served := func(id, photoID string) []byte {
 		t.Helper()

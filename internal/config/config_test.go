@@ -166,3 +166,59 @@ func TestMCPSetting(t *testing.T) {
 		t.Errorf("written config:\n%s", data)
 	}
 }
+
+func TestStorageSettings(t *testing.T) {
+	dir := t.TempDir()
+	load := func(toml string) (*Config, error) {
+		path := filepath.Join(dir, "config.toml")
+		if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+
+	// A file from before backends existed keeps its directory.
+	cfg, err := load("[storage]\nlocal_path = \"/var/lib/bam/uploads\"\n")
+	if err != nil || cfg.Storage.Backend != StorageLocal || cfg.Storage.LocalPath != "/var/lib/bam/uploads" {
+		t.Fatalf("older file: %v %+v", err, cfg.Storage)
+	}
+
+	s3 := "[storage]\nbackend = \"s3\"\n[storage.s3]\nendpoint = \"http://minio:9000\"\nbucket = \"bam\"\nprefix = \"site\"\npath_style = true\naccess_key_id = \"AK\"\nsecret_access_key = \"SK\"\n"
+	cfg, err = load(s3)
+	if err != nil || cfg.Storage.Backend != StorageS3 || cfg.Storage.S3.Prefix != "site/" || !cfg.Storage.S3.PathStyle || cfg.Storage.S3.Bucket != "bam" {
+		t.Fatalf("s3: %v %+v", err, cfg.Storage)
+	}
+
+	// Each setting from the environment, the keys too.
+	for env, v := range map[string]string{"BAM_STORAGE_BACKEND": "s3", "BAM_STORAGE_S3_ENDPOINT": "https://s3.example.org", "BAM_STORAGE_S3_REGION": "eu-west-2",
+		"BAM_STORAGE_S3_BUCKET": "other", "BAM_STORAGE_S3_PREFIX": "a/b/", "BAM_STORAGE_S3_PATH_STYLE": "off",
+		"BAM_STORAGE_S3_ACCESS_KEY_ID": "AK2", "BAM_STORAGE_S3_SECRET_ACCESS_KEY": "SK2"} {
+		t.Setenv(env, v)
+	}
+	cfg, err = load(s3)
+	if want := (S3Config{Endpoint: "https://s3.example.org", Region: "eu-west-2", Bucket: "other", Prefix: "a/b/", AccessKeyID: "AK2", SecretAccessKey: "SK2"}); err != nil || cfg.Storage.S3 != want {
+		t.Errorf("from the environment: %v %+v", err, cfg.Storage.S3)
+	}
+	t.Setenv("BAM_STORAGE_S3_PATH_STYLE", "sideways")
+	if _, err := load(s3); err == nil {
+		t.Error("BAM_STORAGE_S3_PATH_STYLE=sideways was accepted")
+	}
+	for _, env := range []string{"BAM_STORAGE_BACKEND", "BAM_STORAGE_S3_ENDPOINT", "BAM_STORAGE_S3_REGION", "BAM_STORAGE_S3_BUCKET", "BAM_STORAGE_S3_PREFIX",
+		"BAM_STORAGE_S3_PATH_STYLE", "BAM_STORAGE_S3_ACCESS_KEY_ID", "BAM_STORAGE_S3_SECRET_ACCESS_KEY"} {
+		t.Setenv(env, "")
+	}
+
+	for what, c := range map[string]struct{ toml, want string }{
+		"an unknown backend": {"[storage]\nbackend = \"floppy\"\n", "unsupported storage backend"},
+		"s3 without its settings": {"[storage]\nbackend = \"s3\"\n",
+			"storage.s3.access_key_id, storage.s3.bucket, storage.s3.endpoint, storage.s3.secret_access_key"},
+		"an endpoint with no scheme":  {strings.Replace(s3, "http://minio:9000", "minio:9000", 1), "must be an http:// or https:// address"},
+		"an endpoint with no host":    {strings.Replace(s3, "http://minio:9000", "http://", 1), "must be an http:// or https:// address"},
+		"a prefix leaving the bucket": {strings.Replace(s3, `prefix = "site"`, `prefix = "../site"`, 1), "storage.s3.prefix"},
+		"no directory":                {"[storage]\nlocal_path = \"\"\n", "local_path cannot be empty"},
+	} {
+		if _, err := load(c.toml); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v, want it to say %q", what, err, c.want)
+		}
+	}
+}

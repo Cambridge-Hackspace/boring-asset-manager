@@ -2,8 +2,11 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -32,10 +35,41 @@ type DatabaseConfig struct {
 	DSN  string `toml:"dsn"`
 }
 
-// StorageConfig holds filesystem storage configuration.
+// StorageConfig says where uploaded files are kept (README §2): in a
+// directory, LocalPath, or with Backend "s3", in a bucket of an
+// S3-compatible store.
 type StorageConfig struct {
-	LocalPath string `toml:"local_path"`
+	// Backend is "local" (the default, also when empty) or "s3".
+	Backend   string   `toml:"backend"`
+	LocalPath string   `toml:"local_path"`
+	S3        S3Config `toml:"s3"`
 }
+
+// S3Config reaches a bucket of an S3-compatible store: AWS, MinIO, Garage,
+// Ceph, Backblaze B2, Cloudflare R2. Its keys are never logged.
+type S3Config struct {
+	// Endpoint is the store's address, such as
+	// https://s3.eu-west-2.amazonaws.com or http://minio:9000.
+	Endpoint string `toml:"endpoint"`
+	// Region signs requests; empty is us-east-1, as most stores but AWS
+	// take.
+	Region string `toml:"region"`
+	Bucket string `toml:"bucket"`
+	// Prefix starts the name of every object bam keeps, so one bucket can
+	// hold more than bam's; a / is added if it has none.
+	Prefix string `toml:"prefix"`
+	// PathStyle addresses the bucket in the path, as MinIO, Garage and
+	// most stores but AWS expect.
+	PathStyle       bool   `toml:"path_style"`
+	AccessKeyID     string `toml:"access_key_id"`
+	SecretAccessKey string `toml:"secret_access_key"`
+}
+
+// The storage backends.
+const (
+	StorageLocal = "local"
+	StorageS3    = "s3"
+)
 
 // PrintersConfig holds what printer connections may reach on this server.
 type PrintersConfig struct {
@@ -131,6 +165,28 @@ func applyEnvOverrides(cfg *Config) error {
 	if storagePath := os.Getenv("BAM_STORAGE_PATH"); storagePath != "" {
 		cfg.Storage.LocalPath = storagePath
 	}
+	if backend := os.Getenv("BAM_STORAGE_BACKEND"); backend != "" {
+		cfg.Storage.Backend = backend
+	}
+	for env, field := range map[string]*string{
+		"BAM_STORAGE_S3_ENDPOINT":          &cfg.Storage.S3.Endpoint,
+		"BAM_STORAGE_S3_REGION":            &cfg.Storage.S3.Region,
+		"BAM_STORAGE_S3_BUCKET":            &cfg.Storage.S3.Bucket,
+		"BAM_STORAGE_S3_PREFIX":            &cfg.Storage.S3.Prefix,
+		"BAM_STORAGE_S3_ACCESS_KEY_ID":     &cfg.Storage.S3.AccessKeyID,
+		"BAM_STORAGE_S3_SECRET_ACCESS_KEY": &cfg.Storage.S3.SecretAccessKey,
+	} {
+		if v := os.Getenv(env); v != "" {
+			*field = v
+		}
+	}
+	if v := os.Getenv("BAM_STORAGE_S3_PATH_STYLE"); v != "" {
+		on, err := parseSwitch(v)
+		if err != nil {
+			return fmt.Errorf("BAM_STORAGE_S3_PATH_STYLE: %w", err)
+		}
+		cfg.Storage.S3.PathStyle = on
+	}
 
 	if devices := os.Getenv("BAM_PRINTERS_DEVICES"); devices != "" {
 		cfg.Printers.Devices = strings.Split(devices, ",")
@@ -170,6 +226,9 @@ func (c *Config) Validate() error {
 	if c.Database.DSN == "" {
 		return fmt.Errorf("database dsn cannot be empty")
 	}
+	if err := c.Storage.validate(); err != nil {
+		return err
+	}
 	for _, pattern := range c.Printers.Devices {
 		if !strings.HasPrefix(pattern, "/") {
 			return fmt.Errorf("printers.devices pattern %q must be an absolute path", pattern)
@@ -177,6 +236,46 @@ func (c *Config) Validate() error {
 		if _, err := path.Match(pattern, ""); err != nil {
 			return fmt.Errorf("printers.devices pattern %q: %v", pattern, err)
 		}
+	}
+	return nil
+}
+
+// prefixSegment is one part of an S3 prefix, as of a file's key.
+var prefixSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$`)
+
+// validate checks the storage settings, and gives a prefix its /.
+func (s *StorageConfig) validate() error {
+	switch s.Backend {
+	case "", StorageLocal:
+		s.Backend = StorageLocal
+		if s.LocalPath == "" {
+			return fmt.Errorf("storage.local_path cannot be empty")
+		}
+	case StorageS3:
+		var missing []string
+		for name, v := range map[string]string{"endpoint": s.S3.Endpoint, "bucket": s.S3.Bucket,
+			"access_key_id": s.S3.AccessKeyID, "secret_access_key": s.S3.SecretAccessKey} {
+			if strings.TrimSpace(v) == "" {
+				missing = append(missing, "storage.s3."+name)
+			}
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			return fmt.Errorf("storage backend s3 needs %s", strings.Join(missing, ", "))
+		}
+		if u, err := url.Parse(s.S3.Endpoint); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("storage.s3.endpoint %q must be an http:// or https:// address", s.S3.Endpoint)
+		}
+		if s.S3.Prefix != "" && !strings.HasSuffix(s.S3.Prefix, "/") {
+			s.S3.Prefix += "/"
+		}
+		for _, seg := range strings.Split(strings.TrimSuffix(s.S3.Prefix, "/"), "/") {
+			if s.S3.Prefix != "" && !prefixSegment.MatchString(seg) {
+				return fmt.Errorf("storage.s3.prefix %q: each part is letters, digits, ., - and _, separated by /", s.S3.Prefix)
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported storage backend %q (must be local or s3)", s.Backend)
 	}
 	return nil
 }
