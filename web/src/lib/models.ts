@@ -616,7 +616,7 @@ export interface ReportSection {
   actions?: ScanAction[];
 }
 
-export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report', 'actions', 'add_similar', 'add_inside'] as const;
+export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report', 'actions', 'add_similar', 'add_inside', 'flows'] as const;
 export type ScanAction = (typeof scanActions)[number];
 
 /** The scan or label template an asset uses, and why: the closest category naming one, or for scan templates the default. */

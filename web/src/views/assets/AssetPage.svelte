@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { flowHref, type FlowLink } from '../../lib/flows';
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
   import { amount, conditionLabel, contentsOf, describeChange, describeEvent, isWebURL, keptValues, placeLink } from '../../lib/assets';
@@ -38,6 +39,8 @@
   let howMany = $state<number | null>(1);
   // Where it is: the link types that make locations, and moving it.
   let relationTypes = $state<RelationType[]>([]);
+  // The flows that start from it, such as Collect it (README §6.7).
+  let offeredFlows = $state<FlowLink[]>([]);
   let moving = $state(false);
 
   const path = `/assets/${encodeURIComponent(id)}`;
@@ -61,6 +64,9 @@
       relationTypes = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
     } catch {
       // Without them, where it is shows, but not what it holds.
+    }
+    if (session.can('flows.run')) {
+      offeredFlows = await request<{ flows: FlowLink[] }>('GET', `${path}/flows`).then((r) => r.flows ?? [], () => []);
     }
   });
 
@@ -397,6 +403,15 @@
       <section class="card" aria-labelledby="actions-heading">
         <h2 id="actions-heading" class="mb-3 text-lg font-semibold">Actions</h2>
         <ActionButtons assetId={id} actions={asset.actions} />
+      </section>
+    {/if}
+
+    {#if !archived && offeredFlows.length}
+      <section class="card" aria-labelledby="flows-heading">
+        <h2 id="flows-heading" class="mb-3 text-lg font-semibold">Flows</h2>
+        <div class="flex flex-wrap gap-2">
+          {#each offeredFlows as f (f.slug)}<a class="btn-secondary" href={flowHref(f.slug, id)}>{f.name}</a>{/each}
+        </div>
       </section>
     {/if}
 
