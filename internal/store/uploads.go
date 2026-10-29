@@ -129,3 +129,12 @@ func (s *Store) StaleUploads(before time.Time) ([]models.Upload, error) {
 	}
 	return out, rows.Err()
 }
+
+// SchemaVersion is the last migration the database has run.
+func (s *Store) SchemaVersion() (int, error) {
+	var v int
+	if err := s.QueryRow("SELECT MAX(version) FROM schema_migrations").Scan(&v); err != nil {
+		return 0, fmt.Errorf("reading the schema's version: %w", err)
+	}
+	return v, nil
+}

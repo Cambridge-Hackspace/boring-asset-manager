@@ -21,6 +21,10 @@ import (
 // ErrNotEmpty is returned for a restore into an instance already in use.
 var ErrNotEmpty = errors.New("archive: the instance is in use")
 
+// ErrLockout is returned for a replace that would leave no one able to
+// manage users, or the person replacing unable to.
+var ErrLockout = errors.New("archive: refused, as it would lock people out")
+
 // RestoreOptions are what Restore restores.
 type RestoreOptions struct {
 	// Kinds are the kinds of information to restore, of those the archive
@@ -29,25 +33,38 @@ type RestoreOptions struct {
 	// Secrets lets authentication be restored: only from the CLI. Without
 	// it, an archive's authentication is skipped, with a warning.
 	Secrets bool
+	// Replace replaces the kinds chosen in an instance in use (replace.go),
+	// with a backup of it at this schema, rather than restoring into one not
+	// yet in use.
+	Replace bool
+	// Keep, with Replace, is a user who must still be active, and able to
+	// manage users, after: the person replacing.
+	Keep string
 }
 
 // RestoreSummary is what Restore did.
 type RestoreSummary struct {
-	Header Header
+	Header Header `json:"header"`
 	// Kinds are the kinds restored.
-	Kinds []Kind
+	Kinds []Kind `json:"kinds"`
 	// Tables counts the rows restored into each table.
-	Tables map[string]int
+	Tables map[string]int `json:"tables"`
 	// Files counts the files put in the file store, and their bytes.
-	Files     int
-	FileBytes int64
+	Files     int   `json:"files"`
+	FileBytes int64 `json:"file_bytes"`
 	// Already counts a later part's files the store already had, and
 	// Unnamed those no row names, which are not stored.
-	Already, Unnamed int
+	Already int `json:"already"`
+	Unnamed int `json:"unnamed"`
 	// Migrated is set when the schema was migrated after the rows went in.
-	Migrated bool
+	Migrated bool `json:"migrated"`
+	// Removed counts, with Replace, the rows of each table replaced that
+	// the archive did not have, and Lost the rows of tables not replaced
+	// that went with them, as they named only those.
+	Removed map[string]int `json:"removed"`
+	Lost    map[string]int `json:"lost"`
 	// Warnings say what was left out, and why.
-	Warnings []string
+	Warnings []string `json:"warnings"`
 }
 
 // placeholders are the values secret columns that may not be null take
@@ -101,6 +118,11 @@ func Restore(ctx context.Context, st *store.Store, blobs filestore.Blobs, open f
 			sum.Warnings = append(sum.Warnings, "authentication is not restored here: only bam restore, from the command line, restores it")
 			continue
 		}
+		if k == KindAuth && opts.Replace && !hasKind(opts.Kinds, KindAuth) {
+			// Replacing it signs people out, so it is only done when chosen.
+			sum.Warnings = append(sum.Warnings, "authentication is kept as it is: name auth among the kinds to replace it")
+			continue
+		}
 		sum.Kinds = append(sum.Kinds, k)
 	}
 	for _, k := range opts.Kinds {
@@ -117,10 +139,13 @@ func Restore(ctx context.Context, st *store.Store, blobs filestore.Blobs, open f
 	if err != nil {
 		return sum, err
 	}
+	if opts.Replace && current != version {
+		return sum, fmt.Errorf("%w: the archive's schema is at version %d and this instance's at %d; replace with a backup made by this version of bam, or restore it into a new database", ErrSchema, version, current)
+	}
 	if current > version {
 		return sum, fmt.Errorf("%w: the archive's schema is at version %d and the database's at %d; restore it into an empty database, which is migrated to its version first", ErrSchema, version, current)
 	}
-	if current > 0 {
+	if current > 0 && !opts.Replace {
 		inUse, err := inUse(st)
 		if err != nil {
 			return sum, err
@@ -147,7 +172,7 @@ func Restore(ctx context.Context, st *store.Store, blobs filestore.Blobs, open f
 		return sum, err
 	}
 	defer rc.Close()
-	if err := applyRows(ctx, st, blobs, rc, sum); err != nil {
+	if err := applyRows(ctx, st, blobs, rc, sum, opts); err != nil {
 		return sum, err
 	}
 	if version < migrations.Latest() || current == 0 {
@@ -193,7 +218,7 @@ func inUse(st *store.Store) (string, error) {
 
 // applyRows replaces the rows of the kinds chosen with the archive's, in
 // one transaction, putting its files in the store as it goes.
-func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io.Reader, sum *RestoreSummary) error {
+func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io.Reader, sum *RestoreSummary, opts RestoreOptions) error {
 	m, err := openMembers(bufio.NewReader(r))
 	if err != nil {
 		return err
@@ -213,7 +238,23 @@ func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io
 	if err != nil {
 		return err
 	}
-	for i := len(Tables) - 1; i >= 0; i-- {
+	var replacing []*Table
+	for i := range Tables {
+		if t := &Tables[i]; hasKind(sum.Kinds, t.Kind) && exist[t.Name] {
+			replacing = append(replacing, t)
+		}
+	}
+	adminsBefore := 0
+	if opts.Replace {
+		if adminsBefore, err = st.ActiveAdminsTx(tx); err != nil {
+			return err
+		}
+		if err := makeSeen(ctx, tx, st.Dialect, replacing); err != nil {
+			return err
+		}
+	}
+	// Restoring into an instance not in use, its kinds are emptied first.
+	for i := len(Tables) - 1; i >= 0 && !opts.Replace; i-- {
 		t := &Tables[i]
 		if !hasKind(sum.Kinds, t.Kind) || !exist[t.Name] {
 			continue
@@ -232,7 +273,7 @@ func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io
 		return err
 	}
 
-	ins := &inserter{ctx: ctx, st: st, tx: tx, perms: perms, parents: map[string][]parentRef{}}
+	ins := &inserter{ctx: ctx, st: st, tx: tx, perms: perms, parents: map[string][]parentRef{}, replace: opts.Replace}
 	for {
 		h, err := m.next()
 		if err == io.EOF {
@@ -271,8 +312,40 @@ func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io
 	if err := ins.setParents(); err != nil {
 		return err
 	}
-	if err := checkKept(ctx, tx, sum.Kinds, exist, kept); err != nil {
+	if !opts.Replace {
+		if err := checkKept(ctx, tx, sum.Kinds, exist, kept); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+
+	if sum.Removed, err = removeMissing(ctx, tx, replacing); err != nil {
 		return err
+	}
+	if err := dropSeen(ctx, tx, st.Dialect, replacing); err != nil {
+		return err
+	}
+	now, err := countKept(ctx, tx, sum.Kinds, exist)
+	if err != nil {
+		return err
+	}
+	sum.Lost = map[string]int{}
+	for name, n := range kept {
+		if now[name] < n {
+			sum.Lost[name] = n - now[name]
+		}
+	}
+	if after, err := st.ActiveAdminsTx(tx); err != nil {
+		return err
+	} else if adminsBefore > 0 && after == 0 {
+		return fmt.Errorf("%w: it would leave no one active who can manage users", ErrLockout)
+	}
+	if opts.Keep != "" {
+		if ok, err := st.CanManageUsersTx(tx, opts.Keep); err != nil {
+			return err
+		} else if !ok {
+			return fmt.Errorf("%w: the backup would leave you unable to sign in or manage users", ErrLockout)
+		}
 	}
 	return tx.Commit()
 }
@@ -341,6 +414,9 @@ type inserter struct {
 	tx      *sql.Tx
 	perms   map[string]string
 	parents map[string][]parentRef
+	// replace upserts rows (replace.go), rather than adding them to tables
+	// emptied first.
+	replace bool
 }
 
 // batchArgs is the most values one INSERT binds: within every dialect's
@@ -359,7 +435,12 @@ func (in *inserter) member(t *Table, r io.Reader, secrets bool) (int, error) {
 		if len(batch) == 0 {
 			return nil
 		}
-		err := in.insert(t, cols, batch)
+		var err error
+		if in.replace {
+			err = in.upsert(t, cols, batch)
+		} else {
+			err = in.insert(t, cols, batch)
+		}
 		batch = batch[:0]
 		return err
 	}
@@ -515,7 +596,7 @@ func (in *inserter) insert(t *Table, cols []Column, batch [][]any) error {
 		args = append(append(args, row...), extra...)
 	}
 	if _, err := in.tx.ExecContext(in.ctx, in.st.Rebind(q.String()), args...); err != nil {
-		return fmt.Errorf("%w (its rows may name information this instance does not have: restore that kind too)", err)
+		return fmt.Errorf("%w (its rows clash with what this instance has, as a backup of another instance's would, or name what it does not have: restore that kind too)", err)
 	}
 	return nil
 }

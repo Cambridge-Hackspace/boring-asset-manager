@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/archive"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
@@ -295,6 +296,69 @@ func TestRestoreAnArchive(t *testing.T) {
 	}
 	if _, err := ParseKinds("assets,gold"); err == nil {
 		t.Error("took a kind there is not")
+	}
+}
+
+// TestRestoreReplacing: --replace puts an instance's assets back as its
+// backup had them, after backing them up, and keeps everything else.
+func TestRestoreReplacing(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bam.toml")
+	cfg := config.DefaultConfig()
+	cfg.Database.DSN = filepath.Join(dir, "bam.db")
+	cfg.Storage.LocalPath = filepath.Join(dir, "uploads")
+	if err := cfg.SaveTOML(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := AdminCreate(path, "ada@example.com", "correct horse battery", "Ada"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.CreateAsset("Drill", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(dir, "b.bam.tar.gz")
+	if err := Backup(path, backup, BackupOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateAsset("Saw", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateUser("bob@example.com", "bobs long password", true); err != nil {
+		t.Fatal(err)
+	}
+
+	only := []archive.Kind{archive.KindAssets}
+	if err := Restore(path, backup, RestoreOptions{Replace: true, Only: only}); err != nil {
+		t.Fatal(err)
+	}
+	var assets, users int
+	st.QueryRow("SELECT COUNT(*) FROM assets").Scan(&assets)
+	st.QueryRow("SELECT COUNT(*) FROM users").Scan(&users)
+	if assets != 1 || users != 2 {
+		t.Errorf("%d assets and %d users after replacing assets", assets, users)
+	}
+	before, _ := filepath.Glob(filepath.Join(cfg.Storage.StagingDir(), "before-replace-*.bam.tar.gz"))
+	if len(before) != 1 {
+		t.Fatalf("backups taken first: %v", before)
+	}
+	// Which put the saw back.
+	if err := Restore(path, before[0], RestoreOptions{Replace: true, Only: only, BackupTo: filepath.Join(dir, "again.bam.tar.gz")}); err != nil {
+		t.Fatal(err)
+	}
+	st.QueryRow("SELECT COUNT(*) FROM assets").Scan(&assets)
+	if assets != 2 {
+		t.Errorf("%d assets after putting back what was replaced", assets)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "again.bam.tar.gz")); err != nil {
+		t.Error(err)
 	}
 }
 
