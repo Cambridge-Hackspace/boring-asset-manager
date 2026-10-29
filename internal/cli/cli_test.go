@@ -169,10 +169,10 @@ func TestBackupAndRestoreCommands(t *testing.T) {
 	if err := Backup(configPath, backup, BackupOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Restore(configPath, ""); err == nil {
+	if err := Restore(configPath, "", RestoreOptions{}); err == nil {
 		t.Error("restored without --from")
 	}
-	if err := Restore(configPath, backup); err != nil {
+	if err := Restore(configPath, backup, RestoreOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -229,6 +229,72 @@ func TestBackupWritesAnArchive(t *testing.T) {
 
 	if err := Backup(configPath, filepath.Join(dir, "x.db"), BackupOptions{WithoutSecrets: true}); err == nil {
 		t.Error("--without-secrets was taken for a .db copy")
+	}
+}
+
+// TestRestoreAnArchive: an archive restores into a new database, people
+// signing in as before; --check changes nothing; and what is neither an
+// archive nor a SQLite copy is refused.
+func TestRestoreAnArchive(t *testing.T) {
+	dir := t.TempDir()
+	configFor := func(name string) string {
+		path := filepath.Join(dir, name+".toml")
+		cfg := config.DefaultConfig()
+		cfg.Database.DSN = filepath.Join(dir, name+".db")
+		cfg.Storage.LocalPath = filepath.Join(dir, name+"-uploads")
+		if err := cfg.SaveTOML(path); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	from, to := configFor("from"), configFor("to")
+	if err := Migrate(from); err != nil {
+		t.Fatal(err)
+	}
+	if err := AdminCreate(from, "ada@example.com", "correct horse battery", "Ada"); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(dir, "b.bam.tar.gz")
+	if err := Backup(from, backup, BackupOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Restore(to, backup, RestoreOptions{Check: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "to.db")); err == nil {
+		t.Error("--check made a database")
+	}
+	if err := Restore(to, backup, RestoreOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	u, err := st.GetUserByEmail("ada@example.com")
+	if err != nil || !auth.CheckPassword("correct horse battery", u.PasswordHash) {
+		t.Errorf("Ada cannot sign in after a restore: %v", err)
+	}
+	if err := Restore(to, backup, RestoreOptions{}); err == nil {
+		t.Error("restored into an instance in use")
+	}
+
+	junk := filepath.Join(dir, "junk")
+	os.WriteFile(junk, []byte("not a backup"), 0o600)
+	if err := Restore(to, junk, RestoreOptions{}); err == nil || !strings.Contains(err.Error(), "neither") {
+		t.Errorf("restored junk: %v", err)
+	}
+	if _, err := ParseKinds("assets,catalog"); err != nil {
+		t.Error(err)
+	}
+	if _, err := ParseKinds("assets,gold"); err == nil {
+		t.Error("took a kind there is not")
 	}
 }
 

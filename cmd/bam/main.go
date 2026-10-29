@@ -29,7 +29,8 @@ Available Commands:
                 a --to ending in .db copies a SQLite database instead, and exits 3 for other databases
   storage sweep Remove uploaded files no row names, older than a day, and list rows whose file is missing (--dry-run removes nothing)
   storage copy  Copy every uploaded file to the store another config file's [storage] names, checking each (requires --to)
-  restore       Replace a SQLite database with a backup (requires --from; stop BAM first)
+  restore       Restore an archive into an instance not yet in use, or put a .db copy back (requires --from;
+                --only <kinds>, --check; stop BAM first)
   mcp           Relay MCP between stdio and a server, for assistants (requires --url; API token in $BAM_TOKEN)
   version       Print version information
 
@@ -112,6 +113,8 @@ func main() {
 		from := cmd.String("from", "", "Backup to restore (restore)")
 		withoutSecrets := cmd.Bool("without-secrets", false, "Leave authentication out: password hashes, sessions, tokens, OAuth and notification channels' secrets (backup)")
 		split := cmd.String("split", "", "Write the archive in parts of at most this size, such as 4GiB (backup)")
+		only := cmd.String("only", "", "Restore only these kinds of information, such as assets,catalog (restore)")
+		check := cmd.Bool("check", false, "Check the archive and say what restoring it would do, changing nothing (restore)")
 		_ = cmd.Parse(os.Args[2:])
 
 		var err error
@@ -124,7 +127,13 @@ func main() {
 				err = cli.Backup(*configPath, *to, opts)
 			}
 		} else {
-			err = cli.Restore(*configPath, *from)
+			opts := cli.RestoreOptions{Check: *check}
+			if *only != "" {
+				opts.Only, err = cli.ParseKinds(*only)
+			}
+			if err == nil {
+				err = cli.Restore(*configPath, *from, opts)
+			}
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

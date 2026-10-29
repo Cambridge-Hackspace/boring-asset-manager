@@ -142,10 +142,11 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 # Start the daemon
 ./bam serve --config ./config.toml
 
-# Back up the instance, files and all, on any database (safe while running;
-# §2.3); a --to ending in .db copies a SQLite database instead, and restore
-# puts such a copy back (with BAM stopped; §2.2)
+# Back up the instance, files and all, on any database (safe while running),
+# and restore it into a new one (with BAM stopped); §2.3. A --to ending in
+# .db copies a SQLite database instead, which restore puts back (§2.2)
 ./bam backup --config ./config.toml --to ./bam-backup.bam.tar.gz
+./bam restore --config ./config.toml --from ./bam-backup.bam.tar.gz
 ./bam backup --config ./config.toml --to ./bam-backup.db
 ./bam restore --config ./config.toml --from ./bam-backup.db
 
@@ -334,7 +335,27 @@ The tables are listed, and restored, in that order: each after those its rows na
 
 **In parts.** With `--split <size>` (such as `500MB` or `4GiB`), a backup is a **set** of archives, each complete with its own header and manifest: the first holds the rows and the files that fit, and the rest hold the rest of the files, none over the size (a single file larger than it has a part of its own). Parts are named with `.partN` before the extension. A very large instance can then be moved, and uploaded, a part at a time.
 
-**Memory** does not grow with the size of an instance: rows are written as they are read, and files streamed. Only the list of files to copy is kept, a few dozen bytes for each. A test writes 256 MiB of files, generated as it goes, and checks the heap; `BAM_TEST_ARCHIVE_BYTES=21474836480 go test ./internal/archive -run Memory` writes 20 GiB.
+**Restoring.** `bam restore --from <file>`, with BAM stopped, tells an archive from a copy of a SQLite database by its contents, not its name, and puts a copy back as before (§2.2). An archive is restored into an instance not yet in use (no users and no assets), on any database: a backup from one dialect restores into another, so it is also the way to move between them.
+
+```bash
+# Check an archive, and say what restoring it would do, changing nothing
+./bam restore --config ./config.toml --from ./bam.bam.tar.gz --check
+# Restore it all, authentication included
+./bam restore --config ./config.toml --from ./bam.bam.tar.gz
+# Restore some kinds of information only
+./bam restore --config ./config.toml --from ./bam.bam.tar.gz --only labels,reports
+# A set in parts: the first, then the others in any order, now or later
+./bam restore --config ./config.toml --from ./bam.part1.bam.tar.gz
+./bam restore --config ./config.toml --from ./bam.part3.bam.tar.gz
+```
+
+- **Checked first.** The archive is read through once before anything changes: every member's size and SHA-256 against the manifest, the order of its members, the rows of each table, and its versions. One corrupted, cut short, padded, reordered, or with a member the manifest does not list is refused, saying what is wrong. So the archive must be a file, read twice.
+- **All or nothing.** The rows of each kind restored replace the instance's in one transaction, every ID kept; a kind not chosen is left as it is. Files go into the configured store (§2) as they are read, before the rows naming them are committed, so a restore that fails leaves at most files for `bam storage sweep` to remove. One that would change a kind not chosen, or whose rows name what the instance does not have (assets without their catalog, say), is refused and changes nothing.
+- **Authentication** is restored from the command line with the rest, sessions included, so people stay signed in as the archive has them. Restoring people without it leaves them with no password: set one with `bam admin password`.
+- **Schemas.** An archive from an older bam is restored into an empty database, migrated first to the archive's schema, and then to this bam's. One from a newer bam, or a newer format, is refused.
+- **Parts.** A set's first part restores the rows. Each later part adds the files its rows name that the store does not yet have, so a part applied twice changes nothing, and one from another set is refused. Until every part is in, `bam storage sweep --dry-run` lists the files still to come.
+
+**Memory** does not grow with the size of an instance: rows are written as they are read, and files streamed. Only the list of files to copy is kept, a few dozen bytes for each. A restore inserts rows in batches as it reads them, and streams files into the store. Tests write and restore 256 MiB of files, generated as they go, and check the heap; `BAM_TEST_ARCHIVE_BYTES=21474836480 go test ./internal/archive -run Memory` does 20 GiB.
 
 ---
 

@@ -414,9 +414,20 @@ func ParseSize(s string) (int64, error) {
 	return n * unit, nil
 }
 
-// Restore puts a backup made by Backup in place of the configured SQLite
-// database. BAM must be stopped first.
-func Restore(configPath, from string) error {
+// RestoreOptions are bam restore's choices beyond what to restore.
+type RestoreOptions struct {
+	// Only are the kinds of information to restore; nil for all.
+	Only []archive.Kind
+	// Check only checks the archive, and says what a restore would do.
+	Check bool
+}
+
+// Restore puts a backup made by Backup back. It tells the two kinds apart
+// by their contents: a copy of a SQLite database replaces the configured
+// one, as before archives (§2.2); an archive is restored, authentication
+// included, into an instance not yet in use, on any database (§2.3). BAM
+// must be stopped first.
+func Restore(configPath, from string, opts RestoreOptions) error {
 	if from == "" {
 		return errors.New("--from is required")
 	}
@@ -424,9 +435,140 @@ func Restore(configPath, from string) error {
 	if err != nil {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
-	if err := store.RestoreSQLite(&cfg.Database, from); err != nil {
+	kind, err := backupKind(from)
+	if err != nil {
 		return err
 	}
-	fmt.Printf("Restored the database from %s\n", from)
+	if kind == "sqlite" {
+		if opts.Only != nil || opts.Check {
+			return errors.New("--only and --check are for archives; this is a copy of a SQLite database")
+		}
+		if err := store.RestoreSQLite(&cfg.Database, from); err != nil {
+			return err
+		}
+		fmt.Printf("Restored the database from %s\n", from)
+		return nil
+	}
+
+	open := func() (io.ReadCloser, error) { return os.Open(from) }
+	if opts.Check {
+		f, err := open()
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		c, err := archive.Check(f)
+		if err != nil {
+			return err
+		}
+		printChecked(c)
+		return nil
+	}
+
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	blobs, err := filestore.Open(cfg.Storage)
+	if err != nil {
+		return err
+	}
+	sum, err := archive.Restore(context.Background(), st, blobs, open, archive.RestoreOptions{Kinds: opts.Only, Secrets: true})
+	if err != nil {
+		return err
+	}
+	for _, w := range sum.Warnings {
+		fmt.Println("Note: " + w + ".")
+	}
+	if sum.Header.Set.Part > 1 {
+		fmt.Printf("Restored part %d of %d: %d files (%d bytes); %d already restored, %d named by no row.\n",
+			sum.Header.Set.Part, sum.Header.Set.Parts, sum.Files, sum.FileBytes, sum.Already, sum.Unnamed)
+		return nil
+	}
+	rows := 0
+	for _, n := range sum.Tables {
+		rows += n
+	}
+	fmt.Printf("Restored %d rows and %d files (%d bytes) of %s, from %s.\n", rows, sum.Files, sum.FileBytes, kindList(sum.Kinds), from)
+	if sum.Migrated {
+		fmt.Printf("The archive's schema, version %d, was migrated to this bam's.\n", sum.Header.SchemaVersion)
+	}
+	if parts := sum.Header.Set.Parts; parts > 1 {
+		fmt.Printf("This is part 1 of %d: restore the others, in any order, for the rest of the files.\n", parts)
+	}
 	return nil
+}
+
+// backupKind tells a copy of a SQLite database ("sqlite") from an archive
+// ("archive") by its first bytes.
+func backupKind(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	head := make([]byte, 16)
+	n, _ := io.ReadFull(f, head)
+	switch {
+	case n == 16 && string(head) == "SQLite format 3\x00":
+		return "sqlite", nil
+	case n >= 2 && head[0] == 0x1f && head[1] == 0x8b:
+		return "archive", nil
+	}
+	return "", fmt.Errorf("%s is neither an archive nor a copy of a SQLite database", path)
+}
+
+// ParseKinds reads a list of kinds of information, such as assets,labels.
+func ParseKinds(s string) ([]archive.Kind, error) {
+	var out []archive.Kind
+	for _, k := range strings.Split(s, ",") {
+		k = strings.TrimSpace(k)
+		found := false
+		for _, known := range archive.Kinds {
+			if string(known) == k {
+				out = append(out, known)
+				found = true
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("%q is not a kind of information: %s", k, kindList(archive.Kinds))
+		}
+	}
+	return out, nil
+}
+
+func kindList(kinds []archive.Kind) string {
+	s := make([]string, len(kinds))
+	for i, k := range kinds {
+		s[i] = string(k)
+	}
+	return strings.Join(s, ", ")
+}
+
+// printChecked says what an archive that checks out holds.
+func printChecked(c *archive.Checked) {
+	h := c.Header
+	fmt.Printf("The archive checks out: every member matches its manifest.\n")
+	fmt.Printf("Written %s by bam %s from %s, schema version %d.\n", h.CreatedAt, h.BamVersion, h.Dialect, h.SchemaVersion)
+	parts := c.Manifest.Set.Parts
+	if h.Set.Part > 1 {
+		fmt.Printf("Part %d of %d: %d files (%d bytes), which restoring it adds.\n", h.Set.Part, parts, c.Files, c.FileBytes)
+		return
+	}
+	rows := 0
+	for _, n := range c.Rows {
+		rows += n
+	}
+	fmt.Printf("Holds %s: %d rows and %d files (%d bytes).\n", kindList(h.Kinds), rows, c.Files, c.FileBytes)
+	if h.Secrets {
+		fmt.Println("It holds authentication, which bam restore restores with it.")
+	}
+	if n := len(c.Manifest.Missing); n > 0 {
+		fmt.Printf("%d files its rows name were missing when it was written.\n", n)
+	}
+	if parts > 1 {
+		fmt.Printf("Part 1 of %d: restoring it restores the rows; the other parts add the rest of the files.\n", parts)
+	}
+	fmt.Println("Restoring it replaces those kinds in an instance not yet in use, and migrates it if its schema is older.")
 }

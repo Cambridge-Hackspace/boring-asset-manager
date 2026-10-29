@@ -48,6 +48,9 @@ type Options struct {
 	Split int64
 	// Now is when it is written; the current time, unless set.
 	Now time.Time
+	// setID, in tests, is the set's ID, so an archive can be written again
+	// the same.
+	setID string
 }
 
 // Summary is what Write wrote.
@@ -94,7 +97,10 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 		Dialect:       st.Dialect,
 		Kinds:         kinds,
 		Secrets:       hasKind(kinds, KindAuth),
-		Set:           Set{ID: uuid.NewString(), Part: 1},
+		Set:           Set{ID: opts.setID, Part: 1},
+	}
+	if hdr.Set.ID == "" {
+		hdr.Set.ID = uuid.NewString()
 	}
 	sum := Summary{Set: hdr.Set.ID, Tables: map[string]int{}}
 
