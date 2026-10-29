@@ -22,7 +22,9 @@ dsn = "/var/db/bam/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 # dsn = "bam:secret@tcp(localhost:3306)/bam"
 
 [storage]
-# Uploaded images.
+# Uploaded photos and label images: "local", the directory below, or
+# "s3", a bucket of an S3-compatible store, set in [storage.s3] (README §2).
+backend = "local"
 local_path = "/var/db/bam/uploads"
 
 [printers]

@@ -338,7 +338,7 @@ func TestLiveEventsKeepToTheirScopes(t *testing.T) {
 func TestLiveEventsAcrossServers(t *testing.T) {
 	first, admin, _ := setupTestServer(t)
 	cfg := config.DefaultConfig()
-	cfg.Storage.LocalPath = t.TempDir()
+	testStorage(t, cfg)
 	second := NewServer(cfg, first.store)
 	st := first.store
 	parts, _ := st.CreateCategory("Parts", nil, "", false, false)

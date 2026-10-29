@@ -75,7 +75,23 @@ type = "sqlite"
 dsn = "data/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 
 [storage]
+# Where uploaded files (asset photos, label images) are kept: "local", a
+# directory, or "s3", a bucket of an S3-compatible store (below).
+# Environment: BAM_STORAGE_BACKEND, BAM_STORAGE_LOCAL_PATH.
+backend = "local"
 local_path = "./data/uploads"
+
+# Only with backend = "s3". Environment: BAM_STORAGE_S3_ENDPOINT, _REGION,
+# _BUCKET, _PREFIX, _PATH_STYLE (true or false), _ACCESS_KEY_ID and
+# _SECRET_ACCESS_KEY.
+# [storage.s3]
+# endpoint = "https://s3.eu-west-2.amazonaws.com"
+# region = "eu-west-2"
+# bucket = "bam"
+# prefix = ""
+# path_style = false
+# access_key_id = ""
+# secret_access_key = ""
 
 [printers]
 # Device paths printers may be connected to directly (README §4.4), as
@@ -90,6 +106,15 @@ devices = []
 enabled = true
 
 ```
+
+### Where Uploaded Files Are Kept
+
+Asset photos, their thumbnails and label images are files, kept through one interface (`internal/filestore`, #116), so that the rest of bam treats a file in a directory and an object in a bucket alike. Each is stored by a key, `photos/<id>` or `images/<id>`. Files are always served by bam, which checks who may see them; there are no links to the store that would work for anyone holding one.
+
+* **`local`** (the default): files in `storage.local_path`, each at its key below it, as they always were, written to a temporary file and renamed into place.
+* **`s3`:** objects in a bucket of any S3-compatible store (AWS, MinIO, Garage, Ceph, Backblaze B2, Cloudflare R2), each named `prefix` and its key, so that one bucket can hold more than bam's. Requests are signed with AWS Signature Version 4 by bam's own small client, with no SDK. `path_style` puts the bucket in the path (`endpoint/bucket/key`), as most stores but AWS expect; otherwise it goes in the host name. `region` is `us-east-1` when empty. The keys are never logged.
+* **Checked at startup:** `bam serve` writes, reads back and deletes a small object, so a store that cannot be reached or written stops it with a plain error, rather than failing the first upload, and says in its log which store it uses ("Uploaded files are kept in S3 bucket bam at https://…").
+* With PostgreSQL or MariaDB and `s3`, an instance keeps nothing on its own disk: it can move hosts, or run as more than one copy, without copying a directory.
 
 ### CLI Bootstrap Tooling
 
@@ -603,7 +628,7 @@ A template is stored in the `templates` table: `id`, `name`, `units`, `width`, `
 * **Element types:**
   * `generator`: `generator_type` (`qr`, `micro_qr` or `code128`); optional `error_correction` (QR `L`, `M` (default), `Q`, `H`; Micro QR `L` (default), `M`, `Q`); optional `margin`, the space kept clear around it, side by side (`top`, `right`, `bottom`, `left`; a side left out takes the standard quiet zone: QR 4 modules, Micro QR 2, Code 128 10 across and none above and below), counted as `margin_unit` says: `modules` (the default), growing with the code, or `length`, in the template's units whatever the code holds; each side from 0 to 20 modules or to half the box, and always whole printer dots. `quiet_zone`, from before margins, still means the same margin in modules on every side the standard has, and cannot be set with `margin`. The symbol is drawn at the largest whole number of dots per module that fits the box inside its margins, placed as `align` (`left`, `center` or `right`) and `vertical_align` (`top`, `middle` or `bottom`) say, centered by default; rendering fails if that is under 2 dots. Code 128 bars fill the height inside the top and bottom margins. A margin narrower than the standard quiet zone is allowed, as a code at the label's edge often scans, but the preview warns of it.
   * `text`: `font_size` (pt), `font_weight` (`normal`/`bold`), `font_family` (`sans`/`mono`), `align` (`left`/`center`/`right`), `wrap` (default `false`), `min_font_size` (default 6) and `fill` (`black`, the default, or `white`, for text reversed out of a black shape). Lines break at newlines (and between words when wrapping). Text that overflows its box shrinks in 0.5 pt steps down to `min_font_size`, then is cut short with an ellipsis; or, with `fit: "fill"` (`"shrink"`, the default, is the above), it takes the largest size in 0.5 pt steps from `min_font_size` to `max_font_size` (absent: 200 pt) that fits its box, growing as well as shrinking, and an adaptive template does not refuse it for its size. The block is centered vertically in its box. The JSON preview gives the size each text was drawn at (`drawn_font_size`). The embedded Go fonts cover Latin, Greek and Cyrillic; other scripts render as empty boxes.
-  * `static_image`: `image_id` names an uploaded PNG or JPEG, scaled to fit the box with its aspect ratio kept. Uploads are recorded in the `images` table and stored under `storage.local_path/images/`; `GET /api/v1/images/{id}` returns the metadata and `/content` the image itself. SVG images are not placed as images, since there is no dependable pure-Go SVG rasterizer; SVG artwork is imported as shapes instead, which print sharp at any size (below).
+  * `static_image`: `image_id` names an uploaded PNG or JPEG, scaled to fit the box with its aspect ratio kept. Uploads are recorded in the `images` table and stored as `images/<id>` in the file store (§2), which in a directory is `storage.local_path/images/<id>`; `GET /api/v1/images/{id}` returns the metadata and `/content` the image itself. SVG images are not placed as images, since there is no dependable pure-Go SVG rasterizer; SVG artwork is imported as shapes instead, which print sharp at any size (below).
   * `icon`: an icon (§3.7), placed in its box as an image is. `icon` is `{{asset.icon}}`, each asset's own icon or its categories', or an icon by name, which must be one the build draws when the template is saved.
     * It is drawn as large as fits its box, its proportions kept, at the dots it prints at; centered, or across its box as `align` says (`left`, `center` or `right`); vertically centered; and flipped by `mirror` as an image is.
     * `shading` is `shaded` (the default), each palette token printed as the gray of its light color, the `category` token as the asset's category's (or the palette's `ink-muted`), dithered in 1-bit output; or `outline`, its strokes alone, in black, which reads better on a small label. A stroke an icon keeps the width of prints as wide as it is at the icon's own size, enlarged with the rest of it, so that a hairline is still seen at a printer's resolution.
@@ -1346,6 +1371,12 @@ Guided pages that file assets into categories, or finish with them (#121, §6.7)
 * [x] A date to collect by, and overdue notifications (#132).
 * [x] Starting a flow from an asset's scan page (#133).
 
+### Phase 11: Storage
+Where uploaded files live, and moving an instance's contents in and out (#116, #117).
+* [x] Uploaded files through one interface, `filestore.Blobs`, with the directory as one adapter and a conformance suite every adapter passes (§2).
+* [x] An S3-compatible adapter, chosen in `[storage]`, checked at startup, with the suites run on it (§2, §8.3).
+* [ ] Keeping the database and the store in step: a sweep for orphaned objects and missing ones, and copying between stores (#116).
+
 ### Upcoming Features
 
 Agreed, not yet scheduled or designed in detail.
@@ -1398,6 +1429,14 @@ These namespaces are deliberately hostile, as a server set up without BAM in min
 BAM_TEST_DIALECT=postgres BAM_TEST_DSN='postgres://postgres:secret@localhost:5432/postgres?sslmode=disable' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/ ./internal/integration/
 
 BAM_TEST_DIALECT=mariadb BAM_TEST_DSN='root:secret@tcp(localhost:3306)/' go test ./internal/store/ ./internal/api/ ./internal/notify/ ./internal/assetcsv/ ./internal/integration/
+```
+
+Setting `BAM_TEST_S3_ENDPOINT`, with `BAM_TEST_S3_BUCKET`, `BAM_TEST_S3_ACCESS_KEY_ID` and `BAM_TEST_S3_SECRET_ACCESS_KEY`, runs the file store's conformance suite on an S3-compatible store as well as on a directory, and the API suite, photos, images and labels included, with every test server keeping its files there, each under a prefix of its own. Without it, those runs are skipped with a message. MinIO no longer publishes images anyone can pull, so the S3 gateway of [Versity](https://github.com/versity/versitygw) serves, keeping a bucket as a directory:
+
+```bash
+podman run -d --pod bamdb --name bams3 --entrypoint sh docker.io/versity/versitygw@sha256:2df780de109d16491cb99c25f4c0bc9085b286e77b5b47b56121b340094e70bb   -c 'mkdir -p /data/bam && exec versitygw --port :9000 --access bamtest --secret bamtest-secret-key posix /data'
+
+BAM_TEST_S3_ENDPOINT=http://localhost:9000 BAM_TEST_S3_BUCKET=bam BAM_TEST_S3_ACCESS_KEY_ID=bamtest BAM_TEST_S3_SECRET_ACCESS_KEY=bamtest-secret-key   go test ./internal/filestore/ ./internal/api/
 ```
 
 Portability rules for schema and queries:
