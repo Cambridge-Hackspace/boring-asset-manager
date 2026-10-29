@@ -26,8 +26,11 @@ var Version = "dev"
 
 // Server wraps the HTTP server and dependencies.
 type Server struct {
-	cfg        *config.Config
-	store      *store.Store
+	cfg   *config.Config
+	store *store.Store
+	// blobs holds uploaded files (README §2); images and photos are kinds
+	// of them.
+	blobs      filestore.Blobs
 	images     *filestore.Images
 	photos     *filestore.Images
 	transport  printers.Transport
@@ -57,8 +60,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	s := &Server{
 		cfg:        cfg,
 		store:      st,
-		images:     filestore.NewImages(cfg.Storage.LocalPath),
-		photos:     filestore.NewPhotos(cfg.Storage.LocalPath),
+		blobs:      filestore.NewLocal(cfg.Storage.LocalPath),
 		transport:  printers.NewDispatcher(cfg.Printers.Devices),
 		spool:      newSpooler(),
 		presses:    newPressLimiter(),
@@ -66,6 +68,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		icons:      isolex.Default(),
 		iconsDirty: make(chan struct{}, 1),
 	}
+	s.images, s.photos = filestore.NewImages(s.blobs), filestore.NewPhotos(s.blobs)
 	handle := func(pattern string, h http.Handler) {
 		s.routes = append(s.routes, pattern)
 		if !strings.HasPrefix(pattern, "GET ") {

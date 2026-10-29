@@ -1,88 +1,73 @@
-// Package filestore keeps uploaded files under the configured storage directory.
 package filestore
 
 import (
+	"bytes"
+	"context"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
+	"io"
 
 	"github.com/google/uuid"
 )
 
-// ErrInvalidID is returned for IDs that are not UUIDs, which also keeps paths
-// inside the storage directory.
+// ErrInvalidID is returned for IDs that are not UUIDs, which also keeps keys
+// to the one kind of file.
 var ErrInvalidID = errors.New("filestore: id must be a UUID")
 
-// Images stores image bytes as storage.local_path/images/<uuid>.
+// Images stores files of one kind by UUID, as <kind>/<uuid> in a Blobs:
+// images/<uuid> for label images, photos/<uuid> for asset photos and their
+// thumbnails. In a directory, that is storage.local_path/images/<uuid>, as
+// it always was.
 type Images struct {
-	dir string
+	blobs  Blobs
+	prefix string
 }
 
-// NewImages returns an image store rooted at root/images. The directory is
-// created on first write.
-func NewImages(root string) *Images {
-	return &Images{dir: filepath.Join(root, "images")}
+// NewImages returns the store of label images in blobs.
+func NewImages(blobs Blobs) *Images {
+	return &Images{blobs: blobs, prefix: "images/"}
 }
 
-func (s *Images) path(id string) (string, error) {
+// NewPhotos returns the store of asset photos in blobs.
+func NewPhotos(blobs Blobs) *Images {
+	return &Images{blobs: blobs, prefix: "photos/"}
+}
+
+func (s *Images) key(id string) (string, error) {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
 		return "", ErrInvalidID
 	}
-	return filepath.Join(s.dir, parsed.String()), nil
+	return s.prefix + parsed.String(), nil
 }
 
-// Save writes data atomically: readers never observe a partial file.
-func (s *Images) Save(id string, data []byte) error {
-	dest, err := s.path(id)
+// Save stores data whole: readers never see it part written.
+func (s *Images) Save(ctx context.Context, id string, data []byte) error {
+	key, err := s.key(id)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.dir, 0o755); err != nil {
-		return fmt.Errorf("creating image directory: %w", err)
-	}
-	tmp, err := os.CreateTemp(s.dir, ".upload-*")
-	if err != nil {
-		return fmt.Errorf("creating temporary image file: %w", err)
-	}
-	defer os.Remove(tmp.Name()) // no-op once renamed
-
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return fmt.Errorf("writing image: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("writing image: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), dest); err != nil {
-		return fmt.Errorf("storing image: %w", err)
-	}
-	return nil
+	return s.blobs.Put(ctx, key, bytes.NewReader(data), int64(len(data)), "application/octet-stream")
 }
 
-// Read returns an image's bytes.
-func (s *Images) Read(id string) ([]byte, error) {
-	p, err := s.path(id)
+// Read returns a file's bytes; ErrNotFound when there is none.
+func (s *Images) Read(ctx context.Context, id string) ([]byte, error) {
+	key, err := s.key(id)
 	if err != nil {
 		return nil, err
 	}
-	return os.ReadFile(p)
+	rc, err := s.blobs.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	return io.ReadAll(rc)
 }
 
-// Remove deletes an image's bytes. Removing a missing image is not an error.
-func (s *Images) Remove(id string) error {
-	p, err := s.path(id)
+// Remove deletes a file. Removing a missing one is not an error.
+func (s *Images) Remove(ctx context.Context, id string) error {
+	key, err := s.key(id)
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
-}
-
-// NewPhotos returns a store for asset photos, rooted at root/photos.
-func NewPhotos(root string) *Images {
-	return &Images{dir: filepath.Join(root, "photos")}
+	return s.blobs.Delete(ctx, key)
 }

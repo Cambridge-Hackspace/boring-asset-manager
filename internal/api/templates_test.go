@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -272,7 +273,7 @@ func TestImageAPIWorkflow(t *testing.T) {
 	if rec := doJSON(t, srv, cookie, http.MethodDelete, "/api/v1/images/"+img.ID, ""); rec.Code != http.StatusOK {
 		t.Errorf("delete: got %d %s", rec.Code, rec.Body.String())
 	}
-	if _, err := srv.images.Read(img.ID); err == nil {
+	if _, err := srv.images.Read(context.Background(), img.ID); err == nil {
 		t.Error("image file survived deletion")
 	}
 	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/images/"+img.ID, ""); rec.Code != http.StatusNotFound {

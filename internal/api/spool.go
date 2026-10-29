@@ -655,7 +655,7 @@ func (s *Server) handleDownloadSpool(w http.ResponseWriter, r *http.Request) {
 	}
 	takeLonger(w)
 
-	images := s.newLabelImages()
+	images := s.newLabelImages(r.Context())
 	type laidOut struct {
 		entry models.SpoolEntry
 		scene *render.Scene
