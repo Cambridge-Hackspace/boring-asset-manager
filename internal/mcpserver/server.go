@@ -255,7 +255,7 @@ func instructions(c Caller) string {
 // allTools are every tool, in the order they are listed.
 var allTools = sync.OnceValue(func() []tool {
 	var out []tool
-	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools(), iconTools(), labelTools(), queueTools(), reportTools(), adminTools(), eventTools(), credentialTools()} {
+	for _, group := range [][]tool{basicTools(), findingTools(), changingTools(), extraTools(), catalogTools(), iconTools(), labelTools(), queueTools(), reportTools(), adminTools(), eventTools(), credentialTools(), flowTools()} {
 		out = append(out, group...)
 	}
 	return out

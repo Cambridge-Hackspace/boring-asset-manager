@@ -75,6 +75,16 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/scopes", body: `{"name":"scope-{n}"}`},
 	{method: "PUT", path: "/api/v1/scopes/{scope}", body: `{"name":"renamed-{n}"}`},
 	{method: "DELETE", path: "/api/v1/scopes/{scope}"},
+	{method: "GET", path: "/api/v1/flows"},
+	{method: "POST", path: "/api/v1/flows", body: `{"slug":"flow-{n}","name":"Flow {n}","definition":{"version":1,"category_ids":["{category}"],"steps":[{"id":"find","kind":"find","find_by":["list","search"]},{"id":"confirm","kind":"confirm","text":"Archive it?"},{"id":"change","kind":"change","changes":[{"kind":"archive"}]},{"id":"done","kind":"done"}]}}`},
+	{method: "GET", path: "/api/v1/flow-starters", query: map[string][]string{"category_ids": {"x,y"}}},
+	{method: "GET", path: "/api/v1/flows/{flow}"},
+	{method: "PUT", path: "/api/v1/flows/{flow}", body: `{"slug":"moved-{n}","name":"Moved {n}","enabled":false,"definition":{"version":1,"category_ids":["{category}"],"steps":[{"id":"kind","kind":"choose_category"},{"id":"about","kind":"form","ask_name":true},{"id":"file","kind":"create","name":"{name}"},{"id":"done","kind":"done"}]}}`},
+	{method: "DELETE", path: "/api/v1/flows/{flow}"},
+	{method: "POST", path: "/api/v1/flows/{flow}/runs"},
+	{method: "GET", path: "/api/v1/flows/{flow}/runs/{run}", query: map[string][]string{"search": {"a"}}},
+	{method: "POST", path: "/api/v1/flows/{flow}/runs/{run}", body: `{"step":"find","asset_id":"{asset}"}`},
+	{method: "DELETE", path: "/api/v1/flows/{flow}/runs/{run}"},
 	{method: "GET", path: "/api/v1/reports"},
 	{method: "POST", path: "/api/v1/reports", body: `{"name":"Report {n}","spec":{"filter":{"running_low":true,"category_ids":["{category}"]},"sections":[{"type":"table","title":"Low","columns":[{"heading":"Asset","binding":"{{asset.name}} {{stock.quantity}}"}],"group_by":"category"}]}}`},
 	{method: "POST", path: "/api/v1/reports/preview", body: `{"spec":{"filter":{"loan":"open"},"sections":[{"type":"table","columns":[{"heading":"Borrower","binding":"{{loan.borrower}}"}]}]}}`},
@@ -336,6 +346,10 @@ func kindOf(path string) string {
 		return "action"
 	case "/api/v1/icon-library":
 		return "library"
+	case "/api/v1/flows":
+		return "flow"
+	case "/api/v1/flows/{flow}/runs":
+		return "run"
 	}
 	return ""
 }
@@ -381,7 +395,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job", "pool", "action", "stock"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job", "pool", "action", "stock", "flow", "run"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {
@@ -525,7 +539,18 @@ func (fz *fuzzer) send(req fuzzRequest) {
 		fz.ids[req.deleteKind] = ids
 	}
 	if req.create != "" && rec.Code == http.StatusCreated {
-		if id := firstID(rec.Body.Bytes()); id != "" {
+		id := firstID(rec.Body.Bytes())
+		if req.create == "flow" {
+			// Flows are reached by their address.
+			var made struct {
+				Flow struct {
+					Slug string `json:"slug"`
+				} `json:"flow"`
+			}
+			_ = json.Unmarshal(rec.Body.Bytes(), &made)
+			id = made.Flow.Slug
+		}
+		if id != "" {
 			fz.ids[req.create] = append(fz.ids[req.create], id)
 		}
 	}
