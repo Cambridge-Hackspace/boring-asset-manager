@@ -68,7 +68,7 @@ func (s *Server) handleGetImageContent(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "query image")
 		return
 	}
-	data, err := s.images.Read(img.ID)
+	data, err := s.images.Read(r.Context(), img.ID)
 	if err != nil {
 		writeServerError(w, err, "read the image file")
 		return
@@ -132,12 +132,12 @@ func (s *Server) handleUploadImage(w http.ResponseWriter, r *http.Request) {
 		SHA256:      hex.EncodeToString(sum[:]),
 		CreatedAt:   time.Now().UTC(),
 	}
-	if err := s.images.Save(img.ID, data); err != nil {
+	if err := s.images.Save(r.Context(), img.ID, data); err != nil {
 		writeServerError(w, err, "store the image")
 		return
 	}
 	if err := s.store.CreateImage(img); err != nil {
-		_ = s.images.Remove(img.ID)
+		_ = s.images.Remove(r.Context(), img.ID)
 		writeServerError(w, err, "record the image")
 		return
 	}
@@ -163,7 +163,7 @@ func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The record is gone, so a leftover file is only wasted space.
-	if err := s.images.Remove(id); err != nil {
+	if err := s.images.Remove(r.Context(), id); err != nil {
 		log.Printf("removing image file %s: %v", id, err)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Image deleted successfully"})

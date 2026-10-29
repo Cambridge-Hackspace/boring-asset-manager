@@ -3,6 +3,7 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,6 +69,7 @@ type LabelProblem struct {
 // build and the palette once.
 type labelImages struct {
 	s     *Server
+	ctx   context.Context
 	cache map[string]image.Image
 	// icons is the current build, read on first use; noIcons says it was
 	// read and there is none, or it could not be read.
@@ -109,15 +111,17 @@ func (li *labelImages) IconColors() map[string]string {
 	return li.palette
 }
 
-func (s *Server) newLabelImages() *labelImages {
-	return &labelImages{s: s, cache: map[string]image.Image{}}
+// newLabelImages loads label images for one rendering, as long as ctx
+// lasts.
+func (s *Server) newLabelImages(ctx context.Context) *labelImages {
+	return &labelImages{s: s, ctx: ctx, cache: map[string]image.Image{}}
 }
 
 func (li *labelImages) LoadImage(id string) (image.Image, error) {
 	if img, ok := li.cache[id]; ok {
 		return img, nil
 	}
-	data, err := li.s.images.Read(id)
+	data, err := li.s.images.Read(li.ctx, id)
 	if err != nil {
 		return nil, errors.New("image is missing from storage")
 	}
@@ -262,7 +266,7 @@ func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	assetID := r.PathValue("id")
-	scene, problem, err := s.layoutAsset(r, t, assetID, s.newLabelImages())
+	scene, problem, err := s.layoutAsset(r, t, assetID, s.newLabelImages(r.Context()))
 	if err != nil {
 		writeServerError(w, err, "render label")
 		return
@@ -401,7 +405,7 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	images := s.newLabelImages()
+	images := s.newLabelImages(r.Context())
 	var (
 		scene *render.Scene
 		data  labels.Data
@@ -473,7 +477,7 @@ func checkAssetIDs(w http.ResponseWriter, assetIDs []string) bool {
 // a batch either renders completely or not at all.
 func (s *Server) layoutBatch(w http.ResponseWriter, r *http.Request, t *labels.Template, assetIDs []string) ([]*render.Scene, bool) {
 
-	images := s.newLabelImages()
+	images := s.newLabelImages(r.Context())
 	scenes := make([]*render.Scene, 0, len(assetIDs))
 	var problems []LabelProblem
 	parts := 0

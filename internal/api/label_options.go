@@ -111,7 +111,7 @@ func (s *Server) handleLabelOptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := LabelOptionsResponse{Templates: []LabelTemplateOption{}, Printers: []SpoolChoice{}, Fits: map[string]map[string]LabelFit{}}
-	images := s.newLabelImages()
+	images := s.newLabelImages(r.Context())
 	for _, t := range order {
 		opt := LabelTemplateOption{ID: t.ID, Name: t.Name, Units: t.Units, Width: t.Width, Height: t.Height, DPI: t.DPI,
 			Sizing: t.Sizing, Adapt: t.Adapt, PrintMirror: t.PrintMirror, PrintRotation: t.PrintRotation, Preferred: preferred[t.ID], Problems: []LabelProblem{}}

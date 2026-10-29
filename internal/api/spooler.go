@@ -195,7 +195,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 	}
 
 	out := store.SpoolOutcome{Printer: p.Name, Problems: map[string]string{}, Moves: map[string]string{}}
-	images := s.newLabelImages()
+	images := s.newLabelImages(ctx)
 	var rendered []*image.Gray
 	for _, e := range b.Entries {
 		scene, problem, err := s.layoutAsset(r, t, e.AssetID, images)
