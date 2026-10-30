@@ -33,12 +33,13 @@ const categoryToken = "category"
 func (s *Scene) placeIcon(e *labels.Element, box image.Rectangle, data labels.Data, images ImageSource) error {
 	name, tint := e.Icon, ""
 	if name == labels.IconOfAsset {
-		name, tint = data.Icon, data.IconColor
-		if data.BoundIcon != "" {
-			name = data.BoundIcon
+		icon := data.IconFor(e.Rendition)
+		name, tint = icon.Icon, icon.IconColor
+		if icon.BoundIcon != "" {
+			name = icon.BoundIcon
 		}
-		if e.State && data.StateIcon != "" {
-			name = data.StateIcon
+		if e.State && icon.StateIcon != "" {
+			name = icon.StateIcon
 		}
 	}
 	icons, ok := images.(IconSource)

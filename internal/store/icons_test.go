@@ -47,7 +47,7 @@ func newCategory(t *testing.T, st *Store, name string) string {
 
 func saveIcon(t *testing.T, st *Store, c IconCompiler, categoryID, name, source string) *models.IconSave {
 	t.Helper()
-	save, err := st.SaveCategoryIcon(context.Background(), c, categoryID, name, source)
+	save, err := st.SaveCategoryIcon(context.Background(), c, categoryID, "", name, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestACategoryIconIsPublishedOrDrafted(t *testing.T) {
 	if e := second.Errors[0]; e.File != "categories/crate.ilx" || e.Line != 1 || !strings.Contains(e.Message, "box takes 6") {
 		t.Errorf("error: %+v", e)
 	}
-	ic, err := st.GetCategoryIcon(cat)
+	ic, err := st.GetCategoryIcon(cat, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,10 +125,10 @@ func TestACategoryIconIsPublishedOrDrafted(t *testing.T) {
 	if !third.Published || third.Build.Hash == first.Build.Hash {
 		t.Fatalf("third save: %+v", third)
 	}
-	if ic, _ := st.GetCategoryIcon(cat); ic.Draft != nil || len(ic.DraftErrors) != 0 || *ic.Source != fixed {
+	if ic, _ := st.GetCategoryIcon(cat, ""); ic.Draft != nil || len(ic.DraftErrors) != 0 || *ic.Source != fixed {
 		t.Errorf("publishing kept the draft: %+v", ic)
 	}
-	revs, err := st.ListCategoryIconRevisions(cat)
+	revs, err := st.ListCategoryIconRevisions(cat, "")
 	if err != nil || len(revs) != 2 || revs[0].Source != fixed || revs[1].Source != crate {
 		t.Errorf("revisions: %+v, %v", revs, err)
 	}
@@ -156,14 +156,14 @@ func TestACategoryMustDrawItsOwnIcon(t *testing.T) {
 	if save.Published || len(save.Errors) != 1 || !strings.Contains(save.Errors[0].Message, `named "bin", but nothing here draws an icon by that name`) {
 		t.Errorf("%+v", save)
 	}
-	if ic, err := st.GetCategoryIcon(cat); err != nil || ic.Source != nil || ic.Draft == nil {
+	if ic, err := st.GetCategoryIcon(cat, ""); err != nil || ic.Source != nil || ic.Draft == nil {
 		t.Errorf("a first save that failed: %+v, %v", ic, err)
 	}
 	// a draft never published is dropped whole
-	if err := st.DiscardCategoryIconDraft(cat); err != nil {
+	if err := st.DiscardCategoryIconDraft(cat, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.GetCategoryIcon(cat); !errors.Is(err, ErrCategoryIconNotFound) {
+	if _, err := st.GetCategoryIcon(cat, ""); !errors.Is(err, ErrCategoryIconNotFound) {
 		t.Errorf("after discarding: %v", err)
 	}
 }
@@ -173,18 +173,18 @@ func TestIconNames(t *testing.T) {
 	c := compilerFor(t)
 	a, b := newCategory(t, st, "A"), newCategory(t, st, "B")
 	for _, name := range []string{"", ".hidden", "a/b", "sp ace", "bam-unknown", strings.Repeat("x", 65)} {
-		if _, err := st.SaveCategoryIcon(context.Background(), c, a, name, crate); err == nil {
+		if _, err := st.SaveCategoryIcon(context.Background(), c, a, "", name, crate); err == nil {
 			t.Errorf("accepted the name %q", name)
 		}
 	}
 	saveIcon(t, st, c, a, "crate", crate)
-	if _, err := st.SaveCategoryIcon(context.Background(), c, b, "crate", crate); !errors.Is(err, ErrIconNameTaken) {
+	if _, err := st.SaveCategoryIcon(context.Background(), c, b, "", "crate", crate); !errors.Is(err, ErrIconNameTaken) {
 		t.Errorf("a second category took the name: %v", err)
 	}
-	if _, err := st.SaveCategoryIcon(context.Background(), c, a, "box", crate); !errors.Is(err, ErrIconRename) {
+	if _, err := st.SaveCategoryIcon(context.Background(), c, a, "", "box", crate); !errors.Is(err, ErrIconRename) {
 		t.Errorf("a save renamed the icon: %v", err)
 	}
-	if _, err := st.SaveCategoryIcon(context.Background(), c, "no-such-category", "crate2", crate); !errors.Is(err, ErrCategoryNotFound) {
+	if _, err := st.SaveCategoryIcon(context.Background(), c, "no-such-category", "", "crate2", crate); !errors.Is(err, ErrCategoryNotFound) {
 		t.Errorf("an icon for no category: %v", err)
 	}
 }
@@ -200,20 +200,20 @@ func TestWhatOthersUseCannotBeRemoved(t *testing.T) {
 		t.Fatalf("child: %+v", s.Errors)
 	}
 
-	_, err := st.DeleteCategoryIcon(ctx, c, parent)
+	_, err := st.DeleteCategoryIcon(ctx, c, parent, "")
 	if errs := buildErrors(t, err); !strings.Contains(errs[0].Message, "crate") || errs[0].File != "categories/small-crate.ilx" {
 		t.Errorf("deleting the parent: %+v", errs)
 	}
-	_, err = st.RenameCategoryIcon(ctx, c, parent, "box")
+	_, err = st.RenameCategoryIcon(ctx, c, parent, "", "box")
 	buildErrors(t, err)
-	if ic, _ := st.GetCategoryIcon(parent); ic.IconName != "crate" {
+	if ic, _ := st.GetCategoryIcon(parent, ""); ic.IconName != "crate" {
 		t.Errorf("a refused rename renamed it: %+v", ic)
 	}
 
-	if _, err := st.DeleteCategoryIcon(ctx, c, child); err != nil {
+	if _, err := st.DeleteCategoryIcon(ctx, c, child, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.DeleteCategoryIcon(ctx, c, parent); err != nil {
+	if _, err := st.DeleteCategoryIcon(ctx, c, parent, ""); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := st.CurrentIconBuild()
@@ -228,16 +228,16 @@ func TestRenamingAnIcon(t *testing.T) {
 	cat := newCategory(t, st, "Storage")
 	saveIcon(t, st, c, cat, "crate", crate)
 	// the source must draw it under the new name: refused until it does
-	_, err := st.RenameCategoryIcon(context.Background(), c, cat, "box")
+	_, err := st.RenameCategoryIcon(context.Background(), c, cat, "", "box")
 	if errs := buildErrors(t, err); !strings.Contains(errs[0].Message, `named "box"`) {
 		t.Errorf("%+v", errs)
 	}
 	both := crate + "\n" + strings.Replace(crate, `icon "crate"`, `icon "box"`, 1)
 	saveIcon(t, st, c, cat, "crate", both)
-	if _, err := st.RenameCategoryIcon(context.Background(), c, cat, "box"); err != nil {
+	if _, err := st.RenameCategoryIcon(context.Background(), c, cat, "", "box"); err != nil {
 		t.Fatal(err)
 	}
-	if ic, _ := st.GetCategoryIcon(cat); ic.IconName != "box" {
+	if ic, _ := st.GetCategoryIcon(cat, ""); ic.IconName != "box" {
 		t.Errorf("%+v", ic)
 	}
 }
@@ -364,15 +364,15 @@ func TestCheckKeepsNothing(t *testing.T) {
 	st := setupTestStore(t)
 	c := compilerFor(t)
 	cat := newCategory(t, st, "Storage")
-	ok, err := st.CheckCategoryIcon(context.Background(), c, cat, "crate", crate)
+	ok, err := st.CheckCategoryIcon(context.Background(), c, cat, "", "crate", crate)
 	if err != nil || len(ok.Errors) != 0 || !strings.Contains(string(ok.IR), `"crate"`) {
 		t.Fatalf("%+v %v", ok, err)
 	}
-	bad, err := st.CheckCategoryIcon(context.Background(), c, cat, "crate", "icon {")
+	bad, err := st.CheckCategoryIcon(context.Background(), c, cat, "", "crate", "icon {")
 	if err != nil || len(bad.Errors) == 0 || bad.IR != nil {
 		t.Fatalf("%+v %v", bad, err)
 	}
-	if _, err := st.GetCategoryIcon(cat); !errors.Is(err, ErrCategoryIconNotFound) {
+	if _, err := st.GetCategoryIcon(cat, ""); !errors.Is(err, ErrCategoryIconNotFound) {
 		t.Error("a check kept the icon")
 	}
 	if b, _ := st.CurrentIconBuild(); b != nil {
@@ -493,7 +493,7 @@ func TestAChangeIsNeverKeptAgainstInputsThatMoved(t *testing.T) {
 			}
 		}
 	}}
-	save, err := st.SaveCategoryIcon(ctx, m, child, "small-crate", `icon "small-crate" { extends "crate" }`)
+	save, err := st.SaveCategoryIcon(ctx, m, child, "", "small-crate", `icon "small-crate" { extends "crate" }`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -507,7 +507,7 @@ func TestAChangeIsNeverKeptAgainstInputsThatMoved(t *testing.T) {
 			t.Error(err)
 		}
 	}}
-	if _, err := st.SaveCategoryIcon(ctx, always, parent, "crate", crate); !errors.Is(err, ErrIconsChanging) {
+	if _, err := st.SaveCategoryIcon(ctx, always, parent, "", "crate", crate); !errors.Is(err, ErrIconsChanging) {
 		t.Errorf("err = %v after %d compiles", err, always.calls)
 	}
 }

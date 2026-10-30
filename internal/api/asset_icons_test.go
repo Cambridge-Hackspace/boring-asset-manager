@@ -31,7 +31,7 @@ func iconedWorld(t *testing.T, srv *Server) (storage, bins string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, st.ID, "crate", crateSource); err != nil || !save.Published {
+	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, st.ID, "", "crate", crateSource); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	return st.ID, b.ID
@@ -53,7 +53,7 @@ func TestAssetIconsThroughTheAPI(t *testing.T) {
 	rec := doJSON(t, srv, cookie, "POST", "/api/v1/assets", `{"name":"Bin","category_ids":["`+bins+`"]}`)
 	var got assetAnswer
 	decodeBody(t, rec.Body.Bytes(), &got)
-	want := models.ResolvedIcon{Name: "crate", From: models.IconFromCategory, SourceCategoryID: storage, SourceCategoryName: "Storage", Color: "#aa0000"}
+	want := models.ResolvedIcon{Name: "crate", From: models.IconFromCategory, Rendition: models.RenditionScreen, SourceCategoryID: storage, SourceCategoryName: "Storage", Color: "#aa0000"}
 	if rec.Code != http.StatusCreated || got.Asset.ResolvedIcon == nil || !reflect.DeepEqual(*got.Asset.ResolvedIcon, want) || got.Asset.Asset.IconName != nil {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
 	}
@@ -87,7 +87,7 @@ func TestAssetIconsThroughTheAPI(t *testing.T) {
 	}
 	// and a scan shows it
 	rec = doJSON(t, srv, cookie, "GET", "/api/v1/scan/"+got.Asset.Asset.ID, "")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"icon":{"name":"crate","from":"asset","color":"#aa0000"}`) {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"icon":{"name":"crate","from":"asset","rendition":"screen","color":"#aa0000"}`) {
 		t.Errorf("scan: %d %s", rec.Code, rec.Body)
 	}
 
@@ -180,7 +180,7 @@ func TestIconImages(t *testing.T) {
 	storage, bins := iconedWorld(t, srv)
 	// the crate paints a tile in its category's color
 	painted := strings.Replace(crateSource, "box 0 0 0 1 1 1", `box 0 0 0 1 1 1; tile 0 0 1 1 1 fill="category"`, 1)
-	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, storage, "crate", painted); err != nil || !save.Published {
+	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, storage, "", "crate", painted); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	get := func(query string) *httptest.ResponseRecorder {
@@ -262,7 +262,7 @@ func TestMissingIconsAreReported(t *testing.T) {
 	cookie := sessionCookie(t, srv, admin.ID)
 	_, bins := iconedWorld(t, srv)
 	barrels, _ := srv.store.CreateCategoryFrom(store.CategoryInput{Name: "Barrels"})
-	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, barrels.ID, "barrel", strings.ReplaceAll(crateSource, "crate", "barrel")); err != nil || !save.Published {
+	if save, err := srv.store.SaveCategoryIcon(t.Context(), srv.icons, barrels.ID, "", "barrel", strings.ReplaceAll(crateSource, "crate", "barrel")); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	var ids []string
@@ -283,7 +283,7 @@ func TestMissingIconsAreReported(t *testing.T) {
 	if m := overview(); len(m) != 0 {
 		t.Errorf("before: %+v", m)
 	}
-	if _, err := srv.store.DeleteCategoryIcon(t.Context(), srv.icons, barrels.ID); err != nil {
+	if _, err := srv.store.DeleteCategoryIcon(t.Context(), srv.icons, barrels.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 	if m := overview(); len(m) != 1 || m[0] != (store.MissingIcon{Name: "barrel", Assets: 2}) {
@@ -405,7 +405,7 @@ func TestIconStatesThroughTheAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if save, err := srv.store.SaveCategoryIcon(ctx, srv.icons, tools.ID, "drill",
+	if save, err := srv.store.SaveCategoryIcon(ctx, srv.icons, tools.ID, "", "drill",
 		`icon "drill" { category "tools"; footprint 1 1 1; axes "state"; part "box" { box 0 0 0 1 1 1 } }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
@@ -526,7 +526,7 @@ func TestIconParamsThroughTheAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if save, err := srv.store.SaveCategoryIcon(ctx, srv.icons, servers.ID, "server",
+	if save, err := srv.store.SaveCategoryIcon(ctx, srv.icons, servers.ID, "", "server",
 		`icon "server" { category "compute"; param u 1; footprint 1 1 "u * 0.5"; part "box" { box 0 0 0 1 1 "u * 0.5" } }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}

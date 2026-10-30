@@ -136,11 +136,16 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 	b := ap.b
 	switch t.Name {
 	case "assets":
-		var icon any
+		// its own icons, as renamed; an archive made before renditions
+		// has no label icon
+		var icon, labelIcon any
 		if n := str(r, "icon_name"); n != "" {
 			icon = iconRenamed(b, n)
 		}
-		return with(r, "id", ids.of(str(r, "id")), "icon_name", icon), true
+		if n := str(r, "label_icon_name"); n != "" {
+			labelIcon = iconRenamed(b, n)
+		}
+		return with(r, "id", ids.of(str(r, "id")), "icon_name", icon, "label_icon_name", labelIcon), true
 	case "asset_categories":
 		c, ok := b.cats[str(r, "category_id")]
 		return with(r, "asset_id", ids.of(str(r, "asset_id")), "category_id", c), ok

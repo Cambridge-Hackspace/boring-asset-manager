@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -41,8 +42,27 @@ const (
 )
 
 // ItemCategoryIcon is a category's own icon, by its category's ID in the
-// archive.
+// archive, and for a rendition other than the screen, /<rendition> after
+// it (iconItemID).
 const ItemCategoryIcon = "category_icon"
+
+// iconItemID is the ID of the item of a category's icon for rendition.
+func iconItemID(categoryID, rendition string) string {
+	if rendition == "" || rendition == models.RenditionScreen {
+		return categoryID
+	}
+	return categoryID + "/" + rendition
+}
+
+// rowRendition is the rendition of a row of a table keyed by category
+// and rendition; a row of an archive made before renditions has none, and
+// is the screen's.
+func rowRendition(r map[string]any) string {
+	if rendition := str(r, "rendition"); rendition != "" {
+		return rendition
+	}
+	return models.RenditionScreen
+}
 
 // ImportItem is one thing an archive holds, and what importing does with
 // it.

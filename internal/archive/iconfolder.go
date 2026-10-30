@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -26,9 +27,10 @@ var iconSourceTables = map[string]string{"icon_library": "path", "category_icons
 type iconFolder struct {
 	// library and icons are sources by path and by icon name.
 	library, icons map[string]string
-	// categories are categories' icons' categories, by icon name.
-	categories map[string]string
-	assets     []IndexedAsset
+	// categories are categories' icons' categories, and renditions their
+	// renditions, by icon name.
+	categories, renditions map[string]string
+	assets                 []IndexedAsset
 }
 
 // take notes what of a row the folder holds, reporting whether its source
@@ -49,10 +51,14 @@ func (f *iconFolder) take(t *Table, vals []any) bool {
 			f.icons[get("icon_name")] = src
 		}
 		f.categories[get("icon_name")] = get("category_id")
+		f.renditions[get("icon_name")] = get("rendition")
 		return true
 	case "assets":
 		if icon := get("icon_name"); icon != "" {
-			f.assets = append(f.assets, IndexedAsset{AssetID: get("id"), Asset: get("name"), Icon: icon})
+			f.assets = append(f.assets, IndexedAsset{AssetID: get("id"), Asset: get("name"), Icon: icon, Rendition: models.RenditionScreen})
+		}
+		if icon := get("label_icon_name"); icon != "" {
+			f.assets = append(f.assets, IndexedAsset{AssetID: get("id"), Asset: get("name"), Icon: icon, Rendition: models.RenditionLabel})
 		}
 	}
 	return false
@@ -88,7 +94,7 @@ func (f *iconFolder) write(ctx context.Context, st *store.Store, tx *sql.Tx, p *
 	}
 	for _, icon := range sortedKeys(f.categories) {
 		id := f.categories[icon]
-		index.Categories = append(index.Categories, IndexedIcon{Icon: icon, CategoryID: id, Category: names[id]})
+		index.Categories = append(index.Categories, IndexedIcon{Icon: icon, CategoryID: id, Category: names[id], Rendition: f.renditions[icon]})
 	}
 	b, err := json.MarshalIndent(index, "", "  ")
 	if err != nil {

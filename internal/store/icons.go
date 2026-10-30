@@ -30,6 +30,7 @@ import (
 
 var (
 	ErrCategoryIconNotFound    = errors.New("this category has no icon")
+	ErrUnknownRendition        = errors.New("no such rendition: an icon's rendition is screen or label")
 	ErrIconLibraryFileNotFound = errors.New("icon library file not found")
 	ErrIconNameTaken           = errors.New("another category's icon already has this name")
 	ErrIconPathTaken           = errors.New("another library file already has this path")
@@ -127,8 +128,27 @@ func checkIconSource(src string) error {
 func categoryIconFile(name string) string { return "categories/" + name + ".ilx" }
 func libraryFile(path string) string      { return "library/" + path }
 
+// iconSource is a source a build compiles: a library file, id its ID, or
+// a category's icon, id the category's, for rendition.
 type iconSource struct {
-	id, name, source string
+	id, rendition, name, source string
+}
+
+// isCategoryIcon reports whether i is categoryID's icon for rendition.
+func (i iconSource) isCategoryIcon(categoryID, rendition string) bool {
+	return i.id == categoryID && i.rendition == rendition
+}
+
+// renditionOf is r, or the default rendition when r is empty; a rendition
+// that is not one is ErrUnknownRendition.
+func renditionOf(r string) (string, error) {
+	if r == "" {
+		return models.RenditionScreen, nil
+	}
+	if !models.ValidRendition(r) {
+		return "", fmt.Errorf("%w: %q", ErrUnknownRendition, r)
+	}
+	return r, nil
 }
 
 // iconInputs is everything a build compiles.
@@ -227,17 +247,17 @@ func (s *Store) readIconInputs(q querier) (iconInputs, error) {
 		var out []iconSource
 		for rows.Next() {
 			var src iconSource
-			if err := rows.Scan(&src.id, &src.name, &src.source); err != nil {
+			if err := rows.Scan(&src.id, &src.rendition, &src.name, &src.source); err != nil {
 				return nil, err
 			}
 			out = append(out, src)
 		}
 		return out, rows.Err()
 	}
-	if in.library, err = read(`SELECT id, path, source FROM icon_library WHERE source IS NOT NULL`); err != nil {
+	if in.library, err = read(`SELECT id, '', path, source FROM icon_library WHERE source IS NOT NULL`); err != nil {
 		return in, fmt.Errorf("reading the icon library: %w", err)
 	}
-	if in.icons, err = read(`SELECT category_id, icon_name, source FROM category_icons WHERE source IS NOT NULL`); err != nil {
+	if in.icons, err = read(`SELECT category_id, rendition, icon_name, source FROM category_icons WHERE source IS NOT NULL`); err != nil {
 		return in, fmt.Errorf("reading category icons: %w", err)
 	}
 	if in.wrappers, err = readIconWrappers(q); err != nil {
@@ -486,8 +506,13 @@ type IconCheck struct {
 }
 
 // CheckCategoryIcon compiles the lexicon with source as categoryID's
-// icon, named name, and keeps nothing: what an editor checks as it goes.
-func (s *Store) CheckCategoryIcon(ctx context.Context, c IconCompiler, categoryID, name, source string) (*IconCheck, error) {
+// icon for rendition, named name, and keeps nothing: what an editor checks
+// as it goes.
+func (s *Store) CheckCategoryIcon(ctx context.Context, c IconCompiler, categoryID, rendition, name, source string) (*IconCheck, error) {
+	rendition, err := renditionOf(rendition)
+	if err != nil {
+		return nil, err
+	}
 	if err := ValidIconName(name); err != nil {
 		return nil, err
 	}
@@ -498,7 +523,7 @@ func (s *Store) CheckCategoryIcon(ctx context.Context, c IconCompiler, categoryI
 	if err != nil {
 		return nil, err
 	}
-	setCategoryIcon(&in, categoryID, name, source)
+	setCategoryIcon(&in, categoryID, rendition, name, source)
 	// what an editor checks is the icons, not the values assets give them
 	in.wrappers = nil
 	in.sort()
@@ -520,14 +545,14 @@ func (s *Store) CheckCategoryIcon(ctx context.Context, c IconCompiler, categoryI
 	return check, nil
 }
 
-func setCategoryIcon(in *iconInputs, categoryID, name, source string) {
+func setCategoryIcon(in *iconInputs, categoryID, rendition, name, source string) {
 	for i := range in.icons {
-		if in.icons[i].id == categoryID {
+		if in.icons[i].isCategoryIcon(categoryID, rendition) {
 			in.icons[i].name, in.icons[i].source = name, source
 			return
 		}
 	}
-	in.icons = append(in.icons, iconSource{id: categoryID, name: name, source: source})
+	in.icons = append(in.icons, iconSource{id: categoryID, rendition: rendition, name: name, source: source})
 }
 
 // iconDefined requires the build to emit the category's icon by its name.
@@ -539,9 +564,13 @@ func iconDefined(res *isolex.Result, name string) []models.IconDiag {
 		Message: fmt.Sprintf("this category's icon is named %q, but nothing here draws an icon by that name; add `icon %q { … }`", name, name)}}
 }
 
-// GetCategoryIcon returns a category's icon source.
-func (s *Store) GetCategoryIcon(categoryID string) (*models.CategoryIcon, error) {
-	rows, err := s.Query(`SELECT category_id, icon_name, source, draft, draft_errors, updated_at FROM category_icons WHERE category_id = ?`, categoryID)
+// GetCategoryIcon returns a category's icon source for rendition.
+func (s *Store) GetCategoryIcon(categoryID, rendition string) (*models.CategoryIcon, error) {
+	rendition, err := renditionOf(rendition)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.Query(`SELECT category_id, rendition, icon_name, source, draft, draft_errors, updated_at FROM category_icons WHERE category_id = ? AND rendition = ?`, categoryID, rendition)
 	if err != nil {
 		return nil, err
 	}
@@ -555,9 +584,10 @@ func (s *Store) GetCategoryIcon(categoryID string) (*models.CategoryIcon, error)
 	return &list[0], nil
 }
 
-// ListCategoryIcons returns every category's icon source, by icon name.
+// ListCategoryIcons returns every category's icon sources, every
+// rendition's, by icon name.
 func (s *Store) ListCategoryIcons() ([]models.CategoryIcon, error) {
-	rows, err := s.Query(`SELECT category_id, icon_name, source, draft, draft_errors, updated_at FROM category_icons ORDER BY icon_name`)
+	rows, err := s.Query(`SELECT category_id, rendition, icon_name, source, draft, draft_errors, updated_at FROM category_icons ORDER BY icon_name`)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +600,7 @@ func scanCategoryIcons(rows *sql.Rows) ([]models.CategoryIcon, error) {
 	for rows.Next() {
 		var ic models.CategoryIcon
 		var source, draft, errs sql.NullString
-		if err := rows.Scan(&ic.CategoryID, &ic.IconName, &source, &draft, &errs, &ic.UpdatedAt); err != nil {
+		if err := rows.Scan(&ic.CategoryID, &ic.Rendition, &ic.IconName, &source, &draft, &errs, &ic.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if err := fillSources(&ic.Source, &ic.Draft, &ic.DraftErrors, source, draft, errs); err != nil {
@@ -595,11 +625,16 @@ func fillSources(source, draft **string, errs *[]models.IconDiag, s, d, e sql.Nu
 	return nil
 }
 
-// SaveCategoryIcon saves source as categoryID's icon, named name: the
-// first save names it, and later ones must give the same name (see
-// RenameCategoryIcon). Published if the lexicon compiles clean with it
-// and draws an icon by that name; kept as a draft otherwise.
-func (s *Store) SaveCategoryIcon(ctx context.Context, c IconCompiler, categoryID, name, source string) (*models.IconSave, error) {
+// SaveCategoryIcon saves source as categoryID's icon for rendition, named
+// name: the first save names it, and later ones must give the same name
+// (see RenameCategoryIcon). Published if the lexicon compiles clean with
+// it and draws an icon by that name; kept as a draft otherwise. A name is
+// one icon's, whatever its rendition.
+func (s *Store) SaveCategoryIcon(ctx context.Context, c IconCompiler, categoryID, rendition, name, source string) (*models.IconSave, error) {
+	rendition, err := renditionOf(rendition)
+	if err != nil {
+		return nil, err
+	}
 	if err := ValidIconName(name); err != nil {
 		return nil, err
 	}
@@ -609,7 +644,7 @@ func (s *Store) SaveCategoryIcon(ctx context.Context, c IconCompiler, categoryID
 	if _, err := s.GetCategoryByID(categoryID); err != nil {
 		return nil, err
 	}
-	existing, err := s.GetCategoryIcon(categoryID)
+	existing, err := s.GetCategoryIcon(categoryID, rendition)
 	switch {
 	case errors.Is(err, ErrCategoryIconNotFound):
 		existing = nil
@@ -626,10 +661,10 @@ func (s *Store) SaveCategoryIcon(ctx context.Context, c IconCompiler, categoryID
 		}
 	}
 	return s.changeIcons(ctx, c, iconChange{
-		apply: func(in *iconInputs) error { setCategoryIcon(in, categoryID, name, source); return nil },
+		apply: func(in *iconInputs) error { setCategoryIcon(in, categoryID, rendition, name, source); return nil },
 		check: func(r *isolex.Result) []models.IconDiag { return iconDefined(r, name) },
 		keep: func(tx *sql.Tx, published bool, errs []models.IconDiag) error {
-			return s.keepCategoryIcon(tx, categoryID, name, source, published, errs)
+			return s.keepCategoryIcon(tx, categoryID, rendition, name, source, published, errs)
 		},
 	})
 }
@@ -640,14 +675,14 @@ func (s *Store) iconNameTaken(name string) (bool, error) {
 	return n > 0, err
 }
 
-func (s *Store) keepCategoryIcon(tx *sql.Tx, categoryID, name, source string, published bool, errs []models.IconDiag) error {
+func (s *Store) keepCategoryIcon(tx *sql.Tx, categoryID, rendition, name, source string, published bool, errs []models.IconDiag) error {
 	now := dbTime(time.Now())
 	var exists int
-	if err := s.TxQueryRow(tx, `SELECT COUNT(*) FROM category_icons WHERE category_id = ?`, categoryID).Scan(&exists); err != nil {
+	if err := s.TxQueryRow(tx, `SELECT COUNT(*) FROM category_icons WHERE category_id = ? AND rendition = ?`, categoryID, rendition).Scan(&exists); err != nil {
 		return err
 	}
 	if exists == 0 {
-		_, err := s.TxExec(tx, `INSERT INTO category_icons (category_id, icon_name, updated_at) VALUES (?, ?, ?)`, categoryID, name, now)
+		_, err := s.TxExec(tx, `INSERT INTO category_icons (category_id, rendition, icon_name, updated_at) VALUES (?, ?, ?, ?)`, categoryID, rendition, name, now)
 		if IsUniqueViolation(err) {
 			return ErrIconNameTaken
 		}
@@ -660,18 +695,32 @@ func (s *Store) keepCategoryIcon(tx *sql.Tx, categoryID, name, source string, pu
 		if err != nil {
 			return err
 		}
-		_, err = s.TxExec(tx, `UPDATE category_icons SET draft = ?, draft_errors = ?, updated_at = ? WHERE category_id = ?`, source, string(data), now, categoryID)
+		_, err = s.TxExec(tx, `UPDATE category_icons SET draft = ?, draft_errors = ?, updated_at = ? WHERE category_id = ? AND rendition = ?`, source, string(data), now, categoryID, rendition)
 		return err
 	}
-	if _, err := s.TxExec(tx, `UPDATE category_icons SET source = ?, draft = NULL, draft_errors = NULL, updated_at = ? WHERE category_id = ?`, source, now, categoryID); err != nil {
+	if _, err := s.TxExec(tx, `UPDATE category_icons SET source = ?, draft = NULL, draft_errors = NULL, updated_at = ? WHERE category_id = ? AND rendition = ?`, source, now, categoryID, rendition); err != nil {
 		return err
 	}
-	if err := s.addIconRevision(tx, "category_id", categoryID, source, now); err != nil {
+	if err := s.addCategoryIconRevision(tx, categoryID, rendition, source, now); err != nil {
 		return err
+	}
+	what := "icon"
+	if rendition != models.RenditionScreen {
+		what = rendition + " icon"
 	}
 	return s.recordEvent(tx, models.EventCategoryIconChanged, categoryID, models.EventPayload{
-		Changes: []models.EventChange{{What: "icon", To: name}},
+		Changes: []models.EventChange{{What: what, To: name}},
 	})
+}
+
+func (s *Store) addCategoryIconRevision(tx *sql.Tx, categoryID, rendition, source string, at time.Time) error {
+	var actor *string
+	if s.actor != "" {
+		actor = &s.actor
+	}
+	_, err := s.TxExec(tx, `INSERT INTO icon_revisions (id, category_id, rendition, source, actor_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		uuid.NewString(), categoryID, rendition, source, actor, at)
+	return err
 }
 
 func (s *Store) addIconRevision(tx *sql.Tx, column, id, source string, at time.Time) error {
@@ -684,15 +733,15 @@ func (s *Store) addIconRevision(tx *sql.Tx, column, id, source string, at time.T
 	return err
 }
 
-// RenameCategoryIcon renames a category's published icon, which is
-// refused if anything else names it by its old name; the source must
-// already draw it under the new one. Assets drawn with it by name, or with
-// one of its variants, are given it by the new name.
-func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, categoryID, name string) (*models.IconSave, error) {
+// RenameCategoryIcon renames a category's published icon for rendition,
+// which is refused if anything else names it by its old name; the source
+// must already draw it under the new one. Assets drawn with it by name, or
+// with one of its variants, are given it by the new name.
+func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, categoryID, rendition, name string) (*models.IconSave, error) {
 	if err := ValidIconName(name); err != nil {
 		return nil, err
 	}
-	existing, err := s.GetCategoryIcon(categoryID)
+	existing, err := s.GetCategoryIcon(categoryID, rendition)
 	if err != nil {
 		return nil, err
 	}
@@ -710,7 +759,7 @@ func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, category
 		refuse: true,
 		apply: func(in *iconInputs) error {
 			for i := range in.icons {
-				if in.icons[i].id == categoryID {
+				if in.icons[i].isCategoryIcon(categoryID, existing.Rendition) {
 					in.icons[i].name = name
 				}
 			}
@@ -729,7 +778,7 @@ func (s *Store) RenameCategoryIcon(ctx context.Context, c IconCompiler, category
 			return iconDefined(r, name)
 		},
 		keep: func(tx *sql.Tx, _ bool, _ []models.IconDiag) error {
-			_, err := s.TxExec(tx, `UPDATE category_icons SET icon_name = ?, updated_at = ? WHERE category_id = ?`, name, dbTime(time.Now()), categoryID)
+			_, err := s.TxExec(tx, `UPDATE category_icons SET icon_name = ?, updated_at = ? WHERE category_id = ? AND rendition = ?`, name, dbTime(time.Now()), categoryID, existing.Rendition)
 			if IsUniqueViolation(err) {
 				return ErrIconNameTaken
 			}
@@ -757,6 +806,13 @@ func (s *Store) followIconRenameTx(tx *sql.Tx, was, now string, drawn map[string
 	if err != nil {
 		return err
 	}
+	labelNamed, err := s.txNames(tx, `SELECT DISTINCT label_icon_name FROM assets WHERE label_icon_name IS NOT NULL`)
+	if err != nil {
+		return err
+	}
+	for n := range labelNamed {
+		named[n] = true
+	}
 	moves := map[string]string{}
 	for n := range named {
 		switch {
@@ -770,6 +826,9 @@ func (s *Store) followIconRenameTx(tx *sql.Tx, was, now string, drawn map[string
 	}
 	for from, to := range moves {
 		if _, err := s.TxExec(tx, `UPDATE assets SET icon_name = ? WHERE icon_name = ?`, to, from); err != nil {
+			return err
+		}
+		if _, err := s.TxExec(tx, `UPDATE assets SET label_icon_name = ? WHERE label_icon_name = ?`, to, from); err != nil {
 			return err
 		}
 	}
@@ -794,10 +853,11 @@ func (s *Store) txNames(tx *sql.Tx, query string) (map[string]bool, error) {
 	return names, rows.Err()
 }
 
-// DeleteCategoryIcon removes a category's icon and its history, which is
-// refused if anything else draws with it.
-func (s *Store) DeleteCategoryIcon(ctx context.Context, c IconCompiler, categoryID string) (*models.IconSave, error) {
-	if _, err := s.GetCategoryIcon(categoryID); err != nil {
+// DeleteCategoryIcon removes a category's icon for rendition and its
+// history, which is refused if anything else draws with it.
+func (s *Store) DeleteCategoryIcon(ctx context.Context, c IconCompiler, categoryID, rendition string) (*models.IconSave, error) {
+	ic, err := s.GetCategoryIcon(categoryID, rendition)
+	if err != nil {
 		return nil, err
 	}
 	return s.changeIcons(ctx, c, iconChange{
@@ -805,7 +865,7 @@ func (s *Store) DeleteCategoryIcon(ctx context.Context, c IconCompiler, category
 		apply: func(in *iconInputs) error {
 			kept := in.icons[:0]
 			for _, i := range in.icons {
-				if i.id != categoryID {
+				if !i.isCategoryIcon(categoryID, ic.Rendition) {
 					kept = append(kept, i)
 				}
 			}
@@ -813,38 +873,39 @@ func (s *Store) DeleteCategoryIcon(ctx context.Context, c IconCompiler, category
 			return nil
 		},
 		keep: func(tx *sql.Tx, _ bool, _ []models.IconDiag) error {
-			_, err := s.TxExec(tx, `DELETE FROM category_icons WHERE category_id = ?`, categoryID)
+			_, err := s.TxExec(tx, `DELETE FROM category_icons WHERE category_id = ? AND rendition = ?`, categoryID, ic.Rendition)
 			return err
 		},
 	})
 }
 
-// DiscardCategoryIconDraft drops a category's draft; an icon never
-// published goes with it.
-func (s *Store) DiscardCategoryIconDraft(categoryID string) error {
-	ic, err := s.GetCategoryIcon(categoryID)
+// DiscardCategoryIconDraft drops a category's draft for rendition; an icon
+// never published goes with it.
+func (s *Store) DiscardCategoryIconDraft(categoryID, rendition string) error {
+	ic, err := s.GetCategoryIcon(categoryID, rendition)
 	if err != nil {
 		return err
 	}
 	if ic.Source == nil {
-		_, err = s.Exec(`DELETE FROM category_icons WHERE category_id = ?`, categoryID)
+		_, err = s.Exec(`DELETE FROM category_icons WHERE category_id = ? AND rendition = ?`, categoryID, ic.Rendition)
 	} else {
-		_, err = s.Exec(`UPDATE category_icons SET draft = NULL, draft_errors = NULL, updated_at = ? WHERE category_id = ?`, dbTime(time.Now()), categoryID)
+		_, err = s.Exec(`UPDATE category_icons SET draft = NULL, draft_errors = NULL, updated_at = ? WHERE category_id = ? AND rendition = ?`, dbTime(time.Now()), categoryID, ic.Rendition)
 	}
 	return err
 }
 
-// ListCategoryIconRevisions returns a category icon's published versions,
-// newest first.
-func (s *Store) ListCategoryIconRevisions(categoryID string) ([]models.IconRevision, error) {
-	if _, err := s.GetCategoryIcon(categoryID); err != nil {
+// ListCategoryIconRevisions returns a category icon's published versions
+// for rendition, newest first.
+func (s *Store) ListCategoryIconRevisions(categoryID, rendition string) ([]models.IconRevision, error) {
+	ic, err := s.GetCategoryIcon(categoryID, rendition)
+	if err != nil {
 		return nil, err
 	}
-	return s.iconRevisions("category_id", categoryID)
+	return s.iconRevisions("category_id = ? AND rendition = ?", categoryID, ic.Rendition)
 }
 
-func (s *Store) iconRevisions(column, id string) ([]models.IconRevision, error) {
-	rows, err := s.Query(`SELECT id, source, actor_user_id, created_at FROM icon_revisions WHERE `+column+` = ? ORDER BY created_at DESC, id`, id)
+func (s *Store) iconRevisions(where string, args ...any) ([]models.IconRevision, error) {
+	rows, err := s.Query(`SELECT id, source, actor_user_id, created_at FROM icon_revisions WHERE `+where+` ORDER BY created_at DESC, id`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -1057,7 +1118,7 @@ func (s *Store) ListIconLibraryRevisions(id string) ([]models.IconRevision, erro
 	if _, err := s.GetIconLibraryFile(id); err != nil {
 		return nil, err
 	}
-	return s.iconRevisions("library_id", id)
+	return s.iconRevisions("library_id = ?", id)
 }
 
 // GetIconPalette returns the palette, in its order.

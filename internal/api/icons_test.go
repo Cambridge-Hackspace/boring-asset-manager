@@ -276,7 +276,7 @@ func TestRunIconsBuildsAtStartup(t *testing.T) {
 	requireIcons(t)
 	srv, _, _ := setupTestServer(t)
 	cat, _ := srv.store.CreateCategoryFrom(store.CategoryInput{Name: "Storage"})
-	if _, err := srv.store.SaveCategoryIcon(context.Background(), srv.icons, cat.ID, "crate", crateSource); err != nil {
+	if _, err := srv.store.SaveCategoryIcon(context.Background(), srv.icons, cat.ID, "", "crate", crateSource); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := srv.store.Exec(`DELETE FROM icon_build`); err != nil {

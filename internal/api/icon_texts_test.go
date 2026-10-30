@@ -38,7 +38,7 @@ func TestAssetTextsThroughTheAPI(t *testing.T) {
 		t.Fatalf("%+v %v", save, err)
 	}
 	tags, _ := st.CreateCategoryFrom(store.CategoryInput{Name: "Tags"})
-	if save, err := st.SaveCategoryIcon(ctx, srv.icons, tags.ID, "tag", textTag); err != nil || !save.Published {
+	if save, err := st.SaveCategoryIcon(ctx, srv.icons, tags.ID, "", "tag", textTag); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	count, _ := st.CreateField("count", "Count", "number", nil)

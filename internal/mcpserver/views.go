@@ -77,10 +77,14 @@ type assetDetail struct {
 	Scopes       []string     `json:"scopes,omitempty"`
 	ScanURL      string       `json:"scan_url,omitempty" jsonschema:"what its QR labels open"`
 	Icon         *iconView    `json:"icon,omitempty" jsonschema:"the icon it is drawn with, when it or a category has one"`
+	LabelIcon    *iconView    `json:"label_icon,omitempty" jsonschema:"the icon its labels draw, when it is not icon: its own label icon or its categories'"`
 }
 
 type iconView struct {
 	Name string `json:"name"`
+	// Rendition is whose icon it is: for a label icon, the screen's when
+	// there is none for labels.
+	Rendition string `json:"rendition" jsonschema:"whose icon it is: screen, or label"`
 	// Own is set for an icon of its own (icon_name on update_asset), and
 	// Category names the category it gets one from otherwise.
 	Own      bool   `json:"own,omitempty" jsonschema:"set when it is its own icon rather than its categories'"`
@@ -181,13 +185,22 @@ func (e *env) detail(ctx context.Context, a *models.AssetWithDetails) (assetDeta
 	for _, o := range a.Actions {
 		d.Actions = append(d.Actions, actionView{Key: o.Key, Label: o.Label, Confirm: o.Confirm})
 	}
-	if ic := a.ResolvedIcon; ic != nil {
-		d.Icon = &iconView{Name: ic.Name, Own: ic.From == models.IconFromAsset, Missing: ic.Missing, Color: ic.Color, Base: ic.Base, State: ic.State, Texts: ic.Texts}
-		if ic.SourceCategoryID != "" {
-			d.Icon.Category = &ref{ID: ic.SourceCategoryID, Name: ic.SourceCategoryName}
-		}
+	d.Icon = iconViewOf(a.ResolvedIcon)
+	if label := a.ResolvedIcons[models.RenditionLabel]; label != a.ResolvedIcon {
+		d.LabelIcon = iconViewOf(label)
 	}
 	return d, nil
+}
+
+func iconViewOf(ic *models.ResolvedIcon) *iconView {
+	if ic == nil {
+		return nil
+	}
+	v := &iconView{Name: ic.Name, Rendition: ic.Rendition, Own: ic.From == models.IconFromAsset, Missing: ic.Missing, Color: ic.Color, Base: ic.Base, State: ic.State, Texts: ic.Texts}
+	if ic.SourceCategoryID != "" {
+		v.Category = &ref{ID: ic.SourceCategoryID, Name: ic.SourceCategoryName}
+	}
+	return v
 }
 
 // describe names an asset for a summary: its name, and a code if it has one.

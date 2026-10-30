@@ -389,8 +389,18 @@ type Asset struct {
 	Condition     string `json:"condition"`
 	ConditionNote string `json:"condition_note"`
 	// IconName is the asset's own icon (README §3.7), drawn in place of its
-	// categories'; nil when it has none.
-	IconName *string `json:"icon_name"`
+	// categories'; nil when it has none. It is its screen icon
+	// (RenditionScreen); LabelIconName is its own label icon.
+	IconName      *string `json:"icon_name"`
+	LabelIconName *string `json:"label_icon_name"`
+}
+
+// OwnIcon is the asset's own icon for rendition, nil when it has none.
+func (a *Asset) OwnIcon(rendition string) *string {
+	if rendition == RenditionLabel {
+		return a.LabelIconName
+	}
+	return a.IconName
 }
 
 // AssetStock is an asset's stock, counted by quantity.
@@ -453,9 +463,34 @@ type AssetWithDetails struct {
 	LabelTemplate TemplateChoice `json:"label_template"`
 	// Actions are those its categories offer on it (README §5.4).
 	Actions []OfferedAction `json:"actions"`
-	// ResolvedIcon is the icon it is drawn with, and why; nil when neither
-	// it nor any of its categories has one.
+	// ResolvedIcon is the icon it is drawn with on screen, and why; nil
+	// when neither it nor any of its categories has one.
 	ResolvedIcon *ResolvedIcon `json:"resolved_icon"`
+	// ResolvedIcons is the icon it is drawn with for each rendition it has
+	// one for, ResolvedIcon among them.
+	ResolvedIcons map[string]*ResolvedIcon `json:"resolved_icons"`
+}
+
+// Renditions are the forms an icon takes for where it is drawn (README
+// §3.7): RenditionScreen, every icon on screen, and RenditionLabel, on
+// labels. A category, and an asset, has an icon for each; one with no
+// label icon is drawn on labels with its screen icon.
+const (
+	RenditionScreen = "screen"
+	RenditionLabel  = "label"
+)
+
+// Renditions lists every rendition, the default first.
+var Renditions = []string{RenditionScreen, RenditionLabel}
+
+// ValidRendition reports whether r is a rendition.
+func ValidRendition(r string) bool {
+	for _, x := range Renditions {
+		if r == x {
+			return true
+		}
+	}
+	return false
 }
 
 // Where an asset's icon comes from (ResolvedIcon.From).
@@ -479,8 +514,11 @@ const (
 // and State says which. Base is the icon as it is named, with neither,
 // set whenever Name is not it.
 type ResolvedIcon struct {
-	Name               string             `json:"name"`
-	From               string             `json:"from"`
+	Name string `json:"name"`
+	From string `json:"from"`
+	// Rendition is whose icon it is: the rendition asked for, or
+	// RenditionScreen when there is no icon for that one.
+	Rendition          string             `json:"rendition"`
 	SourceCategoryID   string             `json:"source_category_id,omitempty"`
 	SourceCategoryName string             `json:"source_category_name,omitempty"`
 	Missing            bool               `json:"missing,omitempty"`
@@ -975,11 +1013,12 @@ type IconDiag struct {
 	Message string `json:"message"`
 }
 
-// CategoryIcon is a category's isolex source (README §3.7). Source is
+// CategoryIcon is a category's isolex source for a rendition (README §3.7). Source is
 // the published version, nil until one has compiled; Draft is a later
 // edit that has not, with the errors that stopped it.
 type CategoryIcon struct {
 	CategoryID  string     `json:"category_id"`
+	Rendition   string     `json:"rendition"`
 	IconName    string     `json:"icon_name"`
 	Source      *string    `json:"source"`
 	Draft       *string    `json:"draft"`
