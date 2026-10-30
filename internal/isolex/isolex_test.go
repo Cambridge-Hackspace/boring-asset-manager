@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -110,18 +111,18 @@ func TestTheModuleIsThePinnedVersion(t *testing.T) {
 
 // isolex's own fixtures compile here to isolex's own goldens, byte for
 // byte: the module is the compiler, not an approximation of it. They are
-// the pinned release's (testdata/isolex-0.5.0): its sample, and its
+// the pinned release's (testdata/isolex-0.6.0): its sample, and its
 // transforms and text, in IR version 2.
 func TestTheSampleCompilesToIsolexsGolden(t *testing.T) {
 	c := compiler(t, Options{})
 	var r *Result
 	for _, fixture := range []string{"sample", "transforms", "text"} {
-		got := compile(t, c, File{fixture + ".ilx", readFile(t, "testdata/isolex-0.5.0/"+fixture+".ilx")})
+		got := compile(t, c, File{fixture + ".ilx", readFile(t, "testdata/isolex-0.6.0/"+fixture+".ilx")})
 		if !got.OK || len(got.Errors) != 0 {
 			t.Fatalf("%s: errors: %+v", fixture, got.Errors)
 		}
 		var want bytes.Buffer
-		if err := json.Compact(&want, []byte(readFile(t, "testdata/isolex-0.5.0/"+fixture+".ir.golden.json"))); err != nil {
+		if err := json.Compact(&want, []byte(readFile(t, "testdata/isolex-0.6.0/"+fixture+".ir.golden.json"))); err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got.IR, want.Bytes()) {
@@ -149,7 +150,7 @@ func TestTheSampleCompilesToIsolexsGolden(t *testing.T) {
 func TestOneIconAndManyFromOneParse(t *testing.T) {
 	c := compiler(t, Options{})
 	ctx := context.Background()
-	src := readFile(t, "testdata/isolex-0.5.0/text.ilx")
+	src := readFile(t, "testdata/isolex-0.6.0/text.ilx")
 	files := []File{{"text.ilx", src}}
 
 	one, err := c.CompileOne(ctx, files, "port-label", map[string]any{"ports": 24.0})
@@ -384,13 +385,90 @@ func TestTheUnknownIconNeedsNoCompiler(t *testing.T) {
 // package svg is isolex's own SVG for it.
 func TestTheCompiledSampleDrawsAsIsolexDraws(t *testing.T) {
 	c := compiler(t, Options{})
-	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/isolex-0.5.0/sample.ilx")})
-	want := readFile(t, "testdata/isolex-0.5.0/sample.svg.golden")
+	r := compile(t, c, File{"sample.ilx", readFile(t, "testdata/isolex-0.6.0/sample.ilx")})
+	want := readFile(t, "testdata/isolex-0.6.0/sample.svg.golden")
 	for i := range r.Doc.Icons {
 		icon := &r.Doc.Icons[i]
 		got := "== " + icon.Name + ".svg ==\n" + svg.Icon(icon, svg.Palette(svg.IsolexPalette))
 		if !strings.Contains(want, got) {
 			t.Errorf("%s is not drawn as isolex draws it:\n%s", icon.Name, got)
 		}
+	}
+}
+
+// A lexicon's own colors come back from the compiler, from one icon or
+// many too, and draw it as isolex render draws it with them.
+func TestALexiconsPaletteBlockComesBack(t *testing.T) {
+	c := compiler(t, Options{})
+	files := []File{{"palette.ilx", readFile(t, "testdata/isolex-0.6.0/palette.ilx")}}
+	r := compile(t, c, files...)
+	if !r.OK || len(r.Warnings) != 0 {
+		t.Fatalf("errors %+v, warnings %+v", r.Errors, r.Warnings)
+	}
+	if len(r.Palette) != 6 || r.Palette["accent"] != (Colors{Light: "#c62828", Dark: "#ef9a9a"}) {
+		t.Fatalf("palette %v", r.Palette)
+	}
+	colors := map[string]string{}
+	for token, c := range svg.IsolexPalette {
+		colors[token] = c
+	}
+	for token, c := range r.Palette {
+		colors[token] = c.Light
+	}
+	got := "== crate.svg ==\n" + svg.Icon(r.Doc.Icon("crate"), svg.Palette(colors))
+	if want := readFile(t, "testdata/isolex-0.6.0/palette.svg.golden"); !strings.Contains(want, got) {
+		t.Errorf("drawn\n%s\nisolex draws\n%s", got, want)
+	}
+
+	one, err := c.CompileOne(context.Background(), files, "crate", nil)
+	if err != nil || !reflect.DeepEqual(one.Palette, r.Palette) {
+		t.Errorf("one icon's palette %v %v", one.Palette, err)
+	}
+	many, err := c.CompileMany(context.Background(), files, []Request{{Icon: "crate"}})
+	if err != nil || !reflect.DeepEqual(many.Palette, r.Palette) {
+		t.Errorf("many icons' palette %v %v", many.Palette, err)
+	}
+	// even when the lexicon does not compile
+	broken := compile(t, c, File{"palette.ilx", files[0].Text + `icon "x" {}`})
+	if broken.OK || !reflect.DeepEqual(broken.Palette, r.Palette) {
+		t.Errorf("a broken lexicon's palette %v", broken.Palette)
+	}
+	if plain := compile(t, c, File{"sample.ilx", readFile(t, "testdata/isolex-0.6.0/sample.ilx")}); plain.Palette != nil {
+		t.Errorf("a lexicon without a block has palette %v", plain.Palette)
+	}
+}
+
+// The palette bam writes as a block is the palette the compiler reads
+// back, but a color with transparency, which a block cannot hold.
+func TestPaletteBlock(t *testing.T) {
+	palette := []PaletteColor{
+		{"ink", Colors{"#1f2933", "#e4e7eb"}},
+		{"body-top", Colors{"#fff", "#000"}},
+		{"glass", Colors{"#a0c4ff80", "#a0c4ff"}},
+	}
+	block := PaletteBlock(palette)
+	want := "palette {\n" +
+		"    ink light=\"#1f2933\" dark=\"#e4e7eb\"\n" +
+		"    body-top light=\"#fff\" dark=\"#000\"\n" +
+		"    // glass is light #a0c4ff80 and dark #a0c4ff, which a palette block cannot hold\n" +
+		"}\n"
+	if block != want {
+		t.Errorf("got\n%s\nwant\n%s", block, want)
+	}
+	if PaletteBlock(nil) != "" {
+		t.Error("an empty palette wrote a block")
+	}
+
+	c := compiler(t, Options{})
+	lexicon, err := LexiconBlock(Vocabulary{Tokens: []string{"ink", "body-top", "glass"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := compile(t, c, File{LexiconFileName, lexicon + "\n" + block})
+	if !r.OK {
+		t.Fatalf("errors %+v", r.Errors)
+	}
+	if !reflect.DeepEqual(r.Palette, map[string]Colors{"ink": palette[0].Colors, "body-top": palette[1].Colors}) {
+		t.Errorf("read back %v", r.Palette)
 	}
 }

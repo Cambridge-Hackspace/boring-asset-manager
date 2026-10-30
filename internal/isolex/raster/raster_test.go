@@ -274,9 +274,9 @@ func TestCurvesAndRoundShapes(t *testing.T) {
 func TestTheSampleDraws(t *testing.T) {
 	for _, file := range []string{
 		"sample.ir.golden.json",
-		filepath.Join("isolex-0.5.0", "sample.ir.golden.json"),
-		filepath.Join("isolex-0.5.0", "transforms.ir.golden.json"),
-		filepath.Join("isolex-0.5.0", "text.ir.golden.json"),
+		filepath.Join("isolex-0.6.0", "sample.ir.golden.json"),
+		filepath.Join("isolex-0.6.0", "transforms.ir.golden.json"),
+		filepath.Join("isolex-0.6.0", "text.ir.golden.json"),
 	} {
 		drawsAll(t, file)
 	}

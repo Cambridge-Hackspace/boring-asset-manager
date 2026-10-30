@@ -1,0 +1,8 @@
+== crate.svg ==
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-42.64 -28.00 85.28 76.00" width="85.28" height="76.00">
+<title>crate</title>
+  <polygon points="-34.64,20.00 0.00,40.00 0.00,20.00 -34.64,0.00" fill="#bcccdc" stroke="#102a43" stroke-width="1.20"/>
+  <polygon points="34.64,20.00 0.00,40.00 0.00,20.00 34.64,0.00" fill="#9fb3c8" stroke="#102a43" stroke-width="1.20"/>
+  <polygon points="0.00,-20.00 34.64,0.00 0.00,20.00 -34.64,0.00" fill="#d9e2ec" stroke="#102a43" stroke-width="1.20"/>
+  <polygon points="-25.98,19.00 -8.66,29.00 -8.66,21.00 -25.98,11.00" fill="#c62828" stroke="none"/>
+</svg>
