@@ -1235,4 +1235,12 @@ test("draw an icon on the label: each asset's, or one chosen, drawn as it prints
   await expect.poll(async () => (await api.call('GET', `/templates/${template.id}`)).template.elements).toMatchObject([
     { type: 'icon', icon: '{{asset.icon}}', state: true },
   ]);
+
+  // its label icon unless asked for its screen icon
+  await expect(page.getByLabel('Rendition')).toHaveValue('label');
+  await page.getByLabel('Rendition').selectOption('screen');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect.poll(async () => (await api.call('GET', `/templates/${template.id}`)).template.elements).toMatchObject([
+    { type: 'icon', icon: '{{asset.icon}}', state: true, rendition: 'screen' },
+  ]);
 });

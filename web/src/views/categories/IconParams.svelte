@@ -10,7 +10,7 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Field, IconParamBinding } from '../../lib/models';
+  import type { Field, IconParamBinding, Rendition } from '../../lib/models';
   import type { Definition } from '../../lib/isolex/syntax';
   import { iconParams, iconTextParams } from '../../lib/icons';
   import { iconset } from '../../lib/iconset.svelte';
@@ -21,8 +21,11 @@
     /** What every source defines, for the params the icon has. */
     definitions: Definition[];
     canEdit: boolean;
+    /** Which of the category's icons: its screen icon (absent) or its label icon. */
+    rendition?: Rendition;
   }
-  let { categoryId, iconName, definitions, canEdit }: Props = $props();
+  let { categoryId, iconName, definitions, canEdit, rendition = 'screen' }: Props = $props();
+  const path = $derived(`/categories/${encodeURIComponent(categoryId)}/icon/params${rendition === 'screen' ? '' : `?rendition=${rendition}`}`);
 
   let fields = $state<Field[]>([]);
   let bound = $state<Record<string, string>>({});
@@ -53,7 +56,7 @@
     try {
       const [f, b] = await Promise.all([
         request<{ fields: Field[] }>('GET', '/fields'),
-        request<{ params: IconParamBinding[] }>('GET', `/categories/${encodeURIComponent(categoryId)}/icon/params`),
+        request<{ params: IconParamBinding[] }>('GET', path),
       ]);
       fields = f.fields ?? [];
       saved = asMap(b.params ?? []);
@@ -71,7 +74,7 @@
     saving = true;
     const out = Object.fromEntries(Object.entries(bound).filter(([p, f]) => f && listed.includes(p)));
     try {
-      const res = await request<{ params: IconParamBinding[] }>('PUT', `/categories/${encodeURIComponent(categoryId)}/icon/params`, { params: out });
+      const res = await request<{ params: IconParamBinding[] }>('PUT', path, { params: out });
       saved = asMap(res.params ?? []);
       bound = { ...saved };
       status = 'Saved: each asset is drawn with its own.';

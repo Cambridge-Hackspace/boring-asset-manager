@@ -161,3 +161,44 @@ icon "${iconName}" { category "labels"; footprint 1 1 0.5
 
   await api.call('PUT', `/categories/${category.id}/icon/params`, { params: {} });
 });
+
+test('a category is drawn a label icon, previewed as it prints, and its assets’ labels print it', async ({ signedIn: page, api }) => {
+  const name = unique('Totes');
+  const { category } = await api.call('POST', '/categories', { name, color_hex: '#0f766e' });
+  const iconName = unique('tote').toLowerCase();
+  await api.call('PUT', `/categories/${category.id}/icon`, { icon_name: iconName, source: `icon "${iconName}" { category "storage"; footprint 1 1 1; part "box" { box 0 0 0 1 1 1 } }` });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Tote'), category_ids: [category.id] });
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Tote label'), units: 'mm', width: 20, height: 20, dpi: 203, layering: 'list',
+    elements: [{ type: 'icon', x: 0, y: 0, width: 20, height: 20, icon: '{{asset.icon}}' }],
+  });
+  const printed = async () => (await page.request.get(`/api/v1/assets/${asset.asset.id}/label?format=png&template_id=${template.id}`)).body();
+  const before = await printed();
+
+  await page.goto(`/categories/${category.id}`);
+  const section = iconSection(page);
+  await expect(section.getByRole('tab', { name: 'On screen' })).toHaveAttribute('aria-selected', 'true');
+  await section.getByRole('tab', { name: 'On labels' }).click();
+  await expect(section.getByText(`No label icon here or above, so labels print its screen icon, ${iconName}.`)).toBeVisible();
+
+  // drawn from the screen icon, named for it, and previewed as it prints
+  await section.getByRole('button', { name: 'Extend its screen icon' }).click();
+  await expect(section.getByLabel('Its name')).toHaveValue(`${iconName}-label`);
+  const source = page.getByRole('textbox', { name: `${name}'s label icon source` });
+  await source.fill(`icon "${iconName}-label" { category "storage"; footprint 1 1 1; part "lid" { tile 0 0 1 1 1 } }`);
+  await expect(section.getByRole('img', { name: `${iconName}-label as it prints in black and white on a 12 mm label: shaded, and as an outline` })).toBeVisible();
+  await expect(section.getByText('Shaded, and as an outline, at 203 dots an inch, enlarged.')).toBeVisible();
+  await noViolations(page);
+  await section.getByRole('button', { name: 'Save' }).click();
+  await expect(section.getByText('Published.')).toBeVisible();
+  await section.getByRole('button', { name: 'Close' }).click();
+  await expect(section.getByText(`Its own label icon, ${iconName}-label.`)).toBeVisible();
+
+  // the screen icon is as it was, and labels print the label icon
+  await section.getByRole('tab', { name: 'On screen' }).click();
+  await expect(section.getByText(`Its own icon, ${iconName}.`)).toBeVisible();
+  expect((await printed()).equals(before)).toBe(false);
+  const { asset: read } = await api.call('GET', `/assets/${asset.asset.id}`);
+  expect(read.resolved_icons.label.name).toBe(`${iconName}-label`);
+  expect(read.resolved_icon.name).toBe(iconName);
+});

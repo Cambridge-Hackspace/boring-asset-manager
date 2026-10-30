@@ -189,10 +189,10 @@
         <p class="text-sm">Nothing: every icon is published as it was last saved, the build has no warnings, and every asset's own icon is drawn.</p>
       {:else}
         <ul class="mt-1 space-y-1 text-sm">
-          {#each drafts as d (d.category_id)}
+          {#each drafts as d (`${d.category_id}/${d.rendition}`)}
             {@const c = categoryOf(d.category_id)}
             <li>
-              <span aria-hidden="true">⚠ </span><a class="underline" href="/categories/{encodeURIComponent(d.category_id)}">{c?.name ?? d.icon_name}</a>:
+              <span aria-hidden="true">⚠ </span><a class="underline" href="/categories/{encodeURIComponent(d.category_id)}">{c?.name ?? d.icon_name}</a>{d.rendition === 'label' ? "'s label icon" : ''}:
               a draft{d.source ? '' : ', never published,'} with {d.draft_errors.length} problem{d.draft_errors.length === 1 ? '' : 's'}.
             </li>
           {/each}
