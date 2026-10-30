@@ -80,7 +80,7 @@ export { expect };
 const navGroupOf: Record<string, string> = {
   Categories: 'Catalog', Fields: 'Catalog', 'Link types': 'Catalog', Actions: 'Catalog', Icons: 'Catalog',
   Templates: 'Labels', Images: 'Labels', Printers: 'Labels',
-  Users: 'Admin', Roles: 'Admin', 'API tokens': 'Admin', Notifications: 'Admin', Backups: 'Admin',
+  Users: 'Admin', Roles: 'Admin', 'API tokens': 'Admin', Notifications: 'Admin', Backups: 'Admin', 'Import & export': 'Admin',
 };
 
 /**

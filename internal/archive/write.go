@@ -48,6 +48,13 @@ type Options struct {
 	Split int64
 	// Now is when it is written; the current time, unless set.
 	Now time.Time
+	// Select makes a package (#144) of what it chooses and what that
+	// needs, as May may read it, rather than a backup. Info says what the
+	// package is, and Preview is its preview image, PNG, JPEG or WebP.
+	Select  *Selection
+	May     Reader
+	Info    *PackageInfo
+	Preview []byte
 	// setID, in tests, is the set's ID, so an archive can be written again
 	// the same.
 	setID string
@@ -103,6 +110,23 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 		hdr.Set.ID = uuid.NewString()
 	}
 	sum := Summary{Set: hdr.Set.ID, Tables: map[string]int{}}
+	var preview string
+	if opts.Select != nil {
+		hdr.Type = "package"
+		hdr.Secrets = false
+		info := PackageInfo{}
+		if opts.Info != nil {
+			info = *opts.Info
+		}
+		if len(opts.Preview) > 0 {
+			var err error
+			if preview, err = PreviewPath(opts.Preview); err != nil {
+				return sum, err
+			}
+			info.Preview = preview
+		}
+		hdr.Package = &info
+	}
 
 	txOpts := &sql.TxOptions{ReadOnly: true}
 	if st.Dialect != "sqlite" {
@@ -122,19 +146,31 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 		// Tables describes the schema as this bam's migrations leave it.
 		return sum, fmt.Errorf("%w: the database's schema is at version %d and this bam's at %d; run bam migrate with the bam that matches it", ErrSchema, hdr.SchemaVersion, migrations.Latest())
 	}
+	var plan *Plan
+	if opts.Select != nil {
+		if plan, err = Resolve(ctx, st, tx, *opts.Select, opts.May); err != nil {
+			return sum, err
+		}
+		hdr.Kinds = packageKinds(plan)
+	}
 
 	p, err := startPart(open, hdr)
 	if err != nil {
 		return sum, err
 	}
 	defer func() { p.abort() }()
+	if preview != "" {
+		if err := p.addBytes(preview, opts.Preview); err != nil {
+			return sum, err
+		}
+	}
 	named := map[string]bool{}
 	for i := range Tables {
 		t := &Tables[i]
-		if !hasKind(kinds, t.Kind) {
+		if !hasKind(hdr.Kinds, t.Kind) {
 			continue
 		}
-		n, err := writeTable(ctx, st, tx, p, t, hdr.Secrets, named)
+		n, err := writeTable(ctx, st, tx, p, t, hdr.Secrets, named, plan)
 		if err != nil {
 			return sum, fmt.Errorf("writing %s: %w", t.Name, err)
 		}
@@ -233,7 +269,7 @@ func selectRows(t *Table) string {
 // writeTable writes a table's rows, in data/, and in auth/ its secret
 // columns, with its key, or the whole of it when it is authentication.
 // It notes the files its rows name in named.
-func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Table, secrets bool, named map[string]bool) (int, error) {
+func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Table, secrets bool, named map[string]bool, plan *Plan) (int, error) {
 	rows, err := tx.QueryContext(ctx, st.Rebind(selectRows(t)))
 	if err != nil {
 		return 0, err
@@ -254,6 +290,15 @@ func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Ta
 	for rows.Next() {
 		if err := rows.Scan(ptrs...); err != nil {
 			return n, err
+		}
+		if plan != nil {
+			keep, err := plan.packaged(t, vals)
+			if err != nil {
+				return n, err
+			}
+			if !keep {
+				continue
+			}
 		}
 		line, secret = append(line[:0], '{'), append(secret[:0], '{')
 		for i, c := range t.Columns {
@@ -287,6 +332,21 @@ func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Ta
 	}
 	if err := rows.Err(); err != nil {
 		return n, err
+	}
+	if plan != nil {
+		// rows a package adds: what its top categories inherit
+		for _, extra := range plan.extra[t.Name] {
+			line = append(line[:0], '{')
+			for _, c := range t.Columns {
+				if line, err = appendField(line, c, extra[c.Name]); err != nil {
+					return n, err
+				}
+			}
+			if err := data.add(append(line, '}', '\n')); err != nil {
+				return n, err
+			}
+			n++
+		}
 	}
 	if err := data.flush(); err != nil {
 		return n, err

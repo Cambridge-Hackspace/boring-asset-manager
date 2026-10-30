@@ -32,6 +32,9 @@ Available Commands:
   restore       Restore an archive into an instance not yet in use, or put a .db copy back (requires --from;
                 --only <kinds>, --check; --replace [--backup-to <file>] replaces kinds in one in use;
                 --wipe empties the database first; stop BAM first)
+  export        Write a package of part of the instance, with what it needs (requires --select and --to, and --name;
+                --photos, --links, --history with assets; --description, --author, --license, --version, --preview <image>;
+                --plan says what it would hold, writing nothing)
   mcp           Relay MCP between stdio and a server, for assistants (requires --url; API token in $BAM_TOKEN)
   version       Print version information
 
@@ -146,6 +149,31 @@ func main() {
 			if errors.Is(err, store.ErrBackupUnsupported) {
 				os.Exit(3)
 			}
+			os.Exit(1)
+		}
+
+	case "export":
+		cmd := flag.NewFlagSet(command, flag.ExitOnError)
+		configPath := cmd.String("config", "config.toml", "Path to configuration file")
+		to := cmd.String("to", "", "File to write the package to")
+		var opts cli.ExportOptions
+		cmd.Func("select", "What to package, kind:name, repeated or separated by commas: "+cli.SelectKinds(), func(s string) error {
+			opts.Select = append(opts.Select, s)
+			return nil
+		})
+		cmd.BoolVar(&opts.Photos, "photos", false, "Bring the assets' photos")
+		cmd.BoolVar(&opts.Links, "links", false, "Bring the links between the assets packaged")
+		cmd.BoolVar(&opts.History, "history", false, "Bring the assets' history, without who did what")
+		cmd.StringVar(&opts.Info.Name, "name", "", "The package's name")
+		cmd.StringVar(&opts.Info.Description, "description", "", "What the package is for")
+		cmd.StringVar(&opts.Info.Author, "author", "", "Who made it")
+		cmd.StringVar(&opts.Info.License, "license", "", "Its license, such as CC-BY-4.0")
+		cmd.StringVar(&opts.Info.Version, "version", "", "Its version")
+		cmd.StringVar(&opts.PreviewFile, "preview", "", "A preview image, PNG, JPEG or WebP, of at most 1 MiB")
+		cmd.BoolVar(&opts.Plan, "plan", false, "Say what the package would hold, writing nothing")
+		_ = cmd.Parse(os.Args[2:])
+		if err := cli.Export(*configPath, *to, opts); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 

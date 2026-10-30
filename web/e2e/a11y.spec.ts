@@ -124,6 +124,7 @@ for (const scheme of ['light', 'dark'] as const) {
       ['/roles', 'Roles'],
       ['/tokens', 'API tokens'],
       ['/backups', 'Backups'],
+      ['/packages', 'Import & export'],
       ['/loans', 'Loans'],
       ['/spool', 'Print queue'],
       ['/relations', 'Link types'],
@@ -238,7 +239,7 @@ test('keyboard only: the navigation menus open, close, and lead to their pages',
 
   // Tabbing out of an open menu closes it.
   await page.keyboard.press('Enter');
-  for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');
+  for (let i = 0; i < 7; i++) await page.keyboard.press('Tab');
   await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0);
 
   // A link goes to its page, closes the menu, and marks the menu current.
@@ -259,7 +260,7 @@ test('the home page lists the same pages, in the same groups', async ({ signedIn
   for (const [group, links] of [
     ['Catalog', ['Categories', 'Fields', 'Link types', 'Actions', 'Icons']],
     ['Labels', ['Templates', 'Images', 'Printers']],
-    ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Backups']],
+    ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Backups', 'Import & export']],
   ] as const) {
     const section = main.getByRole('region', { name: group });
     await expect(section.getByRole('link')).toHaveText([...links]);

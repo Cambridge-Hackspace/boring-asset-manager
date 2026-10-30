@@ -13,3 +13,14 @@ Rows with an ID update that asset, and blank cells leave its values alone; rows 
 ## Links
 
 The **links** column holds entries such as `contained_in:Bin A3;used_with:Drill`. Assets are named by name, or by ID or code where a name is shared. An import adds and moves links; tick **Also remove links that no row states** to remove the rest, so an edited export comes back exactly.
+
+## Packages
+
+**Admin › Import & export** (with the *settings.manage* permission) packages part of BAM! to share with another: categories, the fields, actions, link types, templates, reports, flows and icons they use, and their assets if you like.
+
+1. Tick what to share. Ticking a category ticks those under it.
+2. What your choice needs is ticked for you, marked *Needed by…*. It stays ticked until you untick what needs it.
+3. Anything that stays behind, such as a printer a flow prints to, is listed with why.
+4. Give the package a name, and **Export**. Your browser saves it, however large.
+
+A package never holds people, passwords or printers, and holds only what you can see.
