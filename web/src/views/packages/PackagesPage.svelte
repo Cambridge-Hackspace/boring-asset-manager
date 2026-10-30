@@ -23,6 +23,7 @@
     type TreeNode,
   } from '../../lib/packages';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import ImportSection from './ImportSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -237,6 +238,8 @@
 {/snippet}
 
 <h1 class="mb-4 text-2xl font-bold">Import &amp; export</h1>
+
+<ImportSection {tree} onimported={() => void load()} />
 
 <section class="card mb-6 max-w-3xl space-y-4" aria-labelledby="export-heading">
   <h2 id="export-heading" class="text-lg font-semibold">Export a package</h2>
