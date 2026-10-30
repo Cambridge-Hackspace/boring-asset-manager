@@ -176,6 +176,13 @@ func TestStorageSettings(t *testing.T) {
 		}
 		return Load(path)
 	}
+	// The files' settings alone, whatever the environment running the test
+	// sets (reaper sets BAM_STORAGE_PATH).
+	for _, kv := range os.Environ() {
+		if name, _, _ := strings.Cut(kv, "="); strings.HasPrefix(name, "BAM_STORAGE_") {
+			t.Setenv(name, "")
+		}
+	}
 
 	// A file from before backends existed keeps its directory.
 	cfg, err := load("[storage]\nlocal_path = \"/var/lib/bam/uploads\"\n")
