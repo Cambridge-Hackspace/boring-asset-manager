@@ -183,7 +183,7 @@ func (s *Store) CreateAssetWithIcon(name string, categoryIDs []string, generator
 			return err
 		}
 		if icon != "" {
-			if err := s.setAssetIconTx(ic.tx, assetID, icon); err != nil {
+			if err := s.setAssetIconTx(ic.tx, assetID, models.RenditionScreen, icon); err != nil {
 				return err
 			}
 		}
@@ -255,13 +255,13 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 // readAsset reads an asset as GetAssetByID does, taking what it needs from
 // whole tables from ctx, which a list shares across its assets.
 func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetails, error) {
-	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, icon_name, ` + stockColumns + ` FROM assets WHERE id = ?`
+	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, icon_name, label_icon_name, ` + stockColumns + ` FROM assets WHERE id = ?`
 	var (
-		a    models.Asset
-		sc   stockScan
-		icon sql.NullString
+		a               models.Asset
+		sc              stockScan
+		icon, labelIcon sql.NullString
 	)
-	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt, &a.Condition, &a.ConditionNote, &icon}, sc.dest()...)...)
+	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt, &a.Condition, &a.ConditionNote, &icon, &labelIcon}, sc.dest()...)...)
 	if err == sql.ErrNoRows {
 		return nil, ErrAssetNotFound
 	}
@@ -271,6 +271,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	a.Stock = sc.stock()
 	if icon.Valid {
 		a.IconName = &icon.String
+	}
+	if labelIcon.Valid {
+		a.LabelIconName = &labelIcon.String
 	}
 
 	// Categories
@@ -383,9 +386,10 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	if details.ScanTemplate, err = s.contextScan(ctx, catIDs); err != nil {
 		return nil, err
 	}
-	if details.ResolvedIcon, err = s.contextIcon(ctx, a.IconName, catIDs, fieldValues, assetStates(details)); err != nil {
+	if details.ResolvedIcons, err = s.contextIcons(ctx, &a, catIDs, fieldValues, assetStates(details)); err != nil {
 		return nil, err
 	}
+	details.ResolvedIcon = details.ResolvedIcons[models.RenditionScreen]
 	if err := s.contextTexts(ctx, details); err != nil {
 		return nil, err
 	}
@@ -448,8 +452,8 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 	}
 
 	if f.Icon != "" {
-		whereClauses = append(whereClauses, "a.icon_name = ?")
-		args = append(args, f.Icon)
+		whereClauses = append(whereClauses, "(a.icon_name = ? OR a.label_icon_name = ?)")
+		args = append(args, f.Icon, f.Icon)
 	}
 	if f.Within != "" {
 		whereClauses = append(whereClauses, `a.id IN (SELECT l.to_asset_id FROM asset_links l
@@ -606,7 +610,10 @@ func (s *Store) UpdateAssetWithIcon(id, name string, categoryIDs []string, gener
 		return nil, ErrAssetArchived
 	}
 	if icon != nil {
-		if err := s.checkAssetIcon(icon.Name, existing.Asset.IconName); err != nil {
+		if icon.Rendition, err = renditionOf(icon.Rendition); err != nil {
+			return nil, err
+		}
+		if err := s.checkAssetIcon(icon.Name, existing.Asset.OwnIcon(icon.Rendition)); err != nil {
 			return nil, err
 		}
 	}
@@ -682,7 +689,7 @@ func (s *Store) UpdateAssetWithIcon(id, name string, categoryIDs []string, gener
 			return err
 		}
 		if icon != nil {
-			if err := s.setAssetIconTx(ic.tx, id, icon.Name); err != nil {
+			if err := s.setAssetIconTx(ic.tx, id, icon.Rendition, icon.Name); err != nil {
 				return err
 			}
 		}

@@ -170,7 +170,7 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 	named := map[string]bool{}
 	var folder *iconFolder
 	if hdr.FormatVersion >= 2 && hasKind(hdr.Kinds, KindIcons) {
-		folder = &iconFolder{library: map[string]string{}, icons: map[string]string{}, categories: map[string]string{}}
+		folder = &iconFolder{library: map[string]string{}, icons: map[string]string{}, categories: map[string]string{}, renditions: map[string]string{}}
 	}
 	for i := range Tables {
 		t := &Tables[i]

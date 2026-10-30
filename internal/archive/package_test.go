@@ -148,8 +148,8 @@ func seedPackaged(t *testing.T, st *store.Store, blobs filestore.Blobs) packaged
 	p.crate = libraryFile(t, st, "shared/crates.ilx", `base "crate-base" { category "storage"; footprint 1 1 1; part "box" { insert "lid" } }`)
 	p.lid = libraryFile(t, st, "shared/lids.ilx", `fragment "lid" { tile 0 0 1 1 1 }`)
 	p.other = libraryFile(t, st, "shared/other.ilx", `base "pot" { category "kitchen"; footprint 1 1 1 }`)
-	if _, err := st.Exec("INSERT INTO category_icons (category_id, icon_name, source, draft, draft_errors, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-		p.tools.ID, "toolbox", `icon "toolbox" { extends "crate-base" }`, "a draft", "[]", time.Now()); err != nil {
+	if _, err := st.Exec("INSERT INTO category_icons (category_id, rendition, icon_name, source, draft, draft_errors, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		p.tools.ID, "screen", "toolbox", `icon "toolbox" { extends "crate-base" }`, "a draft", "[]", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	p.flow = flow(t, st, "lend-a-tool", flows.Definition{Version: 1, CategoryIDs: []string{p.tools.ID}, Steps: []flows.Step{

@@ -139,7 +139,7 @@ func Describe(t *labels.Template, data labels.Data, scene *render.Scene) Descrip
 		switch {
 		case e.Type == labels.ElementIcon && e.Icon == labels.IconOfAsset:
 			// the icon it draws, by name
-			pe.Value = data.Icon
+			pe.Value = data.IconFor(e.Rendition).Icon
 		case e.Type == labels.ElementIcon:
 			pe.Value = e.Icon
 		case e.Type != labels.ElementStaticImage:

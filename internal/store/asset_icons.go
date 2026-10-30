@@ -11,59 +11,70 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// Which icon an asset is drawn with (README §3.7): its own, if it has one,
-// or else that of the nearest category up from its categories with one,
-// chosen as its templates are. An icon of its own names anything the build
-// draws, variants and library icons included, and is checked against the
-// build when it is set; it is not tied to the build after that, so an
-// icon taken away later is drawn as the unknown icon, never quietly
-// replaced by its categories'.
+// Which icon an asset is drawn with (README §3.7), for each rendition: its
+// own, if it has one, or else that of the nearest category up from its
+// categories with one, chosen as its templates are. An icon of its own
+// names anything the build draws, variants and library icons included,
+// and is checked against the build when it is set; it is not tied to the
+// build after that, so an icon taken away later is drawn as the unknown
+// icon, never quietly replaced by its categories'.
+//
+// For a rendition other than the screen, an asset with no icon for it is
+// drawn with its screen icon, in this order: its own for the rendition,
+// its own screen icon (it was made to look different on purpose), its
+// categories' for the rendition, their screen icon.
 
-// IconUpdate sets an asset's own icon to Name; an empty Name gives it its
-// categories' again.
+// IconUpdate sets an asset's own icon for Rendition (the screen's when
+// empty) to Name; an empty Name gives it its categories' again.
 type IconUpdate struct {
-	Name string
+	Name      string
+	Rendition string
 }
 
-// publishedCategoryIcons maps each category with a published icon to its
-// name.
+// publishedCategoryIcons maps each rendition to the categories with a
+// published icon for it, each to its name.
 func publishedCategoryIcons(q interface {
 	Query(string, ...any) (*sql.Rows, error)
-}) (map[string]string, error) {
-	rows, err := q.Query(`SELECT category_id, icon_name FROM category_icons WHERE source IS NOT NULL`)
+}) (map[string]map[string]string, error) {
+	rows, err := q.Query(`SELECT category_id, rendition, icon_name FROM category_icons WHERE source IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("reading category icons: %w", err)
 	}
 	defer rows.Close()
-	icons := map[string]string{}
+	icons := map[string]map[string]string{}
+	for _, r := range models.Renditions {
+		icons[r] = map[string]string{}
+	}
 	for rows.Next() {
-		var id, name string
-		if err := rows.Scan(&id, &name); err != nil {
+		var id, rendition, name string
+		if err := rows.Scan(&id, &rendition, &name); err != nil {
 			return nil, err
 		}
-		icons[id] = name
+		if icons[rendition] != nil {
+			icons[rendition][id] = name
+		}
 	}
 	return icons, rows.Err()
 }
 
-// chooseIcon is the icon an asset in these categories gets from them, or
-// nil when none of them, nor their ancestors, has one.
-func (t categoryTraits) chooseIcon(categoryIDs []string) *models.ResolvedIcon {
-	choice := t.choose(t.icons, categoryIDs, "")
+// chooseIcon is the icon for rendition an asset in these categories gets
+// from them, or nil when none of them, nor their ancestors, has one.
+func (t categoryTraits) chooseIcon(rendition string, categoryIDs []string) *models.ResolvedIcon {
+	choice := t.choose(t.icons[rendition], categoryIDs, "")
 	if choice.TemplateID == "" {
 		return nil
 	}
-	return &models.ResolvedIcon{Name: choice.TemplateID, From: models.IconFromCategory, SourceCategoryID: choice.SourceCategoryID,
-		SourceCategoryName: t.names[choice.SourceCategoryID]}
+	return &models.ResolvedIcon{Name: choice.TemplateID, From: models.IconFromCategory, Rendition: rendition,
+		SourceCategoryID: choice.SourceCategoryID, SourceCategoryName: t.names[choice.SourceCategoryID]}
 }
 
-// shownIcons maps every category that has an icon, its own or its
-// nearest ancestor's, to that icon's name.
-func (t categoryTraits) shownIcons() map[string]string {
+// shownIcons maps every category that has an icon for rendition, its own
+// or its nearest ancestor's, to that icon's name.
+func (t categoryTraits) shownIcons(rendition string) map[string]string {
 	shown := map[string]string{}
 	for id := range t.parents {
 		for c, d := id, 0; c != "" && d < 100; c, d = t.parents[c], d+1 {
-			if name := t.icons[c]; name != "" {
+			if name := t.icons[rendition][c]; name != "" {
 				shown[id] = name
 				break
 			}
@@ -72,26 +83,81 @@ func (t categoryTraits) shownIcons() map[string]string {
 	return shown
 }
 
-// ShownCategoryIcons maps every category that has an icon, its own or its
-// nearest ancestor's, to that icon's name.
-func (s *Store) ShownCategoryIcons() (map[string]string, error) {
+// ShownCategoryIcons maps every category that has an icon for rendition
+// (the screen's when empty), its own or its nearest ancestor's, to that
+// icon's name; for another rendition, a category with none is given its
+// screen icon.
+func (s *Store) ShownCategoryIcons(rendition string) (map[string]string, error) {
+	rendition, err := renditionOf(rendition)
+	if err != nil {
+		return nil, err
+	}
 	t, err := s.categoryTraits(storeQuerier{s})
 	if err != nil {
 		return nil, err
 	}
-	return t.shownIcons(), nil
+	shown := t.shownIcons(rendition)
+	if rendition != models.RenditionScreen {
+		for id, name := range t.shownIcons(models.RenditionScreen) {
+			if shown[id] == "" {
+				shown[id] = name
+			}
+		}
+	}
+	return shown, nil
 }
 
-// contextIcon resolves the icon of an asset with its own icon own, if not
-// nil, in these categories, with these field values by key, and in these
-// states, worst first.
-func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs []string, fieldValues map[string]string, states []string) (*models.ResolvedIcon, error) {
+// contextIcons resolves the icons of asset a, in these categories, with
+// these field values by key, and in these states, worst first: each
+// rendition it has an icon for, by rendition. A rendition drawn with the
+// screen icon shares it.
+func (s *Store) contextIcons(ctx *assetContext, a *models.Asset, categoryIDs []string, fieldValues map[string]string, states []string) (map[string]*models.ResolvedIcon, error) {
+	out := map[string]*models.ResolvedIcon{}
+	for _, r := range models.Renditions {
+		icon, err := s.contextIcon(ctx, a, r, categoryIDs, fieldValues, states)
+		if err != nil {
+			return nil, err
+		}
+		if icon == nil {
+			continue
+		}
+		if r != models.RenditionScreen && icon.Rendition == models.RenditionScreen && out[models.RenditionScreen] != nil {
+			icon = out[models.RenditionScreen]
+		}
+		out[r] = icon
+	}
+	return out, nil
+}
+
+// ownOrChosenIcon is the icon a is drawn with for rendition, before params
+// and states: its own for it, its own screen icon, its categories' for it,
+// their screen icon, the first it has; nil when none.
+func (t categoryTraits) ownOrChosenIcon(a *models.Asset, rendition string, categoryIDs []string) *models.ResolvedIcon {
+	if own := a.OwnIcon(rendition); own != nil {
+		return &models.ResolvedIcon{Name: *own, From: models.IconFromAsset, Rendition: rendition}
+	}
+	if rendition != models.RenditionScreen && a.IconName != nil {
+		return &models.ResolvedIcon{Name: *a.IconName, From: models.IconFromAsset, Rendition: models.RenditionScreen}
+	}
+	if icon := t.chooseIcon(rendition, categoryIDs); icon != nil {
+		return icon
+	}
+	if rendition != models.RenditionScreen {
+		return t.chooseIcon(models.RenditionScreen, categoryIDs)
+	}
+	return nil
+}
+
+// contextIcon resolves the icon of asset a for rendition, in these
+// categories, with these field values by key, and in these states, worst
+// first.
+func (s *Store) contextIcon(ctx *assetContext, a *models.Asset, rendition string, categoryIDs []string, fieldValues map[string]string, states []string) (*models.ResolvedIcon, error) {
 	traits, err := s.contextTraits(ctx)
 	if err != nil {
 		return nil, err
 	}
-	icon := traits.chooseIcon(categoryIDs)
-	if icon == nil && own == nil {
+	icon := traits.ownOrChosenIcon(a, rendition, categoryIDs)
+	if icon == nil {
 		return nil, nil
 	}
 	if ctx.iconNames == nil {
@@ -99,8 +165,8 @@ func (s *Store) contextIcon(ctx *assetContext, own *string, categoryIDs []string
 			return nil, err
 		}
 	}
-	if own != nil {
-		icon = &models.ResolvedIcon{Name: *own, From: models.IconFromAsset, Missing: !ctx.iconNames[*own]}
+	if icon.From == models.IconFromAsset {
+		icon.Missing = !ctx.iconNames[icon.Name]
 	}
 	icon.Color = traits.choose(traits.colors, categoryIDs, "").TemplateID
 	if icon.Missing {
@@ -237,14 +303,19 @@ type MissingIcon struct {
 	Assets int    `json:"assets"`
 }
 
-// MissingAssetIcons lists the icons active assets have as their own that
-// the build does not draw, by name, with how many have each.
+// MissingAssetIcons lists the icons active assets have as their own, for
+// any rendition, that the build does not draw, by name, with how many have
+// each.
 func (s *Store) MissingAssetIcons() ([]MissingIcon, error) {
 	drawn, err := s.BuiltIconNames()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.Query(`SELECT icon_name, COUNT(*) FROM assets WHERE icon_name IS NOT NULL AND archived_at IS NULL GROUP BY icon_name ORDER BY icon_name`)
+	rows, err := s.Query(`SELECT name, COUNT(DISTINCT id) FROM (
+		SELECT id, icon_name AS name FROM assets WHERE icon_name IS NOT NULL AND archived_at IS NULL
+		UNION ALL
+		SELECT id, label_icon_name AS name FROM assets WHERE label_icon_name IS NOT NULL AND archived_at IS NULL
+	) own GROUP BY name ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +355,8 @@ func (s *Store) BuiltIconNames() (map[string]bool, error) {
 	return names, nil
 }
 
-// checkAssetIcon checks an icon an asset is to be given: one the build
-// draws, unless it already has it.
+// checkAssetIcon checks an icon an asset is to be given for a rendition:
+// one the build draws, unless it already has it.
 func (s *Store) checkAssetIcon(name string, current *string) error {
 	if name == "" || (current != nil && *current == name) {
 		return nil
@@ -303,12 +374,21 @@ func (s *Store) checkAssetIcon(name string, current *string) error {
 	return nil
 }
 
-// setAssetIconTx sets an asset's own icon within tx; "" clears it.
-func (s *Store) setAssetIconTx(tx *sql.Tx, id, name string) error {
+// assetIconColumns are the columns holding an asset's own icon, by
+// rendition.
+var assetIconColumns = map[string]string{models.RenditionScreen: "icon_name", models.RenditionLabel: "label_icon_name"}
+
+// setAssetIconTx sets an asset's own icon for rendition within tx; ""
+// clears it.
+func (s *Store) setAssetIconTx(tx *sql.Tx, id, rendition, name string) error {
+	rendition, err := renditionOf(rendition)
+	if err != nil {
+		return err
+	}
 	var v any
 	if name != "" {
 		v = name
 	}
-	_, err := s.TxExec(tx, `UPDATE assets SET icon_name = ? WHERE id = ?`, v, id)
+	_, err = s.TxExec(tx, `UPDATE assets SET `+assetIconColumns[rendition]+` = ? WHERE id = ?`, v, id)
 	return err
 }

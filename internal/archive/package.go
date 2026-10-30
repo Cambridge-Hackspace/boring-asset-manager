@@ -239,7 +239,10 @@ type category struct {
 	fields, actions, relTypes  []string
 	labelTemplates, scopes     []string
 	required                   map[string]bool
-	icon                       *iconSource
+	// icons are its icons, one for each rendition it has one for, and
+	// iconFields the fields their params are bound to.
+	icons      []*iconSource
+	iconFields []string
 }
 
 type iconSource struct {
@@ -281,7 +284,7 @@ type resolver struct {
 	chosenCats     map[string]bool
 	assetIDs       []string
 	assetCats      map[string][]string
-	assetIcons     map[string]string
+	assetIcons     map[string][]string
 	includedAsset  map[string]bool
 	readEvents     map[string]bool
 
@@ -414,19 +417,15 @@ func (r *resolver) load() error {
 		{"SELECT category_id, template_id FROM category_label_templates ORDER BY sort_order", func(c *category, v string) { c.labelTemplates = append(c.labelTemplates, v) }},
 		{"SELECT category_id, scope_id FROM category_scopes", func(c *category, v string) { c.scopes = append(c.scopes, v) }},
 		{"SELECT category_id, field_id FROM icon_param_bindings", func(c *category, v string) {
-			if c.icon != nil {
-				c.icon.fields = append(c.icon.fields, v)
-			}
+			c.iconFields = append(c.iconFields, v)
 		}},
 		{"SELECT category_id, field_id FROM icon_text_bindings WHERE field_id IS NOT NULL", func(c *category, v string) {
-			if c.icon != nil {
-				c.icon.fields = append(c.icon.fields, v)
-			}
+			c.iconFields = append(c.iconFields, v)
 		}},
 	}
-	if err := read("SELECT category_id, icon_name, source FROM category_icons", func(c []string) {
+	if err := read("SELECT category_id, icon_name, source FROM category_icons ORDER BY rendition DESC", func(c []string) {
 		if cat := r.cats[c[0]]; cat != nil {
-			cat.icon = &iconSource{owner: Ref{Kind: ItemCategory, ID: c[0]}, name: c[1], names: ScanIcons(c[2])}
+			cat.icons = append(cat.icons, &iconSource{owner: Ref{Kind: ItemCategory, ID: c[0]}, name: c[1], names: ScanIcons(c[2])})
 		}
 	}); err != nil {
 		return err
@@ -458,9 +457,9 @@ func (r *resolver) load() error {
 		}
 	}
 	for _, c := range r.cats {
-		if c.icon != nil {
-			for _, n := range c.icon.names.Defines {
-				r.defined[n] = append(r.defined[n], c.icon.owner)
+		for _, icon := range c.icons {
+			for _, n := range icon.names.Defines {
+				r.defined[n] = append(r.defined[n], icon.owner)
 			}
 		}
 	}
@@ -664,11 +663,11 @@ func (r *resolver) needs(x Ref) {
 			r.need(Ref{Kind: ItemLabelTemplate, ID: id}, x)
 		}
 		r.need(Ref{Kind: ItemScanTemplate, ID: c.scanTemplate}, x)
-		if c.icon != nil {
-			for _, id := range c.icon.fields {
-				r.need(Ref{Kind: ItemField, ID: id}, x)
-			}
-			r.needIcons(c.icon.names.Uses, x)
+		for _, id := range c.iconFields {
+			r.need(Ref{Kind: ItemField, ID: id}, x)
+		}
+		for _, icon := range c.icons {
+			r.needIcons(icon.names.Uses, x)
 		}
 		// the flows that file into it or take from it
 		ids := make([]string, 0, len(r.flows))
@@ -865,11 +864,11 @@ func (r *resolver) stays(x Ref, by Ref, why string) {
 // what they need: their categories, and the icons they draw as their own.
 func (r *resolver) assets(plan *Plan) error {
 	sel := plan.sel.Assets
-	rows, err := r.strings("SELECT a.id, a.name, a.icon_name, ac.category_id FROM assets a LEFT JOIN asset_categories ac ON ac.asset_id = a.id WHERE a.archived_at IS NULL ORDER BY a.id")
+	rows, err := r.strings("SELECT a.id, a.name, a.icon_name, ac.category_id, a.label_icon_name FROM assets a LEFT JOIN asset_categories ac ON ac.asset_id = a.id WHERE a.archived_at IS NULL ORDER BY a.id")
 	if err != nil {
 		return fmt.Errorf("reading assets: %w", err)
 	}
-	r.assetCats, r.assetIcons = map[string][]string{}, map[string]string{}
+	r.assetCats, r.assetIcons = map[string][]string{}, map[string][]string{}
 	var order []string
 	for _, row := range rows {
 		id := row[0]
@@ -877,7 +876,11 @@ func (r *resolver) assets(plan *Plan) error {
 			order = append(order, id)
 			r.assetCats[id] = []string{}
 			r.names[Ref{Kind: ItemAsset, ID: id}] = row[1]
-			r.assetIcons[id] = row[2]
+			for _, icon := range []string{row[2], row[4]} {
+				if icon != "" {
+					r.assetIcons[id] = append(r.assetIcons[id], icon)
+				}
+			}
 		}
 		if row[3] != "" {
 			r.assetCats[id] = append(r.assetCats[id], row[3])
@@ -912,8 +915,8 @@ func (r *resolver) assets(plan *Plan) error {
 		for _, c := range cats {
 			r.need(Ref{Kind: ItemCategory, ID: c}, whole)
 		}
-		if icon := r.assetIcons[id]; icon != "" {
-			r.needIcons([]string{icon}, whole)
+		if icons := r.assetIcons[id]; len(icons) > 0 {
+			r.needIcons(icons, whole)
 		}
 	}
 	counts.Assets = len(r.assetIDs)
@@ -1029,7 +1032,7 @@ func (r *resolver) rowsOf(plan *Plan) {
 				plan.scan[id] = scan
 			}
 		}
-		if c.icon != nil {
+		if len(c.icons) > 0 {
 			set("category_icons", id)
 			// its bindings, by its category
 			plan.whole["icon_param_bindings:"+id] = true

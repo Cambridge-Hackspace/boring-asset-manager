@@ -416,7 +416,7 @@ func (m *matcher) match() {
 			if n := m.clash(str(r, "source"), name); n != "" {
 				ex = &Ref{Kind: ItemCategoryIcon, Name: n}
 			}
-			m.item(ItemCategoryIcon, str(r, "category_id"), name, ex, false, []Choice{ChoiceCopy, ChoiceSkip})
+			m.item(ItemCategoryIcon, iconItemID(str(r, "category_id"), rowRendition(r)), name, ex, false, []Choice{ChoiceCopy, ChoiceSkip})
 		}
 	} else if len(rows["category_icons"]) > 0 {
 		m.plan.Warnings = append(m.plan.Warnings, "Categories' icons come with their categories, which are not being imported, and are left out.")
@@ -693,7 +693,12 @@ func (m *matcher) name() {
 	}
 	for _, it := range byKind(ItemCategoryIcon) {
 		if it.Action == ChoiceCopy {
-			r := rowOf("category_icons", "category_id", it.ID)
+			var r map[string]any
+			for _, row := range m.a.rows["category_icons"] {
+				if iconItemID(str(row, "category_id"), rowRendition(row)) == it.ID {
+					r = row
+				}
+			}
 			rename(str(r, "source"))
 			if _, ok := m.b.iconRenames[it.Name]; !ok {
 				m.b.iconRenames[it.Name] = unique(it.Name, iconsTaken, "-%d", 64, validIcon)
@@ -931,20 +936,20 @@ func (m *matcher) rows() {
 	}
 	iconCats := map[string]bool{}
 	for _, r := range a.rows["category_icons"] {
-		cat := str(r, "category_id")
-		it, ok := copied(ItemCategoryIcon, cat)
+		cat, rendition := str(r, "category_id"), rowRendition(r)
+		it, ok := copied(ItemCategoryIcon, iconItemID(cat, rendition))
 		if !ok || b.cats[cat] == "" {
 			continue
 		}
-		iconCats[cat] = true
+		iconCats[iconItemID(cat, rendition)] = true
 		src := RenameIcons(str(r, "source"), b.iconRenames)
-		catIcons = append(catIcons, with(r, "category_id", b.cats[cat], "icon_name", as(it), "source", src, "draft", nil, "draft_errors", nil))
+		catIcons = append(catIcons, with(r, "category_id", b.cats[cat], "rendition", rendition, "icon_name", as(it), "source", src, "draft", nil, "draft_errors", nil))
 		b.icons = append(b.icons, store.IconFile{ID: b.cats[cat], Name: as(it), Source: src})
 	}
 	for _, table := range []string{"icon_param_bindings", "icon_text_bindings"} {
 		for _, r := range a.rows[table] {
-			cat := str(r, "category_id")
-			if !iconCats[cat] {
+			cat, rendition := str(r, "category_id"), rowRendition(r)
+			if !iconCats[iconItemID(cat, rendition)] {
 				continue
 			}
 			var field any
@@ -955,7 +960,7 @@ func (m *matcher) rows() {
 				}
 				field = id
 			}
-			row := with(r, "category_id", b.cats[cat], "field_id", field)
+			row := with(r, "category_id", b.cats[cat], "rendition", rendition, "field_id", field)
 			if table == "icon_param_bindings" {
 				params = append(params, row)
 			} else {

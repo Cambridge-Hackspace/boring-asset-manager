@@ -73,7 +73,7 @@ func withIcons(t *testing.T, srv *Server) {
 	if _, _, err := srv.store.CreateIconLibraryFile(ctx, srv.icons, "shared/crates.ilx", crateBase); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := srv.store.SaveCategoryIcon(ctx, srv.icons, cat.ID, "crate", `icon "crate" { extends "crate-base" }`); err != nil {
+	if _, err := srv.store.SaveCategoryIcon(ctx, srv.icons, cat.ID, "", "crate", `icon "crate" { extends "crate-base" }`); err != nil {
 		t.Fatal(err)
 	}
 }

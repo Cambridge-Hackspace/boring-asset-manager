@@ -43,6 +43,14 @@ const (
 	ShadingOutline = "outline"
 )
 
+// The renditions an icon element draws the asset's icon in (README §3.7):
+// its label icon, the default, which is its screen icon when it has no
+// label icon, or its screen icon.
+const (
+	RenditionLabel  = "label"
+	RenditionScreen = "screen"
+)
+
 // iconName is an icon's name, as the server checks it.
 var iconName = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$`)
 
@@ -307,10 +315,12 @@ type Element struct {
 	// when empty, and Mirror flips it as it does an image. State draws the
 	// asset's icon as the variant its state is drawn with, if it has one,
 	// as the label is printed; a label outlives its asset's state, so it
-	// is drawn without unless asked.
-	Icon    string `json:"icon,omitempty"`
-	Shading string `json:"shading,omitempty"`
-	State   bool   `json:"state,omitempty"`
+	// is drawn without unless asked. Rendition is which of the asset's
+	// icons: RenditionLabel (or empty) or RenditionScreen.
+	Icon      string `json:"icon,omitempty"`
+	Shading   string `json:"shading,omitempty"`
+	State     bool   `json:"state,omitempty"`
+	Rendition string `json:"rendition,omitempty"`
 	// Mirror flips the element in its box, before it is turned: across
 	// (left for right), down (top for bottom) or both. A mirrored code does
 	// not scan from the side the label is read from.
@@ -654,7 +664,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"d":             e.D != "",
 		"fill_rule":     e.FillRule != "",
 	}
-	iconProps := map[string]bool{"icon": e.Icon != "", "shading": e.Shading != "", "state": e.State}
+	iconProps := map[string]bool{"icon": e.Icon != "", "shading": e.Shading != "", "state": e.State, "rendition": e.Rendition != ""}
 	textProps := map[string]bool{
 		"font_size":     e.FontSize != 0,
 		"font_weight":   e.FontWeight != "",
@@ -765,6 +775,11 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		}
 		if e.State && e.Icon != IconOfAsset {
 			v.add(at("state"), `shows the state of the asset's icon only: icon must be "`+IconOfAsset+`"`)
+		}
+		if e.Rendition != "" && e.Rendition != RenditionLabel && e.Rendition != RenditionScreen {
+			v.add(at("rendition"), `must be "label" or "screen"`)
+		} else if e.Rendition != "" && e.Icon != IconOfAsset {
+			v.add(at("rendition"), `chooses which of the asset's icons: icon must be "`+IconOfAsset+`"`)
 		}
 		if e.Align != "" && e.Align != AlignLeft && e.Align != AlignCenter && e.Align != AlignRight {
 			v.add(at("align"), `must be "left", "center" or "right"`)

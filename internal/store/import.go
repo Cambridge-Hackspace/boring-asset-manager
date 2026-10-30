@@ -129,7 +129,7 @@ func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) (
 	}
 
 	if row.Icon != nil {
-		if err := s.setAssetIconTx(tx, id, *row.Icon); err != nil {
+		if err := s.setAssetIconTx(tx, id, models.RenditionScreen, *row.Icon); err != nil {
 			return nil, err
 		}
 	}

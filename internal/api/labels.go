@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"maps"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -138,6 +139,16 @@ func (s *Server) labelData(a *models.AssetWithDetails) labels.Data {
 	return bindingData(a, s.cfg.Server.BaseURL)
 }
 
+// iconData is a resolved icon as a label draws it: its plain name, and
+// the names it is drawn under with its params and its state.
+func iconData(ic *models.ResolvedIcon) labels.IconData {
+	d := labels.IconData{Icon: ic.Plain(), IconColor: ic.Color, BoundIcon: ic.Bound}
+	if ic.State != "" {
+		d.StateIcon = ic.Name
+	}
+	return d
+}
+
 // bindingData gathers what bindings resolve against for one asset, on a
 // label or in a report.
 func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
@@ -167,11 +178,20 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 		d.Quantity, d.Unit = strconv.Itoa(st.Quantity), st.Unit
 	}
 	if ic := a.ResolvedIcon; ic != nil {
-		d.Icon, d.IconColor, d.BoundIcon = ic.Plain(), ic.Color, ic.Bound
-		if ic.State != "" {
-			d.StateIcon = ic.Name
-		}
+		screen := iconData(ic)
+		d.Icon, d.IconColor, d.BoundIcon, d.StateIcon = screen.Icon, screen.IconColor, screen.BoundIcon, screen.StateIcon
 		d.DrawnIcons = ic.Drawn
+	}
+	if ic := a.ResolvedIcons[models.RenditionLabel]; ic != nil && ic != a.ResolvedIcon {
+		label := iconData(ic)
+		d.LabelIcon = &label
+		// the names differ, so both are drawn from one map
+		if len(ic.Drawn) > 0 {
+			drawn := make(map[string]json.RawMessage, len(d.DrawnIcons)+len(ic.Drawn))
+			maps.Copy(drawn, d.DrawnIcons)
+			maps.Copy(drawn, ic.Drawn)
+			d.DrawnIcons = drawn
+		}
 	}
 	if l := a.Loan; l != nil {
 		// By name only; a borrower hidden from the request (no ID) is blank.

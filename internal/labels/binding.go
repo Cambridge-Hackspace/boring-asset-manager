@@ -164,10 +164,33 @@ type Data struct {
 	IconColor string `json:"icon_color"`
 	BoundIcon string `json:"bound_icon,omitempty"`
 	StateIcon string `json:"state_icon,omitempty"`
+	// LabelIcon is the asset's label icon, as Icon and the rest are its
+	// screen icon, when it is another; nil when its labels draw its screen
+	// icon.
+	LabelIcon *IconData `json:"label_icon,omitempty"`
 	// DrawnIcons holds the icon drawn with the asset's own texts (its
 	// name, a code), by the name it is drawn under, as isolex's IR has
 	// it; an icon it lacks is drawn as the build draws it.
 	DrawnIcons map[string]json.RawMessage `json:"drawn_icons,omitempty"`
+}
+
+// IconData is the icon an asset is drawn with, as Data has its screen
+// icon.
+type IconData struct {
+	Icon      string `json:"icon"`
+	IconColor string `json:"icon_color"`
+	BoundIcon string `json:"bound_icon,omitempty"`
+	StateIcon string `json:"state_icon,omitempty"`
+}
+
+// IconFor is the asset's icon for rendition, RenditionLabel when empty:
+// its label icon, or its screen icon when it has none or rendition is
+// RenditionScreen.
+func (d Data) IconFor(rendition string) IconData {
+	if rendition != RenditionScreen && d.LabelIcon != nil {
+		return *d.LabelIcon
+	}
+	return IconData{Icon: d.Icon, IconColor: d.IconColor, BoundIcon: d.BoundIcon, StateIcon: d.StateIcon}
 }
 
 // Resolve substitutes every placeholder. Missing codes and field values

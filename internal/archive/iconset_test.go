@@ -74,7 +74,7 @@ func TestIconsTravelAsALibraryFolder(t *testing.T) {
 	if err := json.Unmarshal(r.members[IconsIndex], &index); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(index.Categories, []IndexedIcon{{Icon: "toolbox", CategoryID: p.tools.ID, Category: "Workshop tools"}}) ||
+	if !reflect.DeepEqual(index.Categories, []IndexedIcon{{Icon: "toolbox", CategoryID: p.tools.ID, Category: "Workshop tools", Rendition: "screen"}}) ||
 		len(index.Assets) != 1 || index.Assets[0].AssetID != p.drawer || index.Assets[0].Icon != "toolbox" {
 		t.Errorf("icons.json %+v", index)
 	}
@@ -208,7 +208,7 @@ func iconInstance(t *testing.T, c *isolex.Compiler) (*store.Store, *models.Categ
 		t.Fatal(err)
 	}
 	cat := must[*models.Category](t)(st.CreateCategory("Storage", nil, "#123456", false, false))
-	if save, err := st.SaveCategoryIcon(ctx, c, cat.ID, "crate", `icon "crate" { extends "crate-base" }`); err != nil || !save.Published {
+	if save, err := st.SaveCategoryIcon(ctx, c, cat.ID, "", "crate", `icon "crate" { extends "crate-base" }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	return st, cat

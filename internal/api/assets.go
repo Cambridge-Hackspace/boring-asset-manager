@@ -34,7 +34,8 @@ type CreateAssetRequest struct {
 // the keys it names; an empty value removes one. An absent stock keeps the
 // asset's, null stops counting it by quantity, and an object replaces it.
 // An absent icon_name keeps the asset's own icon; null or "" draws it with
-// its categories', and a name gives it that one.
+// its categories', and a name gives it that one. It is the icon for
+// icon_rendition, the screen's when absent.
 type UpdateAssetRequest struct {
 	Name          string                     `json:"name,omitempty"`
 	CategoryIDs   []string                   `json:"category_ids,omitempty"`
@@ -42,6 +43,7 @@ type UpdateAssetRequest struct {
 	FieldValues   map[string]string          `json:"field_values,omitempty"`
 	Stock         json.RawMessage            `json:"stock,omitempty"`
 	IconName      json.RawMessage            `json:"icon_name,omitempty"`
+	IconRendition string                     `json:"icon_rendition,omitempty"`
 }
 
 // StockRequest is an asset's stock (README §5.1). An absent quantity keeps
@@ -82,9 +84,9 @@ func (r UpdateAssetRequest) iconUpdate() (*store.IconUpdate, error) {
 		return nil, err
 	}
 	if name == nil {
-		return &store.IconUpdate{}, nil
+		return &store.IconUpdate{Rendition: r.IconRendition}, nil
 	}
-	return &store.IconUpdate{Name: *name}, nil
+	return &store.IconUpdate{Name: *name, Rendition: r.IconRendition}, nil
 }
 
 // QuantityRequest changes an asset's quantity: by adjust (negative to use

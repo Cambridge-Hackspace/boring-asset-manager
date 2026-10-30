@@ -62,7 +62,7 @@ func TestAnAssetIsDrawnWithItsCategoriesIcon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := models.ResolvedIcon{Name: "switch", From: models.IconFromCategory, SourceCategoryID: w.networking, SourceCategoryName: "Networking", Color: "#445566"}
+	want := models.ResolvedIcon{Name: "switch", From: models.IconFromCategory, Rendition: models.RenditionScreen, SourceCategoryID: w.networking, SourceCategoryName: "Networking", Color: "#445566"}
 	if got := router.ResolvedIcon; got == nil || !reflect.DeepEqual(*got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
@@ -74,7 +74,7 @@ func TestAnAssetIsDrawnWithItsCategoriesIcon(t *testing.T) {
 		t.Errorf("an asset in no category with an icon: %+v", plain.ResolvedIcon)
 	}
 
-	shown, err := w.st.ShownCategoryIcons()
+	shown, err := w.st.ShownCategoryIcons("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestAnAssetsOwnIcon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := models.ResolvedIcon{Name: "switch-down", From: models.IconFromAsset, Color: "#445566"}
+	want := models.ResolvedIcon{Name: "switch-down", From: models.IconFromAsset, Rendition: models.RenditionScreen, Color: "#445566"}
 	if got := a.ResolvedIcon; got == nil || !reflect.DeepEqual(*got, want) || a.Asset.IconName == nil || *a.Asset.IconName != "switch-down" {
 		t.Errorf("got %+v (%v), want %+v", got, a.Asset.IconName, want)
 	}
@@ -149,7 +149,7 @@ func TestAnOwnIconThatGoesAwayIsMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.st.DeleteCategoryIcon(context.Background(), w.c, storage); err != nil {
+	if _, err := w.st.DeleteCategoryIcon(context.Background(), w.c, storage, ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := resolved(t, w.st, a.Asset.ID); got == nil || got.Name != "crate" || got.From != models.IconFromAsset || !got.Missing {
@@ -176,7 +176,7 @@ func TestRenamingAnIconCarriesAssetsAlong(t *testing.T) {
 	}
 	both := switchSrc + "\n" + strings.Replace(switchSrc, `icon "switch"`, `icon "net-switch"`, 1)
 	saveIcon(t, w.st, w.c, w.networking, "switch", both)
-	if _, err := w.st.RenameCategoryIcon(context.Background(), w.c, w.networking, "net-switch"); err != nil {
+	if _, err := w.st.RenameCategoryIcon(context.Background(), w.c, w.networking, "", "net-switch"); err != nil {
 		t.Fatal(err)
 	}
 	for was, now := range map[string]string{"switch": "net-switch", "switch-down": "net-switch-down", "switch-l3": "switch-l3"} {

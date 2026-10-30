@@ -13,6 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/raster"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/svg"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -29,7 +30,8 @@ var hexColor = regexp.MustCompile(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{
 // handleIconImage draws an icon as an image (README §3.7), for where a
 // page's drawing will not do: an export, a notification, a chat.
 // GET /api/v1/icons/image with one of name, category (the icon it is drawn
-// with, its own or inherited) or asset (its own, or its categories');
+// with, its own or inherited) or asset (its own, or its categories'), each
+// for rendition, the screen's unless given;
 // format svg (the default) or png; theme light (the default) or dark;
 // height in pixels, 1 to 1024, 64 unless given; and color, what the
 // category token paints in, the category's own unless given. A name the
@@ -52,6 +54,10 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	color := q.Get("color")
+	if rn := rendition(r); rn != "" && !models.ValidRendition(rn) {
+		writeJSONError(w, http.StatusBadRequest, "rendition is screen or label")
+		return
+	}
 	if color != "" && !hexColor.MatchString(color) {
 		writeJSONError(w, http.StatusBadRequest, "color is #rgb, #rrggbb or #rrggbbaa")
 		return
@@ -66,12 +72,16 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		if a.ResolvedIcon == nil {
+		icon := a.ResolvedIcons[rendition(r)]
+		if rendition(r) == "" {
+			icon = a.ResolvedIcon
+		}
+		if icon == nil {
 			writeJSONError(w, http.StatusNotFound, "this asset has no icon")
 			return
 		}
-		name, own = a.ResolvedIcon.Name, a.ResolvedIcon.Color
-		drawn = a.ResolvedIcon.Drawn[name]
+		name, own = icon.Name, icon.Color
+		drawn = icon.Drawn[name]
 	case q.Get("category") != "":
 		cat, err := s.store.GetCategoryByID(q.Get("category"))
 		if errors.Is(err, store.ErrCategoryNotFound) {
@@ -82,7 +92,11 @@ func (s *Server) handleIconImage(w http.ResponseWriter, r *http.Request) {
 			writeServerError(w, err, "query category")
 			return
 		}
-		shown, err := s.store.ShownCategoryIcons()
+		shown, err := s.store.ShownCategoryIcons(rendition(r))
+		if errors.Is(err, store.ErrUnknownRendition) {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		if err != nil {
 			writeServerError(w, err, "read the category icons")
 			return

@@ -137,6 +137,8 @@ func writeIconError(w http.ResponseWriter, err error, action string) {
 		writeJSONError(w, http.StatusNotFound, "Category not found")
 	case errors.Is(err, store.ErrCategoryIconNotFound):
 		writeJSONError(w, http.StatusNotFound, "This category has no icon")
+	case errors.Is(err, store.ErrUnknownRendition):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, store.ErrIconLibraryFileNotFound):
 		writeJSONError(w, http.StatusNotFound, "Icon library file not found")
 	case errors.Is(err, store.ErrIconNameTaken), errors.Is(err, store.ErrIconPathTaken), errors.Is(err, store.ErrIconsChanging):
@@ -160,28 +162,31 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 // handleIcons says whether icons can change here, what the current build
-// is, which icon each category is drawn with, its own or its nearest
-// ancestor's, the unknown icon, drawn for a name the build does not draw,
-// and the names assets have as their own that it does not draw, with how
-// many have each: GET /api/v1/icons
+// is, which icon each category is drawn with on screen, its own or its
+// nearest ancestor's, and for each rendition, the unknown icon, drawn for
+// a name the build does not draw, and the names assets have as their own
+// that it does not draw, with how many have each: GET /api/v1/icons
 func (s *Server) handleIcons(w http.ResponseWriter, r *http.Request) {
 	b, err := s.store.CurrentIconBuild()
 	if err != nil {
 		writeServerError(w, err, "read the icon build")
 		return
 	}
-	shown, err := s.store.ShownCategoryIcons()
-	if err != nil {
-		writeServerError(w, err, "read the category icons")
-		return
+	byRendition := map[string]map[string]string{}
+	for _, rendition := range models.Renditions {
+		if byRendition[rendition], err = s.store.ShownCategoryIcons(rendition); err != nil {
+			writeServerError(w, err, "read the category icons")
+			return
+		}
 	}
+	shown := byRendition[models.RenditionScreen]
 	missing, err := s.store.MissingAssetIcons()
 	if err != nil {
 		writeServerError(w, err, "read the assets' icons")
 		return
 	}
 	body := map[string]any{"available": s.icons.Available(), "isolex_version": isolex.Pinned().Version, "build": nil,
-		"category_icons": shown, "unknown": isolex.UnknownIR(), "missing_icons": missing}
+		"category_icons": shown, "rendition_icons": byRendition, "unknown": isolex.UnknownIR(), "missing_icons": missing}
 	if b != nil {
 		var doc struct {
 			Icons []struct {
@@ -348,9 +353,15 @@ func (s *Server) handleListCategoryIcons(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"icons": icons})
 }
 
-// GET /api/v1/categories/{id}/icon
+// rendition is the rendition a category icon route acts on: ?rendition=,
+// the screen's when not given.
+func rendition(r *http.Request) string {
+	return r.URL.Query().Get("rendition")
+}
+
+// GET /api/v1/categories/{id}/icon?rendition=
 func (s *Server) handleGetCategoryIcon(w http.ResponseWriter, r *http.Request) {
-	icon, err := s.store.GetCategoryIcon(r.PathValue("id"))
+	icon, err := s.store.GetCategoryIcon(r.PathValue("id"), rendition(r))
 	if err != nil {
 		writeIconError(w, err, "read the category's icon")
 		return
@@ -363,20 +374,20 @@ type iconSourceRequest struct {
 	Source   string `json:"source"`
 }
 
-// PUT /api/v1/categories/{id}/icon with {"icon_name", "source"}: published
-// if the icons compile with it, a draft otherwise.
+// PUT /api/v1/categories/{id}/icon?rendition= with {"icon_name",
+// "source"}: published if the icons compile with it, a draft otherwise.
 func (s *Server) handleSaveCategoryIcon(w http.ResponseWriter, r *http.Request) {
 	var req iconSourceRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 	id := r.PathValue("id")
-	save, err := s.actingStore(r).SaveCategoryIcon(r.Context(), s.icons, id, req.IconName, req.Source)
+	save, err := s.actingStore(r).SaveCategoryIcon(r.Context(), s.icons, id, rendition(r), req.IconName, req.Source)
 	if err != nil {
 		writeIconError(w, err, "save the category's icon")
 		return
 	}
-	icon, err := s.store.GetCategoryIcon(id)
+	icon, err := s.store.GetCategoryIcon(id, rendition(r))
 	if err != nil {
 		writeIconError(w, err, "read the category's icon")
 		return
@@ -384,8 +395,8 @@ func (s *Server) handleSaveCategoryIcon(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"icon": icon, "save": save})
 }
 
-// POST /api/v1/categories/{id}/icon/check with {"icon_name", "source"}:
-// compiles as a save would, and keeps nothing.
+// POST /api/v1/categories/{id}/icon/check?rendition= with {"icon_name",
+// "source"}: compiles as a save would, and keeps nothing.
 func (s *Server) handleCheckCategoryIcon(w http.ResponseWriter, r *http.Request) {
 	var req iconSourceRequest
 	if !decodeJSON(w, r, &req) {
@@ -396,7 +407,7 @@ func (s *Server) handleCheckCategoryIcon(w http.ResponseWriter, r *http.Request)
 		writeIconError(w, err, "check the category's icon")
 		return
 	}
-	check, err := s.store.CheckCategoryIcon(r.Context(), s.icons, id, req.IconName, req.Source)
+	check, err := s.store.CheckCategoryIcon(r.Context(), s.icons, id, rendition(r), req.IconName, req.Source)
 	if err != nil {
 		writeIconError(w, err, "check the category's icon")
 		return
@@ -404,19 +415,19 @@ func (s *Server) handleCheckCategoryIcon(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"check": check})
 }
 
-// POST /api/v1/categories/{id}/icon/rename with {"icon_name"}
+// POST /api/v1/categories/{id}/icon/rename?rendition= with {"icon_name"}
 func (s *Server) handleRenameCategoryIcon(w http.ResponseWriter, r *http.Request) {
 	var req iconSourceRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 	id := r.PathValue("id")
-	save, err := s.actingStore(r).RenameCategoryIcon(r.Context(), s.icons, id, req.IconName)
+	save, err := s.actingStore(r).RenameCategoryIcon(r.Context(), s.icons, id, rendition(r), req.IconName)
 	if err != nil {
 		writeIconError(w, err, "rename the category's icon")
 		return
 	}
-	icon, err := s.store.GetCategoryIcon(id)
+	icon, err := s.store.GetCategoryIcon(id, rendition(r))
 	if err != nil {
 		writeIconError(w, err, "read the category's icon")
 		return
@@ -424,19 +435,19 @@ func (s *Server) handleRenameCategoryIcon(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"icon": icon, "save": save})
 }
 
-// GET /api/v1/categories/{id}/icon/params: the params of the category's
-// icon bound to fields.
+// GET /api/v1/categories/{id}/icon/params?rendition=: the params of the
+// category's icon bound to fields.
 func (s *Server) handleCategoryIconParams(w http.ResponseWriter, r *http.Request) {
-	bindings, err := s.store.IconParamBindings(r.PathValue("id"))
+	bindings, err := s.store.IconParamBindings(r.PathValue("id"), rendition(r))
 	if err != nil {
-		writeServerError(w, err, "read the icon's params")
+		writeIconError(w, err, "read the icon's params")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"params": bindings})
 }
 
-// PUT /api/v1/categories/{id}/icon/params with {"params": {param: field_id}}
-// replaces them, and builds the icons with them.
+// PUT /api/v1/categories/{id}/icon/params?rendition= with {"params":
+// {param: field_id}} replaces them, and builds the icons with them.
 func (s *Server) handleSetCategoryIconParams(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Params map[string]string `json:"params"`
@@ -444,7 +455,7 @@ func (s *Server) handleSetCategoryIconParams(w http.ResponseWriter, r *http.Requ
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	bindings, save, err := s.actingStore(r).SetIconParamBindings(r.Context(), s.icons, r.PathValue("id"), req.Params)
+	bindings, save, err := s.actingStore(r).SetIconParamBindings(r.Context(), s.icons, r.PathValue("id"), rendition(r), req.Params)
 	if errors.Is(err, store.ErrInvalidIconParams) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
@@ -456,9 +467,9 @@ func (s *Server) handleSetCategoryIconParams(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{"params": bindings, "save": save})
 }
 
-// DELETE /api/v1/categories/{id}/icon
+// DELETE /api/v1/categories/{id}/icon?rendition=
 func (s *Server) handleDeleteCategoryIcon(w http.ResponseWriter, r *http.Request) {
-	save, err := s.actingStore(r).DeleteCategoryIcon(r.Context(), s.icons, r.PathValue("id"))
+	save, err := s.actingStore(r).DeleteCategoryIcon(r.Context(), s.icons, r.PathValue("id"), rendition(r))
 	if err != nil {
 		writeIconError(w, err, "delete the category's icon")
 		return
@@ -466,18 +477,18 @@ func (s *Server) handleDeleteCategoryIcon(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"save": save})
 }
 
-// DELETE /api/v1/categories/{id}/icon/draft
+// DELETE /api/v1/categories/{id}/icon/draft?rendition=
 func (s *Server) handleDiscardCategoryIconDraft(w http.ResponseWriter, r *http.Request) {
-	if err := s.actingStore(r).DiscardCategoryIconDraft(r.PathValue("id")); err != nil {
+	if err := s.actingStore(r).DiscardCategoryIconDraft(r.PathValue("id"), rendition(r)); err != nil {
 		writeIconError(w, err, "discard the draft")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/v1/categories/{id}/icon/revisions
+// GET /api/v1/categories/{id}/icon/revisions?rendition=
 func (s *Server) handleCategoryIconRevisions(w http.ResponseWriter, r *http.Request) {
-	revs, err := s.store.ListCategoryIconRevisions(r.PathValue("id"))
+	revs, err := s.store.ListCategoryIconRevisions(r.PathValue("id"), rendition(r))
 	if err != nil {
 		writeIconError(w, err, "list the icon's versions")
 		return
@@ -592,18 +603,24 @@ func (s *Server) handleIconLibraryRevisions(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
 }
 
-// removeCategoryIcon takes a category's icon away before the category
-// goes, refused if other icons still use it. Without the compiler, icons
-// are off and the icon simply goes with the category.
+// removeCategoryIcon takes a category's icons away before the category
+// goes, refused if other icons still use them. Without the compiler, icons
+// are off and the icons simply go with the category.
 func (s *Server) removeCategoryIcon(r *http.Request, id string) error {
 	if id == store.UncategorizedCategoryID || !s.icons.Available() {
 		return nil
 	}
-	if _, err := s.store.GetCategoryIcon(id); errors.Is(err, store.ErrCategoryIconNotFound) {
-		return nil
-	} else if err != nil {
-		return err
+	// the label icon first, which may extend the screen one
+	for i := len(models.Renditions) - 1; i >= 0; i-- {
+		rendition := models.Renditions[i]
+		if _, err := s.store.GetCategoryIcon(id, rendition); errors.Is(err, store.ErrCategoryIconNotFound) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		if _, err := s.actingStore(r).DeleteCategoryIcon(r.Context(), s.icons, id, rendition); err != nil {
+			return err
+		}
 	}
-	_, err := s.actingStore(r).DeleteCategoryIcon(r.Context(), s.icons, id)
-	return err
+	return nil
 }

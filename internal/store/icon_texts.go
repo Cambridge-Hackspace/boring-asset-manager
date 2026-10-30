@@ -48,7 +48,7 @@ type textBinding struct {
 // param.
 func readTextBindings(q querier) (map[string][]textBinding, error) {
 	rows, err := q(`SELECT ci.icon_name, b.param, b.source, COALESCE(f.field_key, '') FROM icon_text_bindings b
-		JOIN category_icons ci ON ci.category_id = b.category_id
+		JOIN category_icons ci ON ci.category_id = b.category_id AND ci.rendition = b.rendition
 		LEFT JOIN fields f ON f.id = b.field_id
 		WHERE ci.source IS NOT NULL ORDER BY ci.icon_name, b.param`)
 	if err != nil {
@@ -67,12 +67,35 @@ func readTextBindings(q querier) (map[string][]textBinding, error) {
 	return out, rows.Err()
 }
 
-// contextTexts sets the texts an asset's icon is drawn with: its name, its
-// first code or its value of a field, for each text param of its plain
-// icon bound to one, those it has none for left to their defaults.
+// contextTexts sets the texts each of an asset's icons is drawn with: its
+// name, its first code or its value of a field, for each text param of
+// its plain icon bound to one, those it has none for left to their
+// defaults.
 func (s *Store) contextTexts(ctx *assetContext, d *models.AssetWithDetails) error {
-	icon := d.ResolvedIcon
-	if icon == nil || icon.Missing {
+	for _, icon := range uniqueIcons(d) {
+		if err := s.iconTexts(ctx, d, icon); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// uniqueIcons are an asset's resolved icons, each once, the screen's
+// first.
+func uniqueIcons(d *models.AssetWithDetails) []*models.ResolvedIcon {
+	var out []*models.ResolvedIcon
+	seen := map[*models.ResolvedIcon]bool{}
+	for _, r := range models.Renditions {
+		if icon := d.ResolvedIcons[r]; icon != nil && !seen[icon] {
+			seen[icon] = true
+			out = append(out, icon)
+		}
+	}
+	return out
+}
+
+func (s *Store) iconTexts(ctx *assetContext, d *models.AssetWithDetails, icon *models.ResolvedIcon) error {
+	if icon.Missing {
 		return nil
 	}
 	if ctx.textBindings == nil {
@@ -208,16 +231,17 @@ func (s *Store) drawTexts(assets []*models.AssetWithDetails) {
 	}
 	var wants []want
 	for _, a := range assets {
-		icon := a.ResolvedIcon
-		if icon == nil || len(icon.Texts) == 0 {
-			continue
-		}
-		names := []string{icon.Name}
-		if shape := icon.Shape(); shape != icon.Name {
-			names = append(names, shape)
-		}
-		for _, name := range names {
-			wants = append(wants, want{icon: icon, name: name})
+		for _, icon := range uniqueIcons(a) {
+			if len(icon.Texts) == 0 {
+				continue
+			}
+			names := []string{icon.Name}
+			if shape := icon.Shape(); shape != icon.Name {
+				names = append(names, shape)
+			}
+			for _, name := range names {
+				wants = append(wants, want{icon: icon, name: name})
+			}
 		}
 	}
 	if len(wants) == 0 {

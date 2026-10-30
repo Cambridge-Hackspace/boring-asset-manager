@@ -24,11 +24,11 @@ func TestAssetScenes(t *testing.T) {
 	ctx := t.Context()
 
 	rooms, _ := st.CreateCategoryFrom(store.CategoryInput{Name: "Rooms"})
-	if save, err := st.SaveCategoryIcon(ctx, srv.icons, rooms.ID, "room", `icon "room" { category "places"; footprint 4 3 2; part "floor" { tile 0 0 0 4 3 } }`); err != nil || !save.Published {
+	if save, err := st.SaveCategoryIcon(ctx, srv.icons, rooms.ID, "", "room", `icon "room" { category "places"; footprint 4 3 2; part "floor" { tile 0 0 0 4 3 } }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	servers, _ := st.CreateCategoryFrom(store.CategoryInput{Name: "Servers"})
-	if save, err := st.SaveCategoryIcon(ctx, srv.icons, servers.ID, "server", `icon "server" { category "compute"; footprint 2 1 0.5; part "box" { box 0 0 0 2 1 0.5 } }`); err != nil || !save.Published {
+	if save, err := st.SaveCategoryIcon(ctx, srv.icons, servers.ID, "", "server", `icon "server" { category "compute"; footprint 2 1 0.5; part "box" { box 0 0 0 2 1 0.5 } }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	secret, _ := st.CreateScope("secret")
@@ -224,11 +224,11 @@ func TestSceneImages(t *testing.T) {
 	st := srv.store
 	ctx := t.Context()
 	rooms, _ := st.CreateCategoryFrom(store.CategoryInput{Name: "Rooms"})
-	if save, err := st.SaveCategoryIcon(ctx, srv.icons, rooms.ID, "room", `icon "room" { category "places"; footprint 3 2 2; part "floor" { tile 0 0 0 3 2 } }`); err != nil || !save.Published {
+	if save, err := st.SaveCategoryIcon(ctx, srv.icons, rooms.ID, "", "room", `icon "room" { category "places"; footprint 3 2 2; part "floor" { tile 0 0 0 3 2 } }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	servers, _ := st.CreateCategoryFrom(store.CategoryInput{Name: "Servers", ColorHex: "#2266aa"})
-	if save, err := st.SaveCategoryIcon(ctx, srv.icons, servers.ID, "server", `icon "server" { category "compute"; footprint 2 1 0.5; part "box" { box 0 0 0 2 1 0.5; tile 0 0 0.5 2 1 fill="category" } }`); err != nil || !save.Published {
+	if save, err := st.SaveCategoryIcon(ctx, srv.icons, servers.ID, "", "server", `icon "server" { category "compute"; footprint 2 1 0.5; part "box" { box 0 0 0 2 1 0.5; tile 0 0 0.5 2 1 fill="category" } }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	secret, _ := st.CreateScope("secret")

@@ -86,18 +86,23 @@ func WriteIconSet(ctx context.Context, st *store.Store, w io.Writer) error {
 // iconIndex is icons.json for what is published.
 func iconIndex(ctx context.Context, st *store.Store) (IconsIndexFile, error) {
 	index := IconsIndexFile{Categories: []IndexedIcon{}, Assets: []IndexedAsset{}}
-	rows, err := queryRows(ctx, st, st.DB, "SELECT ci.icon_name, c.id, c.name FROM category_icons ci JOIN categories c ON c.id = ci.category_id WHERE ci.source IS NOT NULL ORDER BY ci.icon_name")
+	rows, err := queryRows(ctx, st, st.DB, "SELECT ci.icon_name, c.id, c.name, ci.rendition FROM category_icons ci JOIN categories c ON c.id = ci.category_id WHERE ci.source IS NOT NULL ORDER BY ci.icon_name")
 	if err != nil {
 		return index, err
 	}
 	for _, r := range rows {
-		index.Categories = append(index.Categories, IndexedIcon{Icon: r[0], CategoryID: r[1], Category: r[2]})
+		index.Categories = append(index.Categories, IndexedIcon{Icon: r[0], CategoryID: r[1], Category: r[2], Rendition: r[3]})
 	}
-	if rows, err = queryRows(ctx, st, st.DB, "SELECT id, name, icon_name FROM assets WHERE icon_name IS NOT NULL AND archived_at IS NULL ORDER BY id"); err != nil {
+	if rows, err = queryRows(ctx, st, st.DB, "SELECT id, name, COALESCE(icon_name, ''), COALESCE(label_icon_name, '') FROM assets WHERE (icon_name IS NOT NULL OR label_icon_name IS NOT NULL) AND archived_at IS NULL ORDER BY id"); err != nil {
 		return index, err
 	}
 	for _, r := range rows {
-		index.Assets = append(index.Assets, IndexedAsset{AssetID: r[0], Asset: r[1], Icon: r[2]})
+		if r[2] != "" {
+			index.Assets = append(index.Assets, IndexedAsset{AssetID: r[0], Asset: r[1], Icon: r[2], Rendition: models.RenditionScreen})
+		}
+		if r[3] != "" {
+			index.Assets = append(index.Assets, IndexedAsset{AssetID: r[0], Asset: r[1], Icon: r[3], Rendition: models.RenditionLabel})
+		}
 	}
 	return index, nil
 }
@@ -356,7 +361,7 @@ func checkIconSetImport(ctx context.Context, st *store.Store, data []byte, opts 
 			it.Action, it.Identical = ChoiceExisting, true
 		default:
 			it.Action = ChoiceReplace
-			set.Icons[cur.CategoryID] = src
+			set.Icons[name] = src
 		}
 		if ok {
 			it.Existing = &Ref{Kind: ItemCategoryIcon, ID: cur.CategoryID, Name: name}

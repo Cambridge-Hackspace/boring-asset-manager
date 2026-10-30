@@ -70,7 +70,7 @@ func TestIconParamsFollowAssetFields(t *testing.T) {
 		t.Fatalf("unbound: %+v", ic)
 	}
 
-	bindings, save, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, map[string]string{"u": w.fieldID})
+	bindings, save, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, "", map[string]string{"u": w.fieldID})
 	if err != nil || len(bindings) != 1 || bindings[0].FieldKey != "rack_units" || save == nil || !save.Published {
 		t.Fatalf("%+v %+v %v", bindings, save, err)
 	}
@@ -136,7 +136,7 @@ func TestIconParamsFollowAssetFields(t *testing.T) {
 	}
 
 	// unbinding draws them plain again
-	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, nil); err != nil {
+	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if ic := resolved(t, w.st, twin); ic.Name != "server-down" || ic.Bound != "" {
@@ -150,12 +150,12 @@ func TestIconParamsFollowAssetFields(t *testing.T) {
 		"no field":     {"u": "7c9e6679-7425-40de-944b-e07fc1f90ae7"},
 		"a text field": {"u": textField(t, w.st)},
 	} {
-		if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, params); !errors.Is(err, ErrInvalidIconParams) {
+		if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, "", params); !errors.Is(err, ErrInvalidIconParams) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
 	plain, _ := w.st.CreateCategoryFrom(CategoryInput{Name: "Chairs"})
-	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, plain.ID, map[string]string{"u": w.fieldID}); !errors.Is(err, ErrInvalidIconParams) {
+	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, plain.ID, "", map[string]string{"u": w.fieldID}); !errors.Is(err, ErrInvalidIconParams) {
 		t.Errorf("a category with no icon: %v", err)
 	}
 }
@@ -175,12 +175,12 @@ func TestWrappersThatDoNotCompileAreLeftOut(t *testing.T) {
 	w := newParamWorld(t)
 	ctx := context.Background()
 	ok, bad := w.server(t, "Web", "2"), w.server(t, "Odd", "3")
-	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, map[string]string{"u": w.fieldID}); err != nil {
+	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, "", map[string]string{"u": w.fieldID}); err != nil {
 		t.Fatal(err)
 	}
 	// an icon that cannot be drawn 3 units high
 	src := `icon "server" { category "compute"; param u 1; footprint 1 1 "u * 0.5"; axes "state"; part "box" { box 0 0 0 1 1 "u * 0.5" when="1 / (u - 3) != 0" } }`
-	save, err := w.st.SaveCategoryIcon(ctx, w.c, w.servers, "server", src)
+	save, err := w.st.SaveCategoryIcon(ctx, w.c, w.servers, "", "server", src)
 	if err != nil || !save.Published {
 		t.Fatalf("a save with a value that does not draw: %+v %v", save, err)
 	}
@@ -202,7 +202,7 @@ func TestAWrapperErringOnItsLineIsLeftOut(t *testing.T) {
 	w := newParamWorld(t)
 	ctx := context.Background()
 	w.server(t, "Web", "2")
-	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, map[string]string{"u": w.fieldID}); err != nil {
+	if _, _, err := w.st.SetIconParamBindings(ctx, w.c, w.servers, "", map[string]string{"u": w.fieldID}); err != nil {
 		t.Fatal(err)
 	}
 	in, err := w.st.readIconInputs(w.st.Query)

@@ -395,7 +395,7 @@ func TestIconsCopiedAreRenamedWhereverTheyAreNamed(t *testing.T) {
 		t.Fatal(err)
 	}
 	storage := must[*models.Category](t)(src.CreateCategory("Storage", nil, "#123456", false, false))
-	if save, err := src.SaveCategoryIcon(ctx, c, storage.ID, "crate", `icon "crate" { extends "crate-base" }`); err != nil || !save.Published {
+	if save, err := src.SaveCategoryIcon(ctx, c, storage.ID, "", "crate", `icon "crate" { extends "crate-base" }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 	pkg := exportPackage(t, src, srcBlobs, Selection{Categories: []string{storage.ID}})
@@ -405,7 +405,7 @@ func TestIconsCopiedAreRenamedWhereverTheyAreNamed(t *testing.T) {
 		t.Fatal(err)
 	}
 	bins := must[*models.Category](t)(dst.CreateCategory("Bins", nil, "#654321", false, false))
-	if save, err := dst.SaveCategoryIcon(ctx, c, bins.ID, "crate", `icon "crate" { extends "crate-base" }`); err != nil || !save.Published {
+	if save, err := dst.SaveCategoryIcon(ctx, c, bins.ID, "", "crate", `icon "crate" { extends "crate-base" }`); err != nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 
