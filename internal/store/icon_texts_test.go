@@ -67,7 +67,7 @@ func newTextWorld(t *testing.T) textWorld {
 
 func (w textWorld) bind(t *testing.T, bindings map[string]string) {
 	t.Helper()
-	if _, save, err := w.st.SetIconParamBindings(context.Background(), w.c, w.tags, bindings); err != nil || save == nil || !save.Published {
+	if _, save, err := w.st.SetIconParamBindings(context.Background(), w.c, w.tags, "", bindings); err != nil || save == nil || !save.Published {
 		t.Fatalf("%+v %v", save, err)
 	}
 }
@@ -301,13 +301,13 @@ func TestTextBindingsAreHeldToTheIcon(t *testing.T) {
 		{map[string]string{"labl": TextFromName}, "icon 'tag' has no param 'labl' (did you mean 'label'?)"},
 		{map[string]string{"label": "nope"}, `there is no field "nope"`},
 	} {
-		_, _, err := w.st.SetIconParamBindings(ctx, w.c, w.tags, tc.bindings)
+		_, _, err := w.st.SetIconParamBindings(ctx, w.c, w.tags, "", tc.bindings)
 		if !errors.Is(err, ErrInvalidIconParams) || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%v: %v", tc.bindings, err)
 		}
 	}
 	w.bind(t, map[string]string{"label": TextFromCode, "note": w.notes, "u": w.height})
-	got, err := w.st.IconParamBindings(w.tags)
+	got, err := w.st.IconParamBindings(w.tags, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestTextBindingsAreHeldToTheIcon(t *testing.T) {
 	if err := w.st.DeleteField(w.notes); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := w.st.IconParamBindings(w.tags); len(got) != 2 {
+	if got, _ := w.st.IconParamBindings(w.tags, ""); len(got) != 2 {
 		t.Errorf("after deleting the field: %+v", got)
 	}
 }

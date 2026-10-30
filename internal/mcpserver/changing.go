@@ -80,6 +80,7 @@ type updateIn struct {
 	StopCountingStock bool              `json:"stop_counting_stock,omitempty" jsonschema:"stop counting it by quantity"`
 	Icon              string            `json:"icon,omitempty" jsonschema:"give it an icon of its own, by name (icons_overview lists them)"`
 	CategoryIcon      bool              `json:"category_icon,omitempty" jsonschema:"draw it with its categories' icon again, dropping one of its own"`
+	IconRendition     string            `json:"icon_rendition,omitempty" jsonschema:"which of its own icons icon or category_icon sets: screen (the default), or label, drawn on its labels; with its own screen icon and no label one, its labels draw its screen icon"`
 }
 
 type moveIn struct {
@@ -405,6 +406,12 @@ func changingTools() []tool {
 				body["icon_name"] = nil
 			case in.Icon != "":
 				body["icon_name"] = in.Icon
+			}
+			if in.IconRendition != "" {
+				if _, ok := body["icon_name"]; !ok {
+					return reply[assetOut]{}, fmt.Errorf("icon_rendition says which icon icon or category_icon sets; give one of them")
+				}
+				body["icon_rendition"] = in.IconRendition
 			}
 			if len(body) == 0 {
 				return reply[assetOut]{}, fmt.Errorf("nothing to change: give a name, categories, fields, codes, stock or icon")

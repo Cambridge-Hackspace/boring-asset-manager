@@ -101,7 +101,7 @@ type iconBinding struct {
 // param.
 func readIconBindings(q querier) (map[string][]iconBinding, error) {
 	rows, err := q(`SELECT ci.icon_name, b.param, f.id, f.field_key FROM icon_param_bindings b
-		JOIN category_icons ci ON ci.category_id = b.category_id
+		JOIN category_icons ci ON ci.category_id = b.category_id AND ci.rendition = b.rendition
 		JOIN fields f ON f.id = b.field_id
 		WHERE ci.source IS NOT NULL ORDER BY ci.icon_name, b.param`)
 	if err != nil {
@@ -139,35 +139,42 @@ func boundParams(bindings []iconBinding, values func(b iconBinding) (string, boo
 // readIconWrappers works out the wrappers a build has: for each icon with
 // bindings, one for each distinct set of values among the active assets
 // that are drawn with it, or may be: those with it as their own, and
-// those in a category it is drawn for.
+// those in a category it is drawn for, in any rendition.
 func readIconWrappers(q querier) ([]iconWrapper, error) {
 	bindings, err := readIconBindings(q)
 	if err != nil || len(bindings) == 0 {
 		return nil, err
 	}
-	// which icon each category is drawn with, its own or inherited
-	parents, own := map[string]string{}, map[string]string{}
-	rows, err := q(`SELECT c.id, COALESCE(c.parent_id, ''), COALESCE(ci.icon_name, '') FROM categories c
+	// which icon each category is drawn with for each rendition, its own
+	// or inherited
+	parents, own := map[string]string{}, map[string]map[string]string{}
+	rows, err := q(`SELECT c.id, COALESCE(c.parent_id, ''), COALESCE(ci.rendition, ''), COALESCE(ci.icon_name, '') FROM categories c
 		LEFT JOIN category_icons ci ON ci.category_id = c.id AND ci.source IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("reading categories: %w", err)
 	}
 	for rows.Next() {
-		var id, parent, icon string
-		if err := rows.Scan(&id, &parent, &icon); err != nil {
+		var id, parent, rendition, icon string
+		if err := rows.Scan(&id, &parent, &rendition, &icon); err != nil {
 			rows.Close()
 			return nil, err
 		}
-		parents[id], own[id] = parent, icon
+		parents[id] = parent
+		if icon != "" {
+			if own[rendition] == nil {
+				own[rendition] = map[string]string{}
+			}
+			own[rendition][id] = icon
+		}
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	shown := func(id string) string {
+	shown := func(rendition, id string) string {
 		for c, d := id, 0; c != "" && d < 100; c, d = parents[c], d+1 {
-			if own[c] != "" {
-				return own[c]
+			if icon := own[rendition][c]; icon != "" {
+				return icon
 			}
 		}
 		return ""
@@ -184,21 +191,28 @@ func readIconWrappers(q querier) ([]iconWrapper, error) {
 		}
 		drawnWith[asset][icon] = true
 	}
-	rows, err = q(`SELECT a.id, COALESCE(a.icon_name, ''), COALESCE(ac.category_id, '') FROM assets a
+	rows, err = q(`SELECT a.id, COALESCE(a.icon_name, ''), COALESCE(a.label_icon_name, ''), COALESCE(ac.category_id, '') FROM assets a
 		LEFT JOIN asset_categories ac ON ac.asset_id = a.id WHERE a.archived_at IS NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("reading assets: %w", err)
 	}
 	for rows.Next() {
-		var id, icon, category string
-		if err := rows.Scan(&id, &icon, &category); err != nil {
+		var id, icon, labelIcon, category string
+		if err := rows.Scan(&id, &icon, &labelIcon, &category); err != nil {
 			rows.Close()
 			return nil, err
 		}
+		// as resolveIcon draws it: its own, else its categories'
 		if icon != "" {
 			add(id, icon)
 		} else if category != "" {
-			add(id, shown(category))
+			add(id, shown(models.RenditionScreen, category))
+		}
+		switch {
+		case labelIcon != "":
+			add(id, labelIcon)
+		case icon == "" && category != "":
+			add(id, shown(models.RenditionLabel, category))
 		}
 	}
 	rows.Close()
@@ -379,14 +393,19 @@ func (s *Store) IconParamsBound() (bool, error) {
 	return n > 0, err
 }
 
-// IconParamBindings lists the params of a category's icon bound to an
-// asset's fields, or for a text param, to its name or code, by param.
-func (s *Store) IconParamBindings(categoryID string) ([]models.IconParamBinding, error) {
+// IconParamBindings lists the params of a category's icon for rendition
+// bound to an asset's fields, or for a text param, to its name or code, by
+// param.
+func (s *Store) IconParamBindings(categoryID, rendition string) ([]models.IconParamBinding, error) {
+	rendition, err := renditionOf(rendition)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.Query(`SELECT b.param, 'field', f.id, f.field_key, f.label FROM icon_param_bindings b
-		JOIN fields f ON f.id = b.field_id WHERE b.category_id = ?
+		JOIN fields f ON f.id = b.field_id WHERE b.category_id = ? AND b.rendition = ?
 		UNION ALL
 		SELECT t.param, t.source, COALESCE(f.id, ''), COALESCE(f.field_key, ''), COALESCE(f.label, '') FROM icon_text_bindings t
-		LEFT JOIN fields f ON f.id = t.field_id WHERE t.category_id = ?`, categoryID, categoryID)
+		LEFT JOIN fields f ON f.id = t.field_id WHERE t.category_id = ? AND t.rendition = ?`, categoryID, rendition, categoryID, rendition)
 	if err != nil {
 		return nil, fmt.Errorf("reading icon params: %w", err)
 	}
@@ -403,14 +422,18 @@ func (s *Store) IconParamBindings(categoryID string) ([]models.IconParamBinding,
 	return out, rows.Err()
 }
 
-// SetIconParamBindings replaces the bindings of a category's icon, by
-// param: a number field's ID for a number param, or for a text param, a
-// field's ID, TextFromName or TextFromCode. A compiler that can draw one
-// icon checks each param is the icon's, and of that kind. Then it builds
-// the icons with them.
-func (s *Store) SetIconParamBindings(ctx context.Context, c IconCompiler, categoryID string, bindings map[string]string) ([]models.IconParamBinding, *models.IconSave, error) {
+// SetIconParamBindings replaces the bindings of a category's icon for
+// rendition, by param: a number field's ID for a number param, or for a
+// text param, a field's ID, TextFromName or TextFromCode. A compiler that
+// can draw one icon checks each param is the icon's, and of that kind.
+// Then it builds the icons with them.
+func (s *Store) SetIconParamBindings(ctx context.Context, c IconCompiler, categoryID, rendition string, bindings map[string]string) ([]models.IconParamBinding, *models.IconSave, error) {
+	rendition, err := renditionOf(rendition)
+	if err != nil {
+		return nil, nil, err
+	}
 	var icon string
-	err := s.QueryRow(`SELECT icon_name FROM category_icons WHERE category_id = ? AND source IS NOT NULL`, categoryID).Scan(&icon)
+	err = s.QueryRow(`SELECT icon_name FROM category_icons WHERE category_id = ? AND rendition = ? AND source IS NOT NULL`, categoryID, rendition).Scan(&icon)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, fmt.Errorf("%w: the category has no published icon of its own", ErrInvalidIconParams)
 	}
@@ -481,19 +504,19 @@ func (s *Store) SetIconParamBindings(ctx context.Context, c IconCompiler, catego
 	}
 	defer tx.Rollback()
 	for _, table := range []string{"icon_param_bindings", "icon_text_bindings"} {
-		if _, err := s.TxExec(tx, `DELETE FROM `+table+` WHERE category_id = ?`, categoryID); err != nil {
+		if _, err := s.TxExec(tx, `DELETE FROM `+table+` WHERE category_id = ? AND rendition = ?`, categoryID, rendition); err != nil {
 			return nil, nil, err
 		}
 	}
 	for _, b := range all {
 		if b.number {
-			_, err = s.TxExec(tx, `INSERT INTO icon_param_bindings (category_id, param, field_id) VALUES (?, ?, ?)`, categoryID, b.param, b.field)
+			_, err = s.TxExec(tx, `INSERT INTO icon_param_bindings (category_id, rendition, param, field_id) VALUES (?, ?, ?, ?)`, categoryID, rendition, b.param, b.field)
 		} else {
 			var field any
 			if b.field != "" {
 				field = b.field
 			}
-			_, err = s.TxExec(tx, `INSERT INTO icon_text_bindings (category_id, param, source, field_id) VALUES (?, ?, ?, ?)`, categoryID, b.param, b.source, field)
+			_, err = s.TxExec(tx, `INSERT INTO icon_text_bindings (category_id, rendition, param, source, field_id) VALUES (?, ?, ?, ?, ?)`, categoryID, rendition, b.param, b.source, field)
 		}
 		if err != nil {
 			return nil, nil, err
@@ -502,7 +525,7 @@ func (s *Store) SetIconParamBindings(ctx context.Context, c IconCompiler, catego
 	if err := tx.Commit(); err != nil {
 		return nil, nil, err
 	}
-	out, err := s.IconParamBindings(categoryID)
+	out, err := s.IconParamBindings(categoryID, rendition)
 	if err != nil {
 		return nil, nil, err
 	}

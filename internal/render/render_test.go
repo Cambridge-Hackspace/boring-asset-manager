@@ -1038,6 +1038,24 @@ func TestIconElements(t *testing.T) {
 	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","state":true}`, bound), variant) {
 		t.Error("bound, in a state: not drawn as its variant")
 	}
+
+	// an asset with a label icon: drawn with it unless the screen's is
+	// asked for, its own state variant too
+	labelled := testData
+	labelled.LabelIcon = &labels.IconData{Icon: "switch-l3", StateIcon: "switch-poe-down"}
+	l3 := drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"switch-l3"}`, testData)
+	if !bytes.Equal(drawn(el, labelled), l3) {
+		t.Error("label: not drawn as the label icon")
+	}
+	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","rendition":"label"}`, labelled), l3) {
+		t.Error("label, asked for: not drawn as the label icon")
+	}
+	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","rendition":"screen"}`, labelled), shaded.Raster(false).Pix) {
+		t.Error("screen, asked for: not drawn as the screen icon")
+	}
+	if !bytes.Equal(drawn(`{"type":"icon","x":0,"y":0,"width":10,"height":10,"icon":"{{asset.icon}}","state":true}`, labelled), variant) {
+		t.Error("label, in a state: not drawn as its variant")
+	}
 }
 
 // An icon of IR version 2 prints, its fixed strokes as wide as they are

@@ -87,9 +87,12 @@ type categoryTraits struct {
 	// depth and descendants count each category's ancestors and
 	// descendants.
 	depth, descendants map[string]int
-	// icons maps each category with a published icon to its name, colors
-	// each with a color to it, and names every category to its name.
-	icons, colors, names map[string]string
+	// icons maps each rendition to the categories with a published icon
+	// for it, each to its name.
+	icons map[string]map[string]string
+	// colors maps each category with a color to it, and names every
+	// category to its name.
+	colors, names map[string]string
 }
 
 // weighs reports whether an asset in these categories, counting its stock

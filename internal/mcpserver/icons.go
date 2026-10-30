@@ -19,17 +19,29 @@ import (
 
 type categoryIconIn struct {
 	CategoryID string `json:"category_id"`
-	IconName   string `json:"icon_name" jsonschema:"the icon's name: 1 to 64 letters, digits, -, _ and ., not starting with .; set by the first save, and the same for every later one"`
+	Rendition  string `json:"rendition,omitempty" jsonschema:"which of the category's icons: screen (the default), drawn everywhere on screen, or label, drawn on labels in its place"`
+	IconName   string `json:"icon_name" jsonschema:"the icon's name: 1 to 64 letters, digits, -, _ and ., not starting with .; set by the first save, and the same for every later one; unique across renditions, by convention <icon>-label for a label icon"`
 	Source     string `json:"source" jsonschema:"isolex source (KDL 2.0) that draws an icon by that name; it may extend others' icons and use the library's bases and fragments"`
 }
 
 type categoryIDIn struct {
 	CategoryID string `json:"category_id"`
+	Rendition  string `json:"rendition,omitempty" jsonschema:"which of the category's icons: screen (the default), drawn everywhere on screen, or label, drawn on labels in its place"`
 }
 
 type renameIconIn struct {
 	CategoryID string `json:"category_id"`
+	Rendition  string `json:"rendition,omitempty" jsonschema:"which of the category's icons: screen (the default), drawn everywhere on screen, or label, drawn on labels in its place"`
 	IconName   string `json:"icon_name" jsonschema:"the new name, which the published source must already draw"`
+}
+
+// withRendition is a category icon route's path for rendition, the
+// screen's when empty.
+func withRendition(path, rendition string) string {
+	if rendition == "" {
+		return path
+	}
+	return path + "?" + url.Values{"rendition": {rendition}}.Encode()
 }
 
 type libraryFileIn struct {
@@ -78,7 +90,8 @@ func iconTools() []tool {
 	return []tool{
 		define(&mcp.Tool{Name: "icons_overview", Description: "How icons stand: whether this server can compile them, the current build (its icons, by name and isolex category, and its warnings), " +
 			"the palette (the tokens icons may paint with, besides category, which paints in the category's color), the lexicon settings, " +
-			"and the variant each asset state is drawn with (an asset in a state is drawn as <icon>-<variant> when the build draws that). " +
+			"the variant each asset state is drawn with (an asset in a state is drawn as <icon>-<variant> when the build draws that), " +
+			"and the icon each category is drawn with for each rendition (rendition_icons: screen, everywhere on screen, and label, on labels). " +
 			"Icons are written in isolex, a KDL 2.0 language for isometric icons; the guide resource explains how bam uses it.",
 			Annotations: readOnly("Icons overview")},
 			[]string{"GET /api/v1/icons", "GET /api/v1/icons/palette", "GET /api/v1/icons/settings", "GET /api/v1/icons/states"}, read,
@@ -136,7 +149,7 @@ func iconTools() []tool {
 				}
 				return reply[map[string]any]{}, fmt.Errorf("no icon named %q in the current build", in.Name)
 			}),
-		define(&mcp.Tool{Name: "draw_icon", Description: "Draw an icon as a PNG, to show the person: by name, a category's (its own or inherited) or an asset's (its own or its categories'). " +
+		define(&mcp.Tool{Name: "draw_icon", Description: "Draw an icon as a PNG, to show the person: by name, a category's (its own or inherited) or an asset's (its own or its categories'), for a rendition. " +
 			"A name the build does not draw comes back as the unknown icon, a question mark.",
 			Annotations: readOnly("Draw an icon")}, []string{"GET /api/v1/icons/image"}, read,
 			func(ctx context.Context, e *env, in drawIconIn) (reply[drawIconOut], error) {
@@ -161,6 +174,12 @@ func iconTools() []tool {
 				if given != 1 {
 					return reply[drawIconOut]{}, fmt.Errorf("give one of name, category or asset")
 				}
+				if in.Rendition != "" {
+					if in.Name != "" {
+						return reply[drawIconOut]{}, fmt.Errorf("a rendition is for a category's or an asset's icon; an icon by name is the one named")
+					}
+					q.Set("rendition", in.Rendition)
+				}
 				if in.Dark {
 					q.Set("theme", "dark")
 				}
@@ -179,7 +198,7 @@ func iconTools() []tool {
 				r.extra = []mcp.Content{&mcp.ImageContent{Data: res.Body, MIMEType: "image/png"}}
 				return r, nil
 			}),
-		define(&mcp.Tool{Name: "list_icon_sources", Description: "Every icon source: each category's (its icon's name, published source, and any draft that did not compile, with its errors) " +
+		define(&mcp.Tool{Name: "list_icon_sources", Description: "Every icon source: each category's, for each rendition it has one for (its rendition, its icon's name, published source, and any draft that did not compile, with its errors) " +
 			"and the library's shared files.",
 			Annotations: readOnly("List icon sources")}, []string{"GET /api/v1/category-icons", "GET /api/v1/icon-library"}, read,
 			func(ctx context.Context, e *env, _ none) (reply[map[string]any], error) {
@@ -193,22 +212,22 @@ func iconTools() []tool {
 				out := map[string]any{"category_icons": icons["icons"], "library": files["files"]}
 				return say(out, "%d category icons and %d library files.", count(icons, "icons"), count(files, "files"))
 			}),
-		define(&mcp.Tool{Name: "get_category_icon", Description: "A category's icon: its name, published source, any draft with its errors, every published version, newest first, " +
+		define(&mcp.Tool{Name: "get_category_icon", Description: "A category's icon for a rendition (screen unless given): its name, published source, any draft with its errors, every published version, newest first, " +
 			"and its params bound to asset fields (params).",
 			Annotations: readOnly("Get a category's icon")},
 			[]string{"GET /api/v1/categories/{id}/icon", "GET /api/v1/categories/{id}/icon/revisions", "GET /api/v1/categories/{id}/icon/params"}, read,
 			func(ctx context.Context, e *env, in categoryIDIn) (reply[map[string]any], error) {
 				out := map[string]any{}
-				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/categories/{id}/icon", in.CategoryID), nil, &out); err != nil {
+				if err := e.call(ctx, http.MethodGet, withRendition(pathOf("/api/v1/categories/{id}/icon", in.CategoryID), in.Rendition), nil, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}
 				var revs map[string]any
-				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/categories/{id}/icon/revisions", in.CategoryID), nil, &revs); err != nil {
+				if err := e.call(ctx, http.MethodGet, withRendition(pathOf("/api/v1/categories/{id}/icon/revisions", in.CategoryID), in.Rendition), nil, &revs); err != nil {
 					return reply[map[string]any]{}, err
 				}
 				out["revisions"] = revs["revisions"]
 				var params map[string]any
-				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/categories/{id}/icon/params", in.CategoryID), nil, &params); err != nil {
+				if err := e.call(ctx, http.MethodGet, withRendition(pathOf("/api/v1/categories/{id}/icon/params", in.CategoryID), in.Rendition), nil, &params); err != nil {
 					return reply[map[string]any]{}, err
 				}
 				out["params"] = params["params"]
@@ -218,7 +237,7 @@ func iconTools() []tool {
 			"Check as often as you like before saving.",
 			Annotations: readOnly("Check a category's icon")}, "POST /api/v1/categories/{id}/icon/check", manage,
 			func(in categoryIconIn) (request, error) {
-				return request{path: pathOf("/api/v1/categories/{id}/icon/check", in.CategoryID), body: map[string]string{"icon_name": in.IconName, "source": in.Source}}, need(in.CategoryID, "category_id")
+				return request{path: withRendition(pathOf("/api/v1/categories/{id}/icon/check", in.CategoryID), in.Rendition), body: map[string]string{"icon_name": in.IconName, "source": in.Source}}, need(in.CategoryID, "category_id")
 			},
 			func(_ categoryIconIn, out map[string]any) string {
 				check, _ := out["check"].(map[string]any)
@@ -227,11 +246,12 @@ func iconTools() []tool {
 				}
 				return "It compiles."
 			}),
-		simple(&mcp.Tool{Name: "save_category_icon", Description: "Save a category's icon source. It is published if the icons compile with it and it draws an icon by its name; " +
+		simple(&mcp.Tool{Name: "save_category_icon", Description: "Save a category's icon source, for a rendition: screen (the default), or label, drawn on labels in place of the screen icon, " +
+			"best flat line art that prints clearly in black and white. It is published if the icons compile with it and it draws an icon by its name; " +
 			"otherwise it is kept as a draft, with the errors, and the published icon stays.",
 			Annotations: changes("Save a category's icon", true)}, "PUT /api/v1/categories/{id}/icon", manage,
 			func(in categoryIconIn) (request, error) {
-				return request{path: pathOf("/api/v1/categories/{id}/icon", in.CategoryID), body: map[string]string{"icon_name": in.IconName, "source": in.Source}}, need(in.CategoryID, "category_id")
+				return request{path: withRendition(pathOf("/api/v1/categories/{id}/icon", in.CategoryID), in.Rendition), body: map[string]string{"icon_name": in.IconName, "source": in.Source}}, need(in.CategoryID, "category_id")
 			},
 			func(in categoryIconIn, out map[string]any) string {
 				return saveSaid(fmt.Sprintf("%q", in.IconName), out)
@@ -240,7 +260,7 @@ func iconTools() []tool {
 			"or the published source does not draw it by the new one.",
 			Annotations: changes("Rename a category's icon", true)}, "POST /api/v1/categories/{id}/icon/rename", manage,
 			func(in renameIconIn) (request, error) {
-				return request{path: pathOf("/api/v1/categories/{id}/icon/rename", in.CategoryID), body: map[string]string{"icon_name": in.IconName}}, need(in.CategoryID, "category_id")
+				return request{path: withRendition(pathOf("/api/v1/categories/{id}/icon/rename", in.CategoryID), in.Rendition), body: map[string]string{"icon_name": in.IconName}}, need(in.CategoryID, "category_id")
 			},
 			func(in renameIconIn, _ map[string]any) string { return fmt.Sprintf("Renamed it %q.", in.IconName) }),
 		simple(&mcp.Tool{Name: "bind_icon_params", Description: "Bind params of a category's icon, its own or inherited, to what each asset has, replacing those bound: " +
@@ -254,21 +274,21 @@ func iconTools() []tool {
 				if params == nil {
 					params = map[string]string{}
 				}
-				return request{path: pathOf("/api/v1/categories/{id}/icon/params", in.CategoryID), body: map[string]any{"params": params}}, need(in.CategoryID, "category_id")
+				return request{path: withRendition(pathOf("/api/v1/categories/{id}/icon/params", in.CategoryID), in.Rendition), body: map[string]any{"params": params}}, need(in.CategoryID, "category_id")
 			},
 			func(_ iconParamsIn, out map[string]any) string {
 				return fmt.Sprintf("%d params bound.", count(out, "params"))
 			}),
-		simple(&mcp.Tool{Name: "delete_category_icon", Description: "Delete a category's icon and its history. Refused if another icon uses it.",
+		simple(&mcp.Tool{Name: "delete_category_icon", Description: "Delete a category's icon for a rendition (screen unless given) and its history. Refused if another icon uses it.",
 			Annotations: destroys("Delete a category's icon", true)}, "DELETE /api/v1/categories/{id}/icon", manage,
 			func(in categoryIDIn) (request, error) {
-				return request{path: pathOf("/api/v1/categories/{id}/icon", in.CategoryID)}, need(in.CategoryID, "category_id")
+				return request{path: withRendition(pathOf("/api/v1/categories/{id}/icon", in.CategoryID), in.Rendition)}, need(in.CategoryID, "category_id")
 			},
 			func(categoryIDIn, map[string]any) string { return "Deleted the icon." }),
 		simple(&mcp.Tool{Name: "discard_category_icon_draft", Description: "Drop a category icon's draft, keeping what is published. An icon never published goes with it.",
 			Annotations: destroys("Discard an icon draft", true)}, "DELETE /api/v1/categories/{id}/icon/draft", manage,
 			func(in categoryIDIn) (request, error) {
-				return request{path: pathOf("/api/v1/categories/{id}/icon/draft", in.CategoryID)}, need(in.CategoryID, "category_id")
+				return request{path: withRendition(pathOf("/api/v1/categories/{id}/icon/draft", in.CategoryID), in.Rendition)}, need(in.CategoryID, "category_id")
 			},
 			func(categoryIDIn, map[string]any) string { return "Discarded the draft." }),
 		define(&mcp.Tool{Name: "get_icon_library_file", Description: "A library file: its path, published source, any draft with its errors, and every published version, newest first.",
@@ -359,6 +379,7 @@ func iconTools() []tool {
 
 type iconParamsIn struct {
 	CategoryID string            `json:"category_id" jsonschema:"the category whose own icon it is"`
+	Rendition  string            `json:"rendition,omitempty" jsonschema:"which of the category's icons: screen (the default) or label"`
 	Params     map[string]string `json:"params,omitempty" jsonschema:"each param's name, to what sets it: a field's ID, or for a text param name or code"`
 }
 
@@ -370,8 +391,10 @@ type drawIconIn struct {
 	Name     string `json:"name,omitempty" jsonschema:"an icon by name, as the build draws it"`
 	Category string `json:"category,omitempty" jsonschema:"a category by ID: the icon it is drawn with"`
 	Asset    string `json:"asset,omitempty" jsonschema:"an asset by ID or code: the icon it is drawn with"`
-	Height   int    `json:"height,omitempty" jsonschema:"how high, in pixels, 1 to 1024; 64 unless given"`
-	Dark     bool   `json:"dark,omitempty" jsonschema:"draw it in the palette's dark colors"`
+	// a category's or an asset's icon for a rendition
+	Rendition string `json:"rendition,omitempty" jsonschema:"for a category or an asset, the icon for screen (the default) or label; one with no label icon is drawn on labels with its screen icon"`
+	Height    int    `json:"height,omitempty" jsonschema:"how high, in pixels, 1 to 1024; 64 unless given"`
+	Dark      bool   `json:"dark,omitempty" jsonschema:"draw it in the palette's dark colors"`
 }
 
 type drawIconOut struct {

@@ -900,7 +900,7 @@ func TestIcons(t *testing.T) {
 		return `{"type":"icon","x":0,"y":0,"width":10,"height":10,` + props + `}`
 	}
 	tpl, err := Parse([]byte(doc(icon(`"icon":"{{asset.icon}}","state":true`) + `,` + icon(`"icon":"switch-l3","shading":"outline","align":"right","mirror":"across"`) +
-		`,` + icon(`"icon":"switch-l3"`))))
+		`,` + icon(`"icon":"switch-l3"`) + `,` + icon(`"icon":"{{asset.icon}}","rendition":"screen"`) + `,` + icon(`"icon":"{{asset.icon}}","rendition":"label"`))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -925,6 +925,10 @@ func TestIcons(t *testing.T) {
 			[]string{"elements[0].icon", "elements[0].shading", "elements[0].state"}},
 		// only the asset's icon has a state to show
 		{icon(`"icon":"crate","state":true`), []string{"elements[0].state"}},
+		// a rendition is the asset's label or screen icon
+		{icon(`"icon":"{{asset.icon}}","rendition":"sticker"`), []string{"elements[0].rendition"}},
+		{icon(`"icon":"crate","rendition":"label"`), []string{"elements[0].rendition"}},
+		{`{"type":"text","x":0,"y":0,"width":10,"height":5,"font_size":8,"content_binding":"A","rendition":"label"}`, []string{"elements[0].rendition"}},
 		{`{"type":"shape","shape":"ellipse","x":0,"y":0,"width":10,"height":10,"icon":"crate"}`, []string{"elements[0].icon"}},
 		{`{"type":"thing","x":0,"y":0,"width":10,"height":10}`, []string{"elements[0].type"}},
 	} {

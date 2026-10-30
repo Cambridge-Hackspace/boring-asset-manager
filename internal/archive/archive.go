@@ -217,16 +217,20 @@ type IconsIndexFile struct {
 	Assets     []IndexedAsset `json:"assets"`
 }
 
-// IndexedIcon is a category's own icon, by its name.
+// IndexedIcon is a category's own icon for a rendition, by its name.
 type IndexedIcon struct {
 	Icon       string `json:"icon"`
 	CategoryID string `json:"category_id"`
 	Category   string `json:"category"`
+	// Rendition is where it is drawn: screen or label. An index written
+	// before renditions has none, and means screen.
+	Rendition string `json:"rendition,omitempty"`
 }
 
-// IndexedAsset is an asset drawn with an icon of its own.
+// IndexedAsset is an asset drawn with an icon of its own, for a rendition.
 type IndexedAsset struct {
-	AssetID string `json:"asset_id"`
-	Asset   string `json:"asset"`
-	Icon    string `json:"icon"`
+	AssetID   string `json:"asset_id"`
+	Asset     string `json:"asset"`
+	Icon      string `json:"icon"`
+	Rendition string `json:"rendition,omitempty"`
 }
