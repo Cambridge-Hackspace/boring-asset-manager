@@ -106,8 +106,19 @@ func TestExportingIconsMakesALexiconIsolexChecks(t *testing.T) {
 	for _, n := range names {
 		lexicon = append(lexicon, isolex.File{Name: n, Text: files[n]})
 	}
-	if r, err := isolex.Default().Compile(context.Background(), lexicon); err != nil || !r.OK {
-		t.Errorf("the export does not compile: %v %+v", err, r)
+	r, err := isolex.Default().Compile(context.Background(), lexicon)
+	if err != nil || !r.OK {
+		t.Fatalf("the export does not compile: %v %+v", err, r)
+	}
+	// it carries the palette, every color of it, as a palette block
+	palette, _ := srv.store.GetIconPalette()
+	if len(palette) == 0 || len(r.Palette) != len(palette) {
+		t.Fatalf("the export's palette %v, bam's %v", r.Palette, palette)
+	}
+	for _, c := range palette {
+		if r.Palette[c.Token] != (isolex.Colors{Light: c.Light, Dark: c.Dark}) {
+			t.Errorf("%s: the export has %v, bam %+v", c.Token, r.Palette[c.Token], c)
+		}
 	}
 	if again := doJSON(t, srv, cookie, "GET", "/api/v1/icons/export", ""); !bytes.Equal(again.Body.Bytes(), rec.Body.Bytes()) {
 		t.Error("two exports of the same icons differ")
