@@ -261,3 +261,63 @@ func TestNarrowedTokens(t *testing.T) {
 		t.Errorf("a token narrowed to an unknown scope: %v", err)
 	}
 }
+
+// TestAssignmentsByRoleName lists a holder's roles by name, as the account
+// page does, not by their random IDs.
+func TestAssignmentsByRoleName(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	admin, err := st.CreateAdminUser("admin@hackspace.org", "Pass1234!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada, err := st.CreateUser("ada@hackspace.org", "Pass1234!", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// eight, given out of order, so their IDs falling in name order by chance
+	// is one in 40,320
+	names := []string{"Fixers", "Borrowers", "Hosts", "Admins of bins", "Editors", "Greeters", "Cleaners", "Drivers"}
+	var given []models.RoleAssignment
+	byID := map[string]string{}
+	for _, name := range names {
+		role, err := st.CreateRole(RoleInput{Name: name, Permissions: []string{"assets.read"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		given = append(given, models.RoleAssignment{RoleID: role.ID})
+		byID[role.ID] = name
+	}
+	want := append([]string(nil), names...)
+	sort.Strings(want)
+	named := func(list []models.RoleAssignment) []string {
+		out := []string{}
+		for _, a := range list {
+			out = append(out, byID[a.RoleID])
+		}
+		return out
+	}
+
+	if err := st.SetUserRoleAssignments(ada.ID, given); err != nil {
+		t.Fatal(err)
+	}
+	all, err := st.UserRoleAssignments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := named(all[ada.ID]); !reflect.DeepEqual(got, want) {
+		t.Errorf("a user's roles: %v, want %v", got, want)
+	}
+
+	tok, _, err := st.CreateTokenWithRoles("Dashboard", given, nil, admin.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := st.GetToken(tok.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := named(read.Roles); !reflect.DeepEqual(got, want) {
+		t.Errorf("a token's roles: %v, want %v", got, want)
+	}
+}

@@ -111,7 +111,8 @@ func assignmentScopeNames(q interface {
 }
 
 // readAssignments maps each holder with roles to its assignments, by role
-// ID, each with the IDs of the scopes it is narrowed to, sorted.
+// name as the account page lists them, each with the IDs of the scopes it is
+// narrowed to, sorted.
 func (s *Store) readAssignments(t assignmentTables) (map[string][]models.RoleAssignment, error) {
 	narrowed := map[[2]string][]string{}
 	rows, err := s.Query("SELECT " + t.holder + ", role_id, scope_id FROM " + t.scopes)
@@ -132,17 +133,19 @@ func (s *Store) readAssignments(t assignmentTables) (map[string][]models.RoleAss
 		return nil, err
 	}
 
-	rows, err = s.Query("SELECT " + t.holder + ", role_id FROM " + t.roles)
+	rows, err = s.Query("SELECT a." + t.holder + ", a.role_id, r.name FROM " + t.roles + " a JOIN roles r ON r.id = a.role_id")
 	if err != nil {
 		return nil, fmt.Errorf("reading assignments: %w", err)
 	}
 	defer rows.Close()
 	out := map[string][]models.RoleAssignment{}
+	names := map[string]string{}
 	for rows.Next() {
-		var holder, role string
-		if err := rows.Scan(&holder, &role); err != nil {
+		var holder, role, name string
+		if err := rows.Scan(&holder, &role, &name); err != nil {
 			return nil, fmt.Errorf("scanning assignment: %w", err)
 		}
+		names[role] = name
 		scopes := narrowed[[2]string{holder, role}]
 		if scopes == nil {
 			scopes = []string{}
@@ -151,7 +154,13 @@ func (s *Store) readAssignments(t assignmentTables) (map[string][]models.RoleAss
 		out[holder] = append(out[holder], models.RoleAssignment{RoleID: role, ScopeIDs: scopes})
 	}
 	for _, list := range out {
-		sort.Slice(list, func(i, j int) bool { return list[i].RoleID < list[j].RoleID })
+		sort.Slice(list, func(i, j int) bool {
+			a, b := list[i], list[j]
+			if names[a.RoleID] != names[b.RoleID] {
+				return names[a.RoleID] < names[b.RoleID]
+			}
+			return a.RoleID < b.RoleID
+		})
 	}
 	return out, rows.Err()
 }
