@@ -77,13 +77,13 @@
   {#if liveState === 'failed'}
     <p class="text-sm text-zinc-600 dark:text-zinc-400">The label preview cannot be drawn in this browser.</p>
   {:else}
-    <canvas
-      bind:this={canvas}
-      class="rounded border border-zinc-300 bg-white [image-rendering:pixelated]"
-      style="width: {(size * 2 + 2) * 8}px; height: {size * 8}px"
-      role="img"
-      aria-label="{name} as it prints in black and white on a 12 mm label: shaded, and as an outline"
-    ></canvas>
+    <div role="img" aria-label="{name} as it prints in black and white on a 12 mm label: shaded, and as an outline" class="w-fit">
+      <canvas
+        bind:this={canvas}
+        class="block rounded border border-zinc-300 bg-white [image-rendering:pixelated]"
+        style="width: {(size * 2 + 2) * 8}px; height: {size * 8}px"
+      ></canvas>
+    </div>
     <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
       {drawn ? 'Shaded, and as an outline, at 203 dots an inch, enlarged.' : 'Drawing…'}
     </p>
