@@ -170,7 +170,7 @@ func Check(r io.Reader) (*Checked, error) {
 			}
 			gotManifest = true
 			continue
-		case h.Name == ReadmePath:
+		case h.Name == ReadmePath || c.Header.Package != nil && h.Name == c.Header.Package.Preview && h.Name != "":
 			n, err := io.Copy(io.Discard, body)
 			if err != nil {
 				return nil, invalid("%s: %v", h.Name, err)
@@ -297,7 +297,9 @@ func (c *Checked) matchManifest(got map[string]Member, authRows map[string]int) 
 	man := &c.Manifest
 	hdr := man.Header
 	hdr.Set.Parts = c.Header.Set.Parts
-	if fmt.Sprint(hdr) != fmt.Sprint(c.Header) {
+	a, _ := json.Marshal(hdr)
+	b, _ := json.Marshal(c.Header)
+	if !bytes.Equal(a, b) {
 		return invalid("the manifest's header is not the header")
 	}
 	if man.Set.Parts < man.Set.Part || c.Header.Set.Parts != 0 && c.Header.Set.Parts != man.Set.Parts {

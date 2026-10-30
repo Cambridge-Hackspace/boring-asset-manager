@@ -118,6 +118,8 @@ type Header struct {
 	// Secrets is set when it holds authentication (KindAuth).
 	Secrets bool `json:"secrets"`
 	Set     Set  `json:"set"`
+	// Package says what a package is: set on packages alone.
+	Package *PackageInfo `json:"package,omitempty"`
 }
 
 // Set names the set of archives a backup split into parts makes, and this
@@ -173,8 +175,9 @@ const RowChunk = 8 << 20
 // readme is README.txt, for whoever opens an archive without bam.
 const readme = `This is an archive of a BAM! (Boring Asset Manager) instance, written by
 bam backup, or downloaded from its Backups page. bam restore puts it back,
-into a database of any kind. Its format is documented in bam's README, in
-section 2.3.
+into a database of any kind. Or it is a package of part of one, written by
+bam export or its Import & export page, which header.json says. Its format
+is documented in bam's README, in section 2.3.
 
 header.json    what this archive is: bam's version, the schema's, when it
                was written, the kinds of information it holds, and its
@@ -186,6 +189,7 @@ auth/<table>/  authentication: password hashes, sessions, API tokens,
                the command line writes. Keep such an archive as carefully
                as the database itself.
 files/         uploaded files, as stored: photos/<id> and images/<id>.
+preview.*      a package's preview image, if it has one.
 manifest.json  last: the size and SHA-256 of every other member, the rows
                of each table, and files rows name that were not found.
 `

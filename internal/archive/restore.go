@@ -21,6 +21,9 @@ import (
 // ErrNotEmpty is returned for a restore into an instance already in use.
 var ErrNotEmpty = errors.New("archive: the instance is in use")
 
+// ErrNotBackup is returned for restoring, or replacing with, a package.
+var ErrNotBackup = errors.New("archive: not a backup")
+
 // ErrLockout is returned for a replace that would leave no one able to
 // manage users, or the person replacing unable to.
 var ErrLockout = errors.New("archive: refused, as it would lock people out")
@@ -110,6 +113,10 @@ func Restore(ctx context.Context, st *store.Store, blobs filestore.Blobs, open f
 		return nil, err
 	}
 	sum := &RestoreSummary{Header: checked.Header, Tables: map[string]int{}}
+	if checked.Header.Type == "package" {
+		// part of an instance, merged into one rather than put back
+		return nil, fmt.Errorf("%w: it is a package, part of an instance, which is imported into one rather than restored", ErrNotBackup)
+	}
 	if checked.Header.Set.Part > 1 {
 		return sum, restoreFiles(ctx, st, blobs, open, sum)
 	}
