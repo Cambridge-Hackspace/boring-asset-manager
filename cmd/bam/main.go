@@ -35,6 +35,8 @@ Available Commands:
   export        Write a package of part of the instance, with what it needs (requires --select and --to, and --name;
                 --photos, --links, --history with assets; --description, --author, --license, --version, --preview <image>;
                 --plan says what it would hold, writing nothing)
+  import        Merge a package, or kinds of a backup, into the instance (requires --from; --anchor <category>;
+                --choose kind:name=existing|copy|skip for what clashes; --only <kinds> of a backup; --check changes nothing)
   mcp           Relay MCP between stdio and a server, for assistants (requires --url; API token in $BAM_TOKEN)
   version       Print version information
 
@@ -173,6 +175,31 @@ func main() {
 		cmd.BoolVar(&opts.Plan, "plan", false, "Say what the package would hold, writing nothing")
 		_ = cmd.Parse(os.Args[2:])
 		if err := cli.Export(*configPath, *to, opts); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "import":
+		cmd := flag.NewFlagSet(command, flag.ExitOnError)
+		configPath := cmd.String("config", "config.toml", "Path to configuration file")
+		from := cmd.String("from", "", "Package, or backup, to import")
+		only := cmd.String("only", "", "Merge only these kinds of a backup, such as catalog,assets")
+		var opts cli.ImportOptions
+		cmd.StringVar(&opts.Anchor, "anchor", "", "The category, by name or ID, its top categories go under; by default, the top level")
+		cmd.Func("choose", "What to do with what clashes, kind:name=existing, copy or skip, repeated or separated by commas", func(s string) error {
+			opts.Choose = append(opts.Choose, s)
+			return nil
+		})
+		cmd.BoolVar(&opts.Check, "check", false, "Say what importing would do, changing nothing")
+		_ = cmd.Parse(os.Args[2:])
+		var err error
+		if *only != "" {
+			opts.Only, err = cli.ParseKinds(*only)
+		}
+		if err == nil {
+			err = cli.Import(*configPath, *from, opts)
+		}
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

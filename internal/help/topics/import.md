@@ -24,3 +24,14 @@ The **links** column holds entries such as `contained_in:Bin A3;used_with:Drill`
 4. Give the package a name, and **Export**. Your browser saves it, however large.
 
 A package never holds people, passwords or printers, and holds only what you can see.
+
+### Importing a package
+
+**Choose a package or backup** on the same page. It is uploaded and checked, and nothing changes until you **Import** it.
+
+1. Choose the category its top categories go under, or the top level.
+2. What it holds that is here already is listed, with what to do with each: **Use the one here**, **Import as a copy** (renamed, with everything in the package that names it changed to match) or **Skip**. What is the same is used as it is; what differs is copied.
+3. If you change either, **Check it with these choices**, so that what you import is what you see.
+4. **Import**. Everything comes in new, so the same package can be imported twice, under different categories.
+
+From a backup, choose which kinds to merge. People, settings, passwords and sessions never come in this way. What it needs that you may not do, such as adding flows without *flows.manage*, is said before anything changes.

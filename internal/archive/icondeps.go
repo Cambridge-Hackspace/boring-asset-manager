@@ -3,6 +3,8 @@ package archive
 import (
 	"strings"
 	"unicode"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 )
 
 // Icons' dependencies (#144): which definitions an isolex source makes, and
@@ -27,13 +29,41 @@ type IconNames struct {
 func ScanIcons(source string) IconNames {
 	var out IconNames
 	seenDef, seenUse := map[string]bool{}, map[string]bool{}
-	use := func(name string) {
-		if name != "" && !seenUse[name] {
-			seenUse[name] = true
-			out.Uses = append(out.Uses, name)
+	walkIcons(kdlTokens(source), func(t kdlToken, define bool) {
+		switch {
+		case t.text == "":
+		case define && !seenDef[t.text]:
+			seenDef[t.text] = true
+			out.Defines = append(out.Defines, t.text)
+		case !define && !seenUse[t.text]:
+			seenUse[t.text] = true
+			out.Uses = append(out.Uses, t.text)
 		}
-	}
-	toks := kdlTokens(source)
+	})
+	return out
+}
+
+// RenameIcons renames definitions in a source (#145), where it makes them
+// and where it names them, old name to new: an icon imported as a copy,
+// and what uses it.
+func RenameIcons(source string, renames map[string]string) string {
+	r := []rune(source)
+	var b strings.Builder
+	at := 0
+	walkIcons(kdlTokens(source), func(t kdlToken, _ bool) {
+		if to, ok := renames[t.text]; ok && t.start >= at {
+			b.WriteString(string(r[at:t.start]))
+			b.WriteString(isolex.Quote(to))
+			at = t.end
+		}
+	})
+	b.WriteString(string(r[at:]))
+	return b.String()
+}
+
+// walkIcons calls each with every string that defines a name, or names
+// one, in order.
+func walkIcons(toks []kdlToken, each func(t kdlToken, define bool)) {
 	depth := 0
 	for i := 0; i < len(toks); {
 		// a node: its name, then its arguments and properties, to the end
@@ -62,7 +92,7 @@ func ScanIcons(source string) IconNames {
 			if v.kind == tokWord && i+2 < len(toks) && toks[i+1].kind == tokEquals {
 				// a property
 				if (v.text == "extends" || v.text == "font") && toks[i+2].kind == tokString {
-					use(toks[i+2].text)
+					each(toks[i+2], false)
 				}
 				i += 3
 				continue
@@ -70,21 +100,17 @@ func ScanIcons(source string) IconNames {
 			if v.kind == tokString {
 				switch {
 				case depth == 0 && first && iconDefinitions[name]:
-					if !seenDef[v.text] {
-						seenDef[v.text] = true
-						out.Defines = append(out.Defines, v.text)
-					}
+					each(v, true)
 				case depth > 0 && (name == "extends" || name == "axes"):
-					use(v.text)
+					each(v, false)
 				case depth > 0 && first && (name == "insert" || name == "badge"):
-					use(v.text)
+					each(v, false)
 				}
 				first = false
 			}
 			i++
 		}
 	}
-	return out
 }
 
 type tokKind int
@@ -101,6 +127,8 @@ const (
 type kdlToken struct {
 	kind tokKind
 	text string
+	// start and end are where a string is in the source, in runes.
+	start, end int
 }
 
 // kdlTokens splits KDL 2.0 into words, strings, =, braces and the ends of
@@ -164,11 +192,11 @@ func kdlTokens(s string) []kdlToken {
 			i++
 		case c == '"':
 			text, next := quoted(r, i)
-			out = append(out, kdlToken{kind: tokString, text: text})
+			out = append(out, kdlToken{kind: tokString, text: text, start: i, end: min(next, len(r))})
 			i = next
 		case c == '#' && i+1 < len(r) && (r[i+1] == '"' || r[i+1] == '#'):
 			text, next := raw(r, i)
-			out = append(out, kdlToken{kind: tokString, text: text})
+			out = append(out, kdlToken{kind: tokString, text: text, start: i, end: min(next, len(r))})
 			i = next
 		default:
 			start := i

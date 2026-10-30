@@ -1,5 +1,22 @@
-import { describe, expect, it } from 'vitest';
-import { anyChosen, categoryTree, needed, neededBySaid, planSummary, subtreeIds, toggleSubtree, treeState, type Plan } from './packages';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  actionSaid,
+  anyChosen,
+  categoryTree,
+  clashes,
+  importJob,
+  importSummary,
+  needed,
+  neededBySaid,
+  planSummary,
+  subtreeIds,
+  toggleSubtree,
+  treeState,
+  type ImportItem,
+  type ImportPlan,
+  type Plan,
+} from './packages';
+import { fakeApi } from '../test/fetch';
 
 const cats = [
   { id: 'k', name: 'Kitchen', parent_id: null },
@@ -75,5 +92,39 @@ describe('what is needed', () => {
     expect(anyChosen({ fields: ['f'] })).toBe(true);
     expect(anyChosen({ icons: true })).toBe(true);
     expect(anyChosen({ assets: { all: true, photos: false, links: false, history: false } })).toBe(true);
+  });
+});
+
+describe('importing', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const items: ImportItem[] = [
+    { kind: 'category', id: 'c', name: 'Tools', action: 'create' },
+    { kind: 'field', id: 'f', name: 'Serial', action: 'copy', as: 'serial_2', existing: { kind: 'field', id: 'h', name: 'Serial' }, choices: ['existing', 'copy', 'skip'] },
+    { kind: 'action', id: 'a', name: 'Open', action: 'existing', existing: { kind: 'action', id: 'h2', name: 'Open (open)' }, identical: true, choices: ['existing', 'copy', 'skip'] },
+    { kind: 'relation_type', id: 'r', name: 'Stores', action: 'skip', existing: { kind: 'relation_type', id: 'h3', name: 'Stores' }, choices: ['existing', 'copy', 'skip'] },
+  ];
+  const plan = { items, assets: { assets: 1, photos: 0, links: 2 } } as unknown as ImportPlan;
+
+  it('lists what clashes, to choose for', () => {
+    expect(clashes(plan).map((i) => i.id)).toEqual(['f', 'a', 'r']);
+    expect(clashes(null)).toEqual([]);
+  });
+
+  it('says what it does with each thing, and with all of them', () => {
+    expect(items.map(actionSaid)).toEqual(['Created', 'Imported as a copy, serial_2', 'Uses Open (open), here already', 'Skipped']);
+    expect(importSummary(plan)).toBe('It creates 2 things (1 of them copies), uses 1 here already, skips 1, and brings 1 asset with 0 photos and 2 links.');
+  });
+
+  it('waits for a check, and gives its plan even when refused', async () => {
+    let asked = 0;
+    fakeApi({
+      'POST /import/check': () => ({ status: 202, body: { id: 'j', done: false } }),
+      'GET /import/jobs/j': () => (++asked < 2 ? { id: 'j', done: false } : { id: 'j', done: true, error: 'needs flows.manage', result: { plan } }),
+    });
+    const out = await importJob('/import/check', { upload_id: 'u', anchor: '', choices: {} }, { sleep: async () => {} });
+    expect(out.error).toBe('needs flows.manage');
+    expect(out.plan?.items).toHaveLength(4);
+    expect(asked).toBe(2);
   });
 });

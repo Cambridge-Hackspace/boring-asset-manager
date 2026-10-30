@@ -35,7 +35,8 @@ export type ItemKind =
   | 'printer_pool'
   | 'asset'
   | 'icons'
-  | 'assets';
+  | 'assets'
+  | 'category_icon';
 
 export interface Ref {
   kind: ItemKind;
@@ -84,6 +85,7 @@ export const kindNames: Record<ItemKind, string> = {
   asset: 'asset',
   icons: 'icons',
   assets: 'assets',
+  category_icon: 'category’s icon',
 };
 
 export interface TreeNode {
@@ -196,4 +198,127 @@ export function base64Of(file: Blob): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('Could not read the file'));
     reader.readAsDataURL(file);
   });
+}
+
+// Importing (README §2.3, #145): a package, or kinds of a backup, uploaded
+// as backups are, checked to say what it would do, then imported as checked.
+
+/** What an import does with one thing: what clashes with nothing is created. */
+export type Choice = 'create' | 'existing' | 'copy' | 'skip';
+
+export const choiceLabels: Record<Choice, string> = {
+  create: 'Create',
+  existing: 'Use the one here',
+  copy: 'Import as a copy',
+  skip: 'Skip',
+};
+
+export interface ImportItem extends Ref {
+  action: Choice;
+  /** Its key, name, address or path here, when that is not its own. */
+  as?: string;
+  /** What it clashes with here. */
+  existing?: Ref;
+  identical?: boolean;
+  /** What may be chosen for it; none when nothing clashes. */
+  choices?: Choice[];
+  note?: string;
+}
+
+/** The kinds of a backup an import can merge. */
+export const mergeable = ['catalog', 'labels', 'reports', 'icons', 'flows', 'assets'] as const;
+export type MergeKind = (typeof mergeable)[number];
+
+export interface ImportPlan {
+  header: {
+    type: string;
+    created_at: string;
+    kinds: string[];
+    package?: { name: string; description?: string; author?: string; license?: string; version?: string };
+  };
+  kinds: string[];
+  anchor: Ref | null;
+  items: ImportItem[];
+  assets?: { assets: number; photos: number; links: number; events: number; values_dropped: number; links_dropped: number; codes_taken: number };
+  files: number;
+  file_bytes: number;
+  permissions: string[];
+  missing: string[];
+  warnings: string[];
+  problems: string[];
+  fingerprint: string;
+}
+
+export interface ImportRequest {
+  upload_id: string;
+  anchor: string;
+  choices: Record<string, Choice>;
+  kinds?: MergeKind[];
+  fingerprint?: string;
+}
+
+/** What a check or an import came to: its plan, even when refused, and why it was. */
+export interface ImportOutcome {
+  plan: ImportPlan | null;
+  error: string;
+}
+
+interface ImportJob {
+  id: string;
+  done: boolean;
+  error?: string;
+  result?: { plan: ImportPlan | null };
+}
+
+/** Checks an upload, or imports it as checked, waiting for the job. */
+export async function importJob(
+  path: '/import/check' | '/import',
+  body: ImportRequest,
+  opts: { sleep?: (ms: number) => Promise<void> } = {},
+): Promise<ImportOutcome> {
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  let job = await request<ImportJob>('POST', path, body);
+  for (let wait = 250; !job.done; wait = Math.min(wait * 2, 3000)) {
+    await sleep(wait);
+    job = await request<ImportJob>('GET', `/import/jobs/${encodeURIComponent(job.id)}`);
+  }
+  return { plan: job.result?.plan ?? null, error: job.error ?? '' };
+}
+
+/** The key a choice is made by. */
+export function itemKey(it: Ref): string {
+  return `${it.kind}:${it.id}`;
+}
+
+/** What clashes with something here, to choose for. */
+export function clashes(plan: ImportPlan | null): ImportItem[] {
+  return (plan?.items ?? []).filter((it) => (it.choices?.length ?? 0) > 0);
+}
+
+/** Says what an import does with one thing. */
+export function actionSaid(it: ImportItem): string {
+  switch (it.action) {
+    case 'create':
+      return it.as ? `Created as ${it.as}` : 'Created';
+    case 'existing':
+      return it.existing?.name ? `Uses ${it.existing.name}, here already` : 'Uses the one here already';
+    case 'copy':
+      return `Imported as a copy, ${it.as}`;
+    case 'skip':
+      return 'Skipped';
+  }
+}
+
+/** Says what a plan does: "Creates 4 things, uses 1 here already and copies 1; 2 assets with 1 photo." */
+export function importSummary(plan: ImportPlan): string {
+  const n = (a: Choice) => plan.items.filter((i) => i.action === a).length;
+  const parts = [`creates ${count(n('create') + n('copy'), 'thing')}`];
+  if (n('copy') > 0) parts[0] += ` (${n('copy').toLocaleString()} of them copies)`;
+  if (n('existing') > 0) parts.push(`uses ${n('existing').toLocaleString()} here already`);
+  if (n('skip') > 0) parts.push(`skips ${n('skip').toLocaleString()}`);
+  let s = `It ${parts.join(', ')}`;
+  if (plan.assets) {
+    s += `, and brings ${count(plan.assets.assets, 'asset')} with ${count(plan.assets.photos, 'photo')} and ${count(plan.assets.links, 'link')}`;
+  }
+  return s + '.';
 }

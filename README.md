@@ -155,6 +155,11 @@ BAM does not use a web-based setup wizard for core security initialization. Prov
 ./bam backup --config ./config.toml --to ./bam-backup.db
 ./bam restore --config ./config.toml --from ./bam-backup.db
 
+# Package part of the instance to share (§2.3), and merge one into another,
+# under a category, saying first what it would do
+./bam export --config ./config.toml --select subtree:Tools --name Tools --to ./tools.bam.tar.gz
+./bam import --config ./config.toml --from ./tools.bam.tar.gz --anchor Lab --check
+
 # Keep uploaded files in step with the database: remove those no row names,
 # older than a day, and list rows whose file is missing (--dry-run removes
 # nothing); and copy every uploaded file to the store another configuration
@@ -409,6 +414,29 @@ The tables are listed, and restored, in that order: each after those its rows na
 ```
 
 Over the API, `POST /api/v1/exports/plan` with `{"selection"}` answers the plan: its `items`, each `chosen` or not with what it is `needed_by`, the `assets` counted, and what is `left_out`, with why. `POST /api/v1/exports` with the selection, `name`, `description`, `author`, `license`, `version` and a `preview` (base64) answers `201` with the export's `id` and where to `download` it: `GET /api/v1/exports/{id}`, by whoever posted it, within the hour, streamed as it is written, holding what they may read when it is. A selection is worked out again then, so what was removed meanwhile is not in it. Over MCP, `export_package` does the same.
+
+**Importing one.** A package, or the kinds chosen of a backup, is merged into an instance in use: checked first, saying what it would do, then imported as checked, all or nothing.
+
+- **Checked first.** Every member's SHA-256 is verified before anything else, and an archive from a newer bam is refused. The plan lists each thing it holds and what importing does with it: **create** it, use the **existing** one here, import it as a **copy** under a new name, or **skip** it. It counts the assets, photos, links and history that come, and lists **problems** that stop it, such as something needed that is skipped, or an icon that would not compile with this instance's lexicon.
+- **Matching.** What has a key that is the same on every instance is matched against what is here: fields and actions by key; link types, scopes, label templates, reports and scan templates by name; flows by address; label images by their content; library files by path and the names they define; a category's icon by its name and the names it defines. What clashes defaults to the existing one when it is the same, and to a copy when it differs. A copy is renamed (`serial_2`, `Tool label (2)`, `lend-a-tool-2`, `shared/crates-2.ilx`), and everything the archive holds that names it is rewritten: categories, assets' values, templates' bindings, reports' columns, flows' steps, and icon sources, whose definitions are renamed with them. A category's icon that clashes is copied or skipped.
+- **Anchored, with new IDs.** The archive's top categories go under the category chosen, or the top level. Everything gets new IDs, so one package can be imported twice under two categories, as two copies, sharing what is the same.
+- **All or nothing.** The rows go in in one transaction; files are stored as they are read, before it commits, and removed if it does not. Each asset's history records it was created by an import, by whoever imported it, and keeps what the archive's history held, without who did what. A check's `fingerprint` is passed to the import, which is refused if it would now do something else.
+- **What comes in.** The catalog, labels, reports, icons, flows and assets. People, roles, settings, printers, notification channels and authentication are never merged: they are an instance's own. Through the web, an archive holding authentication is imported without it, with a warning; from the command line too, as merging never brings it (`bam restore` does). Loans, what flows filed, icon revisions and drafts stay behind, as do this instance's icon settings and palette colors it already has. Codes another asset here has are left out, and counted. A flow is changed as it comes in where it must be: what it printed goes to the print queue, a place it named that did not come is asked for, and one that moved things to such a place is turned off.
+- **Permissions follow what it holds:** `categories.manage` for categories, fields, actions, link types and scopes; `templates.manage` for label templates and images; `reports.manage` for reports and scan templates; `icons.manage` for the library, categories' icons and palette colors; `flows.manage` for flows; and `assets.write` in the scopes the assets will be in, under the category chosen. Uploading needs `settings.manage`. What needs a permission the importer lacks is refused at check, before anything changes.
+
+**Admin › Import & export** uploads the file as backups are, in parts, at any size, shows the plan with a choice for each clash and the category to import under, and checks again when these change, so what is imported is what was shown. From the command line:
+
+```bash
+# What importing would do, changing nothing
+./bam import --config ./config.toml --from ./workshop.bam.tar.gz --anchor "Lab" --check
+# Under Lab, using this instance's serial field and copying its label template
+./bam import --config ./config.toml --from ./workshop.bam.tar.gz --anchor "Lab" \
+  --choose field:serial=existing --choose "label-template:Tool label=copy"
+# The catalog and assets of a backup, and nothing else of it
+./bam import --config ./config.toml --from ./bam-backup.bam.tar.gz --only catalog,assets
+```
+
+`--choose` takes `kind:name=existing|copy|skip`, where kind is `category`, `field`, `action`, `link-type`, `label-template`, `scan-template`, `report`, `flow`, `scope`, `image`, `icon-file` or `category-icon`, and name is its name, key or path, or its ID in the archive. Over the API, `POST /api/v1/import/check` with `{"upload_id", "anchor", "choices", "kinds"}` starts a job, which `GET /api/v1/import/jobs/{id}` answers with its `plan`: `items`, each with its `action`, `as`, the `existing` one it clashes with, whether `identical`, and its `choices`, keyed `kind:id`; the `assets`; the `permissions` it needs and those `missing`; `warnings`; `problems`; and the `fingerprint`. `POST /api/v1/import`, with the same and the `fingerprint`, imports it, one import or replace at a time. Over MCP, `check_import` and `import_package` do the same with an upload of the person's.
 
 **Memory** does not grow with the size of an instance: rows are written as they are read, and files streamed. Only the list of files to copy is kept, a few dozen bytes for each. A restore inserts rows in batches as it reads them, and streams files into the store. Tests write and restore 256 MiB of files, generated as they go, and check the heap; `BAM_TEST_ARCHIVE_BYTES=21474836480 go test ./internal/archive -run Memory` does 20 GiB. An upload of 256 MiB goes over HTTP in parts the same way, and `BAM_TEST_UPLOAD_BYTES` sends more (`go test ./internal/api -run LargeUpload`).
 
