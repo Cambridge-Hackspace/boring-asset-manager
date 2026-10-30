@@ -61,6 +61,14 @@ func (s Selection) Empty() bool {
 		!s.Icons && s.Assets == nil
 }
 
+// IconsOnly reports whether the icon library, palette and settings are
+// all that is chosen: a package of an icon set, which is written as a
+// zipped isolex library folder (#146).
+func (s Selection) IconsOnly() bool {
+	return s.Icons && len(s.Categories)+len(s.Subtrees)+len(s.Fields)+len(s.Actions)+len(s.RelationTypes)+
+		len(s.LabelTemplates)+len(s.ScanTemplates)+len(s.Reports)+len(s.Flows)+len(s.Scopes) == 0 && s.Assets == nil
+}
+
 // PackageInfo is what a package says of itself, in its header and
 // manifest: what a marketplace would list it by.
 type PackageInfo struct {

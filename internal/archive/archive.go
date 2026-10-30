@@ -8,8 +8,10 @@
 package archive
 
 // FormatVersion is the version of the archive format this package writes.
-// It is the format's own, apart from bam's.
-const FormatVersion = 1
+// It is the format's own, apart from bam's. Version 2 (#146) keeps icon
+// sources as an isolex library folder, icons/, rather than in their rows;
+// version 1 archives are read as they are.
+const FormatVersion = 2
 
 // Format names the format in every header and manifest.
 const Format = "bam-archive"
@@ -165,6 +167,14 @@ const (
 	DataDir      = "data/"
 	AuthDir      = "auth/"
 	FilesDir     = "files/"
+	// IconsDir is the icons as an isolex library folder (#146): its
+	// lexicon.ilx, library/<path> and categories/<icon>.ilx; IconsIndex
+	// says whose each category's icon is.
+	IconsDir   = "icons/"
+	IconsIndex = "icons.json"
+	// LexiconFile is the folder's lexicon block and palette, as bam writes
+	// them from its palette and icon settings.
+	LexiconFile = "lexicon.ilx"
 )
 
 // RowChunk is the most bytes of rows a member holds before the next
@@ -189,7 +199,34 @@ auth/<table>/  authentication: password hashes, sessions, API tokens,
                the command line writes. Keep such an archive as carefully
                as the database itself.
 files/         uploaded files, as stored: photos/<id> and images/<id>.
+icons/         the icons' sources, as an isolex library folder that
+               isolex check and isolex studio open as it is: lexicon.ilx
+               (the lexicon block and the palette), library/ and each
+               category's own icon in categories/<icon>.ilx.
+icons.json     which category each icon in icons/categories/ belongs to,
+               and the assets drawn with an icon of their own.
 preview.*      a package's preview image, if it has one.
 manifest.json  last: the size and SHA-256 of every other member, the rows
                of each table, and files rows name that were not found.
 `
+
+// IconsIndexFile is icons.json: whose each category's icon is, and the
+// assets drawn with an icon of their own, by name.
+type IconsIndexFile struct {
+	Categories []IndexedIcon  `json:"categories"`
+	Assets     []IndexedAsset `json:"assets"`
+}
+
+// IndexedIcon is a category's own icon, by its name.
+type IndexedIcon struct {
+	Icon       string `json:"icon"`
+	CategoryID string `json:"category_id"`
+	Category   string `json:"category"`
+}
+
+// IndexedAsset is an asset drawn with an icon of its own.
+type IndexedAsset struct {
+	AssetID string `json:"asset_id"`
+	Asset   string `json:"asset"`
+	Icon    string `json:"icon"`
+}

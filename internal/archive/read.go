@@ -198,6 +198,30 @@ func Check(r io.Reader) (*Checked, error) {
 			} else {
 				c.Rows[table] += rows
 			}
+		case h.Name == IconsIndex || dir+"/" == IconsDir:
+			if c.Header.FormatVersion < 2 || c.Header.Set.Part > 1 {
+				return nil, invalid("%s is in an archive that keeps its icons in its rows, or in a later part", h.Name)
+			}
+			if h.Name != IconsIndex && !iconMember(rest) {
+				return nil, invalid("%s is not in an isolex library folder as bam writes one", h.Name)
+			}
+			if h.Name == IconsIndex {
+				b, err := readSmall(body, h.Size)
+				if err != nil {
+					return nil, err
+				}
+				var index IconsIndexFile
+				if err := json.Unmarshal(b, &index); err != nil {
+					return nil, invalid("%s: %v", IconsIndex, err)
+				}
+				size = int64(len(b))
+			} else {
+				src, err := readIconFile(h.Name, body)
+				if err != nil {
+					return nil, err
+				}
+				size = int64(len(src))
+			}
 		case dir+"/" == FilesDir:
 			if !filestore.ValidKey(rest) || !strings.HasPrefix(rest, "photos/") && !strings.HasPrefix(rest, "images/") {
 				return nil, invalid("%s is no file bam keeps", h.Name)

@@ -34,4 +34,6 @@ A package never holds people, passwords or printers, and holds only what you can
 3. If you change either, **Check it with these choices**, so that what you import is what you see.
 4. **Import**. Everything comes in new, so the same package can be imported twice, under different categories.
 
+An icon set, a zip of an isolex library folder such as **Export as a zip** on the Icons page or isolex studio makes, imports the same way: it replaces the icons and palette colors it changes, and leaves the rest alone.
+
 From a backup, choose which kinds to merge. People, settings, passwords and sessions never come in this way. What it needs that you may not do, such as adding flows without *flows.manage*, is said before anything changes.

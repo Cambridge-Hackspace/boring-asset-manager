@@ -1247,15 +1247,8 @@ func (s *Store) IconLexiconFiles() ([]isolex.File, error) {
 	}
 	// Builds go without it: their colors are drawn from the palette as it
 	// is when drawn, and a color changed needs no build.
-	palette := make([]isolex.PaletteColor, len(in.palette))
-	for i, c := range in.palette {
-		palette[i] = isolex.PaletteColor{Token: c.Token, Colors: isolex.Colors{Light: c.Light, Dark: c.Dark}}
-	}
-	if block := isolex.PaletteBlock(palette); block != "" {
-		if files[0].Text != "" {
-			block = "\n" + block
-		}
-		files[0].Text += block
+	if files[0].Text, err = lexiconText(in); err != nil {
+		return nil, err
 	}
 	return files, nil
 }

@@ -36,7 +36,8 @@ export type ItemKind =
   | 'asset'
   | 'icons'
   | 'assets'
-  | 'category_icon';
+  | 'category_icon'
+  | 'palette_token';
 
 export interface Ref {
   kind: ItemKind;
@@ -86,7 +87,14 @@ export const kindNames: Record<ItemKind, string> = {
   icons: 'icons',
   assets: 'assets',
   category_icon: 'category’s icon',
+  palette_token: 'palette color',
 };
+
+/** A kind's name with its article: "a field", "an icon library file". */
+export function aKind(kind: ItemKind): string {
+  const name = kindNames[kind];
+  return `${/^[aeiou]/.test(name) ? 'an' : 'a'} ${name}`;
+}
 
 export interface TreeNode {
   id: string;
@@ -204,13 +212,14 @@ export function base64Of(file: Blob): Promise<string> {
 // as backups are, checked to say what it would do, then imported as checked.
 
 /** What an import does with one thing: what clashes with nothing is created. */
-export type Choice = 'create' | 'existing' | 'copy' | 'skip';
+export type Choice = 'create' | 'existing' | 'copy' | 'skip' | 'replace';
 
 export const choiceLabels: Record<Choice, string> = {
   create: 'Create',
   existing: 'Use the one here',
   copy: 'Import as a copy',
   skip: 'Skip',
+  replace: 'Replace the one here',
 };
 
 export interface ImportItem extends Ref {
@@ -306,6 +315,8 @@ export function actionSaid(it: ImportItem): string {
       return `Imported as a copy, ${it.as}`;
     case 'skip':
       return 'Skipped';
+    case 'replace':
+      return 'Replaces the one here';
   }
 }
 
@@ -314,6 +325,7 @@ export function importSummary(plan: ImportPlan): string {
   const n = (a: Choice) => plan.items.filter((i) => i.action === a).length;
   const parts = [`creates ${count(n('create') + n('copy'), 'thing')}`];
   if (n('copy') > 0) parts[0] += ` (${n('copy').toLocaleString()} of them copies)`;
+  if (n('replace') > 0) parts.push(`replaces ${n('replace').toLocaleString()}`);
   if (n('existing') > 0) parts.push(`uses ${n('existing').toLocaleString()} here already`);
   if (n('skip') > 0) parts.push(`skips ${n('skip').toLocaleString()}`);
   let s = `It ${parts.join(', ')}`;

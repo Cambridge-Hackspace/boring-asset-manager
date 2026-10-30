@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -184,6 +185,19 @@ func (s *Server) handleDownloadExport(w http.ResponseWriter, r *http.Request) {
 		}
 		return c
 	}, p.info.Name))
+	if p.sel.IconsOnly() {
+		// an icon set: a zipped isolex library folder, as the studio opens
+		var buf bytes.Buffer
+		if err := archive.WriteIconSet(r.Context(), s.store, &buf); err != nil {
+			writeServerError(w, err, "write the icon set")
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.zip"`, name))
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(buf.Bytes())
+		return
+	}
 	w.Header().Set("Content-Type", "application/gzip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.bam.tar.gz"`, name))
 	w.Header().Set("Cache-Control", "no-store")
