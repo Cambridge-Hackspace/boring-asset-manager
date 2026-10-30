@@ -376,14 +376,28 @@
           <input type="checkbox" class="mt-0.5" checked={!!e.state} onchange={(ev) => update(withProp(e, 'state', ev.currentTarget.checked || undefined))} />
           <span>Show the asset's state, as it is when printed</span>
         </label>
+        <label class="flex flex-col text-xs">
+          <span class="text-zinc-600 dark:text-zinc-400">Rendition</span>
+          <select
+            id={id('rendition')}
+            class="input-sm"
+            value={e.rendition ?? 'label'}
+            aria-describedby={id('rendition-help')}
+            onchange={(ev) => update(withProp(e, 'rendition', ev.currentTarget.value === 'screen' ? 'screen' : undefined))}
+          >
+            <option value="label">Its label icon</option>
+            <option value="screen">Its screen icon</option>
+          </select>
+          <span id={id('rendition-help')} class="mt-0.5 text-zinc-600 dark:text-zinc-400">An asset with no label icon prints its screen icon.</span>
+        </label>
       {/if}
       {#if pickingIcon}
         <IconPicker
           value={own ? '' : (e.icon ?? '')}
           onpick={(name) => {
             pickingIcon = false;
-            // one icon has no state to show
-            update(withProp(withProp(e, 'icon', name), 'state', undefined));
+            // one icon has no state to show, nor renditions
+            update(withProp(withProp(withProp(e, 'icon', name), 'state', undefined), 'rendition', undefined));
           }}
           onclose={() => (pickingIcon = false)}
         />

@@ -128,9 +128,18 @@ export interface Asset {
   /** How it is: working, needing maintenance or out of service, with a note saying what is wrong. */
   condition: Condition;
   condition_note: string;
-  /** Its own icon (README §3.7), drawn in place of its categories'; null when it has none. */
+  /** Its own icon (README §3.7), drawn in place of its categories'; null when it has none. Its screen icon. */
   icon_name?: string | null;
+  /** Its own label icon, drawn on its labels in place of its categories'; null when it has none. */
+  label_icon_name?: string | null;
 }
+
+/**
+ * The form an icon takes for where it is drawn (README §3.7): screen,
+ * everywhere on screen, or label, on labels. A category, and an asset, has
+ * an icon for each; with no label icon, labels draw the screen icon.
+ */
+export type Rendition = 'screen' | 'label';
 
 /**
  * The icon an asset is drawn with (README §3.7): its own, or that of the
@@ -142,6 +151,8 @@ export interface Asset {
 export interface ResolvedIcon {
   name: string;
   from: 'asset' | 'category';
+  /** Whose icon it is: the rendition asked for, or screen when there is none for it. */
+  rendition?: Rendition;
   source_category_id?: string;
   source_category_name?: string;
   missing?: boolean;
@@ -252,6 +263,8 @@ export interface AssetWithDetails {
   photos: AssetPhoto[];
   /** The icon it is drawn with, and why; null when neither it nor its categories have one. */
   resolved_icon?: ResolvedIcon | null;
+  /** The icon it is drawn with for each rendition it has one for, resolved_icon among them. */
+  resolved_icons?: Partial<Record<Rendition, ResolvedIcon>>;
 }
 
 export interface GeneratorInfo {
@@ -822,6 +835,7 @@ export interface IconDiag {
 /** A category's isolex source: the published version, and a later draft that did not compile. */
 export interface CategoryIcon {
   category_id: string;
+  rendition: Rendition;
   icon_name: string;
   source: string | null;
   draft: string | null;

@@ -2,14 +2,16 @@
   A category's icon (README §3.7): what it shows, its own or inherited;
   and, for those who manage categories, its isolex source to write, checked
   as it is typed, previewed in light and dark beside its subcategories,
-  published or kept as a draft with its problems, with its history.
+  published or kept as a draft with its problems, with its history. A tab
+  for each rendition: its icon on screen, and on labels, previewed as it
+  prints.
 -->
 <script lang="ts">
   import { iconset } from '../../lib/iconset.svelte';
   import { onMount } from 'svelte';
   import { ApiError, request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Category, CategoryIcon, IconCheck, IconDiag, IconLibraryFile, IconRevision, IconSave } from '../../lib/models';
+  import type { Category, CategoryIcon, IconCheck, IconDiag, IconLibraryFile, IconRevision, IconSave, Rendition } from '../../lib/models';
   import { session } from '../../lib/session.svelte';
   import { outline, type Problem } from '../../lib/isolex/syntax';
   import type { Vocabulary } from '../../lib/isolex/complete';
@@ -21,6 +23,7 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import IconParams from './IconParams.svelte';
   import IconPaletteStyle from '../../components/IconPaletteStyle.svelte';
+  import LabelIconPreview from './LabelIconPreview.svelte';
 
   interface Props {
     category: Category;
@@ -54,16 +57,28 @@
   let revisions = $state<IconRevision[] | null>(null);
   let refusal = $state<IconDiag[]>([]);
 
-  const own = $derived(icons.find((i) => i.category_id === id) ?? null);
+  /** Which of its icons the section shows: on screen, or on labels. */
+  let rendition = $state<Rendition>('screen');
+  const renditions: { value: Rendition; label: string }[] = [
+    { value: 'screen', label: 'On screen' },
+    { value: 'label', label: 'On labels' },
+  ];
+  /** A category icon route, for the rendition shown. */
+  const route = (rest = '') => `/categories/${encodeURIComponent(id)}/icon${rest}${rendition === 'screen' ? '' : `?rendition=${rendition}`}`;
+  const renditionOf = (i: CategoryIcon) => i.rendition ?? 'screen';
+
+  const own = $derived(icons.find((i) => i.category_id === id && renditionOf(i) === rendition) ?? null);
+  const screenOwn = $derived(icons.find((i) => i.category_id === id && renditionOf(i) === 'screen') ?? null);
   const savedText = $derived(own?.draft ?? own?.source ?? '');
   const canEdit = $derived(session.can('categories.manage') && available);
-  const shown = $derived(shownIcon(categories, icons, id));
-  const parentShown = $derived(category.parent_id ? shownIcon(categories, icons, category.parent_id) : null);
+  const shown = $derived(shownIcon(categories, icons, id, rendition));
+  const parentShown = $derived(category.parent_id ? shownIcon(categories, icons, category.parent_id, rendition) : null);
   const nameOf = (catId: string) => categories.find((c) => c.id === catId)?.name ?? 'another category';
   const file = $derived(iconFile(name));
   const doc = $derived(preview ?? build);
   const children = $derived(categories.filter((c) => c.parent_id === id));
-  const withIcons = $derived(icons.filter((i) => i.source !== null && i.category_id !== id));
+  const withIcons = $derived(icons.filter((i) => i.source !== null && !(i.category_id === id && renditionOf(i) === rendition)));
+  const iconKey = (i: CategoryIcon) => `${i.category_id}/${renditionOf(i)}`;
   const errorCount = $derived(problems.filter((p) => p.severity === 'error').length + elsewhere.filter((d) => d.severity === 'error').length);
 
   $effect(() => {
@@ -74,7 +89,7 @@
   const vocabulary = $derived<Vocabulary>({
     tokens: [...palette.map((c) => c.token), 'category'],
     definitions: [
-      ...icons.filter((i) => i.category_id !== id && i.source).flatMap((i) => outline(i.source!)),
+      ...icons.filter((i) => !(i.category_id === id && renditionOf(i) === rendition) && i.source).flatMap((i) => outline(i.source!)),
       ...library.filter((f) => f.source).flatMap((f) => outline(f.source!)),
     ],
     icons: build?.icons.map((i) => i.name) ?? [],
@@ -117,12 +132,37 @@
   /** The editor as saved: the draft and its errors, or what is published. */
   function reset() {
     text = savedText;
-    name = own?.icon_name ?? suggestIconName(category.name, icons.map((i) => i.icon_name));
+    // a label icon is named for the screen icon, by convention
+    const base = rendition === 'label' ? `${screenOwn?.icon_name ?? category.name}-label` : category.name;
+    name = own?.icon_name ?? suggestIconName(base, icons.map((i) => i.icon_name));
     renameTo = name;
     const split = splitDiags(iconFile(name), own?.draft ? own.draft_errors : [], []);
     problems = split.here;
     elsewhere = split.elsewhere;
     preview = null;
+  }
+
+  /** Shows another rendition's icon, leaving the one being edited. */
+  function show(next: Rendition) {
+    if (next === rendition) return;
+    rendition = next;
+    editing = false;
+    revisions = null;
+    refusal = [];
+    copyFrom = '';
+    error = message = '';
+    reset();
+  }
+
+  /** Arrow keys move between the tabs, as a tab list's do. */
+  function tabKey(event: KeyboardEvent) {
+    const at = renditions.findIndex((r) => r.value === rendition);
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    const next = renditions[(at + step + renditions.length) % renditions.length]!;
+    show(next.value);
+    document.getElementById(`icon-tab-${next.value}`)?.focus();
   }
 
   function start(source: string) {
@@ -146,7 +186,7 @@
     const seq = ++asked;
     checking = true;
     try {
-      const { check } = await request<{ check: IconCheck }>('POST', `/categories/${encodeURIComponent(id)}/icon/check`, { icon_name: iconName, source });
+      const { check } = await request<{ check: IconCheck }>('POST', route('/check'), { icon_name: iconName, source });
       if (seq !== asked) return;
       const split = splitDiags(iconFile(iconName), check.errors, check.warnings);
       problems = split.here;
@@ -167,8 +207,8 @@
     saving = true;
     error = message = '';
     try {
-      const out = await request<{ icon: CategoryIcon; save: IconSave }>('PUT', `/categories/${encodeURIComponent(id)}/icon`, { icon_name: name, source: text });
-      icons = [...icons.filter((i) => i.category_id !== id), out.icon];
+      const out = await request<{ icon: CategoryIcon; save: IconSave }>('PUT', route(), { icon_name: name, source: text });
+      icons = [...icons.filter((i) => !(i.category_id === id && renditionOf(i) === rendition)), out.icon];
       const split = splitDiags(file, out.save.errors, out.save.warnings);
       problems = split.here;
       elsewhere = split.elsewhere;
@@ -190,7 +230,7 @@
   async function discard() {
     error = message = '';
     try {
-      await request('DELETE', `/categories/${encodeURIComponent(id)}/icon/draft`);
+      await request('DELETE', route('/draft'));
       editing = false;
       await load();
       void iconset.refresh();
@@ -218,7 +258,7 @@
     error = message = '';
     refusal = [];
     try {
-      await request('POST', `/categories/${encodeURIComponent(id)}/icon/rename`, { icon_name: renameTo });
+      await request('POST', route('/rename'), { icon_name: renameTo });
       await load();
       void iconset.refresh();
       reset();
@@ -232,7 +272,7 @@
     error = message = '';
     refusal = [];
     try {
-      await request('DELETE', `/categories/${encodeURIComponent(id)}/icon`);
+      await request('DELETE', route());
       editing = false;
       await load();
       void iconset.refresh();
@@ -246,7 +286,7 @@
   async function history(event: Event) {
     if (!(event.currentTarget as HTMLDetailsElement).open || revisions) return;
     try {
-      revisions = (await request<{ revisions: IconRevision[] }>('GET', `/categories/${encodeURIComponent(id)}/icon/revisions`)).revisions ?? [];
+      revisions = (await request<{ revisions: IconRevision[] }>('GET', route('/revisions'))).revisions ?? [];
     } catch (err) {
       error = messageOf(err);
     }
@@ -279,6 +319,29 @@
 
 <section class="mt-6" aria-labelledby="icon-heading">
   <h2 id="icon-heading" class="mb-1 text-lg font-semibold">Icon</h2>
+  <div role="tablist" aria-label="Where the icon is drawn" class="mb-3 flex gap-1 border-b border-zinc-200 dark:border-zinc-700">
+    {#each renditions as r (r.value)}
+      <button
+        type="button"
+        role="tab"
+        id="icon-tab-{r.value}"
+        aria-selected={rendition === r.value}
+        aria-controls="icon-panel"
+        tabindex={rendition === r.value ? 0 : -1}
+        class="-mb-px border-b-2 px-3 py-1.5 text-sm {rendition === r.value
+          ? 'border-zinc-900 font-medium dark:border-zinc-100'
+          : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}"
+        onclick={() => show(r.value)}
+        onkeydown={tabKey}>{r.label}</button
+      >
+    {/each}
+  </div>
+  <div role="tabpanel" id="icon-panel" aria-labelledby="icon-tab-{rendition}">
+  {#if rendition === 'label' && !loading}
+    <p class="mb-2 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
+      Labels print in black and white, most often on small thermal tape, where shaded faces turn to noise: a label icon is best flat line art. Without one, labels print the screen icon.
+    </p>
+  {/if}
   {#if loading}
     <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
   {:else}
@@ -306,9 +369,14 @@
         {/if}
         <div class="min-w-0 flex-1 text-sm">
           {#if own?.source}
-            <p>Its own icon, <span class="font-mono">{own.icon_name}</span>.</p>
+            <p>Its own {rendition === 'label' ? 'label icon' : 'icon'}, <span class="font-mono">{own.icon_name}</span>.</p>
+          {:else if shown && rendition === 'label' && shown.rendition === 'screen'}
+            <p>
+              No label icon here or above, so labels print {shown.from === id ? 'its' : `${nameOf(shown.from)}'s`} screen icon,
+              <span class="font-mono">{shown.name}</span>.
+            </p>
           {:else if shown}
-            <p>The icon of <a class="underline" href="/categories/{encodeURIComponent(shown.from)}">{nameOf(shown.from)}</a>, which it inherits.</p>
+            <p>The {rendition === 'label' ? 'label icon' : 'icon'} of <a class="underline" href="/categories/{encodeURIComponent(shown.from)}">{nameOf(shown.from)}</a>, which it inherits.</p>
           {:else}
             <p>No icon: it shows none, and neither does anything above it.</p>
           {/if}
@@ -327,29 +395,34 @@
       </div>
 
       {#if own?.source}
-        <IconParams categoryId={id} iconName={own.icon_name} definitions={[...vocabulary.definitions, ...outline(own.source)]} canEdit={session.can('categories.manage') && available} />
+        {#key rendition}
+          <IconParams categoryId={id} {rendition} iconName={own.icon_name} definitions={[...vocabulary.definitions, ...outline(own.source)]} canEdit={session.can('categories.manage') && available} />
+        {/key}
       {/if}
 
       {#if canEdit && !own}
         <div class="mt-3 max-w-2xl">
-          <h3 class="text-sm font-medium">Draw it an icon of its own</h3>
+          <h3 class="text-sm font-medium">Draw it {rendition === 'label' ? 'a label icon' : 'an icon'} of its own</h3>
           <div class="mt-2 flex flex-wrap items-center gap-2">
+            {#if rendition === 'label' && screenOwn?.source}
+              <button type="button" class="btn-secondary" onclick={() => start(extendingSource(name, screenOwn.icon_name))}>Extend its screen icon</button>
+            {/if}
             {#if parentShown}
-              <button type="button" class="btn-secondary" onclick={() => start(extendingSource(name, parentShown.name))}>Extend {nameOf(parentShown.from)}'s icon</button>
+              <button type="button" class="btn-secondary" onclick={() => start(extendingSource(name, parentShown.name))}>Extend {nameOf(parentShown.from)}'s {parentShown.rendition === 'label' ? 'label icon' : 'icon'}</button>
             {/if}
             <button type="button" class="btn-secondary" onclick={() => start(boxSource(name, iconGroup(categories, id)))}>Start from a box</button>
             {#if withIcons.length}
               <label class="sr-only" for="icon-copy">Copy another category's icon</label>
               <select id="icon-copy" class="input w-auto" bind:value={copyFrom}>
                 <option value="">Copy another category's…</option>
-                {#each withIcons as i (i.category_id)}<option value={i.category_id}>{nameOf(i.category_id)}</option>{/each}
+                {#each withIcons as i (iconKey(i))}<option value={iconKey(i)}>{nameOf(i.category_id)}{renditionOf(i) === 'label' ? ', on labels' : ''}</option>{/each}
               </select>
               <button
                 type="button"
                 class="btn-secondary"
                 disabled={!copyFrom}
                 onclick={() => {
-                  const from = withIcons.find((i) => i.category_id === copyFrom)!;
+                  const from = withIcons.find((i) => iconKey(i) === copyFrom)!;
                   start(copiedSource(from.source!, from.icon_name, name));
                 }}>Copy</button
               >
@@ -369,7 +442,7 @@
               <p id="icon-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">How other icons name it. Letters, digits, -, _ and .; it can be renamed later.</p>
             </div>
           {/if}
-          <IconSourceEditor bind:value={text} {problems} {vocabulary} label="{category.name}'s icon source" readonly={!canEdit} />
+          <IconSourceEditor bind:value={text} {problems} {vocabulary} label="{category.name}'s {rendition === 'label' ? 'label icon' : 'icon'} source" readonly={!canEdit} />
           {#if elsewhere.length}
             <div class="mt-3 text-sm">
               <h3 class="font-medium">Problems in other icons, caused by this</h3>
@@ -409,6 +482,9 @@
               {#if !preview && errorCount}
                 <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">The published icon: this source does not compile yet.</p>
               {/if}
+              {#if rendition === 'label' && doc}
+                <div class="mt-3"><LabelIconPreview {doc} {name} {palette} categoryColor={category.color_hex} /></div>
+              {/if}
             {:else}
               <p class="text-sm text-zinc-600 dark:text-zinc-400">{errorCount ? 'Nothing to show until it compiles.' : 'Nothing drawn yet.'}</p>
             {/if}
@@ -431,7 +507,7 @@
               <h3 class="mb-2 text-sm font-medium">Its subcategories</h3>
               <ul class="flex flex-wrap gap-3">
                 {#each children as c (c.id)}
-                  {@const shownHere = shownIcon(categories, icons, c.id)}
+                  {@const shownHere = shownIcon(categories, icons, c.id, rendition)}
                   <li class="text-center text-xs">
                     {#if shownHere}{@render tile(shownHere.name, 40, 'page', `${c.name}'s icon`, c.color_hex)}{/if}
                     <a class="underline" href="/categories/{encodeURIComponent(c.id)}">{c.name}</a>
@@ -472,11 +548,12 @@
               <p id="icon-rename-help" class="w-full text-xs text-zinc-600 dark:text-zinc-400">Its source must already draw it by the new name, and nothing else may still use the old one.</p>
             </form>
             <div>
-              <ConfirmButton label="Delete the icon" question="Delete this category's icon and its history?" onconfirm={remove} />
+              <ConfirmButton label="Delete the icon" question="Delete this category's {rendition === 'label' ? 'label icon' : 'icon'} and its history?" onconfirm={remove} />
             </div>
           {/if}
         </div>
       {/if}
     {/if}
   {/if}
+  </div>
 </section>

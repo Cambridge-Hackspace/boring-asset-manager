@@ -56,6 +56,9 @@
   // Its own icon (README §3.7); '' for its categories'.
   let ownIcon = $state('');
   let pickingIcon = $state(false);
+  // its own label icon (README §3.7), drawn on its labels in place of its categories'
+  let ownLabelIcon = $state('');
+  let pickingLabelIcon = $state(false);
   // Where it is: the asset it is in (README §5.3).
   let relationTypes = $state<RelationType[]>([]);
   let place = $state<{ id: string; name: string } | null>(null);
@@ -82,16 +85,21 @@
   $effect(() => {
     void iconset.load();
   });
-  const categoryIcon = $derived.by(() => {
-    const rows = tree.filter((r) => categoryIds.includes(r.category.id) && iconset.categories[r.category.id]);
+  function fromCategories(shown: Record<string, string>) {
+    const rows = tree.filter((r) => categoryIds.includes(r.category.id) && shown[r.category.id]);
     const deepest = rows.reduce<(typeof rows)[number] | undefined>((best, r) => (!best || r.depth > best.depth ? r : best), undefined);
     if (!deepest) return null;
-    const name = iconset.categories[deepest.category.id]!;
+    const name = shown[deepest.category.id]!;
     let from = deepest.category;
-    for (let up = categories.find((c) => c.id === from.parent_id); up && iconset.categories[up.id] === name; up = categories.find((c) => c.id === up!.parent_id)) from = up;
+    for (let up = categories.find((c) => c.id === from.parent_id); up && shown[up.id] === name; up = categories.find((c) => c.id === up!.parent_id)) from = up;
     return { category: from, name };
-  });
+  }
+  const categoryIcon = $derived(fromCategories(iconset.categories));
   const shownIcon = $derived(ownIcon ? iconset.named(ownIcon) : categoryIcon ? iconset.named(categoryIcon.name) : undefined);
+  // on labels: its own label icon, its own icon, its categories' label icon, their icon
+  const categoryLabelIcon = $derived(fromCategories(iconset.labelCategories));
+  const labelIconName = $derived(ownLabelIcon || ownIcon || categoryLabelIcon?.name || '');
+  const shownLabelIcon = $derived(labelIconName ? iconset.named(labelIconName) : undefined);
   const iconColor = $derived(
     tree.filter((r) => categoryIds.includes(r.category.id)).reduce<(typeof tree)[number] | undefined>((best, r) => (!best || r.depth > best.depth ? r : best), undefined)?.category.color_hex ?? '',
   );
@@ -115,6 +123,7 @@
         values = { ...a.field_values };
         stock = stockDraft(a.asset.stock);
         ownIcon = a.asset.icon_name ?? '';
+        ownLabelIcon = a.asset.label_icon_name ?? '';
         place = placeOf(a);
       } else if (like) {
         const [c, of] = await Promise.all([
@@ -243,6 +252,7 @@
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
         // The asset is made; one that could not be placed says so on its page.
         await placeIt(res.asset).catch(() => undefined);
+        if (ownLabelIcon) await setLabelIcon(res.asset.asset.id).catch(() => undefined);
         // As its original is linked: each on its own, so one that cannot be leaves the rest.
         for (const l of startLinks.filter((l) => l.keep)) {
           await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/links`, { type_id: l.type_id, asset_id: l.asset.id, outgoing: l.outgoing }).catch(() => undefined);
@@ -262,6 +272,7 @@
       } else {
         const res = await request<{ asset: AssetWithDetails }>('PUT', `/assets/${encodeURIComponent(id)}`, body);
         await placeIt(res.asset);
+        if (ownLabelIcon !== (original?.asset.label_icon_name ?? '')) await setLabelIcon(id);
         navigate(`/assets/${encodeURIComponent(id)}`, true);
       }
     } catch (err) {
@@ -273,6 +284,11 @@
     } finally {
       busy = false;
     }
+  }
+
+  /** Sets its own label icon, which an update sets apart from its own icon. */
+  function setLabelIcon(assetId: string) {
+    return request('PUT', `/assets/${encodeURIComponent(assetId)}`, { icon_name: ownLabelIcon || null, icon_rendition: 'label' });
   }
 
   const describedBy = (target: string, help?: string) =>
@@ -328,7 +344,7 @@
           </ul>
         {/if}
       </fieldset>
-      {#if iconset.all.length || ownIcon}
+      {#if iconset.all.length || ownIcon || ownLabelIcon}
         <fieldset>
           <legend class="label">Icon</legend>
           <div class="flex flex-wrap items-center gap-3">
@@ -344,7 +360,7 @@
                 None: none of its categories has an icon.
               {/if}
             </p>
-            <button type="button" class="btn-secondary" aria-expanded={pickingIcon} aria-describedby="asset-icon-note" onclick={() => (pickingIcon = !pickingIcon)}>Choose another…</button>
+            <button type="button" class="btn-secondary" aria-expanded={pickingIcon} aria-describedby="asset-icon-note" onclick={() => ((pickingIcon = !pickingIcon), (pickingLabelIcon = false))}>Choose another…</button>
             {#if ownIcon}<button type="button" class="btn-secondary" onclick={() => (ownIcon = '')}>Use the category's</button>{/if}
           </div>
           {#if pickingIcon}
@@ -356,6 +372,40 @@
                 pickingIcon = false;
               }}
               onclose={() => (pickingIcon = false)}
+            />
+          {/if}
+          <div class="mt-3 flex flex-wrap items-center gap-3">
+            <span class="grid h-14 w-14 shrink-0 place-items-center rounded border border-zinc-200 bg-white grayscale">
+              {#if shownLabelIcon}<IsoIcon icon={shownLabelIcon} height={44} categoryColor={iconColor} label="On its labels" />{/if}
+            </span>
+            <p class="text-sm" id="asset-label-icon-note">
+              On its labels:
+              {#if ownLabelIcon}
+                its own label icon, <span class="font-mono">{ownLabelIcon}</span>{#if !iconset.all.some((i) => i.name === ownLabelIcon)}: no icon is drawn by that name any more{/if}.
+              {:else if ownIcon}
+                its own icon, as above.
+              {:else if categoryLabelIcon && categoryLabelIcon.name === categoryIcon?.name}
+                the same as above.
+              {:else if categoryLabelIcon}
+                <span class="font-mono">{categoryLabelIcon.name}</span>, from {categoryLabelIcon.category.name}.
+              {:else}
+                none.
+              {/if}
+            </p>
+            <button type="button" class="btn-secondary" aria-expanded={pickingLabelIcon} aria-describedby="asset-label-icon-note" onclick={() => ((pickingLabelIcon = !pickingLabelIcon), (pickingIcon = false))}
+              >Choose a label icon…</button
+            >
+            {#if ownLabelIcon}<button type="button" class="btn-secondary" onclick={() => (ownLabelIcon = '')}>Don't use its own on labels</button>{/if}
+          </div>
+          {#if pickingLabelIcon}
+            <IconPicker
+              value={ownLabelIcon}
+              categoryColor={iconColor}
+              onpick={(n) => {
+                ownLabelIcon = n;
+                pickingLabelIcon = false;
+              }}
+              onclose={() => (pickingLabelIcon = false)}
             />
           {/if}
         </fieldset>

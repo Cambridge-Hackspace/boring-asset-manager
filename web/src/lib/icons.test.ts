@@ -4,8 +4,8 @@ import type { Category, CategoryIcon } from './models';
 import { outline } from './isolex/syntax';
 
 const cat = (id: string, name: string, parent: string | null = null) => ({ id, name, parent_id: parent }) as Category;
-const icon = (category_id: string, icon_name: string, published = true) =>
-  ({ category_id, icon_name, source: published ? 'x' : null, draft: published ? null : 'x', draft_errors: [], updated_at: '' }) as CategoryIcon;
+const icon = (category_id: string, icon_name: string, published = true, rendition: 'screen' | 'label' = 'screen') =>
+  ({ category_id, rendition, icon_name, source: published ? 'x' : null, draft: published ? null : 'x', draft_errors: [], updated_at: '' }) as CategoryIcon;
 
 describe('icon names', () => {
   it('are suggested from the category, as the server would take them, not taken', () => {
@@ -26,11 +26,21 @@ describe('shownIcon', () => {
   const tree = [cat('net', 'Networking'), cat('sw', 'Switches', 'net'), cat('poe', 'PoE', 'sw'), cat('other', 'Other')];
   it('is a category’s own published icon, or the nearest one above it', () => {
     const icons = [icon('net', 'network-gear'), icon('poe', 'poe-switch', false)];
-    expect(shownIcon(tree, icons, 'net')).toEqual({ name: 'network-gear', from: 'net' });
-    expect(shownIcon(tree, icons, 'sw')).toEqual({ name: 'network-gear', from: 'net' });
+    expect(shownIcon(tree, icons, 'net')).toEqual({ name: 'network-gear', from: 'net', rendition: 'screen' });
+    expect(shownIcon(tree, icons, 'sw')).toEqual({ name: 'network-gear', from: 'net', rendition: 'screen' });
     // a draft never published is not shown
-    expect(shownIcon(tree, icons, 'poe')).toEqual({ name: 'network-gear', from: 'net' });
+    expect(shownIcon(tree, icons, 'poe')).toEqual({ name: 'network-gear', from: 'net', rendition: 'screen' });
     expect(shownIcon(tree, icons, 'other')).toBeNull();
+  });
+  it('for labels, is the nearest label icon above it, or else the screen icon', () => {
+    const icons = [icon('net', 'network-gear'), icon('sw', 'switch'), icon('net', 'network-gear-label', true, 'label')];
+    // the screen icon is the screen's alone
+    expect(shownIcon(tree, icons, 'sw')).toEqual({ name: 'switch', from: 'sw', rendition: 'screen' });
+    // a label icon above wins over a screen icon nearer
+    expect(shownIcon(tree, icons, 'poe', 'label')).toEqual({ name: 'network-gear-label', from: 'net', rendition: 'label' });
+    // with no label icon anywhere above, the screen icon
+    expect(shownIcon(tree, [icon('net', 'network-gear')], 'sw', 'label')).toEqual({ name: 'network-gear', from: 'net', rendition: 'screen' });
+    expect(shownIcon(tree, icons, 'other', 'label')).toBeNull();
   });
   it('survives a loop in the tree', () => {
     expect(shownIcon([cat('a', 'A', 'b'), cat('b', 'B', 'a')], [], 'a')).toBeNull();

@@ -14,6 +14,7 @@ import { isWrapper } from './icons';
 
 interface Overview {
   category_icons?: Record<string, string>;
+  rendition_icons?: { label?: Record<string, string> };
   unknown?: IrIcon;
 }
 
@@ -21,6 +22,8 @@ class Iconset {
   palette = $state<IconColor[]>([]);
   /** The icon each category is drawn with, its own or its nearest ancestor's, by name. */
   categories = $state<Record<string, string>>({});
+  /** The icon each category is drawn with on labels, as categories; its screen icon when it has no label icon. */
+  labelCategories = $state<Record<string, string>>({});
   #icons = $state<Map<string, IrIcon>>(new Map());
   #unknown = $state<IrIcon | null>(null);
   #reading: Promise<void> | null = null;
@@ -51,6 +54,7 @@ class Iconset {
       ]);
       this.#icons = new Map((ir.icons ?? []).map((i) => [i.name, i]));
       this.categories = overview.category_icons ?? {};
+      this.labelCategories = overview.rendition_icons?.label ?? this.categories;
       this.#unknown = overview.unknown ?? null;
       this.palette = palette.palette ?? [];
     } catch {

@@ -58,6 +58,10 @@ Things may be put where something else already is. They are outlined in red, and
 
 A label template can print icons too: add an **Icon** in the template editor, for each asset's icon or one you choose. See **Labels**.
 
+An icon that reads well on screen doesn't always print well. Labels mostly print in black and white on small thermal tape, where shaded faces turn to noise and the category's color to an unpredictable gray; what prints best is flat line art. So a category can have a **label icon** too: open the category, go to **Icon**, choose **On labels**, and draw one, by convention named after its screen icon with `-label` on the end. The preview shows it as it prints, in black and white at a label's size, shaded and as an outline.
+
+Labels print each asset's label icon: that of its nearest category with one, as for its screen icon. With no label icon anywhere above it, a label prints the screen icon, so nothing changes until you draw one, and drawing one for a category gives it to every subcategory without one of its own. An asset with an icon of its own prints that on its labels too, unless it has a label icon of its own: edit it, and under **Icon**, choose **Choose a label icon…**.
+
 ## History, renaming and deleting
 
 **History** lists every version published; any can be loaded back into the editor. Renaming an icon renames it for the assets given it too. An icon can be renamed or deleted only when no other icon still uses it, such as a subcategory's that extends it. A category whose icon others use cannot be deleted until they no longer do.

@@ -396,7 +396,7 @@ describe('AssetForm icons', () => {
     photos: [],
   });
   let n = 0;
-  function serve(existing: AssetWithDetails) {
+  function serve(existing: AssetWithDetails, overview: Record<string, unknown> = { category_icons: { storage: 'crate', bins: 'crate' } }) {
     session.user = { id: `icon-form-${++n}`, email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' };
     return fakeApi({
       'GET /categories': () => ({ categories: [storage, bins] }),
@@ -405,8 +405,8 @@ describe('AssetForm icons', () => {
       'GET /assets/a1': () => ({ asset: existing }),
       'POST /categories/effective-fields': () => ({ fields: [] }),
       'PUT /assets/a1': () => ({ asset: existing }),
-      'GET /icons': () => ({ category_icons: { storage: 'crate', bins: 'crate' } }),
-      'GET /icons/ir': () => ({ ir_version: 1, icons: [drawn('crate'), drawn('crate-down')] }),
+      'GET /icons': () => overview,
+      'GET /icons/ir': () => ({ ir_version: 1, icons: [drawn('crate'), drawn('crate-down'), drawn('crate-label')] }),
       'GET /icons/palette': () => ({ palette: [] }),
     });
   }
@@ -446,5 +446,32 @@ describe('AssetForm icons', () => {
     await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
     await vi.waitFor(() => expect(put(second.sent)).toBeTruthy());
     expect(put(second.sent).icon_name).toBeNull();
+  });
+
+  it('says what its labels print, and sets a label icon of its own apart', async () => {
+    const { sent } = serve(editing(null), { category_icons: { storage: 'crate', bins: 'crate' }, rendition_icons: { label: { storage: 'crate-label', bins: 'crate-label' } } });
+    render(AssetForm, { params: { id: 'a1' } });
+    expect((await screen.findByText(/On its labels:/)).textContent).toMatch(/crate-label,\s+from Storage\./);
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose a label icon…' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'crate-down' }));
+    expect(screen.getByText(/On its labels:/).textContent).toMatch(/its own label icon,\s+crate-down/);
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT')).toHaveLength(2));
+    const [edit, label] = sent.filter((r) => r.method === 'PUT');
+    expect(edit!.body).not.toHaveProperty('icon_name');
+    expect(label!.body).toEqual({ icon_name: 'crate-down', icon_rendition: 'label' });
+  });
+
+  it('with no label icon anywhere, says its labels print the same', async () => {
+    serve(editing(null));
+    render(AssetForm, { params: { id: 'a1' } });
+    expect((await screen.findByText(/On its labels:/)).textContent).toMatch(/the same as above\./);
+    expect(screen.getByText(/On its labels:/).textContent).not.toContain('Storage');
+  });
+
+  it('prints its own icon on its labels when it has no label icon of its own', async () => {
+    serve(editing('crate-down'), { category_icons: { storage: 'crate', bins: 'crate' }, rendition_icons: { label: { storage: 'crate-label', bins: 'crate-label' } } });
+    render(AssetForm, { params: { id: 'a1' } });
+    expect((await screen.findByText(/On its labels:/)).textContent).toMatch(/its own icon, as above\./);
   });
 });

@@ -2,7 +2,7 @@
 // and starting sources the category page offers, and where the
 // compiler's diagnostics belong.
 
-import type { Category, CategoryIcon, IconDiag } from './models';
+import type { Category, CategoryIcon, IconDiag, Rendition } from './models';
 import type { Definition, Problem } from './isolex/syntax';
 
 /** Whether a name is a wrapper's, drawing an icon with params set to assets' fields: the build's, not anyone's to choose. */
@@ -63,16 +63,22 @@ export function suggestIconName(categoryName: string, taken: Iterable<string>): 
   for (let n = 2; ; n++) if (!used.has(`${base}-${n}`)) return `${base}-${n}`;
 }
 
-/** The icon a category shows: its own, published, or else the nearest
-    category above it with one; with the category it comes from. */
-export function shownIcon(categories: Category[], icons: CategoryIcon[], id: string): { name: string; from: string } | null {
-  const own = new Map(icons.filter((i) => i.source !== null).map((i) => [i.category_id, i.icon_name]));
+/** The icon a category shows for a rendition: its own, published, or else
+    the nearest category above it with one; with the category it comes
+    from. With none for labels, labels show the screen icon. */
+export function shownIcon(categories: Category[], icons: CategoryIcon[], id: string, rendition: Rendition = 'screen'): { name: string; from: string; rendition: Rendition } | null {
+  const shown = shownFor(categories, icons, id, rendition);
+  return shown || rendition === 'screen' ? shown : shownFor(categories, icons, id, 'screen');
+}
+
+function shownFor(categories: Category[], icons: CategoryIcon[], id: string, rendition: Rendition): { name: string; from: string; rendition: Rendition } | null {
+  const own = new Map(icons.filter((i) => i.source !== null && (i.rendition ?? 'screen') === rendition).map((i) => [i.category_id, i.icon_name]));
   const parent = new Map(categories.map((c) => [c.id, c.parent_id ?? null]));
   const seen = new Set<string>();
   for (let at: string | null = id; at && !seen.has(at); at = parent.get(at) ?? null) {
     seen.add(at);
     const name = own.get(at);
-    if (name) return { name, from: at };
+    if (name) return { name, from: at, rendition };
   }
   return null;
 }
