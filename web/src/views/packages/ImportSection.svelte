@@ -3,6 +3,7 @@
   import { formatBytes, type UploadState } from '../../lib/upload';
   import {
     actionSaid,
+    aKind,
     choiceLabels,
     clashes,
     importJob,
@@ -117,7 +118,11 @@
   }
 
   const what = (p: ImportPlan) =>
-    p.header.package ? `the package ${p.header.package.name}${p.header.package.version ? ` ${p.header.package.version}` : ''}` : 'a backup';
+    p.header.type === 'icons'
+      ? `the icon set ${p.header.package?.name ?? ''}`
+      : p.header.package
+        ? `the package ${p.header.package.name}${p.header.package.version ? ` ${p.header.package.version}` : ''}`
+        : 'a backup';
 </script>
 
 <section class="card mb-6 max-w-3xl space-y-4" aria-labelledby="import-heading">
@@ -125,12 +130,17 @@
   <p class="text-sm">
     Bring a package, or parts of a backup, into this instance. Nothing changes until you import it: it is checked first, and
     what it would create, use, copy or skip is shown. Everything comes in new, so a package can be imported twice, under
-    different categories. People, settings, passwords and sessions never come in.
+    different categories. People, settings, passwords and sessions never come in. An icon set, a zipped isolex library folder
+    such as isolex studio makes, replaces the icons and colors it changes and leaves the rest alone.
   </p>
 
-  <ArchiveUpload label="Choose a package or backup" onuploaded={(up) => uploadedOne(up)} />
+  <ArchiveUpload
+    label="Choose a package, backup or icon set"
+    accept=".gz,.tgz,.zip,application/gzip,application/zip"
+    onuploaded={(up) => uploadedOne(up)}
+  />
 
-  {#if uploaded}
+  {#if uploaded && plan?.header.type !== 'icons'}
     <label class="block max-w-md text-sm">
       Put its top categories under
       <select class="input mt-1" bind:value={anchor} data-testid="anchor">
@@ -184,7 +194,7 @@
             {@const key = itemKey(it)}
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span>
-                <span class="font-medium">{it.name}</span>, a {kindNames[it.kind]},
+                <span class="font-medium">{it.name}</span>, {aKind(it.kind)},
                 {it.identical ? 'is the same as' : 'clashes with'} {it.existing?.name ? `${it.existing.name} here` : 'one here'}
               </span>
               <select
@@ -205,7 +215,7 @@
         <ul class="mt-2 space-y-1" data-testid="import-items">
           {#each plan.items as it (itemKey(it))}
             <li>
-              <span class="font-medium">{it.name}</span>, a {kindNames[it.kind]}: {actionSaid(it)}.{it.note ? ` ${it.note}` : ''}
+              <span class="font-medium">{it.name}</span>, {aKind(it.kind)}: {actionSaid(it)}.{it.note ? ` ${it.note}` : ''}
             </li>
           {/each}
         </ul>

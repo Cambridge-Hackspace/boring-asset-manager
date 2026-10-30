@@ -9,8 +9,8 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/archive"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -30,32 +30,13 @@ const (
 	archiveEntryLimit = store.MaxIconSource * 4
 )
 
-// archiveEpoch dates every entry of an export, so the same lexicon makes
-// the same bytes.
-var archiveEpoch = time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC)
-
-// handleExportIcons sends what is published as a zip: _lexicon.ilx, the
-// block bam writes, then library/ and categories/, as a build compiles
-// them: GET /api/v1/icons/export
+// handleExportIcons sends what is published as a zipped isolex library
+// folder (#146): lexicon.ilx, the block bam writes with the palette, then
+// library/ and categories/, as a build compiles them, and icons.json:
+// GET /api/v1/icons/export
 func (s *Server) handleExportIcons(w http.ResponseWriter, r *http.Request) {
-	files, err := s.store.IconLexiconFiles()
-	if err != nil {
-		writeServerError(w, err, "export the icons")
-		return
-	}
 	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	for _, f := range files {
-		fw, err := zw.CreateHeader(&zip.FileHeader{Name: f.Name, Method: zip.Deflate, Modified: archiveEpoch})
-		if err == nil {
-			_, err = io.WriteString(fw, f.Text)
-		}
-		if err != nil {
-			writeServerError(w, err, "export the icons")
-			return
-		}
-	}
-	if err := zw.Close(); err != nil {
+	if err := archive.WriteIconSet(r.Context(), s.store, &buf); err != nil {
 		writeServerError(w, err, "export the icons")
 		return
 	}
@@ -151,8 +132,11 @@ func readIconArchive(data []byte) ([]store.IconSourceFile, []skippedEntry, error
 	for _, e := range entries {
 		name := strings.TrimPrefix(e.name, "library/")
 		switch {
-		case e.name == "_lexicon.ilx":
+		case e.name == "_lexicon.ilx" || e.name == archive.LexiconFile:
 			skipped = append(skipped, skippedEntry{e.name, "bam writes the lexicon block itself, from the palette and settings"})
+			continue
+		case e.name == archive.IconsIndex:
+			skipped = append(skipped, skippedEntry{e.name, "which category each icon is, which a category's page sets"})
 			continue
 		case strings.HasPrefix(e.name, "categories/"):
 			skipped = append(skipped, skippedEntry{e.name, "a category's icon: it is saved on its category's page"})

@@ -92,3 +92,22 @@ test('upload a package, choose for what clashes and where it goes, and import it
   const { fields } = await api.call('GET', '/fields');
   expect(fields.map((f: { key: string }) => f.key)).toContain(`${key}_2`);
 });
+
+// An icon set (#146): the icons as a zipped isolex library folder, exported
+// and taken back, replacing what changed.
+test('export the icons as a library folder, and import it back', async ({ signedIn: page }) => {
+  const res = await page.context().request.get('/api/v1/icons/export');
+  expect(res.ok()).toBe(true);
+  const zip = await res.body();
+  expect(zip.subarray(0, 2).toString()).toBe('PK');
+
+  await goTo(page, 'Import & export');
+  await page.getByTestId('archive-file').setInputFiles({ name: 'icons.zip', mimeType: 'application/zip', buffer: zip });
+  const plan = page.getByTestId('import-plan');
+  await expect(plan).toContainText('the icon set', { timeout: 30_000 });
+  await expect(page.getByTestId('anchor')).toHaveCount(0);
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(results.violations).toEqual([]);
+  await page.getByTestId('import').click();
+  await expect(page.getByTestId('imported')).toContainText('Imported the icon set', { timeout: 30_000 });
+});
