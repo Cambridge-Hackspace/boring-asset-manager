@@ -39,6 +39,8 @@ type Server struct {
 	uploadLocks uploadLocks
 	// backupJobs are the checks and replaces of backups under way (#142).
 	backupJobs backupJobs
+	// exports are packages posted to download (#144).
+	exports    exportsPending
 	transport  printers.Transport
 	spool      *spooler
 	presses    *pressLimiter
@@ -143,6 +145,11 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/backup/check", manageBackups(s.handleCheckBackup))
 	handle("POST /api/v1/backup/replace", manageBackups(s.handleReplaceBackup))
 	handle("GET /api/v1/backup/jobs/{id}", manageBackups(s.handleBackupJob))
+	// Packages (#144): what is packaged is what the requester may read.
+	readAssets := RequirePermission(rbac.PermAssetsRead)
+	handle("POST /api/v1/exports/plan", readAssets(http.HandlerFunc(s.handleExportPlan)))
+	handle("POST /api/v1/exports", readAssets(http.HandlerFunc(s.handleCreateExport)))
+	handle("GET /api/v1/exports/{id}", readAssets(http.HandlerFunc(s.handleDownloadExport)))
 
 	// Scopes (README §3.3): who may see and change assets is users.manage's
 	// to decide; category managers read them to see what labels are there.

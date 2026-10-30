@@ -303,6 +303,8 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 			switch r.URL.Path {
 			case "/api/v1/images":
 				limit = imageUploadLimit
+			case "/api/v1/exports":
+				limit = exportBodyLimit
 			case "/api/v1/assets/import", "/api/v1/assets/import/preview":
 				limit = importBodyLimit
 			case "/api/v1/icon-library/import":
