@@ -150,6 +150,11 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/exports/plan", readAssets(http.HandlerFunc(s.handleExportPlan)))
 	handle("POST /api/v1/exports", readAssets(http.HandlerFunc(s.handleCreateExport)))
 	handle("GET /api/v1/exports/{id}", readAssets(http.HandlerFunc(s.handleDownloadExport)))
+	// Importing one (#145), uploaded as backups are: what it needs beyond
+	// is checked against what it holds.
+	handle("POST /api/v1/import/check", manageSettings(http.HandlerFunc(s.handleCheckPackageImport)))
+	handle("POST /api/v1/import", manageSettings(http.HandlerFunc(s.handlePackageImport)))
+	handle("GET /api/v1/import/jobs/{id}", manageSettings(http.HandlerFunc(s.handleBackupJob)))
 
 	// Scopes (README §3.3): who may see and change assets is users.manage's
 	// to decide; category managers read them to see what labels are there.

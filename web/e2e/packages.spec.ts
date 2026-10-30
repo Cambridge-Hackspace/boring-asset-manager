@@ -52,3 +52,43 @@ test('choose a category, see what it needs, and download it as a package', async
   expect(header.kinds).not.toContain('people');
   await expect(page.getByText(`Your browser is saving ${name}.`)).toBeVisible();
 });
+
+// Importing one (README §2.3): uploaded, checked, what clashes chosen for,
+// put under a category, and imported as checked.
+test('upload a package, choose for what clashes and where it goes, and import it', async ({ signedIn: page, api }) => {
+  const parent = unique('Bench');
+  const { category: top } = await api.call('POST', '/categories', { name: parent, color_hex: '#123456' });
+  const key = unique('torque').replace(/-/g, '_');
+  const label = unique('Torque');
+  const { field } = await api.call('POST', '/fields', { key, label, validation_type: 'number' });
+  await api.call('POST', `/categories/${top.id}/fields`, { field_id: field.id, is_required: false });
+  const made = await api.call('POST', '/exports', { selection: { subtrees: [top.id] }, name: unique('Bench package') });
+  const res = await page.context().request.get(made.download);
+  expect(res.ok()).toBe(true);
+  const body = await res.body();
+  const lab = unique('Lab');
+  const { category: anchor } = await api.call('POST', '/categories', { name: lab, color_hex: '#654321' });
+
+  await goTo(page, 'Import & export');
+  await page.getByTestId('archive-file').setInputFiles({ name: 'bench.bam.tar.gz', mimeType: 'application/gzip', buffer: body });
+  const plan = page.getByTestId('import-plan');
+  await expect(plan).toBeVisible({ timeout: 30_000 });
+
+  // the field is here already, the same: used as it is, unless chosen otherwise
+  const choice = page.getByRole('combobox', { name: `What to do with the field ${label} (${key})` });
+  await expect(choice).toHaveValue('existing');
+  await choice.selectOption('copy');
+  await page.getByTestId('anchor').selectOption({ label: lab });
+  await page.getByTestId('check-again').click();
+  await expect(page.getByTestId('import')).toBeEnabled({ timeout: 30_000 });
+
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+  expect(results.violations).toEqual([]);
+
+  await page.getByTestId('import').click();
+  await expect(page.getByTestId('imported')).toContainText(`under ${lab}`, { timeout: 30_000 });
+  const { categories } = await api.call('GET', '/categories');
+  expect(categories.filter((c: { name: string; parent_id?: string }) => c.name === parent && c.parent_id === anchor.id)).toHaveLength(1);
+  const { fields } = await api.call('GET', '/fields');
+  expect(fields.map((f: { key: string }) => f.key)).toContain(`${key}_2`);
+});
