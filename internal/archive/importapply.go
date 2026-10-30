@@ -108,7 +108,7 @@ func (ap *applier) apply(r io.Reader) error {
 		}
 		ap.stored = append(ap.stored, to)
 		return nil
-	})
+	}, nil)
 	if err != nil {
 		return err
 	}

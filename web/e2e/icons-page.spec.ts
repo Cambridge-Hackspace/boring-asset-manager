@@ -108,7 +108,7 @@ test('library files are written here, and the lexicon goes out as a zip and come
   // the export comes back in: the library's files replaced, the rest skipped
   await page.getByLabel('Import library files from a zip').setInputFiles({ name: 'icons.zip', mimeType: 'application/zip', buffer: zip });
   await section(page, 'The build').getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.getByText(/Imported 0 new files and replaced \d+\. Skipped \d+: _lexicon\.ilx/)).toBeVisible();
+  await expect(page.getByText(/Imported 0 new files and replaced \d+\. Skipped \d+: lexicon\.ilx/)).toBeVisible();
 });
 
 test("an asset's own icon that nothing draws any more needs attention, and finds the assets", async ({ signedIn: page, api }) => {

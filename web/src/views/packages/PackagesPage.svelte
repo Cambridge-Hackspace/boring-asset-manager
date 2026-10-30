@@ -290,7 +290,10 @@
     <fieldset class="space-y-1">
       <legend class="text-sm font-medium">Icons</legend>
       {@render item('icons', 'icons', 'The icon library, palette and icon settings', icons, (on) => (icons = on))}
-      <p class="text-xs text-zinc-600 dark:text-zinc-400">A category’s icon comes with it, with the library files it uses.</p>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">
+        A category’s icon comes with it, with the library files it uses. Chosen alone, the icons download as a zipped isolex
+        library folder, which isolex studio opens as it is.
+      </p>
     </fieldset>
 
     <fieldset class="space-y-1">

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/archive"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -117,5 +119,38 @@ func TestImportMergesAPackage(t *testing.T) {
 	}
 	if err := Import(dstConfig, bad, ImportOptions{}); err == nil {
 		t.Error("imported a corrupted package")
+	}
+}
+
+// TestIconsExportAsALibraryFolder: bam export of the icons alone writes a
+// zipped isolex library folder, and bam import takes one back.
+func TestIconsExportAsALibraryFolder(t *testing.T) {
+	c := isolex.Default()
+	if !c.Available() {
+		if os.Getenv("BAM_REQUIRE_ISOLEX") != "" {
+			t.Fatal("isolex is not available")
+		}
+		t.Skip("isolex is not available")
+	}
+	configPath, st := instance(t)
+	if _, _, err := st.CreateIconLibraryFile(context.Background(), c, "shared/crates.ilx", `base "crate-base" { category "storage"; footprint 1 1 1; part "box" { box 0 0 0 1 1 1 } }`); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "icons.zip")
+	if err := Export(configPath, dest, ExportOptions{Select: []string{"icons"}, Info: archive.PackageInfo{Name: "Icons"}}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(dest)
+	if err != nil || !archive.IsIconSet(b) {
+		t.Fatalf("not a zip: %v", err)
+	}
+	if err := Import(configPath, dest, ImportOptions{Check: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Import(configPath, dest, ImportOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Import(configPath, dest, ImportOptions{Anchor: "Nowhere"}); err == nil {
+		t.Error("an anchor for an icon set was taken")
 	}
 }

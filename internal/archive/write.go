@@ -74,6 +74,9 @@ type Summary struct {
 // database while the rest are.
 var afterTable func(table string)
 
+// writeFormat, in tests, writes an archive of an earlier format.
+var writeFormat = FormatVersion
+
 // filesNamed are the columns whose values name a stored file, with the
 // prefix of its key (filestore.Images).
 var filesNamed = map[string][]struct{ column, prefix string }{
@@ -97,7 +100,7 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 	}
 	hdr := Header{
 		Format:        Format,
-		FormatVersion: FormatVersion,
+		FormatVersion: writeFormat,
 		Type:          opts.Type,
 		BamVersion:    opts.BamVersion,
 		CreatedAt:     opts.Now.UTC().Format(time.RFC3339),
@@ -165,18 +168,27 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 		}
 	}
 	named := map[string]bool{}
+	var folder *iconFolder
+	if hdr.FormatVersion >= 2 && hasKind(hdr.Kinds, KindIcons) {
+		folder = &iconFolder{library: map[string]string{}, icons: map[string]string{}, categories: map[string]string{}}
+	}
 	for i := range Tables {
 		t := &Tables[i]
 		if !hasKind(hdr.Kinds, t.Kind) {
 			continue
 		}
-		n, err := writeTable(ctx, st, tx, p, t, hdr.Secrets, named, plan)
+		n, err := writeTable(ctx, st, tx, p, t, hdr.Secrets, named, plan, folder)
 		if err != nil {
 			return sum, fmt.Errorf("writing %s: %w", t.Name, err)
 		}
 		sum.Tables[t.Name] = n
 		if afterTable != nil {
 			afterTable(t.Name)
+		}
+	}
+	if folder != nil {
+		if err := folder.write(ctx, st, tx, p); err != nil {
+			return sum, fmt.Errorf("writing the icons: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -269,7 +281,7 @@ func selectRows(t *Table) string {
 // writeTable writes a table's rows, in data/, and in auth/ its secret
 // columns, with its key, or the whole of it when it is authentication.
 // It notes the files its rows name in named.
-func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Table, secrets bool, named map[string]bool, plan *Plan) (int, error) {
+func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Table, secrets bool, named map[string]bool, plan *Plan, folder *iconFolder) (int, error) {
 	rows, err := tx.QueryContext(ctx, st.Rebind(selectRows(t)))
 	if err != nil {
 		return 0, err
@@ -300,10 +312,15 @@ func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Ta
 				continue
 			}
 		}
+		inFolder := folder != nil && folder.take(t, vals)
 		line, secret = append(line[:0], '{'), append(secret[:0], '{')
 		for i, c := range t.Columns {
 			isKey := hasString(t.Key, c.Name)
 			isSecret := t.secret(c.Name)
+			if inFolder && c.Name == "source" {
+				// in icons/, as the folder holds it
+				continue
+			}
 			if !isSecret || isKey {
 				if line, err = appendField(line, c, vals[i]); err != nil {
 					return n, err

@@ -17,9 +17,10 @@
   // is chosen. onuploaded is given the complete upload, to use by its ID.
   let {
     label = 'Choose an archive',
+    accept = '.gz,.tgz,application/gzip',
     onuploaded,
     fetch: fetchFn,
-  }: { label?: string; onuploaded: (up: UploadState, file: File) => void; fetch?: typeof fetch } = $props();
+  }: { label?: string; accept?: string; onuploaded: (up: UploadState, file: File) => void; fetch?: typeof fetch } = $props();
 
   let file = $state<File | null>(null);
   let progress = $state<UploadProgress | null>(null);
@@ -107,7 +108,7 @@
     {label}
     <input
       type="file"
-      accept=".gz,.tgz,application/gzip"
+      {accept}
       class="sr-only"
       onchange={choose}
       disabled={running}

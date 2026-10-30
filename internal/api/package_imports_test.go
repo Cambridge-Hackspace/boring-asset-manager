@@ -175,3 +175,45 @@ func TestImportingAPackageOverMCP(t *testing.T) {
 		t.Errorf("without categories.manage: %s", toolText(res))
 	}
 }
+
+// TestAnIconSetExportsAndImports: a package of the icons alone downloads
+// as a zipped isolex library folder, and one uploaded is checked and
+// imported as an icon set, replacing what changed.
+func TestAnIconSetExportsAndImports(t *testing.T) {
+	requireIcons(t)
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	withIcons(t, srv)
+
+	var made struct {
+		Download string `json:"download"`
+	}
+	rec := postJSON(t, srv, cookie, "/api/v1/exports", map[string]any{"selection": map[string]any{"icons": true}, "name": "Crates"})
+	if err := json.Unmarshal(rec.Body.Bytes(), &made); err != nil || rec.Code != http.StatusCreated {
+		t.Fatalf("export: %d %s", rec.Code, rec.Body)
+	}
+	got := do(t, srv, cookie, http.MethodGet, made.Download, "", nil)
+	if got.Header().Get("Content-Type") != "application/zip" || !strings.Contains(got.Header().Get("Content-Disposition"), `filename="Crates.zip"`) {
+		t.Fatalf("download: %d %v", got.Code, got.Header())
+	}
+	files := unzip(t, got.Body.Bytes())
+	if files["library/shared/crates.ilx"] != crateBase {
+		t.Fatalf("the set: %v", files)
+	}
+
+	files["library/shared/crates.ilx"] = strings.Replace(crateBase, "footprint 1 1 1", "footprint 2 2 2", 1)
+	upload := uploadArchive(t, srv, cookie, iconZip(files))
+	job := awaitImport(t, srv, cookie, postJSON(t, srv, cookie, "/api/v1/import/check", map[string]any{"upload_id": upload}))
+	plan := planOf(t, job)
+	if job["error"] != nil || plan["header"].(map[string]any)["type"] != "icons" {
+		t.Fatalf("check: %v", job)
+	}
+	job = awaitImport(t, srv, cookie, postJSON(t, srv, cookie, "/api/v1/import", map[string]any{"upload_id": upload, "fingerprint": plan["fingerprint"]}))
+	if job["error"] != nil {
+		t.Fatalf("import: %v", job)
+	}
+	var src string
+	if err := srv.store.QueryRow("SELECT source FROM icon_library WHERE path = 'shared/crates.ilx'").Scan(&src); err != nil || !strings.Contains(src, "footprint 2 2 2") {
+		t.Errorf("after: %q %v", src, err)
+	}
+}

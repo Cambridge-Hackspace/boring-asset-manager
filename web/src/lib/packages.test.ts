@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   actionSaid,
+  aKind,
   anyChosen,
   categoryTree,
   clashes,
@@ -105,6 +106,12 @@ describe('importing', () => {
     { kind: 'relation_type', id: 'r', name: 'Stores', action: 'skip', existing: { kind: 'relation_type', id: 'h3', name: 'Stores' }, choices: ['existing', 'copy', 'skip'] },
   ];
   const plan = { items, assets: { assets: 1, photos: 0, links: 2 } } as unknown as ImportPlan;
+
+  it('names a kind with its article, and says what replacing does', () => {
+    expect(aKind('field')).toBe('a field');
+    expect(aKind('icon_library_file')).toBe('an icon library file');
+    expect(actionSaid({ kind: 'palette_token', id: 'sky', name: 'sky', action: 'replace' })).toBe('Replaces the one here');
+  });
 
   it('lists what clashes, to choose for', () => {
     expect(clashes(plan).map((i) => i.id)).toEqual(['f', 'a', 'r']);

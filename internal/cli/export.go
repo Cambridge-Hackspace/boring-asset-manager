@@ -97,6 +97,26 @@ func Export(configPath, dest string, opts ExportOptions) error {
 			return err
 		}
 	}
+	if sel.IconsOnly() {
+		// an icon set: a zipped isolex library folder, as the studio opens
+		f, err := os.OpenFile(dest+".partial", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			return err
+		}
+		if err := archive.WriteIconSet(ctx, st, f); err != nil {
+			f.Close()
+			_ = os.Remove(dest + ".partial")
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		if err := os.Rename(dest+".partial", dest); err != nil {
+			return err
+		}
+		fmt.Printf("Wrote the icons as an isolex library folder, zipped, to %s\n", dest)
+		return nil
+	}
 	blobs, err := filestore.Open(cfg.Storage)
 	if err != nil {
 		return err

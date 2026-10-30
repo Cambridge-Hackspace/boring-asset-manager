@@ -106,6 +106,28 @@ describe('ImportSection', () => {
     expect((screen.getByTestId('import') as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('imports an icon set, replacing what changed, with no category to choose', async () => {
+    const icons = planWith({
+      header: { type: 'icons', created_at: '', kinds: ['icons'], package: { name: 'My shapes' } },
+      kinds: ['icons'],
+      items: [
+        { kind: 'icon_library_file', id: 'shared/crates.ilx', name: 'shared/crates.ilx', action: 'replace', existing: { kind: 'icon_library_file', id: 'l1', name: 'shared/crates.ilx' } },
+        { kind: 'palette_token', id: 'sky', name: 'sky', action: 'create' },
+      ],
+      assets: undefined,
+      files: 0,
+    });
+    const { sent } = server(icons);
+    render(ImportSection, { tree });
+    await choosePackage();
+    expect(screen.queryByTestId('anchor')).toBeNull();
+    expect(screen.getByTestId('import-plan').textContent).toMatch(/the icon set My shapes:\s+It creates 1 thing, replaces 1\./);
+    expect(screen.getByTestId('import-items').textContent).toMatch(/shared\/crates\.ilx, an icon library file: Replaces the one here/);
+    await fireEvent.click(screen.getByTestId('import'));
+    await waitFor(() => expect(screen.getByTestId('imported')).toBeTruthy());
+    expect(sent.find((r) => r.method === 'POST' && r.path === '/import')!.body).toEqual({ upload_id: 'u1', anchor: '', choices: {}, fingerprint: 'fp1' });
+  });
+
   it('merges the kinds chosen of a backup', async () => {
     const backup = planWith({ header: { type: 'backup', created_at: '2026-10-30T00:00:00Z', kinds: ['catalog', 'assets', 'people', 'auth'] }, warnings: ['People and roles are an instance’s own.'] });
     const { sent } = server(backup);

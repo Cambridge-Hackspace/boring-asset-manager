@@ -78,8 +78,9 @@ func withIcons(t *testing.T, srv *Server) {
 	}
 }
 
-// The export is the lexicon as a build compiles it: the compiler checks
-// it as it is, the same bytes every time.
+// The export is the lexicon as a build compiles it, as an isolex library
+// folder (#146): the compiler checks it as it is, the same bytes every
+// time, with icons.json beside it.
 func TestExportingIconsMakesALexiconIsolexChecks(t *testing.T) {
 	requireIcons(t)
 	srv, admin, _ := setupTestServer(t)
@@ -96,15 +97,18 @@ func TestExportingIconsMakesALexiconIsolexChecks(t *testing.T) {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	if strings.Join(names, " ") != "_lexicon.ilx categories/crate.ilx library/shared/crates.ilx" {
+	if strings.Join(names, " ") != "categories/crate.ilx icons.json lexicon.ilx library/shared/crates.ilx" {
 		t.Fatalf("exported %v", names)
 	}
-	if !strings.Contains(files["_lexicon.ilx"], `tokens "body-top"`) || files["categories/crate.ilx"] != `icon "crate" { extends "crate-base" }` {
+	if !strings.Contains(files["lexicon.ilx"], `tokens "body-top"`) || files["categories/crate.ilx"] != `icon "crate" { extends "crate-base" }` ||
+		!strings.Contains(files["icons.json"], `"icon": "crate"`) {
 		t.Errorf("%q", files)
 	}
 	var lexicon []isolex.File
 	for _, n := range names {
-		lexicon = append(lexicon, isolex.File{Name: n, Text: files[n]})
+		if strings.HasSuffix(n, ".ilx") {
+			lexicon = append(lexicon, isolex.File{Name: n, Text: files[n]})
+		}
 	}
 	r, err := isolex.Default().Compile(context.Background(), lexicon)
 	if err != nil || !r.OK {
@@ -140,7 +144,7 @@ func TestImportingIconsIntoTheLibrary(t *testing.T) {
 		Skipped          []skippedEntry
 	}
 	_ = json.Unmarshal([]byte(body), &out)
-	if code != http.StatusOK || !out.Save.Published || out.Created != 0 || out.Updated != 1 || len(out.Skipped) != 2 {
+	if code != http.StatusOK || !out.Save.Published || out.Created != 0 || out.Updated != 1 || len(out.Skipped) != 3 {
 		t.Fatalf("round trip: %d %s", code, body)
 	}
 

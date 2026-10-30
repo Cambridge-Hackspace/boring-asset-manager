@@ -292,7 +292,7 @@ func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io
 		return err
 	}
 
-	ins := &inserter{ctx: ctx, st: st, tx: tx, perms: perms, parents: map[string][]parentRef{}, replace: opts.Replace}
+	ins := &inserter{ctx: ctx, st: st, tx: tx, perms: perms, parents: map[string][]parentRef{}, replace: opts.Replace, folder: sum.Header.FormatVersion >= 2}
 	for {
 		h, err := m.next()
 		if err == io.EOF {
@@ -316,6 +316,17 @@ func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io
 			}
 			if !secrets {
 				sum.Tables[table] += n
+			}
+		case IconsDir:
+			if !hasKind(sum.Kinds, KindIcons) {
+				continue
+			}
+			src, err := readIconFile(h.Name, m.tr)
+			if err != nil {
+				return err
+			}
+			if err := fillIconSource(ctx, st, tx, rest, src); err != nil {
+				return fmt.Errorf("restoring %s: %w", h.Name, err)
 			}
 		case FilesDir:
 			if k := fileKinds[rest[:strings.Index(rest, "/")+1]]; !hasKind(sum.Kinds, k) {
@@ -436,6 +447,9 @@ type inserter struct {
 	// replace upserts rows (replace.go), rather than adding them to tables
 	// emptied first.
 	replace bool
+	// folder is set for an archive keeping icons' sources in icons/: their
+	// rows' sources are null until the folder's files fill them.
+	folder bool
 }
 
 // batchArgs is the most values one INSERT binds: within every dialect's
@@ -473,6 +487,15 @@ func (in *inserter) member(t *Table, r io.Reader, secrets bool) (int, error) {
 			var err error
 			if cols, err = rowColumns(t, row, secrets); err != nil {
 				return n, err
+			}
+			if _, ok := iconSourceTables[t.Name]; ok && in.folder && !secrets && colIndexIn(cols, "source") < 0 {
+				cols = append(cols, Column{"source", Text})
+			}
+		}
+		if _, ok := iconSourceTables[t.Name]; ok && in.folder && !secrets {
+			// filled from icons/, after the rows
+			if _, ok := row["source"]; !ok {
+				row["source"] = json.RawMessage("null")
 			}
 		}
 		if len(row) != len(cols) {

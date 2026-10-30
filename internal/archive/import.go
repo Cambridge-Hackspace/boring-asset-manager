@@ -165,8 +165,57 @@ func streamed(t *Table) bool { return t.Kind == KindAssets }
 // cannot be imported; one needing what the importer may not do is refused
 // with ErrForbidden.
 func CheckImport(ctx context.Context, st *store.Store, open func() (io.ReadCloser, error), opts ImportOptions) (*ImportPlan, error) {
+	if data, err := iconSetUpload(open); err != nil {
+		return nil, err
+	} else if data != nil {
+		plan, _, err := checkIconSetImport(ctx, st, data, opts)
+		if err == nil && len(plan.Missing) > 0 {
+			err = fmt.Errorf("%w: %s", ErrForbidden, strings.Join(plan.Missing, "; "))
+		}
+		return plan, err
+	}
 	plan, _, _, err := checkImport(ctx, st, open, opts)
 	return plan, err
+}
+
+// iconSetUpload reads an upload that is an icon set, a zip, whole; nil
+// for one that is not.
+func iconSetUpload(open func() (io.ReadCloser, error)) ([]byte, error) {
+	rc, err := open()
+	if err != nil {
+		return nil, err
+	}
+	head := make([]byte, 4)
+	n, _ := io.ReadFull(rc, head)
+	rc.Close()
+	if !IsIconSet(head[:n]) {
+		return nil, nil
+	}
+	return readUpload(open, MaxIconSet)
+}
+
+// importIconSet imports an icon set as its check says, as one icon change.
+func importIconSet(ctx context.Context, st *store.Store, data []byte, opts ImportOptions) (*ImportPlan, error) {
+	plan, set, err := checkIconSetImport(ctx, st, data, opts)
+	if err != nil {
+		return plan, err
+	}
+	if len(plan.Missing) > 0 {
+		return plan, fmt.Errorf("%w: %s", ErrForbidden, strings.Join(plan.Missing, "; "))
+	}
+	if len(plan.Problems) > 0 {
+		return plan, fmt.Errorf("%w: %s", ErrImport, strings.Join(plan.Problems, "; "))
+	}
+	if opts.Fingerprint != "" && opts.Fingerprint != plan.Fingerprint {
+		return plan, ErrChanged
+	}
+	if len(set.Library) == 0 && len(set.Icons) == 0 && len(set.Palette) == 0 {
+		return plan, nil
+	}
+	if _, err := st.ApplyIconSet(ctx, opts.Icons, set); err != nil {
+		return plan, fmt.Errorf("%w: %v", ErrImport, err)
+	}
+	return plan, nil
 }
 
 func checkImport(ctx context.Context, st *store.Store, open func() (io.ReadCloser, error), opts ImportOptions) (*ImportPlan, *archived, *built, error) {
@@ -216,6 +265,11 @@ func checkImport(ctx context.Context, st *store.Store, open func() (io.ReadClose
 // does not do what was checked. The rows go in one transaction; the files
 // are stored before it commits, and removed again if it does not.
 func Import(ctx context.Context, st *store.Store, blobs filestore.Blobs, open func() (io.ReadCloser, error), opts ImportOptions) (*ImportPlan, error) {
+	if data, err := iconSetUpload(open); err != nil {
+		return nil, err
+	} else if data != nil {
+		return importIconSet(ctx, st, data, opts)
+	}
 	plan, a, _, err := checkImport(ctx, st, open, opts)
 	if err != nil {
 		return plan, err
@@ -326,6 +380,7 @@ func readArchived(ctx context.Context, st *store.Store, q querier, r io.Reader, 
 		a.assetIDs = map[string]bool{}
 	}
 	codes := &codeCheck{ctx: ctx, st: st, q: q}
+	sources := map[string]string{}
 	var setOf string
 	var set []string
 	categorized := 0
@@ -378,10 +433,22 @@ func readArchived(ctx context.Context, st *store.Store, q querier, r io.Reader, 
 			a.images[id] = true
 		}
 		return nil
-	})
+	}, func(rest, source string) { sources[rest] = source })
 	endSet()
 	if err != nil {
 		return nil, err
+	}
+	if c.Header.FormatVersion >= 2 {
+		// the icons' sources, from the folder
+		for table, col := range iconSourceTables {
+			for _, row := range a.rows[table] {
+				var src any
+				if s, ok := sources[iconSourceKey(table, str(row, col))]; ok {
+					src = s
+				}
+				row["source"] = src
+			}
+		}
 	}
 	if categorized < a.counts.Assets {
 		// assets in no category, in no scope
@@ -406,8 +473,9 @@ func fileWanted(key string, kinds []Kind) bool {
 }
 
 // eachMember reads an archive's members, giving each row of the tables
-// merged, of the kinds given, to row, and each file to file.
-func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any) error, file func(key string, r io.Reader, size int64) error) error {
+// merged, of the kinds given, to row, each file to file, and each icon
+// source in icons/ to icon, if it is not nil.
+func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any) error, file func(key string, r io.Reader, size int64) error, icon func(rest, source string)) error {
 	m, err := openMembers(bufio.NewReader(r))
 	if err != nil {
 		return err
@@ -435,6 +503,15 @@ func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any
 			if err := file(rest, m.tr, h.Size); err != nil {
 				return err
 			}
+		case IconsDir:
+			if icon == nil || !hasKind(kinds, KindIcons) {
+				continue
+			}
+			src, err := readIconFile(h.Name, m.tr)
+			if err != nil {
+				return err
+			}
+			icon(rest, src)
 		}
 	}
 }
