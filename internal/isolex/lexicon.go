@@ -2,6 +2,7 @@ package isolex
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -75,6 +76,36 @@ func LexiconBlock(v Vocabulary) (string, error) {
 		return "", nil
 	}
 	return "// Written by bam from the palette and the icon settings.\nlexicon {\n" + b.String() + "}\n", nil
+}
+
+// PaletteColor is a token's colors, as a `palette` block gives them.
+type PaletteColor struct {
+	Token string
+	Colors
+}
+
+// paletteColor is a color a `palette` block can hold (isolex SPEC §2).
+var paletteColor = regexp.MustCompile(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`)
+
+// PaletteBlock writes a palette as a `palette {}` block, in its order, so
+// that a folder of the lexicon's files carries its colors (isolex SPEC
+// §2), or "" for none. A block has no room for transparency: a token
+// with a color written #rrggbbaa is left out, saying so in a comment.
+func PaletteBlock(palette []PaletteColor) string {
+	if len(palette) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("palette {\n")
+	for _, c := range palette {
+		if !paletteColor.MatchString(c.Light) || !paletteColor.MatchString(c.Dark) {
+			fmt.Fprintf(&b, "    // %s is light %s and dark %s, which a palette block cannot hold\n", c.Token, c.Light, c.Dark)
+			continue
+		}
+		fmt.Fprintf(&b, "    %s light=%s dark=%s\n", c.Token, Quote(c.Light), Quote(c.Dark))
+	}
+	b.WriteString("}\n")
+	return b.String()
 }
 
 func isLimit(name string) bool {

@@ -1,0 +1,27 @@
+// A lexicon that carries its own colors (#55): render draws with the
+// palette block's light colors, and a palette file overrides them.
+
+lexicon {
+  tokens "ink" "outline" "body-top" "body-left" "body-right" "accent"
+  stroke-widths 1.2 1.5
+}
+
+palette {
+  ink light="#102a43" dark="#f0f4f8"
+  outline light="#102a43" dark="#f0f4f8"
+  body-top light="#d9e2ec" dark="#334e68"
+  body-left light="#bcccdc" dark="#243b53"
+  body-right light="#9fb3c8" dark="#102a43"
+  accent light="#c62828" dark="#ef9a9a"
+}
+
+icon "crate" {
+  category "store"
+  footprint 1 1 0.5
+  part "body" {
+    box 0 0 0 1 1 0.5
+  }
+  part "label" {
+    facerect "front" 0.25 1 0.15 0.5 0.2 fill="accent"
+  }
+}

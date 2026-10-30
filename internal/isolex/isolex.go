@@ -114,6 +114,16 @@ type Result struct {
 	// IR is the document as the compiler wrote it, byte for byte.
 	IR  json.RawMessage
 	Doc *ir.Document
+	// Palette is the lexicon's `palette` block (isolex SPEC §2), by token,
+	// whether it compiled or not; nil without one.
+	Palette map[string]Colors
+}
+
+// Colors are a token's colors in a `palette` block: on a light ground and
+// on a dark one.
+type Colors struct {
+	Light string `json:"light"`
+	Dark  string `json:"dark"`
 }
 
 // Options bound a compile. Zero values take the defaults.
@@ -291,6 +301,8 @@ type Many struct {
 	OK       bool
 	Errors   []Diag
 	Warnings []Diag
+	// Palette is the lexicon's `palette` block, as Result's.
+	Palette map[string]Colors
 	// Results are the requests', in order, when OK: each what CompileOne
 	// gives for it, or Refused.
 	Results []One
@@ -328,6 +340,7 @@ func (c *Compiler) CompileMany(ctx context.Context, files []File, requests []Req
 		Errors     []Diag            `json:"errors"`
 		Warnings   []Diag            `json:"warnings"`
 		Results    []json.RawMessage `json:"results"`
+		Palette    map[string]Colors `json:"palette"`
 	}
 	if err := json.Unmarshal(out, &o); err != nil {
 		return nil, fmt.Errorf("isolex: unreadable output from the compiler: %w", err)
@@ -335,7 +348,7 @@ func (c *Compiler) CompileMany(ctx context.Context, files []File, requests []Req
 	if o.InputError != "" {
 		return nil, fmt.Errorf("isolex: the compiler could not read its input: %s", o.InputError)
 	}
-	m := &Many{OK: o.OK, Errors: o.Errors, Warnings: o.Warnings}
+	m := &Many{OK: o.OK, Errors: o.Errors, Warnings: o.Warnings, Palette: o.Palette}
 	if m.Errors == nil {
 		m.Errors = []Diag{}
 	}
@@ -430,11 +443,12 @@ func read(mod api.Module, packed uint64) ([]byte, error) {
 // for one icon (one) the lexicon cannot; otherwise it is bam's mistake.
 func decode(out []byte, one bool) (*Result, error) {
 	var o struct {
-		OK         bool            `json:"ok"`
-		InputError string          `json:"input_error"`
-		Errors     []Diag          `json:"errors"`
-		Warnings   []Diag          `json:"warnings"`
-		IR         json.RawMessage `json:"ir"`
+		OK         bool              `json:"ok"`
+		InputError string            `json:"input_error"`
+		Errors     []Diag            `json:"errors"`
+		Warnings   []Diag            `json:"warnings"`
+		IR         json.RawMessage   `json:"ir"`
+		Palette    map[string]Colors `json:"palette"`
 	}
 	if err := json.Unmarshal(out, &o); err != nil {
 		return nil, fmt.Errorf("isolex: unreadable output from the compiler: %w", err)
@@ -445,7 +459,7 @@ func decode(out []byte, one bool) (*Result, error) {
 	if o.InputError != "" {
 		return nil, fmt.Errorf("isolex: the compiler could not read its input: %s", o.InputError)
 	}
-	r := &Result{OK: o.OK, Errors: o.Errors, Warnings: o.Warnings}
+	r := &Result{OK: o.OK, Errors: o.Errors, Warnings: o.Warnings, Palette: o.Palette}
 	if r.Errors == nil {
 		r.Errors = []Diag{}
 	}

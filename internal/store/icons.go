@@ -1231,8 +1231,9 @@ func (s *Store) ImportIconLibrary(ctx context.Context, c IconCompiler, files []I
 }
 
 // IconLexiconFiles returns what is published as the files a build
-// compiles, the lexicon block bam writes among them: a lexicon the isolex
-// compiler can check as it is.
+// compiles, the lexicon block bam writes among them, with the palette
+// beside it as a `palette` block: a lexicon the isolex compiler can check
+// as it is, which carries its own colors.
 func (s *Store) IconLexiconFiles() ([]isolex.File, error) {
 	in, err := s.readIconInputs(s.Query)
 	if err != nil {
@@ -1240,5 +1241,21 @@ func (s *Store) IconLexiconFiles() ([]isolex.File, error) {
 	}
 	// the wrappers are made from assets' values, by each build
 	in.wrappers = nil
-	return in.files()
+	files, err := in.files()
+	if err != nil {
+		return nil, err
+	}
+	// Builds go without it: their colors are drawn from the palette as it
+	// is when drawn, and a color changed needs no build.
+	palette := make([]isolex.PaletteColor, len(in.palette))
+	for i, c := range in.palette {
+		palette[i] = isolex.PaletteColor{Token: c.Token, Colors: isolex.Colors{Light: c.Light, Dark: c.Dark}}
+	}
+	if block := isolex.PaletteBlock(palette); block != "" {
+		if files[0].Text != "" {
+			block = "\n" + block
+		}
+		files[0].Text += block
+	}
+	return files, nil
 }

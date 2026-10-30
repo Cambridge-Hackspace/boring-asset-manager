@@ -57,7 +57,7 @@ describe('IsoIcon', () => {
   // drawn through matrices, cut to clips, with strokes that keep their
   // width; each drawn here as isolex 0.4.0 draws it.
   it("draws IR version 2 as isolex 0.4 does", () => {
-    const v2 = resolve(testdata, 'isolex-0.5.0');
+    const v2 = resolve(testdata, 'isolex-0.6.0');
     const fixtures: [string, (name: string, golden: string) => string][] = [
       ['sample', (name, golden) => {
         const start = golden.indexOf(`== ${name}.svg ==\n`);
@@ -99,7 +99,7 @@ describe('IsoIcon', () => {
   });
 
   it('names the clip paths of an icon drawn twice apart', () => {
-    const doc = JSON.parse(readFileSync(resolve(testdata, 'isolex-0.5.0/transforms.ir.golden.json'), 'utf8')) as IrDocument;
+    const doc = JSON.parse(readFileSync(resolve(testdata, 'isolex-0.6.0/transforms.ir.golden.json'), 'utf8')) as IrDocument;
     const icon = doc.icons.find((i) => i.name === 'clipped')!;
     // both on one page, as a list draws the same icon twice
     render(IsoIcon, { icon });
