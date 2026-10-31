@@ -50,5 +50,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
     setupFiles: ['src/test/setup.ts'],
+    // Time enough for a file's first test, which pays for the first
+    // render, on a machine busy with the other suites.
+    testTimeout: 15_000,
   },
 });
