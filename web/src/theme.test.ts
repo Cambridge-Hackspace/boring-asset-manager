@@ -51,6 +51,8 @@ const pairs: Record<'light' | 'dark', [string, string, number][]> = {
     ['color-zinc-900', 'color-highlight', text],
     ['white', 'color-action', text],
     ['white', 'color-action-hover', text],
+    // Table headings: paper on zinc-800.
+    ['color-zinc-50', 'color-zinc-800', text],
   ],
 };
 

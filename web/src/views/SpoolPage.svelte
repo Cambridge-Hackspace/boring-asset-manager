@@ -9,6 +9,7 @@
   import { session } from '../lib/session.svelte';
   import { addedMessage, destinationName, entryWarnings, groupEntries, jobActive, jobStateName, poolsFor, printedMessage, printersFor, printing, shared, templateName, templatesFor } from '../lib/spool';
   import ConfirmButton from '../components/ConfirmButton.svelte';
+  import SegmentedControl from '../components/SegmentedControl.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import FitWarnings from '../components/FitWarnings.svelte';
 
@@ -201,11 +202,16 @@
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
   <h1 class="text-2xl font-bold">Print queue</h1>
-  <div class="flex gap-1" role="group" aria-label="Show">
-    {#each [['waiting', 'Waiting'], ['jobs', 'Jobs'], ['printed', 'Printed']] as [key, label] (key)}
-      <button type="button" class={view === key ? 'btn-primary' : 'btn-secondary'} aria-pressed={view === key} onclick={() => show(key as View)}>{label}</button>
-    {/each}
-  </div>
+  <SegmentedControl
+    label="Show"
+    options={[
+      { value: 'waiting', label: 'Waiting' },
+      { value: 'jobs', label: 'Jobs' },
+      { value: 'printed', label: 'Printed' },
+    ]}
+    value={view}
+    onchange={show}
+  />
 </div>
 
 <div class="mb-4 flex flex-wrap items-center gap-4 text-sm">

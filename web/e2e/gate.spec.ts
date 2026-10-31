@@ -51,7 +51,6 @@ const KNOWN: Record<Check, string[]> = {
   primary: [
     '/account 1440', '/account 390',
     '/categories/:id 1440', '/categories/:id 390',
-    '/spool 1440', '/spool 390',
   ],
   scroll: [
     '/fields 390',
