@@ -97,7 +97,7 @@
             <div class="flex items-center gap-2">
               <input
                 id="limit-{l.key}"
-                class="input-sm w-32 tabular-nums"
+                class="input w-32 tabular-nums"
                 inputmode="numeric"
                 pattern="[0-9]*|none"
                 placeholder={l.default.toLocaleString()}

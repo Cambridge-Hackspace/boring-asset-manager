@@ -23,21 +23,25 @@ test('fields and categories, with inheritance', async ({ signedIn: page }) => {
   await page.getByLabel('Name', { exact: true }).fill(parent);
   await page.getByRole('button', { name: 'Create category' }).click();
   await expect(page).toHaveURL(/\/categories\/[0-9a-f-]{36}$/);
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Fields' }).click();
   await page.getByLabel('Add a field').selectOption({ label });
   await page.getByLabel('Required').check();
   await page.getByRole('button', { name: 'Add field' }).click();
   await expect(page.getByRole('cell', { name: 'This category', exact: true })).toBeVisible();
 
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'About' }).click();
   await page.getByRole('link', { name: 'New subcategory' }).click();
   await expect(page.getByLabel('Parent')).toHaveValue(/[0-9a-f-]{36}/);
   await page.getByLabel('Name', { exact: true }).fill('Drills');
   await page.getByRole('button', { name: 'Create category' }).click();
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Fields' }).click();
   const row = page.getByRole('row').filter({ hasText: label });
   await expect(row).toContainText('Required');
   await expect(row).toContainText(`Inherited from ${parent}`);
   await expect(row.getByRole('button', { name: 'Remove' })).toHaveCount(0);
 
   // Running low only for consumables.
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Stock and lending' }).click();
   await expect(page.getByLabel('Running low')).toBeDisabled();
   await page.getByLabel('Consumable').check();
   await expect(page.getByLabel('Running low')).toBeEnabled();
@@ -55,9 +59,11 @@ test('duplicate a category: its settings and fields, not its subcategories or as
   await page.getByRole('button', { name: 'Duplicate' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${name} copy`);
   await expect(page).not.toHaveURL(new RegExp(category.id));
+  await expect(page.getByRole('link', { name: 'New subcategory' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Stock and lending' }).click();
   await expect(page.getByLabel('Consumable')).toBeChecked();
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Fields' }).click();
   await expect(page.getByRole('region', { name: 'Fields' }).getByText('Spool weight')).toBeVisible();
   // Nothing in it, and nothing under it.
-  await expect(page.getByRole('link', { name: 'No assets in it yet' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'New subcategory' })).toBeVisible();
+  await expect(page.getByText('No assets in it yet.')).toBeVisible();
 });

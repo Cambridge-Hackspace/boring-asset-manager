@@ -135,7 +135,7 @@
           <span class="font-mono">{f.path}</span>
           {#if f.draft}<span class="text-amber-900 dark:text-amber-200">draft, {f.draft_errors.length} problem{f.draft_errors.length === 1 ? '' : 's'}</span>{/if}
           {#if f.source === null}<span class="text-zinc-600 dark:text-zinc-400">never published</span>{/if}
-          <button type="button" class="btn-sm ml-auto" aria-label="Open {f.path}" onclick={() => show(f)}>Open</button>
+          <button type="button" class="btn-secondary ml-auto" aria-label="Open {f.path}" onclick={() => show(f)}>Open</button>
         </li>
       {/each}
     </ul>
@@ -193,7 +193,7 @@
                 {#each revisions as r (r.id)}
                   <li class="flex flex-wrap items-center gap-2">
                     <time datetime={r.created_at}>{new Date(r.created_at).toLocaleString()}</time>
-                    <button type="button" class="btn-sm" onclick={() => (text = r.source)}>Load into the editor</button>
+                    <button type="button" class="btn-secondary" onclick={() => (text = r.source)}>Load into the editor</button>
                   </li>
                 {/each}
               </ul>

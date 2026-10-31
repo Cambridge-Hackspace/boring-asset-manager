@@ -66,7 +66,10 @@
     The colors icons paint with, by name, in light and in dark mode. Icons name a color, never paint one of their own; <span class="font-mono">category</span> paints in each category's own color.
   </p>
   <form onsubmit={save}>
-    <table class="w-full text-sm">
+    <!-- Scrolls sideways within itself on a phone, not the page; relative,
+         so the hidden column heading is inside what scrolls. -->
+    <div class="relative overflow-x-auto">
+    <table class="w-full min-w-[44rem] text-sm">
       <thead>
         <tr class="text-left">
           <th scope="col" class="pb-1 font-medium">Token</th>
@@ -80,7 +83,7 @@
           <tr>
             <td class="py-1 pr-2">
               {#if canManage}
-                <input class="input-sm font-mono" aria-label="Token {i + 1}" bind:value={row.token} required pattern="[a-z][a-z0-9\-]*" maxlength="64" />
+                <input class="input font-mono" aria-label="Token {i + 1}" bind:value={row.token} required pattern="[a-z][a-z0-9\-]*" maxlength="64" />
               {:else}<span class="font-mono">{row.token}</span>{/if}
             </td>
             {#each ['light', 'dark'] as const as mode (mode)}
@@ -88,23 +91,24 @@
                 <div class="flex items-center gap-1">
                   <span class="inline-block h-6 w-6 shrink-0 rounded border border-zinc-300 dark:border-zinc-600" style="background-color: {hex.test(row[mode]) ? row[mode] : 'transparent'}" aria-hidden="true"></span>
                   {#if canManage}
-                    <input type="color" class="h-7 w-9 cursor-pointer rounded border border-zinc-300 bg-transparent dark:border-zinc-600" aria-label="{row.token || 'Token ' + (i + 1)}, {mode}, chosen" value={six(row[mode])} oninput={(e) => (row[mode] = (e.currentTarget as HTMLInputElement).value)} />
-                    <input class="input-sm w-24 font-mono" aria-label="{row.token || 'Token ' + (i + 1)}, {mode}" bind:value={row[mode]} required pattern={colorPattern} />
+                    <input type="color" class="h-11 w-11 shrink-0 cursor-pointer rounded border-2 border-zinc-900 bg-transparent dark:border-zinc-400" aria-label="{row.token || 'Token ' + (i + 1)}, {mode}, chosen" value={six(row[mode])} oninput={(e) => (row[mode] = (e.currentTarget as HTMLInputElement).value)} />
+                    <input class="input w-28 font-mono" aria-label="{row.token || 'Token ' + (i + 1)}, {mode}" bind:value={row[mode]} required pattern={colorPattern} />
                   {:else}<span class="font-mono">{row[mode]}</span>{/if}
                 </div>
               </td>
             {/each}
             {#if canManage}
               <td class="py-1 whitespace-nowrap">
-                <button type="button" class="icon-btn" aria-label="Move {row.token} up" disabled={i === 0} onclick={() => move(i, -1)}>↑</button>
-                <button type="button" class="icon-btn" aria-label="Move {row.token} down" disabled={i === rows.length - 1} onclick={() => move(i, 1)}>↓</button>
-                <button type="button" class="icon-btn" aria-label="Remove {row.token}" onclick={() => rows.splice(i, 1)}>✕</button>
+                <button type="button" class="btn-secondary px-0" aria-label="Move {row.token} up" disabled={i === 0} onclick={() => move(i, -1)}>↑</button>
+                <button type="button" class="btn-secondary px-0" aria-label="Move {row.token} down" disabled={i === rows.length - 1} onclick={() => move(i, 1)}>↓</button>
+                <button type="button" class="btn-secondary px-0" aria-label="Remove {row.token}" onclick={() => rows.splice(i, 1)}>✕</button>
               </td>
             {/if}
           </tr>
         {/each}
       </tbody>
     </table>
+    </div>
     {#if error}
       <div role="alert" class="mt-2 text-sm text-red-700 dark:text-red-400">
         <p>{error}</p>

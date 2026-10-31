@@ -63,6 +63,7 @@
      summary that folds a section, and the way back in a breadcrumb. */
   label:has(> input:is([type='checkbox'], [type='radio'])):not([data-dense] label) {
     min-height: 2.75rem;
+    min-width: 2.75rem;
     cursor: pointer;
   }
   summary:not([data-dense] summary) {
@@ -173,9 +174,11 @@
   @apply flex flex-col items-center gap-3 rounded border-2 border-dashed border-zinc-300 p-8 text-center text-zinc-600 dark:border-zinc-700 dark:text-zinc-400;
 }
 /* A table with an ink header row and rules between rows, in a box that
-   scrolls sideways when narrow (stack-table still makes cards on a phone). */
+   scrolls sideways when narrow (stack-table still makes cards on a phone);
+   relative, so a hidden heading scrolls with it rather than widening the
+   page. */
 @utility data-table {
-  @apply overflow-x-auto rounded border-2 border-zinc-900 bg-white dark:border-zinc-600 dark:bg-zinc-900;
+  @apply relative overflow-x-auto rounded border-2 border-zinc-900 bg-white dark:border-zinc-600 dark:bg-zinc-900;
   & table {
     @apply w-full border-collapse text-sm tabular-nums;
   }
