@@ -24,22 +24,22 @@
   }
 </script>
 
-<h1 class="mb-4 text-2xl font-bold">Scan</h1>
-<div class="max-w-md space-y-4">
-  <form class="card space-y-3" onsubmit={lookUp}>
-    <label class="label" for="scan-code">Code</label>
-    <div class="flex gap-2">
-      <input id="scan-code" bind:this={input} class="input" autocomplete="off" placeholder="HS-100, or a scan link" bind:value={code} />
-      <button type="submit" class="btn-primary" disabled={!code.trim()}>Look up</button>
-    </div>
-    <p class="text-xs text-zinc-600 dark:text-zinc-400">Type or paste the code on a label. A USB scanner types it here too.</p>
-  </form>
-
-  <section class="card space-y-3" aria-labelledby="camera-heading">
-    <h2 id="camera-heading" class="text-lg font-semibold">Camera</h2>
+<h1 class="mb-6 text-3xl font-bold">Scan a label</h1>
+<!-- The camera first, as on a phone; typing, or a USB scanner, beneath. -->
+<div class="max-w-md space-y-6">
+  <section aria-label="Camera">
     <CodeScanner
       onfound={go}
       unsupported="This browser cannot read codes with the camera. A phone’s own camera app opens labels whose QR codes link to their scan page."
     />
   </section>
+
+  <form class="space-y-2" onsubmit={lookUp}>
+    <label class="label" for="scan-code">Or type the code</label>
+    <div class="flex gap-2">
+      <input id="scan-code" bind:this={input} class="input font-mono" autocomplete="off" placeholder="HS-100, or a scan link" bind:value={code} />
+      <button type="submit" class="btn-primary" disabled={!code.trim()}>Look up</button>
+    </div>
+    <p class="text-xs text-zinc-600 dark:text-zinc-400">Type or paste the code on a label. A USB scanner types it here too.</p>
+  </form>
 </div>

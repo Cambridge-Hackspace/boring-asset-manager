@@ -67,6 +67,15 @@ describe('ScanPage', () => {
     expect(sent.filter((r) => r.method === 'PUT').at(-1)!.body).toEqual({ condition: 'out_of_service', note: 'Lid cracked' });
   });
 
+  it('offers its flows beside its quick action, which stays the one primary button', async () => {
+    const scan = scanOf(10, ['use', 'flows']);
+    fakeApi({ 'GET /scan/BIN-A3': () => ({ ...scan, asset: { ...scan.asset, flows: [{ slug: 'refill', name: 'Refill it' }, { slug: 'move', name: 'Move it' }] } }) });
+    const { container } = render(ScanPage, { params: { code: 'BIN-A3' } });
+    expect((await screen.findByRole('link', { name: 'Refill it' })).className).toContain('btn-secondary');
+    expect(screen.getByRole('link', { name: 'Move it' })).toBeTruthy();
+    expect([...container.querySelectorAll('.btn-primary')].map((b) => b.textContent?.trim())).toEqual(['Use']);
+  });
+
   it('starts a new asset like the one scanned, or in it', async () => {
     fakeApi({ 'GET /scan/BIN-A3': () => scanOf(10, ['add_similar', 'add_inside']) });
     render(ScanPage, { params: { code: 'BIN-A3' } });

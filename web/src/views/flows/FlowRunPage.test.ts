@@ -111,6 +111,8 @@ describe('FlowRunPage', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Find' }));
     await screen.findByRole('heading', { name: 'Is this right?' });
     expect(sent.at(-1)!.body).toEqual({ step: 'find', code: 'WOOD-1' });
+    // What it found, above the question.
+    expect(screen.getByText('Oak', { selector: 'span' })).toBeTruthy();
     expect(screen.getByText('Archive Oak: it is taken off the lists.')).toBeTruthy();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Yes, go ahead' }));

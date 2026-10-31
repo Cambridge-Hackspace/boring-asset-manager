@@ -209,8 +209,15 @@
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else if asset}
-  <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-    <h1 class="flex items-center gap-2 text-2xl font-bold"><AssetIcon icon={asset.resolved_icon} height={40} />{asset.asset.name}</h1>
+  <div class="mb-4 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="flex items-center gap-3 text-3xl font-bold"><AssetIcon icon={asset.resolved_icon} height={44} />{asset.asset.name}</h1>
+      {#if asset.generator_keys.length}
+        <p class="mt-2 flex flex-wrap gap-2" aria-label="Its codes">
+          {#each asset.generator_keys as k, i (k.generator_type)}<span class={i === 0 ? 'chip-yellow' : 'chip'} title={generatorName(k.generator_type)}>{k.assigned_code}</span>{/each}
+        </p>
+      {/if}
+    </div>
     <div class="flex flex-wrap gap-2">
       {#if archived}
         {#if session.canOn(asset.scopes, 'assets.delete')}
@@ -220,17 +227,12 @@
         {#if asset.holds}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/scene">See inside</a>{/if}
         {#if session.canOn(asset.scopes, 'assets.write')}
           <a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>
-          <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(id)}" title="A new asset like this one, to change before it is created">Duplicate…</a>
-          {#if locationType}<a class="btn-secondary" href="/assets/new?in={encodeURIComponent(id)}" title="A new asset, in this one">Add something inside…</a>{/if}
         {/if}
         {#if session.canAnyOn(asset.scopes, 'assets.report', 'assets.write') && !reporting}
           <button type="button" class="btn-secondary" onclick={() => (reporting = true)}>{asset.asset.condition === 'ok' ? 'Report a problem' : 'Update the problem'}</button>
         {/if}
         {#if asset.asset.condition !== 'ok' && session.canOn(asset.scopes, 'assets.write')}
           <button type="button" class="btn-secondary" disabled={busy} onclick={markWorking}>Mark as working</button>
-        {/if}
-        {#if session.canOn(asset.scopes, 'assets.delete')}
-          <ConfirmButton label="Archive" question="Archive this asset? Its codes become free for reuse." onconfirm={archive} />
         {/if}
       {/if}
     </div>
@@ -258,188 +260,202 @@
     </div>
   {/if}
 
-  <div class="grid gap-6 lg:grid-cols-2">
-    {#if asset.asset.stock}
-      {@const stock = asset.asset.stock}
-      <section class="card" aria-labelledby="stock-heading">
-        <h2 id="stock-heading" class="mb-1 text-lg font-semibold">Stock</h2>
-        <p class="text-sm">
-          <strong>{stock.is_running_low ? 'Running low.' : 'In stock.'}</strong>
-          {amount(stock.quantity, stock.unit)} left{stock.low_stock_threshold
-            ? `; flagged automatically below ${amount(stock.low_stock_threshold, stock.unit)}`
-            : ''}.
-        </p>
-        {#if session.canOn(asset.scopes, 'stock.record') && !archived}
-          <div class="mt-3 flex flex-wrap items-end gap-2">
-            <div>
-              <label class="label" for="stock-amount">How many{stock.unit ? ` (${stock.unit})` : ''}</label>
-              <input id="stock-amount" class="input w-28" type="number" min="1" step="1" bind:value={howMany} />
-            </div>
-            <button type="button" class="btn-secondary" disabled={busy} onclick={() => adjust(-1)}>Use</button>
-            <button type="button" class="btn-secondary" disabled={busy} onclick={() => adjust(1)}>Add</button>
-            {#if stock.is_running_low}
-              <button type="button" class="btn-secondary" disabled={busy} onclick={() => setRunningLow(false)}>Mark restocked</button>
-            {:else}
-              <button type="button" class="btn-secondary" disabled={busy} onclick={() => setRunningLow(true)}>Mark running low</button>
-            {/if}
-          </div>
+  <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div class="space-y-6">
+      <PhotosPanel {asset} onchange={assetChanged} />
+      <section class="card" aria-labelledby="details-heading">
+        <h2 id="details-heading" class="mb-3 text-lg font-semibold">Details</h2>
+        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt class="font-medium">Categories</dt>
+          <dd class="flex flex-wrap gap-1">
+            {#each asset.categories as c (c.id)}<CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />{/each}
+          </dd>
+          {#if asset.resolved_icon}
+            {@const icon = asset.resolved_icon}
+            <dt class="font-medium">Icon</dt>
+            <dd>
+              {#if icon.from === 'asset'}
+                Its own, <span class="font-mono">{plainIcon(icon)}</span>{#if icon.missing}: no icon is drawn by that name any more, so it shows as unknown{/if}.
+              {:else}
+                From <a class="underline" href="/categories/{encodeURIComponent(icon.source_category_id ?? '')}?tab=icon">{icon.source_category_name}</a>.
+              {/if}
+              {#if paramsNote(icon)}<span data-icon-params>{paramsNote(icon)}</span>{/if}
+              {#if textsNote(icon)}<span data-icon-texts>{textsNote(icon)}</span>{/if}
+              {#if stateNote(icon)}<span data-icon-state>{stateNote(icon)}</span>{/if}
+            </dd>
+          {/if}
+          {#if asset.scopes && !(asset.scopes.length === 1 && asset.scopes[0] === DEFAULT_SCOPE)}
+            <dt class="font-medium">Scopes</dt>
+            <dd>{asset.scopes.join(', ')}</dd>
+          {/if}
+          {#if session.canOn(asset.scopes, 'assets.scan')}
+            <dt class="font-medium">Scan page</dt>
+            <dd>
+              <a class="inline-flex min-h-11 items-center underline" href="/scan/{encodeURIComponent(asset.asset.id)}">What scanning it shows</a>
+              {#if asset.scan_template?.conflict}
+                <span class="block"><ConflictMark /> Its template was chosen by a tie between categories as close to it as each other.
+                <a class="underline" href="/categories">Name a template on one of them</a> to settle it.</span>
+              {/if}
+            </dd>
+          {/if}
+          {#if asset.label_template?.conflict && session.can('labels.print')}
+            <dt class="font-medium">Label template</dt>
+            <dd>
+              <ConflictMark label="Label template chosen by a tie between categories" /> Chosen by a tie between categories as close to it as
+              each other. <a class="underline" href="/categories">Name a template on one of them</a> to settle it.
+            </dd>
+          {/if}
+          {#each asset.effective_fields as e (e.field.id)}
+            <dt class="font-medium">{e.field.label}</dt>
+            <dd>
+              {#if asset.field_values[e.field.key]}
+                {@const value = asset.field_values[e.field.key]!}
+                {#if e.field.validation_type === 'url' && isWebURL(value)}
+                  <a class="underline" href={value} rel="noopener noreferrer" target="_blank">{value}</a>
+                {:else if e.field.validation_type === 'select'}
+                  {e.field.options?.choices.find((c) => c.value === value)?.label ?? value}
+                {:else}
+                  {value}
+                {/if}
+              {:else}
+                <span class="text-zinc-600 dark:text-zinc-400">{e.is_required ? 'Missing' : '—'}</span>
+              {/if}
+            </dd>
+          {/each}
+          {#each asset.generator_keys as k (k.generator_type)}
+            <dt class="font-medium">{generatorName(k.generator_type)}</dt>
+            <dd class="font-mono">{k.assigned_code}</dd>
+          {/each}
+        </dl>
+        {#if keptValues(asset.field_values, asset.effective_fields).length}
+          <details class="mt-4 text-sm">
+            <summary class="cursor-pointer">Values kept from former categories</summary>
+            <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+              {#each keptValues(asset.field_values, asset.effective_fields) as [key, value] (key)}
+                <dt class="font-mono">{key}</dt>
+                <dd>{value}</dd>
+              {/each}
+            </dl>
+          </details>
         {/if}
       </section>
-    {/if}
-
-    {#if (asset.lendable || asset.loan) && !archived}
-      <LoanPanel {asset} onchange={assetChanged} />
-    {/if}
-
-    {#if contents.length}
-      <section class="card" aria-labelledby="contents-heading">
-        <h2 id="contents-heading" class="mb-3 text-lg font-semibold">Contents</h2>
-        <ul class="space-y-1 text-sm">
-          {#each contents as l (l.id)}
-            <li><a class="underline" href="/assets/{encodeURIComponent(l.asset.id)}">{l.asset.name}</a>{#if l.asset.archived}<span class="text-xs text-zinc-600 dark:text-zinc-400"> (archived)</span>{/if}</li>
-          {/each}
-        </ul>
-      </section>
-    {/if}
-
-    <section class="card" aria-labelledby="details-heading">
-      <h2 id="details-heading" class="mb-3 text-lg font-semibold">Details</h2>
-      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-        <dt class="font-medium">Where</dt>
-        <dd>
+      <LinksPanel {asset} onchange={assetChanged} />
+      {#if contents.length}
+        <section class="card" aria-labelledby="contents-heading">
+          <h2 id="contents-heading" class="mb-3 text-lg font-semibold">Contents</h2>
+          <ul class="space-y-1 text-sm">
+            {#each contents as l (l.id)}
+              <li><a class="underline" href="/assets/{encodeURIComponent(l.asset.id)}">{l.asset.name}</a>{#if l.asset.archived}<span class="text-xs text-zinc-600 dark:text-zinc-400"> (archived)</span>{/if}</li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+      {#if history.length}
+        <section class="card" aria-labelledby="history-heading">
+          <h2 id="history-heading" class="mb-3 text-lg font-semibold">History</h2>
+          <ul class="space-y-2 text-sm">
+            {#each history as e (e.id)}
+              <li>
+                <span class="font-medium">{describeEvent(e)}</span>
+                {#if e.payload.changes?.length}
+                  <ul class="list-disc pl-5">
+                    {#each e.payload.changes as c, i (i)}<li>{describeChange(c, e.kind)}</li>{/each}
+                  </ul>
+                {/if}
+                <span class="block text-xs text-zinc-600 dark:text-zinc-400">
+                  {when(e.created_at)}{e.payload.actor ? ` · ${actorName(e.payload.actor, session.user?.id)}` : ''}
+                </span>
+              </li>
+            {/each}
+          </ul>
+          {#if olderHistory}
+            <button type="button" class="btn-secondary mt-3" onclick={showOlder}>Show older</button>
+          {/if}
+        </section>
+      {/if}
+    </div>
+    <aside class="space-y-6" aria-label="About it">
+      <section class="card" aria-labelledby="where-heading">
+        <h2 id="where-heading" class="mb-2 text-lg font-semibold">Where it is</h2>
+        <p class="flex flex-wrap items-center gap-x-1 text-sm">
           {#if asset.location.length}
-            {#each asset.location as place, i (place.id)}{#if i > 0}{' › '}{/if}<a class="underline" href="/assets/{encodeURIComponent(place.id)}">{place.name}</a>{/each}
-            {' '}<a class="underline" href="/assets/{encodeURIComponent(asset.location.at(-1)!.id)}/scene?show={encodeURIComponent(id)}">Show in place</a>
+            {#each asset.location as place, i (place.id)}{#if i > 0}<span aria-hidden="true">›</span>{/if}<a class="inline-flex min-h-11 items-center underline" href="/assets/{encodeURIComponent(place.id)}">{place.name}</a>{/each}
           {:else}
             <span class="text-zinc-600 dark:text-zinc-400">Not set</span>
           {/if}
+        </p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {#if asset.location.length}<a class="btn-secondary" href="/assets/{encodeURIComponent(asset.location.at(-1)!.id)}/scene?show={encodeURIComponent(id)}">Show in place</a>{/if}
           {#if !archived && locationType && session.canOn(asset.scopes, 'assets.write')}
-            {' '}<button type="button" class="inline-flex min-h-11 min-w-11 items-center underline" aria-expanded={moving} onclick={() => (moving = !moving)}>{asset.location.length ? 'Move' : 'Set where it is'}</button>
-            {#if moving}
-              <div class="mt-2">
-                <LocationPicker id="move" value={asset.location.at(-1) ?? null} exclude={asset.asset.id} onchange={move} />
-              </div>
-            {/if}
+            <button type="button" class="btn-secondary" aria-expanded={moving} onclick={() => (moving = !moving)}>{asset.location.length ? 'Move' : 'Set where it is'}</button>
           {/if}
-        </dd>
-        <dt class="font-medium">Categories</dt>
-        <dd class="flex flex-wrap gap-1">
-          {#each asset.categories as c (c.id)}<CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />{/each}
-        </dd>
-        {#if asset.resolved_icon}
-          {@const icon = asset.resolved_icon}
-          <dt class="font-medium">Icon</dt>
-          <dd>
-            {#if icon.from === 'asset'}
-              Its own, <span class="font-mono">{plainIcon(icon)}</span>{#if icon.missing}: no icon is drawn by that name any more, so it shows as unknown{/if}.
-            {:else}
-              From <a class="underline" href="/categories/{encodeURIComponent(icon.source_category_id ?? '')}">{icon.source_category_name}</a>.
-            {/if}
-            {#if paramsNote(icon)}<span data-icon-params>{paramsNote(icon)}</span>{/if}
-            {#if textsNote(icon)}<span data-icon-texts>{textsNote(icon)}</span>{/if}
-            {#if stateNote(icon)}<span data-icon-state>{stateNote(icon)}</span>{/if}
-          </dd>
-        {/if}
-        {#if asset.scopes && !(asset.scopes.length === 1 && asset.scopes[0] === DEFAULT_SCOPE)}
-          <dt class="font-medium">Scopes</dt>
-          <dd>{asset.scopes.join(', ')}</dd>
-        {/if}
-        {#if session.canOn(asset.scopes, 'assets.scan')}
-          <dt class="font-medium">Scan page</dt>
-          <dd>
-            <a class="inline-flex min-h-11 items-center underline" href="/scan/{encodeURIComponent(asset.asset.id)}">What scanning it shows</a>
-            {#if asset.scan_template?.conflict}
-              <span class="block"><ConflictMark /> Its template was chosen by a tie between categories as close to it as each other.
-              <a class="underline" href="/categories">Name a template on one of them</a> to settle it.</span>
-            {/if}
-          </dd>
-        {/if}
-        {#if asset.label_template?.conflict && session.can('labels.print')}
-          <dt class="font-medium">Label template</dt>
-          <dd>
-            <ConflictMark label="Label template chosen by a tie between categories" /> Chosen by a tie between categories as close to it as
-            each other. <a class="underline" href="/categories">Name a template on one of them</a> to settle it.
-          </dd>
-        {/if}
-        {#each asset.effective_fields as e (e.field.id)}
-          <dt class="font-medium">{e.field.label}</dt>
-          <dd>
-            {#if asset.field_values[e.field.key]}
-              {@const value = asset.field_values[e.field.key]!}
-              {#if e.field.validation_type === 'url' && isWebURL(value)}
-                <a class="underline" href={value} rel="noopener noreferrer" target="_blank">{value}</a>
-              {:else if e.field.validation_type === 'select'}
-                {e.field.options?.choices.find((c) => c.value === value)?.label ?? value}
-              {:else}
-                {value}
-              {/if}
-            {:else}
-              <span class="text-zinc-600 dark:text-zinc-400">{e.is_required ? 'Missing' : '—'}</span>
-            {/if}
-          </dd>
-        {/each}
-        {#each asset.generator_keys as k (k.generator_type)}
-          <dt class="font-medium">{generatorName(k.generator_type)}</dt>
-          <dd class="font-mono">{k.assigned_code}</dd>
-        {/each}
-      </dl>
-      {#if keptValues(asset.field_values, asset.effective_fields).length}
-        <details class="mt-4 text-sm">
-          <summary class="cursor-pointer">Values kept from former categories</summary>
-          <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-            {#each keptValues(asset.field_values, asset.effective_fields) as [key, value] (key)}
-              <dt class="font-mono">{key}</dt>
-              <dd>{value}</dd>
-            {/each}
-          </dl>
-        </details>
-      {/if}
-    </section>
-
-    <PhotosPanel {asset} onchange={assetChanged} />
-    <LinksPanel {asset} onchange={assetChanged} />
-
-    {#if !archived && asset.actions?.length && session.canOn(asset.scopes, 'assets.act')}
-      <section class="card" aria-labelledby="actions-heading">
-        <h2 id="actions-heading" class="mb-3 text-lg font-semibold">Actions</h2>
-        <ActionButtons assetId={id} actions={asset.actions} />
-      </section>
-    {/if}
-
-    {#if !archived && offeredFlows.length}
-      <section class="card" aria-labelledby="flows-heading">
-        <h2 id="flows-heading" class="mb-3 text-lg font-semibold">Flows</h2>
-        <div class="flex flex-wrap gap-2">
-          {#each offeredFlows as f (f.slug)}<a class="btn-secondary" href={flowHref(f.slug, id)}>{f.name}</a>{/each}
         </div>
-      </section>
-    {/if}
-
-    {#if !archived && session.user}<LabelActions assetIds={[id]} spool />{/if}
-
-    {#if history.length}
-      <section class="card" aria-labelledby="history-heading">
-        <h2 id="history-heading" class="mb-3 text-lg font-semibold">History</h2>
-        <ul class="space-y-2 text-sm">
-          {#each history as e (e.id)}
-            <li>
-              <span class="font-medium">{describeEvent(e)}</span>
-              {#if e.payload.changes?.length}
-                <ul class="list-disc pl-5">
-                  {#each e.payload.changes as c, i (i)}<li>{describeChange(c, e.kind)}</li>{/each}
-                </ul>
-              {/if}
-              <span class="block text-xs text-zinc-600 dark:text-zinc-400">
-                {when(e.created_at)}{e.payload.actor ? ` · ${actorName(e.payload.actor, session.user?.id)}` : ''}
-              </span>
-            </li>
-          {/each}
-        </ul>
-        {#if olderHistory}
-          <button type="button" class="btn-secondary mt-3" onclick={showOlder}>Show older</button>
+        {#if moving}
+          <div class="mt-3">
+            <LocationPicker id="move" value={asset.location.at(-1) ?? null} exclude={asset.asset.id} onchange={move} />
+          </div>
         {/if}
       </section>
-    {/if}
+      {#if asset.asset.stock}
+        {@const stock = asset.asset.stock}
+        <section class="card" aria-labelledby="stock-heading">
+          <h2 id="stock-heading" class="mb-1 text-lg font-semibold">Stock</h2>
+          <p class="text-sm">
+            <strong>{stock.is_running_low ? 'Running low.' : 'In stock.'}</strong>
+            {amount(stock.quantity, stock.unit)} left{stock.low_stock_threshold
+              ? `; flagged automatically below ${amount(stock.low_stock_threshold, stock.unit)}`
+              : ''}.
+          </p>
+          {#if session.canOn(asset.scopes, 'stock.record') && !archived}
+            <div class="mt-3 flex flex-wrap items-end gap-2">
+              <div>
+                <label class="label" for="stock-amount">How many{stock.unit ? ` (${stock.unit})` : ''}</label>
+                <input id="stock-amount" class="input w-28" type="number" min="1" step="1" bind:value={howMany} />
+              </div>
+              <button type="button" class="btn-secondary" disabled={busy} onclick={() => adjust(-1)}>Use</button>
+              <button type="button" class="btn-secondary" disabled={busy} onclick={() => adjust(1)}>Add</button>
+              {#if stock.is_running_low}
+                <button type="button" class="btn-secondary" disabled={busy} onclick={() => setRunningLow(false)}>Mark restocked</button>
+              {:else}
+                <button type="button" class="btn-secondary" disabled={busy} onclick={() => setRunningLow(true)}>Mark running low</button>
+              {/if}
+            </div>
+          {/if}
+        </section>
+      {/if}
+      {#if (asset.lendable || asset.loan) && !archived}
+        <LoanPanel {asset} onchange={assetChanged} />
+      {/if}
+      {#if !archived && session.user}<LabelActions assetIds={[id]} spool />{/if}
+      {#if !archived && asset.actions?.length && session.canOn(asset.scopes, 'assets.act')}
+        <section class="card" aria-labelledby="actions-heading">
+          <h2 id="actions-heading" class="mb-3 text-lg font-semibold">Actions</h2>
+          <ActionButtons assetId={id} actions={asset.actions} />
+        </section>
+      {/if}
+      {#if !archived && offeredFlows.length}
+        <section class="card" aria-labelledby="flows-heading">
+          <h2 id="flows-heading" class="mb-3 text-lg font-semibold">Flows</h2>
+          <div class="flex flex-wrap gap-2">
+            {#each offeredFlows as f (f.slug)}<a class="btn-secondary" href={flowHref(f.slug, id)}>{f.name}</a>{/each}
+          </div>
+        </section>
+      {/if}
+      {#if !archived && (session.canOn(asset.scopes, 'assets.write') || session.canOn(asset.scopes, 'assets.delete'))}
+        <section class="card" aria-labelledby="more-heading">
+          <h2 id="more-heading" class="mb-3 text-lg font-semibold">More</h2>
+          <div class="flex flex-wrap gap-2">
+            {#if session.canOn(asset.scopes, 'assets.write')}
+              <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(id)}" title="A new asset like this one, to change before it is created">Duplicate…</a>
+              {#if locationType}<a class="btn-secondary" href="/assets/new?in={encodeURIComponent(id)}" title="A new asset, in this one">Add something inside…</a>{/if}
+            {/if}
+            {#if session.canOn(asset.scopes, 'assets.delete')}
+              <ConfirmButton label="Archive" question="Archive this asset? Its codes become free for reuse." onconfirm={archive} />
+            {/if}
+          </div>
+        </section>
+      {/if}
+    </aside>
   </div>
 {:else if !session.user}
   <SignInToSee />

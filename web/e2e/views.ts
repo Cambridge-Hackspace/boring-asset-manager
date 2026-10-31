@@ -104,7 +104,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/assets/${screws.asset.asset.id}`, ''],
     [`/assets/${screws.asset.asset.id}/edit`, 'Edit asset'],
     [`/scan/${screws.asset.asset.id}`, ''],
-    ['/scan', 'Scan'],
+    ['/scan', 'Scan a label'],
     ['/assets?archived=true', 'Assets'],
     ['/assets?condition=problem', 'Assets'],
     [`/assets/${archived.asset.asset.id}`, ''],

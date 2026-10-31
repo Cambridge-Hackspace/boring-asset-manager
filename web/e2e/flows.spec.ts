@@ -113,7 +113,7 @@ test.describe('the flow editor', () => {
     await expect(page.getByRole('img', { name: `QR code opening ${flowName}` })).toBeVisible();
 
     await page.goto('/flows');
-    await page.getByRole('link', { name: new RegExp(flowName) }).first().click();
+    await page.getByRole('link', { name: `Run ${flowName}` }).click();
     await page.getByLabel('What is it?').fill(unique('Parcel'));
     await page.getByLabel('Anything else?').fill('fragile');
     await page.getByRole('button', { name: 'Next' }).click();

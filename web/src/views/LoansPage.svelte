@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SegmentedControl from '../components/SegmentedControl.svelte';
   import { stack } from '../lib/stack';
   import { onMount } from 'svelte';
   import { request } from '../lib/api';
@@ -62,14 +63,19 @@
 
 {#if canLend}
   <div class="mb-4 flex flex-wrap items-end gap-3">
-    <div>
-      <label class="label" for="loans-state">Show</label>
-      <select id="loans-state" class="input" bind:value={show} onchange={load}>
-        <option value="open">Lent out now</option>
-        <option value="overdue">Overdue</option>
-        <option value="">All loans, returned too</option>
-      </select>
-    </div>
+    <SegmentedControl
+      label="Show"
+      options={[
+        { value: 'open', label: 'Lent out now' },
+        { value: 'overdue', label: 'Overdue' },
+        { value: '', label: 'All, returned too' },
+      ]}
+      value={show}
+      onchange={(v) => {
+        show = v;
+        void load();
+      }}
+    />
     <div>
       <label class="label" for="loans-person">Borrower</label>
       <select id="loans-person" class="input" bind:value={borrowerId} onchange={load}>
