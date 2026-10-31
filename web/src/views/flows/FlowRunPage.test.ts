@@ -42,12 +42,12 @@ describe('FlowRunPage', () => {
   it('rebuilds the form for the category chosen, and files it', async () => {
     let category = '';
     const { sent } = fakeApi({
-      'POST /flows/leave/runs': () => ({ status: 201, body: view(0, choose) }),
+      'POST /flows/leave/runs': () => ({ status: 201, body: view(0, choose, { progress: { step: 1, of: 2 } }) }),
       'POST /flows/leave/runs/r1': (body) => {
         const b = body as { step: string; category_id?: string };
         if (b.step === 'kind') {
           category = b.category_id!;
-          return view(1, formFor(category === 'long'));
+          return view(1, formFor(category === 'long'), { progress: { step: 2, of: 2 } });
         }
         return view(4, {
           step: 'done',
@@ -63,10 +63,13 @@ describe('FlowRunPage', () => {
     render(FlowRunPage, { params: { slug: 'leave' } });
 
     expect((await screen.findByRole('heading', { name: 'What are you leaving?' })).ownerDocument.activeElement?.textContent).toContain('What are you leaving?');
+    // How far along, as the server counts it (#166).
+    expect(screen.getByText(/· Step 1 of 2$/)).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Long boards' }));
 
     // Long boards ask until, with its help, and the owner, defaulted.
     await screen.findByRole('heading', { name: 'About it' });
+    expect(screen.getByText(/· Step 2 of 2$/)).toBeTruthy();
     expect(screen.getByLabelText('Leave until')).toBeTruthy();
     expect(screen.getByText("When you'll take it home")).toBeTruthy();
     expect((screen.getByLabelText(/Owner/) as HTMLInputElement).value).toBe('Sam');

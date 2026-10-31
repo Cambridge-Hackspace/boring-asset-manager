@@ -254,6 +254,9 @@ type FlowRunState struct {
 	// Progress counts, by step, how much of its work a step has done, so a
 	// step tried again after failing part way does not do it twice.
 	Progress map[string]int `json:"progress,omitempty"`
+	// Answered counts the steps the person has answered that ask something,
+	// for "step 2 of 3" (#166).
+	Answered int `json:"answered,omitempty"`
 }
 
 // CreateFlowRun starts a run of a flow by a user.
@@ -293,7 +296,7 @@ func (s *Store) GetFlowRun(id string) (*models.FlowRun, error) {
 	if err := json.Unmarshal([]byte(state), &st); err != nil {
 		return nil, fmt.Errorf("reading run %s: %w", id, err)
 	}
-	r.Step, r.Values, r.Done, r.Finished, r.Fields, r.Progress = st.Step, st.Values, st.Done, st.Finished, st.Fields, st.Progress
+	r.Step, r.Values, r.Done, r.Finished, r.Fields, r.Progress, r.Answered = st.Step, st.Values, st.Done, st.Finished, st.Fields, st.Progress, st.Answered
 	if r.Done == nil {
 		r.Done = []models.FlowDone{}
 	}

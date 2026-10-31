@@ -170,6 +170,14 @@ export interface RunView {
   prompt: Prompt;
   /** Why the last answer was refused; the run is as it was. */
   error?: string;
+  /** How far along it is (#166): left out on Done, and on a step that asks nothing and failed. */
+  progress?: Progress;
+}
+
+/** "Step 2 of 3": the steps that ask something, answered and this one, of those and the ones ahead. */
+export interface Progress {
+  step: number;
+  of: number;
 }
 
 /** An answer to the step a run is on, naming it. */

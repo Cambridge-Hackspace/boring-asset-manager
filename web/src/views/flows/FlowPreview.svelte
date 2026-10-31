@@ -2,10 +2,17 @@
   // A step as a phone shows it, beside the editor (README §6.7): drawn here
   // from its settings, with sample answers where a run would have its own.
   import type { Category, Field } from '../../lib/models';
-  import type { Step } from '../../lib/flows';
+  import type { Progress, Step } from '../../lib/flows';
+  import RunProgress from '../../components/RunProgress.svelte';
   import { kindLabels } from '../../lib/flowEditor';
 
-  let { step, flowName, categories, fields }: { step: Step | null; flowName: string; categories: Category[]; fields: Field[] } = $props();
+  let {
+    step,
+    flowName,
+    categories,
+    fields,
+    progress = null,
+  }: { step: Step | null; flowName: string; categories: Category[]; fields: Field[]; progress?: Progress | null } = $props();
 
   // The fields a form asks, as its settings order and name them.
   const asked = $derived.by(() => {
@@ -25,7 +32,7 @@
     <p class="text-zinc-600 dark:text-zinc-400">Choose a step to see it.</p>
   {:else}
     <div class="space-y-3" inert>
-      <p class="text-xs font-medium tracking-wide text-zinc-600 uppercase dark:text-zinc-400">{flowName || 'Flow'}</p>
+      <RunProgress flowName={flowName || 'Flow'} {progress} />
       <p class="text-2xl font-bold">{step.title || (step.kind === 'done' ? 'Done' : step.kind === 'confirm' ? 'Is this right?' : flowName || kindLabels[step.kind])}</p>
       {#if step.text}<p>{step.text}</p>{/if}
       {#if step.kind === 'choose_category'}

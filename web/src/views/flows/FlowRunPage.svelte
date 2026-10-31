@@ -8,6 +8,7 @@
   import { formDefaults, inputType, missing, runRequest, runsPath, scannedCode, type Prompt, type RunView } from '../../lib/flows';
   import CodeScanner from '../../components/CodeScanner.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import RunProgress from '../../components/RunProgress.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const slug = $derived(params.slug ?? '');
@@ -140,7 +141,7 @@
 </script>
 
 <div class="mx-auto max-w-xl space-y-5 text-lg">
-  <p class="font-mono text-sm tracking-wide text-zinc-600 uppercase dark:text-zinc-400">{flowName}</p>
+  <RunProgress {flowName} progress={view?.progress} />
 
   {#if !prompt}
     {#if busy}<p role="status">Starting…</p>{/if}

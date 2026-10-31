@@ -137,7 +137,7 @@ func (s *Server) mayRun(r *http.Request, f *models.Flow) (bool, error) {
 
 // runState is a run's state as the store keeps it.
 func runState(run *models.FlowRun) store.FlowRunState {
-	return store.FlowRunState{Step: run.Step, Values: run.Values, Done: run.Done, Finished: run.Finished, Fields: run.Fields, Progress: run.Progress}
+	return store.FlowRunState{Step: run.Step, Values: run.Values, Done: run.Done, Finished: run.Finished, Fields: run.Fields, Progress: run.Progress, Answered: run.Answered}
 }
 
 // startRun begins a run of a flow by the person making the request, and
@@ -210,6 +210,9 @@ type FlowAnswer struct {
 	Code    string `json:"code,omitempty"`
 	// Create: the code of the place it is put, when it is scanned.
 	PlaceCode string `json:"place_code,omitempty"`
+	// given is set on an answer the server gives for the person, as when a
+	// run started from an asset finds it: not counted as a step they took.
+	given bool
 }
 
 // answer takes an answer to the step a run is on, then does the steps that
@@ -235,6 +238,11 @@ func (f *flowRunner) answer(run *models.FlowRun, a FlowAnswer) (*models.FlowRun,
 	step := &d.Steps[st.Step]
 	stepErr := f.take(&st, step, a)
 	if stepErr == nil {
+		// A step that asks something, answered by the person: one more
+		// toward "step 2 of 3". Trying a failed Label again is not one.
+		if step.Asks() && !a.given {
+			st.Answered++
+		}
 		st, stepErr = f.advance(st)
 	}
 	if err := f.s.store.SaveFlowRun(run.ID, st); err != nil {

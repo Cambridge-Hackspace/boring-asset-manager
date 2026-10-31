@@ -37,6 +37,8 @@ test('flows: leave wood in one of two kinds, the form changing to fit, then coll
   // Leaving it: short boards ask only the owner; long ones ask until too.
   await page.goto(`/f/${leaveSlug}`);
   await expect(page.getByRole('heading', { name: 'What are you leaving?' })).toBeFocused();
+  // How far along: choosing, then the form; filing asks nothing (#166).
+  await expect(page.getByText(/· Step 1 of 2$/)).toBeVisible();
   await audit(page, 'choosing a category');
   await page.getByRole('button', { name: short }).click();
   await expect(page.getByRole('heading', { name: 'About it' })).toBeVisible();
@@ -44,6 +46,7 @@ test('flows: leave wood in one of two kinds, the form changing to fit, then coll
   await page.getByRole('button', { name: 'Start again' }).click();
   await page.getByRole('button', { name: long }).click();
   await expect(page.getByLabel('Leave until')).toBeVisible();
+  await expect(page.getByText(/· Step 2 of 2$/)).toBeVisible();
   await audit(page, 'the form');
   const name = unique('Oak');
   await page.getByLabel('What is it?').fill(name);
@@ -138,6 +141,8 @@ test('flows: scanning what was left offers Collect it, which starts with it foun
   await page.goto(`/scan/${assets[0].asset.id}`);
   await page.getByRole('link', { name: 'Collect from the bench' }).click();
   await expect(page.getByRole('heading', { name: 'Collect it?' })).toBeVisible();
+  // Found for them, so its one question is all there is: nothing to count.
+  await expect(page.getByText(/Step \d+ of/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Yes, go ahead' }).click();
   await expect(page.getByText(`Archived ${name}.`)).toBeVisible();
 });

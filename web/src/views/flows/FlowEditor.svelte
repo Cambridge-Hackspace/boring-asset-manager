@@ -8,7 +8,7 @@
   import { navigate } from '../../lib/router.svelte';
   import type { AssetAction, Category, EffectiveField, Field, Printer, PrinterPool, TemplateSummary } from '../../lib/models';
   import type { Definition, Flow, FlowProblem, Starter, StepKind } from '../../lib/flows';
-  import { addStep, addableKinds, checkFlow, kindHelp, kindLabels, moveStep, problemsOf, slugFrom } from '../../lib/flowEditor';
+  import { addStep, addableKinds, checkFlow, kindHelp, kindLabels, moveStep, previewProgress, problemsOf, slugFrom } from '../../lib/flowEditor';
   import CategoryPicker from '../../components/CategoryPicker.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import FlowStepEditor from './FlowStepEditor.svelte';
@@ -154,6 +154,8 @@
   }
 
   const flowProblems = $derived(problemsOf(problems));
+  // Counted as a run counts them, before any answer (#166).
+  const shownProgress = $derived(previewProgress(def.steps, selected));
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -287,8 +289,11 @@
     </div>
 
     <aside class="space-y-2 lg:sticky lg:top-4 lg:self-start" aria-label="Preview">
-      <p class="font-mono text-xs tracking-wide text-zinc-600 uppercase dark:text-zinc-400">Preview · step {selected + 1} of {def.steps.length}</p>
-      <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} {fields} />
+      <p class="font-mono text-xs tracking-wide text-zinc-600 uppercase dark:text-zinc-400">
+        Preview ·
+        {#if shownProgress}step {shownProgress.step} of {shownProgress.of}{:else if def.steps[selected]?.kind === 'done'}the end{:else}asks nothing, so a run does it and moves on{/if}
+      </p>
+      <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} {fields} progress={shownProgress} />
     </aside>
   </form>
 {/if}

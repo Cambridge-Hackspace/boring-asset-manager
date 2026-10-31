@@ -11,6 +11,8 @@ Open **Flows**, or scan the QR code on a flow's poster, and follow the steps. Ea
 - **Find** something already here: scan its code with the camera, type it, or let a barcode scanner type it; search for it; or pick it from a list.
 - **Confirm** what will happen before it does.
 
+Above each question it says how far along you are, such as *step 2 of 3*. A choice can bring in a question that only some answers ask, so the count can grow as you go.
+
 When it's done, it says what it did, and shows the label to put on it if it made one. **Start again** is for the next person.
 
 What a flow does, it does as you: it can only do what you're allowed to, and history records it as yours, made through the flow.
