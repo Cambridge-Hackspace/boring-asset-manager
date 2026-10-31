@@ -23,6 +23,7 @@
     type TreeNode,
   } from '../../lib/packages';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import ImportSection from './ImportSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -237,7 +238,7 @@
   </li>
 {/snippet}
 
-<h1 class="mb-4 text-2xl font-bold">Import &amp; export</h1>
+<PageHeader title="Import & export" lede="Categories, fields, templates and more as a package: to share with another instance, or to bring one in." />
 
 <ImportSection {tree} onimported={() => void load()} />
 

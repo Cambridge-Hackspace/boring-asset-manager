@@ -5,6 +5,7 @@
   import type { TemplateSummary } from '../../lib/models';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -39,10 +40,11 @@
   }
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Label templates</h1>
-  <a class="btn-primary" href="/templates/new">New template</a>
-</div>
+<PageHeader title="Label templates" lede="What a label looks like: its size, and what it prints of each asset.">
+  {#snippet actions()}
+    <a class="btn-primary" href="/templates/new">New template</a>
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 
 {#if loading}

@@ -11,6 +11,7 @@
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import SegmentedControl from '../components/SegmentedControl.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
+  import PageHeader from '../components/PageHeader.svelte';
   import FitWarnings from '../components/FitWarnings.svelte';
 
   // The spool (README §6.2): labels waiting to print, sorted onto templates
@@ -200,19 +201,20 @@
   const jobOf = (e: SpoolEntry) => (e.job?.state === 'sending' ? `Sending to ${e.job.target}` : `Waiting for ${e.job?.target}`);
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Print queue</h1>
-  <SegmentedControl
-    label="Show"
-    options={[
-      { value: 'waiting', label: 'Waiting' },
-      { value: 'jobs', label: 'Jobs' },
-      { value: 'printed', label: 'Printed' },
-    ]}
-    value={view}
-    onchange={show}
-  />
-</div>
+<PageHeader title="Print queue" lede="Labels waiting to print, sorted onto templates and printers; the jobs printing them; and those printed, to print again.">
+  {#snippet actions()}
+    <SegmentedControl
+      label="Show"
+      options={[
+        { value: 'waiting', label: 'Waiting' },
+        { value: 'jobs', label: 'Jobs' },
+        { value: 'printed', label: 'Printed' },
+      ]}
+      value={view}
+      onchange={show}
+    />
+  {/snippet}
+</PageHeader>
 
 <div class="mb-4 flex flex-wrap items-center gap-4 text-sm">
   {#if view !== 'jobs'}
