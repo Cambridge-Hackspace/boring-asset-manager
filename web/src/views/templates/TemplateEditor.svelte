@@ -29,6 +29,7 @@
   import CommandSearch from './editor/CommandSearch.svelte';
   import type { Command } from './editor/commands';
   import Dock from './editor/Dock.svelte';
+  import { panelSummaries } from './editor/summaries';
   import { Editor, provideEditor, toolNames, type Tool } from './editor/editor.svelte';
   import Icon from './editor/Icon.svelte';
   import LabelPanel from './editor/LabelPanel.svelte';
@@ -579,6 +580,8 @@
   }
   onDestroy(() => clearTimeout(hintTimer));
 
+  const summaries = $derived(panelSummaries(editor.doc, editor.selected, editor.changes.done.length));
+
   // The panels' width, dragged by their edge (or moved with the arrow keys
   // there), within what leaves the canvas room, and remembered.
   let panelsWant = $state(storedPanels());
@@ -624,7 +627,7 @@
   <p role="status" class="p-4 text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else}
   <!-- On a phone, the parts stack and the page scrolls: tools, label, panels. -->
-  <div class="flex flex-col bg-white text-zinc-900 md:h-full dark:bg-zinc-950 dark:text-zinc-100">
+  <div data-dense class="flex flex-col bg-white text-zinc-900 md:h-full dark:bg-zinc-950 dark:text-zinc-100">
     <!-- Canvas only hides the rest, keeping it as it was, not removing it. -->
     <div class="contents" hidden={editor.canvasOnly}>
       <div class="flex h-11 shrink-0 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-800">
@@ -716,12 +719,12 @@
               // Layers above Properties, which grows as something is
               // selected, so the list does not move under the pointer.
               { id: 'overview', title: 'Overview', content: overview },
-              { id: 'layers', title: 'Layers', content: layers },
-              { id: 'properties', title: 'Properties', content: properties },
+              { id: 'layers', title: 'Layers', summary: summaries.layers, content: layers },
+              { id: 'properties', title: 'Properties', summary: summaries.properties, content: properties },
               { id: 'arrange', title: 'Arrange', content: arrange },
-              { id: 'history', title: 'History', content: history },
-              { id: 'grid', title: 'Grid and guides', content: gridAndGuides },
-              { id: 'label', title: 'Label', content: label },
+              { id: 'history', title: 'History', summary: summaries.history, content: history },
+              { id: 'grid', title: 'Grid and guides', summary: summaries.grid, content: gridAndGuides },
+              { id: 'label', title: 'Label', summary: summaries.label, content: label },
               { id: 'printer', title: 'Printer', content: printer },
               { id: 'preview', title: 'Preview data', content: preview },
             ]}

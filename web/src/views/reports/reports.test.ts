@@ -68,7 +68,11 @@ describe('ReportEditor', () => {
     expect(((await screen.findByLabelText('Name')) as HTMLInputElement).value).toBe('Running low');
     expect((screen.getByRole('checkbox', { name: /running low/ }) as HTMLInputElement).checked).toBe(true);
 
+    // Its categories, chosen in the picker.
+    await fireEvent.click(screen.getByRole('button', { name: 'Choose categories' }));
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Filament' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.getByRole('button', { name: 'Remove Filament' })).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Add column' }));
     await fireEvent.input(screen.getByLabelText('Heading of column 3'), { target: { value: 'Where' } });
     await fireEvent.input(screen.getByLabelText('What column 3 shows'), { target: { value: '{{asset.location}}' } });

@@ -236,6 +236,19 @@ describe('UsersPage', () => {
     await screen.findByText('bo@hackspace.org is now shown as Bo Diddley.');
     expect(sent.find((r) => r.path === '/users/u2/name')!.body).toEqual({ name: 'Bo Diddley' });
   });
+
+  it('finds someone by name or email', async () => {
+    api(() => ({}));
+    render(UsersPage, { params: {} });
+    await screen.findByRole('cell', { name: 'bo@hackspace.org' });
+    const find = screen.getByRole('searchbox', { name: 'Find someone' });
+    await fireEvent.input(find, { target: { value: 'BO' } });
+    expect(screen.queryByRole('cell', { name: /me@hackspace.org/ })).toBeNull();
+    expect(screen.getByRole('cell', { name: 'bo@hackspace.org' })).toBeTruthy();
+    await fireEvent.input(find, { target: { value: 'me@' } });
+    expect(screen.queryByRole('cell', { name: 'bo@hackspace.org' })).toBeNull();
+    expect(screen.getByRole('cell', { name: /me@hackspace.org/ })).toBeTruthy();
+  });
 });
 
 describe('AccountPage', () => {

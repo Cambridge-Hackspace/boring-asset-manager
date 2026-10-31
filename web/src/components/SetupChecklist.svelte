@@ -82,13 +82,13 @@
       <h2 id="setup-heading" class="text-lg font-semibold">Setting up</h2>
       <button type="button" class="btn-secondary text-xs" onclick={hide}>Hide</button>
     </div>
-    <ol class="space-y-1 text-sm">
+    <ol class="text-sm">
       {#each steps as s (s.href + s.label)}
-        <li class="flex items-start gap-2">
+        <li class="flex min-h-7 items-center gap-2">
           <span aria-hidden="true" class={s.done ? 'text-green-700 dark:text-green-400' : 'text-zinc-500'}>{s.done ? '✓' : '○'}</span>
           <span>
             {#if s.done}<span class="text-zinc-600 line-through dark:text-zinc-400">{s.label}</span><span class="sr-only"> (done)</span>
-            {:else}<a class="underline" href={s.href}>{s.label}</a>{/if}{#if s.optional}<span class="text-zinc-600 dark:text-zinc-400"> (optional)</span>{/if}
+            {:else}<a class="inline-flex min-h-11 items-center underline" href={s.href}>{s.label}</a>{/if}{#if s.optional}<span class="text-zinc-600 dark:text-zinc-400"> (optional)</span>{/if}
           </span>
         </li>
       {/each}

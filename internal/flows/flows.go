@@ -290,6 +290,23 @@ func (d *Definition) Next(i int, v Values) int {
 	return len(d.Steps)
 }
 
+// Asks reports whether a step is a screen that asks the person something:
+// not Done, and not one that does its work as soon as it is reached.
+func (s *Step) Asks() bool { return s.Kind != KindDone && !s.Auto() }
+
+// Ahead counts the steps after i that ask something and whose condition
+// holds on v (#166). A step whose condition depends on an answer not yet
+// given counts once it holds, so a run's total can grow as it goes.
+func (d *Definition) Ahead(i int, v Values) int {
+	n := 0
+	for j := i + 1; j < len(d.Steps); j++ {
+		if d.Steps[j].Asks() && d.Steps[j].When.Holds(v) {
+			n++
+		}
+	}
+	return n
+}
+
 // Auto reports whether a step does its work as soon as it is reached,
 // asking nothing.
 func (s *Step) Auto() bool {

@@ -62,5 +62,14 @@ describe('LoansPage', () => {
     expect(String(fetchMock.mock.calls.at(-1)![0])).toContain('state=open');
     await fireEvent.change(screen.getByLabelText('Borrower'), { target: { value: 'bo' } });
     await vi.waitFor(() => expect(String(fetchMock.mock.calls.at(-1)![0])).toContain('borrower_id=bo'));
+
+    // Which loans, as one row of buttons, the one shown pressed.
+    const show = screen.getByRole('group', { name: 'Show' });
+    expect(within(show).getByRole('button', { name: 'Lent out now' }).getAttribute('aria-pressed')).toBe('true');
+    await fireEvent.click(within(show).getByRole('button', { name: 'Overdue' }));
+    await vi.waitFor(() => expect(String(fetchMock.mock.calls.at(-1)![0])).toContain('state=overdue'));
+    expect(within(show).getByRole('button', { name: 'Overdue' }).getAttribute('aria-pressed')).toBe('true');
+    await fireEvent.click(within(show).getByRole('button', { name: 'All, returned too' }));
+    await vi.waitFor(() => expect(String(fetchMock.mock.calls.at(-1)![0])).not.toContain('state='));
   });
 });

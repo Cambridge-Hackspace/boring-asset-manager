@@ -5,7 +5,7 @@ The **Print queue** (the spool, to the API) holds labels waiting to be printed. 
 ## Adding labels
 
 - On the asset list, **Add all to the print queue** adds every asset the filters show, and with some ticked, **Add to the print queue** adds those.
-- On a category's page, **Add its assets to the print queue** adds its active assets, with its subcategories' unless you untick that.
+- On a category's **Labels** tab, **Add its assets to the print queue** adds its active assets, with its subcategories' unless you untick that.
 - An asset's page and its scan page each have **Add its label to the print queue**.
 - Making an asset, or importing a CSV file, can add the new assets' labels too. The choice starts ticked and remembers what you chose last.
 
@@ -13,7 +13,7 @@ An asset's label already waiting with the same template is not added twice. Arch
 
 ## Templates and printers
 
-Each label takes a template its category names, under **Labels** on the category's page; a subcategory takes its parent's unless it names its own. A category can name several, in order of preference, such as the same design for 29 mm and 62 mm tape: each label takes the first that suits the printer it goes to. If a printer's roll changes, waiting labels move to another of their category's templates that suits it; a template you chose by hand stays. When only one printer suits that template, the label goes to it; when only one pool does, and holds every printer that suits it, the label goes to the pool.
+Each label takes a template its category names, on the category's **Labels** tab; a subcategory takes its parent's unless it names its own. A category can name several, in order of preference, such as the same design for 29 mm and 62 mm tape: each label takes the first that suits the printer it goes to. If a printer's roll changes, waiting labels move to another of their category's templates that suits it; a template you chose by hand stays. When only one printer suits that template, the label goes to it; when only one pool does, and holds every printer that suits it, the label goes to the pool.
 
 In the print queue, labels are grouped by printer and template. Tick some, or a whole group, then set their template, printer or copies together. Only printers and pools a template suits are offered, and only templates a printer or pool takes. **Download** stands in for a printer, for labels printed on sheets.
 

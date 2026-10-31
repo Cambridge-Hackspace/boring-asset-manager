@@ -89,7 +89,7 @@
   }
 </script>
 
-<section class="card mb-6 max-w-2xl space-y-3" aria-labelledby="assistants-heading">
+<section class="card space-y-3" aria-labelledby="assistants-heading">
   <div class="flex flex-wrap items-center justify-between gap-2">
     <h2 id="assistants-heading" class="text-lg font-semibold">Assistants</h2>
     {#if !creating && mcp}<button type="button" class="btn-secondary" onclick={() => ((creating = true), (made = null))}>New assistant</button>{/if}

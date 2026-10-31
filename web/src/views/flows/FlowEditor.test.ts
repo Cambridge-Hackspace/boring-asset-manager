@@ -54,29 +54,39 @@ function api(save: (body: unknown) => unknown) {
 }
 
 describe('FlowEditor', () => {
-  it('edits steps as cards, previews the one chosen, and says what stops saving beside its step', async () => {
+  it('opens one step at a time, previews it, and says what stops saving beside its step', async () => {
     const { sent } = api(() => ({ status: 400, body: { error: 'The flow cannot be saved', problems: [{ step: 'file', message: 'its steps use assets.write, which you do not hold' }] } }));
     render(FlowEditor, { params: { slug: 'leave' } });
     const steps = await screen.findByRole('list', { name: 'Steps' });
     expect(within(steps).getAllByRole('listitem')).toHaveLength(4);
 
-    // The form's card lists the union of the categories' fields; its
-    // preview shows them as a phone would.
-    await fireEvent.click(screen.getByRole('button', { name: 'Preview step 2' }));
+    // The first step starts open, and only it shows its settings.
+    expect(screen.getByRole('button', { name: '1. Choose category: What are you leaving?' }).getAttribute('aria-expanded')).toBe('true');
+    expect(within(steps).getAllByLabelText('Name')).toHaveLength(1);
+
+    // The form lists the union of the categories' fields; its preview
+    // shows them as a phone would.
+    await fireEvent.click(screen.getByRole('button', { name: '2. Form: About it' }));
+    expect(screen.getByRole('button', { name: '1. Choose category: What are you leaving?' }).getAttribute('aria-expanded')).toBe('false');
+    // Counted as a run counts them: Create and Done ask nothing.
+    expect(screen.getByText('Preview · step 2 of 2')).toBeTruthy();
     const preview = screen.getByRole('figure', { name: 'Preview, as a phone shows it' });
     await vi.waitFor(() => expect(preview.textContent).toContain('Until'));
     expect(preview.textContent).toContain('What is it?');
     await fireEvent.input(screen.getByLabelText('Label for Until'), { target: { value: 'Leave until' } });
     expect(preview.textContent).toContain('Leave until');
 
-    // Checked here first: a step whose name is taken.
-    await fireEvent.input(within(steps).getAllByLabelText('Name')[2]!, { target: { value: 'about' } });
+    // Checked here first: a step whose name is taken, said beside both
+    // steps, open or not.
+    await fireEvent.click(screen.getByRole('button', { name: '3. Create' }));
+    expect(screen.getByText('Preview · asks nothing, so a run does it and moves on')).toBeTruthy();
+    await fireEvent.input(within(steps).getByLabelText('Name'), { target: { value: 'about' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
     expect(await screen.findAllByText('Another step is named about.')).toHaveLength(2);
     expect(sent.some((r) => r.method === 'PUT')).toBe(false);
 
     // Then by the server, beside the step it names.
-    await fireEvent.input(within(steps).getAllByLabelText('Name')[2]!, { target: { value: 'file' } });
+    await fireEvent.input(within(steps).getByLabelText('Name'), { target: { value: 'file' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
     expect(await screen.findByText('its steps use assets.write, which you do not hold')).toBeTruthy();
     const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
@@ -95,6 +105,23 @@ describe('FlowEditor', () => {
     expect((screen.getByRole('button', { name: 'Move step 4 down' }) as HTMLButtonElement).disabled).toBe(true);
     await fireEvent.click(screen.getByRole('button', { name: 'Move step 4 up' }));
     expect(headings()[2]).toBe('3. Confirm: Is this right?');
+    // The step added opens, and stays open as it moves.
+    expect(screen.getByRole('button', { name: '3. Confirm: Is this right?' }).getAttribute('aria-expanded')).toBe('true');
+    // Moving another step past it keeps it open too.
+    await fireEvent.click(screen.getByRole('button', { name: 'Move step 2 down' }));
+    expect(screen.getByRole('button', { name: '2. Confirm: Is this right?' }).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('chooses its categories with the picker, and saves them', async () => {
+    const { sent } = api(() => ({ flow }));
+    render(FlowEditor, { params: { slug: 'leave' } });
+    await screen.findByRole('list', { name: 'Steps' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Long boards' }));
+    expect(screen.queryByRole('button', { name: 'Remove Long boards' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
+    expect(body.definition.category_ids).toEqual(['short']);
   });
 
   it('says it saved a new flow, once it opens at its address', async () => {

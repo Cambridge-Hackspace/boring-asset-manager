@@ -11,13 +11,15 @@ Open **Flows**, or scan the QR code on a flow's poster, and follow the steps. Ea
 - **Find** something already here: scan its code with the camera, type it, or let a barcode scanner type it; search for it; or pick it from a list.
 - **Confirm** what will happen before it does.
 
+Above each question it says how far along you are, such as *step 2 of 3*. A choice can bring in a question that only some answers ask, so the count can grow as you go.
+
 When it's done, it says what it did, and shows the label to put on it if it made one. **Start again** is for the next person.
 
 What a flow does, it does as you: it can only do what you're allowed to, and history records it as yours, made through the flow.
 
 ## Making a flow
 
-Whoever manages flows makes them on the **Flows** page, with **New flow**: choose the categories it files into or takes from, start from **Leave something** or **Collect it**, and adjust its steps. Each step is a card, in order; the preview beside them shows the step chosen as a phone shows it.
+Whoever manages flows makes them on the **Flows** page, with **New flow**: choose the categories it files into or takes from, start from **Leave something** or **Collect it**, and adjust its steps. The steps are listed in order, one open at a time; the preview beside them shows the open step as a phone shows it.
 
 - **Choose category** offers the flow's categories, or always uses one.
 - **Form** asks for the fields the chosen category records. For each field you can hide it, rename it, add help, give it a default such as `{user}` or `{today}`, make it required, and move it. A field the category requires is always asked. It can also ask for the thing's name, a photo, and questions of its own, used in names and text as `{what}`.

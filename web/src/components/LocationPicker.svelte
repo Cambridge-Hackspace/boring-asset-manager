@@ -47,7 +47,7 @@
 <div class="space-y-2">
   <p class="text-sm">
     {#if value}In <strong>{value.name}</strong>.
-      <button type="button" class="underline" onclick={() => pick(null)}>Not in anything</button>
+      <button type="button" class="inline-flex min-h-11 items-center underline" onclick={() => pick(null)}>Not in anything</button>
     {:else}Not set.{/if}
   </p>
   <div class="flex flex-wrap items-end gap-2">

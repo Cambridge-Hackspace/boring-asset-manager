@@ -16,7 +16,9 @@
 </script>
 
 {#if build}
-  <footer class="mx-auto max-w-7xl px-4 pt-2 pb-6 text-xs text-zinc-600 print:hidden dark:text-zinc-400">
-    {#if build.href}<a class="hover:underline" href={build.href} rel="noopener" target="_blank">{build.text}</a>{:else}{build.text}{/if}
+  <footer class="mt-12 bg-zinc-900 text-zinc-100 print:hidden dark:border-t-2 dark:border-zinc-700 dark:bg-zinc-950">
+    <div class="mx-auto flex min-h-14 max-w-7xl items-center px-4 font-mono text-xs">
+      {#if build.href}<a class="inline-flex min-h-11 items-center text-highlight underline underline-offset-4" href={build.href} rel="noopener" target="_blank">{build.text}</a>{:else}{build.text}{/if}
+    </div>
   </footer>
 {/if}

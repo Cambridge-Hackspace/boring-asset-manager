@@ -6,6 +6,7 @@
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import FitWarnings from '../../components/FitWarnings.svelte';
   import { driverName } from '../../lib/stock';
   import PrinterForm from './PrinterForm.svelte';
@@ -107,12 +108,13 @@
   const connLabel = (p: Printer) => `${p.connection.type}: ${p.connection.address}`;
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Printers</h1>
-  {#if canManage && editing !== 'new'}
-    <button type="button" class="btn-primary" onclick={() => (editing = 'new')} disabled={!drivers.length}>New printer</button>
-  {/if}
-</div>
+<PageHeader title="Printers" lede="The label printers BAM! sends to, the stock loaded in each, and pools that share labels among several.">
+  {#snippet actions()}
+    {#if canManage && editing !== 'new'}
+      <button type="button" class="btn-primary" onclick={() => (editing = 'new')} disabled={!drivers.length}>New printer</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 
 {#if editing === 'new'}

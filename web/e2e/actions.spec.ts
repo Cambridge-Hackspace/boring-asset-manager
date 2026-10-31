@@ -17,6 +17,7 @@ test('define an action, offer it on a category, and press it', async ({ signedIn
   const cabinet = await api.call('POST', '/categories', { name: unique('Cabinet') });
   const drawers = await api.call('POST', '/categories', { name: unique('Drawers'), parent_id: cabinet.category.id });
   await page.goto(`/categories/${cabinet.category.id}`);
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Links and actions' }).click();
   const section = page.getByRole('region', { name: 'Actions' });
   await section.getByRole('checkbox', { name: label }).check();
   await expect(section.getByRole('checkbox', { name: 'On its subcategories’ assets too' })).toBeChecked();

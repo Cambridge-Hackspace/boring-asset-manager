@@ -1,10 +1,46 @@
 @import 'tailwindcss';
+@import './fonts/fonts.css';
 
+/* The Supply look (#156): paper and ink, red for the one primary action on a
+   screen, yellow only behind ink. Zinc, which every view uses for its
+   neutrals, is redrawn warm at the same lightness as Tailwind's, so contrast
+   between any two shades is as it was. theme.test.ts checks the pairs. */
 @theme {
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --color-accent-500: #f59e0b;
-  --color-accent-600: #d97706;
-  --color-accent-700: #b45309;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: 'Space Grotesk', 'IBM Plex Sans', system-ui, sans-serif;
+  --color-zinc-50: #faf7f0;
+  --color-zinc-100: #f0ece1;
+  --color-zinc-200: #e5e0d5;
+  --color-zinc-300: #d6cfbf;
+  --color-zinc-400: #a39c8c;
+  --color-zinc-500: #78716a;
+  --color-zinc-600: #57534e;
+  --color-zinc-700: #44403c;
+  --color-zinc-800: #292624;
+  --color-zinc-900: #141413;
+  --color-zinc-950: #0b0b0a;
+  --color-action: #d41920;
+  --color-action-hover: #b8141a;
+  --color-highlight: #fce029;
+  /* Focus rings, and what was the amber accent. */
+  --color-accent-500: var(--bam-focus);
+  --color-accent-600: var(--bam-focus);
+  --color-accent-700: var(--bam-focus);
+  --shadow-hard: 4px 4px 0 0 var(--bam-shadow);
+  --shadow-hard-sm: 2px 2px 0 0 var(--bam-shadow);
+}
+
+/* What changes between the schemes, beyond the dark: variants. */
+:root {
+  --bam-focus: #1e3a8a;
+  --bam-shadow: #141413;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bam-focus: #8fb0ff;
+    --bam-shadow: #a39c8c;
+  }
 }
 
 @layer base {
@@ -14,8 +50,40 @@
   body {
     @apply bg-zinc-50 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
   }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-accent-600;
+    @apply outline-3 outline-offset-2 outline-accent-600;
+  }
+  /* Targets of at least 44 px (#156's gate), outside the editors' dense
+     controls ([data-dense], at least 32): a checkbox or radio's label, a
+     summary that folds a section, and the way back in a breadcrumb. */
+  label:has(> input:is([type='checkbox'], [type='radio'])):not([data-dense] label) {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    cursor: pointer;
+  }
+  summary:not([data-dense] summary) {
+    padding-block: 0.75rem;
+    cursor: pointer;
+  }
+  [data-dense] label:has(> input:is([type='checkbox'], [type='radio'])) {
+    min-height: 2rem;
+  }
+  [data-dense] nav[aria-label='Breadcrumb'] a {
+    display: inline-flex;
+    min-height: 2rem;
+    align-items: center;
+  }
+  nav[aria-label='Breadcrumb'] a:not([data-dense] a) {
+    display: inline-flex;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    justify-content: center;
+    align-items: center;
   }
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -30,26 +98,34 @@
 
 /* Shared building blocks. Tailwind 4 only lets @apply use utilities, so
    these are declared as utilities. */
+/* Buttons are at least 44 px tall (#156's gate); the primary one is red,
+   with the hard shadow, and a screen has one. */
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center gap-2 rounded border-2 px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300;
+  @apply btn border-zinc-900 bg-action font-display font-bold text-white shadow-hard hover:bg-action-hover dark:border-zinc-300;
 }
 @utility btn-secondary {
-  @apply btn border border-zinc-300 bg-white hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800;
+  @apply btn border-zinc-900 bg-white text-zinc-900 hover:bg-zinc-100 dark:border-zinc-300 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800;
 }
 @utility btn-danger {
-  @apply btn bg-red-700 text-white hover:bg-red-800;
+  @apply btn border-red-900 bg-red-700 text-white hover:bg-red-800 dark:border-red-300;
 }
 @utility input {
-  @apply block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900;
+  @apply block min-h-11 w-full rounded border-2 border-zinc-900 bg-white px-3 py-2 text-sm dark:border-zinc-400 dark:bg-zinc-900;
 }
 @utility label {
-  @apply mb-1 block text-sm font-medium;
+  @apply mb-1 block text-sm font-semibold;
 }
 @utility card {
-  @apply rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900;
+  @apply rounded border-2 border-zinc-900 bg-white p-4 dark:border-zinc-600 dark:bg-zinc-900;
+}
+/* A section's title where the page is not boxed into cards, such as an
+   asset's main column: underlined in yellow, never set on it, so it reads
+   in dark as in light. */
+@utility section-title {
+  @apply inline-block border-b-4 border-highlight pb-0.5 text-xl font-bold;
 }
 @utility error-text {
   @apply text-sm text-red-700 dark:text-red-400;
@@ -65,17 +141,62 @@
   @apply btn-secondary min-h-13 min-w-32 text-lg;
 }
 @utility flow-choice {
-  @apply flex min-h-16 w-full items-center gap-3 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-left text-lg font-semibold hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800;
+  @apply flex min-h-16 w-full cursor-pointer items-center gap-3 rounded border-2 border-zinc-900 bg-white px-4 py-3 text-left text-lg font-semibold hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-300 dark:bg-zinc-900 dark:hover:bg-zinc-800;
 }
-/* The template editor's dense controls, as a desktop editor's. */
+/* The template editor's dense controls, as a desktop editor's: 32 px, the
+   least #156's gate allows there. */
 @utility input-sm {
-  @apply block w-full min-w-0 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-950;
+  @apply block min-h-8 w-full min-w-0 rounded border-[1.5px] border-zinc-900 bg-white px-1.5 py-1 text-xs tabular-nums dark:border-zinc-400 dark:bg-zinc-950;
 }
 @utility btn-sm {
-  @apply inline-flex items-center justify-center gap-1 rounded border border-zinc-300 bg-white px-2 py-0.5 text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:bg-zinc-800 aria-pressed:text-white dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-200 dark:aria-pressed:text-zinc-900;
+  @apply inline-flex min-h-8 cursor-pointer items-center justify-center gap-1 rounded border-[1.5px] border-zinc-900 bg-white px-2 py-1 text-xs hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:bg-zinc-900 aria-pressed:text-white dark:border-zinc-400 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-100 dark:aria-pressed:text-zinc-900;
 }
 @utility icon-btn {
-  @apply inline-grid h-7 w-7 place-items-center rounded text-zinc-700 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-zinc-800 aria-pressed:text-white dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-200 dark:aria-pressed:text-zinc-900;
+  @apply inline-grid h-8 w-8 cursor-pointer place-items-center rounded text-zinc-700 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-zinc-900 aria-pressed:text-white dark:text-zinc-300 dark:hover:bg-zinc-800 dark:aria-pressed:bg-zinc-100 dark:aria-pressed:text-zinc-900;
+}
+
+/* Small mono labels for codes, states and roles (#159): plain; yellow for
+   emphasis; red only beside words that say what is wrong; muted. */
+@utility chip {
+  @apply inline-flex items-center gap-1.5 rounded border-[1.5px] border-zinc-900 px-2 py-px font-mono text-xs font-semibold whitespace-nowrap dark:border-zinc-300;
+}
+@utility chip-yellow {
+  @apply chip bg-highlight text-zinc-900 dark:border-zinc-900;
+}
+@utility chip-red {
+  @apply chip border-red-700 text-red-700 dark:border-red-400 dark:text-red-400;
+}
+@utility chip-muted {
+  @apply chip border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400;
+}
+/* One notice for status and selection, and one empty state with a next step. */
+@utility notice {
+  @apply flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded border-2 border-zinc-900 bg-white px-5 py-3 dark:border-zinc-400 dark:bg-zinc-900;
+}
+@utility notice-strong {
+  @apply notice bg-highlight text-zinc-900 dark:border-zinc-900;
+}
+@utility empty-state {
+  @apply flex flex-col items-center gap-3 rounded border-2 border-dashed border-zinc-300 p-8 text-center text-zinc-600 dark:border-zinc-700 dark:text-zinc-400;
+}
+/* A table with an ink header row and rules between rows, in a box that
+   scrolls sideways when narrow (stack-table still makes cards on a phone);
+   relative, so a hidden heading scrolls with it rather than widening the
+   page. */
+@utility data-table {
+  @apply relative overflow-x-auto rounded border-2 border-zinc-900 bg-white dark:border-zinc-600 dark:bg-zinc-900;
+  & table {
+    @apply w-full border-collapse text-sm tabular-nums;
+  }
+  & th {
+    @apply bg-zinc-900 px-4 py-2.5 text-left font-mono text-xs font-semibold whitespace-nowrap text-zinc-50 dark:bg-zinc-800;
+  }
+  & td {
+    @apply px-4 py-3 align-top;
+  }
+  & tbody tr + tr td {
+    @apply border-t border-zinc-300 dark:border-zinc-700;
+  }
 }
 
 /* Tables that become cards on a phone (lib/stack.ts): each row a card,

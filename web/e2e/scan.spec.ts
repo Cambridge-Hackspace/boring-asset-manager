@@ -82,5 +82,5 @@ test('scanning a spool adds another like it, and scanning a bin puts something i
   await page.getByLabel('Name').fill(sample);
   await page.getByRole('button', { name: 'Create asset' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(sample);
-  await expect(page.locator('dt', { hasText: /^Where$/ }).locator('xpath=following-sibling::dd[1]')).toContainText(asset.asset.name);
+  await expect(page.getByRole('region', { name: 'Where it is' })).toContainText(asset.asset.name);
 });

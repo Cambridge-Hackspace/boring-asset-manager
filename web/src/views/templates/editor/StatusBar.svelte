@@ -66,7 +66,7 @@
     <input
       id="zoom-slider"
       type="range"
-      class="w-24"
+      class="h-8 w-24"
       min={Math.log(5)}
       max={Math.log(6400)}
       step="0.01"
