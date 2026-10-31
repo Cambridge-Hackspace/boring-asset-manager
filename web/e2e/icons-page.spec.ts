@@ -37,7 +37,7 @@ test('shows every icon, and what needs attention', async ({ signedIn: page, api 
 });
 
 test('the palette is the vocabulary: a token an icon paints with cannot go', async ({ signedIn: page, api }) => {
-  await page.goto('/icons');
+  await page.goto('/icons?tab=palette');
   const palette = section(page, 'Palette');
   const token = unique('brand').toLowerCase().replace(/[^a-z0-9-]/g, '');
   await palette.getByRole('button', { name: 'Add a token' }).click();
@@ -69,7 +69,7 @@ test('settings hold every icon to them, and are refused when one cannot keep to 
   const iconName = unique('box').toLowerCase();
   await api.call('PUT', `/categories/${category.id}/icon`, { icon_name: iconName, source: boxIcon(iconName) });
 
-  await page.goto('/icons');
+  await page.goto('/icons?tab=settings');
   const settings = section(page, 'Settings');
   // a box's outline is drawn at 1.2
   await settings.getByLabel('Stroke widths').fill('2');
@@ -87,7 +87,7 @@ test('settings hold every icon to them, and are refused when one cannot keep to 
 });
 
 test('library files are written here, and the lexicon goes out as a zip and comes back in', async ({ signedIn: page }) => {
-  await page.goto('/icons');
+  await page.goto('/icons?tab=library');
   const library = section(page, 'Library');
   const path = `shared/${unique('glyphs').toLowerCase()}.ilx`;
   await library.getByRole('button', { name: 'New file' }).click();
@@ -107,7 +107,7 @@ test('library files are written here, and the lexicon goes out as a zip and come
 
   // the export comes back in: the library's files replaced, the rest skipped
   await page.getByLabel('Import library files from a zip').setInputFiles({ name: 'icons.zip', mimeType: 'application/zip', buffer: zip });
-  await section(page, 'The build').getByRole('button', { name: 'Import', exact: true }).click();
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByText(/Imported 0 new files and replaced \d+\. Skipped \d+: lexicon\.ilx/)).toBeVisible();
 });
 
@@ -130,7 +130,7 @@ test("an asset's own icon that nothing draws any more needs attention, and finds
 });
 
 test("an asset's icon shows its state: the badges start in the library, and each state's variant is chosen", async ({ signedIn: page, api }) => {
-  await page.goto('/icons');
+  await page.goto('/icons?tab=library');
   const library = section(page, 'Library');
   await library.getByRole('button', { name: 'Start the state badges' }).click();
   await expect(library.getByLabel('Its path')).toHaveValue('shared/states.ilx');
@@ -154,7 +154,7 @@ test("an asset's icon shows its state: the badges start in the library, and each
   await page.goto(`/assets/${asset.asset.id}`);
   await expect(page.locator('[data-icon-state]')).toHaveText('Drawn as its down variant: out of service.');
 
-  await page.goto('/icons');
+  await page.goto('/icons?tab=states');
   const states = section(page, 'Asset states');
   await expect(states.getByLabel('Out of service')).toHaveValue('down');
   await expect(states.getByText(new RegExp(`icons?: .*${iconName}-down`))).toBeVisible();
@@ -170,7 +170,7 @@ test("an asset's icon shows its state: the badges start in the library, and each
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('[data-icon-state]')).toHaveCount(0);
 
-  await page.goto('/icons');
+  await page.goto('/icons?tab=states');
   await section(page, 'Asset states').getByRole('button', { name: "Use bam's defaults" }).click();
   await expect(section(page, 'Asset states').getByLabel('Out of service')).toHaveValue('down');
   await section(page, 'Asset states').getByRole('button', { name: 'Save the states' }).click();

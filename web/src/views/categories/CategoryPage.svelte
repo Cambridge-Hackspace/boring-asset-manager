@@ -12,6 +12,8 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import AddToSpool from '../../components/AddToSpool.svelte';
+  import TabLinks from '../../components/TabLinks.svelte';
+  import { currentTab } from '../../lib/tabs';
   import CategoryIconSection from './CategoryIconSection.svelte';
 
   // /categories/new and /categories/:id
@@ -111,6 +113,7 @@
   // saved, to say which have changes not saved, and warn before leaving.
   const sectionNames: Record<string, string> = {
     details: 'its details',
+    stock: 'stock and lending',
     suggestions: 'suggested links',
     scan: 'scan template',
     labels: 'label templates',
@@ -120,7 +123,8 @@
   };
   let savedAs = $state<Record<string, string>>({});
   const sectionState = $derived<Record<string, string>>({
-    details: JSON.stringify([name, parentId, color, consumable, lendable, runningLow, threshold, unit]),
+    details: JSON.stringify([name, parentId, color]),
+    stock: JSON.stringify([consumable, lendable, runningLow, threshold, unit]),
     suggestions: JSON.stringify([...suggested].sort()),
     scan: scanTemplate,
     labels: JSON.stringify(labelList),
@@ -132,6 +136,25 @@
   const unsaved = $derived(
     isNew ? [] : [...Object.keys(savedAs).filter((k) => savedAs[k] !== sectionState[k]), ...(iconUnsaved ? ['icon'] : [])],
   );
+  // The page in tabs (#161), each a part of it, kept in the address. All
+  // stay on the page, hidden but for one, so changes not saved in one
+  // survive looking at another; a tab with any says so.
+  const tabOf: Record<string, string> = { details: 'about', stock: 'stock', suggestions: 'links', scan: 'links', actions: 'links', labels: 'labels', scopes: 'scopes', icon: 'icon' };
+  const tabs = $derived.by(() => {
+    const all = [
+      { key: 'about', label: 'About', on: true },
+      { key: 'fields', label: 'Fields', on: true },
+      { key: 'stock', label: 'Stock and lending', on: !!category?.is_consumable || (canManage && !isSystem) },
+      { key: 'labels', label: 'Labels', on: (canManage && labelTemplates.length > 0) || canSpool || (labelConflicts[id] ?? 0) > 0 },
+      { key: 'icon', label: 'Icon', on: !isSystem },
+      { key: 'links', label: 'Links and actions', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || actions.length > 0)) || (conflicts[id] ?? 0) > 0 },
+      { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
+    ];
+    const changed = new Set(unsaved.map((k) => tabOf[k]));
+    return all.filter((t) => t.on).map((t) => ({ key: t.key, label: changed.has(t.key) ? `${t.label} (not saved)` : t.label }));
+  });
+  const tab = $derived(currentTab(router.search, tabs.map((t) => t.key)));
+
   function markSaved(...keys: string[]) {
     for (const k of keys) savedAs[k] = sectionState[k]!;
   }
@@ -418,19 +441,22 @@
   {/each}
 </nav>
 
-<h1 class="mb-4 flex items-center gap-3 text-2xl font-bold">
-  {#if isNew}New category{:else if category}<span aria-hidden="true" class="inline-block h-5 w-5 rounded-full border border-zinc-300 dark:border-zinc-600" style="background-color: {category.color_hex}"></span>{category.name}{:else}Category{/if}
-</h1>
-
-{#if category && assetCount !== null}
-  <p class="-mt-2 mb-4 text-sm">
-    <a class="underline" href="/assets?category={encodeURIComponent(id)}">{assetCount === 0 ? 'No assets in it yet' : `See its ${assetCount} asset${assetCount === 1 ? '' : 's'}`}</a>
-    {#if session.can('assets.write') && !isSystem}
-      <span aria-hidden="true" class="mx-1 text-zinc-400">·</span>
-      <a class="underline" href="/assets/new?category={encodeURIComponent(id)}">Add an asset to it</a>
+<div class="mb-4 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="flex items-center gap-3 text-3xl font-bold">
+      {#if isNew}New category{:else if category}<span aria-hidden="true" class="inline-block h-6 w-6 shrink-0 rounded-full border-2 border-zinc-900 dark:border-zinc-300" style="background-color: {category.color_hex}"></span>{category.name}{:else}Category{/if}
+    </h1>
+    {#if category && assetCount !== null}
+      <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{assetCount === 0 ? 'No assets in it yet.' : `${assetCount} asset${assetCount === 1 ? '' : 's'} here.`}</p>
     {/if}
-  </p>
-{/if}
+  </div>
+  {#if category && assetCount !== null}
+    <div class="flex flex-wrap gap-2">
+      {#if assetCount > 0}<a class="btn-secondary" href="/assets?category={encodeURIComponent(id)}">See its {assetCount} asset{assetCount === 1 ? '' : 's'}</a>{/if}
+      {#if session.can('assets.write') && !isSystem}<a class="btn-secondary" href="/assets/new?category={encodeURIComponent(id)}">Add an asset to it</a>{/if}
+    </div>
+  {/if}
+</div>
 <ErrorMessage {error} />
 {#if saved}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{saved}</p>{/if}
 {#if unsaved.length}
@@ -439,101 +465,81 @@
   </p>
 {/if}
 
+{#snippet stockFields()}
+  <fieldset class="space-y-2">
+    <legend class="label">Stock</legend>
+    <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={consumable} /> Consumable</label>
+    <label class="flex items-center gap-2 text-sm" class:opacity-50={!consumable}>
+      <input type="checkbox" bind:checked={runningLow} disabled={!consumable} aria-describedby="low-help" /> Running low
+    </label>
+    <p id="low-help" class="text-xs text-zinc-600 dark:text-zinc-400">Only consumable categories can run low.</p>
+    <div>
+      <label class="label" for="cat-unit" class:opacity-50={!consumable}>Unit (optional)</label>
+      <input id="cat-unit" class="input w-32" maxlength="32" placeholder="g" disabled={!consumable} aria-describedby="unit-help" bind:value={unit} />
+      <p id="unit-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        Weighs instead of counting: totals the stock its assets count in this unit, such as spools in g, and the threshold is in it too. Leave empty to count items.
+      </p>
+    </div>
+    <div>
+      <label class="label" for="cat-threshold" class:opacity-50={!consumable}>Low stock threshold (optional)</label>
+      <input id="cat-threshold" class="input w-32" type="number" min="1" step="1" disabled={!consumable} aria-describedby="threshold-help" bind:value={threshold} />
+      <p id="threshold-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        Flag it automatically when fewer active assets than this remain here and in its subcategories, and clear the
+        flag when there are enough again.
+      </p>
+    </div>
+  </fieldset>
+  <fieldset class="space-y-1">
+    <legend class="label">Lending</legend>
+    <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={lendable} aria-describedby="lend-help" /> Lendable</label>
+    <p id="lend-help" class="text-xs text-zinc-600 dark:text-zinc-400">Its assets, and those of its subcategories, can be checked out to people.</p>
+  </fieldset>
+{/snippet}
+
+{#snippet detailFields()}
+  <div>
+    <label class="label" for="cat-name">Name</label>
+    <input id="cat-name" class="input" required bind:value={name} />
+  </div>
+  <div>
+    <label class="label" for="cat-parent">Parent</label>
+    <select id="cat-parent" class="input" bind:value={parentId}>
+      <option value="">None (top level)</option>
+      {#each parentChoices as row (row.category.id)}
+        <option value={row.category.id}>{' '.repeat(row.depth * 3)}{row.category.name}</option>
+      {/each}
+    </select>
+  </div>
+  <div>
+    <label class="label" for="cat-color">Color</label>
+    <div class="flex items-center gap-2">
+      <input id="cat-color" type="color" class="h-11 w-14 rounded border-2 border-zinc-900 dark:border-zinc-400" bind:value={color} />
+      <CategoryBadge category={{ id: 'preview', name: name || 'Preview', color_hex: color }} />
+    </div>
+  </div>
+{/snippet}
+
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
-{:else if isNew || category}
-  {#if category?.is_consumable}
-    <section class="card mb-6 max-w-2xl" aria-labelledby="stock-heading">
-      <h2 id="stock-heading" class="mb-1 text-lg font-semibold">Stock</h2>
-      <p class="text-sm">
-        <strong>{category.is_running_low ? 'Running low.' : 'In stock.'}</strong>
-        {#if category.unit}
-          {amount(total ?? 0, category.unit)} here and in its subcategories, in
-          {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`}{category.low_stock_threshold
-            ? `; flagged automatically below ${amount(category.low_stock_threshold, category.unit)}`
-            : ''}.
-        {:else}
-          {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`} here and in its subcategories{category.low_stock_threshold
-            ? `; flagged automatically below ${category.low_stock_threshold}`
-            : ''}.
-        {/if}
-      </p>
-      {#if session.can('stock.record')}
-        <div class="mt-3">
-          {#if category.is_running_low}
-            <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(false)}>Mark restocked</button>
-          {:else}
-            <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(true)}>Mark running low</button>
-          {/if}
-        </div>
-      {/if}
-    </section>
-  {/if}
-
-  {#if canManage && !isSystem}
-    <form class="card mb-6 max-w-2xl space-y-4" onsubmit={save}>
+{:else if isNew}
+  {#if canManage}
+    <form class="card max-w-2xl space-y-4" onsubmit={save}>
       <div class="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label class="label" for="cat-name">Name</label>
-          <input id="cat-name" class="input" required bind:value={name} />
-        </div>
-        <div>
-          <label class="label" for="cat-parent">Parent</label>
-          <select id="cat-parent" class="input" bind:value={parentId}>
-            <option value="">None (top level)</option>
-            {#each parentChoices as row (row.category.id)}
-              <option value={row.category.id}>{' '.repeat(row.depth * 3)}{row.category.name}</option>
-            {/each}
-          </select>
-        </div>
-        <div>
-          <label class="label" for="cat-color">Color</label>
-          <div class="flex items-center gap-2">
-            <input id="cat-color" type="color" class="h-9 w-14 rounded border border-zinc-300 dark:border-zinc-700" bind:value={color} />
-            <CategoryBadge category={{ id: 'preview', name: name || 'Preview', color_hex: color }} />
-          </div>
-        </div>
-        <fieldset class="space-y-2">
-          <legend class="label">Stock</legend>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={consumable} /> Consumable</label>
-          <label class="flex items-center gap-2 text-sm" class:opacity-50={!consumable}>
-            <input type="checkbox" bind:checked={runningLow} disabled={!consumable} aria-describedby="low-help" /> Running low
-          </label>
-          <p id="low-help" class="text-xs text-zinc-600 dark:text-zinc-400">Only consumable categories can run low.</p>
-          <div>
-            <label class="label" for="cat-unit" class:opacity-50={!consumable}>Unit (optional)</label>
-            <input id="cat-unit" class="input w-32" maxlength="32" placeholder="g" disabled={!consumable} aria-describedby="unit-help" bind:value={unit} />
-            <p id="unit-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-              Weighs instead of counting: totals the stock its assets count in this unit, such as spools in g, and the threshold is in it too. Leave empty to count items.
-            </p>
-          </div>
-          <div>
-            <label class="label" for="cat-threshold" class:opacity-50={!consumable}>Low stock threshold (optional)</label>
-            <input
-              id="cat-threshold"
-              class="input w-32"
-              type="number"
-              min="1"
-              step="1"
-              disabled={!consumable}
-              aria-describedby="threshold-help"
-              bind:value={threshold}
-            />
-            <p id="threshold-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-              Flag it automatically when fewer active assets than this remain here and in its subcategories, and clear the
-              flag when there are enough again.
-            </p>
-          </div>
-        </fieldset>
-        <fieldset class="space-y-1">
-          <legend class="label">Lending</legend>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={lendable} aria-describedby="lend-help" /> Lendable</label>
-          <p id="lend-help" class="text-xs text-zinc-600 dark:text-zinc-400">Its assets, and those of its subcategories, can be checked out to people.</p>
-        </fieldset>
+        {@render detailFields()}
+        {@render stockFields()}
       </div>
-      <div class="flex flex-wrap gap-2">
-        <button type="submit" class="btn-primary" disabled={busy}>{isNew ? 'Create category' : 'Save'}</button>
-        {#if !isNew}
+      <button type="submit" class="btn-primary" disabled={busy}>Create category</button>
+    </form>
+  {/if}
+{:else if category}
+  <TabLinks label="Parts of this category" {tabs} />
+
+  <div class="mt-6" id="tab-about" hidden={tab !== 'about'}>
+    {#if canManage && !isSystem}
+      <form class="card max-w-2xl space-y-4" aria-label="Its details" onsubmit={save}>
+        <div class="grid gap-4 sm:grid-cols-2">{@render detailFields()}</div>
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="btn-primary" disabled={busy}>Save</button>
           <a class="btn-secondary" href="/categories/new?parent={encodeURIComponent(id)}">New subcategory</a>
           <button
             type="button"
@@ -543,46 +549,42 @@
             onclick={duplicate}>Duplicate</button
           >
           <ConfirmButton label="Delete" question="Delete this category? Its subcategories move to the top level." onconfirm={remove} />
-        {/if}
-      </div>
-    </form>
-  {:else if isSystem}
-    <p class="mb-6 text-sm text-zinc-600 dark:text-zinc-400">The system category for assets with no other category. It cannot be renamed, moved or deleted.</p>
-  {/if}
+        </div>
+      </form>
+    {:else if isSystem}
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">The system category for assets with no other category. It cannot be renamed, moved or deleted.</p>
+    {:else}
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">{category.parent_id ? `Under ${categoryName(category.parent_id)}.` : 'At the top level.'}</p>
+    {/if}
+  </div>
 
-  {#if category && !isSystem}
-    <div class="mb-6">
-      <CategoryIconSection {category} {categories} bind:unsaved={iconUnsaved} />
-    </div>
-  {/if}
-
-  {#if !isNew}
-    <section aria-labelledby="fields-heading">
-      <h2 id="fields-heading" class="mb-2 text-lg font-semibold">Fields</h2>
-      {#if effective.length === 0}
-        <p class="text-sm text-zinc-600 dark:text-zinc-400">
-          Assets in this category record no fields yet.{#if canManage && !allFields.length}{' '}Make fields, such as a serial number, on the <a class="underline" href="/fields">Fields</a> page first.{/if}
-        </p>
-      {:else}
-        <table class="mb-4 w-full max-w-3xl text-left text-sm">
-          <thead class="border-b border-zinc-300 dark:border-zinc-700">
+  <section class="mt-6" id="tab-fields" aria-labelledby="fields-heading" hidden={tab !== 'fields'}>
+    <h2 id="fields-heading" class="mb-2 text-lg font-semibold">Fields</h2>
+    {#if effective.length === 0}
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">
+        Assets in this category record no fields yet.{#if canManage && !allFields.length}{' '}Make fields, such as a serial number, on the <a class="underline" href="/fields">Fields</a> page first.{/if}
+      </p>
+    {:else}
+      <div class="data-table mb-4 max-w-3xl">
+        <table>
+          <thead>
             <tr>
-              <th scope="col" class="py-2 pr-4">Field</th>
-              <th scope="col" class="py-2 pr-4">Required</th>
-              <th scope="col" class="py-2 pr-4">From</th>
-              <th scope="col" class="py-2"><span class="sr-only">Actions</span></th>
+              <th scope="col">Field</th>
+              <th scope="col">Required</th>
+              <th scope="col">From</th>
+              <th scope="col"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody>
             {#each effective as e (e.field.id)}
               {@const source = e.source_category_id ? byId.get(e.source_category_id) : undefined}
-              <tr class="border-b border-zinc-200 dark:border-zinc-800">
-                <td class="py-2 pr-4">{e.field.label} <span class="font-mono text-zinc-600 dark:text-zinc-400">{e.field.key}</span></td>
-                <td class="py-2 pr-4">{e.is_required ? 'Required' : 'Optional'}</td>
-                <td class="py-2 pr-4">
+              <tr>
+                <td><span class="font-semibold">{e.field.label}</span> <span class="font-mono text-xs text-zinc-600 dark:text-zinc-400">{e.field.key}</span></td>
+                <td>{e.is_required ? 'Required' : 'Optional'}</td>
+                <td>
                   {#if e.source_category_id === id}This category{:else if source}Inherited from <CategoryBadge category={source} />{/if}
                 </td>
-                <td class="py-2 text-right">
+                <td class="text-right">
                   {#if canManage && e.source_category_id === id}
                     <ConfirmButton label="Remove" question="Stop asking for “{e.field.label}” here?" onconfirm={() => unassign(e.field.id)} />
                   {/if}
@@ -591,72 +593,66 @@
             {/each}
           </tbody>
         </table>
-      {/if}
+      </div>
+    {/if}
 
-      {#if canManage && unassigned.length}
-        <form class="flex flex-wrap items-end gap-3" onsubmit={assign}>
-          <div>
-            <label class="label" for="assign-field">Add a field</label>
-            <select id="assign-field" class="input" bind:value={newFieldId}>
-              <option value="">Choose a field…</option>
-              {#each unassigned as f (f.id)}
-                <option value={f.id}>{f.label}</option>
-              {/each}
-            </select>
-          </div>
-          <label class="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" bind:checked={newRequired} /> Required</label>
-          <button type="submit" class="btn-secondary" disabled={!newFieldId}>Add field</button>
-        </form>
-        <p class="mt-2 text-xs text-zinc-600 dark:text-zinc-400">Adding a field another category already gives this one makes it this category’s own; required anywhere means required.</p>
-      {/if}
-    </section>
-    {#if canManage && relationTypes.length}
-      <section class="mt-6 max-w-2xl" aria-labelledby="relations-heading">
-        <h2 id="relations-heading" class="mb-1 text-lg font-semibold">Suggested links</h2>
-        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">Offered first when linking its assets, and those of its subcategories, to others.</p>
-        <form class="space-y-2" onsubmit={saveSuggestions}>
-          {#each relationTypes as t (t.id)}
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" value={t.id} bind:group={suggested} /> {t.is_symmetric ? t.name : `${t.name} / ${t.inverse_name}`}
-            </label>
-          {/each}
-          <button type="submit" class="btn-secondary">Save suggestions</button>
-        </form>
-      </section>
+    {#if canManage && unassigned.length}
+      <form class="mt-4 flex flex-wrap items-end gap-3" onsubmit={assign}>
+        <div>
+          <label class="label" for="assign-field">Add a field</label>
+          <select id="assign-field" class="input" bind:value={newFieldId}>
+            <option value="">Choose a field…</option>
+            {#each unassigned as f (f.id)}
+              <option value={f.id}>{f.label}</option>
+            {/each}
+          </select>
+        </div>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={newRequired} /> Required</label>
+        <button type="submit" class="btn-secondary" disabled={!newFieldId}>Add field</button>
+      </form>
+      <p class="mt-2 text-xs text-zinc-600 dark:text-zinc-400">Adding a field another category already gives this one makes it this category’s own; required anywhere means required.</p>
     {/if}
-    {#if (conflicts[id] ?? 0) > 0}
-      <p class="mt-6 max-w-2xl rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100" role="note">
-        <span aria-hidden="true">⚠</span>
-        {conflicts[id] === 1 ? '1 asset' : `${conflicts[id]} assets`} here show a scan template chosen by a tie with another
-        category as close to them. <a class="underline" href="/assets?conflict=scan_template">See which</a>, and name a
-        template on one of the categories to settle it.
-      </p>
-    {/if}
-    {#if canManage && scanTemplates.length}
-      <section class="mt-6 max-w-2xl" aria-labelledby="scan-template-heading">
-        <h2 id="scan-template-heading" class="mb-1 text-lg font-semibold">Scan template</h2>
-        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">What scanning its assets, and those of its subcategories, shows, unless they choose their own.</p>
-        <form class="flex flex-wrap items-end gap-2" onsubmit={saveScanTemplate}>
-          <div>
-            <label class="label" for="scan-template">Shows</label>
-            <select id="scan-template" class="input" bind:value={scanTemplate} onchange={checkScanTemplate}>
-              <option value="">Its parent’s, or the default</option>
-              {#each scanTemplates as t (t.id)}<option value={t.id}>{t.name}{t.default ? ' (default)' : ''}</option>{/each}
-            </select>
+  </section>
+
+  <div class="mt-6 max-w-2xl space-y-6" id="tab-stock" hidden={tab !== 'stock'}>
+    {#if category.is_consumable}
+      <section class="card" aria-labelledby="stock-heading">
+        <h2 id="stock-heading" class="mb-1 text-lg font-semibold">Stock</h2>
+        <p class="text-sm">
+          <strong>{category.is_running_low ? 'Running low.' : 'In stock.'}</strong>
+          {#if category.unit}
+            {amount(total ?? 0, category.unit)} here and in its subcategories, in
+            {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`}{category.low_stock_threshold
+              ? `; flagged automatically below ${amount(category.low_stock_threshold, category.unit)}`
+              : ''}.
+          {:else}
+            {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`} here and in its subcategories{category.low_stock_threshold
+              ? `; flagged automatically below ${category.low_stock_threshold}`
+              : ''}.
+          {/if}
+        </p>
+        {#if session.can('stock.record')}
+          <div class="mt-3">
+            {#if category.is_running_low}
+              <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(false)}>Mark restocked</button>
+            {:else}
+              <button type="button" class="btn-secondary" disabled={flagging} onclick={() => setRunningLow(true)}>Mark running low</button>
+            {/if}
           </div>
-          <button type="submit" class="btn-secondary" disabled={scanTemplate === savedScanTemplate}>Save scan template</button>
-        </form>
-        {#if newTies.length}
-          <p class="mt-2 text-sm text-amber-800 dark:text-amber-300" role="alert">
-            <span aria-hidden="true">⚠</span>
-            Saving this ties {newTies.filter((c) => c !== id).map(categoryName).join(', ') || 'it'} with this category for some
-            assets in both: they would get a template chosen by which category is deeper, smaller or older.
-          </p>
         {/if}
       </section>
     {/if}
+    {#if canManage && !isSystem}
+      <form class="card space-y-4" aria-label="Stock and lending" onsubmit={save}>
+        <div class="grid gap-4 sm:grid-cols-2">{@render stockFields()}</div>
+        <button type="submit" class="btn-secondary" disabled={busy}>Save stock and lending</button>
+      </form>
+    {/if}
+  </div>
+
+  <div class="mt-6 max-w-2xl space-y-6" id="tab-labels" hidden={tab !== 'labels'}>
     {#if (labelConflicts[id] ?? 0) > 0}
-      <p class="mt-6 max-w-2xl rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100" role="note">
+      <p class="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100" role="note">
         <span aria-hidden="true">⚠</span>
         {labelConflicts[id] === 1 ? '1 asset' : `${labelConflicts[id]} assets`} here take a label template chosen by a tie with
         another category as close to them. <a class="underline" href="/assets?conflict=label_template">See which</a>, and name a
@@ -664,7 +660,7 @@
       </p>
     {/if}
     {#if (canManage && labelTemplates.length) || canSpool}
-      <section class="mt-6 max-w-2xl" aria-labelledby="labels-heading">
+      <section aria-labelledby="labels-heading">
         <h2 id="labels-heading" class="mb-1 text-lg font-semibold">Labels</h2>
         {#if canManage && labelTemplates.length}
           <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -695,7 +691,7 @@
                 </select>
               </div>
               <button type="button" class="btn-secondary" disabled={!adding} onclick={() => { changeLabels([...labelList, adding]); adding = ''; }}>Add</button>
-              <button type="submit" class="btn-primary" disabled={!labelsChanged}>Save label templates</button>
+              <button type="submit" class="btn-secondary" disabled={!labelsChanged}>Save label templates</button>
             </div>
           </form>
           {#if newLabelTies.length}
@@ -714,8 +710,62 @@
         {/if}
       </section>
     {/if}
+  </div>
+
+  {#if !isSystem}
+    <div class="mt-6" id="tab-icon" hidden={tab !== 'icon'}>
+      <CategoryIconSection {category} {categories} bind:unsaved={iconUnsaved} />
+    </div>
+  {/if}
+
+  <div class="mt-6 max-w-2xl space-y-8" id="tab-links" hidden={tab !== 'links'}>
+    {#if canManage && relationTypes.length}
+      <section aria-labelledby="relations-heading">
+        <h2 id="relations-heading" class="mb-1 text-lg font-semibold">Suggested links</h2>
+        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">Offered first when linking its assets, and those of its subcategories, to others.</p>
+        <form class="space-y-2" onsubmit={saveSuggestions}>
+          {#each relationTypes as t (t.id)}
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" value={t.id} bind:group={suggested} /> {t.is_symmetric ? t.name : `${t.name} / ${t.inverse_name}`}
+            </label>
+          {/each}
+          <button type="submit" class="btn-secondary">Save suggestions</button>
+        </form>
+      </section>
+    {/if}
+    {#if (conflicts[id] ?? 0) > 0}
+      <p class="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100" role="note">
+        <span aria-hidden="true">⚠</span>
+        {conflicts[id] === 1 ? '1 asset' : `${conflicts[id]} assets`} here show a scan template chosen by a tie with another
+        category as close to them. <a class="underline" href="/assets?conflict=scan_template">See which</a>, and name a
+        template on one of the categories to settle it.
+      </p>
+    {/if}
+    {#if canManage && scanTemplates.length}
+      <section aria-labelledby="scan-template-heading">
+        <h2 id="scan-template-heading" class="mb-1 text-lg font-semibold">Scan template</h2>
+        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">What scanning its assets, and those of its subcategories, shows, unless they choose their own.</p>
+        <form class="flex flex-wrap items-end gap-2" onsubmit={saveScanTemplate}>
+          <div>
+            <label class="label" for="scan-template">Shows</label>
+            <select id="scan-template" class="input" bind:value={scanTemplate} onchange={checkScanTemplate}>
+              <option value="">Its parent’s, or the default</option>
+              {#each scanTemplates as t (t.id)}<option value={t.id}>{t.name}{t.default ? ' (default)' : ''}</option>{/each}
+            </select>
+          </div>
+          <button type="submit" class="btn-secondary" disabled={scanTemplate === savedScanTemplate}>Save scan template</button>
+        </form>
+        {#if newTies.length}
+          <p class="mt-2 text-sm text-amber-800 dark:text-amber-300" role="alert">
+            <span aria-hidden="true">⚠</span>
+            Saving this ties {newTies.filter((c) => c !== id).map(categoryName).join(', ') || 'it'} with this category for some
+            assets in both: they would get a template chosen by which category is deeper, smaller or older.
+          </p>
+        {/if}
+      </section>
+    {/if}
     {#if canManage && actions.length}
-      <section class="mt-6 max-w-2xl" aria-labelledby="actions-heading">
+      <section aria-labelledby="actions-heading">
         <h2 id="actions-heading" class="mb-1 text-lg font-semibold">Actions</h2>
         <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">Buttons offered on its assets, such as Identify. <a class="underline" href="/actions">Define actions</a>.</p>
         <form class="space-y-2" onsubmit={saveActions}>
@@ -731,23 +781,24 @@
         </form>
       </section>
     {/if}
-    {#if canSeeScopes && scopes.length}
-      <section class="mt-6 max-w-2xl" aria-labelledby="scopes-heading">
-        <h2 id="scopes-heading" class="mb-1 text-lg font-semibold">Who can see its assets</h2>
-        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Its assets, and those of its subcategories, are in the scopes ticked, and roles holding permissions in them act on
-          those assets. Ticking <strong>public</strong> lets anyone see them, even signed out, as by scanning a label. Assets in no
-          scope are in <span class="font-mono">default</span>.
-        </p>
-        <form class="space-y-2" onsubmit={saveScopes}>
-          {#each scopes as s (s.id)}
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" value={s.id} bind:group={scopeIds} disabled={!canScope} /> <span class="font-mono">{s.name}</span>{#if s.name === 'public'}<span class="text-zinc-600 dark:text-zinc-400">: anyone, even signed out</span>{/if}
-            </label>
-          {/each}
-          {#if canScope}<button type="submit" class="btn-secondary">Save scopes</button>{/if}
-        </form>
-      </section>
-    {/if}
+  </div>
+
+  {#if canSeeScopes && scopes.length}
+    <section class="mt-6 max-w-2xl" id="tab-scopes" aria-labelledby="scopes-heading" hidden={tab !== 'scopes'}>
+      <h2 id="scopes-heading" class="mb-1 text-lg font-semibold">Who can see its assets</h2>
+      <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
+        Its assets, and those of its subcategories, are in the scopes ticked, and roles holding permissions in them act on
+        those assets. Ticking <strong>public</strong> lets anyone see them, even signed out, as by scanning a label. Assets in no
+        scope are in <span class="font-mono">default</span>.
+      </p>
+      <form class="space-y-2" onsubmit={saveScopes}>
+        {#each scopes as s (s.id)}
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" value={s.id} bind:group={scopeIds} disabled={!canScope} /> <span class="font-mono">{s.name}</span>{#if s.name === 'public'}<span class="text-zinc-600 dark:text-zinc-400">: anyone, even signed out</span>{/if}
+          </label>
+        {/each}
+        {#if canScope}<button type="submit" class="btn-secondary">Save scopes</button>{/if}
+      </form>
+    </section>
   {/if}
 {/if}

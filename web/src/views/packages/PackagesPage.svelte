@@ -23,6 +23,7 @@
     type TreeNode,
   } from '../../lib/packages';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import ImportSection from './ImportSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -237,7 +238,7 @@
   </li>
 {/snippet}
 
-<h1 class="mb-4 text-2xl font-bold">Import &amp; export</h1>
+<PageHeader title="Import & export" lede="Categories, fields, templates and more as a package: to share with another instance, or to bring one in." />
 
 <ImportSection {tree} onimported={() => void load()} />
 
@@ -332,7 +333,7 @@
       <label class="block text-sm">License <input class="input mt-1" bind:value={license} maxlength="200" placeholder="CC-BY-4.0" /></label>
       <label class="block text-sm">Version <input class="input mt-1" bind:value={version} maxlength="64" placeholder="1.0" /></label>
       <label class="block text-sm">
-        Preview image <input class="mt-1 block text-sm" type="file" accept="image/png,image/jpeg,image/webp" onchange={choosePreview} />
+        Preview image <input class="mt-1 block min-h-11 py-2 text-sm" type="file" accept="image/png,image/jpeg,image/webp" onchange={choosePreview} />
         {#if previewName}<span class="text-xs">{previewName}</span>{/if}
       </label>
     </fieldset>

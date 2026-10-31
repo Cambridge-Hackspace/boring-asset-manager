@@ -12,7 +12,7 @@ Every press is kept in the asset's history.
 
 Whoever manages categories defines actions on the **Actions** page: a label people see, such as "Identify"; a key devices listen for, such as `identify`; and, if wanted, a question to ask first.
 
-Then, on a category's page under **Actions**, choose which of them it offers on its assets, and whether on its subcategories' assets too.
+Then, on a category's **Links and actions** tab, choose which of them it offers on its assets, and whether on its subcategories' assets too.
 
 ## What a device is told
 

@@ -8,6 +8,7 @@
   import { formDefaults, inputType, missing, runRequest, runsPath, scannedCode, type Prompt, type RunView } from '../../lib/flows';
   import CodeScanner from '../../components/CodeScanner.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import RunProgress from '../../components/RunProgress.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const slug = $derived(params.slug ?? '');
@@ -140,14 +141,22 @@
 </script>
 
 <div class="mx-auto max-w-xl space-y-5 text-lg">
-  <p class="text-sm font-medium tracking-wide text-zinc-600 uppercase dark:text-zinc-400">{flowName}</p>
+  <RunProgress {flowName} progress={view?.progress} />
 
   {#if !prompt}
     {#if busy}<p role="status">Starting…</p>{/if}
     <ErrorMessage {error} />
     {#if error && !busy}<button type="button" class="flow-button-primary" onclick={start}>Try again</button>{/if}
   {:else}
-    <h1 bind:this={heading} tabindex="-1" class="text-3xl font-bold focus:outline-none">
+    <!-- What the run is about, once it is about something; Done says it
+         in its own words. -->
+    {#if prompt.asset && prompt.kind !== 'done'}
+      <p class="flex flex-wrap items-center gap-3">
+        {#if prompt.asset.code}<span class="chip-yellow text-sm">{prompt.asset.code}</span>{/if}
+        <span class="font-semibold">{prompt.asset.name}</span>
+      </p>
+    {/if}
+    <h1 bind:this={heading} tabindex="-1" class="text-4xl font-bold focus:outline-none">
       {prompt.title || (prompt.kind === 'done' ? 'Done' : prompt.kind === 'confirm' ? 'Is this right?' : flowName)}
     </h1>
     {#if prompt.text}<p>{prompt.text}</p>{/if}
@@ -270,7 +279,6 @@
         <CodeScanner onfound={(text) => scanned(text, 'place_code')} />
       </form>
     {:else if prompt.kind === 'confirm'}
-      {#if prompt.asset}<p class="font-semibold">{prompt.asset.name}</p>{/if}
       {#if prompt.coming?.length}
         <ul class="list-disc space-y-1 pl-6">
           {#each prompt.coming as line, i (i)}<li>{line}</li>{/each}
@@ -315,7 +323,7 @@
     {/if}
 
     {#if prompt.kind !== 'done' && prompt.kind !== 'confirm'}
-      <p><button type="button" class="text-base underline" onclick={cancel}>Start again</button></p>
+      <p><button type="button" class="inline-flex min-h-11 items-center text-base underline" onclick={cancel}>Start again</button></p>
     {/if}
   {/if}
 </div>

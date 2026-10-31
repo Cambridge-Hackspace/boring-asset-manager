@@ -70,13 +70,13 @@ Whoever may change categories can draw their icons. Changing the palette and the
 
 ## The Icons page
 
-**Icons**, under **Catalog**, shows every icon, by group, each with **SVG** and **PNG** links to download it as an image, and what **needs attention**: drafts waiting with problems, warnings, and icons that assets were given that no longer exist; follow one to the assets, to give them another. Whoever may **Manage icons** changes there what every icon is drawn with:
+**Icons**, under **Catalog**, shows on its first tab every icon, by group, each with **SVG** and **PNG** links to download it as an image, and what **needs attention**: drafts waiting with problems, warnings, and icons that assets were given that no longer exist; follow one to the assets, to give them another. Whoever may **Manage icons** changes what every icon is drawn with, each on a tab of its own:
 
 - **Library**: shapes icons share and no one category owns, such as a base to extend or a fragment to insert, written and saved as a category's icon is; and fonts, for the words icons carry. isolex can convert a TrueType or OpenType font into one, if the font's license allows it; the converted font keeps its license.
 - **Palette**: the colors icons paint with, each named, with a light and a dark color. A color an icon still uses cannot be taken away.
 - **Settings**: the line widths icons may use, the colors only an icon that grants itself one may use, and how much drawing one icon may take.
 - **Asset states**: the variant each state is drawn with (see **States**).
 
-**Export as a zip** downloads every icon as an isolex library folder, which isolex studio opens as it is. Bring it back, edited, on **Admin › Import & export**: what changed is replaced, colors and categories' icons too, and the rest is left alone. **Import** takes a zip of .ilx files into the library at once, or none of them if any icon would stop drawing.
+**Export as a zip** downloads every icon as an isolex library folder, which isolex studio opens as it is. Bring it back, edited, on **Admin › Import & export**: what changed is replaced, colors and categories' icons too, and the rest is left alone. On the **Library** tab, **Import** takes a zip of .ilx files into the library at once, or none of them if any icon would stop drawing.
 
 Icons are compiled by isolex, the work of Axonibyte Innovations, LLC.

@@ -93,7 +93,7 @@
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Looking it up…</p>
 {:else if scan}
-  <h1 class="mb-4 flex items-center gap-2 text-2xl font-bold"><AssetIcon icon={scan.asset.icon} height={40} />{scan.asset.name}</h1>
+  <h1 class="mb-4 flex items-center gap-3 text-3xl font-bold"><AssetIcon icon={scan.asset.icon} height={44} />{scan.asset.name}</h1>
   {#if status}<p class="mb-3 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
   <ErrorMessage {error} />
   <ScanResult result={scan.result} linkRows>
@@ -129,7 +129,7 @@
               <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(scan!.asset.id)}">{scanActionLabel(action)}</a>
             {:else if action === 'flows'}
               {#each scan!.asset.flows ?? [] as f (f.slug)}
-                <a class="btn-primary" href={flowHref(f.slug, scan!.asset.id)}>{f.name}</a>
+                <a class="btn-secondary" href={flowHref(f.slug, scan!.asset.id)}>{f.name}</a>
               {/each}
             {:else if action === 'add_inside'}
               <a class="btn-secondary" href="/assets/new?in={encodeURIComponent(scan!.asset.id)}">{scanActionLabel(action)}</a>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SegmentedControl from '../components/SegmentedControl.svelte';
   import { stack } from '../lib/stack';
   import { onMount } from 'svelte';
   import { request } from '../lib/api';
@@ -62,14 +63,19 @@
 
 {#if canLend}
   <div class="mb-4 flex flex-wrap items-end gap-3">
-    <div>
-      <label class="label" for="loans-state">Show</label>
-      <select id="loans-state" class="input" bind:value={show} onchange={load}>
-        <option value="open">Lent out now</option>
-        <option value="overdue">Overdue</option>
-        <option value="">All loans, returned too</option>
-      </select>
-    </div>
+    <SegmentedControl
+      label="Show"
+      options={[
+        { value: 'open', label: 'Lent out now' },
+        { value: 'overdue', label: 'Overdue' },
+        { value: '', label: 'All, returned too' },
+      ]}
+      value={show}
+      onchange={(v) => {
+        show = v;
+        void load();
+      }}
+    />
     <div>
       <label class="label" for="loans-person">Borrower</label>
       <select id="loans-person" class="input" bind:value={borrowerId} onchange={load}>
@@ -106,7 +112,7 @@
       <tbody>
         {#each loans as l (l.id)}
           <tr class="border-b border-zinc-200 dark:border-zinc-800">
-            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(l.asset_id)}">{l.asset_name}</a></td>
+            <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(l.asset_id)}">{l.asset_name}</a></td>
             {#if canLend}<td class="py-2 pr-4">{personName(l.borrower)}{l.borrower.archived ? ' (has left)' : ''}</td>{/if}
             <td class="py-2 pr-4 whitespace-nowrap">{dueDate(l.checked_out_at)}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{l.due_at ? dueDate(l.due_at) : '—'}</td>

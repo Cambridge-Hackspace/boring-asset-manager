@@ -19,6 +19,9 @@
   import IconPaletteStyle from '../../components/IconPaletteStyle.svelte';
   import IconDiagList from '../../components/IconDiagList.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import TabLinks from '../../components/TabLinks.svelte';
+  import { router } from '../../lib/router.svelte';
+  import { currentTab } from '../../lib/tabs';
   import LibrarySection from './LibrarySection.svelte';
   import PaletteSection from './PaletteSection.svelte';
   import SettingsSection from './SettingsSection.svelte';
@@ -137,21 +140,38 @@
       importing = false;
     }
   }
+
+  // In tabs (#161), all on the page and hidden but for one, so a change not
+  // saved in one survives looking at another.
+  const tabs = $derived([
+    { key: 'icons', label: 'Every icon' },
+    { key: 'library', label: 'Library' },
+    { key: 'palette', label: 'Palette' },
+    ...(states ? [{ key: 'states', label: 'Asset states' }] : []),
+    { key: 'settings', label: 'Settings' },
+  ]);
+  const tab = $derived(currentTab(router.search, tabs.map((t) => t.key)));
 </script>
 
 <IconPaletteStyle {palette} />
 
-<h1 class="mb-1 text-2xl font-bold">Icons</h1>
-<p class="mb-4 max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">
-  Each category's icon is drawn on its own page. Here are all the icons, what needs attention, and what every icon is drawn with. See
-  <a class="underline" href="/help/icons">Icons</a> in help.
-</p>
+<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="mb-1 text-3xl font-bold">Icons</h1>
+    <p class="max-w-3xl text-sm text-zinc-600 dark:text-zinc-400">
+      Each category's icon is drawn on its own page. Here are all the icons, what needs attention, and what every icon is drawn with. See
+      <a class="underline" href="/help/icons">Icons</a> in help.
+    </p>
+  </div>
+  {#if status}<a class="btn-secondary" href="/api/v1/icons/export" download>Export as a zip</a>{/if}
+</div>
 <ErrorMessage {error} />
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else if status}
-  <div class="space-y-6">
+  <TabLinks label="Parts of the icons" {tabs} />
+  <div class="mt-6 space-y-6" hidden={tab !== 'icons'}>
     <section class="card max-w-3xl" aria-labelledby="status-heading">
       <h2 id="status-heading" class="text-lg font-semibold">The build</h2>
       <p class="text-sm">
@@ -162,25 +182,6 @@
         {/if}
         {#if !status.available}This server cannot compile icons, so they cannot change here.{/if}
       </p>
-      <div class="mt-3 flex flex-wrap items-end gap-4">
-        <a class="btn-secondary" href="/api/v1/icons/export" download>Export as a zip</a>
-        {#if canManage}
-          <form class="flex flex-wrap items-end gap-2" onsubmit={importArchive}>
-            <div>
-              <label class="label" for="icon-archive">Import library files from a zip</label>
-              <input id="icon-archive" type="file" accept=".zip,application/zip" class="text-sm" bind:files={archive} />
-            </div>
-            <button class="btn-secondary" disabled={importing || !archive?.length}>{importing ? 'Importing…' : 'Import'}</button>
-          </form>
-        {/if}
-      </div>
-      {#if imported}<p role="status" class="mt-2 text-sm text-green-700 dark:text-green-400">{imported}</p>{/if}
-      {#if importError}
-        <div role="alert" class="mt-2 text-sm text-red-700 dark:text-red-400">
-          <p>{importError}</p>
-          {#if importRefusal.length}<IconDiagList diags={importRefusal} {categories} {icons} />{/if}
-        </div>
-      {/if}
     </section>
 
     <section class="card max-w-3xl" aria-labelledby="attention-heading">
@@ -192,7 +193,7 @@
           {#each drafts as d (`${d.category_id}/${d.rendition}`)}
             {@const c = categoryOf(d.category_id)}
             <li>
-              <span aria-hidden="true">⚠ </span><a class="underline" href="/categories/{encodeURIComponent(d.category_id)}">{c?.name ?? d.icon_name}</a>{d.rendition === 'label' ? "'s label icon" : ''}:
+              <span aria-hidden="true">⚠ </span><a class="underline" href="/categories/{encodeURIComponent(d.category_id)}?tab=icon">{c?.name ?? d.icon_name}</a>{d.rendition === 'label' ? "'s label icon" : ''}:
               a draft{d.source ? '' : ', never published,'} with {d.draft_errors.length} problem{d.draft_errors.length === 1 ? '' : 's'}.
             </li>
           {/each}
@@ -235,7 +236,7 @@
                   <a class="underline" href={imageUrl(icon.name, 'svg')} download="{icon.name}.svg" aria-label="{icon.name} as SVG">SVG</a> ·
                   <a class="underline" href={imageUrl(icon.name, 'png')} download="{icon.name}.png" aria-label="{icon.name} as PNG">PNG</a>
                 </span>
-                {#if cat}<a class="block truncate underline" href="/categories/{encodeURIComponent(cat.id)}">{cat.name}</a>{/if}
+                {#if cat}<a class="block min-h-11 truncate leading-[2.75rem] underline" href="/categories/{encodeURIComponent(cat.id)}?tab=icon">{cat.name}</a>{/if}
               </li>
             {/each}
           </ul>
@@ -247,16 +248,40 @@
       {/if}
     </section>
 
-    {#if states}
-      <StatesSection {states} names={build?.icons.map((i) => i.name).filter((n) => !isWrapper(n)) ?? []} canManage={session.can('icons.manage')} onsaved={changed} />
+  </div>
+  <div class="mt-6 space-y-6" hidden={tab !== 'library'}>
+    {#if canManage}
+      <form class="flex flex-wrap items-end gap-2" onsubmit={importArchive}>
+        <div>
+          <label class="label" for="icon-archive">Import library files from a zip</label>
+          <input id="icon-archive" type="file" accept=".zip,application/zip" class="block min-h-11 py-2.5 text-sm" bind:files={archive} />
+        </div>
+        <button class="btn-secondary" disabled={importing || !archive?.length}>{importing ? 'Importing…' : 'Import'}</button>
+      </form>
+    {/if}
+    {#if imported}<p role="status" class="text-sm text-green-700 dark:text-green-400">{imported}</p>{/if}
+    {#if importError}
+      <div role="alert" class="text-sm text-red-700 dark:text-red-400">
+        <p>{importError}</p>
+        {#if importRefusal.length}<IconDiagList diags={importRefusal} {categories} {icons} />{/if}
+      </div>
     {/if}
     <LibrarySection files={library} {canManage} {vocabulary} {categories} {icons} starter={states?.starter ?? ''} onsaved={changed} />
-    <PaletteSection {palette} {canManage} {categories} {icons} onsaved={changed} />
-    <SettingsSection {settings} tokens={palette.map((c) => c.token)} {canManage} {categories} {icons} onsaved={changed} />
-
-    <p class="max-w-3xl text-xs text-zinc-600 dark:text-zinc-400">
-      Icons are compiled by <a class="underline" href="https://forge.axonibyte.com/axonibyte/isolex">isolex</a>, the work of Axonibyte Innovations, LLC, under the
-      <a class="underline" href="https://forge.axonibyte.com/axonibyte/isolex/src/branch/main/LICENSE">Apache License 2.0</a>.
-    </p>
   </div>
+  <div class="mt-6" hidden={tab !== 'palette'}>
+    <PaletteSection {palette} {canManage} {categories} {icons} onsaved={changed} />
+  </div>
+  {#if states}
+    <div class="mt-6" hidden={tab !== 'states'}>
+      <StatesSection {states} names={build?.icons.map((i) => i.name).filter((n) => !isWrapper(n)) ?? []} canManage={session.can('icons.manage')} onsaved={changed} />
+    </div>
+  {/if}
+  <div class="mt-6 space-y-6" hidden={tab !== 'settings'}>
+    <SettingsSection {settings} tokens={palette.map((c) => c.token)} {canManage} {categories} {icons} onsaved={changed} />
+  </div>
+
+  <p class="mt-8 max-w-3xl text-xs text-zinc-600 dark:text-zinc-400">
+    Icons are compiled by <a class="underline" href="https://forge.axonibyte.com/axonibyte/isolex">isolex</a>, the work of Axonibyte Innovations, LLC, under the
+    <a class="underline" href="https://forge.axonibyte.com/axonibyte/isolex/src/branch/main/LICENSE">Apache License 2.0</a>.
+  </p>
 {/if}

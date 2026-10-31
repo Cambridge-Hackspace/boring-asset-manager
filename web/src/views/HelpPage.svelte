@@ -21,7 +21,7 @@
     <ul id="help-topics" class="mt-2 space-y-1 text-sm md:mt-0 md:block {topicsOpen ? '' : 'hidden'}">
       {#each helpTopics as t (t.slug)}
         <li>
-          <a class="hover:underline aria-[current=page]:font-semibold" href="/help/{t.slug}" aria-current={t.slug === slug ? 'page' : undefined}>{t.title}</a>
+          <a class="flex min-h-11 items-center hover:underline aria-[current=page]:font-semibold" href="/help/{t.slug}" aria-current={t.slug === slug ? 'page' : undefined}>{t.title}</a>
         </li>
       {/each}
     </ul>

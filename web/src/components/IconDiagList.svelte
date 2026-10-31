@@ -18,7 +18,7 @@
   {#each diags as d, k (k)}
     {@const cat = owner(d.file)}
     <li>
-      {#if cat}<a class="underline" href="/categories/{encodeURIComponent(cat.id)}">{cat.name}</a>{:else}<span class="font-mono">{d.file.replace(/^library\//, '')}</span>{/if}, line {d.line}: {d.message}
+      {#if cat}<a class="underline" href="/categories/{encodeURIComponent(cat.id)}?tab=icon">{cat.name}</a>{:else}<span class="font-mono">{d.file.replace(/^library\//, '')}</span>{/if}, line {d.line}: {d.message}
     </li>
   {/each}
 </ul>

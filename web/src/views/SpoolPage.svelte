@@ -9,7 +9,9 @@
   import { session } from '../lib/session.svelte';
   import { addedMessage, destinationName, entryWarnings, groupEntries, jobActive, jobStateName, poolsFor, printedMessage, printersFor, printing, shared, templateName, templatesFor } from '../lib/spool';
   import ConfirmButton from '../components/ConfirmButton.svelte';
+  import SegmentedControl from '../components/SegmentedControl.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
+  import PageHeader from '../components/PageHeader.svelte';
   import FitWarnings from '../components/FitWarnings.svelte';
 
   // The spool (README §6.2): labels waiting to print, sorted onto templates
@@ -199,14 +201,20 @@
   const jobOf = (e: SpoolEntry) => (e.job?.state === 'sending' ? `Sending to ${e.job.target}` : `Waiting for ${e.job?.target}`);
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Print queue</h1>
-  <div class="flex gap-1" role="group" aria-label="Show">
-    {#each [['waiting', 'Waiting'], ['jobs', 'Jobs'], ['printed', 'Printed']] as [key, label] (key)}
-      <button type="button" class={view === key ? 'btn-primary' : 'btn-secondary'} aria-pressed={view === key} onclick={() => show(key as View)}>{label}</button>
-    {/each}
-  </div>
-</div>
+<PageHeader title="Print queue" lede="Labels waiting to print, sorted onto templates and printers; the jobs printing them; and those printed, to print again.">
+  {#snippet actions()}
+    <SegmentedControl
+      label="Show"
+      options={[
+        { value: 'waiting', label: 'Waiting' },
+        { value: 'jobs', label: 'Jobs' },
+        { value: 'printed', label: 'Printed' },
+      ]}
+      value={view}
+      onchange={show}
+    />
+  {/snippet}
+</PageHeader>
 
 <div class="mb-4 flex flex-wrap items-center gap-4 text-sm">
   {#if view !== 'jobs'}
@@ -358,8 +366,8 @@
         <tbody>
           {#each spool.entries as e (e.id)}
             <tr class="border-b border-zinc-200 dark:border-zinc-800">
-              <td class="py-2 pr-2"><input type="checkbox" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} /></td>
-              <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
+              <td class="py-2 pr-2"><label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} /></label></td>
+              <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
               <td class="py-2 pr-4">{e.printed_template}</td>
               <td class="py-2 pr-4">{e.printed_on}</td>
               <td class="py-2 pr-4">{e.copies}</td>
@@ -392,13 +400,14 @@
             <thead class="border-b border-zinc-300 dark:border-zinc-700">
               <tr>
                 <th scope="col" class="w-8 py-2 pr-2">
-                  <input
+                  <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input
                     type="checkbox"
+                    class="h-5 w-5"
                     aria-label="Select every label for {destinationName(spool, g.destination)}, {templateName(spool, g.templateId)}"
                     checked={g.entries.some((e) => !e.job) && g.entries.every((e) => e.job || selected.includes(e.id))}
                     disabled={g.entries.every((e) => e.job)}
                     onchange={() => toggleGroup(g.entries)}
-                  />
+                  /></label>
                 </th>
                 <th scope="col" class="py-2 pr-4">Asset</th>
                 <th scope="col" class="py-2 pr-4">Copies</th>
@@ -409,8 +418,8 @@
             <tbody>
               {#each g.entries as e (e.id)}
                 <tr class="border-b border-zinc-200 dark:border-zinc-800">
-                  <td class="py-2 pr-2"><input type="checkbox" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} disabled={!!e.job} /></td>
-                  <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
+                  <td class="py-2 pr-2"><label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} disabled={!!e.job} /></label></td>
+                  <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
                   <td class="py-2 pr-4">{e.copies}</td>
                   <td class="py-2 pr-4">{actorName(e.added_by, session.user?.id)}, {when(e.added_at)}</td>
                   <td class="py-2">

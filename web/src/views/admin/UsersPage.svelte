@@ -8,11 +8,18 @@
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import RolePicker from '../../components/RolePicker.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let users = $state<UserWithRoles[]>([]);
+  // Finding someone among many, by name or email.
+  let find = $state('');
+  const shown = $derived.by(() => {
+    const q = find.trim().toLowerCase();
+    return q ? users.filter((u) => u.email.toLowerCase().includes(q) || (u.name ?? '').toLowerCase().includes(q)) : users;
+  });
   let roles = $state<Role[]>([]);
   let scopes = $state<Scope[]>([]);
   let loading = $state(true);
@@ -112,10 +119,11 @@
   }
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Users</h1>
-  {#if !creating}<button type="button" class="btn-primary" onclick={() => (creating = true)}>New user</button>{/if}
-</div>
+<PageHeader title="Users" lede="The people who can sign in, and the roles that decide what each may do.">
+  {#snippet actions()}
+    {#if !creating}<button type="button" class="btn-primary" onclick={() => (creating = true)}>New user</button>{/if}
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
 
@@ -149,6 +157,10 @@
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading users…</p>
 {:else}
+  <div class="mb-4 max-w-sm">
+    <label class="label" for="users-find">Find someone</label>
+    <input id="users-find" class="input" type="search" placeholder="Name or email" autocomplete="off" bind:value={find} />
+  </div>
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm" use:stack>
       <thead class="border-b border-zinc-300 dark:border-zinc-700">
@@ -161,7 +173,7 @@
         </tr>
       </thead>
       <tbody>
-        {#each users as u (u.id)}
+        {#each shown as u (u.id)}
           <tr class="border-b border-zinc-200 align-top dark:border-zinc-800">
             <td class="py-2 pr-4">
               {#if renaming === u.id}
@@ -181,7 +193,7 @@
               {#if editingRoles === u.id}
                 <RolePicker id="roles-{u.id}" legend="Roles for {u.email}" {roles} {scopes} bind:value={roleDraft} />
                 <div class="flex gap-2 pt-1">
-                  <button type="button" class="btn-primary" onclick={() => act(async () => { await request('PUT', `/users/${encodeURIComponent(u.id)}/roles`, { roles: roleDraft }); if (editingRoles === u.id) editingRoles = null; }, `Roles updated for ${u.email}.`)}>Save roles</button>
+                  <button type="button" class="btn-secondary" onclick={() => act(async () => { await request('PUT', `/users/${encodeURIComponent(u.id)}/roles`, { roles: roleDraft }); if (editingRoles === u.id) editingRoles = null; }, `Roles updated for ${u.email}.`)}>Save roles</button>
                   <button type="button" class="btn-secondary" onclick={() => (editingRoles = null)}>Cancel</button>
                 </div>
               {:else}

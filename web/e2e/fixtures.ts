@@ -84,17 +84,22 @@ const navGroupOf: Record<string, string> = {
 };
 
 /**
- * Clicks a link in the main navigation, opening its group's menu first
- * when the page is in one (a group of one page is a plain link).
+ * Clicks a link in the main navigation. A page in a group is reached through
+ * the group's link, then the group's row of pages beneath the header; a group
+ * of one page is a plain link.
  */
 export async function goTo(page: Page, name: string): Promise<void> {
   const nav = page.getByRole('navigation', { name: 'Main' });
   const link = nav.getByRole('link', { name, exact: true });
   const group = navGroupOf[name];
   if (group) {
-    const menu = nav.getByRole('button', { name: group, exact: true });
-    await expect(link.or(menu)).toBeVisible();
-    if (await menu.isVisible()) await menu.click();
+    const groupLink = nav.getByRole('link', { name: group, exact: true });
+    await expect(link.or(groupLink)).toBeVisible();
+    if (await groupLink.isVisible()) {
+      await groupLink.click();
+      await page.getByRole('navigation', { name: group }).getByRole('link', { name, exact: true }).click();
+      return;
+    }
   }
   await link.click();
 }

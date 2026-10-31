@@ -48,7 +48,7 @@
 
 <svelte:window onpointerdown={(e) => snapOpen && !(e.target as Element).closest('[data-snap-menu]') && (snapOpen = false)} />
 
-<div class="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-200 bg-zinc-50 px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-900" role="group" aria-label="Tool options">
+<div class="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-200 bg-zinc-50 px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-900" role="group" aria-label="Tool options">
   {#if editor.editingText !== null}
     <TextBar index={editor.editingText} {placeholderList} />
   {:else if editor.tool === 'select'}

@@ -13,6 +13,7 @@ test('thresholds, running-low actions and notification channels', async ({ signe
   await page.getByRole('button', { name: 'Create category' }).click();
   await expect(page).toHaveURL(/\/categories\/[0-9a-f-]{36}$/);
   const id = page.url().split('/').pop()!;
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Stock and lending' }).click();
   const stock = page.getByRole('region', { name: 'Stock' });
   await expect(stock).toContainText('Running low. 0 active assets here and in its subcategories; flagged automatically below 1.');
 
@@ -29,7 +30,7 @@ test('thresholds, running-low actions and notification channels', async ({ signe
 
   // Adding an asset restocks it automatically; then flag it by hand.
   await api.call('POST', '/assets', { name: `Roll ${tag}`, category_ids: [id] });
-  await page.goto(`/categories/${id}`);
+  await page.goto(`/categories/${id}?tab=stock`);
   await expect(stock).toContainText('In stock. 1 active asset here');
   await stock.getByRole('button', { name: 'Mark running low' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Marked as running low.' })).toBeVisible();

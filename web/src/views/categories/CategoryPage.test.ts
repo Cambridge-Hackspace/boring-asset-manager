@@ -22,8 +22,16 @@ const effective: EffectiveField[] = [
   { field: fieldOf('voltage', 'Voltage'), is_required: false, source_category_id: 'power' },
 ];
 
+// Opens the page at a tab, as a link to it would.
+function at(tab: string) {
+  history.replaceState(null, '', tab ? `/?tab=${tab}` : '/');
+  router.path = location.pathname;
+  router.search = location.search;
+}
+
 beforeEach(() => {
   session.permissions = ['assets.read', 'categories.manage'];
+  at('');
 });
 afterEach(() => {
   cleanup();
@@ -59,6 +67,24 @@ describe('CategoryPage', () => {
     await vi.waitFor(() => expect(screen.queryByText(/Not saved yet/)).toBeNull());
   });
 
+  it('shows one part at a time, keeping changes not saved in another, and marks its tab', async () => {
+    api();
+    render(CategoryPage, { params: { id: 'power' } });
+    const tabs = await screen.findByRole('navigation', { name: 'Parts of this category' });
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['About', 'Fields', 'Stock and lending', 'Icon']);
+    expect(within(tabs).getByRole('link', { name: 'About' }).getAttribute('aria-current')).toBe('page');
+    expect(within(tabs).getByRole('link', { name: 'Fields' }).getAttribute('href')).toBe('/?tab=fields');
+    expect(screen.queryByRole('table')).toBeNull();
+
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Big tools' } });
+    at('fields');
+    expect(await screen.findByRole('table')).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+    expect(within(tabs).getByRole('link', { name: 'About (not saved)' })).toBeTruthy();
+    at('');
+    expect(((await screen.findByRole('textbox', { name: 'Name' })) as HTMLInputElement).value).toBe('Big tools');
+  });
+
   it('duplicates it as saved, and opens the copy', async () => {
     const { sent } = api({ 'POST /categories/power/clone': () => ({ status: 201, body: { category: cat('copy', 'Power tools copy', 'tools') } }) });
     render(CategoryPage, { params: { id: 'power' } });
@@ -75,6 +101,7 @@ describe('CategoryPage', () => {
 
   it('shows own and inherited fields, and only offers to remove its own', async () => {
     api();
+    at('fields');
     render(CategoryPage, { params: { id: 'power' } });
     const table = await screen.findByRole('table');
     const rows = within(table).getAllByRole('row').slice(1);
@@ -105,6 +132,7 @@ describe('CategoryPage', () => {
 
   it('only lets consumable categories run low', async () => {
     api();
+    at('stock');
     render(CategoryPage, { params: { id: 'power' } });
     const low = (await screen.findByLabelText('Running low')) as HTMLInputElement;
     expect(low.disabled).toBe(true);
@@ -114,17 +142,18 @@ describe('CategoryPage', () => {
 
   it('edits the low stock threshold, and drops it for non-consumables', async () => {
     const { sent } = api({ 'PUT /categories/paint': () => ({ category: categories[3] }) });
+    at('stock');
     render(CategoryPage, { params: { id: 'paint' } });
     const input = (await screen.findByLabelText('Low stock threshold (optional)')) as HTMLInputElement;
     expect(input.value).toBe('3');
     await fireEvent.input(input, { target: { value: '5' } });
-    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save stock and lending' }));
     await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT')).toHaveLength(1));
     expect(sent.find((r) => r.method === 'PUT')!.body).toMatchObject({ is_consumable: true, unit: '', low_stock_threshold: 5 });
 
     await fireEvent.click(screen.getByLabelText('Consumable'));
     expect(input.disabled).toBe(true);
-    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save stock and lending' }));
     await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT')).toHaveLength(2));
     expect(sent.filter((r) => r.method === 'PUT')[1]!.body).toMatchObject({ is_consumable: false, unit: '', is_running_low: false, low_stock_threshold: null });
   });
@@ -132,6 +161,7 @@ describe('CategoryPage', () => {
   it('shows stock and lets people with stock.record flag it by hand', async () => {
     session.permissions = ['assets.read', 'stock.record'];
     const { sent } = api({ 'PUT /categories/paint/running-low': () => ({ category: categories[3], changed: true }) });
+    at('stock');
     render(CategoryPage, { params: { id: 'paint' } });
     const stock = await screen.findByRole('region', { name: 'Stock' });
     expect(stock.textContent).toContain('Running low.');
@@ -147,18 +177,22 @@ describe('CategoryPage', () => {
     // Editing assets is not enough.
     session.permissions = ['assets.read', 'assets.write'];
     api();
+    at('stock');
     render(CategoryPage, { params: { id: 'paint' } });
     const stock = await screen.findByRole('region', { name: 'Stock' });
     expect(within(stock).queryByRole('button')).toBeNull();
     cleanup();
+    at('fields');
     render(CategoryPage, { params: { id: 'power' } });
     await screen.findByRole('table');
     expect(screen.queryByRole('region', { name: 'Stock' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Stock and lending' })).toBeNull();
   });
 
   it('is read-only without categories.manage', async () => {
     session.permissions = ['assets.read'];
     api();
+    at('fields');
     render(CategoryPage, { params: { id: 'power' } });
     await screen.findByRole('table');
     expect(screen.queryByLabelText('Name')).toBeNull();
@@ -182,6 +216,7 @@ describe('CategoryPage', () => {
 
     // A category manager sees them, but cannot change them.
     scopeApi();
+    at('scopes');
     render(CategoryPage, { params: { id: 'power' } });
     const section = (await screen.findByRole('heading', { name: 'Who can see its assets' })).closest('section')!;
     const boxes = within(section).getAllByRole('checkbox') as HTMLInputElement[];
@@ -217,6 +252,7 @@ describe('CategoryPage', () => {
       'GET /categories/scan-conflicts': (_b: unknown) => ({ categories: { tools: 0 } }),
       'PUT /categories/power/scan-template': () => ({ category: categories[1] }),
     });
+    at('links');
     // The answer about the change: power would tie with paint over 2 assets.
     let asked = 0;
     const realFetch = globalThis.fetch;
@@ -240,6 +276,7 @@ describe('CategoryPage', () => {
 
   it('says when its assets show a template chosen by a tie', async () => {
     loaded({ 'GET /reports': () => ({ reports: [] }), 'GET /categories/scan-conflicts': () => ({ categories: { power: 3 } }) });
+    at('links');
     render(CategoryPage, { params: { id: 'power' } });
     const note = await screen.findByRole('note');
     expect(note.textContent).toContain('3 assets here show a scan template chosen by a tie');
@@ -253,6 +290,7 @@ describe('CategoryPage', () => {
       'GET /categories/label-conflicts': () => ({ categories: {} }),
       'PUT /categories/power/label-template': () => ({ category: categories[1] }),
     });
+    at('labels');
     const asked: string[] = [];
     const realFetch = globalThis.fetch;
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
@@ -286,6 +324,7 @@ describe('CategoryPage', () => {
 
   it('says when its assets take a label template chosen by a tie', async () => {
     loaded({ 'GET /categories/label-conflicts': () => ({ categories: { power: 2 } }) });
+    at('labels');
     render(CategoryPage, { params: { id: 'power' } });
     const note = await screen.findByRole('note');
     expect(note.textContent).toContain('2 assets here take a label template chosen by a tie');
@@ -298,6 +337,7 @@ describe('CategoryPage', () => {
       'GET /categories/label-conflicts': () => ({ categories: {} }),
       'POST /spool': () => ({ status: 201, body: { added: [{ id: 'e1' }, { id: 'e2' }], already_waiting: ['a3'], skipped: [] } }),
     });
+    at('labels');
     render(CategoryPage, { params: { id: 'power' } });
     // Without categories.manage there is no template to choose, only the spool.
     const add = await screen.findByRole('button', { name: 'Add its assets to the print queue' });
@@ -320,6 +360,7 @@ describe('CategoryPage', () => {
       'GET /categories/power/actions': () => ({ actions: [{ action_id: 'open', cascades: false }] }),
       'PUT /categories/power/actions': (body) => body,
     });
+    at('links');
     render(CategoryPage, { params: { id: 'power' } });
     const section = (await screen.findByRole('heading', { name: 'Actions' })).closest('section')!;
     expect((within(section).getByRole('checkbox', { name: 'Open drawer' }) as HTMLInputElement).checked).toBe(true);

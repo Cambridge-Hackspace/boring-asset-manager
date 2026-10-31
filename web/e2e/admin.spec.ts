@@ -284,6 +284,7 @@ test('scopes: a keeper of the tools edits the tools and nothing else', async ({ 
   await page.getByRole('button', { name: 'Create scope' }).click();
   await expect(page.getByRole('status')).toHaveText(`Created the scope ${scope}.`);
   await page.goto(`/categories/${category.id}`);
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Who can see it' }).click();
   await page.getByRole('checkbox', { name: scope }).check();
   await page.getByRole('button', { name: 'Save scopes' }).click();
   await expect(page.getByRole('status')).toHaveText('Scopes saved.');

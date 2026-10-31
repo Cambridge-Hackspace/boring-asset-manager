@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { stack } from '../../lib/stack';
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
@@ -6,6 +7,7 @@
   import { describeAssignment } from '../../lib/permissions';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import RolePicker from '../../components/RolePicker.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -110,15 +112,16 @@
   }
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">API tokens</h1>
-  {#if !creating}<button type="button" class="btn-primary" onclick={startCreate}>New token</button>{/if}
-</div>
-<p class="mb-4 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-  Tokens let scripts and dashboards use the API, sent as <code>Authorization: Bearer &lt;token&gt;</code>. A token may do what its
-  roles allow, and its changes are recorded under its name. A token cannot make tokens or change anyone's account; one with users.manage can list and revoke them. Personal tokens,
-  which people make for their assistants on their account page, act as them instead (<a class="underline" href="/help/assistants">Assistants</a>).
-</p>
+<PageHeader title="API tokens">
+  {#snippet lede()}
+    Tokens let scripts and dashboards use the API, sent as <code>Authorization: Bearer &lt;token&gt;</code>. A token may do what its
+    roles allow, and its changes are recorded under its name. A token cannot make tokens or change anyone's account; one with users.manage can list and revoke them. Personal tokens,
+    which people make for their assistants on their account page, act as them instead (<a class="underline" href="/help/assistants">Assistants</a>).
+  {/snippet}
+  {#snippet actions()}
+    {#if !creating}<button type="button" class="btn-primary" onclick={startCreate}>New token</button>{/if}
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
 
@@ -164,7 +167,7 @@
   <p class="text-sm text-zinc-600 dark:text-zinc-400">No tokens yet.</p>
 {:else}
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm">
+    <table class="w-full text-left text-sm" use:stack>
       <thead class="border-b border-zinc-300 dark:border-zinc-700">
         <tr>
           <th scope="col" class="py-2 pr-4">Name</th>

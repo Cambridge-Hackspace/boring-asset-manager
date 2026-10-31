@@ -67,7 +67,7 @@
         <CategoryBadge category={row.category} href="/categories/{encodeURIComponent(row.category.id)}" />
         {#if counts[row.category.id]}
           {@const n = counts[row.category.id]!}
-          <a class="text-xs text-zinc-600 underline dark:text-zinc-400" href="/assets?category={encodeURIComponent(row.category.id)}">{n} asset{n === 1 ? '' : 's'}</a>
+          <a class="inline-flex min-h-11 min-w-11 items-center text-xs text-zinc-600 underline dark:text-zinc-400" href="/assets?category={encodeURIComponent(row.category.id)}">{n} asset{n === 1 ? '' : 's'}</a>
         {/if}
         {#if row.category.is_running_low}
           <span class="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Running low</span>
@@ -75,10 +75,10 @@
           <span class="text-xs text-zinc-600 dark:text-zinc-400">Consumable</span>
         {/if}
         {#if conflicts[row.category.id]}
-          <a href="/assets?conflict=scan_template" class="text-xs"><ConflictMark label="Ties with another category over the scan template of {conflicts[row.category.id]} {conflicts[row.category.id] === 1 ? 'asset' : 'assets'}" /></a>
+          <a href="/assets?conflict=scan_template" class="inline-flex min-h-11 min-w-11 items-center text-xs"><ConflictMark label="Ties with another category over the scan template of {conflicts[row.category.id]} {conflicts[row.category.id] === 1 ? 'asset' : 'assets'}" /></a>
         {/if}
         {#if labelConflicts[row.category.id]}
-          <a href="/assets?conflict=label_template" class="text-xs"><ConflictMark label="Ties with another category over the label template of {labelConflicts[row.category.id]} {labelConflicts[row.category.id] === 1 ? 'asset' : 'assets'}" /></a>
+          <a href="/assets?conflict=label_template" class="inline-flex min-h-11 min-w-11 items-center text-xs"><ConflictMark label="Ties with another category over the label template of {labelConflicts[row.category.id]} {labelConflicts[row.category.id] === 1 ? 'asset' : 'assets'}" /></a>
         {/if}
         {#if row.depth > 0}<span class="sr-only">(level {row.depth + 1})</span>{/if}
       </li>

@@ -6,11 +6,11 @@ An asset is anything you keep track of. Open **Assets** to list them; search by 
 
 Choose **New asset**, give it a name and its categories, say where it is (find the shelf, box or room it is in), and fill in the fields its categories ask for. Fields marked as required must be filled in. Codes for its labels are under **Codes**: type one, choose **Assign the next code** to take the one after the highest of that kind (after HS-105, HS-106), or leave them for later.
 
-**Duplicate…** on an asset's page starts a new asset like it, such as one more spool of the same filament: the form is filled in with its categories, fields, stock and place, and the next code in its series (after SP-014, SP-015). Its links are listed to keep or untick, though not what it contains, which stays where it is, and so are its photos, copied unless unticked. Change what differs, and nothing is saved until you choose **Create asset**. Its condition and history are its own.
+**Duplicate…**, under **More** on an asset's page, starts a new asset like it, such as one more spool of the same filament: the form is filled in with its categories, fields, stock and place, and the next code in its series (after SP-014, SP-015). Its links are listed to keep or untick, though not what it contains, which stays where it is, and so are its photos, copied unless unticked. Change what differs, and nothing is saved until you choose **Create asset**. Its condition and history are its own.
 
 To add several alike, such as a box of new spools, **Create and add another** creates one and keeps the form for the next, with the next code in its series, so each one after the first is a name and a code.
 
-You can also start a new asset from where it goes: **Add something inside…** on a shelf or a bin's page, **Add an asset to it** on a category's page, or **New asset…** in an asset's **Links**, which links the new one as the link chosen there would.
+You can also start a new asset from where it goes: **Add something inside…** under **More** on a shelf or a bin's page, **Add an asset to it** on a category's page, or **New asset…** in an asset's **Links**, which links the new one as the link chosen there would.
 
 **Edit** changes any of this; every change is kept in the asset's **History**, with who made it.
 

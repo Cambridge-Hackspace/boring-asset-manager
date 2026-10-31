@@ -176,3 +176,36 @@ func TestStart(t *testing.T) {
 		t.Errorf("two categories leave it to be chosen: %v", v)
 	}
 }
+
+// Asks and Ahead count the screens a run shows (#166).
+func TestAsksAndAhead(t *testing.T) {
+	long := &Condition{Value: ValueCategoryID, Op: OpIs, To: "long"}
+	d := Definition{Steps: []Step{
+		{ID: "kind", Kind: KindChooseCategory},
+		{ID: "fixed", Kind: KindChooseCategory, Fixed: "short"},
+		{ID: "about", Kind: KindForm},
+		{ID: "long_only", Kind: KindConfirm, When: long},
+		{ID: "file", Kind: KindCreate},
+		{ID: "put", Kind: KindCreate, Location: &Location{Mode: PlaceScan}},
+		{ID: "label", Kind: KindLabel},
+		{ID: "done", Kind: KindDone},
+	}}
+	var asks []string
+	for i := range d.Steps {
+		if d.Steps[i].Asks() {
+			asks = append(asks, d.Steps[i].ID)
+		}
+	}
+	if want := []string{"kind", "about", "long_only", "put"}; !reflect.DeepEqual(asks, want) {
+		t.Errorf("asks %v, want %v", asks, want)
+	}
+	if n := d.Ahead(0, Values{}); n != 2 {
+		t.Errorf("ahead of kind, no category: %d", n)
+	}
+	if n := d.Ahead(0, Values{ValueCategoryID: "long"}); n != 3 {
+		t.Errorf("ahead of kind, long: %d", n)
+	}
+	if n := d.Ahead(5, Values{}); n != 0 {
+		t.Errorf("ahead of the last: %d", n)
+	}
+}

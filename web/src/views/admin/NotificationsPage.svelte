@@ -6,6 +6,7 @@
   import { outcome } from '../../lib/notifications';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import ChannelForm from './ChannelForm.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -73,15 +74,13 @@
   }
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <div>
-    <h1 class="text-2xl font-bold">Notifications</h1>
-    <p class="text-sm text-zinc-600 dark:text-zinc-400">Where BAM! sends news, such as consumables running low, overdue loans and problems reported, each channel the events it chooses.</p>
-  </div>
-  {#if editing === null && drivers.length}
-    <button type="button" class="btn-primary" onclick={() => (editing = 'new')}>New channel</button>
-  {/if}
-</div>
+<PageHeader title="Notifications" lede="Where BAM! sends news, such as consumables running low, overdue loans and problems reported, each channel the events it chooses.">
+  {#snippet actions()}
+    {#if editing === null && drivers.length}
+      <button type="button" class="btn-primary" onclick={() => (editing = 'new')}>New channel</button>
+    {/if}
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 {#if notice}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{notice}</p>{/if}
 

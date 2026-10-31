@@ -172,8 +172,8 @@ test('say where an asset is as it is made, find it by its place, and move it', a
   await expect(code128).toHaveValue(/[0-9]$/);
   await page.getByRole('button', { name: 'Create asset' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(name);
-  const details = page.getByRole('region', { name: 'Details' });
-  await expect(details.getByRole('link', { name: shelf })).toBeVisible();
+  const where = page.getByRole('region', { name: 'Where it is' });
+  await expect(where.getByRole('link', { name: shelf })).toBeVisible();
 
   // The list says where, and searching the place finds it.
   await page.goto(`/assets?search=${encodeURIComponent(shelf)}`);
@@ -182,12 +182,12 @@ test('say where an asset is as it is made, find it by its place, and move it', a
 
   // Moved to the bench; the shelf lists what it holds no more.
   await row.getByRole('link', { name }).click();
-  await details.getByRole('button', { name: 'Move' }).click();
+  await where.getByRole('button', { name: 'Move' }).click();
   await page.getByLabel('Move it to').fill(bench);
   await page.getByLabel('Move it to').press('Enter');
   await page.getByRole('list', { name: 'Places found' }).getByRole('button', { name: bench }).click();
   await expect(page.getByRole('status')).toHaveText(`Moved to ${bench}.`);
-  await expect(details.getByRole('link', { name: bench })).toBeVisible();
+  await expect(where.getByRole('link', { name: bench })).toBeVisible();
   await page.goto(`/assets/${shelfAsset.asset.id}`);
   await expect(page.getByRole('region', { name: 'Contents' })).toHaveCount(0);
 });
@@ -226,7 +226,7 @@ test('duplicate an asset: the form filled in from it, the next code in its serie
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${name} 2`);
   await expect(page).not.toHaveURL(new RegExp(spool.id));
-  const where = page.locator('dt', { hasText: /^Where$/ }).locator('xpath=following-sibling::dd[1]');
+  const where = page.getByRole('region', { name: 'Where it is' });
   await expect(where).toContainText(shelf.name);
   await expect(page.getByText(`${series}015`).first()).toBeVisible();
   await expect(page.getByRole('link', { name: printer.name })).toBeVisible();
@@ -251,7 +251,7 @@ test('start a new asset in a bin, in a category, or linked to another', async ({
   await page.getByLabel('Name').fill(screw);
   await page.getByRole('button', { name: 'Create asset' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(screw);
-  await expect(page.locator('dt', { hasText: /^Where$/ }).locator('xpath=following-sibling::dd[1]')).toContainText(bin.name);
+  await expect(page.getByRole('region', { name: 'Where it is' })).toContainText(bin.name);
 
   // In a category.
   await page.goto(`/categories/${category.id}`);

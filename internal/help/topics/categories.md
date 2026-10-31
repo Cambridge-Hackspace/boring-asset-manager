@@ -6,17 +6,20 @@
 
 **Fields** are the details assets carry, such as a serial number or a purchase date. Create them once on the **Fields** page, then give them to categories: an asset fills in every field its categories, and the categories above them, ask for. A field can be required.
 
-## What a category sets
+## A category's page
 
-- **Consumable**, with an optional unit and threshold: see [Stock](/help/stock).
-- **Lendable**: its assets can be lent. See [Lending](/help/loans).
-- **Suggested links**: the kinds of link offered first for its assets.
-- **Scan template**: what scanning its assets shows. See [Scanning](/help/scanning).
+A category's page is in tabs, and each part of it saves with its own button. A tab with changes not saved says so, and they are kept while you look at another.
+
+- **About**: its name, the category it sits in, and its color.
+- **Fields**: what its assets fill in, its own and those it inherits.
+- **Stock and lending**: whether it is consumable, with an optional unit and threshold (see [Stock](/help/stock)), and whether its assets can be lent (see [Lending](/help/loans)).
+- **Labels**: the templates its assets' labels are printed with, and a button that adds them all to the print queue.
 - **Icon**: a small drawing of what its assets are, which its subcategories inherit. See [Icons](/help/icons).
-- **Who can see its assets**: its scopes, which decide who can see and change its assets; **public** lets anyone see them, even signed out. See [People and permissions](/help/people).
+- **Links and actions**: the kinds of link offered first for its assets, what scanning them shows (see [Scanning](/help/scanning)), and the buttons offered on them.
+- **Who can see it**: its scopes, which decide who can see and change its assets; **public** lets anyone see them, even signed out. See [People and permissions](/help/people).
 
 ## Duplicating one
 
-**Duplicate**, on a category's page, makes a copy beside it, named *… copy*, with everything it sets and its own fields, but none of its subcategories or assets. It copies the category as saved, so save any changes first. The copy uses the same scan and label templates, rather than copies of them.
+**Duplicate**, on a category's **About** tab, makes a copy beside it, named *… copy*, with everything it sets and its own fields, but none of its subcategories or assets. It copies the category as saved, so save any changes first. The copy uses the same scan and label templates, rather than copies of them.
 
 A yellow triangle marks a category that ties with another over which scan template some assets show.

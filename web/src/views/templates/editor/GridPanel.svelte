@@ -31,11 +31,11 @@
   <fieldset class="space-y-1">
     <legend class="flex w-full items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
       Grid
-      <label class="flex items-center gap-1"><input type="checkbox" checked={doc.grid?.visible ?? false} onchange={(e) => set({ visible: e.currentTarget.checked || undefined })} /> Show it</label>
+      <label class="flex min-h-8 items-center gap-1"><input type="checkbox" checked={doc.grid?.visible ?? false} onchange={(e) => set({ visible: e.currentTarget.checked || undefined })} /> Show it</label>
     </legend>
     <div class="flex items-center gap-1">
       <div class="flex-1"><NumberField id="grid-x" label="Step across" value={grid.x} min={0.001} step={gridStep(doc.units)} length={doc.units} onchange={(n) => n > 0 && set({ x: n })} /></div>
-      <button type="button" class="icon-btn h-6 w-6" aria-pressed={equal} aria-label="Keep the spacing equal" title="The same spacing across and down" onclick={() => (equal = !equal)}>
+      <button type="button" class="icon-btn" aria-pressed={equal} aria-label="Keep the spacing equal" title="The same spacing across and down" onclick={() => (equal = !equal)}>
         <Icon name={equal ? 'lock' : 'unlock'} size={14} />
       </button>
       <div class="flex-1"><NumberField id="grid-y" label="Step down" value={grid.y} min={0.001} step={gridStep(doc.units)} length={doc.units} onchange={(n) => n > 0 && set({ y: n })} /></div>
@@ -58,8 +58,8 @@
     <legend class="text-xs text-zinc-600 dark:text-zinc-400">Guides</legend>
     <p class="text-xs text-zinc-600 dark:text-zinc-400">Drag one out of a ruler; drag it off the label to take it away.</p>
     <div class="flex flex-wrap items-center gap-3 text-xs">
-      <label class="flex items-center gap-1"><input type="checkbox" checked={editor.guidesShown} onchange={(e) => editor.setGuidesShown(e.currentTarget.checked)} /> Show them</label>
-      <label class="flex items-center gap-1"><input type="checkbox" checked={editor.guidesLocked} onchange={(e) => editor.setGuidesLocked(e.currentTarget.checked)} /> Lock them</label>
+      <label class="flex min-h-8 items-center gap-1"><input type="checkbox" checked={editor.guidesShown} onchange={(e) => editor.setGuidesShown(e.currentTarget.checked)} /> Show them</label>
+      <label class="flex min-h-8 items-center gap-1"><input type="checkbox" checked={editor.guidesLocked} onchange={(e) => editor.setGuidesLocked(e.currentTarget.checked)} /> Lock them</label>
       <button type="button" class="btn-sm" disabled={!doc.guides} onclick={() => editor.setGuides({}, 'Delete all guides')}>Delete all</button>
     </div>
   </fieldset>

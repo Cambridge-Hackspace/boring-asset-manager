@@ -19,7 +19,7 @@ test('weigh filament: a category totals its spools in grams, and one lent comes 
     (await api.call('POST', '/assets', { name: unique(label), category_ids: [categoryId], stock: { quantity: grams, unit: 'g' } })).asset.asset.id as string;
   const blue = await spool('Blue PLA', 1000);
   await spool('Red PLA', 500);
-  await page.reload();
+  await page.goto(`${categoryUrl}?tab=stock`);
   const stock = page.getByRole('region', { name: 'Stock' });
   await expect(stock).toContainText('In stock. 1500 g here and in its subcategories, in 2 active assets; flagged automatically below 1000 g.');
 
@@ -33,6 +33,6 @@ test('weigh filament: a category totals its spools in grams, and one lent comes 
   await expect(page.getByRole('region', { name: 'Stock' })).toContainText('200 g left');
   await expect(page.getByRole('region', { name: 'History' }).getByRole('listitem').first()).toContainText('Used 800 g; 200 g left');
 
-  await page.goto(categoryUrl);
+  await page.goto(`${categoryUrl}?tab=stock`);
   await expect(page.getByRole('region', { name: 'Stock' })).toContainText('Running low. 700 g here');
 });

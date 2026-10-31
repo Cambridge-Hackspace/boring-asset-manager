@@ -3,10 +3,10 @@
   import { router } from './lib/router.svelte';
   import { displayName } from './lib/people';
   import { helpFor } from './lib/help';
-  import { isCurrent, navSections } from './lib/nav';
+  import { currentGroup, isCurrent, navSections } from './lib/nav';
   import { session, signInPath } from './lib/session.svelte';
   import { routes } from './routes';
-  import NavMenu from './components/NavMenu.svelte';
+  import logo from './assets/bam.png';
 
   // A workspace, such as the template editor, has the whole window below
   // the header, rather than a column of the page: the header's height
@@ -19,7 +19,14 @@
     session.user ? navSections(routes, (...p) => session.canAny(...p)) : [],
   );
 
-  const itemClass = 'rounded-md px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800';
+  // Catalog, Labels and Admin each lead to their first page, and the pages of
+  // the one you are in sit in a row beneath the header. A group of one page
+  // is a plain link.
+  const group = $derived(currentGroup(sections, router.path));
+  const row = $derived(group && group.links.length > 1 ? group : undefined);
+
+  const itemClass =
+    'inline-flex min-h-11 items-center rounded px-3 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 aria-[current]:font-semibold aria-[current]:underline aria-[current]:decoration-action aria-[current]:decoration-3 aria-[current]:underline-offset-8';
 
   let main: HTMLElement | undefined = $state();
   let headerHeight = $state(0);
@@ -53,9 +60,9 @@
 <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-zinc-900">
   Skip to content
 </a>
-<header bind:offsetHeight={headerHeight} class="border-b border-zinc-200 bg-white print:hidden dark:border-zinc-800 dark:bg-zinc-900">
-  <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-    <a href="/" class="text-lg font-black tracking-tight">BAM!</a>
+<header bind:offsetHeight={headerHeight} class="border-b-2 border-zinc-900 bg-zinc-50 print:hidden dark:border-zinc-600 dark:bg-zinc-950">
+  <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2">
+    <a href="/" class="inline-flex min-h-11 items-center rounded"><img src={logo} alt="BAM!" width="72" height="45" /></a>
     <button
       type="button"
       class="btn-secondary ml-auto sm:hidden"
@@ -66,27 +73,21 @@
     >
       Menu <span aria-hidden="true">{menuOpen ? '✕' : '☰'}</span>
     </button>
-    <nav aria-label="Main" class="hidden flex-1 flex-wrap gap-1 sm:flex">
+    <nav aria-label="Main" class="hidden flex-1 flex-wrap gap-x-1 sm:flex">
       {#each sections as section (section.group ?? '')}
         {#if section.group && section.links.length > 1}
-          <NavMenu label={section.group} links={section.links} {itemClass} />
+          <a href={section.links[0]!.href} aria-current={section === group ? 'true' : undefined} class={itemClass}>{section.group}</a>
         {:else}
           {#each section.links as link (link.href)}
-            <a
-              href={link.href}
-              aria-current={isCurrent(link.href, router.path) ? 'page' : undefined}
-              class="{itemClass} aria-[current=page]:bg-zinc-900 aria-[current=page]:text-white dark:aria-[current=page]:bg-zinc-100 dark:aria-[current=page]:text-zinc-900"
-            >
-              {link.label}
-            </a>
+            <a href={link.href} aria-current={isCurrent(link.href, router.path) ? 'page' : undefined} class={itemClass}>{link.label}</a>
           {/each}
         {/if}
       {/each}
     </nav>
-    <div class="hidden items-center gap-3 text-sm sm:flex">
-      <a href="/help/{helpFor(router.path)}" class="text-zinc-600 hover:underline dark:text-zinc-400">Help</a>
+    <div class="hidden items-center gap-1 text-sm sm:flex">
+      <a href="/help/{helpFor(router.path)}" class="{itemClass} text-zinc-600 dark:text-zinc-400">Help</a>
       {#if session.user}
-        <a href="/account" class="text-zinc-600 hover:underline dark:text-zinc-400">{displayName(session.user)}</a>
+        <a href="/account" class="{itemClass} text-zinc-600 dark:text-zinc-400">{displayName(session.user)}</a>
         <button type="button" class="btn-secondary" onclick={() => session.signOut()}>Sign out</button>
       {:else}
         <a class="btn-secondary" href={signInPath(router.path + router.search)}>Sign in</a>
@@ -104,7 +105,7 @@
                 <a
                   href={link.href}
                   aria-current={isCurrent(link.href, router.path) ? 'page' : undefined}
-                  class="block {itemClass} py-2.5 aria-[current=page]:bg-zinc-900 aria-[current=page]:text-white dark:aria-[current=page]:bg-zinc-100 dark:aria-[current=page]:text-zinc-900"
+                  class="flex {itemClass}"
                 >
                   {link.label}
                 </a>
@@ -122,6 +123,15 @@
           <a class="btn-primary" href={signInPath(router.path + router.search)}>Sign in</a>
         {/if}
       </div>
+    </nav>
+  {/if}
+  {#if row}
+    <nav aria-label={row.group} class="border-t border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900">
+      <ul class="mx-auto flex max-w-7xl flex-wrap gap-x-1 px-4">
+        {#each row.links as link (link.href)}
+          <li><a href={link.href} aria-current={isCurrent(link.href, router.path) ? 'page' : undefined} class={itemClass}>{link.label}</a></li>
+        {/each}
+      </ul>
     </nav>
   {/if}
 </header>

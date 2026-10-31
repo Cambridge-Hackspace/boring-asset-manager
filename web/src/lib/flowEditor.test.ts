@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Definition } from './flows';
-import { addStep, checkFlow, moveStep, newStepID, problemsOf, slugFrom } from './flowEditor';
+import type { Definition, Step } from './flows';
+import { addStep, asks, checkFlow, moveStep, newStepID, previewProgress, problemsOf, slugFrom } from './flowEditor';
 
 const leave: Definition = {
   version: 1,
@@ -61,5 +61,24 @@ describe('steps', () => {
   it('makes an address from a name', () => {
     expect(slugFrom('  Leave Something Here! ')).toBe('leave-something-here');
     expect(slugFrom('Café shelf')).toBe('cafe-shelf');
+  });
+
+  it('counts the steps that ask something, as the server does (#166)', () => {
+    const steps: Step[] = [
+      { id: 'kind', kind: 'choose_category' },
+      { id: 'fixed', kind: 'choose_category', fixed: 'short' },
+      { id: 'about', kind: 'form' },
+      { id: 'long_only', kind: 'confirm', when: { value: 'category_id', op: 'is', to: 'long' } },
+      { id: 'file', kind: 'create' },
+      { id: 'put', kind: 'create', location: { mode: 'scan' } },
+      { id: 'label', kind: 'label' },
+      { id: 'done', kind: 'done' },
+    ];
+    expect(steps.filter(asks).map((s) => s.id)).toEqual(['kind', 'about', 'long_only', 'put']);
+    // Before any answer, a step with a condition counts as if it held.
+    expect(previewProgress(steps, 2)).toEqual({ step: 2, of: 4 });
+    expect(previewProgress(steps, 5)).toEqual({ step: 4, of: 4 });
+    expect(previewProgress(steps, 4)).toBeNull();
+    expect(previewProgress(steps, 7)).toBeNull();
   });
 });

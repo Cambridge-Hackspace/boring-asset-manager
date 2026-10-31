@@ -5,6 +5,7 @@
   import type { TemplateSummary } from '../../lib/models';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -39,10 +40,11 @@
   }
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Label templates</h1>
-  <a class="btn-primary" href="/templates/new">New template</a>
-</div>
+<PageHeader title="Label templates" lede="What a label looks like: its size, and what it prints of each asset.">
+  {#snippet actions()}
+    <a class="btn-primary" href="/templates/new">New template</a>
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 
 {#if loading}
@@ -62,7 +64,7 @@
     <tbody>
       {#each templates as t (t.id)}
         <tr class="border-b border-zinc-200 dark:border-zinc-800">
-          <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a></td>
+          <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a></td>
           <td class="py-2 pr-4">{t.width} × {t.height} {t.units}, {t.dpi} DPI</td>
           {#if suits}
             <td class="py-2 pr-4">

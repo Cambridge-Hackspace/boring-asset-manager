@@ -6,6 +6,7 @@
   import type { TemplateDoc } from '../../lib/template';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -63,16 +64,14 @@
   const kb = (n: number) => `${Math.max(1, Math.round(n / 1024))} KB`;
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <div>
-    <h1 class="text-2xl font-bold">Images</h1>
-    <p class="text-sm text-zinc-600 dark:text-zinc-400">PNG or JPEG, up to 2 MiB and 4096 × 4096 pixels, for use in label templates.</p>
-  </div>
-  <label class="btn-primary cursor-pointer">
-    {uploading ? 'Uploading…' : 'Upload image'}
-    <input type="file" accept="image/png,image/jpeg" class="sr-only" onchange={upload} disabled={uploading} />
-  </label>
-</div>
+<PageHeader title="Images" lede="PNG or JPEG, up to 2 MiB and 4096 × 4096 pixels, for use in label templates.">
+  {#snippet actions()}
+    <label class="btn-primary cursor-pointer">
+      {uploading ? 'Uploading…' : 'Upload image'}
+      <input type="file" accept="image/png,image/jpeg" class="sr-only" onchange={upload} disabled={uploading} />
+    </label>
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 
 {#if loading}

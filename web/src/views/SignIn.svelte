@@ -51,5 +51,5 @@
     <button type="submit" class="btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
     <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Forgot your password? Ask whoever manages users here to set a new one.</p>
   </form>
-  <p class="mt-4 text-center text-sm"><a class="underline" href="/help">Help</a></p>
+  <p class="mt-4 text-center text-sm"><a class="inline-flex min-h-11 min-w-11 items-center justify-center underline" href="/help">Help</a></p>
 </main>
