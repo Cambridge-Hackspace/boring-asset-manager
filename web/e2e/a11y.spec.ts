@@ -34,12 +34,6 @@ for (const scheme of ['light', 'dark'] as const) {
       await audit(page, `/spool ${tab} (${scheme})`);
     }
 
-    // A navigation menu, open.
-    await page.goto('/');
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Admin' }).click();
-    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Roles' })).toBeVisible();
-    await audit(page, `/ with the Admin menu open (${scheme})`);
-
     await page.context().clearCookies();
     await page.goto('/sign-in');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
@@ -100,36 +94,36 @@ test('keyboard only: confirm buttons keep focus where it belongs', async ({ sign
   await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeFocused();
 });
 
-test('keyboard only: the navigation menus open, close, and lead to their pages', async ({ signedIn: page }) => {
+test('keyboard only: a section opens its first page, with a row of its pages', async ({ signedIn: page }) => {
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Main' });
-  const admin = nav.getByRole('button', { name: 'Admin' });
+  const admin = nav.getByRole('link', { name: 'Admin', exact: true });
+  // No row on a page outside the sections.
+  await expect(page.getByRole('navigation', { name: 'Admin' })).toHaveCount(0);
   await admin.focus();
   await page.keyboard.press('Enter');
-  await expect(admin).toHaveAttribute('aria-expanded', 'true');
-  // The menu's links follow its button.
-  await page.keyboard.press('Tab');
-  await expect(nav.getByRole('link', { name: 'Users' })).toBeFocused();
-  // Escape closes it and returns to the button.
-  await page.keyboard.press('Escape');
-  await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0);
-  await expect(admin).toBeFocused();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Users');
+  // The section is marked, and its row lists its pages with this one current.
+  await expect(admin).toHaveAttribute('aria-current', 'true');
+  const row = page.getByRole('navigation', { name: 'Admin' });
+  await expect(row.getByRole('link')).toHaveText(['Users', 'Roles', 'API tokens', 'Notifications', 'Backups', 'Import & export']);
+  await expect(row.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
 
-  // Tabbing out of an open menu closes it.
-  await page.keyboard.press('Enter');
-  for (let i = 0; i < 7; i++) await page.keyboard.press('Tab');
-  await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0);
-
-  // A link goes to its page, closes the menu, and marks the menu current.
-  await admin.focus();
-  await page.keyboard.press('Enter');
+  // Its links take Tab in order, and lead to their pages.
+  await row.getByRole('link', { name: 'Users' }).focus();
   await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
-  await expect(nav.getByRole('link', { name: 'Roles' })).toBeFocused();
+  const roles = row.getByRole('link', { name: 'Roles' });
+  await expect(roles).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Roles');
-  await expect(admin).toHaveAttribute('aria-expanded', 'false');
-  await expect(admin).toHaveAttribute('data-current', 'true');
+  await expect(page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'Roles' })).toHaveAttribute('aria-current', 'page');
+  await expect(admin).toHaveAttribute('aria-current', 'true');
+
+  // Another section's page shows that section's row instead.
+  await nav.getByRole('link', { name: 'Catalog', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Categories');
+  await expect(page.getByRole('navigation', { name: 'Admin' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Catalog' }).getByRole('link', { name: 'Categories' })).toHaveAttribute('aria-current', 'page');
 });
 
 test('the home page lists the same pages, in the same groups', async ({ signedIn: page }) => {

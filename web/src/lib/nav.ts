@@ -43,6 +43,11 @@ export function navSections(routes: NavRoute[], canAny: (...permissions: Permiss
   return sections;
 }
 
+/** The group holding the page at path, whose row of pages the header shows. */
+export function currentGroup(sections: NavSection[], path: string): NavSection | undefined {
+  return sections.find((s) => s.group && s.links.some((l) => isCurrent(l.href, path)));
+}
+
 /** Whether path is the page at href, or a page within it. */
 export function isCurrent(href: string, path: string): boolean {
   return href === '/' ? path === '/' : path === href || path.startsWith(href + '/');
