@@ -81,8 +81,8 @@
   }
 </script>
 
-<section class="card" aria-labelledby="links-heading">
-  <h2 id="links-heading" class="mb-2 text-lg font-semibold">Links</h2>
+<section aria-labelledby="links-heading">
+  <h2 id="links-heading" class="section-title mb-3">Links</h2>
   <ErrorMessage {error} />
   {#if asset.links.length === 0}
     <p class="text-sm text-zinc-600 dark:text-zinc-400">Not linked to anything.</p>

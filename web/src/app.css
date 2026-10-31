@@ -121,6 +121,12 @@
 @utility card {
   @apply rounded border-2 border-zinc-900 bg-white p-4 dark:border-zinc-600 dark:bg-zinc-900;
 }
+/* A section's title where the page is not boxed into cards, such as an
+   asset's main column: underlined in yellow, never set on it, so it reads
+   in dark as in light. */
+@utility section-title {
+  @apply inline-block border-b-4 border-highlight pb-0.5 text-xl font-bold;
+}
 @utility error-text {
   @apply text-sm text-red-700 dark:text-red-400;
 }

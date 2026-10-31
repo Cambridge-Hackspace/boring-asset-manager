@@ -261,18 +261,19 @@
   {/if}
 
   <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-    <div class="space-y-6">
+    <!-- The main column is plain sections; the side column, cards. -->
+    <div class="space-y-10">
       <PhotosPanel {asset} onchange={assetChanged} />
-      <section class="card" aria-labelledby="details-heading">
-        <h2 id="details-heading" class="mb-3 text-lg font-semibold">Details</h2>
-        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt class="font-medium">Categories</dt>
+      <section aria-labelledby="details-heading">
+        <h2 id="details-heading" class="section-title mb-3">Details</h2>
+        <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+          <dt class="text-zinc-600 dark:text-zinc-400">Categories</dt>
           <dd class="flex flex-wrap gap-1">
             {#each asset.categories as c (c.id)}<CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />{/each}
           </dd>
           {#if asset.resolved_icon}
             {@const icon = asset.resolved_icon}
-            <dt class="font-medium">Icon</dt>
+            <dt class="text-zinc-600 dark:text-zinc-400">Icon</dt>
             <dd>
               {#if icon.from === 'asset'}
                 Its own, <span class="font-mono">{plainIcon(icon)}</span>{#if icon.missing}: no icon is drawn by that name any more, so it shows as unknown{/if}.
@@ -285,11 +286,11 @@
             </dd>
           {/if}
           {#if asset.scopes && !(asset.scopes.length === 1 && asset.scopes[0] === DEFAULT_SCOPE)}
-            <dt class="font-medium">Scopes</dt>
+            <dt class="text-zinc-600 dark:text-zinc-400">Scopes</dt>
             <dd>{asset.scopes.join(', ')}</dd>
           {/if}
           {#if session.canOn(asset.scopes, 'assets.scan')}
-            <dt class="font-medium">Scan page</dt>
+            <dt class="text-zinc-600 dark:text-zinc-400">Scan page</dt>
             <dd>
               <a class="inline-flex min-h-11 items-center underline" href="/scan/{encodeURIComponent(asset.asset.id)}">What scanning it shows</a>
               {#if asset.scan_template?.conflict}
@@ -299,14 +300,14 @@
             </dd>
           {/if}
           {#if asset.label_template?.conflict && session.can('labels.print')}
-            <dt class="font-medium">Label template</dt>
+            <dt class="text-zinc-600 dark:text-zinc-400">Label template</dt>
             <dd>
               <ConflictMark label="Label template chosen by a tie between categories" /> Chosen by a tie between categories as close to it as
               each other. <a class="underline" href="/categories">Name a template on one of them</a> to settle it.
             </dd>
           {/if}
           {#each asset.effective_fields as e (e.field.id)}
-            <dt class="font-medium">{e.field.label}</dt>
+            <dt class="text-zinc-600 dark:text-zinc-400">{e.field.label}</dt>
             <dd>
               {#if asset.field_values[e.field.key]}
                 {@const value = asset.field_values[e.field.key]!}
@@ -323,7 +324,7 @@
             </dd>
           {/each}
           {#each asset.generator_keys as k (k.generator_type)}
-            <dt class="font-medium">{generatorName(k.generator_type)}</dt>
+            <dt class="text-zinc-600 dark:text-zinc-400">{generatorName(k.generator_type)}</dt>
             <dd class="font-mono">{k.assigned_code}</dd>
           {/each}
         </dl>
@@ -341,8 +342,8 @@
       </section>
       <LinksPanel {asset} onchange={assetChanged} />
       {#if contents.length}
-        <section class="card" aria-labelledby="contents-heading">
-          <h2 id="contents-heading" class="mb-3 text-lg font-semibold">Contents</h2>
+        <section aria-labelledby="contents-heading">
+          <h2 id="contents-heading" class="section-title mb-3">Contents</h2>
           <ul class="space-y-1 text-sm">
             {#each contents as l (l.id)}
               <li><a class="underline" href="/assets/{encodeURIComponent(l.asset.id)}">{l.asset.name}</a>{#if l.asset.archived}<span class="text-xs text-zinc-600 dark:text-zinc-400"> (archived)</span>{/if}</li>
@@ -351,8 +352,8 @@
         </section>
       {/if}
       {#if history.length}
-        <section class="card" aria-labelledby="history-heading">
-          <h2 id="history-heading" class="mb-3 text-lg font-semibold">History</h2>
+        <section aria-labelledby="history-heading">
+          <h2 id="history-heading" class="section-title mb-3">History</h2>
           <ul class="space-y-2 text-sm">
             {#each history as e (e.id)}
               <li>

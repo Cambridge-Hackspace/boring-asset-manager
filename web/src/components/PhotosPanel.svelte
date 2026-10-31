@@ -51,9 +51,9 @@
   }
 </script>
 
-<section class="card" aria-labelledby="photos-heading">
-  <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-    <h2 id="photos-heading" class="text-lg font-semibold">Photos</h2>
+<section aria-labelledby="photos-heading">
+  <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+    <h2 id="photos-heading" class="section-title">Photos</h2>
     {#if canEdit && asset.photos.length < max}
       <label class="btn-secondary cursor-pointer">
         {busy ? 'Working…' : 'Add a photo'}

@@ -597,7 +597,7 @@
     {/if}
 
     {#if canManage && unassigned.length}
-      <form class="flex flex-wrap items-end gap-3" onsubmit={assign}>
+      <form class="mt-4 flex flex-wrap items-end gap-3" onsubmit={assign}>
         <div>
           <label class="label" for="assign-field">Add a field</label>
           <select id="assign-field" class="input" bind:value={newFieldId}>

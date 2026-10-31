@@ -38,7 +38,7 @@
     <label class="label" for="scan-code">Or type the code</label>
     <div class="flex gap-2">
       <input id="scan-code" bind:this={input} class="input font-mono" autocomplete="off" placeholder="HS-100, or a scan link" bind:value={code} />
-      <button type="submit" class="btn-primary" disabled={!code.trim()}>Look up</button>
+      <button type="submit" class="btn-primary shrink-0 whitespace-nowrap" disabled={!code.trim()}>Look up</button>
     </div>
     <p class="text-xs text-zinc-600 dark:text-zinc-400">Type or paste the code on a label. A USB scanner types it here too.</p>
   </form>
