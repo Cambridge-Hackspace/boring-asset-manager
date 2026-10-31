@@ -13,6 +13,7 @@
   } from '../../lib/backups';
   import ArchiveUpload from '../../components/ArchiveUpload.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -70,7 +71,7 @@
   const when = (iso: string) => new Date(iso).toLocaleString();
 </script>
 
-<h1 class="mb-4 text-2xl font-bold">Backups</h1>
+<PageHeader title="Backups" lede="The whole instance as one archive: to keep somewhere safe, or to replace this instance with." />
 
 {#if !allowed}
   <p class="max-w-2xl text-sm">Backing up and replacing this instance needs both users.manage and settings.manage.</p>

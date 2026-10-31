@@ -242,8 +242,28 @@ type FlowRunView struct {
 	Run    *models.FlowRun `json:"run"`
 	Flow   string          `json:"flow"`
 	Prompt FlowPrompt      `json:"prompt"`
+	// Progress is how far along the run is, on a step that asks something;
+	// left out on Done, and on a step that asks nothing and failed.
+	Progress *FlowProgress `json:"progress,omitempty"`
 	// Error, with a refused answer, is why; the run is shown as it is.
 	Error string `json:"error,omitempty"`
+}
+
+// FlowProgress is "step 2 of 3" (#166): the steps that ask something
+// answered so far, plus this one, of those and the ones still ahead whose
+// condition holds on the answers given so far. Done is not counted.
+type FlowProgress struct {
+	Step int `json:"step"`
+	Of   int `json:"of"`
+}
+
+// progressOf is a run's progress, or nil where it has none.
+func progressOf(d *flows.Definition, run *models.FlowRun) *FlowProgress {
+	if run.Finished || run.Step >= len(d.Steps) || !d.Steps[run.Step].Asks() {
+		return nil
+	}
+	step := run.Answered + 1
+	return &FlowProgress{Step: step, Of: step + d.Ahead(run.Step, run.Values)}
 }
 
 // FlowChoice is a category a Choose category step offers.
@@ -470,7 +490,7 @@ func (s *Server) runView(w http.ResponseWriter, f *flowRunner, run *models.FlowR
 		writeServerError(w, err, "read the run")
 		return
 	}
-	view := FlowRunView{Run: run, Flow: f.flow.Slug, Prompt: p}
+	view := FlowRunView{Run: run, Flow: f.flow.Slug, Prompt: p, Progress: progressOf(&f.flow.Definition, run)}
 	status := ok
 	if stepErr != nil {
 		var fe *flowError
@@ -525,7 +545,7 @@ func (s *Server) handleStartFlowRun(w http.ResponseWriter, r *http.Request) {
 	if req.AssetID != "" && err == nil {
 		// Found already: answer its Find with it.
 		var found *models.FlowRun
-		found, err = runner.answer(run, FlowAnswer{Step: f.Definition.Steps[run.Step].ID, AssetID: req.AssetID})
+		found, err = runner.answer(run, FlowAnswer{Step: f.Definition.Steps[run.Step].ID, AssetID: req.AssetID, given: true})
 		if found != nil {
 			run = found
 		}

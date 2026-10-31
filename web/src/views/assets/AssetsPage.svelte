@@ -215,7 +215,7 @@
         <tr>
           {#if !archived}
             <th scope="col" class="w-8 py-2 pr-2">
-              <input type="checkbox" aria-label="Select all assets" checked={allSelected} onchange={toggleAll} />
+              <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select all assets" checked={allSelected} onchange={toggleAll} /></label>
             </th>
           {/if}
           <th scope="col" class="py-2 pr-4">Name</th>
@@ -230,17 +230,17 @@
           <tr class="border-b border-zinc-200 dark:border-zinc-800">
             {#if !archived}
               <td class="py-2 pr-2">
-                <input type="checkbox" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} />
+                <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} /></label>
               </td>
             {/if}
             <td class="py-2 pr-4 font-medium">
-              <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
+              <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
             </td>
             <td class="py-2 pr-4">
               {#if a.location.length}
                 {@const place = a.location[a.location.length - 1]!}
-                <a class="hover:underline" href="/assets/{encodeURIComponent(place.id)}" title={a.location.map((p) => p.name).join(' › ')}>{place.name}</a>
+                <a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(place.id)}" title={a.location.map((p) => p.name).join(' › ')}>{place.name}</a>
               {/if}
             </td>
             <td class="py-2 pr-4">

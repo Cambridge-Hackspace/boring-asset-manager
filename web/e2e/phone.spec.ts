@@ -67,12 +67,14 @@ test('the header is one row with a menu, and pages fit the screen', async ({ sig
   await expect(topics.getByRole('link').first()).toBeVisible();
 });
 
-test('a menu near the right edge opens inward', async ({ signedIn: page }) => {
-  await page.setViewportSize({ width: 700, height: 900 });
-  await page.goto('/');
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Admin' }).click();
-  const list = page.locator('#nav-admin');
-  await expect(list).toBeVisible();
-  const box = (await list.boundingBox())!;
-  expect(box.x + box.width).toBeLessThanOrEqual(700);
+test("a section's row of pages wraps within a narrow screen", async ({ signedIn: page }) => {
+  for (const width of [700, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/roles');
+    const row = page.getByRole('navigation', { name: 'Admin' });
+    for (const link of await row.getByRole('link').all()) {
+      const box = (await link.boundingBox())!;
+      expect(box.x + box.width, `${await link.textContent()} at ${width} px`).toBeLessThanOrEqual(width);
+    }
+  }
 });

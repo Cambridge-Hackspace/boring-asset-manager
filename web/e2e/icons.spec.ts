@@ -16,7 +16,7 @@ async function noViolations(page: Page) {
 test('a category is drawn an icon, checked as typed, published, and a draft kept with its problems', async ({ signedIn: page, api }) => {
   const name = unique('Crates');
   const { category } = await api.call('POST', '/categories', { name, color_hex: '#b45309' });
-  await page.goto(`/categories/${category.id}`);
+  await page.goto(`/categories/${category.id}?tab=icon`);
   const section = iconSection(page);
   await expect(section.getByText('No icon: it shows none')).toBeVisible();
 
@@ -67,7 +67,7 @@ test('a subcategory inherits its parent’s icon, extends it, and keeps it from 
     source: `icon "${parentIcon}" { category "storage"; footprint 1 1 1; part "box" { box 0 0 0 1 1 1 } }`,
   });
 
-  await page.goto(`/categories/${child.id}`);
+  await page.goto(`/categories/${child.id}?tab=icon`);
   const section = iconSection(page);
   await expect(section.getByText(`The icon of ${parentName}, which it inherits.`)).toBeVisible();
   await section.getByRole('button', { name: `Extend ${parentName}'s icon` }).click();
@@ -76,7 +76,7 @@ test('a subcategory inherits its parent’s icon, extends it, and keeps it from 
   await expect(section.getByText('Published.')).toBeVisible();
 
   // the parent's page shows it among its subcategories
-  await page.goto(`/categories/${parent.id}`);
+  await page.goto(`/categories/${parent.id}?tab=icon`);
   await section.getByRole('button', { name: 'Edit the icon' }).click();
   await expect(section.getByRole('complementary', { name: 'Preview' }).getByRole('link', { name: childName })).toBeVisible();
 
@@ -106,7 +106,7 @@ icon "${iconName}" extends="${iconName}-unit" { }`,
   await api.call('POST', `/categories/${category.id}/fields`, { field_id: field.id, is_required: false });
   const { asset } = await api.call('POST', '/assets', { name: unique('Web'), category_ids: [category.id], field_values: { [field.key]: '2' } });
 
-  await page.goto(`/categories/${category.id}`);
+  await page.goto(`/categories/${category.id}?tab=icon`);
   const params = page.getByRole('region', { name: 'Parameters' });
   // the param it inherits is offered
   await params.getByLabel('u', { exact: true }).selectOption({ label });
@@ -147,7 +147,7 @@ icon "${iconName}" { category "labels"; footprint 1 1 0.5
   });
   const { asset } = await api.call('POST', '/assets', { name: 'WWW', category_ids: [category.id] });
 
-  await page.goto(`/categories/${category.id}`);
+  await page.goto(`/categories/${category.id}?tab=icon`);
   const params = page.getByRole('region', { name: 'Parameters' });
   await params.getByLabel('label text', { exact: true }).selectOption({ label: "The asset's name" });
   await noViolations(page);
@@ -175,7 +175,7 @@ test('a category is drawn a label icon, previewed as it prints, and its assets�
   const printed = async () => (await page.request.get(`/api/v1/assets/${asset.asset.id}/label?format=png&template_id=${template.id}`)).body();
   const before = await printed();
 
-  await page.goto(`/categories/${category.id}`);
+  await page.goto(`/categories/${category.id}?tab=icon`);
   const section = iconSection(page);
   await expect(section.getByRole('tab', { name: 'On screen' })).toHaveAttribute('aria-selected', 'true');
   await section.getByRole('tab', { name: 'On labels' }).click();

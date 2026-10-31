@@ -19,6 +19,7 @@ test('gather labels in the print queue, sort them, and download them', async ({ 
   const loose = await api.call('POST', '/assets', { name: looseName });
 
   await page.goto(`/categories/${cat.category.id}`);
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Labels' }).click();
   await page.getByRole('button', { name: 'Add its assets to the print queue' }).click();
   await expect(page.getByText('Added 2 labels to the print queue.')).toBeVisible();
   await page.goto(`/assets/${loose.asset.asset.id}`);
@@ -189,6 +190,7 @@ test('a category’s labels take the first of its templates that fits, and move 
 
   // List both, the wide one first, then put the narrow one first.
   await page.goto(`/categories/${category.id}`);
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Labels' }).click();
   const add = page.getByLabel('Add a template');
   await add.selectOption({ label: wide });
   await page.getByRole('button', { name: 'Add', exact: true }).click();

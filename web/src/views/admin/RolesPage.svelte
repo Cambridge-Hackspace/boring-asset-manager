@@ -6,6 +6,7 @@
   import { describeKey, heldIn, permissions, publicAllowed, scopable, setHeld } from '../../lib/permissions';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -144,13 +145,11 @@
   const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 </script>
 
-<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-  <h1 class="text-2xl font-bold">Roles</h1>
-  {#if editing === null}<button type="button" class="btn-primary" onclick={() => start()}>New role</button>{/if}
-</div>
-<p class="mb-4 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
-  A role is a set of permissions. People hold any number of roles and may do everything any of them allows.
-</p>
+<PageHeader title="Roles" lede="A role is a set of permissions. People hold any number of roles and may do everything any of them allows.">
+  {#snippet actions()}
+    {#if editing === null}<button type="button" class="btn-primary" onclick={() => start()}>New role</button>{/if}
+  {/snippet}
+</PageHeader>
 <ErrorMessage {error} />
 {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
 

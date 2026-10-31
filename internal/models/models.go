@@ -1110,6 +1110,9 @@ type FlowRun struct {
 	// Fields and Progress are kept for the run's own use (store.FlowRunState).
 	Fields   map[string]string `json:"-"`
 	Progress map[string]int    `json:"-"`
+	// Answered is kept for the run's own use too: how many steps that ask
+	// something the person has answered (#166).
+	Answered int `json:"-"`
 }
 
 // FlowDone is what one step of a run did, in words, for Done to show.

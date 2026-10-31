@@ -79,7 +79,7 @@
   <ul class="space-y-2">
     {#each reports as r (r.id)}
       <li class="card flex flex-wrap items-center justify-between gap-2">
-        <a class="font-medium hover:underline" href="/reports/{encodeURIComponent(r.id)}">{r.name}</a>
+        <a class="inline-flex min-h-11 items-center font-medium hover:underline" href="/reports/{encodeURIComponent(r.id)}">{r.name}</a>
         {#if canManage}
           <span class="inline-flex flex-wrap gap-2">
             <a class="btn-secondary" href="/reports/{encodeURIComponent(r.id)}/edit" aria-label="Edit {r.name}">Edit</a>

@@ -576,6 +576,8 @@ test.describe('pointer and keyboard', () => {
     await page.keyboard.up('Control');
     await expect.poll(async () => (await box(labelImage(page))).width).toBeGreaterThan(label.width);
     const zoomed = await box(labelImage(page));
+    // The panels scroll; bring the overview into view before pointing at it.
+    await page.locator('[data-overview-view]').locator('..').scrollIntoViewIfNeeded();
     await page.mouse.move(...middle(await box(page.locator('[data-overview-view]').locator('..'))));
     await page.mouse.wheel(0, 300);
     await expect.poll(async () => (await box(labelImage(page))).width).toBeLessThan(zoomed.width);

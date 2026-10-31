@@ -82,7 +82,8 @@ test('report a broken tool, find it needing attention, and mark it working', asy
 
   await page.getByRole('link', { name }).click();
   await page.getByRole('button', { name: 'Mark as working' }).click();
-  await expect(page.getByRole('status')).toHaveText('Marked as working.');
+  // The label panel may still be loading, saying so as a status too.
+  await expect(page.getByRole('status').filter({ hasText: 'Marked as working.' })).toBeVisible();
   await expect(history.getByRole('listitem').first()).toContainText('Marked as working');
   await expect(page.getByText('Out of service', { exact: true })).toHaveCount(0);
 });

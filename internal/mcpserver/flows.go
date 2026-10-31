@@ -183,5 +183,11 @@ func promptSummary(out map[string]any) string {
 		}
 		return "Done. " + strings.Join(said, " ")
 	}
-	return fmt.Sprintf("On step %q (%s); answer it with {\"step\": %q, ...}.", step, kind, step)
+	where := ""
+	if pr, ok := out["progress"].(map[string]any); ok {
+		n, _ := pr["step"].(float64)
+		of, _ := pr["of"].(float64)
+		where = fmt.Sprintf(", %d of %d", int(n), int(of))
+	}
+	return fmt.Sprintf("On step %q (%s%s); answer it with {\"step\": %q, ...}.", step, kind, where, step)
 }

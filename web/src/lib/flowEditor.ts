@@ -2,7 +2,7 @@
 // as, and the checks the editor makes as you go. The server checks a flow
 // again, fully, when it is saved.
 
-import type { Definition, FlowProblem, Step, StepKind } from './flows';
+import type { Definition, FlowProblem, Progress, Step, StepKind } from './flows';
 
 export const kindLabels: Record<StepKind, string> = {
   choose_category: 'Choose category',
@@ -25,6 +25,37 @@ export const kindHelp: Record<StepKind, string> = {
   confirm: 'Shows what will happen, and asks to go ahead.',
   done: 'Says what was done, with Start again for the next person.',
 };
+
+/**
+ * Whether a step is a screen that asks the person something, as the server
+ * counts them for "step 2 of 3" (#166): not Done, and not one that does its
+ * work as soon as it is reached.
+ */
+export function asks(step: Step): boolean {
+  switch (step.kind) {
+    case 'done':
+    case 'label':
+    case 'change':
+      return false;
+    case 'choose_category':
+      return !step.fixed;
+    case 'create':
+      return step.location?.mode === 'scan';
+    default:
+      return true;
+  }
+}
+
+/**
+ * Where a step comes among the steps that ask something, as the editor
+ * previews it: before any answer, so a step with a condition counts as if
+ * it held. Null for a step that asks nothing.
+ */
+export function previewProgress(steps: readonly Step[], i: number): Progress | null {
+  if (!steps[i] || !asks(steps[i])) return null;
+  const asking = steps.filter(asks);
+  return { step: asking.indexOf(steps[i]) + 1, of: asking.length };
+}
 
 /** The kinds an editor offers to add, in order: Done is always last, and comes with the flow. */
 export const addableKinds: StepKind[] = ['choose_category', 'form', 'find', 'create', 'label', 'change', 'confirm'];

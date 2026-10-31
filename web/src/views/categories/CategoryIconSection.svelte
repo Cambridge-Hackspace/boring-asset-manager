@@ -328,7 +328,7 @@
         aria-selected={rendition === r.value}
         aria-controls="icon-panel"
         tabindex={rendition === r.value ? 0 : -1}
-        class="-mb-px border-b-2 px-3 py-1.5 text-sm {rendition === r.value
+        class="-mb-px min-h-11 border-b-2 px-3 py-1.5 text-sm {rendition === r.value
           ? 'border-zinc-900 font-medium dark:border-zinc-100'
           : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}"
         onclick={() => show(r.value)}
@@ -353,7 +353,7 @@
             {#each refusal as d, k (k)}
               {@const owner = fileCategory(d.file)}
               <li>
-                {#if owner}<a class="underline" href="/categories/{encodeURIComponent(owner.id)}">{owner.name}</a>{:else}<span class="font-mono">{d.file}</span>{/if}, line {d.line}: {d.message}
+                {#if owner}<a class="underline" href="/categories/{encodeURIComponent(owner.id)}?tab=icon">{owner.name}</a>{:else}<span class="font-mono">{d.file}</span>{/if}, line {d.line}: {d.message}
               </li>
             {/each}
           </ul>
@@ -376,7 +376,7 @@
               <span class="font-mono">{shown.name}</span>.
             </p>
           {:else if shown}
-            <p>The {rendition === 'label' ? 'label icon' : 'icon'} of <a class="underline" href="/categories/{encodeURIComponent(shown.from)}">{nameOf(shown.from)}</a>, which it inherits.</p>
+            <p>The {rendition === 'label' ? 'label icon' : 'icon'} of <a class="underline" href="/categories/{encodeURIComponent(shown.from)}?tab=icon">{nameOf(shown.from)}</a>, which it inherits.</p>
           {:else}
             <p>No icon: it shows none, and neither does anything above it.</p>
           {/if}
@@ -450,7 +450,7 @@
                 {#each elsewhere as d, k (k)}
                   {@const owner = fileCategory(d.file)}
                   <li>
-                    {#if owner}<a class="underline" href="/categories/{encodeURIComponent(owner.id)}">{owner.name}</a>{:else}<span class="font-mono">{d.file}</span>{/if}, line {d.line}: {d.message}
+                    {#if owner}<a class="underline" href="/categories/{encodeURIComponent(owner.id)}?tab=icon">{owner.name}</a>{:else}<span class="font-mono">{d.file}</span>{/if}, line {d.line}: {d.message}
                   </li>
                 {/each}
               </ul>
@@ -510,7 +510,7 @@
                   {@const shownHere = shownIcon(categories, icons, c.id, rendition)}
                   <li class="text-center text-xs">
                     {#if shownHere}{@render tile(shownHere.name, 40, 'page', `${c.name}'s icon`, c.color_hex)}{/if}
-                    <a class="underline" href="/categories/{encodeURIComponent(c.id)}">{c.name}</a>
+                    <a class="underline" href="/categories/{encodeURIComponent(c.id)}?tab=icon">{c.name}</a>
                     {#if shownHere && shownHere.from !== c.id}<span class="block text-zinc-600 dark:text-zinc-400">inherited</span>{/if}
                   </li>
                 {/each}

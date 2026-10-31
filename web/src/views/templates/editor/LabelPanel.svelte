@@ -103,7 +103,7 @@
           type="button"
           role="radio"
           aria-checked={orientation(doc) === value}
-          class="px-2 py-0.5 text-xs aria-checked:bg-zinc-800 aria-checked:text-white dark:aria-checked:bg-zinc-200 dark:aria-checked:text-zinc-900"
+          class="min-h-8 px-2 py-0.5 text-xs aria-checked:bg-zinc-800 aria-checked:text-white dark:aria-checked:bg-zinc-200 dark:aria-checked:text-zinc-900"
           onclick={() => setOrientation(value)}>{label}</button
         >
       {/each}

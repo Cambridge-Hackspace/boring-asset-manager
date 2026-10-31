@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Permission } from './models';
-import { isCurrent, navSections } from './nav';
+import { currentGroup, isCurrent, navSections } from './nav';
 import { routes } from '../routes';
 
 const holding =
@@ -38,6 +38,19 @@ describe('navSections', () => {
 
   it('lists every navigation page in a known group or on its own', () => {
     for (const r of routes.filter((r) => r.nav)) expect(['Catalog', 'Labels', 'Admin', undefined]).toContain(r.group);
+  });
+});
+
+describe('currentGroup', () => {
+  const sections = navSections(routes, () => true);
+  it('finds the group a page, or a page within it, belongs to', () => {
+    expect(currentGroup(sections, '/roles')?.group).toBe('Admin');
+    expect(currentGroup(sections, '/categories/c1/edit')?.group).toBe('Catalog');
+    expect(currentGroup(sections, '/printers')?.group).toBe('Labels');
+  });
+  it('finds none for an everyday page or home', () => {
+    expect(currentGroup(sections, '/assets')).toBeUndefined();
+    expect(currentGroup(sections, '/')).toBeUndefined();
   });
 });
 

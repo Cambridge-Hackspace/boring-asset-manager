@@ -59,11 +59,11 @@
   <form class="space-y-3" onsubmit={save}>
     <div class="grid gap-x-4 gap-y-3 sm:grid-cols-[auto_1fr]">
       {#each states.states as st (st)}
-        <label class="text-sm font-medium sm:pt-1.5" for="state-{st}">{iconStateNames[st]}</label>
+        <label class="text-sm font-medium sm:pt-3" for="state-{st}">{iconStateNames[st]}</label>
         <div>
           <input
             id="state-{st}"
-            class="input-sm w-48 font-mono"
+            class="input w-48 font-mono"
             bind:value={variants[st]}
             placeholder="none"
             disabled={!canManage}

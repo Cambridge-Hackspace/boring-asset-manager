@@ -231,7 +231,7 @@
         <option value="along">Its width along the roll</option>
       </select>
     </label>
-    <label class="flex items-center gap-1 text-xs">
+    <label class="flex min-h-8 items-center gap-1 text-xs">
       <input
         type="checkbox"
         checked={shade}
