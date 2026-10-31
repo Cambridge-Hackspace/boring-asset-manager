@@ -5,7 +5,7 @@
   import { UNCATEGORIZED, type Category, type Field, type GeneratorInfo, type Report, type ReportResult, type ReportSection, type ReportSpec } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { placeholders } from '../../lib/template';
-  import { flattenTree } from '../../lib/tree';
+  import CategoryPicker from '../../components/CategoryPicker.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import ReportTables from '../../components/ReportTables.svelte';
 
@@ -24,7 +24,7 @@
   let busy = $state(false);
   let error = $state('');
 
-  const categoryChoices = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
+  const categoryChoices = $derived(categories.filter((c) => c.id !== UNCATEGORIZED));
   const bindingChoices = $derived(placeholders(fields.map((f) => f.key), generators.map((g) => g.type)));
 
   function newTable(): ReportSection {
@@ -189,17 +189,7 @@
       </div>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={spec.filter.running_low} /> Only what is running low, or in a category running low</label>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={spec.filter.archived} /> Archived assets instead of active ones</label>
-      <fieldset>
-        <legend class="label">In these categories, or below them (none for all)</legend>
-        <div class="flex max-h-48 flex-col flex-wrap gap-x-6 overflow-auto">
-          {#each categoryChoices as row (row.category.id)}
-            <label class="flex items-center gap-2 text-sm" style="padding-left: {row.depth * 1.25}rem">
-              <input type="checkbox" value={row.category.id} bind:group={categoryIds} />
-              {row.category.name}
-            </label>
-          {/each}
-        </div>
-      </fieldset>
+      <CategoryPicker id="report-categories" label="In these categories, or below them (none for all)" categories={categoryChoices} bind:value={categoryIds} />
     </fieldset>
 
     {#each spec.sections as section, s (s)}

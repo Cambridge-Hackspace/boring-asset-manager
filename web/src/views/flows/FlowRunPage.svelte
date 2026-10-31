@@ -315,7 +315,7 @@
     {/if}
 
     {#if prompt.kind !== 'done' && prompt.kind !== 'confirm'}
-      <p><button type="button" class="text-base underline" onclick={cancel}>Start again</button></p>
+      <p><button type="button" class="inline-flex min-h-11 items-center text-base underline" onclick={cancel}>Start again</button></p>
     {/if}
   {/if}
 </div>

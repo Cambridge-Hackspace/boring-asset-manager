@@ -51,7 +51,7 @@
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
-  <a class="text-sm underline" href="/flows">Back to flows</a>
+  <a class="inline-flex min-h-11 items-center text-sm underline" href="/flows">Back to flows</a>
   <span class="flex flex-wrap gap-2">
     <button type="button" class="btn-primary" onclick={() => window.print()}>Print</button>
     {#if session.can('templates.manage')}<button type="button" class="btn-secondary" disabled={!flow} onclick={makeTemplate}>Make a label template</button>{/if}

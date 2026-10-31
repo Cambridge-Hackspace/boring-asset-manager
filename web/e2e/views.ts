@@ -87,6 +87,10 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   await post('/spool', { asset_ids: [box.asset.asset.id] });
   // And one downloaded, for the Jobs and Printed views.
   await post('/spool', { asset_ids: [screws.asset.asset.id], template_id: template.id, destination: 'download' });
+  // A flow over the category, from its starter, for the flow pages.
+  const { starters } = await (await request.get(`/api/v1/flow-starters?category_ids=${cat.category.id}`)).json();
+  const flowSlug = unique('a11y-leave').toLowerCase();
+  await post('/flows', { slug: flowSlug, name: unique('Leave it'), definition: starters[0].definition });
   const { entries } = await (await request.get('/api/v1/spool')).json();
   const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
   await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
@@ -121,6 +125,11 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/backups', 'Backups'],
     ['/packages', 'Import & export'],
     ['/loans', 'Loans'],
+    ['/flows', 'Flows'],
+    ['/flows/new', 'New flow'],
+    [`/flows/${flowSlug}/edit`, ''],
+    [`/flows/${flowSlug}/poster`, ''],
+    [`/f/${flowSlug}`, ''],
     ['/spool', 'Print queue'],
     ['/relations', 'Link types'],
     ['/actions', 'Actions'],

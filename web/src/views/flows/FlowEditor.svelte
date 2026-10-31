@@ -1,7 +1,7 @@
 <script lang="ts">
-  // /flows/new and /flows/:slug/edit: a flow's steps as cards, in order,
-  // each with its settings, beside a preview of the step chosen as a phone
-  // shows it (README §6.7), laid out as form builders lay out questions.
+  // /flows/new and /flows/:slug/edit: a flow's steps in order, one open at a
+  // time with its settings, beside a preview of that step as a phone shows
+  // it (README §6.7), laid out as form builders lay out questions.
   import { onMount } from 'svelte';
   import { ApiError, request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
@@ -9,6 +9,7 @@
   import type { AssetAction, Category, EffectiveField, Field, Printer, PrinterPool, TemplateSummary } from '../../lib/models';
   import type { Definition, Flow, FlowProblem, Starter, StepKind } from '../../lib/flows';
   import { addStep, addableKinds, checkFlow, kindHelp, kindLabels, moveStep, problemsOf, slugFrom } from '../../lib/flowEditor';
+  import CategoryPicker from '../../components/CategoryPicker.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import FlowStepEditor from './FlowStepEditor.svelte';
   import FlowPreview from './FlowPreview.svelte';
@@ -96,13 +97,6 @@
     if (!slugTouched) slug = slugFrom(name);
   });
 
-  function toggleCategory(id: string, on: boolean) {
-    const set = new Set(def.category_ids);
-    if (on) set.add(id);
-    else set.delete(id);
-    def.category_ids = allCategories.map((c) => c.id).filter((c) => set.has(c));
-  }
-
   async function useStarter() {
     error = '';
     try {
@@ -130,7 +124,10 @@
   function move(i: number, by: -1 | 1) {
     const before = def.steps;
     def.steps = moveStep(def.steps, i, by);
-    if (def.steps !== before && selected === i) selected = i + by;
+    // The open step stays open, wherever it goes.
+    if (def.steps === before) return;
+    if (selected === i) selected = i + by;
+    else if (selected === i + by) selected = i;
   }
 
   async function save(event: SubmitEvent) {
@@ -161,7 +158,12 @@
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
   <h1 class="text-2xl font-bold">{editing ? `Edit ${name || 'flow'}` : 'New flow'}</h1>
-  {#if editing}<a class="btn-secondary" href="/flows/{encodeURIComponent(editing)}/poster">Poster</a>{/if}
+  {#if editing}
+    <span class="flex gap-2">
+      <a class="btn-secondary" href="/flows/{encodeURIComponent(editing)}/poster">Poster</a>
+      <a class="btn-secondary" href="/f/{encodeURIComponent(editing)}">Try it</a>
+    </span>
+  {/if}
 </div>
 <ErrorMessage {error} />
 {#if saved}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{saved}</p>{/if}
@@ -190,17 +192,10 @@
           <label class="label" for="flow-description">One line for its poster</label>
           <input id="flow-description" class="input" maxlength="255" placeholder="Scan to leave something here, with your name on it." bind:value={def.description} />
         </div>
-        <fieldset>
-          <legend class="label">Files into, or takes from</legend>
-          <div class="flex flex-wrap gap-x-4">
-            {#each allCategories as c (c.id)}
-              <label class="inline-flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={def.category_ids.includes(c.id)} onchange={(e) => toggleCategory(c.id, e.currentTarget.checked)} />
-                {c.name}
-              </label>
-            {/each}
-          </div>
-        </fieldset>
+        <div>
+          <CategoryPicker id="flow-categories" label="Files into, or takes from" categories={allCategories} bind:value={def.category_ids} />
+          <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">A Choose category step offers these as buttons. Open a category with › to choose ones under it.</p>
+        </div>
         <div>
           <label class="label" for="flow-until">A date to collect by</label>
           <select id="flow-until" class="input" bind:value={def.leave_until} aria-describedby="flow-until-help">
@@ -227,29 +222,52 @@
         {/if}
       </section>
 
-      <ol class="space-y-3" aria-label="Steps">
-        {#each def.steps as step, i (i)}
-          {@const own = problemsOf(problems, step.id)}
-          <li>
-            <article class="card space-y-3 {selected === i ? 'ring-2 ring-accent-600' : ''}" aria-labelledby="step-{i}-heading" onfocusin={() => (selected = i)}>
-              <header class="flex flex-wrap items-center justify-between gap-2">
-                <h3 id="step-{i}-heading" class="font-semibold">
-                  {i + 1}. {kindLabels[step.kind]}{#if step.title}: {step.title}{/if}
-                </h3>
-                <span class="flex gap-1">
-                  <button type="button" class="btn-sm" aria-pressed={selected === i} aria-label="Preview step {i + 1}" onclick={() => (selected = i)}>Preview</button>
-                  <button type="button" class="btn-sm" aria-label="Move step {i + 1} up" disabled={i === 0 || step.kind === 'done'} onclick={() => move(i, -1)}>↑</button>
-                  <button type="button" class="btn-sm" aria-label="Move step {i + 1} down" disabled={step.kind === 'done' || def.steps[i + 1]?.kind === 'done'} onclick={() => move(i, 1)}>↓</button>
-                  {#if step.kind !== 'done'}<button type="button" class="btn-sm" aria-label="Remove step {i + 1}" onclick={() => remove(i)}>Remove</button>{/if}
-                </span>
-              </header>
-              <p class="text-xs text-zinc-600 dark:text-zinc-400">{kindHelp[step.kind]}</p>
-              <FlowStepEditor prefix="step-{i}" bind:step={() => def.steps[i]!, (v) => (def.steps[i] = v)} categories={flowCategories} {fields} flows={flows.filter((f) => f.slug !== editing)} {destinations} {templates} {actions} />
-              {#each own as m, j (j)}<p class="error-text" role="alert">{m}</p>{/each}
-            </article>
-          </li>
-        {/each}
-      </ol>
+      <section aria-labelledby="flow-steps" class="space-y-2">
+        <h2 id="flow-steps" class="text-lg font-semibold">Steps</h2>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">What a person sees, one screen at a time. Choose a step to edit it and see it in the preview.</p>
+        <ol class="space-y-2" aria-label="Steps">
+          {#each def.steps as step, i (i)}
+            {@const own = problemsOf(problems, step.id)}
+            {@const open = selected === i}
+            <li class="rounded border-2 {open ? 'border-zinc-900 dark:border-zinc-300' : step.kind === 'done' ? 'border-dashed border-zinc-400 dark:border-zinc-600' : 'border-zinc-300 dark:border-zinc-700'} bg-white dark:bg-zinc-900">
+              <div class="flex items-center gap-3 px-3 py-2 {open ? 'bg-highlight/40 dark:bg-zinc-800' : ''}">
+                <span class="w-6 shrink-0 text-center font-mono text-sm text-zinc-600 dark:text-zinc-400" aria-hidden="true">{i + 1}</span>
+                <div class="min-w-0 flex-1">
+                  <h3 class="font-semibold">
+                    <button
+                      type="button"
+                      class="inline-flex min-h-11 w-full cursor-pointer items-center text-left"
+                      aria-expanded={open}
+                      aria-controls="step-{i}-body"
+                      onclick={() => (selected = i)}
+                    >
+                      <span class="sr-only">{i + 1}.</span>{' '}{kindLabels[step.kind]}{#if step.title}: {step.title}{/if}
+                    </button>
+                  </h3>
+                  <p class="text-xs text-zinc-600 dark:text-zinc-400">{kindHelp[step.kind]}</p>
+                </div>
+                {#if step.kind !== 'done'}
+                  <span class="flex shrink-0 gap-1">
+                    <button type="button" class="btn-secondary px-0" aria-label="Move step {i + 1} up" disabled={i === 0} onclick={() => move(i, -1)}>↑</button>
+                    <button type="button" class="btn-secondary px-0" aria-label="Move step {i + 1} down" disabled={def.steps[i + 1]?.kind === 'done'} onclick={() => move(i, 1)}>↓</button>
+                  </span>
+                {/if}
+              </div>
+              {#each own as m, j (j)}<p class="error-text px-3 pb-2" role="alert">{m}</p>{/each}
+              {#if open}
+                <div id="step-{i}-body" class="space-y-3 border-t-2 border-zinc-900 p-4 dark:border-zinc-300">
+                  <FlowStepEditor prefix="step-{i}" bind:step={() => def.steps[i]!, (v) => (def.steps[i] = v)} categories={flowCategories} {fields} flows={flows.filter((f) => f.slug !== editing)} {destinations} {templates} {actions} />
+                  {#if step.kind !== 'done'}
+                    <div class="flex justify-end border-t border-zinc-200 pt-3 dark:border-zinc-800">
+                      <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={() => remove(i)}>Remove this step</button>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+      </section>
 
       <div class="flex flex-wrap items-end gap-2">
         <div>
@@ -259,15 +277,17 @@
           </select>
         </div>
         <button type="button" class="btn-secondary" onclick={add}>Add</button>
+        <p class="pb-3 text-xs text-zinc-600 dark:text-zinc-400">It goes in before Done.</p>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-t-2 border-zinc-900 pt-4 dark:border-zinc-400">
+        <a class="inline-flex min-h-11 items-center underline underline-offset-4" href="/flows">Back to flows</a>
         <button type="submit" class="btn-primary">Save flow</button>
-        <a class="btn-secondary" href="/flows">Back to flows</a>
       </div>
     </div>
 
-    <aside class="lg:sticky lg:top-4 lg:self-start" aria-label="Preview">
+    <aside class="space-y-2 lg:sticky lg:top-4 lg:self-start" aria-label="Preview">
+      <p class="font-mono text-xs tracking-wide text-zinc-600 uppercase dark:text-zinc-400">Preview · step {selected + 1} of {def.steps.length}</p>
       <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} {fields} />
     </aside>
   </form>

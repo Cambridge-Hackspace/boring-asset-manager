@@ -4,6 +4,8 @@
   export interface DockPanel {
     id: string;
     title: string;
+    /** A line on what it holds, beside its title, open or not. */
+    summary?: string;
     content: Snippet;
   }
 
@@ -89,6 +91,7 @@
           <span class={open ? '' : '-rotate-90'}><Icon name="chevron" size={14} /></span>
           {p.title}
         </button>
+        {#if p.summary}<span class="min-w-0 truncate pr-1 font-normal text-zinc-600 dark:text-zinc-400" data-summary>{p.summary}</span>{/if}
         <span class="flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
           <button type="button" class="inline-grid h-8 w-8 place-items-center disabled:invisible" aria-label="Move {p.title} up" disabled={i === 0} onclick={() => move(p.id, -1)}>
             <Icon name="up" size={14} />

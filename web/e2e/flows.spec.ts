@@ -87,7 +87,13 @@ test.describe('the flow editor', () => {
     await page.goto('/flows');
     await page.getByRole('link', { name: 'New flow' }).click();
     await page.getByLabel('Name', { exact: true }).first().fill(flowName);
+    // Chosen in the picker, found by name among however many there are.
+    await page.getByRole('button', { name: 'Choose categories' }).click();
+    await page.getByLabel('Find a category').fill(shelfName);
     await page.getByRole('checkbox', { name: shelfName }).check();
+    const picker = page.getByRole('group', { name: 'Files into, or takes from' });
+    await picker.getByRole('button', { name: 'Done' }).click();
+    await expect(picker.getByRole('button', { name: `Remove ${shelfName}` })).toBeVisible();
     await page.getByLabel('Start from').selectOption('leave');
     await page.getByRole('button', { name: 'Use this starter' }).click();
     // One category: nothing to choose, so it starts with its form.

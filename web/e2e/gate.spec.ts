@@ -39,7 +39,9 @@ async function measure(page: Page, width: number): Promise<{ check: Check; detai
     const visible = (el: Element) => {
       const r = el.getBoundingClientRect();
       const s = getComputedStyle(el);
-      return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none';
+      // Inside something inert, such as the flow editor's preview of a
+      // phone, nothing can be pressed: it is a picture of controls.
+      return r.width > 1 && r.height > 1 && s.visibility !== 'hidden' && s.display !== 'none' && !el.closest('[inert]');
     };
     const describe = (el: Element) =>
       `${el.tagName.toLowerCase()} "${(el.getAttribute('aria-label') || el.textContent || el.getAttribute('name') || '').trim().replace(/\s+/g, ' ').slice(0, 40)}"`;

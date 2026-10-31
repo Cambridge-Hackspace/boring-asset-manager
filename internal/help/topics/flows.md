@@ -17,7 +17,7 @@ What a flow does, it does as you: it can only do what you're allowed to, and his
 
 ## Making a flow
 
-Whoever manages flows makes them on the **Flows** page, with **New flow**: choose the categories it files into or takes from, start from **Leave something** or **Collect it**, and adjust its steps. Each step is a card, in order; the preview beside them shows the step chosen as a phone shows it.
+Whoever manages flows makes them on the **Flows** page, with **New flow**: choose the categories it files into or takes from, start from **Leave something** or **Collect it**, and adjust its steps. The steps are listed in order, one open at a time; the preview beside them shows the open step as a phone shows it.
 
 - **Choose category** offers the flow's categories, or always uses one.
 - **Form** asks for the fields the chosen category records. For each field you can hide it, rename it, add help, give it a default such as `{user}` or `{today}`, make it required, and move it. A field the category requires is always asked. It can also ask for the thing's name, a photo, and questions of its own, used in names and text as `{what}`.
