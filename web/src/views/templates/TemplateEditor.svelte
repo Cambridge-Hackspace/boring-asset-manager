@@ -624,7 +624,7 @@
   <p role="status" class="p-4 text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else}
   <!-- On a phone, the parts stack and the page scrolls: tools, label, panels. -->
-  <div class="flex flex-col bg-white text-zinc-900 md:h-full dark:bg-zinc-950 dark:text-zinc-100">
+  <div data-dense class="flex flex-col bg-white text-zinc-900 md:h-full dark:bg-zinc-950 dark:text-zinc-100">
     <!-- Canvas only hides the rest, keeping it as it was, not removing it. -->
     <div class="contents" hidden={editor.canvasOnly}>
       <div class="flex h-11 shrink-0 items-center gap-2 border-b border-zinc-200 px-2 dark:border-zinc-800">

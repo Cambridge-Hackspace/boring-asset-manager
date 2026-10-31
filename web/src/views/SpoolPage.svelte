@@ -364,8 +364,8 @@
         <tbody>
           {#each spool.entries as e (e.id)}
             <tr class="border-b border-zinc-200 dark:border-zinc-800">
-              <td class="py-2 pr-2"><input type="checkbox" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} /></td>
-              <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
+              <td class="py-2 pr-2"><label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} /></label></td>
+              <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
               <td class="py-2 pr-4">{e.printed_template}</td>
               <td class="py-2 pr-4">{e.printed_on}</td>
               <td class="py-2 pr-4">{e.copies}</td>
@@ -398,13 +398,14 @@
             <thead class="border-b border-zinc-300 dark:border-zinc-700">
               <tr>
                 <th scope="col" class="w-8 py-2 pr-2">
-                  <input
+                  <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input
                     type="checkbox"
+                    class="h-5 w-5"
                     aria-label="Select every label for {destinationName(spool, g.destination)}, {templateName(spool, g.templateId)}"
                     checked={g.entries.some((e) => !e.job) && g.entries.every((e) => e.job || selected.includes(e.id))}
                     disabled={g.entries.every((e) => e.job)}
                     onchange={() => toggleGroup(g.entries)}
-                  />
+                  /></label>
                 </th>
                 <th scope="col" class="py-2 pr-4">Asset</th>
                 <th scope="col" class="py-2 pr-4">Copies</th>
@@ -415,8 +416,8 @@
             <tbody>
               {#each g.entries as e (e.id)}
                 <tr class="border-b border-zinc-200 dark:border-zinc-800">
-                  <td class="py-2 pr-2"><input type="checkbox" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} disabled={!!e.job} /></td>
-                  <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
+                  <td class="py-2 pr-2"><label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select {e.asset_name}" value={e.id} bind:group={selected} disabled={!!e.job} /></label></td>
+                  <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(e.asset_id)}">{e.asset_name}</a></td>
                   <td class="py-2 pr-4">{e.copies}</td>
                   <td class="py-2 pr-4">{actorName(e.added_by, session.user?.id)}, {when(e.added_at)}</td>
                   <td class="py-2">

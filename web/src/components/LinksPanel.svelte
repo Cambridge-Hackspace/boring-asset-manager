@@ -91,10 +91,10 @@
       {#each asset.links as l (l.id)}
         <li class="flex flex-wrap items-center gap-2">
           <span>{l.label.charAt(0).toUpperCase() + l.label.slice(1)}</span>
-          <a class="underline" href="/assets/{encodeURIComponent(l.asset.id)}">{l.asset.name}</a>
+          <a class="inline-flex min-h-11 items-center underline" href="/assets/{encodeURIComponent(l.asset.id)}">{l.asset.name}</a>
           {#if l.asset.archived}<span class="text-xs text-zinc-600 dark:text-zinc-400">(archived)</span>{/if}
           {#if canEdit}
-            <button type="button" class="btn-secondary min-h-8 px-2 py-1 text-xs" disabled={busy} aria-label="Unlink {l.asset.name}" onclick={() => remove(l.id, l.label, l.asset.name)}>
+            <button type="button" class="btn-secondary px-2 py-1 text-xs" disabled={busy} aria-label="Unlink {l.asset.name}" onclick={() => remove(l.id, l.label, l.asset.name)}>
               Unlink
             </button>
           {/if}

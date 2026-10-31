@@ -106,7 +106,7 @@
       <tbody>
         {#each loans as l (l.id)}
           <tr class="border-b border-zinc-200 dark:border-zinc-800">
-            <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/assets/{encodeURIComponent(l.asset_id)}">{l.asset_name}</a></td>
+            <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(l.asset_id)}">{l.asset_name}</a></td>
             {#if canLend}<td class="py-2 pr-4">{personName(l.borrower)}{l.borrower.archived ? ' (has left)' : ''}</td>{/if}
             <td class="py-2 pr-4 whitespace-nowrap">{dueDate(l.checked_out_at)}</td>
             <td class="py-2 pr-4 whitespace-nowrap">{l.due_at ? dueDate(l.due_at) : '—'}</td>

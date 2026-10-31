@@ -21,7 +21,10 @@
 
 <!-- The name always accompanies the color, so color is never the only cue. -->
 {#if href}
-  <a {href} class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold hover:underline" {style}>{@render content()}</a>
+  <!-- The link reaches 44 px around the pill, as #156's gate asks. -->
+  <a {href} class="group inline-flex min-h-11 items-center align-middle">
+    <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold group-hover:underline" {style}>{@render content()}</span>
+  </a>
 {:else}
   <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold" {style}>{@render content()}</span>
 {/if}

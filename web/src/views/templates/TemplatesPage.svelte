@@ -62,7 +62,7 @@
     <tbody>
       {#each templates as t (t.id)}
         <tr class="border-b border-zinc-200 dark:border-zinc-800">
-          <td class="py-2 pr-4 font-medium"><a class="hover:underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a></td>
+          <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a></td>
           <td class="py-2 pr-4">{t.width} × {t.height} {t.units}, {t.dpi} DPI</td>
           {#if suits}
             <td class="py-2 pr-4">

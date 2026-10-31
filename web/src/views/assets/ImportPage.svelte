@@ -115,7 +115,7 @@
 
 <div class="mb-4">
   <label class="label" for="import-file">CSV file</label>
-  <input id="import-file" type="file" accept=".csv,text/csv" class="block text-sm" onchange={choose} disabled={busy} />
+  <input id="import-file" type="file" accept=".csv,text/csv" class="block min-h-11 py-2 text-sm" onchange={choose} disabled={busy} />
 </div>
 
 <ErrorMessage {error} />

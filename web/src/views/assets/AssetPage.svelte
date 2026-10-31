@@ -314,7 +314,7 @@
             <span class="text-zinc-600 dark:text-zinc-400">Not set</span>
           {/if}
           {#if !archived && locationType && session.canOn(asset.scopes, 'assets.write')}
-            {' '}<button type="button" class="underline" aria-expanded={moving} onclick={() => (moving = !moving)}>{asset.location.length ? 'Move' : 'Set where it is'}</button>
+            {' '}<button type="button" class="inline-flex min-h-11 min-w-11 items-center underline" aria-expanded={moving} onclick={() => (moving = !moving)}>{asset.location.length ? 'Move' : 'Set where it is'}</button>
             {#if moving}
               <div class="mt-2">
                 <LocationPicker id="move" value={asset.location.at(-1) ?? null} exclude={asset.asset.id} onchange={move} />
@@ -347,7 +347,7 @@
         {#if session.canOn(asset.scopes, 'assets.scan')}
           <dt class="font-medium">Scan page</dt>
           <dd>
-            <a class="underline" href="/scan/{encodeURIComponent(asset.asset.id)}">What scanning it shows</a>
+            <a class="inline-flex min-h-11 items-center underline" href="/scan/{encodeURIComponent(asset.asset.id)}">What scanning it shows</a>
             {#if asset.scan_template?.conflict}
               <span class="block"><ConflictMark /> Its template was chosen by a tie between categories as close to it as each other.
               <a class="underline" href="/categories">Name a template on one of them</a> to settle it.</span>
