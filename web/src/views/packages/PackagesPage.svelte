@@ -332,7 +332,7 @@
       <label class="block text-sm">License <input class="input mt-1" bind:value={license} maxlength="200" placeholder="CC-BY-4.0" /></label>
       <label class="block text-sm">Version <input class="input mt-1" bind:value={version} maxlength="64" placeholder="1.0" /></label>
       <label class="block text-sm">
-        Preview image <input class="mt-1 block text-sm" type="file" accept="image/png,image/jpeg,image/webp" onchange={choosePreview} />
+        Preview image <input class="mt-1 block min-h-11 py-2 text-sm" type="file" accept="image/png,image/jpeg,image/webp" onchange={choosePreview} />
         {#if previewName}<span class="text-xs">{previewName}</span>{/if}
       </label>
     </fieldset>

@@ -69,6 +69,14 @@
     padding-block: 0.75rem;
     cursor: pointer;
   }
+  [data-dense] label:has(> input:is([type='checkbox'], [type='radio'])) {
+    min-height: 2rem;
+  }
+  [data-dense] nav[aria-label='Breadcrumb'] a {
+    display: inline-flex;
+    min-height: 2rem;
+    align-items: center;
+  }
   nav[aria-label='Breadcrumb'] a:not([data-dense] a) {
     display: inline-flex;
     min-height: 2.75rem;

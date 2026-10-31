@@ -86,7 +86,7 @@
   </div>
   <ErrorMessage error={nameError} />
   {#if nameStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{nameStatus}</p>{/if}
-  <button type="submit" class="btn-primary">Save name</button>
+  <button type="submit" class="btn-secondary">Save name</button>
 </form>
 
 <form class="card max-w-md space-y-4" onsubmit={change}>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { stack } from '../../lib/stack';
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
@@ -164,7 +165,7 @@
   <p class="text-sm text-zinc-600 dark:text-zinc-400">No tokens yet.</p>
 {:else}
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm">
+    <table class="w-full text-left text-sm" use:stack>
       <thead class="border-b border-zinc-300 dark:border-zinc-700">
         <tr>
           <th scope="col" class="py-2 pr-4">Name</th>

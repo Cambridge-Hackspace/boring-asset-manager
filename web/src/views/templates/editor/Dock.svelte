@@ -82,7 +82,7 @@
         <button
           type="button"
           id="panel-{p.id}"
-          class="flex flex-1 items-center gap-1 px-2 py-1.5 text-left"
+          class="flex min-h-8 flex-1 items-center gap-1 px-2 py-1.5 text-left"
           aria-expanded={open}
           onclick={() => toggle(p.id)}
         >
@@ -90,10 +90,10 @@
           {p.title}
         </button>
         <span class="flex opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-          <button type="button" class="p-1 disabled:invisible" aria-label="Move {p.title} up" disabled={i === 0} onclick={() => move(p.id, -1)}>
+          <button type="button" class="inline-grid h-8 w-8 place-items-center disabled:invisible" aria-label="Move {p.title} up" disabled={i === 0} onclick={() => move(p.id, -1)}>
             <Icon name="up" size={14} />
           </button>
-          <button type="button" class="p-1 disabled:invisible" aria-label="Move {p.title} down" disabled={i === shown.length - 1} onclick={() => move(p.id, 1)}>
+          <button type="button" class="inline-grid h-8 w-8 place-items-center disabled:invisible" aria-label="Move {p.title} down" disabled={i === shown.length - 1} onclick={() => move(p.id, 1)}>
             <Icon name="down" size={14} />
           </button>
         </span>

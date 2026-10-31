@@ -115,7 +115,7 @@
     ctx.drawImage(src, b.x * kx, b.y * ky, sw, sh, (canvas.width - sw * k) / 2, (canvas.height - sh * k) / 2, sw * k, sh * k);
   };
 
-  const iconButton = 'icon-btn h-6 w-6';
+  const iconButton = 'icon-btn';
 </script>
 
 {#if rows.length}
@@ -139,7 +139,7 @@
           {:else}
             <button
               type="button"
-              class="min-w-0 flex-1 truncate py-1 text-left text-xs font-medium"
+              class="min-h-8 min-w-0 flex-1 truncate py-1 text-left text-xs font-medium"
               aria-pressed={selected}
               title="Double-click to rename"
               onclick={() => (editor.selected = [...row.members])}
@@ -196,7 +196,7 @@
           {:else}
             <button
               type="button"
-              class="min-w-0 flex-1 truncate py-1 text-left text-xs {problemElements.has(i) ? 'text-red-700 dark:text-red-400' : ''} {hidden ? 'text-zinc-600 italic dark:text-zinc-400' : ''}"
+              class="min-h-8 min-w-0 flex-1 truncate py-1 text-left text-xs {problemElements.has(i) ? 'text-red-700 dark:text-red-400' : ''} {hidden ? 'text-zinc-600 italic dark:text-zinc-400' : ''}"
               aria-pressed={selected}
               title="Double-click to rename"
               onclick={(ev) => choose(ev, i)}

@@ -8,36 +8,17 @@ import { seedViews } from './views';
 //             editor's dense controls ([data-dense]);
 //   primary:  at most one primary button shows;
 //   scroll:   at 390 px the page does not scroll sideways.
-// Views that fail today are listed in KNOWN, so a change that breaks a passing
-// view fails here, and a view that comes to pass must be taken off the list.
+// Views that fail are listed in KNOWN, which #156 emptied: a change that breaks
+// a view fails here, and one listed that comes to pass must come off the list.
 
 type Check = 'targets' | 'primary' | 'scroll';
 const widths = [1440, 390] as const;
 
 // `${view} ${width}`, by check. Each part of #156 empties some of these.
 const KNOWN: Record<Check, string[]> = {
-  // Since #158 the header's controls pass; these fail on the page itself.
-  targets: [
-    '/categories 1440', '/categories 390',
-    '/categories/:id 1440', '/categories/:id 390',
-    '/categories/new 1440', '/categories/new 390',
-    '/help/actions 1440',
-    '/help/scanning 1440',
-    '/help/spool 1440',
-    '/packages 1440', '/packages 390',
-    '/sign-in 1440', '/sign-in 390',
-    '/templates/:id/edit (2) 1440', '/templates/:id/edit (2) 390',
-    '/templates/:id/edit 1440', '/templates/:id/edit 390',
-    '/templates/new 1440', '/templates/new 390',
-  ],
-  primary: [
-    '/account 1440', '/account 390',
-    '/categories/:id 1440', '/categories/:id 390',
-  ],
-  scroll: [
-    '/fields 390',
-    '/tokens 390',
-  ],
+  targets: [],
+  primary: [],
+  scroll: [],
 };
 
 /** A view's name with its IDs taken out, numbered when a name repeats. */

@@ -328,7 +328,7 @@
         aria-selected={rendition === r.value}
         aria-controls="icon-panel"
         tabindex={rendition === r.value ? 0 : -1}
-        class="-mb-px border-b-2 px-3 py-1.5 text-sm {rendition === r.value
+        class="-mb-px min-h-11 border-b-2 px-3 py-1.5 text-sm {rendition === r.value
           ? 'border-zinc-900 font-medium dark:border-zinc-100'
           : 'border-transparent text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'}"
         onclick={() => show(r.value)}

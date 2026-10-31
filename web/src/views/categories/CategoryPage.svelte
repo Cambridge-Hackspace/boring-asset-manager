@@ -489,7 +489,7 @@
         <div>
           <label class="label" for="cat-color">Color</label>
           <div class="flex items-center gap-2">
-            <input id="cat-color" type="color" class="h-9 w-14 rounded border border-zinc-300 dark:border-zinc-700" bind:value={color} />
+            <input id="cat-color" type="color" class="h-11 w-14 rounded border border-zinc-300 dark:border-zinc-700" bind:value={color} />
             <CategoryBadge category={{ id: 'preview', name: name || 'Preview', color_hex: color }} />
           </div>
         </div>
@@ -695,7 +695,7 @@
                 </select>
               </div>
               <button type="button" class="btn-secondary" disabled={!adding} onclick={() => { changeLabels([...labelList, adding]); adding = ''; }}>Add</button>
-              <button type="submit" class="btn-primary" disabled={!labelsChanged}>Save label templates</button>
+              <button type="submit" class="btn-secondary" disabled={!labelsChanged}>Save label templates</button>
             </div>
           </form>
           {#if newLabelTies.length}
