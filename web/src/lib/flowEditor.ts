@@ -223,6 +223,135 @@ export function references(template: string | undefined): string[] {
 }
 
 /**
+ * What a value is compared with in a step's Only when: one of a list (a
+ * category, a choice question's choices, a choice field's, yes or no), a
+ * date, or text.
+ */
+export type ValueInput = { kind: 'category' } | { kind: 'choices'; options: { value: string; label: string }[] } | { kind: 'date' } | { kind: 'text' };
+
+/**
+ * A value a step can name in its templates and its Only when, as {key}:
+ * what it is, which step sets it ("Form: About it") or "Every run", and,
+ * when every step that sets it is shown only when something holds, that
+ * it is empty when those are skipped.
+ */
+export interface AvailableValue {
+  key: string;
+  label: string;
+  from: string;
+  note?: string;
+  input: ValueInput;
+}
+
+/** A field as valuesBefore needs it. */
+export type ValueField = Pick<Field, 'key' | 'label'> & Partial<Pick<Field, 'validation_type' | 'options'>>;
+
+const opWords: Record<string, string> = { is: 'is', is_not: 'is not', set: 'is given', unset: 'is not given' };
+
+/** A condition in words, as "{category_id} is Long boards". */
+export function conditionText(when: NonNullable<Step['when']>, names: Record<string, string> = {}): string {
+  const op = opWords[when.op] ?? when.op;
+  if (when.op === 'set' || when.op === 'unset') return `{${when.value}} ${op}`;
+  const to = when.value === 'category_id' ? (names[when.to ?? ''] ?? when.to ?? '') : (when.to ?? '');
+  return `{${when.value}} ${op} “${to}”`;
+}
+
+function questionInput(q: Question): ValueInput {
+  switch (q.type) {
+    case 'date':
+      return { kind: 'date' };
+    case 'yes_no':
+      return { kind: 'choices', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] };
+    case 'choice':
+      return { kind: 'choices', options: (q.options ?? []).filter((o) => o.value).map((o) => ({ value: o.value, label: o.label || o.value })) };
+  }
+  return { kind: 'text' };
+}
+
+function fieldInput(f: ValueField | undefined): ValueInput {
+  if (f?.validation_type === 'date') return { kind: 'date' };
+  if (f?.validation_type === 'select') return { kind: 'choices', options: (f.options?.choices ?? []).map((c) => ({ value: c.value, label: c.label || c.value })) };
+  return { kind: 'text' };
+}
+
+/**
+ * The values the step at i can name, in its templates and its Only when,
+ * by the rules saving checks with (flows.Check): those every run has, the
+ * category from the start when the flow has only one, and those the steps
+ * before it set; not those it sets itself. A value set by a step shown only
+ * when something holds is still offered, said to be empty when it is
+ * skipped. internal/flows/testdata/values.json pins this to the server.
+ */
+export function valuesBefore(
+  d: Pick<Definition, 'category_ids' | 'steps'>,
+  i: number,
+  fields: readonly ValueField[] = [],
+  names: Record<string, string> = {},
+): AvailableValue[] {
+  const out = new Map<string, AvailableValue & { maybe: boolean }>();
+  const put = (key: string, label: string, from: string, input: ValueInput, when?: Step['when']) => {
+    const before = out.get(key);
+    // Empty only if every step that sets it may be skipped.
+    const maybe = !!when && (!before || before.maybe);
+    const note = maybe ? `Empty when ${from} is skipped: it is shown only when ${conditionText(when!, names)}.` : undefined;
+    out.delete(key);
+    out.set(key, { key, label, from, input, maybe, note });
+  };
+  const every = 'Every run';
+  put('today', 'Today’s date', every, { kind: 'date' });
+  put('now', 'The date and time', every, { kind: 'text' });
+  put('user', 'Who runs it', every, { kind: 'text' });
+  put('flow', 'The flow’s name', every, { kind: 'text' });
+  if (d.category_ids.length === 1) {
+    const from = 'The flow’s one category';
+    put('category', 'The category', from, { kind: 'category' });
+    put('category_id', 'The category, by ID', from, { kind: 'category' });
+  }
+  const byKey = new Map(fields.map((f) => [f.key, f]));
+  const named = (s: Step) => `${kindLabels[s.kind]}${s.title ? `: ${s.title}` : ''}`;
+  for (const s of d.steps.slice(0, Math.max(0, i))) {
+    const from = named(s);
+    switch (s.kind) {
+      case 'choose_category':
+        put('category', 'The category', from, { kind: 'category' }, s.when);
+        put('category_id', 'The category, by ID', from, { kind: 'category' }, s.when);
+        break;
+      case 'form':
+        for (const q of s.questions ?? []) if (q.key) put(q.key, q.label || q.key, from, questionInput(q), s.when);
+        break;
+      case 'set_fields':
+        for (const row of s.fields ?? []) if (row.field) put(row.field, byKey.get(row.field)?.label ?? row.field, from, fieldInput(byKey.get(row.field)), s.when);
+        break;
+      case 'find':
+      case 'create':
+        put('asset', 'Its name', from, { kind: 'text' }, s.when);
+        put('asset_id', 'Its ID', from, { kind: 'text' }, s.when);
+        put('code', 'Its code', from, { kind: 'text' }, s.when);
+        // The asset found or filed brings its field values.
+        for (const f of fields) put(f.key, f.label, from, fieldInput(f), s.when);
+        break;
+    }
+  }
+  return [...out.values()].map(({ maybe: _, ...v }) => v);
+}
+
+/**
+ * Narrows values to those whose key has what was typed, those
+ * whose key starts with it first.
+ */
+export function suggest(values: readonly AvailableValue[], typed: string): AvailableValue[] {
+  const t = typed.toLowerCase();
+  const has = values.filter((v) => v.key.includes(t));
+  return [...has.filter((v) => v.key.startsWith(t)), ...has.filter((v) => !v.key.startsWith(t))];
+}
+
+/** The names a template has that none of these values is, in order, once each. */
+export function unknownNames(template: string | undefined, values: readonly AvailableValue[]): string[] {
+  const known = new Set(values.map((v) => v.key));
+  return [...new Set(references(template).filter((r) => !known.has(r)))];
+}
+
+/**
  * What the editor knows of the flow's categories, for checking Set fields
  * as the server does: the fields any of them records, and, by category,
  * its name and the keys of the fields it requires.
