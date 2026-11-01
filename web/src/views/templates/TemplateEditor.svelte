@@ -27,6 +27,7 @@
   import ArrangePanel from './editor/ArrangePanel.svelte';
   import Canvas from './editor/Canvas.svelte';
   import CommandSearch from './editor/CommandSearch.svelte';
+  import ContextMenu, { type MenuItem } from './editor/ContextMenu.svelte';
   import type { Command } from './editor/commands';
   import Dock from './editor/Dock.svelte';
   import { panelSummaries } from './editor/summaries';
@@ -528,6 +529,7 @@
       { name: 'Select all', keys: 'Ctrl+A', run: () => editor.selectAll() },
       any && { name: 'Select none', keywords: 'deselect', keys: 'Ctrl+Shift+A', run: () => editor.deselect() },
       any && { name: 'Copy', keys: 'Ctrl+C', run: () => void navigator.clipboard?.writeText(editor.copy()).catch(() => {}) },
+      !isNew && { name: 'Copy ID', keywords: 'api identifier template', run: () => void copyID() },
       { name: 'Paste', keys: 'Ctrl+V', run: () => canvas?.paste() },
       any && { name: 'Delete', keywords: 'remove erase', keys: 'Delete', run: () => editor.remove() },
       several && !grouped && { name: 'Group', run: () => editor.group() },
@@ -567,6 +569,31 @@
       { name: 'Turn the label right', keywords: 'rotate orientation template', run: () => editor.apply(turnTemplate(doc, true), 'Turn the label right') },
     ];
     return all.filter((c): c is Command => Boolean(c));
+  }
+
+  // The template's menu, as a drawing program's main menu: what concerns
+  // the template rather than what is on it.
+  let templateMenu = $state<{ x: number; y: number } | null>(null);
+  function openTemplateMenu(event: MouseEvent) {
+    if (templateMenu) return void (templateMenu = null);
+    const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    templateMenu = { x: r.left, y: r.bottom + 2 };
+  }
+  const templateMenuItems = $derived<MenuItem[]>([
+    // The API names a template by its ID (#171), which it has once saved.
+    { label: 'Copy ID', run: () => void copyID(), disabled: isNew },
+    'separator',
+    { label: 'Find an action… (Ctrl+Enter)', run: () => (searching = true) },
+  ]);
+  async function copyID() {
+    error = status = '';
+    try {
+      await navigator.clipboard.writeText(doc.id);
+      status = `Copied the ID of ${doc.name || 'this template'}.`;
+    } catch {
+      // Not allowed, or no clipboard here: it can still be copied from this.
+      error = `The ID could not be copied. It is ${doc.id}.`;
+    }
   }
 
   // Canvas-only mode, and the message saying how to leave it, which fades.
@@ -639,6 +666,17 @@
           <button type="button" class="icon-btn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!editor.canUndo} onclick={() => editor.undo()}><Icon name="undo" size={16} /></button>
           <button type="button" class="icon-btn" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!editor.canRedo} onclick={() => editor.redo()}><Icon name="redo" size={16} /></button>
           <button type="button" class="icon-btn" aria-label="Canvas only" title="Hide everything but the label (Tab)" onclick={() => setCanvasOnly(true)}><Icon name="expand" size={16} /></button>
+          <!-- Pressed while open, it closes the menu, rather than the press outside closing it and the click opening it again. -->
+          <button
+            type="button"
+            class="icon-btn"
+            aria-label="Template menu"
+            title="Template menu"
+            aria-haspopup="menu"
+            aria-expanded={templateMenu !== null}
+            onpointerdown={(e) => templateMenu && e.stopPropagation()}
+            onclick={openTemplateMenu}><Icon name="menu" size={16} /></button
+          >
           <button type="button" class="btn-primary ml-2 px-3 py-1" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
@@ -734,6 +772,9 @@
 
     <div class="contents" hidden={editor.canvasOnly}><StatusBar {liveState} /></div>
   </div>
+  {#if templateMenu}
+    <ContextMenu x={templateMenu.x} y={templateMenu.y} label="Template" items={templateMenuItems} onclose={() => (templateMenu = null)} />
+  {/if}
   {#if searching}
     <CommandSearch commands={commands()} onclose={() => (searching = false)} />
   {/if}
@@ -758,7 +799,7 @@
   <ArrangePanel />
 {/snippet}
 {#snippet label()}
-  <LabelPanel {isNew} problems={labelProblems} frame={drawingLive ? frame : null} {previewURL} />
+  <LabelPanel problems={labelProblems} frame={drawingLive ? frame : null} {previewURL} />
 {/snippet}
 {#snippet printer()}
   <PrinterPanel assetId={previewAsset?.id} onfit={(a) => (printArea = a)} />

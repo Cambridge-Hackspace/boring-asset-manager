@@ -34,6 +34,7 @@
     measure: 'M2 13L13 2l5 5L7 18zM5 10l1.5 1.5M8 7l2 2M11 4l1.5 1.5',
     eye: 'M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10zM10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
     eyeOff: 'M2 10s3-5.5 8-5.5c1.6 0 3 .6 4.2 1.4M18 10s-3 5.5-8 5.5c-1.6 0-3-.6-4.2-1.4M3 3l14 14',
+    menu: 'M3 5h14M3 10h14M3 15h14',
   } as const;
   export type IconName = keyof typeof paths;
 </script>

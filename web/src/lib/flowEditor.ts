@@ -70,6 +70,29 @@ export function newStepID(kind: StepKind, steps: readonly Step[]): string {
   for (let n = 2; ; n++) if (!taken.has(`${base}_${n}`)) return `${base}_${n}`;
 }
 
+/**
+ * Steps each with an ID of its own (#171): those they have are kept, so
+ * runs under way still match their answers to their steps, and any step
+ * without one, or with one another step took first, is given a new one
+ * from its kind. People never see or type them.
+ */
+export function withStepIDs(steps: readonly Step[]): Step[] {
+  const kept = new Set<string>();
+  const fine = steps.map((s) => {
+    const ok = stepID.test(s.id) && !kept.has(s.id);
+    if (ok) kept.add(s.id);
+    return ok;
+  });
+  const out: Step[] = [];
+  steps.forEach((s, i) => {
+    if (fine[i]) return out.push(s);
+    const id = newStepID(s.kind, [...steps.filter((_, j) => fine[j]), ...out]);
+    kept.add(id);
+    out.push({ ...s, id });
+  });
+  return out;
+}
+
 /** A new step of a kind, as it starts. */
 export function newStep(kind: StepKind, steps: readonly Step[]): Step {
   const id = newStepID(kind, steps);
@@ -122,8 +145,10 @@ export function checkFlow(d: Definition): FlowProblem[] {
   const ids = new Set<string>();
   d.steps.forEach((s, i) => {
     const bad = (message: string) => out.push({ step: s.id, message });
-    if (!stepID.test(s.id)) bad('Its name is 1 to 32 lowercase letters, digits and _, starting with a letter.');
-    else if (ids.has(s.id)) bad(`Another step is named ${s.id}.`);
+    // The editor gives each step its ID (withStepIDs), so these are for a
+    // flow made some other way.
+    if (!stepID.test(s.id)) bad('This step has no usable ID: remove it and add it again.');
+    else if (ids.has(s.id)) bad('This step has the same ID as another: remove it and add it again.');
     ids.add(s.id);
     switch (s.kind) {
       case 'choose_category':
@@ -167,6 +192,28 @@ export function checkFlow(d: Definition): FlowProblem[] {
     }
   });
   return out;
+}
+
+/** Whether a template, such as {owner}: {what}, names a value. */
+function names(template: string | undefined, key: string): boolean {
+  return (template ?? '').includes(`{${key}}`);
+}
+
+/**
+ * Which of these steps name a value, by its key: in a template (a heading,
+ * text, name, default, change or match) or in the condition they are shown
+ * on. Renaming a question's key leaves them naming what no step sets.
+ */
+export function stepsUsing(steps: readonly Step[], key: string): Step[] {
+  if (!key) return [];
+  return steps.filter(
+    (s) =>
+      s.when?.value === key ||
+      [s.title, s.text, s.name, s.name_label, s.match?.value].some((t) => names(t, key)) ||
+      (s.fields ?? []).some((f) => names(f.default, key)) ||
+      (s.questions ?? []).some((q) => names(q.default, key)) ||
+      (s.changes ?? []).some((c) => names(c.note, key) || Object.values(c.fields ?? {}).some((v) => names(v, key))),
+  );
 }
 
 /** The problems that belong to a step, or to the flow as a whole (no step). */

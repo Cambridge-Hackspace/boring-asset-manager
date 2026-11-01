@@ -105,7 +105,10 @@ test('design a template with the mouse and keyboard, and save it', async ({ sign
   // The server names the template; the editor moves to it.
   await expect(page).toHaveURL(/\/templates\/[0-9a-f-]{36}\/edit$/);
   const id = new URL(page.url()).pathname.split('/')[2]!;
-  await expect(page.getByText(id, { exact: true })).toBeVisible();
+  // Saved, its ID is offered to copy rather than shown (#171).
+  await page.getByRole('button', { name: 'Template menu' }).click();
+  await expect(page.getByRole('menu', { name: 'Template' }).getByRole('menuitem', { name: 'Copy ID' })).toBeEnabled();
+  await page.keyboard.press('Escape');
   await page.reload();
   await expect(page.getByRole('list', { name: 'Layers' }).getByRole('listitem')).toHaveCount(2);
   const saved = await api.call('GET', `/templates/${id}`);

@@ -5,7 +5,7 @@
   import { amount, conditionLabel, contentsOf, describeChange, describeEvent, isWebURL, keptValues, placeLink } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { actorName } from '../../lib/people';
-  import type { AssetEvent, AssetWithDetails, Condition, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
+  import type { AssetEvent, AssetWithDetails, Condition, Field, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
@@ -42,6 +42,8 @@
   // The flows that start from it, such as Collect it (README §6.7).
   let offeredFlows = $state<FlowLink[]>([]);
   let moving = $state(false);
+  // Every field, to name values kept from former categories by their labels.
+  let allFields = $state<Field[]>([]);
 
   const path = `/assets/${encodeURIComponent(id)}`;
 
@@ -57,6 +59,10 @@
     } finally {
       loading = false;
     }
+    if (asset && keptValues(asset.field_values, asset.effective_fields).length) {
+      // Without them, kept values are named by their keys.
+      allFields = await request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? [], () => []);
+    }
     // Signed out, the catalog is closed (README §3.3): where it is shows,
     // but not what it holds.
     if (!session.user) return;
@@ -71,6 +77,7 @@
   });
 
   const contents = $derived(asset ? contentsOf(asset, relationTypes) : []);
+  const kept = $derived(asset ? keptValues(asset.field_values, asset.effective_fields, allFields) : []);
   const locationType = $derived(relationTypes.find((t) => t.is_location));
 
   // Moves it into a place, or out of the one it is in.
@@ -328,13 +335,13 @@
             <dd class="font-mono">{k.assigned_code}</dd>
           {/each}
         </dl>
-        {#if keptValues(asset.field_values, asset.effective_fields).length}
+        {#if kept.length}
           <details class="mt-4 text-sm">
             <summary class="cursor-pointer">Values kept from former categories</summary>
             <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-              {#each keptValues(asset.field_values, asset.effective_fields) as [key, value] (key)}
-                <dt class="font-mono">{key}</dt>
-                <dd>{value}</dd>
+              {#each kept as k (k.key)}
+                <dt class={k.label ? '' : 'font-mono'}>{k.label ?? k.key}</dt>
+                <dd>{k.value}</dd>
               {/each}
             </dl>
           </details>

@@ -277,3 +277,21 @@ describe('AssetPage, signed out', () => {
     expect(screen.queryByText('Asset not found')).toBeNull();
   });
 });
+
+describe('AssetPage kept values', () => {
+  it('names values kept from former categories by their fields, and by key once a field is gone (#171)', async () => {
+    const kept = { ...withStock(5, false), field_values: { old_shelf: 'B2', gone: 'x' } };
+    fakeApi({
+      'GET /assets/a1': () => ({ asset: kept }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+      'GET /fields': () => ({ fields: [{ id: 'f1', key: 'old_shelf', label: 'Old shelf', validation_type: 'text', created_at: '', updated_at: '' }] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    const shelf = await screen.findByText('Old shelf');
+    expect(shelf.tagName).toBe('DT');
+    expect(shelf.nextElementSibling!.textContent).toBe('B2');
+    expect(screen.queryByText('old_shelf')).toBeNull();
+    expect(screen.getByText('gone').classList.contains('font-mono')).toBe(true);
+  });
+});

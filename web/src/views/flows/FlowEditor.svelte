@@ -8,7 +8,7 @@
   import { navigate } from '../../lib/router.svelte';
   import type { AssetHook, Category, EffectiveField, Field, Printer, PrinterPool, TemplateSummary } from '../../lib/models';
   import type { Definition, Flow, FlowProblem, Starter, StepKind } from '../../lib/flows';
-  import { addStep, addableKinds, checkFlow, kindHelp, kindLabels, moveStep, previewProgress, problemsOf, slugFrom } from '../../lib/flowEditor';
+  import { addStep, addableKinds, checkFlow, kindHelp, kindLabels, moveStep, previewProgress, problemsOf, slugFrom, withStepIDs } from '../../lib/flowEditor';
   import CategoryPicker from '../../components/CategoryPicker.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import FlowStepEditor from './FlowStepEditor.svelte';
@@ -67,7 +67,7 @@
         slug = f.slug;
         slugTouched = true;
         enabled = f.enabled;
-        def = f.definition;
+        def = { ...f.definition, steps: withStepIDs(f.definition.steps ?? []) };
         flows = flows.filter((x) => x.id !== f.id).concat(f);
         if (new URLSearchParams(location.search).has('saved')) {
           saved = `Saved ${f.name}.`;
@@ -103,7 +103,7 @@
       starters = (await request<{ starters: Starter[] }>('GET', `/flow-starters?category_ids=${def.category_ids.map(encodeURIComponent).join(',')}`)).starters ?? [];
       const s = starters.find((x) => x.key === starterKey);
       if (!s) return;
-      def = { ...s.definition, category_ids: [...def.category_ids] };
+      def = { ...s.definition, category_ids: [...def.category_ids], steps: withStepIDs(s.definition.steps) };
       if (!name) name = s.name;
       selected = 0;
     } catch (err) {
@@ -258,7 +258,21 @@
               {#each own as m, j (j)}<p class="error-text px-3 pb-2" role="alert">{m}</p>{/each}
               {#if open}
                 <div id="step-{i}-body" class="space-y-3 border-t-2 border-zinc-900 p-4 dark:border-zinc-300">
-                  <FlowStepEditor prefix="step-{i}" bind:step={() => def.steps[i]!, (v) => (def.steps[i] = v)} categories={flowCategories} {fields} flows={flows.filter((f) => f.slug !== editing)} {destinations} {templates} {hooks} />
+                  <!-- A starter used while a step is open starts its editor afresh. -->
+                  {#key def}
+                    <FlowStepEditor
+                      prefix="step-{i}"
+                      bind:step={() => def.steps[i]!, (v) => (def.steps[i] = v)}
+                      steps={def.steps}
+                      at={i}
+                      categories={flowCategories}
+                      {fields}
+                      flows={flows.filter((f) => f.slug !== editing)}
+                      {destinations}
+                      {templates}
+                      {hooks}
+                    />
+                  {/key}
                   {#if step.kind !== 'done'}
                     <div class="flex justify-end border-t border-zinc-200 pt-3 dark:border-zinc-800">
                       <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={() => remove(i)}>Remove this step</button>

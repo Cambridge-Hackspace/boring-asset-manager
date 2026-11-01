@@ -4,12 +4,13 @@ import { expect, goTo, test, unique } from './fixtures';
 // subcategories' assets, triggered on an asset's page, kept in its history.
 test('define a hook, offer it on a category, and trigger it', async ({ signedIn: page, api }) => {
   const label = unique('Identify');
-  const key = label.toLowerCase();
+  // Made from the label, as field keys are (#171).
+  const key = label.toLowerCase().replace(/[^a-z0-9]+/g, '_');
   await goTo(page, 'Hooks');
   await page.getByRole('button', { name: 'New hook' }).click();
   const form = page.getByRole('form', { name: 'New hook' });
   await form.getByLabel('Label').fill(label);
-  await form.getByLabel('Key').fill(key);
+  await expect(form.getByText(`Devices listen for ${key}`)).toBeVisible();
   await form.getByLabel('Ask first (optional)').fill('Light up its drawer?');
   await form.getByRole('button', { name: 'Save hook' }).click();
   await expect(page.getByText(`Saved ${label}.`)).toBeVisible();

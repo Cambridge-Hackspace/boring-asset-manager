@@ -22,7 +22,7 @@
   // way up it is, whether it is laid out again for other sizes, and how it
   // prints: mirrored, for a clear label read through glass, and turned, for
   // one put on turned. Those it shows as printed, or as applied.
-  let { isNew, problems, frame, previewURL }: { isNew: boolean; problems: Record<string, string>; frame: Frame | null; previewURL: string } = $props();
+  let { problems, frame, previewURL }: { problems: Record<string, string>; frame: Frame | null; previewURL: string } = $props();
 
   const editor = useEditor();
   const doc = $derived(editor.doc);
@@ -77,7 +77,6 @@
     <!-- The name is not an undo step: typing it is not editing the label. -->
     <input id="tpl-name" class="input-sm" required value={doc.name} oninput={(e) => (editor.doc.name = e.currentTarget.value)} aria-invalid={Boolean(problems.name)} />
     {#if problems.name}<p class="error-text text-xs">{problems.name}</p>{/if}
-    {#if !isNew}<p class="mt-0.5 truncate font-mono text-[0.7rem] text-zinc-600 dark:text-zinc-400" title="Assigned when first saved; the API names the template by it">{doc.id}</p>{/if}
   </div>
 
   <div class="grid grid-cols-2 gap-x-2 gap-y-1">

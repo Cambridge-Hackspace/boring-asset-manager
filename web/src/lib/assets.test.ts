@@ -39,7 +39,15 @@ describe('asset form helpers', () => {
   });
 
   it('lists values kept from former categories', () => {
-    expect(keptValues({ serial: '42', old: 'x', blank: '' }, [ef('serial')])).toEqual([['old', 'x']]);
+    expect(keptValues({ serial: '42', old: 'x', blank: '' }, [ef('serial')])).toEqual([{ key: 'old', value: 'x' }]);
+  });
+
+  it('names kept values by their field, where it still exists', () => {
+    const fields = [{ ...ef('old').field, label: 'Old shelf' }];
+    expect(keptValues({ old: 'x', gone: 'y' }, [], fields)).toEqual([
+      { key: 'old', label: 'Old shelf', value: 'x' },
+      { key: 'gone', value: 'y' },
+    ]);
   });
 
   it('finds the input a server error is about', () => {

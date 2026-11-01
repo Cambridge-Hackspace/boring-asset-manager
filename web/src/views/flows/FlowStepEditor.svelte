@@ -1,13 +1,19 @@
 <script lang="ts">
   // The settings of one step of a flow (README §6.7), as its card in the
   // editor shows them.
+  import { untrack } from 'svelte';
   import type { Category, Field } from '../../lib/models';
   import type { Change, ChangeKind, FieldSetting, Flow, Question, Step } from '../../lib/flows';
+  import { kindLabels, stepsUsing } from '../../lib/flowEditor';
+  import { keyFrom } from '../../lib/keys';
+  import DerivedKey from '../../components/DerivedKey.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
 
   let {
     prefix,
     step = $bindable(),
+    steps = [],
+    at = 0,
     categories,
     fields,
     flows,
@@ -18,6 +24,9 @@
     /** Unique on the page, for the ids of its controls. */
     prefix: string;
     step: Step;
+    /** The flow's steps, this one among them at at: those after it may use its questions. */
+    steps?: Step[];
+    at?: number;
     /** The flow's categories. */
     categories: Category[];
     /** The fields an asset in any of the flow's categories records. */
@@ -72,6 +81,32 @@
     step.questions = list;
   }
 
+  // Each question, by a number of its own, so that removing one leaves the
+  // others' keys as they were: those it came with are not made from their
+  // text, as later steps may use them; those added here are, until changed.
+  const came = untrack(() => (step.questions ?? []).map((q) => q.key));
+  const qids = $state(came.map((_, i) => i));
+  let nextQ = came.length;
+  function addQuestion() {
+    qids.push(nextQ++);
+    step.questions = [...(step.questions ?? []), { key: '', label: '' }];
+  }
+  function removeQuestion(i: number) {
+    qids.splice(i, 1);
+    step.questions = (step.questions ?? []).filter((_, j) => j !== i);
+  }
+  const asValue = (key: string) => `{${key}}`;
+  // What renaming a question's key breaks: the later steps that use it.
+  function renameWarning(key: string): string {
+    const later = steps.slice(at + 1);
+    const using = stepsUsing(later, key);
+    if (!using.length) return '';
+    const named = using.map((s) => `step ${at + 2 + later.indexOf(s)} (${kindLabels[s.kind]}${s.title ? `: ${s.title}` : ''})`);
+    const list = named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named.at(-1)}` : named[0]!;
+    const many = using.length > 1;
+    return `${list.charAt(0).toUpperCase()}${list.slice(1)} ${many ? 'use' : 'uses'} {${key}}: change it there too, or ${many ? 'they' : 'it'} will name nothing.`;
+  }
+
   function setChange(i: number, change: Partial<Change>) {
     const list = [...(step.changes ?? [])];
     list[i] = { ...list[i]!, ...change };
@@ -99,19 +134,12 @@
 </script>
 
 <div class="space-y-3 text-sm">
-  <div class="grid gap-3 sm:grid-cols-2">
-    <div>
-      <label class="label" for="{p}-id">Name</label>
-      <input id="{p}-id" class="input font-mono" maxlength="32" bind:value={step.id} aria-describedby="{p}-id-help" />
-      <p id="{p}-id-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">How conditions and the server name it.</p>
+  {#if step.kind !== 'label' && step.kind !== 'change'}
+    <div class="sm:max-w-[50%]">
+      <label class="label" for="{p}-title">Heading</label>
+      <input id="{p}-title" class="input" maxlength="255" bind:value={step.title} />
     </div>
-    {#if step.kind !== 'label' && step.kind !== 'change'}
-      <div>
-        <label class="label" for="{p}-title">Heading</label>
-        <input id="{p}-title" class="input" maxlength="255" bind:value={step.title} />
-      </div>
-    {/if}
-  </div>
+  {/if}
   {#if step.kind === 'confirm' || step.kind === 'done' || step.kind === 'form' || step.kind === 'find'}
     <div>
       <label class="label" for="{p}-text">Text</label>
@@ -182,20 +210,35 @@
     <fieldset class="space-y-2">
       <legend class="label">Questions of its own</legend>
       <p class="text-xs text-zinc-600 dark:text-zinc-400">Recorded in no field; used in names and text, as {'{what}'}.</p>
-      {#each step.questions ?? [] as q, i (i)}
-        <div class="grid gap-2 sm:grid-cols-[8rem_1fr_7rem_auto_auto]" role="group" aria-label="Question {i + 1}">
-          <input class="input font-mono" aria-label="Key of question {i + 1}" placeholder="what" value={q.key} oninput={(e) => setQuestion(i, { key: e.currentTarget.value })} />
-          <input class="input" aria-label="Question {i + 1}" placeholder="What is it?" value={q.label} oninput={(e) => setQuestion(i, { label: e.currentTarget.value })} />
+      {#each step.questions ?? [] as q, i (qids[i] ?? -1 - i)}
+        {@const qid = qids[i] ?? -1}
+        <div class="grid items-start gap-2 sm:grid-cols-[1fr_7rem_auto_auto]" role="group" aria-label="Question {i + 1}">
+          <div>
+            <input class="input" aria-label="Question {i + 1}" placeholder="What is it?" value={q.label} oninput={(e) => setQuestion(i, { label: e.currentTarget.value })} />
+            <DerivedKey
+              id="{p}-question-{qid}-key"
+              bind:value={() => q.key, (key) => setQuestion(i, { key })}
+              from={q.label}
+              follows={qid >= came.length}
+              derive={keyFrom}
+              what="key of question {i + 1}"
+              lead="Used as"
+              format={asValue}
+              warning={renameWarning(came[qid] ?? '')}
+              pattern="[a-z][a-z0-9_]*"
+              maxlength={64}
+            />
+          </div>
           <select class="input" aria-label="Type of question {i + 1}" value={q.type || 'text'} onchange={(e) => setQuestion(i, { type: e.currentTarget.value as Question['type'] })}>
             <option value="text">Text</option>
             <option value="number">Number</option>
             <option value="date">Date</option>
           </select>
           <label class="inline-flex items-center gap-1"><input type="checkbox" checked={!!q.required} onchange={(e) => setQuestion(i, { required: e.currentTarget.checked })} /> Required</label>
-          <button type="button" class="btn-sm" aria-label="Remove question {i + 1}" onclick={() => (step.questions = (step.questions ?? []).filter((_, j) => j !== i))}>Remove</button>
+          <button type="button" class="btn-sm" aria-label="Remove question {i + 1}" onclick={() => removeQuestion(i)}>Remove</button>
         </div>
       {/each}
-      <button type="button" class="btn-secondary" onclick={() => (step.questions = [...(step.questions ?? []), { key: '', label: '' }])}>Add a question</button>
+      <button type="button" class="btn-secondary" onclick={addQuestion}>Add a question</button>
     </fieldset>
   {:else if step.kind === 'find'}
     <fieldset>

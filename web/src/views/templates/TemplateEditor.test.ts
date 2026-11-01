@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import TemplateEditor from './TemplateEditor.svelte';
 import { fakeApi } from '../../test/fetch';
@@ -35,6 +35,12 @@ const layerNames = () =>
     .getAllByRole('button')
     .filter((b) => b.title === 'Double-click to rename')
     .map((b) => b.textContent?.trim());
+
+// jsdom has no clipboard: one for a test, taken away after it.
+function clipboard(fake: { writeText: (text: string) => Promise<void> }) {
+  Object.defineProperty(navigator, 'clipboard', { value: fake, configurable: true });
+  onTestFinished(() => void delete (navigator as { clipboard?: unknown }).clipboard);
+}
 
 async function saved(sent: { method: string; body: unknown }[]): Promise<TemplateDoc> {
   await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -628,10 +634,40 @@ describe('TemplateEditor', () => {
     expect((sent.find((r) => r.method === 'POST' && r.path === '/templates')!.body as TemplateDoc).name).toBe('Shelf tag');
   });
 
-  it('shows a saved template its ID', async () => {
+  it("copies a saved template's ID from its menu, rather than showing it (#171)", async () => {
     api();
+    const writeText = vi.fn((_text: string) => Promise.resolve());
+    clipboard({ writeText });
     render(TemplateEditor, { params: { id: 'ql90' } });
-    expect(await screen.findByText('ql90')).toBeTruthy();
+    await loaded();
+    expect(screen.queryByText('ql90')).toBeNull();
+    const button = screen.getByRole('button', { name: 'Template menu' });
+    await fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    await fireEvent.click(within(screen.getByRole('menu', { name: 'Template' })).getByRole('menuitem', { name: 'Copy ID' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(writeText).toHaveBeenCalledWith('ql90');
+    expect(await screen.findByText('Copied the ID of QL 90x29.')).toBeTruthy();
+  });
+
+  it('gives the ID to copy by hand when the clipboard refuses it', async () => {
+    api();
+    clipboard({ writeText: () => Promise.reject(new Error('denied')) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Template menu' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Copy ID' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('The ID could not be copied. It is ql90.');
+  });
+
+  it('has no ID to copy before a new template is saved', async () => {
+    api();
+    render(TemplateEditor, { params: {} });
+    await screen.findByRole('heading', { level: 1, name: 'New template' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Template menu' }));
+    expect(screen.getByRole('menuitem', { name: 'Copy ID' }).hasAttribute('disabled')).toBe(true);
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Find an action… (Ctrl+Enter)' }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('saves, and shows save errors on the element they name', async () => {

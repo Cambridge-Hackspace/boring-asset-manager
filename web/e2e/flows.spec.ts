@@ -103,8 +103,9 @@ test.describe('the flow editor', () => {
     const steps = page.getByRole('list', { name: 'Steps' });
     await expect(steps.getByRole('heading').first()).toHaveText('1. Form: About it');
     await steps.getByRole('button', { name: 'Add a question' }).click();
-    await steps.getByLabel('Key of question 1').fill('note');
+    // The question first; its key is made from it (#171).
     await steps.getByRole('textbox', { name: 'Question 1', exact: true }).fill('Anything else?');
+    await expect(steps.getByText('Used as {anything_else}')).toBeVisible();
     await expect(page.getByRole('figure', { name: 'Preview, as a phone shows it' })).toContainText('Anything else?');
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.help}`), 'the editor').toEqual([]);
