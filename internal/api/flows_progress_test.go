@@ -12,8 +12,8 @@ import (
 // ahead, as a run goes; a conditional step counts once it holds.
 func TestFlowRunProgress(t *testing.T) {
 	w := newWoodShop(t)
-	leave := flows.Starters([]string{w.short.ID, w.long.ID})[0].Definition
-	leave.Steps[1].Fields = []flows.FieldSetting{{Key: "owner", Default: "{user}"}}
+	leave := w.starter(t, 0, w.short.ID, w.long.ID)
+	question(t, &leave.Steps[1], "owner").Default = "{user}"
 	// Asked of long boards only, after the form.
 	leave.Steps = append(leave.Steps[:2], append([]flows.Step{
 		{ID: "long_only", Kind: flows.KindConfirm, When: &flows.Condition{Value: flows.ValueCategoryID, Op: flows.OpIs, To: w.long.ID}},
@@ -46,7 +46,7 @@ func TestFlowRunProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	at(&FlowProgress{Step: 2, Of: 3}, progressOf(&flow.Definition, run))
-	run, err = runner.answer(run, FlowAnswer{Step: "about", Name: "Ash plank", Fields: map[string]string{"owner": "Sam"}})
+	run, err = runner.answer(run, FlowAnswer{Step: "about", Answers: map[string]string{"name": "Ash plank", "owner": "Sam"}})
 	if err != nil {
 		t.Fatal(err)
 	}

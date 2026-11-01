@@ -3,9 +3,10 @@
   // editor shows them.
   import { untrack } from 'svelte';
   import type { Category, Field } from '../../lib/models';
-  import type { Change, ChangeKind, FieldSetting, Flow, Question, Step } from '../../lib/flows';
-  import { kindLabels, stepsUsing } from '../../lib/flowEditor';
-  import { keyFrom } from '../../lib/keys';
+  import type { Change, ChangeKind, FieldValue, Flow, Option, Question, Step } from '../../lib/flows';
+  import { optionLabel, questionTypes } from '../../lib/flows';
+  import { kindLabels, setsOn, setsOnText, stepsUsing } from '../../lib/flowEditor';
+  import { keyFrom, valueFrom } from '../../lib/keys';
   import DerivedKey from '../../components/DerivedKey.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
 
@@ -16,6 +17,7 @@
     at = 0,
     categories,
     fields,
+    byCategory = [],
     flows,
     destinations,
     templates,
@@ -31,6 +33,8 @@
     categories: Category[];
     /** The fields an asset in any of the flow's categories records. */
     fields: Field[];
+    /** The fields each of the flow's categories records, for Set fields to choose from. */
+    byCategory?: { category: Category; fields: Field[] }[];
     flows: Flow[];
     destinations: { value: string; label: string }[];
     templates: { id: string; name: string }[];
@@ -45,56 +49,76 @@
     ['return', 'Return it'],
     ['place', 'Move it to a place'],
     ['category', 'Move it to another category'],
-    ['fields', 'Set fields'],
     ['hook', 'Trigger a hook'],
   ];
 
-  // Form: a field's setting, made when first changed.
-  function settingOf(key: string): FieldSetting {
-    return step.fields?.find((f) => f.key === key) ?? { key };
-  }
-  function setField(key: string, change: Partial<FieldSetting>) {
-    const list = [...(step.fields ?? [])];
-    const i = list.findIndex((f) => f.key === key);
-    const next = { ...settingOf(key), ...change };
-    if (i < 0) list.push(next);
-    else list[i] = next;
-    step.fields = list;
-  }
-  // The fields in the order asked: those set first, as set, then the rest.
-  const ordered = $derived([
-    ...(step.fields ?? []).map((s) => fields.find((f) => f.key === s.key)).filter((f): f is Field => !!f),
-    ...fields.filter((f) => !(step.fields ?? []).some((s) => s.key === f.key)),
-  ]);
-  function moveField(key: string, by: -1 | 1) {
-    const keys = ordered.map((f) => f.key);
-    const i = keys.indexOf(key);
-    const j = i + by;
-    if (j < 0 || j >= keys.length) return;
-    [keys[i], keys[j]] = [keys[j]!, keys[i]!];
-    step.fields = keys.map((k) => settingOf(k));
-  }
+  // Form: each question, by a number of its own, so that removing or moving
+  // one leaves the others' keys as they were: those it came with are not
+  // made from their text, as later steps may use them; those added here
+  // are, until changed. Its choices are numbered the same way.
+  const came = untrack(() => (step.questions ?? []).map((q) => q.key));
+  const qids = $state(came.map((_, i) => i));
+  let nextQ = came.length;
+  const oids = $state<Record<number, number[]>>({});
+  let nextO = 0;
+  const cameOptions = new Set<number>();
+  untrack(() =>
+    (step.questions ?? []).forEach((q, i) => {
+      oids[i] = (q.options ?? []).map(() => {
+        cameOptions.add(nextO);
+        return nextO++;
+      });
+    }),
+  );
 
   function setQuestion(i: number, change: Partial<Question>) {
     const list = [...(step.questions ?? [])];
     list[i] = { ...list[i]!, ...change };
     step.questions = list;
   }
-
-  // Each question, by a number of its own, so that removing one leaves the
-  // others' keys as they were: those it came with are not made from their
-  // text, as later steps may use them; those added here are, until changed.
-  const came = untrack(() => (step.questions ?? []).map((q) => q.key));
-  const qids = $state(came.map((_, i) => i));
-  let nextQ = came.length;
   function addQuestion() {
-    qids.push(nextQ++);
-    step.questions = [...(step.questions ?? []), { key: '', label: '' }];
+    qids.push(nextQ);
+    oids[nextQ++] = [];
+    step.questions = [...(step.questions ?? []), { key: '', label: '', type: 'text' }];
   }
   function removeQuestion(i: number) {
     qids.splice(i, 1);
     step.questions = (step.questions ?? []).filter((_, j) => j !== i);
   }
+  function moveQuestion(i: number, by: -1 | 1) {
+    const j = i + by;
+    const list = [...(step.questions ?? [])];
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j]!, list[i]!];
+    [qids[i], qids[j]] = [qids[j]!, qids[i]!];
+    step.questions = list;
+  }
+  function setType(i: number, type: Question['type']) {
+    const q = step.questions![i]!;
+    const change: Partial<Question> = { type };
+    if (type === 'choice' && !q.options?.length) {
+      change.options = [{ value: '', label: '' }];
+      oids[qids[i]!] = [nextO++];
+    }
+    if (type !== 'choice') change.options = undefined;
+    // A default that suited the old type may not suit the new.
+    if (type === 'yes_no' || type === 'choice' || type === 'photo') change.default = '';
+    setQuestion(i, change);
+  }
+  function setOption(i: number, j: number, change: Partial<Option>) {
+    const options = [...(step.questions![i]!.options ?? [])];
+    options[j] = { ...options[j]!, ...change };
+    setQuestion(i, { options });
+  }
+  function addOption(i: number) {
+    (oids[qids[i]!] ??= []).push(nextO++);
+    setQuestion(i, { options: [...(step.questions![i]!.options ?? []), { value: '', label: '' }] });
+  }
+  function removeOption(i: number, j: number) {
+    oids[qids[i]!]?.splice(j, 1);
+    setQuestion(i, { options: (step.questions![i]!.options ?? []).filter((_, k) => k !== j) });
+  }
+
   const asValue = (key: string) => `{${key}}`;
   // What renaming a question's key breaks: the later steps that use it.
   function renameWarning(key: string): string {
@@ -106,6 +130,35 @@
     const many = using.length > 1;
     return `${list.charAt(0).toUpperCase()}${list.slice(1)} ${many ? 'use' : 'uses'} {${key}}: change it there too, or ${many ? 'they' : 'it'} will name nothing.`;
   }
+
+  // Set fields: its rows, the fields to choose from by category, and the
+  // photo questions asked before it.
+  const fieldOf = (key: string) => fields.find((f) => f.key === key);
+  function setRow(i: number, change: Partial<FieldValue>) {
+    const list = [...(step.fields ?? [])];
+    list[i] = { ...list[i]!, ...change };
+    step.fields = list;
+  }
+  function moveRow(i: number, by: -1 | 1) {
+    const j = i + by;
+    const list = [...(step.fields ?? [])];
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j]!, list[i]!];
+    step.fields = list;
+  }
+  // A choice field offers its choices as fixed values.
+  function fixedValues(key: string): { value: string; label: string }[] {
+    const f = fieldOf(key);
+    if (f?.validation_type === 'select') return (f.options?.choices ?? []).map((c) => ({ value: c.value, label: c.label }));
+    return [];
+  }
+  const photoQuestions = $derived(
+    steps
+      .slice(0, at)
+      .flatMap((s) => (s.kind === 'form' ? (s.questions ?? []) : []))
+      .filter((q) => q.type === 'photo'),
+  );
+  const placement = $derived(step.kind === 'set_fields' ? setsOnText[setsOn(steps, at)] : '');
 
   function setChange(i: number, change: Partial<Change>) {
     const list = [...(step.changes ?? [])];
@@ -134,7 +187,7 @@
 </script>
 
 <div class="space-y-3 text-sm">
-  {#if step.kind !== 'label' && step.kind !== 'change'}
+  {#if step.kind !== 'label' && step.kind !== 'change' && step.kind !== 'set_fields'}
     <div class="sm:max-w-[50%]">
       <label class="label" for="{p}-title">Heading</label>
       <input id="{p}-title" class="input" maxlength="255" bind:value={step.title} />
@@ -166,80 +219,141 @@
       </select>
     </div>
   {:else if step.kind === 'form'}
-    <div class="flex flex-wrap gap-4">
-      <label class="inline-flex items-center gap-2"><input type="checkbox" bind:checked={step.ask_name} /> Ask for its name</label>
-      <label class="inline-flex items-center gap-2"><input type="checkbox" bind:checked={step.ask_photo} /> Ask for a photo</label>
-    </div>
-    {#if step.ask_name}
-      <div>
-        <label class="label" for="{p}-name-label">The name's question</label>
-        <input id="{p}-name-label" class="input" maxlength="255" placeholder="What is it?" bind:value={step.name_label} />
-      </div>
-    {/if}
-    {#if ordered.length}
-      <fieldset class="space-y-2">
-        <legend class="label">Fields</legend>
-        <p class="text-xs text-zinc-600 dark:text-zinc-400">
-          Each category asks the fields it records; a field it requires is always asked. Adding a field to a category adds it here.
-        </p>
-        {#each ordered as f, i (f.key)}
-          {@const s = settingOf(f.key)}
-          <div class="rounded border border-zinc-200 p-2 dark:border-zinc-800" role="group" aria-label="Field {f.label}">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <span class="font-medium">{f.label} <span class="font-mono text-xs text-zinc-600 dark:text-zinc-400">{f.key}</span></span>
-              <span class="flex gap-1">
-                <button type="button" class="btn-sm" aria-label="Move {f.label} up" disabled={i === 0} onclick={() => moveField(f.key, -1)}>↑</button>
-                <button type="button" class="btn-sm" aria-label="Move {f.label} down" disabled={i === ordered.length - 1} onclick={() => moveField(f.key, 1)}>↓</button>
-              </span>
-            </div>
-            <div class="mt-2 flex flex-wrap gap-4">
-              <label class="inline-flex items-center gap-2"><input type="checkbox" checked={!s.hidden} onchange={(e) => setField(f.key, { hidden: !e.currentTarget.checked })} /> Ask it</label>
-              <label class="inline-flex items-center gap-2"><input type="checkbox" checked={!!s.required} onchange={(e) => setField(f.key, { required: e.currentTarget.checked })} /> Required</label>
-            </div>
-            {#if !s.hidden}
-              <div class="mt-2 grid gap-2 sm:grid-cols-3">
-                <input class="input" aria-label="Label for {f.label}" placeholder={f.label} value={s.label ?? ''} oninput={(e) => setField(f.key, { label: e.currentTarget.value })} />
-                <input class="input" aria-label="Help for {f.label}" placeholder="Help" value={s.help ?? ''} oninput={(e) => setField(f.key, { help: e.currentTarget.value })} />
-                <input class="input" aria-label="Default for {f.label}" placeholder="Default, as {'{user}'}" value={s.default ?? ''} oninput={(e) => setField(f.key, { default: e.currentTarget.value })} />
-              </div>
-            {/if}
-          </div>
-        {/each}
-      </fieldset>
-    {/if}
     <fieldset class="space-y-2">
-      <legend class="label">Questions of its own</legend>
-      <p class="text-xs text-zinc-600 dark:text-zinc-400">Recorded in no field; used in names and text, as {'{what}'}.</p>
+      <legend class="label">Questions</legend>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">
+        Each answer is a value later steps use, as {'{what}'}: a Set fields step puts it into a field.
+      </p>
       {#each step.questions ?? [] as q, i (qids[i] ?? -1 - i)}
         {@const qid = qids[i] ?? -1}
-        <div class="grid items-start gap-2 sm:grid-cols-[1fr_7rem_auto_auto]" role="group" aria-label="Question {i + 1}">
-          <div>
-            <input class="input" aria-label="Question {i + 1}" placeholder="What is it?" value={q.label} oninput={(e) => setQuestion(i, { label: e.currentTarget.value })} />
-            <DerivedKey
-              id="{p}-question-{qid}-key"
-              bind:value={() => q.key, (key) => setQuestion(i, { key })}
-              from={q.label}
-              follows={qid >= came.length}
-              derive={keyFrom}
-              what="key of question {i + 1}"
-              lead="Used as"
-              format={asValue}
-              warning={renameWarning(came[qid] ?? '')}
-              pattern="[a-z][a-z0-9_]*"
-              maxlength={64}
-            />
+        {@const n = i + 1}
+        <div class="space-y-2 rounded border border-zinc-200 p-2 dark:border-zinc-800" role="group" aria-label="Question {n}">
+          <div class="grid items-start gap-2 sm:grid-cols-[1fr_9rem]">
+            <div>
+              <input class="input" aria-label="Question {n}" placeholder="What is it?" value={q.label} oninput={(e) => setQuestion(i, { label: e.currentTarget.value })} />
+              <DerivedKey
+                id="{p}-question-{qid}-key"
+                bind:value={() => q.key, (key) => setQuestion(i, { key })}
+                from={q.label}
+                follows={qid >= came.length}
+                derive={keyFrom}
+                what="key of question {n}"
+                lead="Used as"
+                format={asValue}
+                warning={renameWarning(came[qid] ?? '')}
+                pattern="[a-z][a-z0-9_]*"
+                maxlength={64}
+              />
+            </div>
+            <select class="input" aria-label="Type of question {n}" value={q.type || 'text'} onchange={(e) => setType(i, e.currentTarget.value as Question['type'])}>
+              {#each questionTypes as [t, name] (t)}<option value={t}>{name}</option>{/each}
+            </select>
           </div>
-          <select class="input" aria-label="Type of question {i + 1}" value={q.type || 'text'} onchange={(e) => setQuestion(i, { type: e.currentTarget.value as Question['type'] })}>
-            <option value="text">Text</option>
-            <option value="number">Number</option>
-            <option value="date">Date</option>
-          </select>
-          <label class="inline-flex items-center gap-1"><input type="checkbox" checked={!!q.required} onchange={(e) => setQuestion(i, { required: e.currentTarget.checked })} /> Required</label>
-          <button type="button" class="btn-sm" aria-label="Remove question {i + 1}" onclick={() => removeQuestion(i)}>Remove</button>
+          {#if q.type === 'choice'}
+            <fieldset class="space-y-2 pl-2">
+              <legend class="text-xs font-semibold">Its choices</legend>
+              {#each q.options ?? [] as o, j (oids[qid]?.[j] ?? -1 - j)}
+                {@const oid = oids[qid]?.[j] ?? -1}
+                <div class="flex flex-wrap items-start gap-2">
+                  <div class="flex-1">
+                    <input class="input" aria-label="Choice {j + 1} of question {n}" placeholder="Oak" value={o.label ?? ''} oninput={(e) => setOption(i, j, { label: e.currentTarget.value })} />
+                    <DerivedKey
+                      id="{p}-question-{qid}-choice-{oid}"
+                      bind:value={() => o.value, (value) => setOption(i, j, { value })}
+                      from={o.label ?? ''}
+                      follows={!cameOptions.has(oid)}
+                      derive={valueFrom}
+                      what="value of choice {j + 1} of question {n}"
+                      lead="Answered as"
+                      maxlength={255}
+                    />
+                  </div>
+                  <button type="button" class="btn-secondary" aria-label="Remove choice {j + 1} of question {n}" onclick={() => removeOption(i, j)}>Remove</button>
+                </div>
+              {/each}
+              <button type="button" class="btn-secondary" onclick={() => addOption(i)}>Add a choice</button>
+            </fieldset>
+          {/if}
+          <div class="grid gap-2 sm:grid-cols-2">
+            <input class="input" aria-label="Help for question {n}" placeholder="Help" value={q.help ?? ''} oninput={(e) => setQuestion(i, { help: e.currentTarget.value })} />
+            {#if q.type === 'yes_no' || q.type === 'choice'}
+              <select class="input" aria-label="Default for question {n}" value={q.default ?? ''} onchange={(e) => setQuestion(i, { default: e.currentTarget.value })}>
+                <option value="">No default</option>
+                {#if q.type === 'yes_no'}
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                {:else}
+                  {#each (q.options ?? []).filter((o) => o.value) as o (o.value)}<option value={o.value}>{optionLabel(o)}</option>{/each}
+                {/if}
+              </select>
+            {:else if q.type !== 'photo'}
+              <input class="input" aria-label="Default for question {n}" placeholder="Default, as {'{user}'}" value={q.default ?? ''} oninput={(e) => setQuestion(i, { default: e.currentTarget.value })} />
+            {/if}
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="inline-flex min-h-11 items-center gap-2"><input type="checkbox" checked={!!q.required} onchange={(e) => setQuestion(i, { required: e.currentTarget.checked })} /> Required</label>
+            <span class="flex gap-1">
+              <button type="button" class="btn-secondary px-0" aria-label="Move question {n} up" disabled={i === 0} onclick={() => moveQuestion(i, -1)}>↑</button>
+              <button type="button" class="btn-secondary px-0" aria-label="Move question {n} down" disabled={i === (step.questions ?? []).length - 1} onclick={() => moveQuestion(i, 1)}>↓</button>
+              <button type="button" class="btn-secondary" aria-label="Remove question {n}" onclick={() => removeQuestion(i)}>Remove</button>
+            </span>
+          </div>
         </div>
       {/each}
       <button type="button" class="btn-secondary" onclick={addQuestion}>Add a question</button>
     </fieldset>
+  {:else if step.kind === 'set_fields'}
+    <p class="font-semibold" id="{p}-placement">{placement}</p>
+    <fieldset class="space-y-2" aria-describedby="{p}-placement">
+      <legend class="label">Fields</legend>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">
+        Each value may be an answer, as {'{until}'}, a value every run has, as {'{today}'} or {'{user}'}, fixed text, or a mix.
+      </p>
+      {#each step.fields ?? [] as row, i (i)}
+        {@const n = i + 1}
+        {@const fixed = fixedValues(row.field)}
+        <div class="grid items-start gap-2 rounded border border-zinc-200 p-2 sm:grid-cols-[1fr_1fr_auto] dark:border-zinc-800" role="group" aria-label="Field {n}">
+          <select class="input" aria-label="Field {n}" value={row.field} onchange={(e) => setRow(i, { field: e.currentTarget.value })}>
+            <option value="">Choose a field…</option>
+            {#if row.field && !fieldOf(row.field)}<option value={row.field}>{row.field}</option>{/if}
+            {#each byCategory as g (g.category.id)}
+              <optgroup label={g.category.name}>
+                {#each g.fields as f (f.key)}<option value={f.key}>{f.label}</option>{/each}
+              </optgroup>
+            {/each}
+          </select>
+          <div>
+            <input
+              class="input"
+              aria-label="Value of field {n}"
+              placeholder={fieldOf(row.field)?.validation_type === 'date' ? '{today}' : '{user}'}
+              list={fixed.length ? `${p}-row-${i}-fixed` : undefined}
+              value={row.value}
+              oninput={(e) => setRow(i, { value: e.currentTarget.value })}
+            />
+            {#if fixed.length}
+              <datalist id="{p}-row-{i}-fixed">
+                {#each fixed as v (v.value)}<option value={v.value} label={v.label}></option>{/each}
+              </datalist>
+              <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Its choices: {fixed.map((v) => v.value).join(', ')}</p>
+            {/if}
+          </div>
+          <span class="flex gap-1">
+            <button type="button" class="btn-secondary px-0" aria-label="Move field {n} up" disabled={i === 0} onclick={() => moveRow(i, -1)}>↑</button>
+            <button type="button" class="btn-secondary px-0" aria-label="Move field {n} down" disabled={i === (step.fields ?? []).length - 1} onclick={() => moveRow(i, 1)}>↓</button>
+            <button type="button" class="btn-secondary" aria-label="Remove field {n}" onclick={() => (step.fields = (step.fields ?? []).filter((_, j) => j !== i))}>Remove</button>
+          </span>
+        </div>
+      {/each}
+      <button type="button" class="btn-secondary" onclick={() => (step.fields = [...(step.fields ?? []), { field: '', value: '' }])}>Add a field</button>
+    </fieldset>
+    <div class="sm:max-w-[50%]">
+      <label class="label" for="{p}-photo">Its photo</label>
+      <select id="{p}-photo" class="input" value={step.photo ?? ''} onchange={(e) => (step.photo = e.currentTarget.value || undefined)}>
+        <option value="">None</option>
+        {#each photoQuestions as q (q.key)}<option value={`{${q.key}}`}>{q.label || q.key}</option>{/each}
+      </select>
+    </div>
   {:else if step.kind === 'find'}
     <fieldset>
       <legend class="label">Find it by</legend>
@@ -350,21 +464,6 @@
               <option value="">Choose…</option>
               {#each hooks as a (a.key)}<option value={a.key}>{a.label}</option>{/each}
             </select>
-          {:else if c.kind === 'fields'}
-            {#each fields as f (f.key)}
-              <input
-                class="input w-auto"
-                aria-label="{f.label}, for change {i + 1}"
-                placeholder={f.label}
-                value={c.fields?.[f.key] ?? ''}
-                oninput={(e) => {
-                  const next = { ...(c.fields ?? {}) };
-                  if (e.currentTarget.value) next[f.key] = e.currentTarget.value;
-                  else delete next[f.key];
-                  setChange(i, { fields: next });
-                }}
-              />
-            {/each}
           {/if}
           <button type="button" class="btn-sm" aria-label="Remove change {i + 1}" onclick={() => (step.changes = (step.changes ?? []).filter((_, j) => j !== i))}>Remove</button>
           {#if c.kind === 'place'}
@@ -375,6 +474,7 @@
         </div>
       {/each}
       <button type="button" class="btn-secondary" onclick={() => (step.changes = [...(step.changes ?? []), { kind: 'archive' }])}>Add a change</button>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">To set its fields, add a Set fields step after the step that finds or files it.</p>
     </fieldset>
   {/if}
 

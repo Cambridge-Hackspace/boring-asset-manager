@@ -1159,7 +1159,7 @@ func (m *matcher) flow(it *ImportItem, d *flows.Definition) bool {
 	d.LeaveUntil = m.fieldKey(d.LeaveUntil, who)
 	for i := range d.Steps {
 		s := &d.Steps[i]
-		s.Text, s.Name, s.NameLabel = m.flowText(s.Text), m.flowText(s.Name), m.flowText(s.NameLabel)
+		s.Text, s.Name, s.Photo = m.flowText(s.Text), m.flowText(s.Name), m.flowText(s.Photo)
 		for j, id := range s.Categories {
 			s.Categories[j] = cat(id)
 		}
@@ -1167,11 +1167,20 @@ func (m *matcher) flow(it *ImportItem, d *flows.Definition) bool {
 		if s.When != nil && s.When.Value == flows.ValueCategoryID {
 			s.When.To = cat(s.When.To)
 		}
+		if s.When != nil {
+			// A question keyed as a field it fills is renamed with it.
+			if k, ok := m.fieldKeys[s.When.Value]; ok {
+				s.When.Value = k
+			}
+		}
 		for j := range s.Fields {
-			s.Fields[j].Key = m.fieldKey(s.Fields[j].Key, who)
-			s.Fields[j].Default = m.flowText(s.Fields[j].Default)
+			s.Fields[j].Field = m.fieldKey(s.Fields[j].Field, who)
+			s.Fields[j].Value = m.flowText(s.Fields[j].Value)
 		}
 		for j := range s.Questions {
+			if k, ok := m.fieldKeys[s.Questions[j].Key]; ok {
+				s.Questions[j].Key = k
+			}
 			s.Questions[j].Default = m.flowText(s.Questions[j].Default)
 		}
 		if s.Match != nil {
@@ -1224,13 +1233,6 @@ func (m *matcher) flow(it *ImportItem, d *flows.Definition) bool {
 				} else if _, ok := m.h.hooks[c.Hook]; !ok {
 					m.problem("%s triggers the hook %q, which neither the archive nor this instance has", who, c.Hook)
 				}
-			}
-			if len(c.Fields) > 0 {
-				f := map[string]string{}
-				for k, v := range c.Fields {
-					f[m.fieldKey(k, who)] = m.flowText(v)
-				}
-				c.Fields = f
 			}
 			if c.Kind == flows.ChangePlace && c.AssetID != "" {
 				if m.a.assetIDs[c.AssetID] {

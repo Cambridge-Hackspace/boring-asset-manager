@@ -84,6 +84,7 @@ var codeMigrations = []codeMigration{
 	{29, "printer_media_width", widenPrinterMedia},
 	{33, "template_layering", layerTemplates},
 	{HooksVersion, "hooks", renameHooks},
+	{FormQuestionsVersion, "form_questions", upgradeFlows},
 }
 
 // layerTemplates puts each template's elements in the order they were drawn
