@@ -5,10 +5,11 @@
   import type { Category, Field } from '../../lib/models';
   import type { Change, ChangeKind, FieldValue, Flow, Option, Question, Step } from '../../lib/flows';
   import { optionLabel, questionTypes } from '../../lib/flows';
-  import { kindLabels, setsOn, setsOnText, stepsUsing } from '../../lib/flowEditor';
+  import { kindLabels, setsOn, setsOnText, stepsUsing, valuesBefore, type AvailableValue } from '../../lib/flowEditor';
   import { keyFrom, valueFrom } from '../../lib/keys';
   import DerivedKey from '../../components/DerivedKey.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
+  import TemplateInput from '../../components/TemplateInput.svelte';
 
   let {
     prefix,
@@ -16,6 +17,7 @@
     steps = [],
     at = 0,
     categories,
+    categoryIDs,
     fields,
     byCategory = [],
     flows,
@@ -31,6 +33,8 @@
     at?: number;
     /** The flow's categories. */
     categories: Category[];
+    /** The flow's categories, by ID, as its definition lists them (those of categories when not given). */
+    categoryIDs?: string[];
     /** The fields an asset in any of the flow's categories records. */
     fields: Field[];
     /** The fields each of the flow's categories records, for Set fields to choose from. */
@@ -180,24 +184,72 @@
     step.categories = categories.map((c) => c.id).filter((c) => list.has(c));
   }
 
-  // Only when: a condition on an earlier value.
-  function setWhen(on: boolean) {
-    step.when = on ? { value: 'category_id', op: 'is', to: categories[0]?.id ?? '' } : null;
+  // The values this step can name, in its templates and its Only when: those
+  // every run has, and those the steps before it set (#169).
+  const categoryNames = $derived(Object.fromEntries(categories.map((c) => [c.id, c.name])));
+  const available = $derived(valuesBefore({ category_ids: categoryIDs ?? categories.map((c) => c.id), steps }, at, fields, categoryNames));
+
+  // Only when: a condition on a value set before it, compared with what
+  // suits that value.
+  const depends = $derived(step.when ? available.find((v) => v.key === step.when!.value) : undefined);
+  function firstTo(v: AvailableValue | undefined): string {
+    switch (v?.input.kind) {
+      case 'category':
+        return (v.key === 'category' ? categories[0]?.name : categories[0]?.id) ?? '';
+      case 'choices':
+        return v.input.options[0]?.value ?? '';
+    }
+    return '';
   }
+  function setWhen(on: boolean) {
+    if (!on) {
+      step.when = null;
+      return;
+    }
+    // The category, if chosen before it; else the latest value a step sets.
+    const v = available.find((a) => a.key === 'category_id') ?? [...available].reverse().find((a) => a.from !== 'Every run') ?? available[0];
+    step.when = { value: v?.key ?? 'category_id', op: 'is', to: firstTo(v) };
+  }
+  function setWhenValue(key: string) {
+    step.when = { ...step.when!, value: key, to: firstTo(available.find((a) => a.key === key)) };
+  }
+  // What the value is compared with, as a list: its choices, and what it
+  // is now when that is not among them.
+  const comparedOptions = $derived.by((): { value: string; label: string }[] => {
+    const v = depends;
+    const list =
+      v?.input.kind === 'category'
+        ? categories.map((c) => ({ value: v.key === 'category' ? c.name : c.id, label: c.name }))
+        : v?.input.kind === 'choices'
+          ? v.input.options
+          : [];
+    const to = step.when?.to ?? '';
+    return to && !list.some((o) => o.value === to) ? [{ value: to, label: to }, ...list] : list;
+  });
 </script>
 
 <div class="space-y-3 text-sm">
   {#if step.kind !== 'label' && step.kind !== 'change' && step.kind !== 'set_fields'}
     <div class="sm:max-w-[50%]">
       <label class="label" for="{p}-title">Heading</label>
-      <input id="{p}-title" class="input" maxlength="255" bind:value={step.title} />
+      <TemplateInput id="{p}-title" name="Heading" labelled values={available} bind:value={step.title} />
     </div>
   {/if}
   {#if step.kind === 'confirm' || step.kind === 'done' || step.kind === 'form' || step.kind === 'find'}
     <div>
       <label class="label" for="{p}-text">Text</label>
-      <input id="{p}-text" class="input" maxlength="255" placeholder={step.kind === 'done' ? '{asset} is filed.' : ''} bind:value={step.text} aria-describedby="{p}-text-help" />
-      <p id="{p}-text-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">May name earlier answers, as {'{owner}'} or {'{asset}'}.</p>
+      <TemplateInput
+        id="{p}-text"
+        name="Text"
+        labelled
+        values={available}
+        placeholder={step.kind === 'done' ? '{asset} is filed.' : ''}
+        describedby="{p}-text-help"
+        bind:value={step.text}
+      />
+      <p id="{p}-text-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        May name values set before it, as {'{owner}'} or {'{asset}'}: type {'{'} or press {'{ }'} to choose one.
+      </p>
     </div>
   {/if}
 
@@ -287,7 +339,13 @@
                 {/if}
               </select>
             {:else if q.type !== 'photo'}
-              <input class="input" aria-label="Default for question {n}" placeholder="Default, as {'{user}'}" value={q.default ?? ''} oninput={(e) => setQuestion(i, { default: e.currentTarget.value })} />
+              <TemplateInput
+                id="{p}-question-{qid}-default"
+                name="Default for question {n}"
+                values={available}
+                placeholder="Default, as {'{user}'}"
+                bind:value={() => q.default ?? '', (v) => setQuestion(i, { default: v })}
+              />
             {/if}
           </div>
           <div class="flex flex-wrap items-center justify-between gap-2">
@@ -323,13 +381,13 @@
             {/each}
           </select>
           <div>
-            <input
-              class="input"
-              aria-label="Value of field {n}"
+            <TemplateInput
+              id="{p}-row-{i}-value"
+              name="Value of field {n}"
+              values={available}
               placeholder={fieldOf(row.field)?.validation_type === 'date' ? '{today}' : '{user}'}
               list={fixed.length ? `${p}-row-${i}-fixed` : undefined}
-              value={row.value}
-              oninput={(e) => setRow(i, { value: e.currentTarget.value })}
+              bind:value={() => row.value, (v) => setRow(i, { value: v ?? '' })}
             />
             {#if fixed.length}
               <datalist id="{p}-row-{i}-fixed">
@@ -374,7 +432,7 @@
       </div>
       <div>
         <label class="label" for="{p}-match">Only where a field is</label>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <select
             id="{p}-match"
             class="input"
@@ -385,7 +443,14 @@
             {#each fields as f (f.key)}<option value={f.key}>{f.label}</option>{/each}
           </select>
           {#if step.match}
-            <input class="input" aria-label="The value it matches" placeholder={'{user}'} value={step.match.value} oninput={(e) => (step.match = { field: step.match!.field, value: e.currentTarget.value })} />
+            <TemplateInput
+              id="{p}-match-value"
+              name="The value it matches"
+              class="min-w-48 flex-1"
+              values={available}
+              placeholder={'{user}'}
+              bind:value={() => step.match?.value ?? '', (v) => (step.match = { field: step.match!.field, value: v ?? '' })}
+            />
           {/if}
         </div>
       </div>
@@ -393,7 +458,7 @@
   {:else if step.kind === 'create'}
     <div>
       <label class="label" for="{p}-name">Its name</label>
-      <input id="{p}-name" class="input" maxlength="255" placeholder={'{owner}: {what}'} bind:value={step.name} />
+      <TemplateInput id="{p}-name" name="Its name" labelled values={available} placeholder={'{owner}: {what}'} bind:value={step.name} />
     </div>
     <div>
       <label class="label" for="{p}-where">Put it</label>
@@ -453,7 +518,14 @@
               <option value="needs_maintenance">Needs maintenance</option>
               <option value="out_of_service">Out of service</option>
             </select>
-            <input class="input w-auto" aria-label="Note for change {i + 1}" placeholder="Note" value={c.note ?? ''} oninput={(e) => setChange(i, { note: e.currentTarget.value })} />
+            <TemplateInput
+              id="{p}-change-{i}-note"
+              name="Note for change {i + 1}"
+              class="min-w-48 flex-1"
+              values={available}
+              placeholder="Note"
+              bind:value={() => c.note ?? '', (v) => setChange(i, { note: v })}
+            />
           {:else if c.kind === 'category'}
             <select class="input w-auto" aria-label="Category for change {i + 1}" value={c.category_id ?? ''} onchange={(e) => setChange(i, { category_id: e.currentTarget.value })}>
               <option value="">Choose…</option>
@@ -482,7 +554,17 @@
     <div class="flex flex-wrap items-center gap-2">
       <label class="inline-flex items-center gap-2"><input type="checkbox" checked={!!step.when} onchange={(e) => setWhen(e.currentTarget.checked)} /> Only when</label>
       {#if step.when}
-        <input class="input w-36 font-mono" aria-label="The value it depends on" value={step.when.value} oninput={(e) => (step.when = { ...step.when!, value: e.currentTarget.value })} />
+        <select
+          class="input w-auto"
+          aria-label="The value it depends on"
+          aria-invalid={depends ? undefined : true}
+          aria-describedby={depends ? undefined : `${p}-when-unknown`}
+          value={step.when.value}
+          onchange={(e) => setWhenValue(e.currentTarget.value)}
+        >
+          {#if !depends}<option value={step.when.value}>{`{${step.when.value}}`}</option>{/if}
+          {#each available as v (v.key)}<option value={v.key}>{v.label} {`{${v.key}}`}</option>{/each}
+        </select>
         <select class="input w-auto" aria-label="How" value={step.when.op} onchange={(e) => (step.when = { ...step.when!, op: e.currentTarget.value as 'is' })}>
           <option value="is">is</option>
           <option value="is_not">is not</option>
@@ -490,15 +572,25 @@
           <option value="unset">is not given</option>
         </select>
         {#if step.when.op === 'is' || step.when.op === 'is_not'}
-          {#if step.when.value === 'category_id'}
+          {#if depends?.input.kind === 'category'}
             <select class="input w-auto" aria-label="The category" value={step.when.to ?? ''} onchange={(e) => (step.when = { ...step.when!, to: e.currentTarget.value })}>
-              {#each categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+              {#each comparedOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
             </select>
+          {:else if depends?.input.kind === 'choices'}
+            <select class="input w-auto" aria-label="The choice" value={step.when.to ?? ''} onchange={(e) => (step.when = { ...step.when!, to: e.currentTarget.value })}>
+              {#each comparedOptions as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+            </select>
+          {:else if depends?.input.kind === 'date'}
+            <input type="date" class="input w-auto" aria-label="The date" value={step.when.to ?? ''} oninput={(e) => (step.when = { ...step.when!, to: e.currentTarget.value })} />
           {:else}
             <input class="input w-36" aria-label="The value" value={step.when.to ?? ''} oninput={(e) => (step.when = { ...step.when!, to: e.currentTarget.value })} />
           {/if}
         {/if}
       {/if}
     </div>
+    {#if step.when && !depends}
+      <p id="{p}-when-unknown" class="error-text">{`{${step.when.value}}`} is not set before this step: choose a value an earlier step sets.</p>
+    {/if}
+    {#if depends?.note}<p class="text-xs text-zinc-600 dark:text-zinc-400">{depends.note}</p>{/if}
   {/if}
 </div>

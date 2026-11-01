@@ -30,7 +30,9 @@ Whoever manages flows makes them on the **Flows** page, with **New flow**: choos
 - **Change** archives it, sets its condition, lends or returns it, moves it, or triggers a [hook](/help/hooks).
 - **Confirm** and **Done** say what will happen, and what did.
 
-Any step can be shown **only when** an earlier answer is something, such as only for long boards. A flow can only do what its maker may do.
+Names, defaults, texts and Set fields' values can name **values** in braces, such as `{owner}: {what}`. Every run has four: `{today}`, the date; `{now}`, the date and time; `{user}`, who runs it; and `{flow}`, the flow's name. The rest come from the steps before: the category chosen, each question's answer, each field a Set fields step sets, and what was found or filed, with its fields. You needn't remember them: type `{` in any of those boxes, or press **{ }** beside it, and the editor lists the values that step can use, each with where it comes from, to choose with the arrow keys and Enter or Tab. A value from a step shown only sometimes is said to be empty when that step is skipped. A name no earlier step sets is marked under its box.
+
+Any step can be shown **only when** a value set before it is something, such as only for long boards: choose the value from the list, and what it is compared with follows it, a category from the flow's, a choice from the question's choices, a date as a date. A flow can only do what its maker may do.
 
 A flow cannot be saved while a kind of thing it files would be missing a field that kind requires: each field a category requires must be set by a **Set fields** step before **Create**, either one shown always or one shown only for that category. Saving also says when a fixed value doesn't suit its field, such as a date that isn't one. Its **Poster** has its name, its QR code and its one line of instructions, to print and put up, or to make into a label template.
 

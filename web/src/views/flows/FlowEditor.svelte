@@ -288,6 +288,7 @@
                       steps={def.steps}
                       at={i}
                       categories={flowCategories}
+                      categoryIDs={def.category_ids}
                       {fields}
                       {byCategory}
                       flows={flows.filter((f) => f.slug !== editing)}

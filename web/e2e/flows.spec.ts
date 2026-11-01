@@ -135,6 +135,20 @@ test.describe('the flow editor', () => {
     await expect(steps.getByText('Used as {anything_else}')).toBeVisible();
     await steps.getByLabel('Type of question 2').selectOption('long_text');
     await expect(page.getByRole('figure', { name: 'Preview, as a phone shows it' })).toContainText('Anything else?');
+    // Create's name suggests, as { is typed, the values set before it (#169).
+    await steps.getByRole('button', { name: /^\d+\. Create$/ }).click();
+    const named = steps.getByRole('combobox', { name: 'Its name' });
+    await expect(named).toHaveValue('{name}');
+    await named.click();
+    await named.press('End');
+    await named.pressSequentially(', {any');
+    const suggested = steps.getByRole('listbox', { name: 'Values Its name can use' });
+    await expect(suggested.getByRole('option')).toHaveCount(1);
+    await expect(suggested.getByRole('option')).toContainText('{anything_else}');
+    await expect(suggested.getByRole('option')).toContainText('Form: About it');
+    await named.press('Enter');
+    await expect(named).toHaveValue('{name}, {anything_else}');
+    await expect(suggested).toBeHidden();
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.help}`), 'the editor').toEqual([]);
     await page.getByRole('button', { name: 'Save flow' }).click();

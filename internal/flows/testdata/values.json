@@ -1,0 +1,132 @@
+{
+  "about": "The values each step of a flow can name, which the editor offers (web/src/lib/flowEditor.ts valuesBefore) and saving accepts (Check): flows_test.go and flowEditor.test.ts both read these cases (#169). available lists, by step, every value it can name; empty_when_skipped, those of them every step setting them may skip.",
+  "cases": [
+    {
+      "name": "choose a category, a form shown only for one, then set fields and file",
+      "fields": [
+        { "key": "owner", "label": "Owner", "validation_type": "text" },
+        { "key": "until", "label": "Leave until", "validation_type": "date" },
+        { "key": "grain", "label": "Grain", "validation_type": "select" }
+      ],
+      "definition": {
+        "version": 2,
+        "category_ids": ["short", "long"],
+        "steps": [
+          { "id": "kind", "kind": "choose_category", "title": "What are you leaving?" },
+          {
+            "id": "about",
+            "kind": "form",
+            "title": "About it",
+            "questions": [
+              { "key": "name", "label": "What is it?", "type": "text" },
+              { "key": "until", "label": "Until", "type": "date" }
+            ]
+          },
+          {
+            "id": "long",
+            "kind": "form",
+            "title": "Long boards",
+            "when": { "value": "category_id", "op": "is", "to": "long" },
+            "questions": [
+              { "key": "length", "label": "How long?", "type": "number" },
+              { "key": "wood", "label": "Which wood?", "type": "choice", "options": [{ "value": "oak" }, { "value": "pine" }] }
+            ]
+          },
+          { "id": "set", "kind": "set_fields", "fields": [{ "field": "owner", "value": "{user}" }, { "field": "until", "value": "{until}" }] },
+          { "id": "file", "kind": "create", "name": "{name}" },
+          { "id": "label", "kind": "label", "label": { "mode": "show" } },
+          { "id": "done", "kind": "done", "title": "Filed" }
+        ]
+      },
+      "available": {
+        "kind": ["today", "now", "user", "flow"],
+        "about": ["today", "now", "user", "flow", "category", "category_id"],
+        "long": ["today", "now", "user", "flow", "category", "category_id", "name", "until"],
+        "set": ["today", "now", "user", "flow", "category", "category_id", "name", "until", "length", "wood"],
+        "file": ["today", "now", "user", "flow", "category", "category_id", "name", "until", "length", "wood", "owner"],
+        "label": ["today", "now", "user", "flow", "category", "category_id", "name", "until", "length", "wood", "owner", "asset", "asset_id", "code", "grain"],
+        "done": ["today", "now", "user", "flow", "category", "category_id", "name", "until", "length", "wood", "owner", "asset", "asset_id", "code", "grain"]
+      },
+      "empty_when_skipped": {
+        "set": ["length", "wood"],
+        "file": ["length", "wood"],
+        "label": ["length", "wood"],
+        "done": ["length", "wood"]
+      }
+    },
+    {
+      "name": "one category, from the start; find, then set a field the categories do not record",
+      "fields": [
+        { "key": "owner", "label": "Owner", "validation_type": "text" },
+        { "key": "until", "label": "Leave until", "validation_type": "date" }
+      ],
+      "definition": {
+        "version": 2,
+        "category_ids": ["shelf"],
+        "steps": [
+          { "id": "find", "kind": "find", "title": "Which is it?", "find_by": ["scan"] },
+          { "id": "confirm", "kind": "confirm", "title": "Collect it?" },
+          { "id": "set", "kind": "set_fields", "fields": [{ "field": "note", "value": "collected" }] },
+          { "id": "change", "kind": "change", "changes": [{ "kind": "archive" }] },
+          { "id": "done", "kind": "done", "title": "Collected" }
+        ]
+      },
+      "available": {
+        "find": ["today", "now", "user", "flow", "category", "category_id"],
+        "confirm": ["today", "now", "user", "flow", "category", "category_id", "asset", "asset_id", "code", "owner", "until"],
+        "set": ["today", "now", "user", "flow", "category", "category_id", "asset", "asset_id", "code", "owner", "until"],
+        "change": ["today", "now", "user", "flow", "category", "category_id", "asset", "asset_id", "code", "owner", "until", "note"],
+        "done": ["today", "now", "user", "flow", "category", "category_id", "asset", "asset_id", "code", "owner", "until", "note"]
+      },
+      "empty_when_skipped": {}
+    },
+    {
+      "name": "a find shown only when an answer is given",
+      "fields": [{ "key": "owner", "label": "Owner", "validation_type": "text" }],
+      "definition": {
+        "version": 2,
+        "category_ids": ["a", "b"],
+        "steps": [
+          { "id": "kind", "kind": "choose_category", "fixed": "a" },
+          { "id": "ask", "kind": "form", "title": "Who?", "questions": [{ "key": "who", "label": "Who is it for?", "default": "{user}" }] },
+          { "id": "find", "kind": "find", "find_by": ["list"], "when": { "value": "who", "op": "set" } },
+          { "id": "done", "kind": "done", "title": "Done" }
+        ]
+      },
+      "available": {
+        "kind": ["today", "now", "user", "flow"],
+        "ask": ["today", "now", "user", "flow", "category", "category_id"],
+        "find": ["today", "now", "user", "flow", "category", "category_id", "who"],
+        "done": ["today", "now", "user", "flow", "category", "category_id", "who", "asset", "asset_id", "code", "owner"]
+      },
+      "empty_when_skipped": {
+        "done": ["asset", "asset_id", "code", "owner"]
+      }
+    },
+    {
+      "name": "a value asked again, by a form shown always, is not empty",
+      "fields": [],
+      "definition": {
+        "version": 2,
+        "category_ids": ["a", "b"],
+        "steps": [
+          { "id": "kind", "kind": "choose_category" },
+          { "id": "first", "kind": "form", "when": { "value": "category_id", "op": "is", "to": "a" }, "questions": [{ "key": "size", "label": "Size" }] },
+          { "id": "second", "kind": "form", "questions": [{ "key": "size", "label": "Size" }, { "key": "extra", "label": "Extra" }] },
+          { "id": "third", "kind": "form", "when": { "value": "category_id", "op": "is", "to": "b" }, "questions": [{ "key": "extra", "label": "Extra" }] },
+          { "id": "done", "kind": "done", "title": "Done" }
+        ]
+      },
+      "available": {
+        "kind": ["today", "now", "user", "flow"],
+        "first": ["today", "now", "user", "flow", "category", "category_id"],
+        "second": ["today", "now", "user", "flow", "category", "category_id", "size"],
+        "third": ["today", "now", "user", "flow", "category", "category_id", "size", "extra"],
+        "done": ["today", "now", "user", "flow", "category", "category_id", "size", "extra"]
+      },
+      "empty_when_skipped": {
+        "second": ["size"]
+      }
+    }
+  ]
+}

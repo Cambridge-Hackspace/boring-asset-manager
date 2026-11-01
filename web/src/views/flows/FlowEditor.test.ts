@@ -255,6 +255,66 @@ describe('FlowEditor', () => {
     expect(body.definition.steps[1]!.questions).toEqual([{ key: 'anything_more', label: 'Anything more?', type: 'text' }]);
   });
 
+  it('offers, in Only when, only the values set before the step, and compares a choice question with its choices', async () => {
+    const withWood: Flow = {
+      ...flow,
+      definition: {
+        ...flow.definition,
+        steps: flow.definition.steps.map((s) =>
+          s.id === 'about'
+            ? { ...s, questions: [...s.questions!, { key: 'wood', label: 'Which wood?', type: 'choice', options: [{ value: 'oak', label: 'Oak' }, { value: 'pine', label: 'Pine' }] }] }
+            : s,
+        ),
+      },
+    };
+    const { sent } = api(() => ({ flow: withWood }), withWood);
+    render(FlowEditor, { params: { slug: 'leave' } });
+    await fireEvent.click(await screen.findByRole('button', { name: '4. Create' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Only when' }));
+    const depends = screen.getByLabelText('The value it depends on') as HTMLSelectElement;
+    // The category, chosen before it, to start with, compared with the flow's categories.
+    expect(depends.value).toBe('category_id');
+    expect(within(screen.getByLabelText('The category')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Short boards', 'Long boards']);
+    // What runs have and earlier steps set; not what it sets itself, nor what comes after.
+    const keys = [...depends.options].map((o) => o.value);
+    expect(keys).toEqual(expect.arrayContaining(['today', 'now', 'user', 'flow', 'category', 'category_id', 'name', 'until', 'wood', 'owner']));
+    expect(keys).not.toContain('asset');
+    expect(keys).not.toContain('code');
+
+    // A choice question is compared with its choices; a date, as a date.
+    await fireEvent.change(depends, { target: { value: 'wood' } });
+    const choice = screen.getByLabelText('The choice') as HTMLSelectElement;
+    expect([...choice.options].map((o) => [o.value, o.textContent])).toEqual([
+      ['oak', 'Oak'],
+      ['pine', 'Pine'],
+    ]);
+    await fireEvent.change(choice, { target: { value: 'pine' } });
+    await fireEvent.change(depends, { target: { value: 'until' } });
+    expect((screen.getByLabelText('The date') as HTMLInputElement).type).toBe('date');
+    await fireEvent.change(depends, { target: { value: 'wood' } });
+    await fireEvent.change(screen.getByLabelText('The choice'), { target: { value: 'pine' } });
+
+    // Its name suggests what is set before it, and marks what is not.
+    const name = screen.getByRole('combobox', { name: 'Its name' }) as HTMLInputElement;
+    name.value = '{name} {w';
+    name.setSelectionRange(name.value.length, name.value.length);
+    await fireEvent.input(name);
+    const suggested = within(screen.getByRole('listbox', { name: 'Values Its name can use' })).getAllByRole('option');
+    expect(suggested.map((o) => o.textContent?.trim().split(' ')[0])).toEqual(['{wood}', '{now}', '{flow}', '{owner}']);
+    await fireEvent.keyDown(name, { key: 'Enter' });
+    expect(name.value).toBe('{name} {wood}');
+    name.value = '{name} {asset}';
+    await fireEvent.input(name);
+    expect(screen.getByText('{asset} is not set before this step.')).toBeTruthy();
+    name.value = '{name}: {wood}';
+    await fireEvent.input(name);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
+    expect(body.definition.steps[3]).toMatchObject({ name: '{name}: {wood}', when: { value: 'wood', op: 'is', to: 'pine' } });
+  });
+
   it('chooses its categories with the picker, and saves them', async () => {
     const { sent } = api(() => ({ flow }));
     render(FlowEditor, { params: { slug: 'leave' } });
