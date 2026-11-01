@@ -27,7 +27,7 @@ const (
 
 var hexColor = regexp.MustCompile(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
 
-// handleIconImage draws an icon as an image (README §3.7), for where a
+// handleIconImage draws an icon as an image (docs/icons.md), for where a
 // page's drawing will not do: an export, a notification, a chat.
 // GET /api/v1/icons/image with one of name, category (the icon it is drawn
 // with, its own or inherited) or asset (its own, or its categories'), each

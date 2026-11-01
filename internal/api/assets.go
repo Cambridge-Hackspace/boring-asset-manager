@@ -23,7 +23,7 @@ type CreateAssetRequest struct {
 	FieldValues   map[string]string          `json:"field_values,omitempty"`
 	// Stock counts the asset's stock by quantity; absent or null does not.
 	Stock *StockRequest `json:"stock,omitempty"`
-	// IconName is its own icon (README §3.7), one the build draws; absent or
+	// IconName is its own icon (docs/icons.md), one the build draws; absent or
 	// empty, it is drawn with its categories'.
 	IconName string `json:"icon_name,omitempty"`
 }
@@ -46,7 +46,7 @@ type UpdateAssetRequest struct {
 	IconRendition string                     `json:"icon_rendition,omitempty"`
 }
 
-// StockRequest is an asset's stock (README §5.1). An absent quantity keeps
+// StockRequest is an asset's stock (docs/stock-and-lending.md). An absent quantity keeps
 // the asset's current one, so an edit cannot undo a use made meanwhile; an
 // asset whose stock was not counted starts at 0.
 type StockRequest struct {
@@ -150,7 +150,7 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 		return nil, false
 	}
 	assets = searched(assets, search)
-	// Those whose scan template (README §6.4) or label template (§6.2) was
+	// Those whose scan template (docs/scanning.md) or label template (docs/printing.md) was
 	// chosen by a tie.
 	if conflict := q.Get("conflict"); conflict != "" {
 		kept := assets[:0]
@@ -303,7 +303,7 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleExportAssets writes the assets the list would show as CSV
-// (README §6.1): GET /api/v1/assets/export.csv?category_id=&search=
+// (docs/csv.md): GET /api/v1/assets/export.csv?category_id=&search=
 func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 	assets, err := s.store.ListAssets(r.URL.Query().Get("category_id"), "")
 	if err != nil {

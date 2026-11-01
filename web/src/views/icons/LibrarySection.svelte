@@ -1,5 +1,5 @@
 <!--
-  The icon library (README §3.7): isolex source no one category owns,
+  The icon library (docs/icons.md): isolex source no one category owns,
   such as bases, fragments and axes icons share. Each file is written in
   the source editor, and published or kept as a draft as a category's
   icon is.

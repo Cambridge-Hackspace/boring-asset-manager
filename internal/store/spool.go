@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// The spool (README §6.2): labels waiting to be printed, gathered over time,
+// The spool (docs/printing.md): labels waiting to be printed, gathered over time,
 // sorted onto templates and printers, and printed or downloaded together.
 // Printed entries stay, as the Printed list.
 

@@ -7,7 +7,7 @@ import (
 )
 
 // Stock is a roll of labels known by its size alone, kept in the database
-// for printers that take any size (README §4.4), as opposed to the rolls a
+// for printers that take any size (docs/printing.md), as opposed to the rolls a
 // driver has built in.
 type Stock struct {
 	ID   string `json:"id"`

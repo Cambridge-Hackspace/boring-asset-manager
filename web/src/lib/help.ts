@@ -1,4 +1,4 @@
-// The user help (README §6.5): Markdown topics bundled with the app, and
+// The user help (docs/architecture.md): Markdown topics bundled with the app, and
 // which topic each page's Help link opens. The topics live in
 // internal/help/topics, where the Go server embeds them too, for assistants.
 

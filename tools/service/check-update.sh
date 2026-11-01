@@ -1,5 +1,5 @@
 #!/bin/sh
-# Checks bam-update (README §2.2) in a Debian container booted with systemd,
+# Checks bam-update (docs/installing.md) in a Debian container booted with systemd,
 # against fake releases served from files: it updates to a newer release,
 # leaves an up-to-date or newer installation alone, refuses a download that
 # does not match its checksum, rolls back a release that does not come up

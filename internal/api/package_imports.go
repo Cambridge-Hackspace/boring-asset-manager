@@ -9,7 +9,7 @@ import (
 )
 
 // Importing a package, or parts of a backup, uploaded as backups are
-// (README §2.3, #145): checked first, saying what it would do, then
+// (docs/backups.md, #145): checked first, saying what it would do, then
 // imported as checked. Both take as long as the archive does, so each runs
 // as a job. The importer's permissions follow what it holds, and
 // authentication never comes in through the web.

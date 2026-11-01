@@ -1,5 +1,5 @@
 -- 030_category_label_templates.sql: several label templates per category,
--- by preference (README §6.2).
+-- by preference (docs/printing.md).
 --
 -- A category names its label templates in order; its assets' labels take
 -- the first that suits the printer they go to. The one template a category

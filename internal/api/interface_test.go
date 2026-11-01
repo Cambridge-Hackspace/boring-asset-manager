@@ -10,7 +10,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// Tests for the API additions the web interface needs (README Phase 4.2).
+// Tests for the API additions the web interface needs.
 
 func TestEffectiveFieldsForANewAsset(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)

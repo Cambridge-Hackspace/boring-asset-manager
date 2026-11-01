@@ -1,4 +1,4 @@
--- 020_assets_track.sql: assets.track (README §3.3), seeing the people
+-- 020_assets_track.sql: assets.track (docs/access.md), seeing the people
 -- around assets: borrowers, who changed them, and the loans list. Reading
 -- assets showed them until now, so every role that reads assets keeps
 -- seeing them, in the same scopes.

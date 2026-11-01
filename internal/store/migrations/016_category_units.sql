@@ -1,4 +1,4 @@
--- 016_category_units.sql: weights for things counted by items (README §5.1).
+-- 016_category_units.sql: weights for things counted by items (docs/stock-and-lending.md).
 -- A consumable category with a unit totals the stock of its active assets
 -- in that unit, rather than counting them, and its threshold is in that
 -- unit: two spools of 1000 g and 2000 g make 3000 g. Empty keeps counting

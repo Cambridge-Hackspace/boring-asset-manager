@@ -1,4 +1,4 @@
-// Backups from the web, and replacing the instance with one (README §2.3).
+// Backups from the web, and replacing the instance with one (docs/backups.md).
 // Checking and replacing take as long as the archive does, so each is a
 // job, asked after until it is done.
 

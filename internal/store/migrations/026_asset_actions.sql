@@ -1,4 +1,4 @@
--- 026_asset_actions.sql: actions on assets (README §5.4).
+-- 026_asset_actions.sql: actions on assets (docs/hooks.md).
 --
 -- An action is a button people press on an asset, such as Identify, which
 -- records an asset.action event for devices and channels to act on: a key,

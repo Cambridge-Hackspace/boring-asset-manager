@@ -13,7 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Scan templates on categories (README §6.4).
+// Scan templates on categories (docs/scanning.md).
 
 // CategoryScanTemplateRequest names a category's scan template, or with
 // null, none.
@@ -82,9 +82,9 @@ type ScanAsset struct {
 	// Hooks are those its categories offer, when the viewer may trigger
 	// them.
 	Hooks []models.OfferedHook `json:"hooks,omitempty"`
-	// Icon is the icon it is drawn with (README §3.7), if any.
+	// Icon is the icon it is drawn with (docs/icons.md), if any.
 	Icon *models.ResolvedIcon `json:"icon,omitempty"`
-	// Flows are the flows the viewer may start from it (README §6.7).
+	// Flows are the flows the viewer may start from it (docs/flows.md).
 	Flows []FlowLink `json:"flows,omitempty"`
 }
 
@@ -201,9 +201,9 @@ func (s *Server) scanActionsFor(r *http.Request, a *models.AssetWithDetails) map
 		"borrow": user != nil && a.Lendable && a.Loan == nil && a.Asset.Condition != models.ConditionOutOfService && can(rbac.PermAssetsBorrow),
 		"return": a.Loan != nil && (can(rbac.PermAssetsLend) || (mine && can(rbac.PermAssetsBorrow))),
 		"report": can(rbac.PermAssetsReport) || can(rbac.PermAssetsWrite),
-		// The hooks its categories offer, such as Identify (README §5.4).
+		// The hooks its categories offer, such as Identify (docs/hooks.md).
 		"hooks": len(a.Hooks) > 0 && can(rbac.PermAssetsHook),
-		// A new asset like it, or in it, as the asset's page starts one (README §3.2).
+		// A new asset like it, or in it, as the asset's page starts one (docs/data-model.md).
 		"add_similar": can(rbac.PermAssetsWrite),
 		"add_inside":  can(rbac.PermAssetsWrite) && s.hasLocationType(),
 	}

@@ -13,7 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Hooks on assets (README §5.4): categories.manage defines them and
+// Hooks on assets (docs/hooks.md): categories.manage defines them and
 // chooses which categories offer them; assets.hook triggers them.
 
 // HookRequest creates or replaces a hook.

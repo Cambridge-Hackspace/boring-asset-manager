@@ -26,8 +26,8 @@ func sameOwner(path string, info os.FileInfo) error {
 }
 
 // OwnLike gives root, and everything below it, root's owner and group: for
-// files a restore run as root made where the service keeps its own (README
-// §2.3). A root that is not there is left alone.
+// files a restore run as root made where the service keeps its own
+// (docs/backups.md). A root that is not there is left alone.
 func OwnLike(root string) error {
 	info, err := os.Stat(root)
 	if err != nil {

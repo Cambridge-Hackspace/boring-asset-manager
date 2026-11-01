@@ -14,7 +14,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Icons as an archive (README §3.7): the whole lexicon out, as a folder
+// Icons as an archive (docs/icons.md): the whole lexicon out, as a folder
 // the isolex compiler checks as it is, and library files in.
 
 const (

@@ -1,4 +1,4 @@
--- 006_inventory.sql: inventory thresholds and running-low events (README §5.1).
+-- 006_inventory.sql: inventory thresholds and running-low events (docs/stock-and-lending.md).
 -- low_stock_threshold is NULL when a category has none. Events keep a JSON
 -- snapshot of what they describe, so they still read correctly after the
 -- category or user is renamed or deleted; category_id is deliberately not a

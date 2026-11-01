@@ -1,4 +1,4 @@
-# systemd unit for BAM! (README §2.1). Install as
+# systemd unit for BAM! (docs/installing.md). Install as
 # /etc/systemd/system/bam.service; the configuration lives in
 # /etc/bam/config.toml and the data in /var/lib/bam.
 [Unit]
@@ -13,7 +13,7 @@ Type=simple
 User=bam
 Group=bam
 ExecStart=/usr/local/bin/bam serve --config /etc/bam/config.toml
-# Environment overrides (BAM_SERVER_PORT and the rest, README §2), one
+# Environment overrides (BAM_SERVER_PORT and the rest, docs/configuration.md), one
 # NAME=value per line; the file is optional.
 EnvironmentFile=-/etc/bam/environment
 Restart=on-failure
@@ -26,7 +26,7 @@ StateDirectoryMode=0750
 WorkingDirectory=/var/lib/bam
 UMask=0027
 
-# Printers on USB device files (README §4.4) usually belong to group lp:
+# Printers on USB device files (docs/printing.md) usually belong to group lp:
 # uncomment to let BAM write to them, and list them under [printers].
 #SupplementaryGroups=lp
 

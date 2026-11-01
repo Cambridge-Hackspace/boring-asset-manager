@@ -1,4 +1,4 @@
-// Package isolex runs the isolex compiler (README §1, "Icon compiler"):
+// Package isolex runs the isolex compiler (docs/architecture.md, "Icon compiler"):
 // icon sources in, shape IR and located diagnostics out. isolex is the
 // work of Axonibyte Innovations, LLC, under the Apache License 2.0 (see
 // NOTICE and LICENSE-isolex in this directory). The compiler is isolex's

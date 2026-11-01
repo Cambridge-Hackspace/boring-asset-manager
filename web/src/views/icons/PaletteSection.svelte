@@ -1,5 +1,5 @@
 <!--
-  The palette (README §3.7): the tokens icons may paint with, each with a
+  The palette (docs/icons.md): the tokens icons may paint with, each with a
   light and a dark color. Taking away a token an icon uses is refused,
   and the refusal says which.
 -->

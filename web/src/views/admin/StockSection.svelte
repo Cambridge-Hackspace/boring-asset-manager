@@ -7,7 +7,7 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
-  // Custom label stock (README §4.4): rolls known by their size, for
+  // Custom label stock (docs/printing.md): rolls known by their size, for
   // printers that take any size. Managed with the printers, which reload
   // after a change, since their loaded media may be among them.
   let { stock, onchange }: { stock: LabelStock[]; onchange: () => Promise<void> } = $props();

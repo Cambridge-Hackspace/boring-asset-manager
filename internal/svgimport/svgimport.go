@@ -1,5 +1,5 @@
 // Package svgimport turns SVG artwork into label template shapes: paths in
-// black or white, which print sharp at any size (README §4.1). It reads
+// black or white, which print sharp at any size (docs/labels.md). It reads
 // only geometry and paint, and says what it leaves out.
 package svgimport
 

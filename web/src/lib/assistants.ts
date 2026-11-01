@@ -1,4 +1,4 @@
-// How to connect an assistant to BAM!'s MCP endpoint (README §6.6), for the
+// How to connect an assistant to BAM!'s MCP endpoint (docs/mcp.md), for the
 // account page to show once a personal token is made.
 
 export interface SetupStep {

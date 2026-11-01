@@ -1,5 +1,5 @@
 // Package notify sends events to the outside world through pluggable
-// notifier drivers (README §5.2). Events are neutral; each driver decides how
+// notifier drivers (docs/notifications.md). Events are neutral; each driver decides how
 // to present them. Drivers are registered by name and chosen per channel, so
 // adding a destination means adding a driver, not changing the API.
 package notify

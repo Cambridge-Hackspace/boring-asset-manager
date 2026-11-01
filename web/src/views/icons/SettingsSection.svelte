@@ -1,5 +1,5 @@
 <!--
-  The rest of the lexicon block bam writes (README §3.7): the stroke
+  The rest of the lexicon block bam writes (docs/icons.md): the stroke
   widths allowed, the tokens only a grant may paint with, and the
   compiler's limits. Settings no icon could keep to are refused.
 -->

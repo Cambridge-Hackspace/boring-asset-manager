@@ -1,4 +1,4 @@
--- 018_asset_photos.sql: photos of assets (README §3.2). The files live under
+-- 018_asset_photos.sql: photos of assets (docs/data-model.md). The files live under
 -- storage.local_path/photos/: the photo as <id>, its thumbnail as
 -- <thumb_id>. Position orders an asset's photos, from 0; the first is the
 -- one lists show.

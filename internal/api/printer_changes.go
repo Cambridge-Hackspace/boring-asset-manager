@@ -12,7 +12,7 @@ import (
 )
 
 // PrinterChanges is what changing a printer, such as loading another roll,
-// would leave without a printer (README §4.4), so it can be said before
+// would leave without a printer (docs/printing.md), so it can be said before
 // the change is saved.
 type PrinterChanges struct {
 	// Stranded are labels waiting in the spool for the printer, or a pool

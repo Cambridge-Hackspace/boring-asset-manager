@@ -13,7 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// OAuth 2.1, as the MCP authorization spec has it (README §6.6), so that an
+// OAuth 2.1, as the MCP authorization spec has it (docs/mcp.md), so that an
 // assistant signs a person in rather than being handed a token: protected
 // resource and authorization server metadata, dynamic client registration,
 // the authorization code flow with PKCE (S256 only) and refresh tokens. A

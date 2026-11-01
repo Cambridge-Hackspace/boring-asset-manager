@@ -1,6 +1,6 @@
 <script lang="ts">
   // What to know before printing, such as part of a template where the
-  // printer does not print (README §4.4). Warnings never stop printing.
+  // printer does not print (docs/printing.md). Warnings never stop printing.
   let { warnings, label = 'Before printing' }: { warnings: string[] | undefined; label?: string } = $props();
 </script>
 

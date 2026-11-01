@@ -1,7 +1,7 @@
 // Package filestore keeps uploaded files (asset photos and their
 // thumbnails, label images) through one interface, Blobs, so the rest of
 // bam treats a file in a directory and an object in a bucket the same
-// (README §2).
+// (docs/configuration.md).
 package filestore
 
 import (

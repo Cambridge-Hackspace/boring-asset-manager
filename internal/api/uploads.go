@@ -26,7 +26,7 @@ import (
 
 // Archives are uploaded through the web in parts, each its own request, so
 // that one of any size goes over a connection that drops, and is resumed
-// where it stopped (README §2.3, #141). An upload is staged apart from the
+// where it stopped (docs/backups.md, #141). An upload is staged apart from the
 // files until it is used (filestore.Staging), and only the person who
 // began it may add to it, see it or use it.
 

@@ -23,7 +23,7 @@ var (
 )
 
 // compilerFor returns the icon compiler built into the tests. Without it
-// they skip, unless BAM_REQUIRE_ISOLEX is set (README §8.1).
+// they skip, unless BAM_REQUIRE_ISOLEX is set (docs/testing.md).
 func compilerFor(t *testing.T) *isolex.Compiler {
 	t.Helper()
 	iconCompilerOnce.Do(func() { iconCompiler = isolex.New(isolex.Options{}) })
@@ -410,7 +410,7 @@ func (refuser) Compile(context.Context, []isolex.File) (*isolex.Result, error) {
 
 // A build an older isolex made, in IR version 1, is drawn until a new
 // isolex's build replaces it, and stays when the new one does not compile
-// what is published (README §3.7).
+// what is published (docs/icons.md).
 func TestABuildOfAnOlderIsolexIsDrawnUntilReplaced(t *testing.T) {
 	st := setupTestStore(t)
 	c := compilerFor(t)

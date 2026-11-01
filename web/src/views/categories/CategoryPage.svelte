@@ -29,13 +29,13 @@
   let allFields = $state<Field[]>([]);
   let relationTypes = $state<RelationType[]>([]);
   let suggested = $state<string[]>([]);
-  // Scopes (README §3.3): category managers see them; only user managers
+  // Scopes (docs/access.md): category managers see them; only user managers
   // change them, since they decide who reaches the assets.
   const canSeeScopes = $derived(session.canAny('categories.manage', 'users.manage'));
   const canScope = $derived(session.can('users.manage'));
   let scopes = $state<Scope[]>([]);
   let scopeIds = $state<string[]>([]);
-  // Scan templates (README §6.4): the one its assets show, and the ties
+  // Scan templates (docs/scanning.md): the one its assets show, and the ties
   // between categories that choose them.
   let scanTemplates = $state<Report[]>([]);
   let scanTemplate = $state('');
@@ -47,7 +47,7 @@
       ? Object.keys(afterSaving).filter((c) => (afterSaving![c] ?? 0) > (conflicts[c] ?? 0))
       : [],
   );
-  // Label templates (README §6.2): those its assets join the print queue with, in
+  // Label templates (docs/printing.md): those its assets join the print queue with, in
   // order of preference, and the ties between categories that choose them.
   let labelTemplates = $state<TemplateSummary[]>([]);
   let labelList = $state<string[]>([]);
@@ -63,7 +63,7 @@
   );
   const templateName = (tid: string) => labelTemplates.find((t) => t.id === tid)?.name ?? 'A deleted template';
   const canSpool = $derived(session.can('labels.print'));
-  // Hooks (README §5.4): which it offers on its assets, and whether its
+  // Hooks (docs/hooks.md): which it offers on its assets, and whether its
   // subcategories' too.
   let hooks = $state<AssetHook[]>([]);
   let offered = $state<Record<string, { on: boolean; cascades: boolean }>>({});

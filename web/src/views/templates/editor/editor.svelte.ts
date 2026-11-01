@@ -122,7 +122,7 @@ export class Editor {
   /** Everything but the canvas hidden (Tab). */
   canvasOnly = $state(false);
 
-  // The view: zoom and where the label is in the viewport (README §4.1).
+  // The view: zoom and where the label is in the viewport (docs/labels.md).
   view = $state<View>({ scale: 4, x: 24, y: 24 });
   /** The viewport's size, in CSS pixels. */
   viewport = $state({ w: 0, h: 0 });

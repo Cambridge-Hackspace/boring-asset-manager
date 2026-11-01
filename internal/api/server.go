@@ -28,7 +28,7 @@ var Version = "dev"
 type Server struct {
 	cfg   *config.Config
 	store *store.Store
-	// blobs holds uploaded files (README §2); images and photos are kinds
+	// blobs holds uploaded files (docs/configuration.md); images and photos are kinds
 	// of them.
 	blobs  filestore.Blobs
 	images *filestore.Images
@@ -49,9 +49,9 @@ type Server struct {
 	httpServer *http.Server
 	// routes are every API route, for the test that MCP reaches each (#33).
 	routes []string
-	// registrations limits OAuth clients registering (README §6.6).
+	// registrations limits OAuth clients registering (docs/mcp.md).
 	registrations registrations
-	// icons compiles icon sources (README §3.7).
+	// icons compiles icon sources (docs/icons.md).
 	icons iconCompiler
 	// iconsDirty is signalled after every change made through the API,
 	// for RunIcons to build the icons again if their inputs changed:
@@ -107,7 +107,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handleFunc("GET /api/v1/auth/me", s.handleAuthMe)
 	handle("PUT /api/v1/auth/name", RequirePerson(http.HandlerFunc(s.handleSetOwnName)))
 	handle("PUT /api/v1/auth/theme", RequirePerson(http.HandlerFunc(s.handleSetOwnTheme)))
-	// Personal tokens, for assistants (README §3.4): made, listed and revoked
+	// Personal tokens, for assistants (docs/access.md): made, listed and revoked
 	// by their own user, from a signed-in session.
 	// A personal token lists and revokes its user's too (#43), but only a
 	// session makes them.
@@ -129,7 +129,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateRole)))
 	handle("DELETE /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteRole)))
 
-	// Archives uploaded in parts, resumably (README §2.3, #141), for
+	// Archives uploaded in parts, resumably (docs/backups.md, #141), for
 	// replacing an instance with a backup.
 	manageSettings := RequirePermission(rbac.PermSettingsManage)
 	handle("POST /api/v1/uploads", manageSettings(http.HandlerFunc(s.handleCreateUpload)))
@@ -157,7 +157,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/import", manageSettings(http.HandlerFunc(s.handlePackageImport)))
 	handle("GET /api/v1/import/jobs/{id}", manageSettings(http.HandlerFunc(s.handleBackupJob)))
 
-	// Scopes (README §3.3): who may see and change assets is users.manage's
+	// Scopes (docs/access.md): who may see and change assets is users.manage's
 	// to decide; category managers read them to see what labels are there.
 	seeScopes := RequireAnyPermission(rbac.PermUsersManage, rbac.PermCategoriesManage)
 	handle("GET /api/v1/scopes", seeScopes(http.HandlerFunc(s.handleListScopes)))
@@ -191,7 +191,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/categories/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategory)))
 	handle("PUT /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateCategory)))
 	handle("DELETE /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategory)))
-	// Icons (README §3.7): reading with assets.read; a category's own icon
+	// Icons (docs/icons.md): reading with assets.read; a category's own icon
 	// with categories.manage, and what every icon is drawn with, the
 	// library, palette and settings, with icons.manage.
 	handle("GET /api/v1/icons", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleIcons)))
@@ -236,7 +236,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/categories/{id}/label-template", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryLabelTemplate)))
 	handle("GET /api/v1/categories/label-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleLabelConflicts)))
 
-	// Hooks on assets (README §5.4)
+	// Hooks on assets (docs/hooks.md)
 	handle("GET /api/v1/hooks", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListHooks)))
 	handle("POST /api/v1/hooks", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveHook)))
 	handle("PUT /api/v1/hooks/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveHook)))
@@ -250,7 +250,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/events", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleListEvents)))
 	handle("POST /api/v1/events/{id}/reply", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleReplyToEvent)))
 
-	// Flows (README §6.7): flows.manage makes them; flows.run runs them, in
+	// Flows (docs/flows.md): flows.manage makes them; flows.run runs them, in
 	// the scopes of their categories, which each handler checks.
 	seeFlows := RequireAnyPermission(rbac.PermFlowsManage, rbac.PermFlowsRun)
 	manageFlows := RequirePermission(rbac.PermFlowsManage)
@@ -366,7 +366,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/printer-pools/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSavePool)))
 	handle("DELETE /api/v1/printer-pools/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePool)))
 
-	// The spool, a print queue for labels (README §6.2)
+	// The spool, a print queue for labels (docs/printing.md)
 	printing := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermLabelsPrint)(h) }
 	handle("GET /api/v1/spool", printing(s.handleListSpool))
 	handle("POST /api/v1/spool", printing(s.handleAddToSpool))
@@ -379,7 +379,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/spool/jobs/{id}/cancel", printing(s.handleCancelSpoolJob))
 	handle("POST /api/v1/spool/jobs/{id}/resend", printing(s.handleResendSpoolJob))
 
-	// Notification channels (README §5.2)
+	// Notification channels (docs/notifications.md)
 	manage := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermSettingsManage)(h) }
 	handle("GET /api/v1/notifiers/drivers", manage(s.handleNotifierDrivers))
 	handle("GET /api/v1/notifiers/deliveries", manage(s.handleListDeliveries))
@@ -391,10 +391,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/notifiers/{id}/test", manage(s.handleTestChannel))
 
 	// The web interface: every other GET, including client-side routes
-	// Signing assistants in by OAuth (README §6.6).
+	// Signing assistants in by OAuth (docs/mcp.md).
 	s.oauthRoutes(mux, handle)
 
-	// MCP (README §6.6): the API again, as tools for assistants.
+	// MCP (docs/mcp.md): the API again, as tools for assistants.
 	mcp := s.mcpHandler()
 	for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
 		mux.Handle(method+" /api/v1/mcp", mcp)

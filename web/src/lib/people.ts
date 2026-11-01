@@ -5,7 +5,7 @@ export function displayName(person: { name?: string; email: string }): string {
   return person.name?.trim() || person.email;
 }
 
-/** A person as asset pages show them: by name, never by email (README §3.3). */
+/** A person as asset pages show them: by name, never by email (docs/access.md). */
 export function personName(person: { name?: string }): string {
   return person.name?.trim() || 'Unnamed user';
 }

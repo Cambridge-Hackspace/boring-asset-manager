@@ -1,4 +1,4 @@
--- 025_printer_pools.sql: printer pools (README §6.2).
+-- 025_printer_pools.sql: printer pools (docs/printing.md).
 --
 -- A pool is a set of printers loaded alike that share a job's labels. Its
 -- jobs are cut into batches of batch_size labels; each member suiting the

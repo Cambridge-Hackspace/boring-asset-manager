@@ -12,7 +12,7 @@ import (
 // SweepInterval is how often RunSweep sweeps the file store.
 const SweepInterval = 6 * time.Hour
 
-// SweepStorage keeps the file store in step with the database (README §2):
+// SweepStorage keeps the file store in step with the database (docs/configuration.md):
 // it removes the files no row names, once older than a day, and reports the
 // rows whose file is missing. A dry run removes nothing.
 func (s *Server) SweepStorage(ctx context.Context, dryRun bool) (filestore.SweepResult, error) {

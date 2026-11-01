@@ -9,7 +9,7 @@ import (
 )
 
 // AssetCopy is a new asset like another, to create with POST
-// /api/v1/assets and then link as its links say (README §3.2).
+// /api/v1/assets and then link as its links say (docs/data-model.md).
 type AssetCopy struct {
 	Name        string            `json:"name"`
 	CategoryIDs []string          `json:"category_ids"`

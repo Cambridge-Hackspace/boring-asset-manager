@@ -47,7 +47,7 @@ type RoleWithPermissions struct {
 
 // RoleAssignment is a role as a user or an API token holds it: in every
 // scope its permissions name, or, when ScopeIDs names any, narrowed to those
-// scopes (README §3.3).
+// scopes (docs/access.md).
 type RoleAssignment struct {
 	RoleID   string   `json:"role_id"`
 	ScopeIDs []string `json:"scope_ids"`
@@ -120,28 +120,28 @@ type Category struct {
 	ColorHex     string  `json:"color_hex"`
 	IsConsumable bool    `json:"is_consumable"`
 	// Unit, on a consumable category, totals its assets' stock in that unit
-	// instead of counting them (README §5.1).
+	// instead of counting them (docs/stock-and-lending.md).
 	Unit string `json:"unit"`
 	// IsLendable lets its assets, and those of its subcategories, be lent.
 	IsLendable   bool `json:"is_lendable"`
 	IsRunningLow bool `json:"is_running_low"`
 	// LowStockThreshold flags a consumable category as running low when its
-	// active count drops below it (README §5.1); nil means no threshold.
+	// active count drops below it (docs/stock-and-lending.md); nil means no threshold.
 	LowStockThreshold *int `json:"low_stock_threshold"`
 	// ScanTemplateID names the scan template its assets, and those of its
-	// subcategories that name none, show when scanned (README §6.4).
+	// subcategories that name none, show when scanned (docs/scanning.md).
 	ScanTemplateID *string `json:"scan_template_id"`
 	// LabelTemplateIDs names the label templates its assets, and those of
 	// its subcategories that name none, join the spool with, in order of
 	// preference: each label takes the first that suits its printer
-	// (README §6.2). LabelTemplateID is the first, or nil for none.
+	// (docs/printing.md). LabelTemplateID is the first, or nil for none.
 	LabelTemplateIDs []string  `json:"label_template_ids"`
 	LabelTemplateID  *string   `json:"label_template_id"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
-// Event kinds (README §5.1).
+// Event kinds (docs/stock-and-lending.md).
 const (
 	EventRunningLow      = "category.running_low"
 	EventRestocked       = "category.restocked"
@@ -168,7 +168,7 @@ const (
 	EventAssetCheckedIn  = "asset.checked_in"
 	EventAssetOverdue    = "asset.overdue"
 	// EventFlowOverdue records once that something a flow filed is past
-	// its date to collect by (README §6.7), with the Flow and the date as
+	// its date to collect by (docs/flows.md), with the Flow and the date as
 	// DueAt; channels can subscribe to it.
 	EventFlowOverdue = "asset.flow_overdue"
 	// EventAssetLabelPrinted records labels of an asset sent to a printer or
@@ -178,7 +178,7 @@ const (
 	// Hook; channels and live connections can subscribe to it.
 	EventAssetHook = "asset.hook"
 	// EventCategoryIconChanged records a new published version of a
-	// category's icon (README §3.7), so that what shows it can redraw; it
+	// category's icon (docs/icons.md), so that what shows it can redraw; it
 	// is for history.
 	EventCategoryIconChanged = "category.icon_changed"
 )
@@ -258,7 +258,7 @@ type EventPayload struct {
 	Hook *EventHook `json:"hook,omitempty"`
 }
 
-// EventLabel describes an asset's labels printed (README §6.2): the
+// EventLabel describes an asset's labels printed (docs/printing.md): the
 // template, as named then; the printer, as named then, or Download for a
 // PDF or ZIP from the spool; and how many copies.
 type EventLabel struct {
@@ -311,7 +311,7 @@ type EventActor struct {
 	// Token is set when an API token acted; ID and Name are then the token's.
 	Token bool `json:"token,omitempty"`
 	// Via names the assistant the change was made through, by the name its
-	// MCP client gives, or "MCP" when it gives none (README §6.6).
+	// MCP client gives, or "MCP" when it gives none (docs/mcp.md).
 	Via string `json:"via,omitempty"`
 }
 
@@ -347,7 +347,7 @@ type APIToken struct {
 	RevokedAt        *time.Time `json:"revoked_at"`
 }
 
-// OAuthClient is an assistant registered to sign people in (README §6.6).
+// OAuthClient is an assistant registered to sign people in (docs/mcp.md).
 type OAuthClient struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
@@ -384,14 +384,14 @@ type Asset struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
-	// Stock is the asset's stock when it is counted by quantity (README
-	// §5.1), and nil when it is not.
+	// Stock is the asset's stock when it is counted by quantity
+	// (docs/stock-and-lending.md), and nil when it is not.
 	Stock *AssetStock `json:"stock"`
 	// Condition is ConditionOK, ConditionNeedsMaintenance or
 	// ConditionOutOfService, with a note saying what is wrong.
 	Condition     string `json:"condition"`
 	ConditionNote string `json:"condition_note"`
-	// IconName is the asset's own icon (README §3.7), drawn in place of its
+	// IconName is the asset's own icon (docs/icons.md), drawn in place of its
 	// categories'; nil when it has none. It is its screen icon
 	// (RenditionScreen); LabelIconName is its own label icon.
 	IconName      *string `json:"icon_name"`
@@ -457,14 +457,14 @@ type AssetWithDetails struct {
 	// Photos are its photos, in order.
 	Photos []AssetPhoto `json:"photos"`
 	// Scopes are the scopes it is in: those of its categories and their
-	// ancestors, or the default scope (README §3.3).
+	// ancestors, or the default scope (docs/access.md).
 	Scopes []string `json:"scopes"`
 	// ScanTemplate is the scan template it shows when scanned, and why.
 	ScanTemplate TemplateChoice `json:"scan_template"`
 	// LabelTemplate is the label template the spool queues it with, and why;
 	// TemplateID is empty when no category names one.
 	LabelTemplate TemplateChoice `json:"label_template"`
-	// Hooks are those its categories offer on it (README §5.4).
+	// Hooks are those its categories offer on it (docs/hooks.md).
 	Hooks []OfferedHook `json:"hooks"`
 	// ResolvedIcon is the icon it is drawn with on screen, and why; nil
 	// when neither it nor any of its categories has one.
@@ -474,8 +474,8 @@ type AssetWithDetails struct {
 	ResolvedIcons map[string]*ResolvedIcon `json:"resolved_icons"`
 }
 
-// Renditions are the forms an icon takes for where it is drawn (README
-// §3.7): RenditionScreen, every icon on screen, and RenditionLabel, on
+// Renditions are the forms an icon takes for where it is drawn
+// (docs/icons.md): RenditionScreen, every icon on screen, and RenditionLabel, on
 // labels. A category, and an asset, has an icon for each; one with no
 // label icon is drawn on labels with its screen icon.
 const (
@@ -502,7 +502,7 @@ const (
 	IconFromCategory = "category"
 )
 
-// ResolvedIcon is the icon an asset is drawn with (README §3.7): its own,
+// ResolvedIcon is the icon an asset is drawn with (docs/icons.md): its own,
 // From IconFromAsset, or else that of the nearest category up from its
 // categories with one, From IconFromCategory, chosen as its templates are
 // (TemplateChoice), named SourceCategoryName. Missing is set when the current build draws no icon
@@ -510,8 +510,8 @@ const (
 // "category" token paints in: the color of its nearest category with one,
 // chosen the same way, or empty for the palette's own.
 //
-// When params of its icon are bound to fields it has numbers in (README
-// §3.7), Bound is the wrapper drawing the icon with them, Params, and
+// When params of its icon are bound to fields it has numbers in
+// (docs/icons.md), Bound is the wrapper drawing the icon with them, Params, and
 // Name is that. When the asset is in a state (IconState*) whose variant
 // the build draws for that, Name is the variant, <Bound or Base>-<Variant>,
 // and State says which. Base is the icon as it is named, with neither,
@@ -532,7 +532,7 @@ type ResolvedIcon struct {
 	State              string             `json:"state,omitempty"`
 	Variant            string             `json:"variant,omitempty"`
 	// Texts are the asset's own texts its icon's text params are set to,
-	// by param: its name, a code, a field's value (README §3.7).
+	// by param: its name, a code, a field's value (docs/icons.md).
 	Texts map[string]string `json:"texts,omitempty"`
 	// Drawn holds the icon drawn with Texts, by the name it is drawn
 	// under: Name, and, when that shows a state, Shape too. A name it
@@ -566,7 +566,7 @@ func (r *ResolvedIcon) Shape() string {
 }
 
 // IconParamBinding is a param of a category's icon bound to what an asset
-// has (README §3.7): a field's value, Source "field", or for a text param,
+// has (docs/icons.md): a field's value, Source "field", or for a text param,
 // its name ("name") or first code ("code"), with no field.
 type IconParamBinding struct {
 	Param      string `json:"param"`
@@ -585,7 +585,7 @@ func (r *ResolvedIcon) Plain() string {
 	return r.Name
 }
 
-// The states an asset's icon can show (README §3.7), worst first: an
+// The states an asset's icon can show (docs/icons.md), worst first: an
 // asset in several shows the first whose variant its icon has.
 const (
 	IconStateOutOfService     = "out_of_service"
@@ -611,8 +611,8 @@ var DefaultIconVariants = map[string]string{
 	IconStateLowStock:         "low",
 }
 
-// TemplateChoice is the scan template (README §6.4) or label template
-// (§6.2) an asset uses: the one its nearest category naming one names,
+// TemplateChoice is the scan template (docs/scanning.md) or label template
+// (docs/printing.md) an asset uses: the one its nearest category naming one names,
 // SourceCategoryID, or, for scan templates, the default when none does.
 // Conflict is set when categories at the same distance name different
 // templates and the tie was broken by how deep they are, how many
@@ -672,7 +672,7 @@ type LabelStock struct {
 }
 
 // NotificationChannel sends events to one destination through a notifier
-// driver (README §5.2). Options hold the driver's options, secrets included;
+// driver (docs/notifications.md). Options hold the driver's options, secrets included;
 // the API never returns secret values.
 type NotificationChannel struct {
 	ID        string            `json:"id"`
@@ -705,7 +705,7 @@ type Delivery struct {
 	FinishedAt    *time.Time `json:"finished_at,omitempty"`
 }
 
-// An asset's condition (README §3.2).
+// An asset's condition (docs/data-model.md).
 const (
 	ConditionOK               = "ok"
 	ConditionNeedsMaintenance = "needs_maintenance"
@@ -726,7 +726,7 @@ type Person struct {
 	Archived bool `json:"archived,omitempty"`
 }
 
-// Loan is an asset lent to someone (README §5.3). It is open until
+// Loan is an asset lent to someone (docs/stock-and-lending.md). It is open until
 // CheckedInAt is set, and Overdue while open past DueAt.
 type Loan struct {
 	ID           string     `json:"id"`
@@ -739,7 +739,7 @@ type Loan struct {
 	Overdue      bool       `json:"overdue"`
 }
 
-// RelationType is a kind of link between assets (README §3.6), named from
+// RelationType is a kind of link between assets (docs/data-model.md), named from
 // each end: an asset "contains" another, which is "contained in" it.
 type RelationType struct {
 	ID          string `json:"id"`
@@ -776,12 +776,12 @@ type AssetLink struct {
 	Outgoing bool `json:"outgoing"`
 }
 
-// Report is a saved report (README §6.3): a name and its spec, JSON that
+// Report is a saved report (docs/reports.md): a name and its spec, JSON that
 // the reports package reads.
 type Report struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
-	// Kind is report or scan (README §6.4); Default marks the scan template
+	// Kind is report or scan (docs/scanning.md); Default marks the scan template
 	// assets use when no category names one.
 	Kind      string          `json:"kind"`
 	Default   bool            `json:"default"`
@@ -804,7 +804,7 @@ type AssetPhoto struct {
 }
 
 // Scope is a label on categories that roles can hold asset permissions in
-// (README §3.3). Default is the reserved scope of assets in no other.
+// (docs/access.md). Default is the reserved scope of assets in no other.
 type Scope struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -818,7 +818,7 @@ type Scope struct {
 	AssignmentCount int `json:"assignment_count"`
 }
 
-// Spool destinations (README §6.2): DestinationDownload, or
+// Spool destinations (docs/printing.md): DestinationDownload, or
 // DestinationPrinterPrefix or DestinationPoolPrefix followed by a printer's
 // or a pool's ID. An entry with none waits for one to be chosen.
 const (
@@ -827,7 +827,7 @@ const (
 	DestinationPoolPrefix    = "pool:"
 )
 
-// SpoolEntry is one asset's label in the spool (README §6.2): waiting to be
+// SpoolEntry is one asset's label in the spool (docs/printing.md): waiting to be
 // printed, or printed once PrintedAt is set.
 type SpoolEntry struct {
 	ID            string `json:"id"`
@@ -861,7 +861,7 @@ type SpoolEntry struct {
 	PrintedOn       string      `json:"printed_on,omitempty"`
 }
 
-// Spool job and batch states (README §6.2).
+// Spool job and batch states (docs/printing.md).
 const (
 	SpoolWaiting  = "waiting"
 	SpoolSending  = "sending"
@@ -879,7 +879,7 @@ type SpoolJobRef struct {
 }
 
 // SpoolJob is a printing of spool entries on one printer with one
-// template, or a download of them (README §6.2). Its template and target
+// template, or a download of them (docs/printing.md). Its template and target
 // are named as they were then. Labels counts every copy; Printed those
 // printed so far.
 type SpoolJob struct {
@@ -916,7 +916,7 @@ type SpoolJobMember struct {
 }
 
 // PrinterPool is a set of printers loaded alike that share print jobs
-// (README §6.2). Each job is cut into batches of BatchSize labels. Members
+// (docs/printing.md). Each job is cut into batches of BatchSize labels. Members
 // take the next batch when they have sent their last, except those behind
 // a spooler, and every member when FixedShares is set, which take a fixed
 // share of the batches by their Share.
@@ -937,7 +937,7 @@ type PoolMember struct {
 }
 
 // AssetHook is a hook people trigger on assets, such as Identify
-// (README §5.4). Triggering one records an asset.hook event, which devices
+// (docs/hooks.md). Triggering one records an asset.hook event, which devices
 // and notification channels act on. Confirm, when set, is asked first.
 type AssetHook struct {
 	ID        string    `json:"id"`
@@ -982,8 +982,8 @@ type EventThing struct {
 	Fields map[string]string `json:"fields"`
 }
 
-// LiveConnection is a live event connection a server holds open (README
-// §5.4): for an API token, or for a signed-in user.
+// LiveConnection is a live event connection a server holds open
+// (docs/hooks.md): for an API token, or for a signed-in user.
 type LiveConnection struct {
 	ID       string    `json:"id"`
 	TokenID  *string   `json:"token_id,omitempty"`
@@ -1008,7 +1008,7 @@ type HookReply struct {
 }
 
 // IconDiag is an error or warning the icon compiler reported, at a line
-// and column of a file of the build (README §3.7).
+// and column of a file of the build (docs/icons.md).
 type IconDiag struct {
 	File    string `json:"file"`
 	Line    int    `json:"line"`
@@ -1016,7 +1016,7 @@ type IconDiag struct {
 	Message string `json:"message"`
 }
 
-// CategoryIcon is a category's isolex source for a rendition (README §3.7). Source is
+// CategoryIcon is a category's isolex source for a rendition (docs/icons.md). Source is
 // the published version, nil until one has compiled; Draft is a later
 // edit that has not, with the errors that stopped it.
 type CategoryIcon struct {
@@ -1085,8 +1085,8 @@ type IconSave struct {
 	Build     *IconBuild `json:"build,omitempty"`
 }
 
-// Flow is a guided page for doing one everyday thing with assets (README
-// §6.7): its address, /f/<slug>, its name, and what it does.
+// Flow is a guided page for doing one everyday thing with assets
+// (docs/flows.md): its address, /f/<slug>, its name, and what it does.
 type Flow struct {
 	ID         string           `json:"id"`
 	Slug       string           `json:"slug"`
@@ -1111,7 +1111,7 @@ type FlowRun struct {
 	CreatedAt time.Time    `json:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at"`
 	// Photos are the photos the run's Set fields steps put on assets, for
-	// the page that took each to add it (README §6.7).
+	// the page that took each to add it (docs/flows.md).
 	Photos []FlowPhoto `json:"photos,omitempty"`
 	// Fields and Progress are kept for the run's own use (store.FlowRunState).
 	Fields   map[string]string `json:"-"`
@@ -1137,7 +1137,7 @@ type FlowDone struct {
 }
 
 // Upload is an archive being uploaded through the web in parts, or one
-// uploaded, staged until it is used (README §2.3, #141).
+// uploaded, staged until it is used (docs/backups.md, #141).
 type Upload struct {
 	ID       string `json:"id"`
 	UserID   string `json:"-"`

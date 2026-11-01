@@ -45,7 +45,7 @@ type RestoreOptions struct {
 	Keep string
 	// Wipe drops every table of the database once the archive checks out,
 	// and restores into it empty: an instance put back as it was, whatever
-	// was done to it since (README §2.2).
+	// was done to it since (docs/installing.md).
 	Wipe bool
 }
 

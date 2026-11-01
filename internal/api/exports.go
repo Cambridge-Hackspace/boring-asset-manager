@@ -17,7 +17,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
 
-// Packages (README §2.3, #144): part of an instance, chosen with what it
+// Packages (docs/packages.md, #144): part of an instance, chosen with what it
 // needs, exported to share. A selection may be too long for a URL, so it is
 // posted first, then downloaded by the browser as it is written, at any
 // size. A package holds only what the requester may read: the selection is

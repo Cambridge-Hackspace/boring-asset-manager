@@ -24,7 +24,7 @@ type PrinterRequest struct {
 	Name   string `json:"name"`
 	Driver string `json:"driver"`
 	Model  string `json:"model"`
-	// Connection says how to reach the printer (README §4.4).
+	// Connection says how to reach the printer (docs/printing.md).
 	Connection printers.Connection `json:"connection"`
 	Media      string              `json:"media"`
 	// Options are driver options (see GET /api/v1/printers/drivers).

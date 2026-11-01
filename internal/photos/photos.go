@@ -1,4 +1,4 @@
-// Package photos prepares photos of assets (README §3.2): it checks an
+// Package photos prepares photos of assets (docs/data-model.md): it checks an
 // upload, turns it upright as its camera recorded, scales it down, and makes
 // a thumbnail. Every photo is decoded and encoded again, so what is stored
 // keeps no metadata from the file it came from, such as where it was taken.

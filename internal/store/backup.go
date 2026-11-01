@@ -14,7 +14,7 @@ import (
 )
 
 // ErrBackupUnsupported is returned for databases BAM does not back up
-// itself: PostgreSQL and MariaDB have their own tools (README §2.2).
+// itself: PostgreSQL and MariaDB have their own tools (docs/installing.md).
 var ErrBackupUnsupported = errors.New("BAM backs up only SQLite databases; back up PostgreSQL and MariaDB with their own tools")
 
 // sqliteHeader starts every SQLite database file.

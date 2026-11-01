@@ -28,7 +28,7 @@
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
-  // Packaging part of the instance to share (README §2.3): what may be
+  // Packaging part of the instance to share (docs/backups.md): what may be
   // chosen is what you may read, and what it needs comes with it.
   const seesFlows = $derived(session.can('flows.manage') || session.can('flows.run'));
   const seesScopes = $derived(session.can('users.manage') || session.can('categories.manage'));

@@ -1,4 +1,4 @@
-// Category icons (README §3.7): which icon a category shows, the names
+// Category icons (docs/icons.md): which icon a category shows, the names
 // and starting sources the category page offers, and where the
 // compiler's diagnostics belong.
 

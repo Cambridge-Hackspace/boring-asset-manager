@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Scan templates (README §6.4) are reports of kind scan. A category names
+// Scan templates (docs/scanning.md) are reports of kind scan. A category names
 // the one its assets show when scanned; subcategories inherit it unless
 // they name their own, and assets in no such category show the default.
 

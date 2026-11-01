@@ -1,4 +1,4 @@
--- 035_icons_manage.sql: the icons.manage permission (README §3.3, §3.7).
+-- 035_icons_manage.sql: the icons.manage permission (docs/access.md, docs/icons.md).
 --
 -- It changes what every icon is drawn with: the icon library, the palette
 -- and the lexicon settings. Every role that manages categories is granted

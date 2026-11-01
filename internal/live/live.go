@@ -38,7 +38,7 @@ type Icons struct {
 	Colors  map[string]string `json:"colors"`
 }
 
-// SetIcons gives the renderer the icons labels draw (README §3.7),
+// SetIcons gives the renderer the icons labels draw (docs/icons.md),
 // replacing any it had.
 func (r *Renderer) SetIcons(data []byte) error {
 	var in Icons

@@ -6,7 +6,7 @@
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
-  // An assistant asks to act as the person signed in (README §6.6): they
+  // An assistant asks to act as the person signed in (docs/mcp.md): they
   // approve or deny it here, and are sent back to it.
 
   let { params: _params }: { params: Record<string, string> } = $props();

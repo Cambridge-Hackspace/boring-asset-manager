@@ -9,7 +9,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Printer pools (README §6.2): managed with the printers (settings.manage),
+// Printer pools (docs/printing.md): managed with the printers (settings.manage),
 // and listed to those who may see printers.
 
 // PoolRequest creates or replaces a printer pool. BatchSize defaults to 10

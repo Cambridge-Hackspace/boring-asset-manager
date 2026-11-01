@@ -1,4 +1,4 @@
-// The states an asset's icon shows (README §3.7): an asset in a state is
+// The states an asset's icon shows (docs/icons.md): an asset in a state is
 // drawn as the variant of its icon the state is drawn with, when the build
 // draws one.
 

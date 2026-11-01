@@ -1,4 +1,4 @@
--- 047_icon_renditions.sql: an icon for each rendition (README §3.7). A
+-- 047_icon_renditions.sql: an icon for each rendition (docs/icons.md). A
 -- rendition is the form an icon takes for where it is drawn: screen, what
 -- every icon was before this, and label. A category has an icon for each,
 -- its own source, name, history and param bindings; an asset has its own

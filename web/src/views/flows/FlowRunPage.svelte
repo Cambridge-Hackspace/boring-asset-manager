@@ -1,5 +1,5 @@
 <script lang="ts">
-  // /f/:slug runs a flow, one step at a time (README §6.7): large controls,
+  // /f/:slug runs a flow, one step at a time (docs/flows.md): large controls,
   // for a phone or the shop's tablet, an on-screen keyboard or a scanner
   // that types.
   import { onMount, tick } from 'svelte';

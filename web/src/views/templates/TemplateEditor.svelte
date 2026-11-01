@@ -45,7 +45,7 @@
   import StatusBar from './editor/StatusBar.svelte';
   import Toolbox from './editor/Toolbox.svelte';
 
-  // The template editor (README §4.1), laid out as Krita is: the toolbox on
+  // The template editor (docs/labels.md), laid out as Krita is: the toolbox on
   // the left, the tool's options across the top, the label in the middle,
   // panels down the right, and the status bar along the bottom. Tab hides
   // everything but the label.
@@ -166,7 +166,7 @@
   }
 
   // The live renderer draws the label in the browser, exactly as it will
-  // print, at every change (README §4.1). Until it has loaded, or where it
+  // print, at every change (docs/labels.md). Until it has loaded, or where it
   // cannot, the server renders the preview instead.
   let live: LiveRenderer | null = null;
   let liveState = $state<LiveState>('loading');
@@ -180,7 +180,7 @@
   onDestroy(() => live?.close());
   const drawingLive = $derived(liveState === 'ready' && liveData !== null);
 
-  // The icons labels draw (README §3.7), given to the live renderer as
+  // The icons labels draw (docs/icons.md), given to the live renderer as
   // they load or change; each time, the label is drawn again.
   let iconsGiven = $state(0);
   $effect(() => {

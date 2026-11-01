@@ -7,8 +7,8 @@ import (
 
 // DropAllTables drops every table of the database, bam's and any other,
 // leaving it empty: for putting an instance back from an archive as it was
-// (bam restore --wipe, which bam-update uses when an update fails, README
-// §2.2). It cannot be undone.
+// (bam restore --wipe, which bam-update uses when an update fails,
+// docs/installing.md). It cannot be undone.
 func (s *Store) DropAllTables(ctx context.Context) error {
 	conn, err := s.DB.Conn(ctx)
 	if err != nil {

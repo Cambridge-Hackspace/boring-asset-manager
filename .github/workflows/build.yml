@@ -1,7 +1,7 @@
 # Builds a release binary on every push and pull request, the way the release
-# workflow does (README §2.2), so a change that breaks the build shows up
+# workflow does (docs/installing.md), so a change that breaks the build shows up
 # before a tag does, on Linux and, cross-compiled, on Windows. The suites
-# themselves run in reaper (README §8.1).
+# themselves run in reaper (docs/testing.md).
 name: build
 
 on:

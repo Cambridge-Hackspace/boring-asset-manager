@@ -11,7 +11,7 @@ import (
 )
 
 // StateAxis is the axis the state starter defines, which an icon opts into
-// with `axes "state"` to be drawn in each state (README §3.7).
+// with `axes "state"` to be drawn in each state (docs/icons.md).
 const StateAxis = "state"
 
 // stateBadge is the badge a state's variant puts in an icon's corner: an

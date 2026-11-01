@@ -22,7 +22,7 @@
 
   let { tree, onimported }: { tree: TreeNode[]; onimported?: () => void } = $props();
 
-  // Importing a package, or kinds of a backup (README §2.3): checked first,
+  // Importing a package, or kinds of a backup (docs/packages.md): checked first,
   // saying what it would do; what clashes with something here is chosen
   // for; then imported as checked.
   let uploaded = $state<UploadState | null>(null);

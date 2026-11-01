@@ -1,5 +1,5 @@
 <!--
-  Choosing an icon (README §3.7): every icon the build draws, variants
+  Choosing an icon (docs/icons.md): every icon the build draws, variants
   included, searched by name or description. Escape closes it.
 -->
 <script lang="ts">

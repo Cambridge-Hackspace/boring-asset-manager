@@ -1,7 +1,7 @@
 #!/bin/sh
 # bam-update installs the latest BAM release from GitHub when it is newer
 # than the installed one, on Linux (systemd) and FreeBSD (rc.d), and puts the
-# old binary back if the new one does not come up (README §2.2).
+# old binary back if the new one does not come up (docs/installing.md).
 #
 #   bam-update            update if there is a newer release
 #   bam-update --check    only say whether there is one

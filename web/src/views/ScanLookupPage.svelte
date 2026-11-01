@@ -5,7 +5,7 @@
   import CodeScanner from '../components/CodeScanner.svelte';
 
   // /scan: looking a code up, by the camera where the browser can read
-  // codes, or typed, pasted or from a USB scanner (README §6.4).
+  // codes, or typed, pasted or from a USB scanner (docs/scanning.md).
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let code = $state('');

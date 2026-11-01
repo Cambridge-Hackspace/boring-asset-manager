@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Reads codes with the camera, where the browser can (README §6.4),
+  // Reads codes with the camera, where the browser can (docs/scanning.md),
   // calling onfound with the text of the first one seen. Where it cannot,
   // it says so, and the code is typed instead.
   import { onDestroy, tick } from 'svelte';

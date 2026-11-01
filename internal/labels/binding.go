@@ -154,7 +154,7 @@ type Data struct {
 	Unit       string `json:"unit"`
 	Borrower   string `json:"borrower"`
 	Due        string `json:"due"`
-	// Icon is the name of the icon the asset is drawn with (README §3.7),
+	// Icon is the name of the icon the asset is drawn with (docs/icons.md),
 	// its own or its categories', empty when it has none; IconColor is
 	// what its category token paints in. BoundIcon is the icon drawn with
 	// its params set to the asset's fields, when they are bound to some it
@@ -231,7 +231,7 @@ func (b Binding) Resolve(d Data) string {
 		case RefAssetIcon:
 			sb.WriteString(d.Icon)
 		case RefScanURL:
-			// The asset's scan page (README §6.4), by ID, which never changes.
+			// The asset's scan page (docs/scanning.md), by ID, which never changes.
 			sb.WriteString(strings.TrimRight(d.BaseURL, "/") + "/scan/" + d.AssetID)
 		}
 	}

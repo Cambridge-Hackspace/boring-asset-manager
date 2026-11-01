@@ -67,7 +67,7 @@ type categoryTraits struct {
 	// ones and every category below one.
 	lendable map[string]bool
 	// units holds, for each category, the units it or an ancestor totals
-	// stock in (README §5.1).
+	// stock in (docs/stock-and-lending.md).
 	units map[string]map[string]bool
 	// parents maps each category to its parent.
 	parents map[string]string

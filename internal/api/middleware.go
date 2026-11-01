@@ -326,7 +326,7 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 
 // RefuseUnstorableText answers 400 to a request whose path, query or JSON
 // body holds a NUL character or bytes that are not UTF-8. No stored text may
-// contain either (README §3.5), so such a request cannot name anything that
+// contain either (docs/data-model.md), so such a request cannot name anything that
 // exists; handed on, PostgreSQL would answer a lookup with an error rather
 // than "not found". Multipart bodies (uploads and imports) are left to their
 // handlers, which report problems in the file itself, as are raw bytes
@@ -426,7 +426,7 @@ func PublicPermissions(ctx context.Context) map[string]bool {
 
 // OpenToPublic lets signed-out visitors use what the public role allows on
 // a route: looking at one asset, not the catalog of categories, fields,
-// templates and reports, which only those signed in see (README §3.3).
+// templates and reports, which only those signed in see (docs/access.md).
 func OpenToPublic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !authenticated(r.Context()) {

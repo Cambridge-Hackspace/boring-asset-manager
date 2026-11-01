@@ -11,7 +11,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// Placements (README §3.7): where things stand in their location's scene,
+// Placements (docs/icons.md): where things stand in their location's scene,
 // when someone has arranged them (migration 039).
 
 var (

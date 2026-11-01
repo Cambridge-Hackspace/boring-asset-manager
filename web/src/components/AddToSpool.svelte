@@ -2,7 +2,7 @@
   import { messageOf } from '../lib/errors';
   import { addedMessage, addToSpool, type SpoolAddRequest } from '../lib/spool';
 
-  // Adds labels to the print queue (README §6.2), and says what that did. Only
+  // Adds labels to the print queue (docs/printing.md), and says what that did. Only
   // for those with labels.print; the caller checks.
   let { what, label = 'Add to the print queue' }: { what: () => SpoolAddRequest; label?: string } = $props();
 

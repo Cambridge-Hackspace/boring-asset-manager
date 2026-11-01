@@ -1,4 +1,4 @@
--- 036_asset_icon.sql: an asset's own icon (README §3.7), drawn in place of
+-- 036_asset_icon.sql: an asset's own icon (docs/icons.md), drawn in place of
 -- the one its categories give it: the name of any icon the build draws.
 -- NULL, as every asset starts, takes its categories'.
 

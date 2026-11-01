@@ -1,4 +1,4 @@
--- 032_oauth.sql: signing assistants in by OAuth 2.1 (README §6.6). A client
+-- 032_oauth.sql: signing assistants in by OAuth 2.1 (docs/mcp.md). A client
 -- registers itself; a person approves it, and it trades the code for a
 -- personal token that acts as them, renewed while used.
 --

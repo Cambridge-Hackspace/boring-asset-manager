@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// ImportRow is one validated asset change from an import (README §6.1).
+// ImportRow is one validated asset change from an import (docs/csv.md).
 type ImportRow struct {
 	// ID names the asset to update; empty creates one.
 	ID string

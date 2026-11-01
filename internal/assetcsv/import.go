@@ -70,7 +70,7 @@ type Plan struct {
 	ProblemCount      int       `json:"problem_count"`
 	UnknownCategories []string  `json:"unknown_categories"`
 	// The links the import adds, moves and removes, counted, with the first
-	// of them listed (README §6.1). RemoveLinks says whether links no row
+	// of them listed (docs/csv.md). RemoveLinks says whether links no row
 	// states are removed.
 	LinksAdded   int          `json:"links_added"`
 	LinksMoved   int          `json:"links_moved"`
@@ -183,12 +183,12 @@ type Options struct {
 	// without it, an import only adds and moves links.
 	RemoveLinks bool
 	// May, when set, says whether the importer may change assets in these
-	// scopes (README §3.3), and ScopesOf gives the scopes of an asset in
+	// scopes (docs/access.md), and ScopesOf gives the scopes of an asset in
 	// these categories. Rows changing, and links joining, assets they may
 	// not change are problems.
 	May      func(scopes []string) bool
 	ScopesOf func(categoryIDs []string) []string
-	// Icons are the names the icon build draws (README §3.7): an icon cell
+	// Icons are the names the icon build draws (docs/icons.md): an icon cell
 	// gives an asset one of these, or the one it has already.
 	Icons map[string]bool
 }

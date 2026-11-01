@@ -197,7 +197,7 @@ func TestPrintSendsRotatedLabelsToThePrinter(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"labels":4`) {
 		t.Fatalf("print: got %d %s", rec.Code, rec.Body.String())
 	}
-	// Each asset's history records its labels (README §6.2).
+	// Each asset's history records its labels (docs/printing.md).
 	for _, id := range []string{a.Asset.ID, b.Asset.ID} {
 		events, _, err := srv.store.ListAssetEvents(id, "", 1)
 		if err != nil || len(events) != 1 || events[0].Kind != models.EventAssetLabelPrinted ||

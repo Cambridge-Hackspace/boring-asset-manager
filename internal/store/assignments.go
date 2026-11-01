@@ -65,7 +65,7 @@ func roleKeys(q interface {
 }
 
 // assignedKeys reads what the roles assigned to a holder grant, each
-// narrowed to the scopes its assignment names (README §3.3). roles is SQL
+// narrowed to the scopes its assignment names (docs/access.md). roles is SQL
 // selecting the holder's role IDs, taking args, so a caller can require the
 // holder to be active.
 func assignedKeys(q interface {

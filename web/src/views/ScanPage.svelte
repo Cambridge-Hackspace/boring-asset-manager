@@ -15,7 +15,7 @@
   import ScanResult from '../components/ScanResult.svelte';
   import SignInToSee from '../components/SignInToSee.svelte';
 
-  // /scan/:code: what scanning an asset's code shows (README §6.4), with the
+  // /scan/:code: what scanning an asset's code shows (docs/scanning.md), with the
   // quick actions its template offers that the viewer may take now. Signed
   // out, it shows what the public role may see.
   let { params }: { params: Record<string, string> } = $props();

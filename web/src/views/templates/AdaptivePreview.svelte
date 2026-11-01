@@ -6,7 +6,7 @@
   import { describeElement, type TemplateDoc } from '../../lib/template';
 
   // An adaptive template laid out as each printer would print it, and at a
-  // size typed in, with the sizes it takes in its own shape (README §4.1).
+  // size typed in, with the sizes it takes in its own shape (docs/labels.md).
   let { doc }: { doc: TemplateDoc } = $props();
 
   interface Laid {

@@ -16,7 +16,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// The spooler (README §6.2) sends print jobs from the spool in the
+// The spooler (docs/printing.md) sends print jobs from the spool in the
 // background: each printer takes one batch at a time, and printers work in
 // parallel. A batch being sent beats a heartbeat, so one a stopped server
 // left is found by the sweep and its labels put back.

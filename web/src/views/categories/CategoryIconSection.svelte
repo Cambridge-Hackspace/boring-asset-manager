@@ -1,5 +1,5 @@
 <!--
-  A category's icon (README §3.7): what it shows, its own or inherited;
+  A category's icon (docs/icons.md): what it shows, its own or inherited;
   and, for those who manage categories, its isolex source to write, checked
   as it is typed, previewed in light and dark beside its subcategories,
   published or kept as a draft with its problems, with its history. A tab

@@ -18,7 +18,7 @@ import (
 	"github.com/coder/websocket"
 )
 
-// Live events (README §5.4): devices, such as a cabinet that lights the
+// Live events (docs/hooks.md): devices, such as a cabinet that lights the
 // drawer an asset is in, open a WebSocket with an API token holding
 // events.read, and are sent each event they may see as it is recorded.
 //

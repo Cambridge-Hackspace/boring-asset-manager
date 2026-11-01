@@ -3,7 +3,7 @@
   import { signInPath } from '../lib/session.svelte';
 
   // For a visitor who is not signed in, when what they opened is not public
-  // or does not exist: the server does not say which (README §3.3).
+  // or does not exist: the server does not say which (docs/access.md).
   let { what = 'this asset' }: { what?: string } = $props();
 </script>
 

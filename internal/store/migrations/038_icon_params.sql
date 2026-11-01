@@ -1,5 +1,5 @@
--- 038_icon_params.sql: an icon's params bound to asset fields (README
--- §3.7). An asset drawn with a category's icon is drawn with each bound
+-- 038_icon_params.sql: an icon's params bound to asset fields
+-- (docs/icons.md). An asset drawn with a category's icon is drawn with each bound
 -- param set to its value of the field, a number, through a wrapper icon
 -- each build generates. Deleting the icon or the field drops the binding.
 

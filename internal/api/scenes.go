@@ -13,7 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Scenes (README §3.7): a location's contents laid out on its floor, each
+// Scenes (docs/icons.md): a location's contents laid out on its floor, each
 // drawn with its icon, as internal/scene lays them out.
 
 // builtIcons is the current build's IR, read once for each build.

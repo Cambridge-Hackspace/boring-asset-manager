@@ -12,9 +12,9 @@
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let categories = $state<Category[]>([]);
-  // Categories in scan template ties, with how many assets each (README §6.4).
+  // Categories in scan template ties, with how many assets each (docs/scanning.md).
   let conflicts = $state<Record<string, number>>({});
-  // And in label template ties (§6.2).
+  // And in label template ties (docs/printing.md).
   let labelConflicts = $state<Record<string, number>>({});
   // How many of the assets one may read each category holds directly.
   let counts = $state<Record<string, number>>({});

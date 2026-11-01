@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# rc.d script for BAM! (README §2.1). Install as /usr/local/etc/rc.d/bam,
+# rc.d script for BAM! (docs/installing.md). Install as /usr/local/etc/rc.d/bam,
 # mode 0555, and enable with: sysrc bam_enable=YES
 #
 # PROVIDE: bam

@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Live events (README §5.4): what the servers holding devices' connections
+// Live events (docs/hooks.md): what the servers holding devices' connections
 // read to send them events, and keep about those connections and the
 // devices' answers to hooks.
 

@@ -1,4 +1,4 @@
--- 027_live_events.sql: live connections for devices (README §5.4).
+-- 027_live_events.sql: live connections for devices (docs/hooks.md).
 --
 -- A device opens a WebSocket with an API token holding events.read, and is
 -- sent the events it may see as they are recorded. Each open connection is

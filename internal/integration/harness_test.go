@@ -1,6 +1,6 @@
 // Package integration drives a real BAM server over HTTP, on SQLite or on the
 // PostgreSQL or MariaDB server named by BAM_TEST_DIALECT and BAM_TEST_DSN
-// (README §8.3), to check behavior that spans the API, the store and the
+// (docs/testing.md), to check behavior that spans the API, the store and the
 // database together.
 package integration
 
