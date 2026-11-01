@@ -149,6 +149,17 @@ test.describe('the flow editor', () => {
     await named.press('Enter');
     await expect(named).toHaveValue('{name}, {anything_else}');
     await expect(suggested).toBeHidden();
+    // Add a step is a menu of the kinds, each saying what it does (#172).
+    const addStep = page.getByRole('button', { name: 'Add a step' });
+    await addStep.click();
+    const kinds = page.getByRole('menu', { name: 'Add a step' });
+    await expect(kinds.getByRole('menuitem', { name: 'Choose category' })).toBeFocused();
+    await expect(kinds.getByRole('menuitem', { name: 'Change' })).toHaveAccessibleDescription(/sets its condition/);
+    await page.keyboard.press('End');
+    await expect(kinds.getByRole('menuitem', { name: 'Confirm' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(kinds).toBeHidden();
+    await expect(addStep).toBeFocused();
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.help}`), 'the editor').toEqual([]);
     await page.getByRole('button', { name: 'Save flow' }).click();

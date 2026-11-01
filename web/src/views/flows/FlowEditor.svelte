@@ -23,6 +23,7 @@
   } from '../../lib/flowEditor';
   import CategoryPicker from '../../components/CategoryPicker.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import MenuButton from '../../components/MenuButton.svelte';
   import FlowStepEditor from './FlowStepEditor.svelte';
   import FlowPreview from './FlowPreview.svelte';
 
@@ -40,7 +41,6 @@
   let enabled = $state(true);
   let def = $state<Definition>({ version: definitionVersion, category_ids: [], steps: [{ id: 'done', kind: 'done', title: 'Done' }] });
   let selected = $state(0);
-  let adding = $state<StepKind>('form');
 
   // A new flow starts from a starter, over the categories chosen.
   let starters = $state<Starter[]>([]);
@@ -57,7 +57,15 @@
   let fieldsOf = $state<Record<string, EffectiveField[]>>({});
 
   const flowCategories = $derived(def.category_ids.map((id) => allCategories.find((c) => c.id === id)).filter((c): c is Category => !!c));
-  const byCategory = $derived(flowCategories.map((category) => ({ category, fields: (fieldsOf[category.id] ?? []).map((ef) => ef.field) })));
+  const byCategory = $derived(
+    flowCategories.map((category) => {
+      const list = fieldsOf[category.id] ?? [];
+      return { category, fields: list.map((ef) => ef.field), required: list.filter((ef) => ef.is_required).map((ef) => ef.field.key) };
+    }),
+  );
+  // Whether the fields of each of the flow's categories have come, so Set
+  // fields can say there are none only once it knows.
+  const fieldsKnown = $derived(def.category_ids.every((id) => id in fieldsOf));
   const catalog = $derived<FlowCatalog>({
     fields,
     required: Object.fromEntries(Object.entries(fieldsOf).map(([id, list]) => [id, list.filter((ef) => ef.is_required).map((ef) => ef.field.key)])),
@@ -133,8 +141,8 @@
     }
   }
 
-  function add() {
-    def.steps = addStep(def.steps, adding);
+  function add(kind: StepKind) {
+    def.steps = addStep(def.steps, kind);
     selected = Math.max(0, def.steps.length - 2);
   }
 
@@ -291,6 +299,7 @@
                       categoryIDs={def.category_ids}
                       {fields}
                       {byCategory}
+                      {fieldsKnown}
                       flows={flows.filter((f) => f.slug !== editing)}
                       {destinations}
                       {templates}
@@ -309,15 +318,9 @@
         </ol>
       </section>
 
-      <div class="flex flex-wrap items-end gap-2">
-        <div>
-          <label class="label" for="flow-add">Add a step</label>
-          <select id="flow-add" class="input" bind:value={adding}>
-            {#each addableKinds as k (k)}<option value={k}>{kindLabels[k]}</option>{/each}
-          </select>
-        </div>
-        <button type="button" class="btn-secondary" onclick={add}>Add</button>
-        <p class="pb-3 text-xs text-zinc-600 dark:text-zinc-400">It goes in before Done.</p>
+      <div class="flex flex-wrap items-center gap-2">
+        <MenuButton id="flow-add" label="Add a step" items={addableKinds.map((k) => ({ label: kindLabels[k], description: kindHelp[k], run: () => add(k) }))} />
+        <p class="text-xs text-zinc-600 dark:text-zinc-400">It goes in before Done.</p>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-2 border-t-2 border-zinc-900 pt-4 dark:border-zinc-400">

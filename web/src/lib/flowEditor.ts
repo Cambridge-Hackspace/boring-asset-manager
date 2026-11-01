@@ -18,13 +18,13 @@ export const kindLabels: Record<StepKind, string> = {
 };
 
 export const kindHelp: Record<StepKind, string> = {
-  choose_category: 'Offers the flow’s categories as buttons, or fixes one.',
+  choose_category: 'Offers the flow’s categories, or some of them, as buttons; or always uses one.',
   form: 'Asks questions of its own; later steps use the answers.',
-  set_fields: 'Puts answers, or other values, into the asset’s fields.',
+  set_fields: 'Sets fields from answers or other values: on the new asset before Create, or the one found or filed after.',
   find: 'Finds something already here: by its code, by search, or from a list.',
   create: 'Files a new asset in the chosen category, with the fields set before it.',
   label: 'Prints its label, queues it, or shows it on screen.',
-  change: 'Archives it, moves it, lends it, or triggers a hook.',
+  change: 'Archives it, sets its condition, lends or returns it, moves it to a place or another category, or triggers a hook.',
   confirm: 'Shows what will happen, and asks to go ahead.',
   done: 'Says what was done, with Start again for the next person.',
 };
