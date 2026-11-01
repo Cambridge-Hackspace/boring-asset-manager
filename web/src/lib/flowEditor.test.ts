@@ -1,14 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Definition, Step } from './flows';
+import type { ChangeKind, Definition, Step } from './flows';
 import type { Field } from './models';
 import {
   addStep,
+  addableKinds,
   answerProblem,
   asks,
   checkFlow,
   fieldValueProblem,
+  kindHelp,
+  kindLabels,
   moveStep,
   newStep,
   newStepID,
@@ -36,6 +39,37 @@ const leave: Definition = {
     { id: 'done', kind: 'done' },
   ],
 };
+
+describe('kindHelp', () => {
+  it('says, for each kind to add, what it does, in one line', () => {
+    expect(addableKinds).toContain('set_fields');
+    expect(addableKinds).not.toContain('done');
+    for (const k of addableKinds) {
+      expect(kindLabels[k]).toBeTruthy();
+      expect(kindHelp[k]).toMatch(/^[A-Z].*\.$/);
+    }
+  });
+
+  it('names every change Change can make (#172)', () => {
+    const named: Record<ChangeKind, RegExp> = {
+      archive: /\barchives\b/i,
+      condition: /\bsets its condition\b/,
+      borrow: /\blends\b/,
+      return: /\breturns\b/,
+      place: /\bto a place\b/,
+      category: /\banother category\b/,
+      hook: /\btriggers a hook\b/,
+    };
+    for (const [kind, words] of Object.entries(named)) expect(kindHelp.change, kind).toMatch(words);
+  });
+
+  it('says a form asks its own questions, and Set fields where it sets them', () => {
+    expect(kindHelp.form).toContain('questions of its own');
+    expect(kindHelp.set_fields).toMatch(/answers or other values/);
+    expect(kindHelp.set_fields).toMatch(/new asset before Create/);
+    expect(kindHelp.set_fields).toMatch(/found or filed after/);
+  });
+});
 
 describe('checkFlow', () => {
   it('passes a starter', () => {
