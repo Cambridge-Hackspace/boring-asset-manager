@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
-import ActionButtons from './ActionButtons.svelte';
+import HookButtons from './HookButtons.svelte';
 import { fakeApi } from '../test/fetch';
 
 afterEach(() => {
@@ -8,18 +8,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('ActionButtons', () => {
-  const actions = [
+describe('HookButtons', () => {
+  const hooks = [
     { id: '1', key: 'identify', label: 'Identify' },
     { id: '2', key: 'open-drawer', label: 'Open drawer', confirm: 'Open the drawer?' },
   ];
 
-  it('presses an action, asking first when it has a question', async () => {
+  it('triggers a hook, asking first when it has a question', async () => {
     const { sent } = fakeApi({
-      'POST /assets/a1/actions/identify': () => ({ status: 201, body: { event_id: 'e1' } }),
-      'POST /assets/a1/actions/open-drawer': () => ({ status: 201, body: { event_id: 'e2' } }),
+      'POST /assets/a1/hooks/identify': () => ({ status: 201, body: { event_id: 'e1' } }),
+      'POST /assets/a1/hooks/open-drawer': () => ({ status: 201, body: { event_id: 'e2' } }),
     });
-    render(ActionButtons, { assetId: 'a1', actions });
+    render(HookButtons, { assetId: 'a1', hooks });
     await fireEvent.click(screen.getByRole('button', { name: 'Identify' }));
     expect(await screen.findByText('Identify: sent.')).toBeTruthy();
 
@@ -32,12 +32,12 @@ describe('ActionButtons', () => {
     expect(document.activeElement?.textContent).toBe('Open drawer');
     await fireEvent.click(document.activeElement as HTMLElement);
     expect(await screen.findByText('Open drawer: sent.')).toBeTruthy();
-    expect(sent.map((r) => r.path)).toEqual(['/assets/a1/actions/identify', '/assets/a1/actions/open-drawer']);
+    expect(sent.map((r) => r.path)).toEqual(['/assets/a1/hooks/identify', '/assets/a1/hooks/open-drawer']);
   });
 
   it('says why a press was refused', async () => {
-    fakeApi({ 'POST /assets/a1/actions/identify': () => ({ status: 429, body: { error: 'That was pressed a moment ago; wait a little before pressing it again' } }) });
-    render(ActionButtons, { assetId: 'a1', actions });
+    fakeApi({ 'POST /assets/a1/hooks/identify': () => ({ status: 429, body: { error: 'That was pressed a moment ago; wait a little before pressing it again' } }) });
+    render(HookButtons, { assetId: 'a1', hooks });
     await fireEvent.click(screen.getByRole('button', { name: 'Identify' }));
     expect(await screen.findByText(/pressed a moment ago/)).toBeTruthy();
   });
@@ -47,10 +47,10 @@ describe('ActionButtons', () => {
     try {
       let replies: unknown[] = [];
       fakeApi({
-        'POST /assets/a1/actions/identify': () => ({ status: 201, body: { event_id: 'e1' } }),
-        'GET /assets/a1/actions/replies': () => ({ replies }),
+        'POST /assets/a1/hooks/identify': () => ({ status: 201, body: { event_id: 'e1' } }),
+        'GET /assets/a1/hooks/replies': () => ({ replies }),
       });
-      render(ActionButtons, { assetId: 'a1', actions });
+      render(HookButtons, { assetId: 'a1', hooks });
       await fireEvent.click(screen.getByRole('button', { name: 'Identify' }));
       await screen.findByText('Identify: sent.');
       replies = [

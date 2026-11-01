@@ -25,7 +25,7 @@ test('thresholds, running-low actions and notification channels', async ({ signe
   await form.getByLabel('Webhook URL').fill('https://discord.com/api/webhooks/123/e2e-token');
   await form.getByRole('button', { name: 'Create channel' }).click();
   await expect(page.getByText('Channel saved.')).toBeVisible();
-  await expect(page.getByText('Discord, enabled. A category is running low; A category is restocked; An asset counted by quantity is running low; An asset counted by quantity is restocked; An asset needs maintenance, is out of service, or is working again; A loan is overdue; Something left through a flow is past its date; An action, such as Identify, is pressed on an asset.')).toBeVisible();
+  await expect(page.getByText('Discord, enabled. A category is running low; A category is restocked; An asset counted by quantity is running low; An asset counted by quantity is restocked; An asset needs maintenance, is out of service, or is working again; A loan is overdue; Something left through a flow is past its date; A hook, such as Identify, is triggered on an asset.')).toBeVisible();
   await expect(page.getByText('e2e-token')).toHaveCount(0);
 
   // Adding an asset restocks it automatically; then flag it by hand.

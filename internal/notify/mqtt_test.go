@@ -161,15 +161,15 @@ func (ca *testCA) issue(t *testing.T, server bool) (certPEM, keyPEM string, pair
 	return certPEM, keyPEM, pair
 }
 
-func actionNotification() Notification {
+func hookNotification() Notification {
 	asset := "a1"
 	return Notification{BaseURL: "https://bam.example/", Event: models.Event{
-		ID: "e1", Kind: models.EventAssetAction, AssetID: &asset, CreatedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
+		ID: "e1", Kind: models.EventAssetHook, AssetID: &asset, CreatedAt: time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC),
 		Payload: models.EventPayload{
 			Asset:   &models.EventAsset{ID: "a1", Name: "Drawer A3"},
 			Actor:   &models.EventActor{ID: "u1", Email: "ada@hackspace.org", Name: "Ada"},
 			Trigger: models.TriggerManual,
-			Action:  &models.EventAction{Key: "identify", Label: "Identify"},
+			Hook:    &models.EventHook{Key: "identify", Label: "Identify"},
 		},
 	}}
 }
@@ -180,18 +180,18 @@ func TestMQTTPublishes(t *testing.T) {
 	if err := (MQTT{}).Validate(opts); err != nil {
 		t.Fatal(err)
 	}
-	if err := (MQTT{}).Send(context.Background(), opts, actionNotification()); err != nil {
+	if err := (MQTT{}).Send(context.Background(), opts, hookNotification()); err != nil {
 		t.Fatal(err)
 	}
 	got := b.messages()
-	if len(got) != 1 || got[0].Topic != "hackspace/bam/asset.action/a1" {
+	if len(got) != 1 || got[0].Topic != "hackspace/bam/asset.hook/a1" {
 		t.Fatalf("published: %+v", got)
 	}
 	var e mqttEvent
 	if err := json.Unmarshal(got[0].Payload, &e); err != nil {
 		t.Fatal(err)
 	}
-	if e.Kind != models.EventAssetAction || e.URL != "https://bam.example/assets/a1" || e.Payload.Action.Key != "identify" || e.Payload.Actor.Name != "Ada" {
+	if e.Kind != models.EventAssetHook || e.URL != "https://bam.example/assets/a1" || e.Payload.Hook.Key != "identify" || e.Payload.Actor.Name != "Ada" {
 		t.Errorf("the message: %+v", e)
 	}
 	if strings.Contains(string(got[0].Payload), "ada@hackspace.org") {
@@ -202,7 +202,7 @@ func TestMQTTPublishes(t *testing.T) {
 	}
 
 	// A test message has a topic of its own.
-	test := actionNotification()
+	test := hookNotification()
 	test.Test = true
 	if err := (MQTT{}).Send(context.Background(), opts, test); err != nil {
 		t.Fatal(err)
@@ -213,7 +213,7 @@ func TestMQTTPublishes(t *testing.T) {
 
 	// Refused credentials are final; a broker not there is worth retrying.
 	opts["password"] = "wrong"
-	err := (MQTT{}).Send(context.Background(), opts, actionNotification())
+	err := (MQTT{}).Send(context.Background(), opts, hookNotification())
 	if err == nil || errors.Is(err, ErrTemporary) || !strings.Contains(err.Error(), "refused the user name or password") {
 		t.Errorf("wrong password: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestMQTTPublishes(t *testing.T) {
 	addr := gone.Addr().String()
 	gone.Close()
 	opts["broker"] = "mqtt://" + addr
-	if err := (MQTT{}).Send(context.Background(), opts, actionNotification()); !errors.Is(err, ErrTemporary) {
+	if err := (MQTT{}).Send(context.Background(), opts, hookNotification()); !errors.Is(err, ErrTemporary) {
 		t.Errorf("no broker: %v", err)
 	}
 }
@@ -235,7 +235,7 @@ func TestMQTTOverTLS(t *testing.T) {
 	// A broker that knows its clients by certificate.
 	b := newFakeBroker(t, &tls.Config{Certificates: []tls.Certificate{serverPair}, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: pool}, "", "")
 	opts := map[string]string{"broker": "mqtts://" + b.address(), "topic_prefix": "bam", "ca_cert": ca.pem, "client_cert": clientCert, "client_key": clientKey}
-	if err := (MQTT{}).Send(context.Background(), opts, actionNotification()); err != nil {
+	if err := (MQTT{}).Send(context.Background(), opts, hookNotification()); err != nil {
 		t.Fatal(err)
 	}
 	if got := b.messages(); len(got) != 1 {
@@ -244,7 +244,7 @@ func TestMQTTOverTLS(t *testing.T) {
 	// Without the CA, the broker's certificate is not trusted, and trying
 	// again will not help.
 	delete(opts, "ca_cert")
-	err := (MQTT{}).Send(context.Background(), opts, actionNotification())
+	err := (MQTT{}).Send(context.Background(), opts, hookNotification())
 	if err == nil || errors.Is(err, ErrTemporary) || !strings.Contains(err.Error(), "not trusted") {
 		t.Errorf("an untrusted broker: %v", err)
 	}

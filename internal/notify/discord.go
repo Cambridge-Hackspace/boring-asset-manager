@@ -251,10 +251,10 @@ func discordPayload(n Notification) discordMessage {
 			embed.Description += ", to be collected by " + p.DueAt.UTC().Format("2 January 2006")
 		}
 		embed.Description += "."
-	case e.Kind == models.EventAssetAction:
-		label := "Action"
-		if p.Action != nil {
-			label = p.Action.Label
+	case e.Kind == models.EventAssetHook:
+		label := "Hook"
+		if p.Hook != nil {
+			label = p.Hook.Label
 		}
 		embed.Title, embed.Color = escapeMarkdown(truncate(label, 100))+": "+name, discordNeutral
 		if by != "" {

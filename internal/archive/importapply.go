@@ -11,6 +11,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
 )
 
 // checkIcons compiles the icons as an import would leave them, and notes
@@ -177,11 +178,18 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 		if err != nil {
 			payload = "{}"
 		}
+		kind := str(r, "kind")
+		// an asset.action event, written before hooks were hooks (#173)
+		if s, ok := payload.(string); ok && ap.a.header.SchemaVersion < migrations.HooksVersion {
+			if k, p, err := migrations.HookEvent(kind, s); err == nil {
+				kind, payload = k, p
+			}
+		}
 		var asset any
 		if a := str(r, "asset_id"); a != "" {
 			asset = ids.of(a)
 		}
-		return with(r, "id", ids.of(str(r, "id")), "asset_id", asset, "category_id", cat, "actor_user_id", nil, "payload", payload), true
+		return with(r, "id", ids.of(str(r, "id")), "kind", kind, "asset_id", asset, "category_id", cat, "actor_user_id", nil, "payload", payload), true
 	}
 	return nil, false
 }

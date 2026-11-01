@@ -34,7 +34,7 @@ var selectKinds = []struct{ kind, by, table, column, idKind string }{
 	{"category", "name", "categories", "name", archive.ItemCategory},
 	{"subtree", "name, with every category under it", "categories", "name", archive.ItemCategory},
 	{"field", "key", "fields", "field_key", archive.ItemField},
-	{"action", "key", "asset_actions", "action_key", archive.ItemAction},
+	{"hook", "key", "asset_actions", "action_key", archive.ItemHook},
 	{"link-type", "name", "relation_types", "name", archive.ItemRelationType},
 	{"label-template", "name", "templates", "name", archive.ItemLabelTemplate},
 	{"scan-template", "name", "reports", "name", archive.ItemScanTemplate},
@@ -183,8 +183,8 @@ func ParseSelection(st *store.Store, items []string) (archive.Selection, error) 
 				sel.Subtrees = append(sel.Subtrees, id)
 			case "field":
 				sel.Fields = append(sel.Fields, id)
-			case "action":
-				sel.Actions = append(sel.Actions, id)
+			case "hook":
+				sel.Hooks = append(sel.Hooks, id)
 			case "link-type":
 				sel.RelationTypes = append(sel.RelationTypes, id)
 			case "label-template":

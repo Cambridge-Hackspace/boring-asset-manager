@@ -18,7 +18,7 @@ type packageIn struct {
 	Categories     []string `json:"categories,omitempty" jsonschema:"IDs of single categories"`
 	Subtrees       []string `json:"subtrees,omitempty" jsonschema:"IDs of categories to package with every category under them"`
 	Fields         []string `json:"fields,omitempty" jsonschema:"field IDs"`
-	Actions        []string `json:"actions,omitempty" jsonschema:"action IDs"`
+	Hooks          []string `json:"hooks,omitempty" jsonschema:"hook IDs"`
 	RelationTypes  []string `json:"relation_types,omitempty" jsonschema:"link and relation type IDs"`
 	LabelTemplates []string `json:"label_templates,omitempty" jsonschema:"label template IDs"`
 	ScanTemplates  []string `json:"scan_templates,omitempty" jsonschema:"scan template IDs (reports of kind scan)"`
@@ -40,7 +40,7 @@ type packageIn struct {
 
 func (in packageIn) selection() (map[string]any, error) {
 	sel := map[string]any{
-		"categories": in.Categories, "subtrees": in.Subtrees, "fields": in.Fields, "actions": in.Actions,
+		"categories": in.Categories, "subtrees": in.Subtrees, "fields": in.Fields, "hooks": in.Hooks,
 		"relation_types": in.RelationTypes, "label_templates": in.LabelTemplates, "scan_templates": in.ScanTemplates,
 		"reports": in.Reports, "flows": in.Flows, "scopes": in.Scopes, "icons": in.Icons,
 	}
@@ -185,8 +185,8 @@ func packageTools() []tool {
 				return say(done, "Imported: %s.", importSaid(done))
 			}),
 		define(&mcp.Tool{Name: "export_package", Description: "Package part of the instance to share, as an archive another instance imports: categories (single, or with those under them), " +
-			"fields, actions, link types, label and scan templates, reports, flows, scopes, the icon library, and assets, each by ID. What these need comes too " +
-			"(a category brings its fields, actions, link types, templates, icon and flows; an icon what it extends and inserts; a flow its templates and actions), " +
+			"fields, hooks, link types, label and scan templates, reports, flows, scopes, the icon library, and assets, each by ID. What these need comes too " +
+			"(a category brings its fields, hooks, link types, templates, icon and flows; an icon what it extends and inserts; a flow its templates and hooks), " +
 			"listed in the plan as needed_by. Never in a package: people, passwords, sessions, tokens, notification secrets or printers. It holds only what you may read. " +
 			"With plan_only, it says what it would hold; otherwise it answers where to download the package, within the hour, with this connection's credentials.",
 			Annotations: readOnly("Export a package")}, []string{"POST /api/v1/exports/plan", "POST /api/v1/exports", "GET /api/v1/exports/{id}"}, read,

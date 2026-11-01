@@ -29,7 +29,7 @@ An **asset** is one thing: a drill, a bin of screws, a spool of filament, a shel
 
 **Categories** form a tree (Tools › Power Tools › Drills). An asset can be in several. A category gives its assets **fields** (a serial number, a voltage), and its subcategories inherit them; required anywhere means required. Fields come from one shared list, each with a key, a label and a type.
 
-A category also decides whether its assets are lendable or consumable, which label templates and scan page they use, and which **actions** (buttons such as Identify, for devices to act on) they offer.
+A category also decides whether its assets are lendable or consumable, which label templates and scan page they use, and which **hooks** (buttons such as Identify, for devices to act on) they offer.
 
 ## Icons
 

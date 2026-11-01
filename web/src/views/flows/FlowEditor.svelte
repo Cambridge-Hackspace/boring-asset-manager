@@ -6,7 +6,7 @@
   import { ApiError, request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { navigate } from '../../lib/router.svelte';
-  import type { AssetAction, Category, EffectiveField, Field, Printer, PrinterPool, TemplateSummary } from '../../lib/models';
+  import type { AssetHook, Category, EffectiveField, Field, Printer, PrinterPool, TemplateSummary } from '../../lib/models';
   import type { Definition, Flow, FlowProblem, Starter, StepKind } from '../../lib/flows';
   import { addStep, addableKinds, checkFlow, kindHelp, kindLabels, moveStep, previewProgress, problemsOf, slugFrom } from '../../lib/flowEditor';
   import CategoryPicker from '../../components/CategoryPicker.svelte';
@@ -38,7 +38,7 @@
   let flows = $state<Flow[]>([]);
   let templates = $state<{ id: string; name: string }[]>([]);
   let destinations = $state<{ value: string; label: string }[]>([]);
-  let actions = $state<{ key: string; label: string }[]>([]);
+  let hooks = $state<{ key: string; label: string }[]>([]);
   let fields = $state<Field[]>([]);
 
   const flowCategories = $derived(def.category_ids.map((id) => allCategories.find((c) => c.id === id)).filter((c): c is Category => !!c));
@@ -52,15 +52,15 @@
       allCategories = cats;
       flows = list;
       // Extras: the editor works without them, offering less.
-      const [tpls, printers, pools, acts] = await Promise.all([
+      const [tpls, printers, pools, hooked] = await Promise.all([
         request<{ templates: TemplateSummary[] }>('GET', '/templates').then((r) => r.templates ?? [], () => []),
         request<{ printers: Printer[] }>('GET', '/printers').then((r) => r.printers ?? [], () => []),
         request<{ pools: PrinterPool[] }>('GET', '/printer-pools').then((r) => r.pools ?? [], () => []),
-        request<{ actions: AssetAction[] }>('GET', '/actions').then((r) => r.actions ?? [], () => []),
+        request<{ hooks: AssetHook[] }>('GET', '/hooks').then((r) => r.hooks ?? [], () => []),
       ]);
       templates = tpls.map((t) => ({ id: t.id, name: t.name }));
       destinations = [...printers.map((p) => ({ value: `printer:${p.id}`, label: p.name })), ...pools.map((p) => ({ value: `pool:${p.id}`, label: `${p.name} (pool)` }))];
-      actions = acts.map((a) => ({ key: a.key, label: a.label }));
+      hooks = hooked.map((a) => ({ key: a.key, label: a.label }));
       if (editing) {
         const f = (await request<{ flow: Flow }>('GET', `/flows/${encodeURIComponent(editing)}`)).flow;
         name = f.name;
@@ -258,7 +258,7 @@
               {#each own as m, j (j)}<p class="error-text px-3 pb-2" role="alert">{m}</p>{/each}
               {#if open}
                 <div id="step-{i}-body" class="space-y-3 border-t-2 border-zinc-900 p-4 dark:border-zinc-300">
-                  <FlowStepEditor prefix="step-{i}" bind:step={() => def.steps[i]!, (v) => (def.steps[i] = v)} categories={flowCategories} {fields} flows={flows.filter((f) => f.slug !== editing)} {destinations} {templates} {actions} />
+                  <FlowStepEditor prefix="step-{i}" bind:step={() => def.steps[i]!, (v) => (def.steps[i] = v)} categories={flowCategories} {fields} flows={flows.filter((f) => f.slug !== editing)} {destinations} {templates} {hooks} />
                   {#if step.kind !== 'done'}
                     <div class="flex justify-end border-t border-zinc-200 pt-3 dark:border-zinc-800">
                       <button type="button" class="btn-secondary text-red-700 dark:text-red-400" onclick={() => remove(i)}>Remove this step</button>

@@ -8,7 +8,7 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'assets.track', label: 'See who', description: 'See who borrowed assets and who changed them, by name, and the loans list.' },
   { key: 'stock.record', label: 'Record stock', description: 'Use and restock quantities, and mark things running low or restocked.' },
   { key: 'assets.report', label: 'Report problems', description: 'Report an asset as needing maintenance or out of service.' },
-  { key: 'assets.act', label: 'Take actions', description: 'Press the actions categories offer on assets, such as Identify.' },
+  { key: 'assets.hook', label: 'Trigger hooks', description: 'Trigger the hooks categories offer on assets, such as Identify.' },
   { key: 'assets.borrow', label: 'Borrow', description: 'Check lendable assets out to themselves, and back in.' },
   { key: 'assets.lend', label: 'Lend', description: 'Check lendable assets out to anyone, and any loan back in.' },
   { key: 'assets.write', label: 'Edit assets', description: 'Create, edit and import assets, and mark them working again.' },
@@ -31,7 +31,7 @@ export function permissionLabel(key: string): string {
 }
 
 /** The permissions a role may hold in some scopes only: those acting on assets. */
-export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.act', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run'];
+export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hook', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run'];
 
 /**
  * The permissions of a role that assigning it in these scopes only leaves

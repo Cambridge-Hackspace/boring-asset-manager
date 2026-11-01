@@ -23,11 +23,11 @@ const SourceContents = "contents"
 
 // ScanActions are the quick actions a scan template may offer, in the order
 // the web app shows them: open the asset's page, edit it, use some of its
-// stock, borrow it, give it back, report a problem, the actions its
+// stock, borrow it, give it back, report a problem, the hooks its
 // categories offer, such as Identify (README §5.4), start a new asset like
 // it, or in it (README §3.2), and the flows that start from it, such as
 // Collect it (README §6.7).
-var ScanActions = []string{"open", "edit", "use", "borrow", "return", "report", "actions", "add_similar", "add_inside", "flows"}
+var ScanActions = []string{"open", "edit", "use", "borrow", "return", "report", "hooks", "add_similar", "add_inside", "flows"}
 
 // ParseScan decodes and checks a scan template's spec. It has no filter,
 // since it shows the one asset scanned, and its sections are details (the

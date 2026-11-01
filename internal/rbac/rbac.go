@@ -37,8 +37,8 @@ const (
 	PermAssetsTrack = "assets.track"
 	// PermAssetsScan looks an asset up by its code, and sees its scan page.
 	PermAssetsScan = "assets.scan"
-	// PermAssetsAct presses actions on assets, such as Identify.
-	PermAssetsAct = "assets.act"
+	// PermAssetsHook triggers hooks on assets, such as Identify.
+	PermAssetsHook = "assets.hook"
 	// PermEventsRead receives events live, as devices do (README §5.4).
 	PermEventsRead = "events.read"
 	// PermFlowsManage makes and changes flows (README §6.7).
@@ -71,7 +71,7 @@ func AllPermissions() []string {
 		PermReportsManage,
 		PermAssetsTrack,
 		PermAssetsScan,
-		PermAssetsAct,
+		PermAssetsHook,
 		PermEventsRead,
 		PermFlowsManage,
 		PermFlowsRun,
@@ -143,7 +143,7 @@ var scopable = map[string]bool{
 	PermAssetsReport: true, PermAssetsBorrow: true, PermAssetsLend: true,
 	PermAssetsTrack: true,
 	PermAssetsScan:  true,
-	PermAssetsAct:   true,
+	PermAssetsHook:  true,
 	PermEventsRead:  true,
 	PermStockRecord: true,
 	PermFlowsRun:    true,

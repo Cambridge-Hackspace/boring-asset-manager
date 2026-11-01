@@ -36,7 +36,7 @@ function server() {
   return fakeApi({
     'GET /categories': () => ({ categories: [{ id: 't', name: 'Tools' }, { id: 'd', name: 'Drills', parent_id: 't' }] }),
     'GET /fields': () => ({ fields: [{ id: 'f', key: 'serial', label: 'Serial' }, { id: 'g', key: 'bought', label: 'Bought' }] }),
-    'GET /actions': () => ({ actions: [] }),
+    'GET /hooks': () => ({ hooks: [] }),
     'GET /relation-types': () => ({ relation_types: [] }),
     'GET /templates': () => ({ templates: [] }),
     'GET /reports': () => ({ reports: [] }),

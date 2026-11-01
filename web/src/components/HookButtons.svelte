@@ -2,42 +2,42 @@
   import { onDestroy, tick } from 'svelte';
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
-  import type { ActionReply, OfferedAction } from '../lib/models';
+  import type { HookReply, OfferedHook } from '../lib/models';
 
-  // The actions an asset's categories offer on it, such as Identify (README
+  // The hooks an asset's categories offer on it, such as Identify (README
   // §5.4). Pressing one records an event devices and channels act on; one
   // with a question asks it first. Devices may answer, and their answers
   // show here for a few seconds. Only for those who may press them; the
   // caller checks.
-  let { assetId, actions }: { assetId: string; actions: OfferedAction[] } = $props();
+  let { assetId, hooks }: { assetId: string; hooks: OfferedHook[] } = $props();
 
   // How long, and how often, to look for answers.
   const listenFor = 8000;
   const every = 1000;
 
   let busy = $state(false);
-  let asking = $state<OfferedAction | null>(null);
+  let asking = $state<OfferedHook | null>(null);
   let status = $state('');
   let error = $state('');
-  let replies = $state<ActionReply[]>([]);
+  let replies = $state<HookReply[]>([]);
   let yesButton: HTMLButtonElement | undefined = $state();
   let timer: ReturnType<typeof setTimeout> | undefined;
   onDestroy(() => clearTimeout(timer));
 
-  async function ask(a: OfferedAction) {
+  async function ask(a: OfferedHook) {
     asking = a;
     await tick();
     yesButton?.focus();
   }
 
-  async function press(a: OfferedAction) {
+  async function press(a: OfferedHook) {
     asking = null;
     busy = true;
     status = error = '';
     replies = [];
     clearTimeout(timer);
     try {
-      const { event_id } = await request<{ event_id: string }>('POST', `/assets/${encodeURIComponent(assetId)}/actions/${encodeURIComponent(a.key)}`);
+      const { event_id } = await request<{ event_id: string }>('POST', `/assets/${encodeURIComponent(assetId)}/hooks/${encodeURIComponent(a.key)}`);
       status = `${a.label}: sent.`;
       listen(a, event_id, Date.now() + listenFor);
     } catch (err) {
@@ -48,10 +48,10 @@
   }
 
   // Looks for answers until the time is up, then says if none came.
-  function listen(a: OfferedAction, eventId: string, until: number) {
+  function listen(a: OfferedHook, eventId: string, until: number) {
     timer = setTimeout(async () => {
       try {
-        const got = (await request<{ replies: ActionReply[] }>('GET', `/assets/${encodeURIComponent(assetId)}/actions/replies?event_id=${encodeURIComponent(eventId)}`)).replies ?? [];
+        const got = (await request<{ replies: HookReply[] }>('GET', `/assets/${encodeURIComponent(assetId)}/hooks/replies?event_id=${encodeURIComponent(eventId)}`)).replies ?? [];
         if (got.length !== replies.length) replies = got;
       } catch {
         // Answers are a courtesy; the press itself was sent.
@@ -70,7 +70,7 @@
       <button type="button" class="btn-secondary" onclick={() => (asking = null)}>Cancel</button>
     </span>
   {:else}
-    {#each actions as a (a.id)}
+    {#each hooks as a (a.id)}
       <button type="button" class="btn-secondary" disabled={busy} onclick={() => (a.confirm ? ask(a) : press(a))}>{a.label}</button>
     {/each}
   {/if}

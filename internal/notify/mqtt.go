@@ -29,7 +29,7 @@ func (MQTT) Info() DriverInfo {
 			{Name: "broker", Label: "Broker", Required: true,
 				Description: "mqtts://host for TLS (port 8883 unless given), or mqtt://host to send without encryption (port 1883)."},
 			{Name: "topic_prefix", Label: "Topic prefix", Required: true,
-				Description: "Events are published to <prefix>/<kind>/<asset or category ID>, such as bam/asset.action/…"},
+				Description: "Events are published to <prefix>/<kind>/<asset or category ID>, such as bam/asset.hook/…"},
 			{Name: "client_id", Label: "Client ID",
 				Description: "How BAM names itself to the broker; bam unless given."},
 			{Name: "username", Label: "User name", Description: "For a broker that asks for one."},

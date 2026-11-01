@@ -98,7 +98,7 @@ var Excluded = map[string]string{
 	"icon_build":              "made from the icon sources, again, when the server starts",
 	"live_connections":        "connections open now, gone when the server stops",
 	"flow_runs":               "runs under way, dropped when left 12 hours",
-	"action_replies":          "devices' answers to an action, for the moment it is pressed",
+	"action_replies":          "devices' answers to a hook, for the moment it is triggered",
 	"notification_deliveries": "the queue of notices to send, which a restore must not send again",
 	"uploads":                 "archives being uploaded, staged apart from the files and gone after a day",
 	"upload_parts":            "the parts of uploads under way",
