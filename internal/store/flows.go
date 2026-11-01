@@ -172,7 +172,7 @@ func (s *Store) DeleteFlow(id string) error {
 func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 	c := flows.Catalog{
 		Flows: map[string]bool{}, Categories: map[string]bool{}, DateFields: map[string]bool{}, Fields: map[string]bool{}, Templates: map[string]bool{},
-		Destinations: map[string]bool{}, Actions: map[string]bool{},
+		Destinations: map[string]bool{}, Hooks: map[string]bool{},
 		Asset: func(id string) bool {
 			a, err := s.GetAssetByID(id)
 			return err == nil && a.Asset.ArchivedAt == nil
@@ -228,12 +228,12 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 	for _, p := range pools {
 		c.Destinations[models.DestinationPoolPrefix+p.ID] = true
 	}
-	actions, err := s.ListActions()
+	hooks, err := s.ListHooks()
 	if err != nil {
 		return c, err
 	}
-	for _, a := range actions {
-		c.Actions[a.Key] = true
+	for _, a := range hooks {
+		c.Hooks[a.Key] = true
 	}
 	return c, nil
 }

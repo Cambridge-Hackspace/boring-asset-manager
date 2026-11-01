@@ -29,7 +29,7 @@ type Selection struct {
 	Categories []string `json:"categories,omitempty"`
 	Subtrees   []string `json:"subtrees,omitempty"`
 	Fields     []string `json:"fields,omitempty"`
-	Actions    []string `json:"actions,omitempty"`
+	Hooks      []string `json:"hooks,omitempty"`
 	// RelationTypes are link and relation types.
 	RelationTypes  []string `json:"relation_types,omitempty"`
 	LabelTemplates []string `json:"label_templates,omitempty"`
@@ -56,7 +56,7 @@ type AssetsSelection struct {
 
 // Empty reports whether nothing is chosen.
 func (s Selection) Empty() bool {
-	return len(s.Categories)+len(s.Subtrees)+len(s.Fields)+len(s.Actions)+len(s.RelationTypes)+
+	return len(s.Categories)+len(s.Subtrees)+len(s.Fields)+len(s.Hooks)+len(s.RelationTypes)+
 		len(s.LabelTemplates)+len(s.ScanTemplates)+len(s.Reports)+len(s.Flows)+len(s.Scopes) == 0 &&
 		!s.Icons && s.Assets == nil
 }
@@ -65,7 +65,7 @@ func (s Selection) Empty() bool {
 // all that is chosen: a package of an icon set, which is written as a
 // zipped isolex library folder (#146).
 func (s Selection) IconsOnly() bool {
-	return s.Icons && len(s.Categories)+len(s.Subtrees)+len(s.Fields)+len(s.Actions)+len(s.RelationTypes)+
+	return s.Icons && len(s.Categories)+len(s.Subtrees)+len(s.Fields)+len(s.Hooks)+len(s.RelationTypes)+
 		len(s.LabelTemplates)+len(s.ScanTemplates)+len(s.Reports)+len(s.Flows)+len(s.Scopes) == 0 && s.Assets == nil
 }
 
@@ -85,7 +85,7 @@ type PackageInfo struct {
 const (
 	ItemCategory      = "category"
 	ItemField         = "field"
-	ItemAction        = "action"
+	ItemHook          = "hook"
 	ItemRelationType  = "relation_type"
 	ItemLabelTemplate = "label_template"
 	ItemScanTemplate  = "scan_template"
@@ -236,7 +236,7 @@ func lessRef(a, b Ref) bool {
 
 type category struct {
 	name, parent, scanTemplate string
-	fields, actions, relTypes  []string
+	fields, hooks, relTypes    []string
 	labelTemplates, scopes     []string
 	required                   map[string]bool
 	// icons are its icons, one for each rendition it has one for, and
@@ -267,7 +267,7 @@ type resolver struct {
 	children     map[string][]string
 	names        map[Ref]string
 	fieldKeys    map[string]string // key -> id
-	actionKeys   map[string]string
+	hookKeys     map[string]string
 	reportKinds  map[string]string
 	templateImgs map[string][]string
 	// what templates and reports name: fields by key, icons by name, and
@@ -327,7 +327,7 @@ func (r *resolver) strings(query string, args ...any) ([][]string, error) {
 // load reads the catalog: everything a package can hold but assets.
 func (r *resolver) load() error {
 	r.cats, r.children, r.names = map[string]*category{}, map[string][]string{}, map[Ref]string{}
-	r.fieldKeys, r.actionKeys, r.reportKinds = map[string]string{}, map[string]string{}, map[string]string{}
+	r.fieldKeys, r.hookKeys, r.reportKinds = map[string]string{}, map[string]string{}, map[string]string{}
 	r.templateImgs, r.flows, r.library = map[string][]string{}, map[string]*flowRow{}, map[string]*iconSource{}
 	r.defined, r.scopeNames = map[string][]Ref{}, map[string]string{}
 	r.templateFields, r.templateIcons = map[string][]string{}, map[string][]string{}
@@ -355,8 +355,8 @@ func (r *resolver) load() error {
 			r.names[Ref{Kind: ItemField, ID: c[0]}] = c[2]
 		}},
 		{"SELECT id, action_key, label FROM asset_actions", func(c []string) {
-			r.actionKeys[c[1]] = c[0]
-			r.names[Ref{Kind: ItemAction, ID: c[0]}] = c[2]
+			r.hookKeys[c[1]] = c[0]
+			r.names[Ref{Kind: ItemHook, ID: c[0]}] = c[2]
 		}},
 		{"SELECT id, name FROM relation_types", func(c []string) { r.names[Ref{Kind: ItemRelationType, ID: c[0]}] = c[1] }},
 		{"SELECT id, name, layout_json FROM templates", func(c []string) {
@@ -412,7 +412,7 @@ func (r *resolver) load() error {
 		query string
 		each  func(*category, string)
 	}{
-		{"SELECT category_id, action_id FROM category_actions", func(c *category, v string) { c.actions = append(c.actions, v) }},
+		{"SELECT category_id, action_id FROM category_actions", func(c *category, v string) { c.hooks = append(c.hooks, v) }},
 		{"SELECT category_id, relation_type_id FROM category_relation_types", func(c *category, v string) { c.relTypes = append(c.relTypes, v) }},
 		{"SELECT category_id, template_id FROM category_label_templates ORDER BY sort_order", func(c *category, v string) { c.labelTemplates = append(c.labelTemplates, v) }},
 		{"SELECT category_id, scope_id FROM category_scopes", func(c *category, v string) { c.scopes = append(c.scopes, v) }},
@@ -552,7 +552,7 @@ func (r *resolver) choose(sel Selection) error {
 	}
 	add(ItemCategory, sel.Categories)
 	add(ItemField, sel.Fields)
-	add(ItemAction, sel.Actions)
+	add(ItemHook, sel.Hooks)
 	add(ItemRelationType, sel.RelationTypes)
 	add(ItemLabelTemplate, sel.LabelTemplates)
 	add(ItemScanTemplate, sel.ScanTemplates)
@@ -653,8 +653,8 @@ func (r *resolver) needs(x Ref) {
 			r.need(Ref{Kind: ItemLabelTemplate, ID: id}, x)
 		}
 		r.need(Ref{Kind: ItemScanTemplate, ID: scan}, x)
-		for _, id := range c.actions {
-			r.need(Ref{Kind: ItemAction, ID: id}, x)
+		for _, id := range c.hooks {
+			r.need(Ref{Kind: ItemHook, ID: id}, x)
 		}
 		for _, id := range c.relTypes {
 			r.need(Ref{Kind: ItemRelationType, ID: id}, x)
@@ -790,7 +790,7 @@ func (r *resolver) needIcons(names []string, by Ref) {
 }
 
 // flowNeeds adds what a flow names: its categories, the label templates
-// and actions it uses, the fields it asks or sets, and the flow whose
+// and hooks it uses, the fields it asks or sets, and the flow whose
 // filings it finds. Printers and pools, and the places it puts things,
 // stay behind.
 func (r *resolver) flowNeeds(x Ref) {
@@ -836,8 +836,8 @@ func (r *resolver) flowNeeds(x Ref) {
 		}
 		for _, c := range s.Changes {
 			cat(c.CategoryID)
-			if id, ok := r.actionKeys[c.Action]; ok {
-				r.need(Ref{Kind: ItemAction, ID: id}, x)
+			if id, ok := r.hookKeys[c.Hook]; ok {
+				r.need(Ref{Kind: ItemHook, ID: id}, x)
 			}
 			for key := range c.Fields {
 				field(key)
@@ -980,7 +980,7 @@ func (r *resolver) rowsOf(plan *Plan) {
 		plan.rows[table][rowKey(keys)] = true
 	}
 	for kind, table := range map[string]string{
-		ItemCategory: "categories", ItemField: "fields", ItemAction: "asset_actions", ItemRelationType: "relation_types",
+		ItemCategory: "categories", ItemField: "fields", ItemHook: "asset_actions", ItemRelationType: "relation_types",
 		ItemLabelTemplate: "templates", ItemImage: "images", ItemScanTemplate: "reports", ItemReport: "reports",
 		ItemFlow: "flows", ItemScope: "scopes", ItemIconFile: "icon_library",
 	} {
@@ -995,8 +995,8 @@ func (r *resolver) rowsOf(plan *Plan) {
 				set("category_fields", id, f)
 			}
 		}
-		for _, a := range c.actions {
-			if has(ItemAction, a) {
+		for _, a := range c.hooks {
+			if has(ItemHook, a) {
 				set("category_actions", id, a)
 			}
 		}

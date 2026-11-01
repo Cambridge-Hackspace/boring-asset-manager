@@ -749,9 +749,9 @@ func (f *flowRunner) change(st *store.FlowRunState, step *flows.Step) error {
 			if err = f.call(http.MethodPut, path, UpdateAssetRequest{FieldValues: vals}, &updated); err == nil {
 				f.said(st, step, "Updated %s.", name)
 			}
-		case flows.ChangeAction:
-			if err = f.call(http.MethodPost, path+"/actions/"+url.PathEscape(c.Action), nil, nil); err == nil {
-				f.said(st, step, "Pressed %s on %s.", c.Action, name)
+		case flows.ChangeHook:
+			if err = f.call(http.MethodPost, path+"/hooks/"+url.PathEscape(c.Hook), nil, nil); err == nil {
+				f.said(st, step, "Triggered %s on %s.", c.Hook, name)
 			}
 		}
 		if err != nil {

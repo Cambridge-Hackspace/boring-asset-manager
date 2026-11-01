@@ -54,9 +54,9 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
       ],
     },
   });
-  // An action its category offers, for the asset and actions pages.
-  const identify = await post('/actions', { key: unique('identify').toLowerCase(), label: 'Identify', confirm: 'Light it up?' });
-  await request.put(`/api/v1/categories/${cat.category.id}/actions`, { data: { actions: [{ action_id: identify.action.id, cascades: true }] } });
+  // A hook its category offers, for the asset and hooks pages.
+  const identify = await post('/hooks', { key: unique('identify').toLowerCase(), label: 'Identify', confirm: 'Light it up?' });
+  await request.put(`/api/v1/categories/${cat.category.id}/hooks`, { data: { hooks: [{ hook_id: identify.hook.id, cascades: true }] } });
   // A printer in a pool, for the printers page.
   const a11yPrinter = await post('/printers', { name: unique('A11y QL'), driver: 'brother_ql', model: 'QL-810W', media: 'dk-22205', connection: { type: 'tcp', address: '127.0.0.1:9' } });
   await post('/printer-pools', { name: unique('A11y pool'), members: [{ printer_id: a11yPrinter.printer.id, share: 2 }] });
@@ -143,7 +143,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/f/${flowSlug}`, ''],
     ['/spool', 'Print queue'],
     ['/relations', 'Link types'],
-    ['/actions', 'Actions'],
+    ['/hooks', 'Hooks'],
     ['/reports', 'Reports'],
     ['/reports/new', 'New report'],
     ['/scan-templates/new', 'New scan template'],
@@ -152,7 +152,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/account', 'Your account'],
     ['/help/scanning', 'Scanning'],
     ['/help/spool', 'The print queue'],
-    ['/help/actions', 'Actions'],
+    ['/help/hooks', 'Hooks'],
     ['/no-such-page', 'Page not found'],
   ];
 }

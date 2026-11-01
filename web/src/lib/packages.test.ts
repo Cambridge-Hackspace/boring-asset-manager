@@ -58,7 +58,7 @@ describe('what is needed', () => {
       { kind: 'category', id: 't', name: 'Tools', chosen: true, needed_by: [] },
       { kind: 'field', id: 'f', name: 'Serial', chosen: false, needed_by: [{ kind: 'category', id: 't', name: 'Tools' }] },
       {
-        kind: 'action',
+        kind: 'hook',
         id: 'a',
         name: 'Open',
         chosen: false,
@@ -76,9 +76,9 @@ describe('what is needed', () => {
 
   it('marks what was not chosen and is needed, with what needs it', () => {
     const n = needed(plan);
-    expect([...n.keys()]).toEqual(['field:f', 'action:a']);
+    expect([...n.keys()]).toEqual(['field:f', 'hook:a']);
     expect(neededBySaid(n.get('field:f')!)).toBe('Needed by Tools');
-    expect(neededBySaid(n.get('action:a')!)).toBe('Needed by Tools, Lend a tool and Return a tool');
+    expect(neededBySaid(n.get('hook:a')!)).toBe('Needed by Tools, Lend a tool and Return a tool');
     expect(needed(null).size).toBe(0);
   });
 
@@ -102,7 +102,7 @@ describe('importing', () => {
   const items: ImportItem[] = [
     { kind: 'category', id: 'c', name: 'Tools', action: 'create' },
     { kind: 'field', id: 'f', name: 'Serial', action: 'copy', as: 'serial_2', existing: { kind: 'field', id: 'h', name: 'Serial' }, choices: ['existing', 'copy', 'skip'] },
-    { kind: 'action', id: 'a', name: 'Open', action: 'existing', existing: { kind: 'action', id: 'h2', name: 'Open (open)' }, identical: true, choices: ['existing', 'copy', 'skip'] },
+    { kind: 'hook', id: 'a', name: 'Open', action: 'existing', existing: { kind: 'hook', id: 'h2', name: 'Open (open)' }, identical: true, choices: ['existing', 'copy', 'skip'] },
     { kind: 'relation_type', id: 'r', name: 'Stores', action: 'skip', existing: { kind: 'relation_type', id: 'h3', name: 'Stores' }, choices: ['existing', 'copy', 'skip'] },
   ];
   const plan = { items, assets: { assets: 1, photos: 0, links: 2 } } as unknown as ImportPlan;

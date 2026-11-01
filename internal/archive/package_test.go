@@ -123,12 +123,12 @@ func seedPackaged(t *testing.T, st *store.Store, blobs filestore.Blobs) packaged
 			t.Fatal(err)
 		}
 	}
-	p.open = must[*models.AssetAction](t)(st.SaveAction("", store.ActionInput{Key: "open", Label: "Open"})).ID
-	p.wash = must[*models.AssetAction](t)(st.SaveAction("", store.ActionInput{Key: "wash", Label: "Wash"})).ID
-	if _, err := st.SetCategoryActions(p.tools.ID, []models.CategoryAction{{ActionID: p.open}}); err != nil {
+	p.open = must[*models.AssetHook](t)(st.SaveHook("", store.HookInput{Key: "open", Label: "Open"})).ID
+	p.wash = must[*models.AssetHook](t)(st.SaveHook("", store.HookInput{Key: "wash", Label: "Wash"})).ID
+	if _, err := st.SetCategoryHooks(p.tools.ID, []models.CategoryHook{{HookID: p.open}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.SetCategoryActions(p.kitchen.ID, []models.CategoryAction{{ActionID: p.wash}}); err != nil {
+	if _, err := st.SetCategoryHooks(p.kitchen.ID, []models.CategoryHook{{HookID: p.wash}}); err != nil {
 		t.Fatal(err)
 	}
 	p.stores = must[*models.RelationType](t)(st.CreateRelationType(store.RelationTypeInput{Name: "Stores", InverseName: "Stored in"}))
@@ -154,7 +154,7 @@ func seedPackaged(t *testing.T, st *store.Store, blobs filestore.Blobs) packaged
 	}
 	p.flow = flow(t, st, "lend-a-tool", flows.Definition{Version: 1, CategoryIDs: []string{p.tools.ID}, Steps: []flows.Step{
 		{ID: "label", Kind: flows.KindLabel, Label: &flows.Label{Mode: flows.LabelPrint, Destination: "printer:" + uuid.NewString(), TemplateID: p.flowLabel}},
-		{ID: "change", Kind: flows.KindChange, Changes: []flows.Change{{Kind: flows.ChangeAction, Action: "open"}}},
+		{ID: "change", Kind: flows.KindChange, Changes: []flows.Change{{Kind: flows.ChangeHook, Hook: "open"}}},
 	}}, p.user.ID)
 	p.kitchenFlow = flow(t, st, "wash-up", flows.Definition{Version: 1, CategoryIDs: []string{p.kitchen.ID}}, p.user.ID)
 
@@ -310,7 +310,7 @@ func TestAPackageClosesOverWhatItNeeds(t *testing.T) {
 		"field Serial":                        "category Workshop tools",
 		"flow Lend-a-tool":                    "category Workshop tools",
 		"label_template Flow label":           "flow Lend-a-tool",
-		"action Open":                         "category Workshop tools",
+		"hook Open":                           "category Workshop tools",
 		"icon_library_file shared/lids.ilx":   "icon_library_file shared/crates.ilx",
 		"icon_library_file shared/crates.ilx": "category Workshop tools",
 		"image logo.png":                      "label_template Tool label",
@@ -416,7 +416,7 @@ func TestEachKindOfSelection(t *testing.T) {
 		want  string
 	}{
 		{Selection{Fields: []string{p.colour.ID}}, "fields", p.colour.ID},
-		{Selection{Actions: []string{p.wash}}, "asset_actions", p.wash},
+		{Selection{Hooks: []string{p.wash}}, "asset_actions", p.wash},
 		{Selection{RelationTypes: []string{p.stores.ID}}, "relation_types", p.stores.ID},
 		{Selection{LabelTemplates: []string{p.unused}}, "templates", p.unused},
 		{Selection{ScanTemplates: []string{p.scan.ID}}, "reports", p.scan.ID},

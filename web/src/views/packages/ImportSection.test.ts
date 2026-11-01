@@ -98,7 +98,7 @@ describe('ImportSection', () => {
   });
 
   it('says what stops an import, and does not offer it', async () => {
-    server(planWith({ missing: ['flows.manage'], problems: ['flow "Lend" presses the action "open", which is skipped'] }));
+    server(planWith({ missing: ['flows.manage'], problems: ['flow "Lend" triggers the hook "open", which is skipped'] }));
     render(ImportSection, { tree });
     await choosePackage();
     expect(screen.getByTestId('import-missing').textContent).toMatch(/permissions you do not have: flows\.manage/);

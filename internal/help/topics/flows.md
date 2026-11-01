@@ -26,7 +26,7 @@ Whoever manages flows makes them on the **Flows** page, with **New flow**: choos
 - **Find** finds something already here, by its code, by search or from a list, optionally only what another flow filed, or whose field matches, such as its owner being `{user}`.
 - **Create** files it, named from the answers, as `{owner}: {what}`, and can put it in a place.
 - **Label** shows its label, adds it to the print queue, or prints it.
-- **Change** archives it, sets its condition, lends or returns it, moves it, sets its fields, or presses an action.
+- **Change** archives it, sets its condition, lends or returns it, moves it, sets its fields, or triggers a [hook](/help/hooks).
 - **Confirm** and **Done** say what will happen, and what did.
 
 Any step can be shown **only when** an earlier answer is something, such as only for long boards. A flow can only do what its maker may do. Its **Poster** has its name, its QR code and its one line of instructions, to print and put up, or to make into a label template.

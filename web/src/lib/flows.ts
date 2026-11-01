@@ -36,7 +36,7 @@ export interface FlowLabel {
   template_id?: string;
 }
 
-export type ChangeKind = 'archive' | 'condition' | 'borrow' | 'return' | 'place' | 'category' | 'fields' | 'action';
+export type ChangeKind = 'archive' | 'condition' | 'borrow' | 'return' | 'place' | 'category' | 'fields' | 'hook';
 
 export interface Change {
   kind: ChangeKind;
@@ -45,7 +45,7 @@ export interface Change {
   asset_id?: string;
   category_id?: string;
   fields?: Record<string, string>;
-  action?: string;
+  hook?: string;
 }
 
 export interface Step {

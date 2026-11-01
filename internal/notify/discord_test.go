@@ -360,30 +360,30 @@ func TestDiscordFlowOverdueEmbed(t *testing.T) {
 	}
 }
 
-func TestDiscordActionEmbed(t *testing.T) {
+func TestDiscordHookEmbed(t *testing.T) {
 	n := Notification{BaseURL: "https://bam.example", Event: models.Event{
-		Kind: models.EventAssetAction,
+		Kind: models.EventAssetHook,
 		Payload: models.EventPayload{
 			Asset:   &models.EventAsset{ID: "a1", Name: "Drawer A3"},
 			Trigger: models.TriggerManual,
 			Actor:   &models.EventActor{ID: "u1", Name: "Ada"},
-			Action:  &models.EventAction{Key: "identify", Label: "*Identify*"},
+			Hook:    &models.EventHook{Key: "identify", Label: "*Identify*"},
 		},
 	}}
 	e := discordPayload(n).Embeds[0]
 	if e.Title != `\*Identify\*: Drawer A3` || e.Description != "Pressed by Ada." || e.URL != "https://bam.example/assets/a1" {
-		t.Errorf("an action: %+v", e)
+		t.Errorf("a hook: %+v", e)
 	}
 }
 
 func TestDiscordNamesTheAssistant(t *testing.T) {
 	n := Notification{BaseURL: "https://bam.example", Event: models.Event{
-		Kind: models.EventAssetAction,
+		Kind: models.EventAssetHook,
 		Payload: models.EventPayload{
 			Asset:   &models.EventAsset{ID: "a1", Name: "Drawer A3"},
 			Trigger: models.TriggerManual,
 			Actor:   &models.EventActor{ID: "u1", Name: "Ada", Via: "Claude_Desktop"},
-			Action:  &models.EventAction{Key: "identify", Label: "Identify"},
+			Hook:    &models.EventHook{Key: "identify", Label: "Identify"},
 		},
 	}}
 	if e := discordPayload(n).Embeds[0]; e.Description != `Pressed by Ada, via Claude\_Desktop.` {

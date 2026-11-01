@@ -9,7 +9,7 @@ const actionLabels: Record<ScanAction, string> = {
   borrow: 'Borrow',
   return: 'Return',
   report: 'Report a problem',
-  actions: 'Its actions, such as Identify',
+  hooks: 'Its hooks, such as Identify',
   add_similar: 'Add another like it',
   add_inside: 'Put something in it',
   flows: 'Its flows, such as Collect it',

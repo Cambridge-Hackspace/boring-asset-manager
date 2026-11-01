@@ -68,12 +68,12 @@ func TestMCPAssetTools(t *testing.T) {
 	_, secret := personalToken(t, srv, adminCookie, "Claude")
 	cs := mcpSession(t, srv, secret)
 
-	// A lendable category with a serial number, an Identify action, and a shelf.
+	// A lendable category with a serial number, an Identify hook, and a shelf.
 	cat := mustID(t, doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/categories", `{"name":"Tools","is_lendable":true}`).Body.Bytes(), "category")
 	field := mustID(t, doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/fields", `{"key":"serial","label":"Serial","validation_type":"text"}`).Body.Bytes(), "field")
 	doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/categories/"+cat+"/fields", `{"field_id":"`+field+`","is_required":false}`)
-	action := mustID(t, doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/actions", `{"key":"identify","label":"Identify"}`).Body.Bytes(), "action")
-	doJSON(t, srv, adminCookie, http.MethodPut, "/api/v1/categories/"+cat+"/actions", `{"actions":[{"action_id":"`+action+`","cascades":true}]}`)
+	hook := mustID(t, doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/hooks", `{"key":"identify","label":"Identify"}`).Body.Bytes(), "hook")
+	doJSON(t, srv, adminCookie, http.MethodPut, "/api/v1/categories/"+cat+"/hooks", `{"hooks":[{"hook_id":"`+hook+`","cascades":true}]}`)
 	rec := doJSON(t, srv, adminCookie, http.MethodPost, "/api/v1/assets", `{"name":"Shelf A","generator_keys":[{"generator_type":"qr","assigned_code":"HS-100"}]}`)
 	shelf := mustID(t, rec.Body.Bytes(), "asset")
 
@@ -111,14 +111,14 @@ func TestMCPAssetTools(t *testing.T) {
 	var detail struct {
 		Contents []struct{ Name string }
 		Fields   []struct{ Key, Value string }
-		Actions  []struct{ Key string }
+		Hooks    []struct{ Key string }
 	}
 	structured(t, callTool(t, cs, "get_asset", map[string]any{"asset": "HS-100"}), &detail)
 	if len(detail.Contents) != 2 {
 		t.Errorf("shelf contents: %+v", detail)
 	}
 	structured(t, callTool(t, cs, "get_asset", map[string]any{"asset": "HS-101"}), &detail)
-	if len(detail.Fields) != 1 || detail.Fields[0].Value != "D-1" || len(detail.Actions) != 1 {
+	if len(detail.Fields) != 1 || detail.Fields[0].Value != "D-1" || len(detail.Hooks) != 1 {
 		t.Errorf("drill: %+v", detail)
 	}
 	if res := callTool(t, cs, "look_up_code", map[string]any{"code": "HS-101"}); res.IsError || !strings.Contains(toolText(res), "Drill") {
@@ -190,12 +190,12 @@ func TestMCPAssetTools(t *testing.T) {
 		t.Errorf("people: %+v", people)
 	}
 
-	// Actions: pressed, with no device to answer.
+	// Hooks: triggered, with no device to answer.
 	var pressed struct {
 		EventID string `json:"event_id"`
 		Replies []any
 	}
-	structured(t, callTool(t, cs, "press_action", map[string]any{"asset": drill, "key": "identify", "wait_seconds": 0}), &pressed)
+	structured(t, callTool(t, cs, "trigger_hook", map[string]any{"asset": drill, "key": "identify", "wait_seconds": 0}), &pressed)
 	if pressed.EventID == "" || len(pressed.Replies) != 0 {
 		t.Errorf("pressed: %+v", pressed)
 	}

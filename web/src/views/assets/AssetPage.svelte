@@ -19,7 +19,7 @@
   import LabelActions from '../../components/LabelActions.svelte';
   import ReportProblemForm from '../../components/ReportProblemForm.svelte';
   import SignInToSee from '../../components/SignInToSee.svelte';
-  import ActionButtons from '../../components/ActionButtons.svelte';
+  import HookButtons from '../../components/HookButtons.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
@@ -428,10 +428,10 @@
         <LoanPanel {asset} onchange={assetChanged} />
       {/if}
       {#if !archived && session.user}<LabelActions assetIds={[id]} spool />{/if}
-      {#if !archived && asset.actions?.length && session.canOn(asset.scopes, 'assets.act')}
-        <section class="card" aria-labelledby="actions-heading">
-          <h2 id="actions-heading" class="mb-3 text-lg font-semibold">Actions</h2>
-          <ActionButtons assetId={id} actions={asset.actions} />
+      {#if !archived && asset.hooks?.length && session.canOn(asset.scopes, 'assets.hook')}
+        <section class="card" aria-labelledby="hooks-heading">
+          <h2 id="hooks-heading" class="mb-3 text-lg font-semibold">Hooks</h2>
+          <HookButtons assetId={id} hooks={asset.hooks} />
         </section>
       {/if}
       {#if !archived && offeredFlows.length}

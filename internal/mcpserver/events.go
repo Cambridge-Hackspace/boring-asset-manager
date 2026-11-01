@@ -22,7 +22,7 @@ import (
 
 const (
 	eventsURI       = "bam://events"
-	eventsTemplate  = "bam://events{?after,kinds,actions,categories}"
+	eventsTemplate  = "bam://events{?after,kinds,hooks,categories}"
 	assetURIPrefix  = "bam://asset/"
 	assetTemplate   = "bam://asset/{id}"
 	maxSubscriptons = 5
@@ -64,7 +64,7 @@ func eventsQuery(uri string) (url.Values, error) {
 		return nil, fmt.Errorf("not an events resource: %s", uri)
 	}
 	q := url.Values{}
-	for _, k := range []string{"after", "kinds", "actions", "categories"} {
+	for _, k := range []string{"after", "kinds", "hooks", "categories"} {
 		if v := u.Query().Get(k); v != "" {
 			q.Set(k, v)
 		}
@@ -84,7 +84,7 @@ type eventList struct {
 func addEventResources(s *mcp.Server, e *env) {
 	if e.caller.may([]string{rbac.PermEventsRead}) {
 		s.AddResourceTemplate(&mcp.ResourceTemplate{URITemplate: eventsTemplate, Name: "events", Title: "Events", MIMEType: "application/json",
-			Description: "What happened, as live connections are sent it, oldest first: after an event's ID, or the last hour's; kinds, actions and categories narrow it, comma-separated. Subscribe to be told of news."},
+			Description: "What happened, as live connections are sent it, oldest first: after an event's ID, or the last hour's; kinds, hooks and categories narrow it, comma-separated. Subscribe to be told of news."},
 			func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 				q, err := eventsQuery(req.Params.URI)
 				if err != nil {
@@ -238,12 +238,12 @@ func eventTools() []tool {
 			func(in struct {
 				After      string `json:"after,omitempty" jsonschema:"an event's ID: only those since"`
 				Kinds      string `json:"kinds,omitempty" jsonschema:"comma-separated event kinds"`
-				Actions    string `json:"actions,omitempty" jsonschema:"comma-separated action keys"`
+				Hooks      string `json:"hooks,omitempty" jsonschema:"comma-separated hook keys"`
 				Categories string `json:"categories,omitempty" jsonschema:"comma-separated category IDs, each with its subcategories"`
 				Limit      int    `json:"limit,omitempty" jsonschema:"1 to 500 (100 if not given)"`
 			}) (request, error) {
 				q := url.Values{}
-				for k, v := range map[string]string{"after": in.After, "kinds": in.Kinds, "actions": in.Actions, "categories": in.Categories} {
+				for k, v := range map[string]string{"after": in.After, "kinds": in.Kinds, "hooks": in.Hooks, "categories": in.Categories} {
 					if v != "" {
 						q.Set(k, v)
 					}
@@ -256,14 +256,14 @@ func eventTools() []tool {
 			func(_ struct {
 				After      string `json:"after,omitempty" jsonschema:"an event's ID: only those since"`
 				Kinds      string `json:"kinds,omitempty" jsonschema:"comma-separated event kinds"`
-				Actions    string `json:"actions,omitempty" jsonschema:"comma-separated action keys"`
+				Hooks      string `json:"hooks,omitempty" jsonschema:"comma-separated hook keys"`
 				Categories string `json:"categories,omitempty" jsonschema:"comma-separated category IDs, each with its subcategories"`
 				Limit      int    `json:"limit,omitempty" jsonschema:"1 to 500 (100 if not given)"`
 			}, out map[string]any) string {
 				return fmt.Sprintf("%d events.", count(out, "events"))
 			}),
-		simple(&mcp.Tool{Name: "reply_to_action", Description: "Answer an action pressed on an asset, as a device acting on it does (\"Lit drawer A3\"), once. The person who pressed it sees the answer.",
-			Annotations: changes("Answer an action", false)}, "POST /api/v1/events/{id}/reply", []string{rbac.PermEventsRead},
+		simple(&mcp.Tool{Name: "reply_to_hook", Description: "Answer a hook triggered on an asset, as a device acting on it does (\"Lit drawer A3\"), once. The person who triggered it sees the answer.",
+			Annotations: changes("Answer a hook", false)}, "POST /api/v1/events/{id}/reply", []string{rbac.PermEventsRead},
 			func(in struct {
 				EventID string `json:"event_id"`
 				OK      bool   `json:"ok" jsonschema:"whether it was done"`

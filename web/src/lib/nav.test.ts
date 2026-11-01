@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Permission } from './models';
 import { currentGroup, isCurrent, navSections } from './nav';
-import { routes } from '../routes';
+import { movedTo, routes } from '../routes';
 
 const holding =
   (...held: Permission[]) =>
@@ -18,7 +18,7 @@ describe('navSections', () => {
     ];
     expect(labels(all)).toEqual([
       ['', ['Assets', 'Scan', 'Loans', 'Print queue', 'Reports']],
-      ['Catalog', ['Categories', 'Fields', 'Link types', 'Actions', 'Icons']],
+      ['Catalog', ['Categories', 'Fields', 'Link types', 'Hooks', 'Icons']],
       ['Labels', ['Templates', 'Images', 'Printers']],
       ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Backups', 'Import & export']],
     ]);
@@ -61,5 +61,22 @@ describe('isCurrent', () => {
     expect(isCurrent('/assets', '/assetsx')).toBe(false);
     expect(isCurrent('/', '/assets')).toBe(false);
     expect(isCurrent('/', '/')).toBe(true);
+  });
+});
+
+describe('movedTo', () => {
+  it('sends the addresses pages had to where they are now', () => {
+    expect(movedTo('/actions')).toBe('/hooks');
+    expect(movedTo('/actions/')).toBe('/hooks');
+    expect(movedTo('/help/actions')).toBe('/help/hooks');
+    expect(movedTo('/hooks')).toBeNull();
+    expect(movedTo('/')).toBeNull();
+  });
+
+  it('sends them to pages that exist', () => {
+    for (const p of ['/actions', '/help/actions']) {
+      const to = movedTo(p)!;
+      expect(routes.some((r) => r.pattern === to || (r.pattern === '/help/:topic' && to.startsWith('/help/')))).toBe(true);
+    }
   });
 });

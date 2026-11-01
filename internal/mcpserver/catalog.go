@@ -52,7 +52,7 @@ type categoryDetail struct {
 	Category           models.Category         `json:"category"`
 	Fields             []models.EffectiveField `json:"fields" jsonschema:"the fields its assets record, its own and those from above it"`
 	SuggestedLinkTypes []string                `json:"suggested_link_type_ids"`
-	Actions            []any                   `json:"actions" jsonschema:"the actions it offers on its assets"`
+	Hooks              []any                   `json:"hooks" jsonschema:"the hooks it offers on its assets"`
 	Scopes             []string                `json:"scope_ids,omitempty" jsonschema:"its own scopes, if you may see them"`
 }
 
@@ -73,8 +73,8 @@ type linkTypeIn struct {
 	IsLocation  *bool   `json:"is_location,omitempty" jsonschema:"its links say where things are (must be single)"`
 }
 
-type actionIn struct {
-	ID      string  `json:"id,omitempty" jsonschema:"the action to change; empty to make one"`
+type hookIn struct {
+	ID      string  `json:"id,omitempty" jsonschema:"the hook to change; empty to make one"`
 	Key     *string `json:"key,omitempty" jsonschema:"what devices listen for: lowercase letters, digits, - and _, starting with a letter"`
 	Label   *string `json:"label,omitempty" jsonschema:"what people see on the button"`
 	Confirm *string `json:"confirm,omitempty" jsonschema:"a question to ask before pressing it; empty for none"`
@@ -91,12 +91,12 @@ type categoryListIn struct {
 	IDs        []string `json:"ids" jsonschema:"the whole list, in order: those not named are taken off"`
 }
 
-type categoryActionsIn struct {
+type categoryHooksIn struct {
 	CategoryID string `json:"category_id"`
-	Actions    []struct {
-		ActionID string `json:"action_id"`
+	Hooks      []struct {
+		HookID   string `json:"hook_id"`
 		Cascades bool   `json:"cascades,omitempty" jsonschema:"offer it on the assets of its subcategories too"`
-	} `json:"actions" jsonschema:"the whole list: those not named are taken off"`
+	} `json:"hooks" jsonschema:"the whole list: those not named are taken off"`
 }
 
 type templateChoiceIn struct {
@@ -133,9 +133,9 @@ func catalogTools() []tool {
 				return fmt.Sprintf("%d categories.", count(out, "categories"))
 			}),
 		define(&mcp.Tool{Name: "get_category", Description: "One category: its settings, the fields its assets record (its own and inherited, with their types and choices), " +
-			"the link types it suggests, the actions it offers, and its scopes.", Annotations: readOnly("Get a category")},
+			"the link types it suggests, the hooks it offers, and its scopes.", Annotations: readOnly("Get a category")},
 			[]string{"GET /api/v1/categories/{id}", "GET /api/v1/categories/{id}/fields", "GET /api/v1/categories/{id}/relation-types",
-				"GET /api/v1/categories/{id}/actions", "GET /api/v1/categories/{id}/scopes"}, read,
+				"GET /api/v1/categories/{id}/hooks", "GET /api/v1/categories/{id}/scopes"}, read,
 			func(ctx context.Context, e *env, in idIn) (reply[categoryDetail], error) {
 				var out categoryDetail
 				var got struct{ Category models.Category }
@@ -155,11 +155,11 @@ func catalogTools() []tool {
 					return reply[categoryDetail]{}, err
 				}
 				out.SuggestedLinkTypes = types.IDs
-				var actions struct{ Actions []any }
-				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/categories/{id}/actions", in.ID), nil, &actions); err != nil {
+				var hooks struct{ Hooks []any }
+				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/categories/{id}/hooks", in.ID), nil, &hooks); err != nil {
 					return reply[categoryDetail]{}, err
 				}
-				out.Actions = actions.Actions
+				out.Hooks = hooks.Hooks
 				// Scopes only for those who may see them.
 				if e.caller.may([]string{rbac.PermUsersManage, rbac.PermCategoriesManage}) {
 					var scopes struct {
@@ -217,13 +217,15 @@ func catalogTools() []tool {
 				}
 				return say(out, "Saved %q.", nameOf(out, "category"))
 			}),
-		simple(&mcp.Tool{Name: "clone_category", Description: "Copy a category beside it, under the same parent: its settings, fields, suggested link types, actions, scopes, " +
+		simple(&mcp.Tool{Name: "clone_category", Description: "Copy a category beside it, under the same parent: its settings, fields, suggested link types, hooks, scopes, " +
 			"and scan and label templates (the same templates, not copies). Not its subcategories or its assets. Named \"<name> copy\" unless named.",
 			Annotations: changes("Copy a category", false)}, "POST /api/v1/categories/{id}/clone", manage,
 			func(in cloneCategoryIn) (request, error) {
 				return request{path: pathOf("/api/v1/categories/{id}/clone", in.ID), body: map[string]string{"name": in.Name}}, need(in.ID, "id")
 			},
-			func(_ cloneCategoryIn, out map[string]any) string { return fmt.Sprintf("Made %q.", nameOf(out, "category")) }),
+			func(_ cloneCategoryIn, out map[string]any) string {
+				return fmt.Sprintf("Made %q.", nameOf(out, "category"))
+			}),
 		simple(&mcp.Tool{Name: "delete_category", Description: "Delete a category. Its assets stay, without it; its subcategories must go first.",
 			Annotations: destroys("Delete a category", true)}, "DELETE /api/v1/categories/{id}", manage,
 			func(in idIn) (request, error) {
@@ -306,17 +308,17 @@ func catalogTools() []tool {
 			func(_ conflictsIn, out map[string]any) string {
 				return fmt.Sprintf("%d categories in ties.", count(out, "categories"))
 			}),
-		simple(&mcp.Tool{Name: "set_category_actions", Description: "The actions a category offers on its assets, each with whether it also does on those of its subcategories.",
-			Annotations: changes("Set category actions", true)}, "PUT /api/v1/categories/{id}/actions", manage,
-			func(in categoryActionsIn) (request, error) {
-				actions := []map[string]any{}
-				for _, a := range in.Actions {
-					actions = append(actions, map[string]any{"action_id": a.ActionID, "cascades": a.Cascades})
+		simple(&mcp.Tool{Name: "set_category_hooks", Description: "The hooks a category offers on its assets, each with whether it also does on those of its subcategories.",
+			Annotations: changes("Set category hooks", true)}, "PUT /api/v1/categories/{id}/hooks", manage,
+			func(in categoryHooksIn) (request, error) {
+				hooks := []map[string]any{}
+				for _, a := range in.Hooks {
+					hooks = append(hooks, map[string]any{"hook_id": a.HookID, "cascades": a.Cascades})
 				}
-				return request{path: pathOf("/api/v1/categories/{id}/actions", in.CategoryID), body: map[string]any{"actions": actions}}, need(in.CategoryID, "category_id")
+				return request{path: pathOf("/api/v1/categories/{id}/hooks", in.CategoryID), body: map[string]any{"hooks": hooks}}, need(in.CategoryID, "category_id")
 			},
-			func(in categoryActionsIn, _ map[string]any) string {
-				return fmt.Sprintf("It offers %d actions.", len(in.Actions))
+			func(in categoryHooksIn, _ map[string]any) string {
+				return fmt.Sprintf("It offers %d hooks.", len(in.Hooks))
 			}),
 
 		// Fields.
@@ -406,49 +408,49 @@ func catalogTools() []tool {
 			},
 			func(idIn, map[string]any) string { return "Deleted the link type." }),
 
-		// Actions.
-		simple(&mcp.Tool{Name: "list_actions", Description: "Every action categories can offer on assets: its key (what devices listen for), label and question.",
-			Annotations: readOnly("List actions")}, "GET /api/v1/actions", read,
-			func(none) (request, error) { return request{path: "/api/v1/actions"}, nil },
-			func(_ none, out map[string]any) string { return fmt.Sprintf("%d actions.", count(out, "actions")) }),
-		define(&mcp.Tool{Name: "save_action", Description: "Make an action, or change one: only what is given changes.",
-			Annotations: changes("Save an action", true)}, []string{"POST /api/v1/actions", "PUT /api/v1/actions/{id}"}, manage,
-			func(ctx context.Context, e *env, in actionIn) (reply[map[string]any], error) {
+		// Hooks.
+		simple(&mcp.Tool{Name: "list_hooks", Description: "Every hook categories can offer on assets: its key (what devices listen for), label and question.",
+			Annotations: readOnly("List hooks")}, "GET /api/v1/hooks", read,
+			func(none) (request, error) { return request{path: "/api/v1/hooks"}, nil },
+			func(_ none, out map[string]any) string { return fmt.Sprintf("%d hooks.", count(out, "hooks")) }),
+		define(&mcp.Tool{Name: "save_hook", Description: "Make a hook, or change one: only what is given changes.",
+			Annotations: changes("Save a hook", true)}, []string{"POST /api/v1/hooks", "PUT /api/v1/hooks/{id}"}, manage,
+			func(ctx context.Context, e *env, in hookIn) (reply[map[string]any], error) {
 				c := given(map[string]any{"key": in.Key, "label": in.Label, "confirm": in.Confirm})
 				out := map[string]any{}
 				if in.ID == "" {
-					if err := e.call(ctx, http.MethodPost, "/api/v1/actions", c, &out); err != nil {
+					if err := e.call(ctx, http.MethodPost, "/api/v1/hooks", c, &out); err != nil {
 						return reply[map[string]any]{}, err
 					}
-					return say(out, "Made the action %q.", nameOf(out, "action"))
+					return say(out, "Made the hook %q.", nameOf(out, "hook"))
 				}
-				var list struct{ Actions []models.AssetAction }
-				if err := e.call(ctx, http.MethodGet, "/api/v1/actions", nil, &list); err != nil {
+				var list struct{ Hooks []models.AssetHook }
+				if err := e.call(ctx, http.MethodGet, "/api/v1/hooks", nil, &list); err != nil {
 					return reply[map[string]any]{}, err
 				}
-				var current *models.AssetAction
-				for i := range list.Actions {
-					if list.Actions[i].ID == in.ID {
-						current = &list.Actions[i]
+				var current *models.AssetHook
+				for i := range list.Hooks {
+					if list.Hooks[i].ID == in.ID {
+						current = &list.Hooks[i]
 					}
 				}
 				if current == nil {
-					return reply[map[string]any]{}, fmt.Errorf("no action has the ID %q", in.ID)
+					return reply[map[string]any]{}, fmt.Errorf("no hook has the ID %q", in.ID)
 				}
 				body, err := merged(current, c)
 				if err != nil {
 					return reply[map[string]any]{}, err
 				}
-				if err := e.call(ctx, http.MethodPut, pathOf("/api/v1/actions/{id}", in.ID), body, &out); err != nil {
+				if err := e.call(ctx, http.MethodPut, pathOf("/api/v1/hooks/{id}", in.ID), body, &out); err != nil {
 					return reply[map[string]any]{}, err
 				}
-				return say(out, "Saved the action %q.", nameOf(out, "action"))
+				return say(out, "Saved the hook %q.", nameOf(out, "hook"))
 			}),
-		simple(&mcp.Tool{Name: "delete_action", Description: "Delete an action, taking it off every category.",
-			Annotations: destroys("Delete an action", true)}, "DELETE /api/v1/actions/{id}", manage,
+		simple(&mcp.Tool{Name: "delete_hook", Description: "Delete a hook, taking it off every category.",
+			Annotations: destroys("Delete a hook", true)}, "DELETE /api/v1/hooks/{id}", manage,
 			func(in idIn) (request, error) {
-				return request{path: pathOf("/api/v1/actions/{id}", in.ID)}, need(in.ID, "id")
+				return request{path: pathOf("/api/v1/hooks/{id}", in.ID)}, need(in.ID, "id")
 			},
-			func(idIn, map[string]any) string { return "Deleted the action." }),
+			func(idIn, map[string]any) string { return "Deleted the hook." }),
 	}
 }

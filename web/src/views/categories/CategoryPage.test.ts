@@ -48,8 +48,8 @@ function api(extra: Record<string, (b: unknown) => unknown> = {}) {
     'GET /fields': () => ({ fields: [fieldOf('serial', 'Serial'), fieldOf('voltage', 'Voltage'), fieldOf('notes', 'Notes')] }),
     'GET /reports': () => ({ reports: [] }),
     'GET /templates': () => ({ templates: [] }),
-    'GET /actions': () => ({ actions: [] }),
-    'GET /categories/power/actions': () => ({ actions: [] }),
+    'GET /hooks': () => ({ hooks: [] }),
+    'GET /categories/power/hooks': () => ({ hooks: [] }),
     ...extra,
   });
 }
@@ -353,25 +353,25 @@ describe('CategoryPage', () => {
     ]);
   });
 
-  it('chooses the actions it offers, and whether its subcategories’ assets get them', async () => {
+  it('chooses the hooks it offers, and whether its subcategories’ assets get them', async () => {
     const act = (id: string, label: string) => ({ id, key: id, label, confirm: '', created_at: '', updated_at: '' });
     const { sent } = loaded({
-      'GET /actions': () => ({ actions: [act('identify', 'Identify'), act('open', 'Open drawer')] }),
-      'GET /categories/power/actions': () => ({ actions: [{ action_id: 'open', cascades: false }] }),
-      'PUT /categories/power/actions': (body) => body,
+      'GET /hooks': () => ({ hooks: [act('identify', 'Identify'), act('open', 'Open drawer')] }),
+      'GET /categories/power/hooks': () => ({ hooks: [{ hook_id: 'open', cascades: false }] }),
+      'PUT /categories/power/hooks': (body) => body,
     });
     at('links');
     render(CategoryPage, { params: { id: 'power' } });
-    const section = (await screen.findByRole('heading', { name: 'Actions' })).closest('section')!;
+    const section = (await screen.findByRole('heading', { name: 'Hooks' })).closest('section')!;
     expect((within(section).getByRole('checkbox', { name: 'Open drawer' }) as HTMLInputElement).checked).toBe(true);
     expect((within(section).getByRole('checkbox', { name: 'On its subcategories’ assets too' }) as HTMLInputElement).checked).toBe(false);
     await fireEvent.click(within(section).getByRole('checkbox', { name: 'Identify' }));
-    await fireEvent.submit(within(section).getByRole('button', { name: 'Save actions' }));
-    await screen.findByText('Actions saved.');
+    await fireEvent.submit(within(section).getByRole('button', { name: 'Save hooks' }));
+    await screen.findByText('Hooks saved.');
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({
-      actions: [
-        { action_id: 'identify', cascades: true },
-        { action_id: 'open', cascades: false },
+      hooks: [
+        { hook_id: 'identify', cascades: true },
+        { hook_id: 'open', cascades: false },
       ],
     });
   });

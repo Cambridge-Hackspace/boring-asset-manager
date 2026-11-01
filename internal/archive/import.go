@@ -17,12 +17,13 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
 )
 
 // Importing (#145, README §2.3): a package, or parts of a backup, merged
 // into an instance in use, rather than restored. What the archive holds is
 // matched against what the instance has, by the keys that are the same
-// everywhere (field and action keys, names, flow addresses, icon names),
+// everywhere (field and hook keys, names, flow addresses, icon names),
 // and the plan says what will be created, what used as it is here, what
 // copied under another name and what skipped. Import then does exactly
 // that, in one transaction, giving everything new IDs, so one package can
@@ -478,7 +479,31 @@ func readArchived(ctx context.Context, st *store.Store, q querier, r io.Reader, 
 		return nil, err
 	}
 	a.counts.CodesTaken = codes.taken
+	if a.header.SchemaVersion < migrations.HooksVersion {
+		hookRows(a.rows)
+	}
 	return a, nil
+}
+
+// hookRows brings the rows of an archive written before hooks were hooks
+// (#173) up to date, as migrating would: flows' changes that pressed an
+// action trigger the same hook, and scan templates offering an asset's
+// actions offer its hooks. What cannot be read is left for the plan to
+// report.
+func hookRows(rows map[string][]map[string]any) {
+	for _, r := range rows["flows"] {
+		if def, changed, err := migrations.HookDefinition(str(r, "definition")); err == nil && changed {
+			r["definition"] = def
+		}
+	}
+	for _, r := range rows["reports"] {
+		if str(r, "kind") != "scan" {
+			continue
+		}
+		if spec, changed, err := migrations.HookScanSpec(str(r, "spec")); err == nil && changed {
+			r["spec"] = spec
+		}
+	}
 }
 
 // fileWanted reports whether an import stores a file: photos with assets,

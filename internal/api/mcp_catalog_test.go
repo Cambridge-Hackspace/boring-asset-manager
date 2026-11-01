@@ -61,7 +61,7 @@ func TestMCPCatalogTools(t *testing.T) {
 		t.Errorf("list_categories: %s", toolText(res))
 	}
 
-	// Link types and actions, made, changed, offered.
+	// Link types and hooks, made, changed, offered.
 	structured(t, callTool(t, cs, "save_link_type", map[string]any{"name": "charges", "inverse_name": "charged by"}), &out)
 	charges := id(out, "relation_type")
 	structured(t, callTool(t, cs, "save_link_type", map[string]any{"id": charges, "inverse_name": "is charged by"}), &out)
@@ -69,22 +69,22 @@ func TestMCPCatalogTools(t *testing.T) {
 		t.Errorf("link type: %v", rt)
 	}
 	structured(t, callTool(t, cs, "set_suggested_link_types", map[string]any{"category_id": tools, "ids": []string{charges}}), &out)
-	structured(t, callTool(t, cs, "save_action", map[string]any{"key": "identify", "label": "Identify"}), &out)
-	identify := id(out, "action")
-	structured(t, callTool(t, cs, "save_action", map[string]any{"id": identify, "confirm": "Light it up?"}), &out)
-	if a := out["action"].(map[string]any); a["key"] != "identify" || a["confirm"] != "Light it up?" {
-		t.Errorf("action: %v", a)
+	structured(t, callTool(t, cs, "save_hook", map[string]any{"key": "identify", "label": "Identify"}), &out)
+	identify := id(out, "hook")
+	structured(t, callTool(t, cs, "save_hook", map[string]any{"id": identify, "confirm": "Light it up?"}), &out)
+	if a := out["hook"].(map[string]any); a["key"] != "identify" || a["confirm"] != "Light it up?" {
+		t.Errorf("hook: %v", a)
 	}
-	structured(t, callTool(t, cs, "set_category_actions", map[string]any{"category_id": tools, "actions": []any{map[string]any{"action_id": identify, "cascades": true}}}), &out)
+	structured(t, callTool(t, cs, "set_category_hooks", map[string]any{"category_id": tools, "hooks": []any{map[string]any{"hook_id": identify, "cascades": true}}}), &out)
 	var offered struct {
 		SuggestedLinkTypes []string `json:"suggested_link_type_ids"`
-		Actions            []any
+		Hooks              []any
 	}
 	structured(t, callTool(t, cs, "get_category", map[string]any{"id": tools}), &offered)
-	if !slices.Equal(offered.SuggestedLinkTypes, []string{charges}) || len(offered.Actions) != 1 {
+	if !slices.Equal(offered.SuggestedLinkTypes, []string{charges}) || len(offered.Hooks) != 1 {
 		t.Errorf("offered: %+v", offered)
 	}
-	for _, name := range []string{"list_fields", "list_link_types", "list_actions", "scan_template_conflicts", "label_template_conflicts"} {
+	for _, name := range []string{"list_fields", "list_link_types", "list_hooks", "scan_template_conflicts", "label_template_conflicts"} {
 		if res := callTool(t, cs, name, nil); res.IsError {
 			t.Errorf("%s: %s", name, toolText(res))
 		}
@@ -121,7 +121,7 @@ func TestMCPCatalogTools(t *testing.T) {
 		{"delete_category", map[string]any{"id": drills}},
 		{"delete_field", map[string]any{"id": serial}},
 		{"delete_link_type", map[string]any{"id": charges}},
-		{"delete_action", map[string]any{"id": identify}},
+		{"delete_hook", map[string]any{"id": identify}},
 	} {
 		if res := callTool(t, cs, c.tool, c.args); res.IsError {
 			t.Errorf("%s: %s", c.tool, toolText(res))
@@ -135,5 +135,18 @@ func TestMCPCatalogTools(t *testing.T) {
 	names := toolNames(t, mcpSession(t, srv, tokenWith(t, srv, admin.ID, "Reader", rbac.PermAssetsRead)))
 	if !slices.Contains(names, "get_category") || slices.Contains(names, "save_category") || slices.Contains(names, "delete_field") {
 		t.Errorf("a reader lists %v", names)
+	}
+
+	// Hooks' tools go by hooks, and none by actions, as they did (#173).
+	names = toolNames(t, mcpSession(t, srv, tokenWith(t, srv, admin.ID, "Hook keeper", rbac.PermAssetsRead, rbac.PermCategoriesManage, rbac.PermAssetsHook, rbac.PermEventsRead)))
+	for _, name := range []string{"list_hooks", "save_hook", "delete_hook", "set_category_hooks", "trigger_hook", "hook_replies", "reply_to_hook"} {
+		if !slices.Contains(names, name) {
+			t.Errorf("no %s in %v", name, names)
+		}
+	}
+	for _, name := range names {
+		if strings.Contains(name, "action") {
+			t.Errorf("a tool is still called %s", name)
+		}
 	}
 }

@@ -19,7 +19,7 @@ const eventsWindow = time.Hour
 // §5.4), oldest first, for those who poll rather than hold a WebSocket open,
 // such as an assistant's subscription: GET /api/v1/events, with ?after= an
 // event's ID (those recorded since it; the last hour's otherwise), ?kinds=,
-// ?actions= and ?categories= as a live connection takes them, and ?limit=
+// ?hooks= and ?categories= as a live connection takes them, and ?limit=
 // (100 unless given, at most 500).
 func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -46,7 +46,11 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		since = at
 	}
-	filter := liveFilterOf(q)
+	filter, err := liveFilterOf(q)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	// Read more than asked, since some are not the requester's to see.
 	events, err := s.store.EventsSince(since, 1000)
 	if err != nil {
@@ -96,13 +100,13 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"events": out, "more": more})
 }
 
-// EventReplyRequest answers an action event, as a device does.
+// EventReplyRequest answers a hook event, as a device does.
 type EventReplyRequest struct {
 	OK      bool   `json:"ok"`
 	Message string `json:"message"`
 }
 
-// handleReplyToEvent answers an action pressed on an asset the requester
+// handleReplyToEvent answers a hook triggered on an asset the requester
 // receives events about, once: POST /api/v1/events/{id}/reply. It is how a
 // device that polls, rather than holding a live connection, answers.
 func (s *Server) handleReplyToEvent(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +132,7 @@ func (s *Server) handleReplyToEvent(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the event")
 		return
 	}
-	replies, err := s.store.ActionReplies(id)
+	replies, err := s.store.HookReplies(id)
 	if err != nil {
 		writeServerError(w, err, "read the answers")
 		return
@@ -136,14 +140,14 @@ func (s *Server) handleReplyToEvent(w http.ResponseWriter, r *http.Request) {
 	who := actorOf(r)
 	for _, prior := range replies {
 		if prior.ReplierID == who {
-			writeJSONError(w, http.StatusConflict, "You have answered this action already")
+			writeJSONError(w, http.StatusConflict, "You have answered this hook already")
 			return
 		}
 	}
-	reply, err := s.actingStore(r).RecordActionReply(id, req.OK, req.Message)
+	reply, err := s.actingStore(r).RecordHookReply(id, req.OK, req.Message)
 	switch {
-	case errors.Is(err, store.ErrNotAnAction):
-		writeJSONError(w, http.StatusConflict, "Only an action can be answered")
+	case errors.Is(err, store.ErrNotAHook):
+		writeJSONError(w, http.StatusConflict, "Only a hook can be answered")
 	case err != nil:
 		writeServerError(w, err, "keep the answer")
 	default:

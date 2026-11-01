@@ -272,7 +272,7 @@ var cloneCategoryLinks = []struct{ table, columns string }{
 }
 
 // CloneCategory makes a copy of a category beside it, under the same
-// parent: its settings, fields, suggested link types, actions, scopes and
+// parent: its settings, fields, suggested link types, hooks, scopes and
 // scan and label templates (the same templates, not copies of them), but
 // not its subcategories or its assets. An empty name names it "<name>
 // copy". The copy is not flagged running low by hand; with a threshold, it

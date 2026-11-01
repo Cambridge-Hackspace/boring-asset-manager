@@ -157,7 +157,7 @@ export function checkFlow(d: Definition): FlowProblem[] {
         for (const c of s.changes ?? []) {
           if (c.kind === 'place' && !c.asset_id) bad('Choose the place it moves to.');
           if (c.kind === 'category' && !c.category_id) bad('Choose the category it moves to.');
-          if (c.kind === 'action' && !c.action) bad('Choose the action to press.');
+          if (c.kind === 'hook' && !c.hook) bad('Choose the hook to trigger.');
           if (c.kind === 'fields' && !Object.keys(c.fields ?? {}).length) bad('Choose at least one field to set.');
         }
         break;

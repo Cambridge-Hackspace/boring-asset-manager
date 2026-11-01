@@ -272,11 +272,11 @@ func TestFlowRunsAreHeldToTheRunnersPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	shelf, _ := st.CreateAsset("Shelf", []string{w.short.ID}, nil, map[string]string{"owner": "Sam"})
-	action, err := st.SaveAction("", store.ActionInput{Key: "identify", Label: "Identify"})
+	hook, err := st.SaveHook("", store.HookInput{Key: "identify", Label: "Identify"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.SetCategoryActions(w.wood.ID, []models.CategoryAction{{ActionID: action.ID}}); err != nil {
+	if _, err := st.SetCategoryHooks(w.wood.ID, []models.CategoryHook{{HookID: hook.ID}}); err != nil {
 		t.Fatal(err)
 	}
 	// A reader runs flows and reads, in the wood shop, and nothing else.
@@ -293,7 +293,7 @@ func TestFlowRunsAreHeldToTheRunnersPermissions(t *testing.T) {
 		{Kind: flows.ChangePlace, AssetID: shelf.Asset.ID},
 		{Kind: flows.ChangeCategory, CategoryID: w.long.ID},
 		{Kind: flows.ChangeFields, Fields: map[string]string{"owner": "{user}"}},
-		{Kind: flows.ChangeAction, Action: "identify"},
+		{Kind: flows.ChangeHook, Hook: "identify"},
 	} {
 		d := flows.Definition{Version: flows.Version, CategoryIDs: []string{w.wood.ID}, Steps: []flows.Step{
 			{ID: "find", Kind: flows.KindFind, FindBy: []string{flows.FindList}},

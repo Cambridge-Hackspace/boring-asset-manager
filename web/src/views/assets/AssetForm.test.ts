@@ -246,7 +246,7 @@ describe('AssetForm', () => {
       scopes: ['default'],
       scan_template: { template_id: 'default' },
       label_template: { template_id: '' },
-      actions: [],
+      hooks: [],
       photos: [],
     };
     const { sent } = fakeApi({
@@ -306,7 +306,7 @@ describe('AssetForm', () => {
       scopes: ['default'],
       scan_template: { template_id: 'default' },
       label_template: { template_id: '' },
-      actions: [],
+      hooks: [],
       photos: [],
     };
     const edit = fakeApi({
@@ -392,7 +392,7 @@ describe('AssetForm icons', () => {
     scopes: ['default'],
     scan_template: { template_id: 'default' },
     label_template: { template_id: '' },
-    actions: [],
+    hooks: [],
     photos: [],
   });
   let n = 0;

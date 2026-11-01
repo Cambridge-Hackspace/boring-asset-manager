@@ -382,7 +382,7 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	for i := range details.Categories {
 		setLabelTemplates(&details.Categories[i], traits.labels[details.Categories[i].ID])
 	}
-	details.Actions = traits.offered(catIDs)
+	details.Hooks = traits.offered(catIDs)
 	if details.ScanTemplate, err = s.contextScan(ctx, catIDs); err != nil {
 		return nil, err
 	}
