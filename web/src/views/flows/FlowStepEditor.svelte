@@ -20,6 +20,7 @@
     categoryIDs,
     fields,
     byCategory = [],
+    fieldsKnown = true,
     flows,
     destinations,
     templates,
@@ -37,8 +38,10 @@
     categoryIDs?: string[];
     /** The fields an asset in any of the flow's categories records. */
     fields: Field[];
-    /** The fields each of the flow's categories records, for Set fields to choose from. */
-    byCategory?: { category: Category; fields: Field[] }[];
+    /** The fields each of the flow's categories records, and the keys of those it requires, for Set fields to choose from. */
+    byCategory?: { category: Category; fields: Field[]; required?: string[] }[];
+    /** Whether byCategory has come for every category, so that none means none. */
+    fieldsKnown?: boolean;
     flows: Flow[];
     destinations: { value: string; label: string }[];
     templates: { id: string; name: string }[];
@@ -177,12 +180,45 @@
     step.find_by = (['scan', 'search', 'list'] as const).filter((b) => list.has(b));
   }
 
-  function toggleOffered(id: string, on: boolean) {
-    const list = new Set(step.categories ?? []);
-    if (on) list.add(id);
-    else list.delete(id);
-    step.categories = categories.map((c) => c.id).filter((c) => list.has(c));
+  // Choose category's Offer: every category the flow has, which is saved
+  // as no list, or some, ticked. Some is never none, which would be saved
+  // as every.
+  const offersSome = $derived(!!step.categories?.length);
+  let offerNote = $state('');
+  function offerEvery(every: boolean) {
+    offerNote = '';
+    step.categories = every ? undefined : categories.map((c) => c.id);
   }
+  function toggleOffered(box: HTMLInputElement, id: string) {
+    const list = new Set(step.categories ?? []);
+    if (box.checked) list.add(id);
+    else list.delete(id);
+    const some = categories.map((c) => c.id).filter((c) => list.has(c));
+    if (!some.length) {
+      box.checked = true;
+      offerNote = 'Offer at least one, or choose every category.';
+      return;
+    }
+    offerNote = '';
+    step.categories = some;
+  }
+
+  // Set fields: which of the flow's categories require each field, as
+  // Create needs them, and whether there are any fields to set at all.
+  const requiredBy = $derived.by(() => {
+    const out: Record<string, string[]> = {};
+    for (const g of byCategory) for (const key of g.required ?? []) (out[key] ??= []).push(g.category.name);
+    return out;
+  });
+  const andList = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? ''));
+  const noFields = $derived(fieldsKnown && !byCategory.some((g) => g.fields.length));
+  // What its categories require that no row here sets, when it fills the
+  // new asset.
+  const requiredLeft = $derived(
+    step.kind === 'set_fields' && setsOn(steps, at) === 'new'
+      ? Object.keys(requiredBy).filter((key) => !(step.fields ?? []).some((r) => r.field === key))
+      : [],
+  );
 
   // The values this step can name, in its templates and its Only when: those
   // every run has, and those the steps before it set (#169).
@@ -256,12 +292,26 @@
   {#if step.kind === 'choose_category'}
     <fieldset>
       <legend class="label">Offer</legend>
-      {#each categories as c (c.id)}
-        <label class="mr-4 inline-flex items-center gap-2">
-          <input type="checkbox" checked={!step.categories?.length || step.categories.includes(c.id)} onchange={(e) => toggleOffered(c.id, e.currentTarget.checked)} />
-          {c.name}
-        </label>
-      {/each}
+      <label class="flex items-center gap-2">
+        <input type="radio" name="{p}-offer" checked={!offersSome} onchange={() => offerEvery(true)} />
+        Every category the flow has, including any added later
+      </label>
+      <label class="flex items-center gap-2">
+        <input type="radio" name="{p}-offer" checked={offersSome} onchange={() => offerEvery(false)} />
+        Only some of them
+      </label>
+      {#if offersSome}
+        <fieldset class="pl-6" aria-describedby={offerNote ? `${p}-offer-note` : undefined}>
+          <legend class="sr-only">The categories it offers</legend>
+          {#each categories as c (c.id)}
+            <label class="mr-4 inline-flex items-center gap-2">
+              <input type="checkbox" checked={step.categories?.includes(c.id)} onchange={(e) => toggleOffered(e.currentTarget, c.id)} />
+              {c.name}
+            </label>
+          {/each}
+        </fieldset>
+        {#if offerNote}<p id="{p}-offer-note" class="error-text" role="alert">{offerNote}</p>{/if}
+      {/if}
     </fieldset>
     <div>
       <label class="label" for="{p}-fixed">Or always</label>
@@ -364,22 +414,44 @@
     <p class="font-semibold" id="{p}-placement">{placement}</p>
     <fieldset class="space-y-2" aria-describedby="{p}-placement">
       <legend class="label">Fields</legend>
-      <p class="text-xs text-zinc-600 dark:text-zinc-400">
-        Each value may be an answer, as {'{until}'}, a value every run has, as {'{today}'} or {'{user}'}, fixed text, or a mix.
-      </p>
+      {#if noFields}
+        <p class="text-sm">
+          {#if !categories.length}
+            This flow has no categories yet, so there are no fields to set: choose them under <a class="underline" href="#flow-categories-label">Files into, or takes from</a>.
+          {:else}
+            This flow's categories record no fields; add some on a category's Fields tab:
+            {#each categories as c, i (c.id)}{i ? ', ' : ''}<a class="underline" href="/categories/{encodeURIComponent(c.id)}?tab=fields">{c.name}</a>{/each}.
+          {/if}
+        </p>
+      {:else}
+        <p class="text-xs text-zinc-600 dark:text-zinc-400">
+          Each value may be an answer, as {'{until}'}, a value every run has, as {'{today}'} or {'{user}'}, fixed text, or a mix.
+        </p>
+      {/if}
       {#each step.fields ?? [] as row, i (i)}
         {@const n = i + 1}
         {@const fixed = fixedValues(row.field)}
         <div class="grid items-start gap-2 rounded border border-zinc-200 p-2 sm:grid-cols-[1fr_1fr_auto] dark:border-zinc-800" role="group" aria-label="Field {n}">
-          <select class="input" aria-label="Field {n}" value={row.field} onchange={(e) => setRow(i, { field: e.currentTarget.value })}>
-            <option value="">Choose a field…</option>
-            {#if row.field && !fieldOf(row.field)}<option value={row.field}>{row.field}</option>{/if}
-            {#each byCategory as g (g.category.id)}
-              <optgroup label={g.category.name}>
-                {#each g.fields as f (f.key)}<option value={f.key}>{f.label}</option>{/each}
-              </optgroup>
-            {/each}
-          </select>
+          <div>
+            <select
+              class="input"
+              aria-label="Field {n}"
+              aria-describedby={requiredBy[row.field] ? `${p}-row-${i}-required` : undefined}
+              value={row.field}
+              onchange={(e) => setRow(i, { field: e.currentTarget.value })}
+            >
+              <option value="">Choose a field…</option>
+              {#if row.field && !fieldOf(row.field)}<option value={row.field}>{row.field}</option>{/if}
+              {#each byCategory as g (g.category.id)}
+                <optgroup label={g.category.name}>
+                  {#each g.fields as f (f.key)}<option value={f.key}>{f.label}{g.required?.includes(f.key) ? ' (required)' : ''}</option>{/each}
+                </optgroup>
+              {/each}
+            </select>
+            {#if requiredBy[row.field]}
+              <p id="{p}-row-{i}-required" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Required by {andList(requiredBy[row.field]!)}</p>
+            {/if}
+          </div>
           <div>
             <TemplateInput
               id="{p}-row-{i}-value"
@@ -403,7 +475,15 @@
           </span>
         </div>
       {/each}
-      <button type="button" class="btn-secondary" onclick={() => (step.fields = [...(step.fields ?? []), { field: '', value: '' }])}>Add a field</button>
+      {#if !noFields}
+        <button type="button" class="btn-secondary" onclick={() => (step.fields = [...(step.fields ?? []), { field: '', value: '' }])}>Add a field</button>
+      {/if}
+      {#if requiredLeft.length}
+        <p class="text-xs text-zinc-600 dark:text-zinc-400">
+          Create also needs, unless another Set fields step before it sets them:
+          {requiredLeft.map((key) => `${fieldOf(key)?.label ?? key} (required by ${andList(requiredBy[key]!)})`).join('; ')}.
+        </p>
+      {/if}
     </fieldset>
     <div class="sm:max-w-[50%]">
       <label class="label" for="{p}-photo">Its photo</label>

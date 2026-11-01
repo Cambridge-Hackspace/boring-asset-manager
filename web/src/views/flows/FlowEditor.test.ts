@@ -4,6 +4,7 @@ import FlowEditor from './FlowEditor.svelte';
 import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
 import type { Flow } from '../../lib/flows';
+import { kindHelp, kindLabels } from '../../lib/flowEditor';
 
 beforeEach(() => {
   session.permissions = ['flows.manage', 'flows.run', 'assets.read'];
@@ -154,8 +155,12 @@ describe('FlowEditor', () => {
     // Chosen from the fields each category records, by their own labels.
     await vi.waitFor(() => expect(within(first).getAllByRole('group').map((g) => g.getAttribute('label'))).toEqual(['Short boards', 'Long boards']));
     const [short, long] = within(first).getAllByRole('group');
-    await vi.waitFor(() => expect([...short!.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Owner']));
-    expect([...long!.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Owner', 'Leave by', 'Grain']);
+    // Those a category requires say so, as Create needs them (#172).
+    await vi.waitFor(() => expect([...short!.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Owner (required)']));
+    expect([...long!.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Owner (required)', 'Leave by', 'Grain']);
+    const required = within(first).getByText('Required by Short boards and Long boards');
+    expect(within(first).getByLabelText('Field 1').getAttribute('aria-describedby')).toBe(required.id);
+    expect(within(screen.getByRole('group', { name: 'Field 2' })).queryByText(/^Required by/)).toBeNull();
     expect((within(first).getByLabelText('Value of field 1') as HTMLInputElement).value).toBe('{user}');
 
     // A choice field offers its choices.
@@ -171,8 +176,11 @@ describe('FlowEditor', () => {
     expect((await screen.findByText('Grain: “teak” is not one of its choices.')).closest('li')!.textContent).toContain('3. Set fields');
     expect(sent.some((r) => r.method === 'PUT')).toBe(false);
 
-    // So does a field a category requires and nothing sets.
+    // So does a field a category requires and nothing sets, which the
+    // step says before saving.
+    expect(screen.queryByText(/^Create also needs/)).toBeNull();
     await fireEvent.click(within(screen.getByRole('group', { name: 'Field 1' })).getByRole('button', { name: 'Remove field 1' }));
+    expect(screen.getByText(/^Create also needs/).textContent).toContain('Owner (required by Short boards and Long boards).');
     await fireEvent.input(within(screen.getByRole('group', { name: 'Field 2' })).getByLabelText('Value of field 2'), { target: { value: 'oak' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
     expect((await screen.findByText('Short boards requires Owner, which no Set fields step before it sets.')).closest('li')!.textContent).toContain('4. Create');
@@ -182,9 +190,9 @@ describe('FlowEditor', () => {
     expect(screen.getByText('On the asset filed')).toBeTruthy();
 
     // Change sets no fields: Set fields does, and is a step to add.
-    expect(within(screen.getByLabelText('Add a step')).getAllByRole('option').map((o) => o.textContent)).toContain('Set fields');
-    await fireEvent.change(screen.getByLabelText('Add a step'), { target: { value: 'change' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a step' }));
+    expect(screen.getByRole('menuitem', { name: 'Set fields' })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Change' }));
     const change = screen.getByRole('group', { name: 'Change 1' });
     expect(within(change).getAllByRole('option').map((o) => o.textContent)).not.toContain('Set fields');
   });
@@ -193,8 +201,8 @@ describe('FlowEditor', () => {
     api(() => ({ flow }));
     render(FlowEditor, { params: { slug: 'leave' } });
     const steps = await screen.findByRole('list', { name: 'Steps' });
-    await fireEvent.change(screen.getByLabelText('Add a step'), { target: { value: 'confirm' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a step' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Confirm' }));
     const headings = () => within(steps).getAllByRole('heading').map((h) => h.textContent?.trim());
     expect(headings().at(-2)).toBe('5. Confirm: Is this right?');
     expect(headings().at(-1)).toBe('6. Done: Filed');
@@ -328,6 +336,128 @@ describe('FlowEditor', () => {
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
     const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
     expect(body.definition.category_ids).toEqual(['short']);
+  });
+
+  it('adds a step from a menu that says what each kind does, from the keyboard too (#172)', async () => {
+    api(() => ({ flow }));
+    render(FlowEditor, { params: { slug: 'leave' } });
+    const steps = await screen.findByRole('list', { name: 'Steps' });
+    const button = screen.getByRole('button', { name: 'Add a step' });
+    expect(button.getAttribute('aria-haspopup')).toBe('menu');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.className).not.toContain('btn-primary');
+    expect(screen.queryByRole('menu')).toBeNull();
+
+    // Every kind but Done, in order, each with what it does.
+    await fireEvent.click(button);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    const menu = screen.getByRole('menu', { name: 'Add a step' });
+    const items = within(menu).getAllByRole('menuitem');
+    const kinds = ['choose_category', 'form', 'set_fields', 'find', 'create', 'label', 'change', 'confirm'] as const;
+    expect(items.map((i) => document.getElementById(i.getAttribute('aria-labelledby')!)!.textContent)).toEqual(kinds.map((k) => kindLabels[k]));
+    expect(items.map((i) => document.getElementById(i.getAttribute('aria-describedby')!)!.textContent)).toEqual(kinds.map((k) => kindHelp[k]));
+    expect(within(menu).getByRole('menuitem', { name: 'Set fields' }).textContent).toContain('on the new asset before Create');
+    await vi.waitFor(() => expect(document.activeElement).toBe(items[0]));
+
+    // Arrows, Home and End move, the arrows wrapping; a letter goes to the next that starts with it.
+    await fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[1]);
+    await fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement).toBe(items[7]);
+    await fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(items[0]);
+    await fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(items[7]);
+    await fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement).toBe(items[0]);
+    await fireEvent.keyDown(document.activeElement!, { key: 'l' });
+    expect(document.activeElement).toBe(items[5]);
+
+    // Escape closes it, back on the button, adding nothing.
+    await fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(5);
+
+    // The up arrow opens it at the last; Enter adds the one chosen before Done, and opens it.
+    await fireEvent.keyDown(button, { key: 'ArrowUp' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Confirm' })));
+    await fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
+    await fireEvent.keyDown(document.activeElement!, { key: 'Enter' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    const headings = within(steps).getAllByRole('heading').map((h) => h.textContent?.trim());
+    expect(headings.slice(-2)).toEqual(['5. Change', '6. Done: Filed']);
+    expect(screen.getByRole('button', { name: '5. Change' }).getAttribute('aria-expanded')).toBe('true');
+
+    // Space adds too; a click elsewhere closes it.
+    await fireEvent.keyDown(button, { key: 'ArrowDown' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getAllByRole('menuitem')[0]));
+    await fireEvent.keyDown(document.activeElement!, { key: ' ' });
+    expect(within(steps).getAllByRole('heading').at(-2)?.textContent?.trim()).toBe('6. Choose category');
+    await fireEvent.click(button);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    await fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('offers every category, or some, and never shows none as all ticked (#172)', async () => {
+    const offering: Flow = { ...flow, definition: { ...flow.definition, steps: [{ ...flow.definition.steps[0]!, categories: [] }, ...flow.definition.steps.slice(1)] } };
+    const { sent } = api(() => ({ flow: offering }), offering);
+    render(FlowEditor, { params: { slug: 'leave' } });
+    const offer = await screen.findByRole('group', { name: 'Offer' });
+    // An empty list is every category, said so, with nothing to tick.
+    const every = within(offer).getByRole('radio', { name: 'Every category the flow has, including any added later' }) as HTMLInputElement;
+    const some = within(offer).getByRole('radio', { name: 'Only some of them' }) as HTMLInputElement;
+    expect(every.checked).toBe(true);
+    expect(within(offer).queryAllByRole('checkbox')).toHaveLength(0);
+
+    // Some starts with them all ticked, and unticks one at a time.
+    await fireEvent.click(some);
+    const boxes = () => within(offer).getAllByRole('checkbox') as HTMLInputElement[];
+    expect(boxes().map((b) => b.checked)).toEqual([true, true]);
+    await fireEvent.click(within(offer).getByRole('checkbox', { name: 'Long boards' }));
+    expect(boxes().map((b) => b.checked)).toEqual([true, false]);
+    // The last cannot be unticked: none would be every one again.
+    await fireEvent.click(within(offer).getByRole('checkbox', { name: 'Short boards' }));
+    expect(boxes().map((b) => b.checked)).toEqual([true, false]);
+    expect(some.checked).toBe(true);
+    expect(within(offer).getByRole('alert').textContent).toBe('Offer at least one, or choose every category.');
+
+    const puts = () => sent.filter((r) => r.method === 'PUT');
+    const saved = (n: number) => (puts()[n]!.body as { definition: Flow['definition'] }).definition.steps[0]!;
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    await vi.waitFor(() => expect(puts()).toHaveLength(1));
+    expect(saved(0).categories).toEqual(['short']);
+
+    // Every again saves no list, as before.
+    await fireEvent.click(every);
+    expect(within(offer).queryAllByRole('checkbox')).toHaveLength(0);
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    await vi.waitFor(() => expect(puts()).toHaveLength(2));
+    expect(JSON.parse(JSON.stringify(saved(1)))).not.toHaveProperty('categories');
+  });
+
+  it('says why Set fields has no fields to choose from (#172)', async () => {
+    const one: Flow = { ...flow, definition: { ...flow.definition, category_ids: ['short'] } };
+    fakeApi({
+      'GET /categories': () => ({ categories: [{ id: 'short', name: 'Short boards', color_hex: '#15803d' }] }),
+      'GET /flows': () => ({ flows: [one] }),
+      'GET /flows/leave': () => ({ flow: one }),
+      'GET /categories/short/fields': () => ({ fields: [] }),
+    });
+    render(FlowEditor, { params: { slug: 'leave' } });
+    await fireEvent.click(await screen.findByRole('button', { name: '3. Set fields' }));
+    const why = await screen.findByText(/This flow's categories record no fields/);
+    expect(why.textContent).toContain("add some on a category's Fields tab");
+    expect(within(why).getByRole('link', { name: 'Short boards' }).getAttribute('href')).toBe('/categories/short?tab=fields');
+    expect(screen.queryByRole('button', { name: 'Add a field' })).toBeNull();
+
+    // With no categories at all, it says to choose them.
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Short boards' }));
+    const none = await screen.findByText(/This flow has no categories yet/);
+    expect(within(none).getByRole('link', { name: 'Files into, or takes from' }).getAttribute('href')).toBe('#flow-categories-label');
   });
 
   it('says it saved a new flow, once it opens at its address', async () => {
