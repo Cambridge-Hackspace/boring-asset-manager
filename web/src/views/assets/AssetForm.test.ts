@@ -256,10 +256,12 @@ describe('AssetForm', () => {
       'GET /assets/a1': () => ({ asset: existing }),
       'POST /categories/effective-fields': () => ({ fields: existing.effective_fields }),
       'PUT /assets/a1': () => ({ status: 400, body: { error: 'field "Weight" (weight): invalid field value: "x" is not a valid number' } }),
+      'GET /fields': () => ({ fields: [{ id: 'n', key: 'old_note', label: 'Old note', validation_type: 'text', created_at: '', updated_at: '' }] }),
     });
     render(AssetForm, { params: { id: 'a1' } });
 
-    expect(await screen.findByText(/Kept from former categories, unchanged: old_note/)).toBeTruthy();
+    // Named by its field's label (#171).
+    expect(await screen.findByText(/Kept from former categories, unchanged: Old note\./)).toBeTruthy();
     await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
     const weight = await screen.findByLabelText('Weight');
     await vi.waitFor(() => expect(weight.getAttribute('aria-invalid')).toBe('true'));

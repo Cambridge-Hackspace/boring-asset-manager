@@ -10,7 +10,7 @@ Every hook triggered is kept in the asset's history.
 
 ## Setting them up
 
-Whoever manages categories defines hooks on the **Hooks** page: a label people see, such as "Identify"; a key devices listen for, such as `identify`; and, if wanted, a question to ask first.
+Whoever manages categories defines hooks on the **Hooks** page: a label people see, such as "Identify"; a key devices listen for, made from the label as you type it, such as `identify`, which **Change** sets otherwise; and, if wanted, a question to ask first. Devices, and flows that trigger the hook, know it by its key, so changing the key of a hook in use says so first.
 
 Then, on a category's **Links and hooks** tab, choose which of them it offers on its assets, and whether on its subcategories' assets too.
 

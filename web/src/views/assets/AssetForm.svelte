@@ -3,7 +3,7 @@
   import { ApiError, request } from '../../lib/api';
   import { assetPayload, type AssetCopy, type CopiedLink, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { photoUrl, UNCATEGORIZED, type AssetPhoto, type AssetWithDetails, type Category, type EffectiveField, type GeneratorInfo, type RelationType } from '../../lib/models';
+  import { photoUrl, UNCATEGORIZED, type AssetPhoto, type AssetWithDetails, type Category, type EffectiveField, type Field, type GeneratorInfo, type RelationType } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
@@ -76,7 +76,9 @@
   let queueLabel = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
 
   const tree = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
-  const kept = $derived(original ? keptValues(original.field_values, effective) : []);
+  // Every field, to name values kept from former categories by their labels.
+  let allFields = $state<Field[]>([]);
+  const kept = $derived(original ? keptValues(original.field_values, effective, allFields) : []);
 
   // The icon its categories give it, as near as the form can tell: the
   // deepest chosen category drawn with one, and the category above it
@@ -125,6 +127,8 @@
         ownIcon = a.asset.icon_name ?? '';
         ownLabelIcon = a.asset.label_icon_name ?? '';
         place = placeOf(a);
+        // Without them, kept values are named by their keys.
+        if (Object.keys(a.field_values).length) void request<{ fields: Field[] }>('GET', '/fields').then((r) => (allFields = r.fields ?? []), () => {});
       } else if (like) {
         const [c, of] = await Promise.all([
           request<{ copy: AssetCopy }>('GET', `/assets/${encodeURIComponent(like)}/copy`),
@@ -514,7 +518,7 @@
       {/each}
       {#if kept.length}
         <p class="text-sm text-zinc-600 dark:text-zinc-400">
-          Kept from former categories, unchanged: {kept.map(([k]) => k).join(', ')}.
+          Kept from former categories, unchanged: {kept.map((k) => k.label ?? k.key).join(', ')}.
         </p>
       {/if}
       {#if effective.some((e) => e.is_required)}<p class="text-xs text-zinc-600 dark:text-zinc-400"><span aria-hidden="true">*</span> Required</p>{/if}

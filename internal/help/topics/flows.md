@@ -22,7 +22,7 @@ What a flow does, it does as you: it can only do what you're allowed to, and his
 Whoever manages flows makes them on the **Flows** page, with **New flow**: choose the categories it files into or takes from, start from **Leave something** or **Collect it**, and adjust its steps. The steps are listed in order, one open at a time; the preview beside them shows the open step as a phone shows it.
 
 - **Choose category** offers the flow's categories, or always uses one.
-- **Form** asks for the fields the chosen category records. For each field you can hide it, rename it, add help, give it a default such as `{user}` or `{today}`, make it required, and move it. A field the category requires is always asked. It can also ask for the thing's name, a photo, and questions of its own, used in names and text as `{what}`.
+- **Form** asks for the fields the chosen category records. For each field you can hide it, rename it, add help, give it a default such as `{user}` or `{today}`, make it required, and move it. A field the category requires is always asked. It can also ask for the thing's name, a photo, and questions of its own, used in names and text as `{what}`. A question's key is made from the question as you type it, and shown under it, such as *Used as `{what}`*; **Change** sets another. Changing the key of a question that later steps use says which, since they would name nothing until changed too.
 - **Find** finds something already here, by its code, by search or from a list, optionally only what another flow filed, or whose field matches, such as its owner being `{user}`.
 - **Create** files it, named from the answers, as `{owner}: {what}`, and can put it in a place.
 - **Label** shows its label, adds it to the print queue, or prints it.

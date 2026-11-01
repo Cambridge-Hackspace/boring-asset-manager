@@ -1,6 +1,6 @@
 // Helpers for the asset form.
 
-import type { AssetChange, AssetEvent, AssetLink, AssetStock, AssetWithDetails, Condition, EffectiveField, FieldType, GeneratorKey, LinkedAsset, RelationType } from './models';
+import type { AssetChange, AssetEvent, AssetLink, AssetStock, AssetWithDetails, Condition, EffectiveField, Field, FieldType, GeneratorKey, LinkedAsset, RelationType } from './models';
 import { personName } from './people';
 
 /** The HTML input type for a field type (select fields use <select>). */
@@ -75,10 +75,25 @@ export function assetPayload(draft: AssetDraft, effective: EffectiveField[], ori
   return body;
 }
 
-/** Values the asset keeps from categories it no longer belongs to. */
-export function keptValues(values: Record<string, string>, effective: EffectiveField[]): [string, string][] {
+/** A value kept from a former category: its field's label while the field still exists. */
+export interface KeptValue {
+  key: string;
+  label?: string;
+  value: string;
+}
+
+/**
+ * Values the asset keeps from categories it no longer belongs to, each
+ * with its field's label where the field is among these (#171).
+ */
+export function keptValues(values: Record<string, string>, effective: EffectiveField[], fields: Field[] = []): KeptValue[] {
   const current = new Set(effective.map((e) => e.field.key));
-  return Object.entries(values).filter(([key, value]) => !current.has(key) && value !== '');
+  return Object.entries(values)
+    .filter(([key, value]) => !current.has(key) && value !== '')
+    .map(([key, value]) => {
+      const label = fields.find((f) => f.key === key)?.label;
+      return label ? { key, label, value } : { key, value };
+    });
 }
 
 /**

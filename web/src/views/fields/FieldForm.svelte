@@ -3,6 +3,8 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { fieldTypes, type Field, type FieldType, type SelectChoice } from '../../lib/models';
+  import { valueFrom } from '../../lib/keys';
+  import DerivedKey from '../../components/DerivedKey.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Creates a field, or edits one when field is given. The key cannot change.
@@ -21,7 +23,15 @@
   let key = $state(initial?.key ?? '');
   let label = $state(initial?.label ?? '');
   let type = $state<FieldType>(initial?.validation_type ?? 'text');
-  let choices = $state<SelectChoice[]>(initial?.options?.choices.map((c) => ({ ...c })) ?? [{ label: '', value: '' }]);
+  // Each choice by a number of its own, so removing one leaves the others
+  // as they were. A choice's value is made from its label (#171), but only
+  // a new one's: the values assets already hold never change by themselves.
+  type Choice = SelectChoice & { n: number; stored: boolean };
+  let nextChoice = 0;
+  const choice = (c: SelectChoice, stored: boolean): Choice => ({ ...c, n: nextChoice++, stored });
+  let choices = $state<Choice[]>(initial?.options?.choices.map((c) => choice(c, true)) ?? [choice({ label: '', value: '' }, false)]);
+  // Values two choices share, which the server refuses.
+  const shared = $derived([...new Set(choices.map((c) => c.value.trim()).filter((v, i, all) => v && all.indexOf(v) !== i))]);
   let defaultChoice = $state(initial?.options?.default ?? '');
   let error = $state('');
   let busy = $state(false);
@@ -40,7 +50,7 @@
     busy = true;
     const options =
       type === 'select'
-        ? { choices: choices.filter((c) => c.label.trim() || c.value.trim()), default: defaultChoice || null }
+        ? { choices: choices.filter((c) => c.label.trim() || c.value.trim()).map((c) => ({ label: c.label, value: c.value })), default: defaultChoice || null }
         : undefined;
     try {
       const body = { label, validation_type: type, options };
@@ -92,25 +102,33 @@
   {#if type === 'select'}
     <fieldset class="space-y-2">
       <legend class="label">Choices</legend>
-      {#each choices as choice, i (i)}
-        <div class="flex flex-wrap items-end gap-2">
+      {#each choices as c, i (c.n)}
+        <div class="flex flex-wrap items-start gap-2">
           <div class="flex-1">
-            <label class="sr-only" for="{idPrefix}-choice-{i}-label">Choice {i + 1} label</label>
-            <input id="{idPrefix}-choice-{i}-label" class="input" placeholder="Label" bind:value={choice.label} />
-          </div>
-          <div class="flex-1">
-            <label class="sr-only" for="{idPrefix}-choice-{i}-value">Choice {i + 1} value</label>
-            <input id="{idPrefix}-choice-{i}-value" class="input font-mono" placeholder="Value" bind:value={choice.value} />
+            <label class="sr-only" for="{idPrefix}-choice-{c.n}-label">Choice {i + 1}</label>
+            <input id="{idPrefix}-choice-{c.n}-label" class="input" placeholder="Label" bind:value={c.label} />
+            <DerivedKey
+              id="{idPrefix}-choice-{c.n}-value"
+              bind:value={c.value}
+              from={c.label}
+              follows={!c.stored}
+              derive={valueFrom}
+              what="value of choice {i + 1}"
+              lead="Stored as"
+              warning={c.stored ? 'Assets that hold the old value keep it, and it will match no choice.' : ''}
+              maxlength={255}
+            />
           </div>
           <button type="button" class="btn-secondary" aria-label="Remove choice {i + 1}" onclick={() => choices.splice(i, 1)}>Remove</button>
         </div>
       {/each}
-      <button type="button" class="btn-secondary" onclick={() => choices.push({ label: '', value: '' })}>Add choice</button>
+      {#each shared as v (v)}<p class="error-text text-sm">Two choices are stored as <span class="font-mono">{v}</span>: change one.</p>{/each}
+      <button type="button" class="btn-secondary" onclick={() => choices.push(choice({ label: '', value: '' }, false))}>Add choice</button>
       <div class="max-w-xs">
         <label class="label" for="{idPrefix}-default">Default</label>
         <select id="{idPrefix}-default" class="input" bind:value={defaultChoice}>
           <option value="">None</option>
-          {#each choices.filter((c) => c.value) as c (c.value)}
+          {#each choices.filter((c) => c.value) as c (c.n)}
             <option value={c.value}>{c.label || c.value}</option>
           {/each}
         </select>

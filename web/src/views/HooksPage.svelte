@@ -4,6 +4,7 @@
   import { messageOf } from '../lib/errors';
   import type { AssetHook } from '../lib/models';
   import ConfirmButton from '../components/ConfirmButton.svelte';
+  import DerivedKey from '../components/DerivedKey.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
   // /hooks: the buttons categories can offer on their assets, such as
@@ -20,6 +21,8 @@
   let key = $state('');
   let label = $state('');
   let confirm = $state('');
+  // The key the hook had when opened: what devices listen for now.
+  let had = $state('');
 
   async function load() {
     try {
@@ -35,7 +38,7 @@
   function edit(a?: AssetHook) {
     error = status = '';
     editing = a?.id ?? 'new';
-    key = a?.key ?? '';
+    key = had = a?.key ?? '';
     label = a?.label ?? '';
     confirm = a?.confirm ?? '';
   }
@@ -84,11 +87,19 @@
     <div>
       <label class="label" for="hook-label">Label</label>
       <input id="hook-label" class="input" required maxlength="255" bind:value={label} />
-    </div>
-    <div>
-      <label class="label" for="hook-key">Key</label>
-      <input id="hook-key" class="input font-mono" required maxlength="64" pattern="[a-z][a-z0-9_\-]*" aria-describedby="hook-key-help" bind:value={key} />
-      <p id="hook-key-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">What devices listen for: lowercase letters, digits, - and _, starting with a letter, such as <span class="font-mono">identify</span>.</p>
+      <!-- Made from the label while new; devices listen for it once saved. -->
+      {#key editing}
+        <DerivedKey
+          id="hook-key"
+          bind:value={key}
+          from={label}
+          follows={editing === 'new'}
+          what="key devices listen for"
+          lead="Devices listen for"
+          warning={editing === 'new' ? '' : `Devices, and flows that trigger it, know this hook as ${had}: change them too, or they stop hearing it.`}
+          pattern="[a-z][a-z0-9_\-]*"
+        />
+      {/key}
     </div>
     <div>
       <label class="label" for="hook-confirm">Ask first (optional)</label>

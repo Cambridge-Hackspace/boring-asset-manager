@@ -4,7 +4,9 @@
 
 ## Fields
 
-**Fields** are the details assets carry, such as a serial number or a purchase date. Create them once on the **Fields** page, then give them to categories: an asset fills in every field its categories, and the categories above them, ask for. A field can be required.
+**Fields** are the details assets carry, such as a serial number or a purchase date. Create them once on the **Fields** page, then give them to categories: an asset fills in every field its categories, and the categories above them, ask for. A field can be required. A field that is a **choice from a list** has a box for each choice; the value stored for it is made from what you type, and shown under it, with **Change** to set another. Values already stored never change by themselves.
+
+If an asset leaves a category, the values it had for that category's fields are kept, and listed on its page under **Values kept from former categories**, by their fields' labels, or by key where a field no longer exists.
 
 ## A category's page
 
