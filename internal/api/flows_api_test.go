@@ -50,6 +50,16 @@ func TestManagingFlowsThroughTheAPI(t *testing.T) {
 	if !strings.Contains(body, `"step":"file"`) || !strings.Contains(body, "{nothing}") {
 		t.Errorf("a broken flow: %s", body)
 	}
+	// A version 1 definition is refused, saying what changed, and only
+	// that.
+	v1 := `{"slug":"old","name":"Old","definition":{"version":1,"category_ids":["` + w.short.ID + `"],"steps":[` +
+		`{"id":"about","kind":"form","ask_name":true,"fields":[{"key":"owner","default":"{user}"}]},{"id":"file","kind":"create","name":"{name}"},{"id":"done","kind":"done"}]}}`
+	body = expect("a version 1 flow", admin, http.MethodPost, "/api/v1/flows", v1, http.StatusBadRequest)
+	var refused FlowProblems
+	if err := json.Unmarshal([]byte(body), &refused); err != nil || len(refused.Problems) != 1 ||
+		!strings.Contains(refused.Error, "version 1") || !strings.Contains(refused.Error, "questions") || !strings.Contains(refused.Error, "set_fields") {
+		t.Errorf("a version 1 flow: %s", body)
+	}
 
 	// Members see the flows they may run; whoever manages flows sees all.
 	if body := expect("listed, as a member", sam, http.MethodGet, "/api/v1/flows", "", http.StatusOK); !strings.Contains(body, `"leave"`) {
@@ -85,7 +95,7 @@ func TestRunningFlowsThroughTheAPI(t *testing.T) {
 	w := newWoodShop(t)
 	srv, st := w.srv, w.srv.store
 	sam := sessionCookie(t, srv, w.sam.ID)
-	leave := w.saveFlow(t, "leave", "Leave something", flows.Starters([]string{w.short.ID, w.long.ID})[0].Definition)
+	leave := w.saveFlow(t, "leave", "Leave something", w.starter(t, 0, w.short.ID, w.long.ID))
 	run := func(cookie *http.Cookie, method, path, body string, want int) FlowRunView {
 		t.Helper()
 		rec := doJSON(t, srv, cookie, method, path, body)
@@ -110,9 +120,9 @@ func TestRunningFlowsThroughTheAPI(t *testing.T) {
 		t.Errorf("another's run: %d", rec.Code)
 	}
 
-	// Long boards: the form asks the owner and until.
+	// The form asks what it is, the owner and until, its own questions.
 	v = run(sam, http.MethodPost, path, `{"step":"kind","category_id":"`+w.long.ID+`"}`, http.StatusOK)
-	if v.Prompt.Kind != flows.KindForm || len(v.Prompt.Fields) != 2 || !v.Prompt.AskName {
+	if v.Prompt.Kind != flows.KindForm || len(v.Prompt.Questions) != 3 || v.Prompt.Questions[0].Key != "name" {
 		t.Fatalf("the form: %+v", v.Prompt)
 	}
 	// An answer to a step it is no longer on is refused, with the run as
@@ -121,11 +131,11 @@ func TestRunningFlowsThroughTheAPI(t *testing.T) {
 	if stale.Error == "" || stale.Prompt.Kind != "" && stale.Prompt.Step != "about" {
 		t.Errorf("answered twice: %+v", stale)
 	}
-	bad := run(sam, http.MethodPost, path, `{"step":"about","name":"Oak","fields":{"owner":"Sam","until":"Friday"}}`, http.StatusBadRequest)
-	if !strings.Contains(bad.Error, "Until") || bad.Prompt.Step != "about" {
+	bad := run(sam, http.MethodPost, path, `{"step":"about","answers":{"name":"Oak","owner":"Sam","until":"Friday"}}`, http.StatusBadRequest)
+	if !strings.Contains(bad.Error, "Until is a date") || bad.Prompt.Step != "about" {
 		t.Errorf("a bad date: %+v", bad)
 	}
-	v = run(sam, http.MethodPost, path, `{"step":"about","name":"Oak","fields":{"owner":"Sam","until":"2026-11-06"}}`, http.StatusOK)
+	v = run(sam, http.MethodPost, path, `{"step":"about","answers":{"name":"Oak","owner":"Sam","until":"2026-11-06"}}`, http.StatusOK)
 	if v.Prompt.Kind != flows.KindDone || !v.Run.Finished || v.Prompt.Asset == nil || v.Prompt.Asset.Name != "Oak" || !v.Prompt.ShowLabel {
 		t.Fatalf("done: %+v", v)
 	}
@@ -145,7 +155,7 @@ func TestRunningFlowsThroughTheAPI(t *testing.T) {
 	if _, err := st.UpdateAsset(oak.Asset.ID, "", nil, []models.AssetGeneratorKey{{GeneratorType: "qr", AssignedCode: "WOOD-1"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	collect := flows.Starters([]string{w.wood.ID})[1].Definition
+	collect := w.starter(t, 1, w.wood.ID)
 	collect.Steps[0].FiledBy = leave.ID
 	w.saveFlow(t, "collect", "Collect it", collect)
 	v = run(sam, http.MethodPost, "/api/v1/flows/collect/runs", "", http.StatusCreated)
@@ -203,8 +213,11 @@ func TestFlowsOverMCP(t *testing.T) {
 	if f := out["flow"].(map[string]any); f["name"] != "Leave it here" || f["slug"] != "leave" {
 		t.Errorf("changed only the name: %v", f)
 	}
-	if msg := toolError(t, admin, "save_flow", map[string]any{"new_slug": "bad", "name": "Bad", "definition": map[string]any{"version": 1, "category_ids": []string{w.short.ID}, "steps": []any{}}}); !strings.Contains(msg, "at least one step") {
+	if msg := toolError(t, admin, "save_flow", map[string]any{"new_slug": "bad", "name": "Bad", "definition": map[string]any{"version": 2, "category_ids": []string{w.short.ID}, "steps": []any{}}}); !strings.Contains(msg, "at least one step") {
 		t.Errorf("a flow with no steps: %s", msg)
+	}
+	if msg := toolError(t, admin, "save_flow", map[string]any{"new_slug": "old", "name": "Old", "definition": map[string]any{"version": 1, "category_ids": []string{w.short.ID}, "steps": []any{}}}); !strings.Contains(msg, "version 1") || !strings.Contains(msg, "set_fields") {
+		t.Errorf("a version 1 flow: %s", msg)
 	}
 	structured(t, callTool(t, admin, "list_flows", nil), &out)
 	if flows, _ := out["flows"].([]any); len(flows) != 1 {
@@ -219,7 +232,7 @@ func TestFlowsOverMCP(t *testing.T) {
 	assistant := mcpSession(t, srv, secret)
 	structured(t, callTool(t, assistant, "run_flow", map[string]any{"slug": "leave"}), &out)
 	runID := out["run"].(map[string]any)["id"].(string)
-	res := callTool(t, assistant, "run_flow", map[string]any{"slug": "leave", "run_id": runID, "answer": map[string]any{"step": "about", "name": "Beech", "fields": map[string]string{"owner": "Sam"}}})
+	res := callTool(t, assistant, "run_flow", map[string]any{"slug": "leave", "run_id": runID, "answer": map[string]any{"step": "about", "answers": map[string]string{"name": "Beech", "owner": "Sam"}}})
 	structured(t, res, &out)
 	if !strings.Contains(toolText(res), "Filed Beech in Short boards.") || out["run"].(map[string]any)["finished"] != true {
 		t.Errorf("run over MCP: %s", toolText(res))
@@ -241,7 +254,7 @@ func TestFlowsOverMCP(t *testing.T) {
 // the server's own address.
 func TestAFlowsPosterCode(t *testing.T) {
 	w := newWoodShop(t)
-	w.saveFlow(t, "leave", "Leave something", flows.Starters([]string{w.short.ID})[0].Definition)
+	w.saveFlow(t, "leave", "Leave something", w.starter(t, 0, w.short.ID))
 	w.srv.cfg.Server.BaseURL = "https://bam.example.org/"
 	if got := w.srv.flowURL(httptest.NewRequest(http.MethodGet, "/", nil), "leave"); got != "https://bam.example.org/f/leave" {
 		t.Errorf("its address: %s", got)
@@ -260,7 +273,7 @@ func TestAFlowsPosterCode(t *testing.T) {
 func TestThingsPastTheirDateAreListed(t *testing.T) {
 	w := newWoodShop(t)
 	srv, st := w.srv, w.srv.store
-	leave := flows.Starters([]string{w.long.ID})[0].Definition
+	leave := w.starter(t, 0, w.long.ID)
 	leave.LeaveUntil = "until"
 	lf := w.saveFlow(t, "leave", "Leave something", leave)
 	oak, _ := st.CreateAsset("Oak", []string{w.long.ID}, nil, map[string]string{"owner": "Sam", "until": "2020-01-01"})
@@ -278,7 +291,7 @@ func TestThingsPastTheirDateAreListed(t *testing.T) {
 	if body := doJSON(t, srv, sam, http.MethodGet, "/api/v1/flows", "").Body.String(); !strings.Contains(body, `"`+lf.ID+`":[{"asset_id":"`+oak.Asset.ID+`"`) {
 		t.Errorf("the list: %s", body)
 	}
-	collect := flows.Starters([]string{w.wood.ID})[1].Definition
+	collect := w.starter(t, 1, w.wood.ID)
 	collect.Steps[0].FiledBy = lf.ID
 	w.saveFlow(t, "collect", "Collect it", collect)
 	rec := doJSON(t, srv, sam, http.MethodPost, "/api/v1/flows/collect/runs", "")
@@ -299,8 +312,8 @@ func TestThingsPastTheirDateAreListed(t *testing.T) {
 func TestStartingAFlowFromAnAsset(t *testing.T) {
 	w := newWoodShop(t)
 	srv, st := w.srv, w.srv.store
-	lf := w.saveFlow(t, "leave", "Leave something", flows.Starters([]string{w.short.ID})[0].Definition)
-	collect := flows.Starters([]string{w.wood.ID})[1].Definition
+	lf := w.saveFlow(t, "leave", "Leave something", w.starter(t, 0, w.short.ID))
+	collect := w.starter(t, 1, w.wood.ID)
 	collect.Steps[0].FiledBy = lf.ID
 	w.saveFlow(t, "collect", "Collect it", collect)
 	oak, _ := st.CreateAsset("Oak", []string{w.short.ID}, []models.AssetGeneratorKey{{GeneratorType: "qr", AssignedCode: "WOOD-9"}}, map[string]string{"owner": "Sam"})

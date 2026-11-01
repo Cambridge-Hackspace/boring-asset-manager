@@ -1110,12 +1110,23 @@ type FlowRun struct {
 	Finished  bool         `json:"finished"`
 	CreatedAt time.Time    `json:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at"`
+	// Photos are the photos the run's Set fields steps put on assets, for
+	// the page that took each to add it (README §6.7).
+	Photos []FlowPhoto `json:"photos,omitempty"`
 	// Fields and Progress are kept for the run's own use (store.FlowRunState).
 	Fields   map[string]string `json:"-"`
 	Progress map[string]int    `json:"-"`
 	// Answered is kept for the run's own use too: how many steps that ask
 	// something the person has answered (#166).
 	Answered int `json:"-"`
+}
+
+// FlowPhoto is a photo question's answer that a Set fields step put on an
+// asset: the page holding the photo adds it to AssetID, which is empty
+// until the Create it was set before has filed the asset.
+type FlowPhoto struct {
+	Question string `json:"question"`
+	AssetID  string `json:"asset_id,omitempty"`
 }
 
 // FlowDone is what one step of a run did, in words, for Done to show.

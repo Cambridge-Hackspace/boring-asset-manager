@@ -814,8 +814,8 @@ func (r *resolver) flowNeeds(x Ref) {
 		if s.When != nil && s.When.Value == flows.ValueCategoryID {
 			cat(s.When.To)
 		}
-		for _, fs := range s.Fields {
-			field(fs.Key)
+		for _, fv := range s.Fields {
+			field(fv.Field)
 		}
 		if s.Match != nil {
 			field(s.Match.Field)
@@ -838,9 +838,6 @@ func (r *resolver) flowNeeds(x Ref) {
 			cat(c.CategoryID)
 			if id, ok := r.hookKeys[c.Hook]; ok {
 				r.need(Ref{Kind: ItemHook, ID: id}, x)
-			}
-			for key := range c.Fields {
-				field(key)
 			}
 			if c.AssetID != "" {
 				r.stays(Ref{Kind: ItemAsset, ID: c.AssetID}, x, "a place is one of this instance's assets: imported, the flow asks for the place to be chosen again")

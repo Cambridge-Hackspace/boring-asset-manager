@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	fieldspkg "github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/flows"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
@@ -170,12 +171,21 @@ func (s *Store) DeleteFlow(id string) error {
 // FlowCatalog is what a flow over these categories may name (flows.Catalog):
 // fields are those an asset in any of them records, own or inherited.
 func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
+	byKey := map[string]models.Field{}
 	c := flows.Catalog{
 		Flows: map[string]bool{}, Categories: map[string]bool{}, DateFields: map[string]bool{}, Fields: map[string]bool{}, Templates: map[string]bool{},
 		Destinations: map[string]bool{}, Hooks: map[string]bool{},
+		Names: map[string]string{}, Labels: map[string]string{}, Required: map[string][]string{},
 		Asset: func(id string) bool {
 			a, err := s.GetAssetByID(id)
 			return err == nil && a.Asset.ArchivedAt == nil
+		},
+		Suits: func(key, value string) error {
+			f, ok := byKey[key]
+			if !ok {
+				return nil
+			}
+			return fieldspkg.ValidateFieldValue(&f, value)
 		},
 	}
 	all, err := s.ListFlows()
@@ -191,6 +201,7 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 	}
 	for _, cat := range cats {
 		c.Categories[cat.ID] = true
+		c.Names[cat.ID] = cat.Name
 	}
 	for _, id := range categoryIDs {
 		if !c.Categories[id] {
@@ -202,8 +213,13 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 		}
 		for _, f := range fields {
 			c.Fields[f.Field.Key] = true
+			c.Labels[f.Field.Key] = f.Field.Label
+			byKey[f.Field.Key] = f.Field
 			if f.Field.ValidationType == "date" {
 				c.DateFields[f.Field.Key] = true
+			}
+			if f.IsRequired {
+				c.Required[id] = append(c.Required[id], f.Field.Key)
 			}
 		}
 	}
@@ -238,6 +254,29 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 	return c, nil
 }
 
+// FlowFields lists the fields a category's assets record, own and
+// inherited, as converting a version 1 flow reads them (flows.UpgradeV1),
+// and the starters are made from.
+func (s *Store) FlowFields(categoryID string) ([]flows.FieldDef, error) {
+	if _, err := s.GetCategoryByID(categoryID); err != nil {
+		// No such category records nothing; saving a flow naming it says so.
+		return nil, nil
+	}
+	effective, err := s.EffectiveFieldsForAsset([]string{categoryID})
+	if err != nil {
+		return nil, err
+	}
+	corpus := flows.NewFieldCorpus()
+	out := make([]flows.FieldDef, 0, len(effective))
+	for _, ef := range effective {
+		corpus.AddField(ef.Field.ID, ef.Field.Key, ef.Field.Label, ef.Field.ValidationType, string(ef.Field.Options))
+		f := corpus.Fields[ef.Field.ID]
+		f.Required = ef.IsRequired
+		out = append(out, f)
+	}
+	return out, nil
+}
+
 // FlowRunState is where a run is: the step it is on, its values, what each
 // step it has done did, and whether it is finished.
 type FlowRunState struct {
@@ -248,9 +287,12 @@ type FlowRunState struct {
 	Finished bool `json:"finished"`
 	// Busy is set while a step does its work (ClaimFlowRun).
 	Busy bool `json:"busy,omitempty"`
-	// Fields are the form's answers that are asset fields, by key, for
-	// Create to file.
+	// Fields are the values Set fields steps gave the asset the next
+	// Create files, by key.
 	Fields map[string]string `json:"fields,omitempty"`
+	// Photos are the photos Set fields steps put on assets, for the page
+	// that took each to add it.
+	Photos []models.FlowPhoto `json:"photos,omitempty"`
 	// Progress counts, by step, how much of its work a step has done, so a
 	// step tried again after failing part way does not do it twice.
 	Progress map[string]int `json:"progress,omitempty"`
@@ -296,7 +338,7 @@ func (s *Store) GetFlowRun(id string) (*models.FlowRun, error) {
 	if err := json.Unmarshal([]byte(state), &st); err != nil {
 		return nil, fmt.Errorf("reading run %s: %w", id, err)
 	}
-	r.Step, r.Values, r.Done, r.Finished, r.Fields, r.Progress, r.Answered = st.Step, st.Values, st.Done, st.Finished, st.Fields, st.Progress, st.Answered
+	r.Step, r.Values, r.Done, r.Finished, r.Fields, r.Progress, r.Answered, r.Photos = st.Step, st.Values, st.Done, st.Finished, st.Fields, st.Progress, st.Answered, st.Photos
 	if r.Done == nil {
 		r.Done = []models.FlowDone{}
 	}

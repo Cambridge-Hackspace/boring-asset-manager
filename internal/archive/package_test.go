@@ -152,11 +152,11 @@ func seedPackaged(t *testing.T, st *store.Store, blobs filestore.Blobs) packaged
 		p.tools.ID, "screen", "toolbox", `icon "toolbox" { extends "crate-base" }`, "a draft", "[]", time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	p.flow = flow(t, st, "lend-a-tool", flows.Definition{Version: 1, CategoryIDs: []string{p.tools.ID}, Steps: []flows.Step{
+	p.flow = flow(t, st, "lend-a-tool", flows.Definition{Version: flows.Version, CategoryIDs: []string{p.tools.ID}, Steps: []flows.Step{
 		{ID: "label", Kind: flows.KindLabel, Label: &flows.Label{Mode: flows.LabelPrint, Destination: "printer:" + uuid.NewString(), TemplateID: p.flowLabel}},
 		{ID: "change", Kind: flows.KindChange, Changes: []flows.Change{{Kind: flows.ChangeHook, Hook: "open"}}},
 	}}, p.user.ID)
-	p.kitchenFlow = flow(t, st, "wash-up", flows.Definition{Version: 1, CategoryIDs: []string{p.kitchen.ID}}, p.user.ID)
+	p.kitchenFlow = flow(t, st, "wash-up", flows.Definition{Version: flows.Version, CategoryIDs: []string{p.kitchen.ID}}, p.user.ID)
 
 	asset := must[*models.AssetWithDetails](t)
 	p.drill = asset(st.CreateAsset("Hammer drill", []string{p.drills.ID}, nil, map[string]string{"serial": "SN-1", "purchased": "2026-01-02"})).Asset.ID

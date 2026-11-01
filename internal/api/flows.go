@@ -151,7 +151,12 @@ func (s *Server) handleFlowStarters(w http.ResponseWriter, r *http.Request) {
 			ids = append(ids, id)
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"starters": flows.Starters(ids)})
+	starters, err := flows.Starters(ids, s.store.FlowFields)
+	if err != nil {
+		writeServerError(w, err, "make the starters")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"starters": starters})
 }
 
 // handleSaveFlow makes a flow, or changes the one at the address:
@@ -175,6 +180,11 @@ func (s *Server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		existing = f
+	}
+	if req.Definition.Version == 1 {
+		// Read as version 2, the rest would say only what this does.
+		writeJSON(w, http.StatusBadRequest, FlowProblems{Error: "The flow cannot be saved: " + flows.V1Refused, Problems: []flows.Problem{{Message: flows.V1Refused}}})
+		return
 	}
 	problems, err := s.checkFlow(r, &req.Definition)
 	if err != nil {
@@ -291,11 +301,7 @@ type FlowPrompt struct {
 	Text  string `json:"text,omitempty"`
 	// Choose category.
 	Categories []FlowChoice `json:"categories,omitempty"`
-	// Form.
-	Fields    []FlowField      `json:"fields,omitempty"`
-	AskName   bool             `json:"ask_name,omitempty"`
-	NameLabel string           `json:"name_label,omitempty"`
-	AskPhoto  bool             `json:"ask_photo,omitempty"`
+	// Form: its questions, their defaults rendered.
 	Questions []flows.Question `json:"questions,omitempty"`
 	// Find: the ways to find, and, by list or search, the assets.
 	FindBy []string    `json:"find_by,omitempty"`
@@ -370,11 +376,6 @@ func (f *flowRunner) prompt(run *models.FlowRun, search string) (FlowPrompt, err
 			p.Categories = append(p.Categories, FlowChoice{ID: id, Name: c.Name, ColorHex: c.ColorHex})
 		}
 	case flows.KindForm:
-		fields, err := f.formFields(step, run.Values)
-		if err != nil {
-			return p, err
-		}
-		p.Fields, p.AskName, p.NameLabel, p.AskPhoto = fields, step.AskName, nameLabel(step), step.AskPhoto
 		for _, q := range step.Questions {
 			q.Default = flows.Render(q.Default, run.Values)
 			p.Questions = append(p.Questions, q)
@@ -450,6 +451,10 @@ func (f *flowRunner) coming(run *models.FlowRun) []string {
 			default:
 				out = append(out, "Print its label.")
 			}
+		case flows.KindSetFields:
+			if line := f.describeSetFields(i, v); line != "" {
+				out = append(out, line)
+			}
 		case flows.KindChange:
 			for _, c := range s.Changes[run.Progress[s.ID]:] {
 				out = append(out, describeChange(c, v))
@@ -457,6 +462,45 @@ func (f *flowRunner) coming(run *models.FlowRun) []string {
 		}
 	}
 	return out
+}
+
+// describeSetFields says what the Set fields step at i will set, by the
+// fields' labels: on the asset to be filed, or the asset found or filed.
+func (f *flowRunner) describeSetFields(i int, v flows.Values) string {
+	d := &f.flow.Definition
+	s := &d.Steps[i]
+	labels := map[string]string{}
+	if all, err := f.s.store.ListFields(); err == nil {
+		for _, fd := range all {
+			labels[fd.Key] = fd.Label
+		}
+	}
+	var set []string
+	for _, row := range s.Fields {
+		val := strings.TrimSpace(flows.Render(row.Value, v))
+		if val == "" {
+			continue
+		}
+		label := labels[row.Field]
+		if label == "" {
+			label = row.Field
+		}
+		set = append(set, fmt.Sprintf("%s: %s", label, val))
+	}
+	if s.Photo != "" && flows.Render(s.Photo, v) != "" {
+		set = append(set, "its photo")
+	}
+	if len(set) == 0 {
+		return ""
+	}
+	if d.SetsOn(i) == flows.OnNew {
+		return fmt.Sprintf("Give it %s.", strings.Join(set, "; "))
+	}
+	name := v[flows.ValueAsset]
+	if name == "" {
+		name = "it"
+	}
+	return fmt.Sprintf("Update %s: %s.", name, strings.Join(set, "; "))
 }
 
 func describeChange(c flows.Change, v flows.Values) string {
@@ -474,8 +518,6 @@ func describeChange(c flows.Change, v flows.Values) string {
 		return fmt.Sprintf("Move %s to its new place.", name)
 	case flows.ChangeCategory:
 		return fmt.Sprintf("Move %s to another category.", name)
-	case flows.ChangeFields:
-		return fmt.Sprintf("Update %s.", name)
 	case flows.ChangeHook:
 		return fmt.Sprintf("Trigger %s on %s.", c.Hook, name)
 	}

@@ -21,11 +21,27 @@ const flow: Flow = {
   created_at: '',
   updated_at: '',
   definition: {
-    version: 1,
+    version: 2,
     category_ids: ['short', 'long'],
     steps: [
       { id: 'kind', kind: 'choose_category', title: 'What are you leaving?' },
-      { id: 'about', kind: 'form', title: 'About it', ask_name: true, name_label: 'What is it?' },
+      {
+        id: 'about',
+        kind: 'form',
+        title: 'About it',
+        questions: [
+          { key: 'name', label: 'What is it?', type: 'text', required: true },
+          { key: 'until', label: 'Until', type: 'date' },
+        ],
+      },
+      {
+        id: 'set',
+        kind: 'set_fields',
+        fields: [
+          { field: 'owner', value: '{user}' },
+          { field: 'until', value: '{until}' },
+        ],
+      },
       { id: 'file', kind: 'create', name: '{name}' },
       { id: 'done', kind: 'done', title: 'Filed' },
     ],
@@ -46,7 +62,11 @@ function api(save: (body: unknown) => unknown, f: Flow = flow) {
     'GET /categories/long/fields': () => ({
       fields: [
         { field: { id: 'o', key: 'owner', label: 'Owner', validation_type: 'text' }, is_required: true },
-        { field: { id: 'u', key: 'until', label: 'Until', validation_type: 'date' }, is_required: false },
+        { field: { id: 'u', key: 'until', label: 'Leave by', validation_type: 'date' }, is_required: false },
+        {
+          field: { id: 'g', key: 'grain', label: 'Grain', validation_type: 'select', options: { choices: [{ label: 'Oak', value: 'oak' }, { label: 'Pine', value: 'pine' }] } },
+          is_required: false,
+        },
       ],
     }),
     'PUT /flows/leave': save,
@@ -58,7 +78,7 @@ describe('FlowEditor', () => {
     const { sent } = api(() => ({ status: 400, body: { error: 'The flow cannot be saved', problems: [{ step: 'file', message: 'its steps use assets.write, which you do not hold' }] } }));
     render(FlowEditor, { params: { slug: 'leave' } });
     const steps = await screen.findByRole('list', { name: 'Steps' });
-    expect(within(steps).getAllByRole('listitem')).toHaveLength(4);
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(5);
 
     // The first step starts open, and only it shows its settings.
     expect(screen.getByRole('button', { name: '1. Choose category: What are you leaving?' }).getAttribute('aria-expanded')).toBe('true');
@@ -66,28 +86,107 @@ describe('FlowEditor', () => {
     // A step's ID is the API's, not something to type (#171).
     expect(within(steps).queryByLabelText('Name')).toBeNull();
 
-    // The form lists the union of the categories' fields; its preview
-    // shows them as a phone would.
+    // The form asks its own questions, of any type; its preview shows them
+    // as a phone would.
     await fireEvent.click(screen.getByRole('button', { name: '2. Form: About it' }));
     expect(screen.getByRole('button', { name: '1. Choose category: What are you leaving?' }).getAttribute('aria-expanded')).toBe('false');
-    // Counted as a run counts them: Create and Done ask nothing.
+    // Counted as a run counts them: Set fields, Create and Done ask nothing.
     expect(screen.getByText('Preview · step 2 of 2')).toBeTruthy();
     const preview = screen.getByRole('figure', { name: 'Preview, as a phone shows it' });
-    await vi.waitFor(() => expect(preview.textContent).toContain('Until'));
-    expect(preview.textContent).toContain('What is it?');
-    await fireEvent.input(screen.getByLabelText('Label for Until'), { target: { value: 'Leave until' } });
+    expect(preview.textContent).toContain('What is it? *');
+    expect(preview.textContent).toContain('A date');
+    // The form no longer lists the categories' fields.
+    expect(screen.queryByText('Ask it')).toBeNull();
+    const second = screen.getByRole('group', { name: 'Question 2' });
+    await fireEvent.input(within(second).getByRole('textbox', { name: 'Question 2' }), { target: { value: 'Leave until' } });
     expect(preview.textContent).toContain('Leave until');
+    await fireEvent.input(within(second).getByLabelText('Help for question 2'), { target: { value: "When you'll take it home" } });
+    expect(preview.textContent).toContain("When you'll take it home");
+    expect(within(second).getAllByRole('option').map((o) => o.textContent)).toEqual(['Text', 'Long text', 'Number', 'Date', 'Yes or no', 'A choice', 'A photo']);
+
+    // A yes/no question's default is yes or no.
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a question' }));
+    const third = screen.getByRole('group', { name: 'Question 3' });
+    await fireEvent.input(within(third).getByRole('textbox', { name: 'Question 3' }), { target: { value: 'Fragile?' } });
+    await fireEvent.change(within(third).getByLabelText('Type of question 3'), { target: { value: 'yes_no' } });
+    await fireEvent.change(within(third).getByLabelText('Default for question 3'), { target: { value: 'no' } });
+    expect(preview.textContent).toContain('YesNo');
+
+    // A choice lists its choices, each answered as a value made from it.
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a question' }));
+    const fourth = screen.getByRole('group', { name: 'Question 4' });
+    await fireEvent.input(within(fourth).getByRole('textbox', { name: 'Question 4' }), { target: { value: 'Which wood?' } });
+    await fireEvent.change(within(fourth).getByLabelText('Type of question 4'), { target: { value: 'choice' } });
+    await fireEvent.input(within(fourth).getByLabelText('Choice 1 of question 4'), { target: { value: 'Red oak' } });
+    expect(within(fourth).getByText(/Answered as/).textContent).toContain('red_oak');
+    await fireEvent.click(within(fourth).getByRole('button', { name: 'Add a choice' }));
+    await fireEvent.input(within(fourth).getByLabelText('Choice 2 of question 4'), { target: { value: 'Pine' } });
+    expect(preview.textContent).toContain('Red oak');
+    expect(preview.textContent).toContain('Pine');
+    // Moved up, it is asked third.
+    await fireEvent.click(within(fourth).getByRole('button', { name: 'Move question 4 up' }));
+    expect(within(screen.getByRole('group', { name: 'Question 3' })).getByRole('textbox', { name: 'Question 3' })).toHaveProperty('value', 'Which wood?');
 
     // The server's problems show beside the step they name, by its ID.
-    await fireEvent.click(screen.getByRole('button', { name: '3. Create' }));
+    await fireEvent.click(screen.getByRole('button', { name: '4. Create' }));
     expect(screen.getByText('Preview · asks nothing, so a run does it and moves on')).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
     const problem = await screen.findByText('its steps use assets.write, which you do not hold');
-    expect(problem.closest('li')!.textContent).toContain('3. Create');
+    expect(problem.closest('li')!.textContent).toContain('4. Create');
     const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
-    expect(body.definition.steps[1]!.fields).toEqual([{ key: 'until', label: 'Leave until' }]);
+    expect(body.definition.version).toBe(2);
+    expect(body.definition.steps[1]!.questions).toEqual([
+      { key: 'name', label: 'What is it?', type: 'text', required: true },
+      { key: 'until', label: 'Leave until', type: 'date', help: "When you'll take it home" },
+      { key: 'which_wood', label: 'Which wood?', type: 'choice', default: '', options: [{ value: 'red_oak', label: 'Red oak' }, { value: 'pine', label: 'Pine' }] },
+      { key: 'fragile', label: 'Fragile?', type: 'yes_no', default: 'no' },
+    ]);
     // The steps keep their IDs, so runs under way still match.
-    expect(body.definition.steps.map((s) => s.id)).toEqual(['kind', 'about', 'file', 'done']);
+    expect(body.definition.steps.map((s) => s.id)).toEqual(['kind', 'about', 'set', 'file', 'done']);
+  });
+
+  it("sets fields chosen by category, says where it sets them, and checks them as the server does", async () => {
+    const { sent } = api(() => ({ flow }));
+    render(FlowEditor, { params: { slug: 'leave' } });
+    await fireEvent.click(await screen.findByRole('button', { name: '3. Set fields' }));
+    expect(screen.getByText('On the new asset, as it is filed')).toBeTruthy();
+    const first = screen.getByRole('group', { name: 'Field 1' });
+    // Chosen from the fields each category records, by their own labels.
+    await vi.waitFor(() => expect(within(first).getAllByRole('group').map((g) => g.getAttribute('label'))).toEqual(['Short boards', 'Long boards']));
+    const [short, long] = within(first).getAllByRole('group');
+    await vi.waitFor(() => expect([...short!.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Owner']));
+    expect([...long!.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Owner', 'Leave by', 'Grain']);
+    expect((within(first).getByLabelText('Value of field 1') as HTMLInputElement).value).toBe('{user}');
+
+    // A choice field offers its choices.
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a field' }));
+    const third = screen.getByRole('group', { name: 'Field 3' });
+    await fireEvent.change(within(third).getByLabelText('Field 3'), { target: { value: 'grain' } });
+    expect(within(third).getByText('Its choices: oak, pine')).toBeTruthy();
+    const offered = third.querySelectorAll('datalist option');
+    expect([...offered].map((o) => (o as HTMLOptionElement).value)).toEqual(['oak', 'pine']);
+    // One it does not offer stops saving, said beside the step.
+    await fireEvent.input(within(third).getByLabelText('Value of field 3'), { target: { value: 'teak' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    expect((await screen.findByText('Grain: “teak” is not one of its choices.')).closest('li')!.textContent).toContain('3. Set fields');
+    expect(sent.some((r) => r.method === 'PUT')).toBe(false);
+
+    // So does a field a category requires and nothing sets.
+    await fireEvent.click(within(screen.getByRole('group', { name: 'Field 1' })).getByRole('button', { name: 'Remove field 1' }));
+    await fireEvent.input(within(screen.getByRole('group', { name: 'Field 2' })).getByLabelText('Value of field 2'), { target: { value: 'oak' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    expect((await screen.findByText('Short boards requires Owner, which no Set fields step before it sets.')).closest('li')!.textContent).toContain('4. Create');
+
+    // Moved after Create, it sets the asset filed.
+    await fireEvent.click(screen.getByRole('button', { name: 'Move step 3 down' }));
+    expect(screen.getByText('On the asset filed')).toBeTruthy();
+
+    // Change sets no fields: Set fields does, and is a step to add.
+    expect(within(screen.getByLabelText('Add a step')).getAllByRole('option').map((o) => o.textContent)).toContain('Set fields');
+    await fireEvent.change(screen.getByLabelText('Add a step'), { target: { value: 'change' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const change = screen.getByRole('group', { name: 'Change 1' });
+    expect(within(change).getAllByRole('option').map((o) => o.textContent)).not.toContain('Set fields');
   });
 
   it('adds a step before Done, and moves steps but not Done', async () => {
@@ -97,16 +196,16 @@ describe('FlowEditor', () => {
     await fireEvent.change(screen.getByLabelText('Add a step'), { target: { value: 'confirm' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     const headings = () => within(steps).getAllByRole('heading').map((h) => h.textContent?.trim());
-    expect(headings().at(-2)).toBe('4. Confirm: Is this right?');
-    expect(headings().at(-1)).toBe('5. Done: Filed');
-    expect((screen.getByRole('button', { name: 'Move step 4 down' }) as HTMLButtonElement).disabled).toBe(true);
-    await fireEvent.click(screen.getByRole('button', { name: 'Move step 4 up' }));
-    expect(headings()[2]).toBe('3. Confirm: Is this right?');
+    expect(headings().at(-2)).toBe('5. Confirm: Is this right?');
+    expect(headings().at(-1)).toBe('6. Done: Filed');
+    expect((screen.getByRole('button', { name: 'Move step 5 down' }) as HTMLButtonElement).disabled).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Move step 5 up' }));
+    expect(headings()[3]).toBe('4. Confirm: Is this right?');
     // The step added opens, and stays open as it moves.
-    expect(screen.getByRole('button', { name: '3. Confirm: Is this right?' }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('button', { name: '4. Confirm: Is this right?' }).getAttribute('aria-expanded')).toBe('true');
     // Moving another step past it keeps it open too.
-    await fireEvent.click(screen.getByRole('button', { name: 'Move step 2 down' }));
-    expect(screen.getByRole('button', { name: '2. Confirm: Is this right?' }).getAttribute('aria-expanded')).toBe('true');
+    await fireEvent.click(screen.getByRole('button', { name: 'Move step 3 down' }));
+    expect(screen.getByRole('button', { name: '3. Confirm: Is this right?' }).getAttribute('aria-expanded')).toBe('true');
   });
 
   it("makes a question's key from its text, and warns before renaming one a later step uses (#171)", async () => {
@@ -117,6 +216,7 @@ describe('FlowEditor', () => {
         steps: [
           flow.definition.steps[0]!,
           { id: 'about', kind: 'form', title: 'About it', questions: [{ key: 'what', label: 'What is it?' }] },
+          { id: 'set', kind: 'set_fields', fields: [{ field: 'owner', value: '{user}' }] },
           { id: 'file', kind: 'create', name: '{owner}: {what}' },
           { id: 'done', kind: 'done', title: 'Filed', text: 'Filed {what}.' },
         ],
@@ -134,7 +234,7 @@ describe('FlowEditor', () => {
     expect(within(first).queryByRole('note')).toBeNull();
     // Warned on pressing Change, before anything is typed.
     await fireEvent.click(within(first).getByRole('button', { name: 'Change key of question 1' }));
-    expect(within(first).getByRole('note').textContent).toBe('Step 3 (Create) and step 4 (Done: Filed) use {what}: change it there too, or they will name nothing.');
+    expect(within(first).getByRole('note').textContent).toBe('Step 4 (Create) and step 5 (Done: Filed) use {what}: change it there too, or they will name nothing.');
     await fireEvent.input(within(first).getByLabelText('Key of question 1'), { target: { value: 'thing' } });
 
     // A new question's key follows its text, until it is changed.
@@ -152,7 +252,7 @@ describe('FlowEditor', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
     const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
-    expect(body.definition.steps[1]!.questions).toEqual([{ key: 'anything_more', label: 'Anything more?' }]);
+    expect(body.definition.steps[1]!.questions).toEqual([{ key: 'anything_more', label: 'Anything more?', type: 'text' }]);
   });
 
   it('chooses its categories with the picker, and saves them', async () => {
@@ -161,6 +261,9 @@ describe('FlowEditor', () => {
     await screen.findByRole('list', { name: 'Steps' });
     await fireEvent.click(screen.getByRole('button', { name: 'Remove Long boards' }));
     expect(screen.queryByRole('button', { name: 'Remove Long boards' })).toBeNull();
+    // Short boards do not record until, so it is set no more.
+    await fireEvent.click(screen.getByRole('button', { name: '3. Set fields' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove field 2' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
     const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };

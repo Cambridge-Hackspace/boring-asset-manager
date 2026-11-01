@@ -17,7 +17,7 @@ const flow = (slug: string, name: string, enabled = true): Flow => ({
   enabled,
   created_at: '',
   updated_at: '',
-  definition: { version: 1, category_ids: [], description: `About ${name}.`, steps: [{ id: 'done', kind: 'done', title: 'Done' }] },
+  definition: { version: 2, category_ids: [], description: `About ${name}.`, steps: [{ id: 'done', kind: 'done', title: 'Done' }] },
 });
 
 function api() {

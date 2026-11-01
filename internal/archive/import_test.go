@@ -635,3 +635,62 @@ func countWhere(t *testing.T, st *store.Store, query string) int {
 	}
 	return n
 }
+
+// A package written before forms asked their own questions (#174) imports
+// its version 1 flows converted to version 2, as migrating would, against
+// the fields its categories record there.
+func TestAPackageFromBeforeFormQuestionsImportsConverted(t *testing.T) {
+	src := setupStore(t)
+	blobs := filestore.NewLocal(t.TempDir())
+	p := seedPackaged(t, src, blobs)
+	v1 := `{"version":1,"category_ids":["` + p.tools.ID + `"],"steps":[` +
+		`{"id":"about","kind":"form","ask_name":true,"fields":[{"key":"serial","label":"Serial number","default":"{today}"}]},` +
+		`{"id":"file","kind":"create","name":"{name}"},` +
+		`{"id":"tidy","kind":"change","changes":[{"kind":"hook","hook":"open"},{"kind":"fields","fields":{"serial":"{serial}-1"}}]},` +
+		`{"id":"done","kind":"done"}]}`
+	if _, err := src.Exec("INSERT INTO flows (id, slug, name, definition, enabled, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		uuid.NewString(), "file-a-tool", "File a tool", v1, true, nil, time.Now(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	pkg := exportPackage(t, src, blobs, Selection{Subtrees: []string{p.tools.ID}})
+	before := pack(t, reseal(t, unpack(t, pkg), func(h *Header, _ *Manifest) { h.SchemaVersion = migrations.FormQuestionsVersion - 1 }))
+
+	dst := setupStore(t)
+	plan, err := Import(context.Background(), dst, filestore.NewLocal(t.TempDir()), opener(before), ImportOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Problems) > 0 {
+		t.Errorf("problems: %v", plan.Problems)
+	}
+	var d flows.Definition
+	if err := json.Unmarshal([]byte(idOf(t, dst, "SELECT definition FROM flows WHERE slug = 'file-a-tool'")), &d); err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, s := range d.Steps {
+		kinds = append(kinds, s.ID+":"+s.Kind)
+	}
+	if d.Version != flows.Version || strings.Join(kinds, " ") != "about:form set:set_fields file:create tidy:change set_2:set_fields done:done" {
+		t.Fatalf("converted: %d %v", d.Version, kinds)
+	}
+	want := []flows.Question{
+		{Key: "name", Label: "Its name", Type: flows.QuestionText, Required: true},
+		{Key: "serial", Label: "Serial number", Type: flows.QuestionText, Default: "{today}", Required: true},
+	}
+	if !reflect.DeepEqual(d.Steps[0].Questions, want) {
+		t.Errorf("questions: %+v", d.Steps[0].Questions)
+	}
+	if !reflect.DeepEqual(d.Steps[1].Fields, []flows.FieldValue{{Field: "serial", Value: "{serial}"}}) ||
+		!reflect.DeepEqual(d.Steps[4].Fields, []flows.FieldValue{{Field: "serial", Value: "{serial}-1"}}) {
+		t.Errorf("set fields: %+v %+v", d.Steps[1], d.Steps[4])
+	}
+	// What a package written now holds is left as it is.
+	again := setupStore(t)
+	if _, err := Import(context.Background(), again, filestore.NewLocal(t.TempDir()), opener(pkg), ImportOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if def := idOf(t, again, "SELECT definition FROM flows WHERE slug = 'file-a-tool'"); !strings.Contains(def, `"version":1`) {
+		t.Errorf("a package written now: %s", def)
+	}
+}

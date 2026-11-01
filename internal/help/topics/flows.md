@@ -7,13 +7,13 @@ A **flow** is a guided page for doing one everyday thing, made for a phone or th
 Open **Flows**, or scan the QR code on a flow's poster, and follow the steps. Each asks one thing at a time:
 
 - **Choose** what kind of thing it is.
-- **Fill in** what that kind asks for, such as your name and until when you're leaving it. The form changes with the kind you chose.
+- **Fill in** a form: what it is, whose it is, until when you're leaving it, yes or no, one of a few choices, or a photo, whatever the flow asks. A form can be asked only for some kinds, such as long boards only.
 - **Find** something already here: scan its code with the camera, type it, or let a barcode scanner type it; search for it; or pick it from a list.
 - **Confirm** what will happen before it does.
 
 Above each question it says how far along you are, such as *step 2 of 3*. A choice can bring in a question that only some answers ask, so the count can grow as you go.
 
-When it's done, it says what it did, and shows the label to put on it if it made one. **Start again** is for the next person.
+When it's done, it says what it did, and shows the label to put on it if it made one. A photo you took is added to it once it is filed. **Start again** is for the next person.
 
 What a flow does, it does as you: it can only do what you're allowed to, and history records it as yours, made through the flow.
 
@@ -22,14 +22,19 @@ What a flow does, it does as you: it can only do what you're allowed to, and his
 Whoever manages flows makes them on the **Flows** page, with **New flow**: choose the categories it files into or takes from, start from **Leave something** or **Collect it**, and adjust its steps. The steps are listed in order, one open at a time; the preview beside them shows the open step as a phone shows it.
 
 - **Choose category** offers the flow's categories, or always uses one.
-- **Form** asks for the fields the chosen category records. For each field you can hide it, rename it, add help, give it a default such as `{user}` or `{today}`, make it required, and move it. A field the category requires is always asked. It can also ask for the thing's name, a photo, and questions of its own, used in names and text as `{what}`. A question's key is made from the question as you type it, and shown under it, such as *Used as `{what}`*; **Change** sets another. Changing the key of a question that later steps use says which, since they would name nothing until changed too.
+- **Form** asks questions of its own, in its own words: text, long text, a number, a date, yes or no, a choice from options you list, or a photo. Each can have help, a default such as `{user}` or `{today}`, and be required. A question's answer is a value later steps use, as `{what}`: its key is made from the question as you type it, and shown under it, such as *Used as `{what}`*; **Change** sets another. Changing the key of a question that later steps use says which, since they would name nothing until changed too.
+- **Set fields** puts answers, or other values, into the thing's fields: for each field, chosen from those the flow's categories record, a value such as `{leave_until}`, `{today}` or `{user}`, fixed text, or a mix. A field with choices offers them. It can also add a photo question's photo. Before **Create**, it fills in the new thing as it is filed; after **Find** or **Create**, it updates what was found or filed. The step says which. It asks nothing.
 - **Find** finds something already here, by its code, by search or from a list, optionally only what another flow filed, or whose field matches, such as its owner being `{user}`.
-- **Create** files it, named from the answers, as `{owner}: {what}`, and can put it in a place.
+- **Create** files it, named from the answers, as `{owner}: {what}`, with the fields set before it, and can put it in a place.
 - **Label** shows its label, adds it to the print queue, or prints it.
-- **Change** archives it, sets its condition, lends or returns it, moves it, sets its fields, or triggers a [hook](/help/hooks).
+- **Change** archives it, sets its condition, lends or returns it, moves it, or triggers a [hook](/help/hooks).
 - **Confirm** and **Done** say what will happen, and what did.
 
-Any step can be shown **only when** an earlier answer is something, such as only for long boards. A flow can only do what its maker may do. Its **Poster** has its name, its QR code and its one line of instructions, to print and put up, or to make into a label template.
+Any step can be shown **only when** an earlier answer is something, such as only for long boards. A flow can only do what its maker may do.
+
+A flow cannot be saved while a kind of thing it files would be missing a field that kind requires: each field a category requires must be set by a **Set fields** step before **Create**, either one shown always or one shown only for that category. Saving also says when a fixed value doesn't suit its field, such as a date that isn't one. Its **Poster** has its name, its QR code and its one line of instructions, to print and put up, or to make into a label template.
+
+Flows made before forms asked their own questions were converted when BAM! was updated: each form now asks what it asked before, in the same words, and a **Set fields** step before **Create** puts the answers into the same fields as before.
 
 ## Left past its date
 

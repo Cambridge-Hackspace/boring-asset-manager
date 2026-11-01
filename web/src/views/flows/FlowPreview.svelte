@@ -1,29 +1,13 @@
 <script lang="ts">
   // A step as a phone shows it, beside the editor (README §6.7): drawn here
   // from its settings, with sample answers where a run would have its own.
-  import type { Category, Field } from '../../lib/models';
-  import type { Progress, Step } from '../../lib/flows';
+  import type { Category } from '../../lib/models';
+  import { optionLabel, type Progress, type Step } from '../../lib/flows';
   import RunProgress from '../../components/RunProgress.svelte';
   import { kindLabels } from '../../lib/flowEditor';
 
-  let {
-    step,
-    flowName,
-    categories,
-    fields,
-    progress = null,
-  }: { step: Step | null; flowName: string; categories: Category[]; fields: Field[]; progress?: Progress | null } = $props();
+  let { step, flowName, categories, progress = null }: { step: Step | null; flowName: string; categories: Category[]; progress?: Progress | null } = $props();
 
-  // The fields a form asks, as its settings order and name them.
-  const asked = $derived.by(() => {
-    if (!step || step.kind !== 'form') return [];
-    const set = step.fields ?? [];
-    const order = [...set.map((s) => s.key), ...fields.map((f) => f.key).filter((k) => !set.some((s) => s.key === k))];
-    return order
-      .map((k) => ({ f: fields.find((f) => f.key === k), s: set.find((s) => s.key === k) }))
-      .filter((x) => x.f && !x.s?.hidden)
-      .map((x) => ({ key: x.f!.key, label: x.s?.label || x.f!.label, help: x.s?.help, required: !!x.s?.required }));
-  });
   const offered = $derived(step?.kind === 'choose_category' && step.categories?.length ? categories.filter((c) => step!.categories!.includes(c.id)) : categories);
 </script>
 
@@ -44,20 +28,23 @@
           {/each}
         {/if}
       {:else if step.kind === 'form'}
-        {#if step.ask_name}
-          <div><span class="label">{step.name_label || 'Its name'}</span><div class="flow-input"></div></div>
-        {/if}
-        {#each asked as f (f.key)}
-          <div>
-            <span class="label">{f.label}{f.required ? ' *' : ''}</span>
-            <div class="flow-input"></div>
-            {#if f.help}<p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{f.help}</p>{/if}
+        {#each step.questions ?? [] as q, i (i)}
+          <div data-question={q.type || 'text'}>
+            <span class="label">{q.label || 'A question'}{q.required ? ' *' : ''}</span>
+            {#if q.type === 'yes_no'}
+              <div class="grid grid-cols-2 gap-2"><div class="flow-choice">Yes</div><div class="flow-choice">No</div></div>
+            {:else if q.type === 'choice'}
+              {#each q.options ?? [] as o, j (j)}<div class="flow-choice">{optionLabel(o) || 'A choice'}</div>{/each}
+            {:else if q.type === 'photo'}
+              <div class="flow-input text-zinc-500">Take a photo, or choose one</div>
+            {:else if q.type === 'long_text'}
+              <div class="flow-input h-24"></div>
+            {:else}
+              <div class="flow-input text-zinc-500">{q.default || (q.type === 'date' ? 'A date' : q.type === 'number' ? 'A number' : '')}</div>
+            {/if}
+            {#if q.help}<p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{q.help}</p>{/if}
           </div>
         {/each}
-        {#each step.questions ?? [] as q, i (i)}
-          <div><span class="label">{q.label || 'A question'}{q.required ? ' *' : ''}</span><div class="flow-input"></div></div>
-        {/each}
-        {#if step.ask_photo}<div><span class="label">A photo</span><div class="flow-input"></div></div>{/if}
         <div class="flow-button-primary">Next</div>
       {:else if step.kind === 'find'}
         {#if step.find_by?.includes('scan')}<div><span class="label">Its code</span><div class="flow-input"></div></div>{/if}
@@ -65,7 +52,7 @@
         {#if step.find_by?.includes('list')}<div class="flow-choice">Something here</div><div class="flow-choice">Something else</div>{/if}
       {:else if step.kind === 'create'}
         {#if step.location?.mode === 'scan'}<div><span class="label">Scan where you put it</span><div class="flow-input"></div></div>{:else}<p class="text-sm text-zinc-600 dark:text-zinc-400">Files it as {step.name || '…'}, asking nothing.</p>{/if}
-      {:else if step.kind === 'label' || step.kind === 'change'}
+      {:else if step.kind === 'label' || step.kind === 'change' || step.kind === 'set_fields'}
         <p class="text-sm text-zinc-600 dark:text-zinc-400">Done as soon as it is reached; nothing is asked.</p>
       {:else if step.kind === 'confirm'}
         <ul class="list-disc pl-5 text-sm"><li>What the next steps will do</li></ul>

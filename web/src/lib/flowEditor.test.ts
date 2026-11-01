@@ -1,13 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import type { Definition, Step } from './flows';
-import { addStep, asks, checkFlow, moveStep, newStepID, previewProgress, problemsOf, slugFrom, stepsUsing, withStepIDs } from './flowEditor';
+import type { Field } from './models';
+import {
+  addStep,
+  answerProblem,
+  asks,
+  checkFlow,
+  fieldValueProblem,
+  moveStep,
+  newStep,
+  newStepID,
+  previewProgress,
+  problemsOf,
+  setsOn,
+  slugFrom,
+  stepsUsing,
+  withStepIDs,
+  type FlowCatalog,
+} from './flowEditor';
 
 const leave: Definition = {
-  version: 1,
+  version: 2,
   category_ids: ['short', 'long'],
   steps: [
     { id: 'kind', kind: 'choose_category' },
-    { id: 'about', kind: 'form', ask_name: true },
+    { id: 'about', kind: 'form', questions: [{ key: 'name', label: 'What is it?', required: true }] },
     { id: 'file', kind: 'create', name: '{name}' },
     { id: 'label', kind: 'label', label: { mode: 'show' } },
     { id: 'done', kind: 'done' },
@@ -20,11 +37,11 @@ describe('checkFlow', () => {
   });
   it('says what each step needs from those before it', () => {
     const d: Definition = {
-      version: 1,
+      version: 2,
       category_ids: ['short', 'long'],
       steps: [
-        { id: 'about', kind: 'form' },
         { id: 'label', kind: 'label', label: { mode: 'print' } },
+        { id: 'about', kind: 'create', name: 'x' },
         { id: 'Bad Name', kind: 'change', changes: [] },
         { id: 'about', kind: 'find', find_by: [] },
         { id: 'done', kind: 'done' },
@@ -39,11 +56,153 @@ describe('checkFlow', () => {
     expect(problemsOf(checkFlow(d), 'Bad Name')).toContain('Add at least one change.');
   });
   it('wants a category, and Done last', () => {
-    const d: Definition = { version: 1, category_ids: [], steps: [{ id: 'confirm', kind: 'confirm' }] };
+    const d: Definition = { version: 2, category_ids: [], steps: [{ id: 'confirm', kind: 'confirm' }] };
     expect(problemsOf(checkFlow(d))).toEqual(['Choose at least one category to file into or take from.', 'A flow ends with a Done step.']);
   });
   it('lets one category stand for choosing', () => {
     expect(checkFlow({ ...leave, category_ids: ['short'], steps: leave.steps.slice(1) })).toEqual([]);
+  });
+  it("checks a form's questions as the server does", () => {
+    const d: Definition = {
+      version: 2,
+      category_ids: ['short'],
+      steps: [
+        {
+          id: 'about',
+          kind: 'form',
+          questions: [
+            { key: 'name', label: 'What?' },
+            { key: 'name', label: 'Again?' },
+            { key: 'Bad', label: '' },
+            { key: 'wood', label: 'Wood', type: 'choice', options: [{ value: 'oak' }, { value: 'oak' }, { value: ' ' }] },
+            { key: 'none', label: 'None', type: 'choice' },
+            { key: 'fragile', label: 'Fragile', type: 'yes_no', default: 'maybe' },
+            { key: 'boards', label: 'Boards', type: 'number', default: '{user}' },
+          ],
+        },
+        { id: 'done', kind: 'done' },
+      ],
+    };
+    expect(problemsOf(checkFlow(d), 'about')).toEqual([
+      'The question name is asked twice.',
+      'A question\'s key is lowercase letters, digits and _: “Bad”.',
+      'The question Bad needs a label.',
+      'Wood offers “oak” twice.',
+      'Each choice of Wood needs a value.',
+      'None needs choices to choose from.',
+      'The default of Fragile is yes or no.',
+    ]);
+  });
+});
+
+// The fields of a wood shop: both kinds of board require an owner; long
+// boards, a date too; and a grain to choose.
+const shop: FlowCatalog = {
+  fields: [
+    { id: 'o', key: 'owner', label: 'Owner', validation_type: 'text' },
+    { id: 'u', key: 'until', label: 'Until', validation_type: 'date' },
+    { id: 'g', key: 'grain', label: 'Grain', validation_type: 'select', options: { choices: [{ label: 'Oak', value: 'oak' }] } },
+  ] as Field[],
+  required: { short: ['owner'], long: ['owner', 'until'] },
+  names: { short: 'Short boards', long: 'Long boards' },
+};
+
+describe('checkFlow, on Set fields', () => {
+  const steps = (...middle: Step[]): Definition => ({
+    version: 2,
+    category_ids: ['short', 'long'],
+    steps: [
+      { id: 'kind', kind: 'choose_category' },
+      { id: 'about', kind: 'form', questions: [{ key: 'name', label: 'What?' }, { key: 'photo', label: 'Photo', type: 'photo' }] },
+      ...middle,
+      { id: 'file', kind: 'create', name: '{name}' },
+      { id: 'done', kind: 'done' },
+    ],
+  });
+  const long = { value: 'category_id', op: 'is' as const, to: 'long' };
+  it('passes when each category Create may file into has what it requires', () => {
+    const d = steps(
+      { id: 'set', kind: 'set_fields', fields: [{ field: 'owner', value: '{user}' }], photo: '{photo}' },
+      { id: 'set_2', kind: 'set_fields', fields: [{ field: 'until', value: '{today}' }], when: long },
+    );
+    expect(checkFlow(d, shop)).toEqual([]);
+  });
+  it('names the fields a category requires that nothing sets before Create', () => {
+    expect(problemsOf(checkFlow(steps(), shop), 'file')).toEqual([
+      'Short boards requires Owner, which no Set fields step before it sets.',
+      'Long boards requires Owner, Until, which no Set fields step before it sets.',
+    ]);
+    // A row shown on another condition counts for no category.
+    const d = steps({ id: 'set', kind: 'set_fields', fields: [{ field: 'owner', value: '{user}' }, { field: 'until', value: '{today}' }], when: { value: 'name', op: 'set' } });
+    expect(problemsOf(checkFlow(d, shop), 'file')).toHaveLength(2);
+    // Offered only short boards, it needs only theirs.
+    const short = steps({ id: 'set', kind: 'set_fields', fields: [{ field: 'owner', value: '{user}' }] });
+    short.steps[0] = { id: 'kind', kind: 'choose_category', categories: ['short'] };
+    expect(checkFlow(short, shop)).toEqual([]);
+    // Without the categories' fields, it cannot tell.
+    expect(checkFlow(steps())).toEqual([]);
+  });
+  it('checks each row: a field, once, values set before it, and fixed values that suit', () => {
+    const d = steps({
+      id: 'set',
+      kind: 'set_fields',
+      fields: [
+        { field: 'owner', value: '{later}' },
+        { field: 'owner', value: '{user}' },
+        { field: '', value: 'x' },
+        { field: 'colour', value: 'red' },
+        { field: 'until', value: 'soon' },
+        { field: 'grain', value: 'teak' },
+      ],
+      photo: '{name}',
+    });
+    expect(problemsOf(checkFlow(d, shop), 'set')).toEqual([
+      'The value of Owner names {later}, which no earlier step sets.',
+      'It sets Owner twice.',
+      'Choose the field each row sets.',
+      'No field the flow\'s categories record has the key “colour”.',
+      'Until: “soon” is not a date.',
+      'Grain: “teak” is not one of its choices.',
+      'Its photo is the answer to a photo question asked before it.',
+    ]);
+    const nothing: Definition = { version: 2, category_ids: ['short'], steps: [{ id: 'set', kind: 'set_fields' }, { id: 'done', kind: 'done' }] };
+    expect(problemsOf(checkFlow(nothing, shop), 'set')).toEqual([
+      'It sets fields on nothing: put it before a Create, or after a Find or Create.',
+      'Add at least one field to set.',
+    ]);
+  });
+});
+
+describe('setsOn', () => {
+  it('sets on the asset the next Create files, or the one found or filed before it', () => {
+    const steps: Step[] = [
+      { id: 'set', kind: 'set_fields' },
+      { id: 'file', kind: 'create' },
+      { id: 'set_2', kind: 'set_fields' },
+      { id: 'find', kind: 'find' },
+      { id: 'set_3', kind: 'set_fields' },
+      { id: 'file_2', kind: 'create' },
+      { id: 'done', kind: 'done' },
+    ];
+    expect([0, 2, 4].map((i) => setsOn(steps, i))).toEqual(['new', 'filed', 'new']);
+    expect(setsOn([{ id: 'find', kind: 'find' }, { id: 'set', kind: 'set_fields' }], 1)).toBe('found');
+    expect(setsOn([{ id: 'set', kind: 'set_fields' }], 0)).toBe('');
+  });
+});
+
+describe('values that suit', () => {
+  it('an answer suits its question', () => {
+    expect(answerProblem({ key: 'n', label: 'N', type: 'number' }, 'two')).toBe('is a number');
+    expect(answerProblem({ key: 'd', label: 'D', type: 'date' }, '2026-02-30')).toBe('is a date, as 2026-10-30');
+    expect(answerProblem({ key: 'd', label: 'D', type: 'date' }, '2026-10-30')).toBe('');
+    expect(answerProblem({ key: 'c', label: 'C', type: 'choice', options: [{ value: 'a' }] }, 'a')).toBe('');
+    expect(answerProblem({ key: 't', label: 'T' }, 'anything')).toBe('');
+  });
+  it('a fixed value suits its field', () => {
+    expect(fieldValueProblem(shop.fields[1]!, '2026-10-30')).toBe('');
+    expect(fieldValueProblem(shop.fields[2]!, 'oak')).toBe('');
+    expect(fieldValueProblem({ id: 'n', key: 'n', label: 'N', validation_type: 'number' } as Field, '3.5')).toBe('');
+    expect(fieldValueProblem({ id: 'w', key: 'w', label: 'W', validation_type: 'url' } as Field, 'example')).toBe('is not a full address');
   });
 });
 
@@ -53,6 +212,10 @@ describe('steps', () => {
     expect(steps.map((s) => s.id)).toEqual(['kind', 'about', 'file', 'label', 'form', 'done']);
     expect(newStepID('form', steps)).toBe('form_2');
     expect(addStep(addStep(steps, 'form'), 'create').map((s) => s.id)).toEqual(['kind', 'about', 'file', 'label', 'form', 'form_2', 'file_2', 'done']);
+    expect(addStep(steps, 'set_fields').at(-2)).toEqual({ id: 'set', kind: 'set_fields', fields: [] });
+  });
+  it('starts a form asking for what it is, by {name}', () => {
+    expect(newStep('form', []).questions).toEqual([{ key: 'name', label: 'What is it?', type: 'text', required: true }]);
   });
   it('keeps the IDs steps have, and gives one to any without its own (#171)', () => {
     const steps: Step[] = [
@@ -74,12 +237,13 @@ describe('steps', () => {
     const steps: Step[] = [
       { id: 'file', kind: 'create', name: '{owner}: {what}' },
       { id: 'look', kind: 'find', find_by: ['list'], match: { field: 'owner', value: '{what}' } },
-      { id: 'note', kind: 'change', changes: [{ kind: 'fields', fields: { notes: 'About {what}' } }] },
+      { id: 'note', kind: 'set_fields', fields: [{ field: 'notes', value: 'About {what}' }] },
+      { id: 'pic', kind: 'set_fields', photo: '{what}' },
       { id: 'when', kind: 'confirm', when: { value: 'what', op: 'set' } },
       { id: 'other', kind: 'confirm', title: 'Is {whatever} right?', text: '{what_else}' },
       { id: 'done', kind: 'done', text: 'Filed {what}.' },
     ];
-    expect(stepsUsing(steps, 'what').map((s) => s.id)).toEqual(['file', 'look', 'note', 'when', 'done']);
+    expect(stepsUsing(steps, 'what').map((s) => s.id)).toEqual(['file', 'look', 'note', 'pic', 'when', 'done']);
     expect(stepsUsing(steps, 'owner').map((s) => s.id)).toEqual(['file']);
     expect(stepsUsing(steps, '')).toEqual([]);
   });
@@ -99,6 +263,7 @@ describe('steps', () => {
       { id: 'fixed', kind: 'choose_category', fixed: 'short' },
       { id: 'about', kind: 'form' },
       { id: 'long_only', kind: 'confirm', when: { value: 'category_id', op: 'is', to: 'long' } },
+      { id: 'set', kind: 'set_fields' },
       { id: 'file', kind: 'create' },
       { id: 'put', kind: 'create', location: { mode: 'scan' } },
       { id: 'label', kind: 'label' },
@@ -107,8 +272,9 @@ describe('steps', () => {
     expect(steps.filter(asks).map((s) => s.id)).toEqual(['kind', 'about', 'long_only', 'put']);
     // Before any answer, a step with a condition counts as if it held.
     expect(previewProgress(steps, 2)).toEqual({ step: 2, of: 4 });
-    expect(previewProgress(steps, 5)).toEqual({ step: 4, of: 4 });
+    expect(previewProgress(steps, 6)).toEqual({ step: 4, of: 4 });
     expect(previewProgress(steps, 4)).toBeNull();
-    expect(previewProgress(steps, 7)).toBeNull();
+    expect(previewProgress(steps, 5)).toBeNull();
+    expect(previewProgress(steps, 8)).toBeNull();
   });
 });

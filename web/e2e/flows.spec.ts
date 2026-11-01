@@ -11,7 +11,10 @@ async function audit(page: Page, label: string): Promise<void> {
   expect(results.violations.map((v) => `${v.id}: ${v.help}`), `${label} has accessibility violations`).toEqual([]);
 }
 
-test('flows: leave wood in one of two kinds, the form changing to fit, then collect it by its code', async ({ signedIn: page, api }) => {
+test('flows: leave wood in one of two kinds, long boards asked more, its fields set from the answers, then collect it by its code', async ({
+  signedIn: page,
+  api,
+}) => {
   const { category: wood } = await api.call('POST', '/categories', { name: unique('Wood'), color_hex: '#92400e' });
   const short = unique('Short boards');
   const long = unique('Long boards');
@@ -26,7 +29,20 @@ test('flows: leave wood in one of two kinds, the form changing to fit, then coll
 
   const { starters } = await api.call('GET', `/flow-starters?category_ids=${shortCat.id},${longCat.id}`);
   const leave = starters[0].definition;
-  leave.steps[1].fields = [{ key: untilKey, label: 'Leave until' }, { key: ownerKey, default: '{user}' }];
+  // The starter asks every field the categories record, and its Set fields
+  // step sets each from its answer (#174). Long boards' date moves to a
+  // form of its own, asked only of them.
+  const about = leave.steps[1];
+  about.questions = about.questions.filter((q: { key: string }) => q.key !== untilKey);
+  about.questions.find((q: { key: string }) => q.key === ownerKey).default = '{user}';
+  leave.steps.splice(2, 0, {
+    id: 'long_only',
+    kind: 'form',
+    title: 'Until when?',
+    when: { value: 'category_id', op: 'is', to: longCat.id },
+    questions: [{ key: untilKey, label: 'Leave until', type: 'date', help: "When you'll take it home" }],
+  });
+  expect(leave.steps.map((s: { kind: string }) => s.kind)).toEqual(['choose_category', 'form', 'form', 'set_fields', 'create', 'label', 'done']);
   const leaveSlug = unique('leave').toLowerCase();
   const { flow: leaveFlow } = await api.call('POST', '/flows', { slug: leaveSlug, name: 'Leave something', definition: leave });
   const collect = starters[1].definition;
@@ -34,22 +50,27 @@ test('flows: leave wood in one of two kinds, the form changing to fit, then coll
   const collectSlug = unique('collect').toLowerCase();
   await api.call('POST', '/flows', { slug: collectSlug, name: 'Collect it', definition: collect });
 
-  // Leaving it: short boards ask only the owner; long ones ask until too.
+  // Leaving it: short boards are asked what it is and whose; long ones,
+  // until when too, on a page of its own.
   await page.goto(`/f/${leaveSlug}`);
   await expect(page.getByRole('heading', { name: 'What are you leaving?' })).toBeFocused();
-  // How far along: choosing, then the form; filing asks nothing (#166).
+  // How far along: choosing, then the form; setting fields and filing ask
+  // nothing (#166).
   await expect(page.getByText(/· Step 1 of 2$/)).toBeVisible();
   await audit(page, 'choosing a category');
   await page.getByRole('button', { name: short }).click();
   await expect(page.getByRole('heading', { name: 'About it' })).toBeVisible();
-  await expect(page.getByLabel('Leave until')).toHaveCount(0);
+  await expect(page.getByText(/· Step 2 of 2$/)).toBeVisible();
+  await expect(page.getByLabel(/Owner/)).toHaveValue(/.+/);
   await page.getByRole('button', { name: 'Start again' }).click();
   await page.getByRole('button', { name: long }).click();
-  await expect(page.getByLabel('Leave until')).toBeVisible();
-  await expect(page.getByText(/· Step 2 of 2$/)).toBeVisible();
+  await expect(page.getByText(/· Step 2 of 3$/)).toBeVisible();
   await audit(page, 'the form');
   const name = unique('Oak');
   await page.getByLabel('What is it?').fill(name);
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByRole('heading', { name: 'Until when?' })).toBeVisible();
+  await expect(page.getByText(/· Step 3 of 3$/)).toBeVisible();
   await page.getByLabel('Leave until').fill('2026-11-06');
   await page.getByRole('button', { name: 'Next' }).click();
   await expect(page.getByRole('heading', { name: 'Filed' })).toBeVisible();
@@ -58,8 +79,12 @@ test('flows: leave wood in one of two kinds, the form changing to fit, then coll
   const [scroll, width] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
   expect(scroll, 'the flow scrolls sideways').toBeLessThanOrEqual(width);
 
-  // Give it a code, as a label would carry.
+  // Filed with the fields Set fields gave it.
   const { assets } = await api.call('GET', `/assets?search=${encodeURIComponent(name)}`);
+  const { asset: filed } = await api.call('GET', `/assets/${assets[0].asset.id}`);
+  expect(filed.field_values[untilKey]).toBe('2026-11-06');
+  expect(filed.field_values[ownerKey]).toBeTruthy();
+  // Give it a code, as a label would carry.
   const code = unique('WOOD').toUpperCase();
   await api.call('PUT', `/assets/${assets[0].asset.id}`, { generator_keys: [{ generator_type: 'code128', assigned_code: code }] });
 
@@ -99,13 +124,16 @@ test.describe('the flow editor', () => {
     await expect(picker.getByRole('button', { name: `Remove ${shelfName}` })).toBeVisible();
     await page.getByLabel('Start from').selectOption('leave');
     await page.getByRole('button', { name: 'Use this starter' }).click();
-    // One category: nothing to choose, so it starts with its form.
+    // One category: nothing to choose, so it starts with its form, which
+    // asks what it is, as {name}.
     const steps = page.getByRole('list', { name: 'Steps' });
     await expect(steps.getByRole('heading').first()).toHaveText('1. Form: About it');
+    await expect(steps.getByText('Used as {name}')).toBeVisible();
     await steps.getByRole('button', { name: 'Add a question' }).click();
     // The question first; its key is made from it (#171).
-    await steps.getByRole('textbox', { name: 'Question 1', exact: true }).fill('Anything else?');
+    await steps.getByRole('textbox', { name: 'Question 2', exact: true }).fill('Anything else?');
     await expect(steps.getByText('Used as {anything_else}')).toBeVisible();
+    await steps.getByLabel('Type of question 2').selectOption('long_text');
     await expect(page.getByRole('figure', { name: 'Preview, as a phone shows it' })).toContainText('Anything else?');
     const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(results.violations.map((v) => `${v.id}: ${v.help}`), 'the editor').toEqual([]);
@@ -136,7 +164,7 @@ test('flows: scanning what was left offers Collect it, which starts with it foun
 
   const name = unique('Project');
   const { run } = await api.call('POST', `/flows/${leaveSlug}/runs`);
-  await api.call('POST', `/flows/${leaveSlug}/runs/${run.id}`, { step: 'about', name });
+  await api.call('POST', `/flows/${leaveSlug}/runs/${run.id}`, { step: 'about', answers: { name } });
   const { assets } = await api.call('GET', `/assets?search=${encodeURIComponent(name)}`);
 
   await page.goto(`/scan/${assets[0].asset.id}`);
