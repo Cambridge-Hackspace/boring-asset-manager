@@ -1,4 +1,4 @@
--- 014_loans.sql: lending assets to people (README §5.3).
+-- 014_loans.sql: lending assets to people (docs/stock-and-lending.md).
 --
 -- A category may be lendable, and so are its subcategories. A loan names the
 -- asset, the user who has it and who lent it; it is open until checked in.

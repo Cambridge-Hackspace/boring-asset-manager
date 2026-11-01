@@ -1,5 +1,5 @@
--- 041_assignment_scopes.sql: a role assigned in some scopes only (README
--- §3.3). An assignment of a role to a user, or to an API token, may name
+-- 041_assignment_scopes.sql: a role assigned in some scopes only
+-- (docs/access.md). An assignment of a role to a user, or to an API token, may name
 -- scopes: the role then grants its asset permissions in those scopes only,
 -- and nothing else. An assignment with no rows here is unrestricted, as
 -- every assignment was before.

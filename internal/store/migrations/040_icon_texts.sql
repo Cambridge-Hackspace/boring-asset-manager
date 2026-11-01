@@ -1,4 +1,4 @@
--- 040_icon_texts.sql: an asset's own text on its icon (README §3.7). A
+-- 040_icon_texts.sql: an asset's own text on its icon (docs/icons.md). A
 -- category's icon may bind a text param to the asset's name, its first
 -- code, or a field; an asset drawn with it is compiled with that text,
 -- one icon at a time, from the files the current build was made from,

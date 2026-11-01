@@ -19,7 +19,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Signing assistants in by OAuth 2.1 (README §6.6): clients register
+// Signing assistants in by OAuth 2.1 (docs/mcp.md): clients register
 // themselves, a person approves one, and it trades the code, with the PKCE
 // verifier, for a personal token acting as them.
 

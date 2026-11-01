@@ -1,4 +1,4 @@
-// Helpers for notification channels and their delivery log (README §5.2).
+// Helpers for notification channels and their delivery log (docs/notifications.md).
 
 import type { Delivery } from './models';
 

@@ -215,7 +215,7 @@ func Serve(configPath string) error {
 	return nil
 }
 
-// StorageSweep sweeps the configured file store once (README §2): it
+// StorageSweep sweeps the configured file store once (docs/configuration.md): it
 // removes the files no row names, older than a day, and lists the rows
 // whose file is missing. A dry run removes nothing.
 func StorageSweep(configPath string, dryRun bool) error {
@@ -257,7 +257,7 @@ func StorageSweep(configPath string, dryRun bool) error {
 
 // StorageCopy copies every uploaded file from the configured store to the
 // one the [storage] table of another configuration file names, reading each
-// back to check it (README §2), so an instance can move from a directory to
+// back to check it (docs/configuration.md), so an instance can move from a directory to
 // a bucket and back. Change the configuration to the new store after.
 func StorageCopy(configPath, toPath string) error {
 	if toPath == "" {
@@ -295,10 +295,10 @@ func StorageCopy(configPath, toPath string) error {
 	return nil
 }
 
-// Backup writes an archive of the instance to dest (README §2.3): its rows,
+// Backup writes an archive of the instance to dest (docs/backups.md): its rows,
 // from any database, and the uploaded files they name, with authentication
 // unless opts leave it out. A dest ending in .db is a copy of a SQLite
-// database instead, as before archives (§2.2); other databases return
+// database instead, as before archives (docs/installing.md); other databases return
 // store.ErrBackupUnsupported for it.
 func Backup(configPath, dest string, opts BackupOptions) error {
 	if dest == "" {
@@ -423,7 +423,7 @@ type RestoreOptions struct {
 	Only []archive.Kind
 	// Check only checks the archive, and says what a restore would do.
 	Check bool
-	// Replace replaces the kinds chosen in an instance in use (§2.3), after
+	// Replace replaces the kinds chosen in an instance in use (docs/backups.md), after
 	// backing up what it replaces to BackupTo: by default, a file in the
 	// staging directory.
 	Replace  bool
@@ -436,8 +436,8 @@ type RestoreOptions struct {
 
 // Restore puts a backup made by Backup back. It tells the two kinds apart
 // by their contents: a copy of a SQLite database replaces the configured
-// one, as before archives (§2.2); an archive is restored, authentication
-// included, into an instance not yet in use, on any database (§2.3). BAM
+// one, as before archives (docs/installing.md); an archive is restored, authentication
+// included, into an instance not yet in use, on any database (docs/backups.md). BAM
 // must be stopped first.
 func Restore(configPath, from string, opts RestoreOptions) error {
 	if from == "" {
@@ -642,7 +642,7 @@ func sortedKeys(m map[string]int) []string {
 // keepOwners gives what a restore run as root made, the database's files
 // and the uploaded files, the owners of the directories they are in, so the
 // service, running as its own user, can use them (bam-update restores as
-// root, README §2.2). The store is closed first, so SQLite's journals are.
+// root, docs/installing.md). The store is closed first, so SQLite's journals are.
 func keepOwners(st *store.Store, cfg *config.Config) error {
 	if os.Geteuid() != 0 {
 		return nil

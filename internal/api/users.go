@@ -59,7 +59,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Email and password are required")
 		return
 	}
-	// Asset pages show people by name, never by email (README §3.3).
+	// Asset pages show people by name, never by email (docs/access.md).
 	if strings.TrimSpace(req.Name) == "" {
 		writeJSONError(w, http.StatusBadRequest, "A name is required")
 		return

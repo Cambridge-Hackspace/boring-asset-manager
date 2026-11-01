@@ -4,7 +4,7 @@
   import type { AssetWithDetails } from '../lib/models';
 
   // Choosing where an asset is: the asset it is in, found by name or code,
-  // or nowhere (README §5.3).
+  // or nowhere (docs/stock-and-lending.md).
   let {
     value,
     exclude,

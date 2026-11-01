@@ -9,7 +9,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// LabelStockRequest creates or updates custom label stock (README §4.4).
+// LabelStockRequest creates or updates custom label stock (docs/printing.md).
 type LabelStockRequest struct {
 	Name     string  `json:"name"`
 	WidthMM  float64 `json:"width_mm"`

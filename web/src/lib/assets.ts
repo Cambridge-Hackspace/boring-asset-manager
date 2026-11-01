@@ -27,7 +27,7 @@ export interface CopiedLink {
   is_location: boolean;
 }
 
-/** A new asset like another, to change before it is created (README §3.2). */
+/** A new asset like another, to change before it is created (docs/data-model.md). */
 export interface AssetCopy {
   name: string;
   category_ids: string[];
@@ -142,7 +142,7 @@ export interface StockPayload {
 }
 
 /**
- * The stock to send (README §5.1): undefined leaves it as it is, null stops
+ * The stock to send (docs/stock-and-lending.md): undefined leaves it as it is, null stops
  * counting it. An edit sends the quantity only when it was changed, so saving
  * cannot undo a use someone made while the form was open.
  */

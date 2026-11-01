@@ -1,7 +1,7 @@
 <svelte:options namespace="svg" />
 
 <!--
-  An isolex icon's shapes (README §3.7), as isolex's reference renderer
+  An isolex icon's shapes (docs/icons.md), as isolex's reference renderer
   draws them: the same shapes, in the same order, every number by the same
   rule, tokens painted with the palette's CSS properties. Drawn into an
   SVG: IsoIcon's own, or a scene's. A group of IR version 2 is drawn

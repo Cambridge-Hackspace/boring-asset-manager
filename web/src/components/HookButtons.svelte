@@ -4,8 +4,8 @@
   import { messageOf } from '../lib/errors';
   import type { HookReply, OfferedHook } from '../lib/models';
 
-  // The hooks an asset's categories offer on it, such as Identify (README
-  // §5.4). Pressing one records an event devices and channels act on; one
+  // The hooks an asset's categories offer on it, such as Identify
+  // (docs/hooks.md). Pressing one records an event devices and channels act on; one
   // with a question asks it first. Devices may answer, and their answers
   // show here for a few seconds. Only for those who may press them; the
   // caller checks.

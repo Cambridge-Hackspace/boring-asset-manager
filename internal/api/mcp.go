@@ -9,7 +9,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
 )
 
-// mcpHandler serves the MCP endpoint, /api/v1/mcp (README §6.6): tools for
+// mcpHandler serves the MCP endpoint, /api/v1/mcp (docs/mcp.md): tools for
 // assistants, acting as the API token they present. Every tool asks the
 // handlers here, in process, so it is held to the same rules as any request.
 func (s *Server) mcpHandler() http.Handler {
@@ -27,7 +27,7 @@ func (s *Server) mcpHandler() http.Handler {
 func (s *Server) mcpCaller(w http.ResponseWriter, r *http.Request) (mcpserver.Caller, mcpserver.Backend, bool) {
 	t := CurrentToken(r.Context())
 	if t == nil {
-		// Where to sign in, for an assistant that can (README §6.6).
+		// Where to sign in, for an assistant that can (docs/mcp.md).
 		w.Header().Set("WWW-Authenticate", `Bearer realm="BAM!", resource_metadata="`+s.resourceMetadataURL()+`"`)
 		writeJSONError(w, http.StatusUnauthorized, "MCP needs an API token, sent as Authorization: Bearer bam_…")
 		return mcpserver.Caller{}, nil, false

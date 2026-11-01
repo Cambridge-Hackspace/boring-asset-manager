@@ -11,7 +11,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
-// Limits on an asset's stock (README §5.1). Quantities fit the 32-bit
+// Limits on an asset's stock (docs/stock-and-lending.md). Quantities fit the 32-bit
 // INTEGER every database has.
 const (
 	MaxQuantity  = 1_000_000_000

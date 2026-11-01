@@ -1,5 +1,5 @@
 <!--
-  An isolex icon (README §3.7), drawn from its IR as isolex's reference
+  An isolex icon (docs/icons.md), drawn from its IR as isolex's reference
   renderer draws it: the same shapes, in the same order, every number by
   the same rule. Tokens are painted with the palette's CSS properties
   (lib/isolex/palette), and category with the category's own color.

@@ -30,7 +30,7 @@ case "${1:-build}" in
 esac
 
 # The live renderer: the label renderer the server prints with, compiled to
-# WebAssembly (README §4.1). TinyGo's build is a third the size of Go's and
+# WebAssembly (docs/labels.md). TinyGo's build is a third the size of Go's and
 # draws every golden label dot for dot as the server does (web/src/lib/live
 # tests that); its default stack is too small for compiling the renderer's
 # regular expressions, hence -stack-size. It is built without the git

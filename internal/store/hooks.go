@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Hooks on assets (README §5.4): buttons categories offer on their
+// Hooks on assets (docs/hooks.md): buttons categories offer on their
 // assets, such as Identify, which record asset.hook events for devices
 // and notification channels to act on.
 

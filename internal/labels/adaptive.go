@@ -7,7 +7,7 @@ import (
 
 // A template is fixed, printed only at its own size and DPI, or adaptive:
 // designed at one size, it is laid out again for the size of the label it
-// prints on, and rendered at the printer's DPI (README §4.1).
+// prints on, and rendered at the printer's DPI (docs/labels.md).
 const (
 	SizingFixed    = "fixed"
 	SizingAdaptive = "adaptive"

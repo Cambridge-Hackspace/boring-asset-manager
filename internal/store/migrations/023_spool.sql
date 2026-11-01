@@ -1,4 +1,4 @@
--- 023_spool.sql: the spool, a print queue for labels (README §6.2).
+-- 023_spool.sql: the spool, a print queue for labels (docs/printing.md).
 --
 -- A category may name the label template its assets, and those of its
 -- subcategories that name none, are queued with. A spool entry is one

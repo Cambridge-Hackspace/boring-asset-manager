@@ -19,7 +19,7 @@
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
   const isNew = !id;
-  // Where a new asset starts from (README §3.2): ?like=<id>, an asset like
+  // Where a new asset starts from (docs/data-model.md): ?like=<id>, an asset like
   // that one; ?in=<id>, in that one; ?category=<id>, in that category; and
   // ?link=<type id>:<out|in>&to=<id>, linked to that one, read from the new
   // asset. They combine.
@@ -53,13 +53,13 @@
   let codes = $state<Record<string, string>>({});
   let values = $state<Record<string, string>>({});
   let stock = $state<StockDraft>(stockDraft(null));
-  // Its own icon (README §3.7); '' for its categories'.
+  // Its own icon (docs/icons.md); '' for its categories'.
   let ownIcon = $state('');
   let pickingIcon = $state(false);
-  // its own label icon (README §3.7), drawn on its labels in place of its categories'
+  // its own label icon (docs/icons.md), drawn on its labels in place of its categories'
   let ownLabelIcon = $state('');
   let pickingLabelIcon = $state(false);
-  // Where it is: the asset it is in (README §5.3).
+  // Where it is: the asset it is in (docs/stock-and-lending.md).
   let relationTypes = $state<RelationType[]>([]);
   let place = $state<{ id: string; name: string } | null>(null);
   // Links to make once it is created, each unless unticked: a copy's, as
@@ -71,7 +71,7 @@
   let copyPhotos = $state(true);
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
-  // New assets' labels join the print queue (README §6.2), as each person last chose.
+  // New assets' labels join the print queue (docs/printing.md), as each person last chose.
   const canSpool = isNew && session.can('labels.print');
   let queueLabel = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
 

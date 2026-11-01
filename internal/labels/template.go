@@ -1,5 +1,5 @@
 // Package labels defines label templates: their JSON document, validation,
-// and the content bindings that fill them from an asset (README §4.1).
+// and the content bindings that fill them from an asset (docs/labels.md).
 package labels
 
 import (
@@ -34,7 +34,7 @@ const (
 	ElementIcon        = "icon"
 )
 
-// Icons (README §3.7): an icon element draws IconOfAsset, the asset's own
+// Icons (docs/icons.md): an icon element draws IconOfAsset, the asset's own
 // icon or its categories', or an icon by name; shaded, its faces in grays
 // from the palette's light colors, or as an outline, strokes only.
 const (
@@ -43,7 +43,7 @@ const (
 	ShadingOutline = "outline"
 )
 
-// The renditions an icon element draws the asset's icon in (README §3.7):
+// The renditions an icon element draws the asset's icon in (docs/icons.md):
 // its label icon, the default, which is its screen icon when it has no
 // label icon, or its screen icon.
 const (
@@ -464,7 +464,7 @@ func (t *Template) InchesPerUnit() float64 {
 	return 1 / 25.4
 }
 
-// Validate checks the template against README §4.1 and returns a
+// Validate checks the template against docs/labels.md and returns a
 // *ValidationError listing every problem found.
 func (t *Template) Validate() error {
 	var v validator

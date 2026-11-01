@@ -1,4 +1,4 @@
-// The icons pages draw (README §3.7): the build's icons, the palette they
+// The icons pages draw (docs/icons.md): the build's icons, the palette they
 // paint with, which icon each category is drawn with, and the unknown
 // icon, drawn for a name the build does not draw. Read once, when a page
 // first draws an icon, again when someone else signs in, and on

@@ -1,4 +1,4 @@
--- 024_spool_jobs.sql: printing from the spool (README §6.2).
+-- 024_spool_jobs.sql: printing from the spool (docs/printing.md).
 --
 -- Printing the spool makes a job for each printer and template: its
 -- labels, as the template and printer were named then, its state and who

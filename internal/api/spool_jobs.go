@@ -13,7 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Printing from the spool (README §6.2): jobs are made here and sent by the
+// Printing from the spool (docs/printing.md): jobs are made here and sent by the
 // spooler in the background.
 
 // SpoolPrintRequest prints waiting entries: those listed, or every ready

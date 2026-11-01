@@ -1,4 +1,4 @@
-// Scan templates and scanning (README §6.4).
+// Scan templates and scanning (docs/scanning.md).
 
 import type { ReportSection, ReportSpec, ScanAction } from './models';
 

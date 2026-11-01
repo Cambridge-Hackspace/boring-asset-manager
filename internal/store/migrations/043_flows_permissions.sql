@@ -1,4 +1,4 @@
--- 043_flows_permissions.sql: the permissions of flows (README §3.3, §6.7).
+-- 043_flows_permissions.sql: the permissions of flows (docs/access.md, docs/flows.md).
 --
 -- flows.manage makes and changes flows: every role that manages
 -- categories is granted it. flows.run runs them, and is scopable: every

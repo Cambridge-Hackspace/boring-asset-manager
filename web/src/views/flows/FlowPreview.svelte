@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A step as a phone shows it, beside the editor (README §6.7): drawn here
+  // A step as a phone shows it, beside the editor (docs/flows.md): drawn here
   // from its settings, with sample answers where a run would have its own.
   import type { Category } from '../../lib/models';
   import { optionLabel, type Progress, type Step } from '../../lib/flows';

@@ -12,7 +12,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
 
-// IconSource gives the icons labels draw (README §3.7), when an image
+// IconSource gives the icons labels draw (docs/icons.md), when an image
 // source does: the icon drawn by a name, the unknown icon when nothing
 // draws it, or nil when there are no icons at all; and the palette's
 // light colors, by token.

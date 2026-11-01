@@ -1,4 +1,4 @@
-// A small Markdown renderer for the help pages (README §6.5): headings,
+// A small Markdown renderer for the help pages (docs/architecture.md): headings,
 // paragraphs, lists, bold, italics, code and links. The help is ours and
 // bundled with the app, but everything is escaped all the same, and links
 // go only to the app's own pages or to https.

@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// readmeExample is the template document from README §4.1.
+// readmeExample is the template document from docs/labels.md.
 const readmeExample = `{
   "id": "brother_ql_29x90",
   "name": "Standard Die-Cut 29mm x 90mm",
@@ -34,7 +34,7 @@ const readmeExample = `{
 func TestParseReadmeExample(t *testing.T) {
 	tpl, err := Parse([]byte(readmeExample))
 	if err != nil {
-		t.Fatalf("README example rejected: %v", err)
+		t.Fatalf("docs/labels.md example rejected: %v", err)
 	}
 	name := tpl.Elements[1]
 	if name.FontWeight != WeightBold || name.FontFamily != FamilySans || name.Align != AlignLeft || name.MinFontSize != 6 {

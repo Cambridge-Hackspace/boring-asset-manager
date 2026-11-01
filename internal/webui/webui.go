@@ -1,5 +1,5 @@
-// Package webui serves the embedded single-page application (README
-// "Frontend Architecture"). The app is built by tools/web/build.sh into
+// Package webui serves the embedded single-page application
+// (docs/architecture.md). The app is built by tools/web/build.sh into
 // static/app; a binary built without it serves a placeholder page instead.
 package webui
 

@@ -19,7 +19,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Icons (README §3.7). Every category's published source, every library
+// Icons (docs/icons.md). Every category's published source, every library
 // file's, the palette and the settings make one lexicon, compiled as a
 // whole. A change is compiled with everything else before it is kept:
 // a source that compiles clean is published, and its build becomes the

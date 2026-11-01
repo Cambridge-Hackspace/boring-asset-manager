@@ -1,4 +1,4 @@
-// Flows (README §6.7): guided pages for doing one everyday thing with
+// Flows (docs/flows.md): guided pages for doing one everyday thing with
 // assets, run one step at a time on the server.
 
 import { ApiError, request } from './api';

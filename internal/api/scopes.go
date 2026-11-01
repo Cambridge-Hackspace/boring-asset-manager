@@ -11,7 +11,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Scoped permissions (README §3.3). A route needing an asset permission
+// Scoped permissions (docs/access.md). A route needing an asset permission
 // lets in whoever holds it in any scope; the handler then checks the asset
 // itself with assetFor. An asset the requester cannot read is not found,
 // so its existence does not show; one they can read but not act on is

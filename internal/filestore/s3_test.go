@@ -14,12 +14,12 @@ import (
 )
 
 // TestS3Conforms runs the conformance suite on a real S3-compatible store,
-// MinIO as README §8.3 starts it, when BAM_TEST_S3_ENDPOINT names one; each
+// MinIO as docs/testing.md starts it, when BAM_TEST_S3_ENDPOINT names one; each
 // run under a prefix of its own.
 func TestS3Conforms(t *testing.T) {
 	s, ok := testS3(t, fmt.Sprintf("conformance-%d/", time.Now().UnixNano()))
 	if !ok {
-		t.Skip("BAM_TEST_S3_ENDPOINT is not set; start MinIO as README §8.3 says to run this")
+		t.Skip("BAM_TEST_S3_ENDPOINT is not set; start MinIO as docs/testing.md says to run this")
 	}
 	blobtest.Run(t, s)
 }

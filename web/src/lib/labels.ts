@@ -1,6 +1,6 @@
 // What the Labels panel offers for some assets (POST /labels/options): the
 // templates that can label them, in order of preference, and how each suits
-// each printer (README §4.4).
+// each printer (docs/printing.md).
 
 import type { Adapt, Mirror } from './template';
 

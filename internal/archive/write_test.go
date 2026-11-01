@@ -140,26 +140,20 @@ func TestTheRegistryMatchesTheSchema(t *testing.T) {
 	}
 }
 
-func TestTheReadmeDocumentsEveryTable(t *testing.T) {
-	b, err := os.ReadFile("../../README.md")
+func TestTheDocsDocumentEveryTable(t *testing.T) {
+	b, err := os.ReadFile("../../docs/backups.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := string(b)
-	start := strings.Index(s, "### 2.3 ")
-	if start < 0 {
-		t.Fatal("README has no §2.3")
-	}
-	end := strings.Index(s[start+1:], "\n## ")
-	section := s[start : start+1+end]
+	doc := string(b)
 	for _, table := range Tables {
-		if !strings.Contains(section, "`"+table.Name+"`") {
-			t.Errorf("README §2.3 does not name %s", table.Name)
+		if !strings.Contains(doc, "`"+table.Name+"`") {
+			t.Errorf("docs/backups.md does not name %s", table.Name)
 		}
 	}
 	for name := range Excluded {
-		if !strings.Contains(section, "`"+name+"`") {
-			t.Errorf("README §2.3 does not say why %s is left out", name)
+		if !strings.Contains(doc, "`"+name+"`") {
+			t.Errorf("docs/backups.md does not say why %s is left out", name)
 		}
 	}
 }

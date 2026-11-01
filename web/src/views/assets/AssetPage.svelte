@@ -39,7 +39,7 @@
   let howMany = $state<number | null>(1);
   // Where it is: the link types that make locations, and moving it.
   let relationTypes = $state<RelationType[]>([]);
-  // The flows that start from it, such as Collect it (README §6.7).
+  // The flows that start from it, such as Collect it (docs/flows.md).
   let offeredFlows = $state<FlowLink[]>([]);
   let moving = $state(false);
   // Every field, to name values kept from former categories by their labels.
@@ -63,7 +63,7 @@
       // Without them, kept values are named by their keys.
       allFields = await request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? [], () => []);
     }
-    // Signed out, the catalog is closed (README §3.3): where it is shows,
+    // Signed out, the catalog is closed (docs/access.md): where it is shows,
     // but not what it holds.
     if (!session.user) return;
     try {

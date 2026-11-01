@@ -14,7 +14,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Icons (README §3.7): category icons, the library, the palette, the
+// Icons (docs/icons.md): category icons, the library, the palette, the
 // settings and the build they make, all compiled by isolex in process.
 
 // iconCompiler is what the server compiles icons with: the process's

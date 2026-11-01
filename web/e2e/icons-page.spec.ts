@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { expect, goTo, test, unique } from './fixtures';
 
-// The Icons page (README §3.7): every icon, what needs attention, the
+// The Icons page (docs/icons.md): every icon, what needs attention, the
 // library, the palette and the settings, and the lexicon out and in.
 
 const section = (page: Page, name: string) => page.getByRole('region', { name });

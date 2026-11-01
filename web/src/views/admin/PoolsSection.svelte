@@ -7,7 +7,7 @@
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
-  // Printer pools (README §6.2): printers loaded alike that share print
+  // Printer pools (docs/printing.md): printers loaded alike that share print
   // jobs from the print queue. Managed with the printers.
   let { printers }: { printers: Printer[] } = $props();
 

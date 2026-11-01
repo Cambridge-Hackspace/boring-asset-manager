@@ -1,5 +1,5 @@
 <!--
-  /assets/:id/scene (README §3.7): what is in a location, each drawn with
+  /assets/:id/scene (docs/icons.md): what is in a location, each drawn with
   its icon where it stands on the floor, as the server lays them out.
   Wheel or the buttons zoom; dragging pans. Choosing one says what it is,
   with ways to open it and to look inside; a double click does the

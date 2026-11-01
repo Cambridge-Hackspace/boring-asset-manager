@@ -12,7 +12,7 @@
 
   let all = $state<Report[]>([]);
   const reports = $derived(all.filter((r) => r.kind !== 'scan'));
-  // Scan templates (README §6.4): what scanning an asset shows.
+  // Scan templates (docs/scanning.md): what scanning an asset shows.
   const scanTemplates = $derived(all.filter((r) => r.kind === 'scan'));
   let loading = $state(true);
   let error = $state('');

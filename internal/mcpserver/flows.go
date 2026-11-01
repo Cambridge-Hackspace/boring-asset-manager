@@ -12,7 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Flows (README §6.7): guided pages for doing one everyday thing with
+// Flows (docs/flows.md): guided pages for doing one everyday thing with
 // assets, managed with flows.manage and run with flows.run, as a person.
 
 type flowIn struct {
@@ -24,7 +24,7 @@ type saveFlowIn struct {
 	NewSlug    string          `json:"new_slug,omitempty" jsonschema:"its address, /f/<slug>: lowercase letters, digits, - and _; for a new flow, required"`
 	Name       *string         `json:"name,omitempty"`
 	Enabled    *bool           `json:"enabled,omitempty"`
-	Definition json.RawMessage `json:"definition,omitempty" jsonschema:"what it does, the whole of it (README §6.7): {version: 2, description, category_ids, steps}; a form asks its own questions, and a set_fields step puts answers or other values into the asset's fields: {kind: set_fields, fields: [{field, value}], photo}; start from flow_starters"`
+	Definition json.RawMessage `json:"definition,omitempty" jsonschema:"what it does, the whole of it (docs/flows.md): {version: 2, description, category_ids, steps}; a form asks its own questions, and a set_fields step puts answers or other values into the asset's fields: {kind: set_fields, fields: [{field, value}], photo}; start from flow_starters"`
 }
 
 type runFlowIn struct {

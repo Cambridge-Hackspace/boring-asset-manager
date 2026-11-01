@@ -1,4 +1,4 @@
-// Uploading an archive in parts (README §2.3, #141): its hash made from
+// Uploading an archive in parts (docs/backups.md, #141): its hash made from
 // slices of the file, then each part sent on its own, retried with backoff
 // when it fails, and resumed where the server says it got to, after a
 // dropped connection, a pause or a page closed. The file is only ever read

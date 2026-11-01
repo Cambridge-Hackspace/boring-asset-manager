@@ -1,5 +1,5 @@
 #!/bin/sh
-# The reaper battery (README §8.1): the Go suites, then the web interface's
+# The reaper battery (docs/testing.md): the Go suites, then the web interface's
 # checks and its Playwright battery, each in its pinned container. reaper
 # runs this on the guest itself (exec = "host"), because a containerized step
 # cannot start containers of its own; the images it uses are listed under

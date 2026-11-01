@@ -1,7 +1,7 @@
 <script lang="ts">
   // /flows: the flows someone may run, as cards; for those who manage
   // flows, every flow, to make, change, turn off and on, and delete
-  // (README §6.7).
+  // (docs/flows.md).
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
