@@ -24,7 +24,8 @@ export function paletteCss(palette: IconColor[]): string {
   const props = (mode: 'light' | 'dark') => ok.map((c) => `--iso-${c.token}:${c[mode]};`).join('');
   return (
     `:root,.iso-light{${props('light')}}` +
-    `@media (prefers-color-scheme: dark){:root{${props('dark')}}}` +
+    `:root[data-theme=dark]{${props('dark')}}` +
+    `@media (prefers-color-scheme: dark){:root:not([data-theme=light]){${props('dark')}}}` +
     `.iso-light{${props('light')}}.iso-dark{${props('dark')}}`
   );
 }

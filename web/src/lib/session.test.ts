@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { request } from './api';
 import { navigate, router } from './router.svelte';
 import { afterSignIn, session, signInPath } from './session.svelte';
+import { appearance } from './theme.svelte';
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -69,5 +70,15 @@ describe('session', () => {
     expect(session.user).toBeNull();
     expect(router.path).toBe('/sign-in');
     expect(router.query.get('next')).toBe('/assets?search=drill');
+  });
+
+  it('takes the theme on the profile over this browser’s, signing in', async () => {
+    appearance.adopt('light');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(200, { ...me, user: { ...me.user, theme: 'dark' } })));
+    await session.load();
+    expect(appearance.theme).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('bam.theme')).toBe('dark');
+    appearance.adopt('system');
   });
 });

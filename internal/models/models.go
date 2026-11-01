@@ -20,6 +20,9 @@ type User struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	ArchivedAt   *time.Time `json:"archived_at,omitempty"`
+	// Theme is how the web interface looks to them: "light" or "dark", as
+	// they chose, or "system" to follow their system's setting.
+	Theme string `json:"theme"`
 }
 
 // Role represents a defined RBAC role.

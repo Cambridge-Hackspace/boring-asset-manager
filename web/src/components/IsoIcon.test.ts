@@ -149,7 +149,7 @@ describe('the palette as CSS', () => {
       { token: 'evil', light: 'red;}body{display:none', dark: '#000' },
     ]);
     expect(css).toBe(
-      ':root,.iso-light{--iso-ink:#111;}@media (prefers-color-scheme: dark){:root{--iso-ink:#eeeeee;}}.iso-light{--iso-ink:#111;}.iso-dark{--iso-ink:#eeeeee;}',
+      ':root,.iso-light{--iso-ink:#111;}:root[data-theme=dark]{--iso-ink:#eeeeee;}@media (prefers-color-scheme: dark){:root:not([data-theme=light]){--iso-ink:#eeeeee;}}.iso-light{--iso-ink:#111;}.iso-dark{--iso-ink:#eeeeee;}',
     );
     expect(tokenVar('body-top')).toBe('var(--iso-body-top)');
     expect(tokenVar('x);}')).toBe('none');

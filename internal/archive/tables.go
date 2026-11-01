@@ -78,7 +78,7 @@ var Tables = []Table{
 		ByPermissionKey: true,
 	},
 	{Name: "users", Kind: KindPeople, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"email", Text}, {"password_hash", Text}, {"totp_secret", Text}, {"is_active", Bool}, {"created_at", Time}, {"updated_at", Time}, {"archived_at", Time}, {"name", Text}},
+		Columns: []Column{{"id", Text}, {"email", Text}, {"password_hash", Text}, {"totp_secret", Text}, {"is_active", Bool}, {"created_at", Time}, {"updated_at", Time}, {"archived_at", Time}, {"name", Text}, {"theme", Text}},
 		Secret:  []string{"password_hash", "totp_secret"},
 	},
 	{Name: "user_roles", Kind: KindPeople, Key: []string{"user_id", "role_id"},

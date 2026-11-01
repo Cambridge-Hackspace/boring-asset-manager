@@ -3,6 +3,7 @@
 import { ApiError, request, setUnauthorizedHandler } from './api';
 import type { Me, Permission, PermissionKey, User } from './models';
 import { navigate, router } from './router.svelte';
+import { appearance } from './theme.svelte';
 
 class Session {
   user = $state<User | null>(null);
@@ -60,6 +61,8 @@ class Session {
   }
 
   private set(me: Me): void {
+    // Signed in, the theme on their profile wins over this browser's.
+    if (me.user?.theme) appearance.adopt(me.user.theme);
     this.user = me.user;
     this.permissions = me.permissions ?? [];
     this.roles = me.roles ?? [];

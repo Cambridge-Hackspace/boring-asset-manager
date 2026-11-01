@@ -45,6 +45,8 @@ export interface User {
   email: string;
   /** For display only; empty shows the email instead. */
   name: string;
+  /** Light or dark, or the system's (#168). */
+  theme?: 'system' | 'light' | 'dark';
   is_active: boolean;
   created_at: string;
   updated_at: string;

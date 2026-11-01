@@ -41,6 +41,7 @@ var fuzzRoutes = []route{
 	{method: "POST", path: "/api/v1/auth/login", body: `{"email":"admin@test.org","password":"wrong"}`},
 	{method: "GET", path: "/api/v1/auth/me"},
 	{method: "PUT", path: "/api/v1/auth/name", body: `{"name":"Ada {n}"}`},
+	{method: "PUT", path: "/api/v1/auth/theme", body: `{"theme":"dark"}`},
 	{method: "PUT", path: "/api/v1/auth/password", body: `{"current_password":"wrong","new_password":"Another123!"}`},
 	{method: "GET", path: "/api/v1/users"},
 	{method: "POST", path: "/api/v1/users", body: `{"email":"someone{n}@test.org","name":"Someone {n}","password":"Secret123!","is_active":true}`},
