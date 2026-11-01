@@ -1,9 +1,11 @@
 package store
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
@@ -180,5 +182,75 @@ func TestUserNames(t *testing.T) {
 	}
 	if _, err := st.SetUserName(other.ID, "Grace"); !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("an archived user: %v", err)
+	}
+}
+
+func TestUserThemes(t *testing.T) {
+	st := setupTestStore(t)
+	defer st.Close()
+	u, err := st.CreateNamedUser("ada@hackspace.org", "Ada", "a long enough password", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Until they choose, the interface follows their system.
+	if u.Theme != ThemeSystem {
+		t.Errorf("created with %q", u.Theme)
+	}
+	if got, _ := st.GetUserByID(u.ID); got.Theme != ThemeSystem {
+		t.Errorf("read back with %q", got.Theme)
+	}
+
+	sess, err := st.CreateSession(u.ID, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, theme := range []string{"dark", "light", "light", ThemeSystem, ThemeSystem, "dark"} {
+		got, err := st.SetUserTheme(u.ID, theme)
+		if err != nil || got.Theme != theme {
+			t.Fatalf("set %s: %+v, %v", theme, got, err)
+		}
+		// Every read of the user has it: by ID, by email, listed and signed in.
+		byEmail, _ := st.GetUserByEmail("ada@hackspace.org")
+		list, _ := st.ListUsers()
+		_, signedIn, _ := st.GetSession(sess.ID)
+		if byEmail.Theme != theme || len(list) != 1 || list[0].Theme != theme || signedIn == nil || signedIn.Theme != theme {
+			t.Errorf("%s read back as %q, %+v, %+v", theme, byEmail.Theme, list, signedIn)
+		}
+	}
+	// The system's is kept as no choice at all.
+	if _, err := st.SetUserTheme(u.ID, ThemeSystem); err != nil {
+		t.Fatal(err)
+	}
+	var stored sql.NullString
+	if err := st.QueryRow("SELECT theme FROM users WHERE id = ?", u.ID).Scan(&stored); err != nil || stored.Valid {
+		t.Errorf("system stored as %+v, %v", stored, err)
+	}
+
+	// It is a preference, not a change to the account.
+	before, _ := st.GetUserByID(u.ID)
+	after, err := st.SetUserTheme(u.ID, "dark")
+	if err != nil || !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Errorf("updated_at went from %v to %v, %v", before.UpdatedAt, after.UpdatedAt, err)
+	}
+
+	for _, bad := range []string{"", "Dark", "sepia", " light", "auto"} {
+		if _, err := st.SetUserTheme(u.ID, bad); !errors.Is(err, ErrInvalidUser) {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	if got, _ := st.GetUserByID(u.ID); got.Theme != "dark" {
+		t.Errorf("a bad theme changed it to %q", got.Theme)
+	}
+	if _, err := st.SetUserTheme("no-such-user", "dark"); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("a missing user: %v", err)
+	}
+	if err := st.DeleteUser(u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetUserTheme(u.ID, "light"); !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("an archived user: %v", err)
+	}
+	if got, _ := st.GetUserByID(u.ID); got.Theme != "dark" {
+		t.Errorf("an archived user's theme became %q", got.Theme)
 	}
 }

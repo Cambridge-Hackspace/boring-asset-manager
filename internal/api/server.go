@@ -106,6 +106,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/auth/logout", RequireAuth(http.HandlerFunc(s.handleLogout)))
 	handleFunc("GET /api/v1/auth/me", s.handleAuthMe)
 	handle("PUT /api/v1/auth/name", RequirePerson(http.HandlerFunc(s.handleSetOwnName)))
+	handle("PUT /api/v1/auth/theme", RequirePerson(http.HandlerFunc(s.handleSetOwnTheme)))
 	// Personal tokens, for assistants (README §3.4): made, listed and revoked
 	// by their own user, from a signed-in session.
 	// A personal token lists and revokes its user's too (#43), but only a

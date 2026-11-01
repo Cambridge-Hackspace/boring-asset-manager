@@ -70,3 +70,68 @@ func TestUserNamesAPI(t *testing.T) {
 		t.Errorf("signed out: %d", rec.Code)
 	}
 }
+
+// TestOwnThemeAPI: a person chooses whether the interface is light or
+// dark, and /auth/me says which, "system" until they choose.
+func TestOwnThemeAPI(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
+
+	me := func(cookie *http.Cookie) models.User {
+		t.Helper()
+		rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/auth/me", "")
+		var v struct{ User models.User }
+		if err := json.Unmarshal(rec.Body.Bytes(), &v); err != nil || rec.Code != http.StatusOK {
+			t.Fatalf("me: %d %s", rec.Code, rec.Body)
+		}
+		return v.User
+	}
+	if got := me(reader).Theme; got != "system" {
+		t.Errorf("before choosing: %q", got)
+	}
+	if rec := doJSON(t, srv, reader, http.MethodGet, "/api/v1/auth/me", ""); !strings.Contains(rec.Body.String(), `"theme":"system"`) {
+		t.Errorf("me does not say the theme: %s", rec.Body)
+	}
+
+	for _, theme := range []string{"dark", "light", "system", "dark"} {
+		rec := doJSON(t, srv, reader, http.MethodPut, "/api/v1/auth/theme", `{"theme":"`+theme+`"}`)
+		var v struct{ User models.User }
+		_ = json.Unmarshal(rec.Body.Bytes(), &v)
+		if rec.Code != http.StatusOK || v.User.Theme != theme || v.User.Email != "reader@hackspace.org" {
+			t.Fatalf("%s: %d %s", theme, rec.Code, rec.Body)
+		}
+		if got := me(reader).Theme; got != theme {
+			t.Errorf("me after %s: %q", theme, got)
+		}
+	}
+	// It is theirs alone.
+	if got := me(sessionCookie(t, srv, admin.ID)).Theme; got != "system" {
+		t.Errorf("the admin's: %q", got)
+	}
+
+	for _, bad := range []string{`{}`, `{"theme":null}`, `{"theme":""}`, `{"theme":"sepia"}`, `{"theme":"Dark"}`, `{"theme":1}`, `nope`} {
+		if rec := doJSON(t, srv, reader, http.MethodPut, "/api/v1/auth/theme", bad); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d %s", bad, rec.Code, rec.Body)
+		}
+	}
+	if got := me(reader).Theme; got != "dark" {
+		t.Errorf("a bad theme changed it to %q", got)
+	}
+
+	// A personal token acts as its person, as it does for their name; a
+	// token holding roles is no one, and no one signed in is refused.
+	_, secret := personalToken(t, srv, reader, "Claude")
+	if rec := withBearer(t, srv, secret, http.MethodPut, "/api/v1/auth/theme", `{"theme":"light"}`); rec.Code != http.StatusOK {
+		t.Errorf("a personal token: %d %s", rec.Code, rec.Body)
+	}
+	roleSecret := tokenWith(t, srv, admin.ID, "Script", rbac.PermAssetsRead)
+	if rec := withBearer(t, srv, roleSecret, http.MethodPut, "/api/v1/auth/theme", `{"theme":"dark"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("a role token: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doJSON(t, srv, nil, http.MethodPut, "/api/v1/auth/theme", `{"theme":"dark"}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("signed out: %d", rec.Code)
+	}
+	if got := me(reader).Theme; got != "light" {
+		t.Errorf("after the tokens: %q", got)
+	}
+}

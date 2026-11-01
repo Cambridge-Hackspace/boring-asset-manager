@@ -12,3 +12,5 @@ What you see depends on your roles: the menu at the top shows the parts you can 
 Setting BAM! up for the first time, the home page lists the steps, ticking each off as it is done: naming yourself, adding a printer, creating categories, a role for members and the people who use it, and, if you like, making some categories public and adding a notification channel.
 
 Every page has a **Help** link at the top that opens the help for that page.
+
+BAM! is light or dark as your device is. To choose for yourself, use **Light**, **System** or **Dark** at the bottom of any page. Signed in, the choice follows you to every device you sign in on.

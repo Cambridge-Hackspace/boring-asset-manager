@@ -18,7 +18,7 @@ test('scanning a bin: anyone sees what is in it, and those allowed use some', as
   await page.goto(`/scan/${code}`);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(bin.asset.name);
   await expect(page.getByRole('region', { name: 'In it' })).toContainText(screws);
-  await expect(page.getByRole('button')).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('button')).toHaveCount(0);
 
   // Signed in, the screws' own scan page uses some.
   await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD);

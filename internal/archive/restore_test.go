@@ -98,6 +98,9 @@ func richSeed(t *testing.T, st *store.Store, blobs filestore.Blobs) seeded {
 	if _, err := st.Exec("UPDATE users SET name = ? WHERE id = ?", awkwardText[5], s.user.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.SetUserTheme(s.user.ID, "dark"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := st.Exec("INSERT INTO templates (id, name, units, width, height, dpi, layout_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		uuid.NewString(), awkwardText[2], "mm", 62.5, 29.125, 300, layoutJSON(awkwardText[4]),
 		time.Date(2026, 1, 2, 3, 4, 5, 123456000, time.UTC), time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)); err != nil {
@@ -434,6 +437,81 @@ func TestAnOlderSchemaIsRestoredThenMigrated(t *testing.T) {
 	_, err = Restore(context.Background(), migratedStore(t, envDialect()), dstBlobs, opener(b), RestoreOptions{})
 	if !errors.Is(err, ErrSchema) {
 		t.Errorf("into a newer schema: %v", err)
+	}
+}
+
+// TestAThemeIsRestored: a person's theme comes back with them, and from an
+// archive written before people chose one (schema 47, bam v0.16.0), whose
+// users have no theme column, they follow their system's.
+func TestAThemeIsRestored(t *testing.T) {
+	src := setupStore(t)
+	blobs := filestore.NewLocal(t.TempDir())
+	s := richSeed(t, src, blobs)
+	b := backup(t, src, blobs, Options{Kinds: []Kind{KindPeople}})
+	themeOf := func(st *store.Store) string {
+		t.Helper()
+		u, err := st.GetUserByID(s.user.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.Theme
+	}
+
+	dst := emptyStore(t, envDialect())
+	if _, err := Restore(context.Background(), dst, filestore.NewLocal(t.TempDir()), opener(b), RestoreOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := themeOf(dst); got != "dark" {
+		t.Errorf("restored with %q", got)
+	}
+
+	// The same archive as v0.16.0 wrote it: no theme in its users' rows.
+	ms := unpack(t, b)
+	stripped := 0
+	for i, m := range ms {
+		if !strings.HasPrefix(m.name, DataDir+"users/") {
+			continue
+		}
+		var out bytes.Buffer
+		for _, line := range strings.Split(strings.TrimSuffix(string(m.data), "\n"), "\n") {
+			var row map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(line), &row); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := row["theme"]; !ok {
+				t.Fatalf("a users row has no theme: %s", line)
+			}
+			delete(row, "theme")
+			stripped++
+			data, _ := json.Marshal(row)
+			out.Write(append(data, '\n'))
+		}
+		ms[i].data = out.Bytes()
+	}
+	if stripped == 0 {
+		t.Fatal("the archive has no users rows")
+	}
+	old := pack(t, reseal(t, ms, func(h *Header, _ *Manifest) { h.SchemaVersion = 47 }))
+	dst = emptyStore(t, envDialect())
+	sum, err := Restore(context.Background(), dst, filestore.NewLocal(t.TempDir()), opener(old), RestoreOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := schemaVersion(dst); v != migrations.Latest() || !sum.Migrated || sum.Tables["users"] != 1 {
+		t.Errorf("schema %d, summary %+v", v, sum)
+	}
+	if got := themeOf(dst); got != "system" {
+		t.Errorf("restored from before themes with %q", got)
+	}
+
+	// One at this schema whose rows lack it is restored the same way.
+	at := pack(t, reseal(t, unpack(t, old), func(h *Header, _ *Manifest) { h.SchemaVersion = migrations.Latest() }))
+	dst = emptyStore(t, envDialect())
+	if _, err := Restore(context.Background(), dst, filestore.NewLocal(t.TempDir()), opener(at), RestoreOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := themeOf(dst); got != "system" {
+		t.Errorf("restored without a theme with %q", got)
 	}
 }
 

@@ -264,6 +264,32 @@ func (s *Server) setUserName(w http.ResponseWriter, r *http.Request, userID stri
 	}
 }
 
+// SetThemeRequest sets how the web interface looks to the signed-in user.
+type SetThemeRequest struct {
+	Theme *string `json:"theme"`
+}
+
+// handleSetOwnTheme sets the signed-in user's theme, "light", "dark" or
+// "system" to follow their system's setting: PUT /api/v1/auth/theme
+func (s *Server) handleSetOwnTheme(w http.ResponseWriter, r *http.Request) {
+	var req SetThemeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Theme == nil {
+		writeJSONError(w, http.StatusBadRequest, "A theme is required: system, light or dark")
+		return
+	}
+	user, err := s.store.SetUserTheme(CurrentUser(r.Context()).ID, *req.Theme)
+	switch {
+	case errors.Is(err, store.ErrUserNotFound):
+		writeJSONError(w, http.StatusNotFound, "User not found")
+	case errors.Is(err, store.ErrInvalidUser):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeStoreError(w, err, "set the theme")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"user": user})
+	}
+}
+
 // SetPasswordRequest sets someone's password for them.
 type SetPasswordRequest struct {
 	Password string `json:"password"`
