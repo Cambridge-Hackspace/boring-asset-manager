@@ -9,11 +9,12 @@ test('fields and categories, with inheritance', async ({ signedIn: page }) => {
   await page.getByLabel('Label', { exact: true }).fill(label);
   await expect(page.getByLabel('Key', { exact: true })).toHaveValue(key);
   await page.getByLabel('Type').selectOption('select');
-  await page.getByLabel('Choice 1 label').fill('Good');
-  await page.getByLabel('Choice 1 value').fill('good');
+  // One box a choice: its value is made from its label (#171).
+  await page.getByLabel('Choice 1', { exact: true }).fill('Good');
+  await expect(page.getByText('Stored as good')).toBeVisible();
   await page.getByRole('button', { name: 'Add choice' }).click();
-  await page.getByLabel('Choice 2 label').fill('Broken');
-  await page.getByLabel('Choice 2 value').fill('broken');
+  await page.getByLabel('Choice 2', { exact: true }).fill('Broken');
+  await expect(page.getByText('Stored as broken')).toBeVisible();
   await page.getByRole('button', { name: 'Create field' }).click();
   await expect(page.getByRole('cell', { name: key, exact: true })).toBeVisible();
 

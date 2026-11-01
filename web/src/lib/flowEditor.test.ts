@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Definition, Step } from './flows';
-import { addStep, asks, checkFlow, moveStep, newStepID, previewProgress, problemsOf, slugFrom } from './flowEditor';
+import { addStep, asks, checkFlow, moveStep, newStepID, previewProgress, problemsOf, slugFrom, stepsUsing, withStepIDs } from './flowEditor';
 
 const leave: Definition = {
   version: 1,
@@ -32,7 +32,7 @@ describe('checkFlow', () => {
     };
     expect(problemsOf(checkFlow(d), 'about')).toEqual([
       'It needs a category: add Choose category before it, or give the flow only one.',
-      'Another step is named about.',
+      'This step has the same ID as another: remove it and add it again.',
       'Choose at least one way to find: scan, search or list.',
     ]);
     expect(problemsOf(checkFlow(d), 'label')).toEqual(['It needs something found or made in an earlier step.', 'Choose the printer or pool it prints to.']);
@@ -52,6 +52,36 @@ describe('steps', () => {
     const steps = addStep(leave.steps, 'form');
     expect(steps.map((s) => s.id)).toEqual(['kind', 'about', 'file', 'label', 'form', 'done']);
     expect(newStepID('form', steps)).toBe('form_2');
+    expect(addStep(addStep(steps, 'form'), 'create').map((s) => s.id)).toEqual(['kind', 'about', 'file', 'label', 'form', 'form_2', 'file_2', 'done']);
+  });
+  it('keeps the IDs steps have, and gives one to any without its own (#171)', () => {
+    const steps: Step[] = [
+      { id: 'about', kind: 'form' },
+      { id: '', kind: 'form' },
+      { id: 'about', kind: 'find', find_by: ['scan'] },
+      { id: 'Bad Name', kind: 'create' },
+      { id: 'done', kind: 'done' },
+    ];
+    const out = withStepIDs(steps);
+    expect(out.map((s) => s.id)).toEqual(['about', 'form', 'find', 'file', 'done']);
+    // A step that keeps its ID is the same step.
+    expect(out[0]).toBe(steps[0]);
+    expect(out[1]).toEqual({ id: 'form', kind: 'form' });
+    expect(withStepIDs(leave.steps)).toEqual(leave.steps);
+    expect(checkFlow({ ...leave, steps: withStepIDs([...leave.steps.slice(0, 2), { id: 'about', kind: 'form' }, ...leave.steps.slice(2)]) })).toEqual([]);
+  });
+  it('finds the steps that name a value', () => {
+    const steps: Step[] = [
+      { id: 'file', kind: 'create', name: '{owner}: {what}' },
+      { id: 'look', kind: 'find', find_by: ['list'], match: { field: 'owner', value: '{what}' } },
+      { id: 'note', kind: 'change', changes: [{ kind: 'fields', fields: { notes: 'About {what}' } }] },
+      { id: 'when', kind: 'confirm', when: { value: 'what', op: 'set' } },
+      { id: 'other', kind: 'confirm', title: 'Is {whatever} right?', text: '{what_else}' },
+      { id: 'done', kind: 'done', text: 'Filed {what}.' },
+    ];
+    expect(stepsUsing(steps, 'what').map((s) => s.id)).toEqual(['file', 'look', 'note', 'when', 'done']);
+    expect(stepsUsing(steps, 'owner').map((s) => s.id)).toEqual(['file']);
+    expect(stepsUsing(steps, '')).toEqual([]);
   });
   it('moves, but never past Done', () => {
     expect(moveStep(leave.steps, 1, -1).map((s) => s.id)).toEqual(['about', 'kind', 'file', 'label', 'done']);
