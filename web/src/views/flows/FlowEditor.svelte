@@ -215,8 +215,8 @@
           <div>
             <label class="label" for="flow-slug">Address</label>
             <div class="flex items-center gap-1 text-sm">
-              <span class="text-zinc-600 dark:text-zinc-400">/f/</span>
-              <input id="flow-slug" class="input font-mono" required maxlength="64" bind:value={slug} oninput={() => (slugTouched = true)} />
+              <span class="shrink-0 whitespace-nowrap text-zinc-600 dark:text-zinc-400">/f/</span>
+              <input id="flow-slug" class="input min-w-0 font-mono" required maxlength="64" bind:value={slug} oninput={() => (slugTouched = true)} />
             </div>
           </div>
         </div>
