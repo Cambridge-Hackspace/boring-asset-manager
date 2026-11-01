@@ -20,7 +20,7 @@
   let busy = $state(false);
   let error = $state('');
   let result = $state<ImportResult | null>(null);
-  // New assets' labels join the print queue (README §6.2), as each person last chose.
+  // New assets' labels join the print queue (docs/printing.md), as each person last chose.
   const canSpool = session.can('labels.print');
   let queueLabels = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
   let spooled = $state('');

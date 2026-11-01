@@ -53,7 +53,7 @@ export interface Route {
   nav?: string;
   /** The navigation group it is listed under; none puts it on its own. */
   group?: NavGroup;
-  /** Signed-out visitors may open it too, when the public role allows (README §3.3). */
+  /** Signed-out visitors may open it too, when the public role allows (docs/access.md). */
   public?: boolean;
   /** A workspace, such as the template editor: the whole window below the header, and no footer. */
   workspace?: boolean;
@@ -102,7 +102,7 @@ export const routes: Route[] = [
   { pattern: '/packages', component: PackagesPage, title: 'Import & export', permissions: ['settings.manage'], nav: 'Import & export', group: 'Admin' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },
   { pattern: '/oauth/consent', component: OAuthConsentPage, title: 'Connect an assistant' },
-  // Help is for everyone, signed in or not (README §6.5).
+  // Help is for everyone, signed in or not (docs/architecture.md).
   { pattern: '/help', component: HelpPage, title: 'Help', public: true },
   { pattern: '/help/:topic', component: HelpPage, title: 'Help', public: true },
 ];

@@ -24,7 +24,7 @@ export type Permission =
   | 'flows.manage'
   | 'flows.run';
 
-/** A permission held in every scope, or in one as scope:permission (README §3.3). */
+/** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
 
 /** A label on categories that roles can hold asset permissions in. */
@@ -125,26 +125,26 @@ export interface Asset {
   created_at: string;
   updated_at: string;
   archived_at?: string | null;
-  /** Set when the asset's stock is counted by quantity (README §5.1). */
+  /** Set when the asset's stock is counted by quantity (docs/stock-and-lending.md). */
   stock?: AssetStock | null;
   /** How it is: working, needing maintenance or out of service, with a note saying what is wrong. */
   condition: Condition;
   condition_note: string;
-  /** Its own icon (README §3.7), drawn in place of its categories'; null when it has none. Its screen icon. */
+  /** Its own icon (docs/icons.md), drawn in place of its categories'; null when it has none. Its screen icon. */
   icon_name?: string | null;
   /** Its own label icon, drawn on its labels in place of its categories'; null when it has none. */
   label_icon_name?: string | null;
 }
 
 /**
- * The form an icon takes for where it is drawn (README §3.7): screen,
+ * The form an icon takes for where it is drawn (docs/icons.md): screen,
  * everywhere on screen, or label, on labels. A category, and an asset, has
  * an icon for each; with no label icon, labels draw the screen icon.
  */
 export type Rendition = 'screen' | 'label';
 
 /**
- * The icon an asset is drawn with (README §3.7): its own, or that of the
+ * The icon an asset is drawn with (docs/icons.md): its own, or that of the
  * nearest category with one, source_category_id, named
  * source_category_name. missing is set when the
  * build draws no icon by the name, so the unknown icon is drawn; color is
@@ -172,7 +172,7 @@ export interface ResolvedIcon {
   drawn?: Record<string, IrIcon>;
 }
 
-/** A param of a category's icon bound to what an asset has (README §3.7): a field's value, or for a text param its name or first code. */
+/** A param of a category's icon bound to what an asset has (docs/icons.md): a field's value, or for a text param its name or first code. */
 export interface IconParamBinding {
   param: string;
   source: 'field' | 'name' | 'code';
@@ -181,7 +181,7 @@ export interface IconParamBinding {
   field_label: string;
 }
 
-/** The states an asset's icon can show, worst first (README §3.7). */
+/** The states an asset's icon can show, worst first (docs/icons.md). */
 export type IconState = 'out_of_service' | 'needs_maintenance' | 'overdue' | 'on_loan' | 'out_of_stock' | 'low_stock';
 
 export type Condition = 'ok' | 'needs_maintenance' | 'out_of_service';
@@ -259,7 +259,7 @@ export interface AssetWithDetails {
   scan_template: TemplateChoice;
   /** The label template the spool queues it with; template_id is empty when no category names one. */
   label_template: TemplateChoice;
-  /** The hooks its categories offer on it, such as Identify (README §5.4). */
+  /** The hooks its categories offer on it, such as Identify (docs/hooks.md). */
   hooks: OfferedHook[];
   /** Its photos, in order; the first is the one lists show. */
   photos: AssetPhoto[];
@@ -383,7 +383,7 @@ export interface Role {
   public: boolean;
 }
 
-/** A role as a user or token holds it: in every scope, or, when scope_ids names any, narrowed to those (README §3.3). */
+/** A role as a user or token holds it: in every scope, or, when scope_ids names any, narrowed to those (docs/access.md). */
 export interface RoleAssignment {
   role_id: string;
   scope_ids: string[];
@@ -419,7 +419,7 @@ export interface ImportProblem {
   message: string;
 }
 
-/** What an import would do (README §6.1). */
+/** What an import would do (docs/csv.md). */
 export interface ImportPlan {
   columns: ImportColumn[];
   rows: number;
@@ -479,7 +479,7 @@ export interface EventKind {
   label: string;
 }
 
-/** A notification channel (README §5.2). */
+/** A notification channel (docs/notifications.md). */
 export interface Channel {
   id: string;
   name: string;
@@ -588,7 +588,7 @@ export interface AssetLink {
 export interface Report {
   id: string;
   name: string;
-  /** A report, or a scan template: what scanning an asset shows (README §6.4). */
+  /** A report, or a scan template: what scanning an asset shows (docs/scanning.md). */
   kind: 'report' | 'scan';
   /** The scan template assets show when no category names one. */
   default: boolean;
@@ -679,7 +679,7 @@ export function photoUrl(assetId: string, photoId: string, thumb = false): strin
   return `/api/v1/assets/${encodeURIComponent(assetId)}/photos/${encodeURIComponent(photoId)}${thumb ? '?size=thumb' : ''}`;
 }
 
-/** Where a spool entry prints: a printer, a download, or nowhere yet (README §6.2). */
+/** Where a spool entry prints: a printer, a download, or nowhere yet (docs/printing.md). */
 export type SpoolDestination = `printer:${string}` | `pool:${string}` | 'download' | '';
 
 /** Someone who added or printed a spool entry, by name. */
@@ -768,7 +768,7 @@ export interface SpoolPrintResult {
   warnings?: string[];
 }
 
-/** Printers loaded alike that share print jobs: each job is cut into batches of batch_size labels (README §6.2). */
+/** Printers loaded alike that share print jobs: each job is cut into batches of batch_size labels (docs/printing.md). */
 export interface PrinterPool {
   id: string;
   name: string;
@@ -780,7 +780,7 @@ export interface PrinterPool {
   updated_at: string;
 }
 
-/** A button people press on assets, such as Identify, triggering a hook: an asset.hook event (README §5.4). */
+/** A button people press on assets, such as Identify, triggering a hook: an asset.hook event (docs/hooks.md). */
 export interface AssetHook {
   id: string;
   key: string;
@@ -805,7 +805,7 @@ export interface OfferedHook {
   confirm?: string;
 }
 
-/** A live event connection a server holds open, for an API token or a signed-in user (README §5.4). */
+/** A live event connection a server holds open, for an API token or a signed-in user (docs/hooks.md). */
 export interface LiveConnection {
   id: string;
   token_id?: string;
@@ -826,7 +826,7 @@ export interface HookReply {
   created_at: string;
 }
 
-/** An error or warning from the icon compiler, at a place in a file of the build (README §3.7). */
+/** An error or warning from the icon compiler, at a place in a file of the build (docs/icons.md). */
 export interface IconDiag {
   file: string;
   line: number;

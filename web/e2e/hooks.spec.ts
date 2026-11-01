@@ -1,6 +1,6 @@
 import { expect, goTo, test, unique } from './fixtures';
 
-// Hooks (README §5.4): defined once, offered by a category to its
+// Hooks (docs/hooks.md): defined once, offered by a category to its
 // subcategories' assets, triggered on an asset's page, kept in its history.
 test('define a hook, offer it on a category, and trigger it', async ({ signedIn: page, api }) => {
   const label = unique('Identify');

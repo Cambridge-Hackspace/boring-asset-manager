@@ -1,4 +1,4 @@
--- 003_printers.sql: label printers (README §4.4). connection_type and address
+-- 003_printers.sql: label printers (docs/printing.md). connection_type and address
 -- say how BAM reaches the printer; options holds the driver's options as a
 -- JSON object, or NULL for its defaults.
 

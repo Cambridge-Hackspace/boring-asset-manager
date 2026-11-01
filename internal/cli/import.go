@@ -15,7 +15,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// ImportOptions are bam import's choices (#145, README §2.3).
+// ImportOptions are bam import's choices (#145, docs/backups.md).
 type ImportOptions struct {
 	// Anchor is the category, by name or ID, the archive's top categories
 	// go under; empty for the top level.

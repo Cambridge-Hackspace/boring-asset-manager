@@ -11,7 +11,7 @@ import (
 )
 
 // Kinds of saved report: a report runs over the assets its filter finds; a
-// scan template is what scanning one asset's code shows (README §6.4).
+// scan template is what scanning one asset's code shows (docs/scanning.md).
 const (
 	KindReport = "report"
 	KindScan   = "scan"
@@ -24,9 +24,9 @@ const SourceContents = "contents"
 // ScanActions are the quick actions a scan template may offer, in the order
 // the web app shows them: open the asset's page, edit it, use some of its
 // stock, borrow it, give it back, report a problem, the hooks its
-// categories offer, such as Identify (README §5.4), start a new asset like
-// it, or in it (README §3.2), and the flows that start from it, such as
-// Collect it (README §6.7).
+// categories offer, such as Identify (docs/hooks.md), start a new asset like
+// it, or in it (docs/data-model.md), and the flows that start from it, such as
+// Collect it (docs/flows.md).
 var ScanActions = []string{"open", "edit", "use", "borrow", "return", "report", "hooks", "add_similar", "add_inside", "flows"}
 
 // ParseScan decodes and checks a scan template's spec. It has no filter,

@@ -1,4 +1,4 @@
-// Package archive writes and reads bam's archives (README §2.3, #117): a
+// Package archive writes and reads bam's archives (docs/packages.md, #117): a
 // backup of a whole instance, or a package of part of one, as a gzipped tar
 // readable with tar and any JSON parser. Rows are JSON Lines, one directory
 // per table; uploaded files are kept as stored; a header comes first and a
@@ -187,7 +187,7 @@ const readme = `This is an archive of a BAM! (Boring Asset Manager) instance, wr
 bam backup, or downloaded from its Backups page. bam restore puts it back,
 into a database of any kind. Or it is a package of part of one, written by
 bam export or its Import & export page, which header.json says. Its format
-is documented in bam's README, in section 2.3.
+is documented in bam's docs/backups.md.
 
 header.json    what this archive is: bam's version, the schema's, when it
                was written, the kinds of information it holds, and its

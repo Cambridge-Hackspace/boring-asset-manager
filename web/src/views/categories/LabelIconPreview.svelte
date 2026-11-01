@@ -1,5 +1,5 @@
 <!--
-  A label icon as it prints (README §3.7): in black and white, at the size
+  A label icon as it prints (docs/icons.md): in black and white, at the size
   of an icon on 12 mm tape at 203 dots an inch, shaded and as an outline,
   drawn by the labels' own renderer in the browser (lib/live), from the
   icons as the editor checks them.

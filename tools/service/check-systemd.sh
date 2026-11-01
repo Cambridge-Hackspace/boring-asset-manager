@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs BAM in a Debian container booted with systemd, following the
-# steps in README §2.1, and checks the service: it starts at boot, serves,
+# steps in docs/installing.md, and checks the service: it starts at boot, serves,
 # comes back after it is killed and after a reboot, and stops cleanly.
 # Needs bin/bam-linux-amd64 (tools/release/build.sh linux/amd64) and
 # podman.
@@ -29,7 +29,7 @@ podman run -d --name "$NAME" --systemd=always -v "$ROOT:/src:ro" bam-systemd-che
 run() { podman exec "$NAME" sh -c "$1"; }
 until run "systemctl is-system-running 2>/dev/null | grep -qE 'running|degraded'"; do sleep 1; done
 
-echo "== installing, as README §2.1 says"
+echo "== installing, as docs/installing.md says"
 run '
 set -e
 cd /src

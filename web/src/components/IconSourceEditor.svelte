@@ -1,5 +1,5 @@
 <!--
-  An editor for isolex source (README §3.7), as a code editor works: a
+  An editor for isolex source (docs/icons.md), as a code editor works: a
   plain textarea, so typing, undo, selection and screen readers are the
   browser's own, over a colored copy of the text; line numbers with a
   mark on each line that has a problem, the problem's token underlined;

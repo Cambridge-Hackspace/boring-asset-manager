@@ -1,4 +1,4 @@
--- 012_api_tokens.sql: API tokens for scripts and dashboards (README §3.4).
+-- 012_api_tokens.sql: API tokens for scripts and dashboards (docs/access.md).
 -- A token is shown once; only the SHA-256 hash of its secret is stored, as
 -- for sessions. Its permissions are those of its roles. Revoked tokens are
 -- kept, so the history can still name them.

@@ -88,7 +88,7 @@ export class LiveRenderer {
   }
 
   /**
-   * Gives the renderer the icons labels draw (README §3.7): the build's,
+   * Gives the renderer the icons labels draw (docs/icons.md): the build's,
    * the unknown icon and the palette's light colors, as live.Icons. They
    * reach it before anything asked for after.
    */

@@ -3,7 +3,7 @@
   import type { ReportResult, ScanAction } from '../lib/models';
   import { scanActionLabel } from '../lib/scan';
 
-  // A scan template laid out for one asset (README §6.4): its details, tables
+  // A scan template laid out for one asset (docs/scanning.md): its details, tables
   // of what it holds, and its quick actions. Without an actions snippet the
   // actions are listed, as an editor's preview shows them.
   let { result, actions, linkRows = false }: { result: ReportResult; actions?: Snippet<[ScanAction[]]>; linkRows?: boolean } = $props();

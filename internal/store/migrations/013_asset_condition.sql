@@ -1,4 +1,4 @@
--- 013_asset_condition.sql: an asset's condition (README §3.2): ok, needs
+-- 013_asset_condition.sql: an asset's condition (docs/data-model.md): ok, needs
 -- maintenance or out of service, with a note. CONDITION is reserved on
 -- MariaDB, hence the column's name.
 --

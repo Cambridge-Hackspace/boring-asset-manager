@@ -1,4 +1,4 @@
-// Package reports runs saved reports (README §6.3): a filter over assets and
+// Package reports runs saved reports (docs/reports.md): a filter over assets and
 // sections that show what it finds, as tables whose columns are content
 // bindings like those of label templates.
 package reports

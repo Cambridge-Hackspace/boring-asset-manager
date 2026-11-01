@@ -1,4 +1,4 @@
-// Custom label stock (README §4.4): rolls known by their size alone, which
+// Custom label stock (docs/printing.md): rolls known by their size alone, which
 // printers whose drivers take any size may have loaded.
 
 import type { DriverInfo, LabelStockSize, PrinterChanges } from './models';

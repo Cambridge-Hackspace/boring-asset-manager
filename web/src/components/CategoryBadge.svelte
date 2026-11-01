@@ -7,7 +7,7 @@
   let { category, href }: { category: Pick<Category, 'id' | 'name' | 'color_hex'>; href?: string } = $props();
 
   const style = $derived(`background-color: ${category.color_hex}; color: ${textOn(category.color_hex)}`);
-  // Its icon (README §3.7), on the page's own background: drawn on the
+  // Its icon (docs/icons.md), on the page's own background: drawn on the
   // category's color, what the icon paints in that color would vanish.
   $effect(() => {
     void iconset.load();

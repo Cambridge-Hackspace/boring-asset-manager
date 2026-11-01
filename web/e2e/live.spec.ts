@@ -1,6 +1,6 @@
 import { expect, test, unique } from './fixtures';
 
-// Live events (README §5.4): a device connects, is sent a hook triggered on
+// Live events (docs/hooks.md): a device connects, is sent a hook triggered on
 // an asset's page, and answers; the person who pressed sees the answer.
 // The device here is a second page of the same signed-in user, which opens
 // the WebSocket with its session.

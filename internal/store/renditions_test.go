@@ -13,7 +13,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
 )
 
-// Renditions (README §3.7): a category's icon for labels, beside its icon
+// Renditions (docs/icons.md): a category's icon for labels, beside its icon
 // for the screen, resolved for an asset by the same rule, and falling back
 // to the screen's.
 

@@ -3,7 +3,7 @@ import { createWriteStream } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { expect, goTo, test, unique } from './fixtures';
 
-// Backups from the web (README §2.3): one downloaded by the browser, and
+// Backups from the web (docs/backups.md): one downloaded by the browser, and
 // the instance's assets put back from it through the page.
 test('download a backup, and replace the assets with it', async ({ signedIn: page, api }, testInfo) => {
   test.setTimeout(120_000);

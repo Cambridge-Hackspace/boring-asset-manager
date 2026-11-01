@@ -14,7 +14,7 @@ import (
 
 // MCP relays the Model Context Protocol between in and out (stdin and stdout)
 // and a BAM! server's MCP endpoint, as the API token given, for assistants
-// that start local programs rather than reach URLs: bam mcp (README §6.6).
+// that start local programs rather than reach URLs: bam mcp (docs/mcp.md).
 // It ends when in does.
 func MCP(ctx context.Context, server, token string, in io.ReadCloser, out io.WriteCloser) error {
 	if strings.TrimSpace(server) == "" {

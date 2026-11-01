@@ -1,4 +1,4 @@
--- 015_asset_links.sql: associations between assets (README §3.6).
+-- 015_asset_links.sql: associations between assets (docs/data-model.md).
 --
 -- A relation type names a link from each end: from_asset "contains" to_asset,
 -- and to_asset is "contained in" from_asset. A symmetric type reads the

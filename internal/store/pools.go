@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Printer pools (README §6.2): printers loaded alike that share print
+// Printer pools (docs/printing.md): printers loaded alike that share print
 // jobs from the spool.
 
 const (

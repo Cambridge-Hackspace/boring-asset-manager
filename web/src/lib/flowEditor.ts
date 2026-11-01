@@ -1,4 +1,4 @@
-// Editing flows (README §6.7): what each kind of step is called and starts
+// Editing flows (docs/flows.md): what each kind of step is called and starts
 // as, and the checks the editor makes as you go. The server checks a flow
 // again, fully, when it is saved.
 

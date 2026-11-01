@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Printing from the spool (README §6.2): jobs, each sent in batches that a
+// Printing from the spool (docs/printing.md): jobs, each sent in batches that a
 // printer takes one at a time. The API's spooler claims batches, sends them
 // and finishes them here; the database keeps two servers from claiming the
 // same batch or sending two batches to one printer at once.

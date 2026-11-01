@@ -10,7 +10,7 @@
   import ScanResult from '../../components/ScanResult.svelte';
 
   // /scan-templates/new and /scan-templates/:id/edit: what scanning an
-  // asset's code shows (README §6.4).
+  // asset's code shows (docs/scanning.md).
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
 

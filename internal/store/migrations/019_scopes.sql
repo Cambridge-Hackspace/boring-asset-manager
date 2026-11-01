@@ -1,4 +1,4 @@
--- 019_scopes.sql: scoped permissions (README §3.3).
+-- 019_scopes.sql: scoped permissions (docs/access.md).
 --
 -- Permission keys become resource.action (assets.read), so a role can hold
 -- one in a scope as scope:resource.action (tools:assets.read). A scope is a

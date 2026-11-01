@@ -1,4 +1,4 @@
--- 028_label_stock.sql: custom label stock (README §4.4).
+-- 028_label_stock.sql: custom label stock (docs/printing.md).
 --
 -- A stock is a roll known by its size alone: the label width, the length
 -- and gap of die-cut labels (none for a continuous roll). Printers whose

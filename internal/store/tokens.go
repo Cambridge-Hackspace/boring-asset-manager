@@ -56,7 +56,7 @@ func (s *Store) CreateToken(name string, roleIDs []string, expiresAt *time.Time,
 }
 
 // CreateTokenWithRoles creates a token as CreateToken does, its roles each
-// in every scope or narrowed to some (README §3.3).
+// in every scope or narrowed to some (docs/access.md).
 func (s *Store) CreateTokenWithRoles(name string, roles []models.RoleAssignment, expiresAt *time.Time, createdBy string) (*models.APIToken, string, error) {
 	return s.createToken(name, roles, expiresAt, createdBy, "")
 }
@@ -240,7 +240,7 @@ func (s *Store) AuthenticateToken(secret string) (*models.APIToken, map[string]b
 }
 
 // Via returns a view of the store whose changes record that they were made
-// through an assistant, by the name its MCP client gives (README §6.6).
+// through an assistant, by the name its MCP client gives (docs/mcp.md).
 func (s *Store) Via(assistant string) *Store {
 	c := *s
 	c.via = assistant

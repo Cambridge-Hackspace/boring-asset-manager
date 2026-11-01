@@ -1,4 +1,4 @@
--- 034_icons.sql: icons written in isolex (README §3.7).
+-- 034_icons.sql: icons written in isolex (docs/icons.md).
 --
 -- A category may carry an isolex source that draws its icon, named by
 -- icon_name. source is what is published: the latest version that

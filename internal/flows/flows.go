@@ -1,4 +1,4 @@
-// Package flows describes flows (README §6.7, #121): guided pages for doing
+// Package flows describes flows (docs/flows.md, #121): guided pages for doing
 // one everyday thing with assets, such as filing a new one or finishing with
 // one, built from an ordered list of configurable steps. It checks a flow
 // before it is saved, renders its templates, and decides which step comes
@@ -133,7 +133,7 @@ type Question struct {
 
 // The types of question. A yes/no question's answer is yes or no; a
 // photo's is the file's name, the photo itself being added by the page
-// that took it once the asset it is of exists (README §6.7).
+// that took it once the asset it is of exists (docs/flows.md).
 const (
 	QuestionText     = "text"
 	QuestionLongText = "long_text"

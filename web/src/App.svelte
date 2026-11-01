@@ -28,7 +28,7 @@
 
   const allowed = $derived(!match?.route.permissions || session.canAny(...match.route.permissions));
   const workspace = $derived(allowed && !!match?.route.workspace);
-  // Signed out, a page is open when the public role allows it (README §3.3).
+  // Signed out, a page is open when the public role allows it (docs/access.md).
   const openToPublic = $derived(!!match?.route.public && allowed);
 
   // A page that moved is opened where it is now, in place of the old
@@ -75,5 +75,5 @@
 {/if}
 
 {#if !workspace}<Footer />{/if}
-<!-- the colors icons paint with (README §3.7), once there are icons -->
+<!-- the colors icons paint with (docs/icons.md), once there are icons -->
 {#if iconset.palette.length}<IconPaletteStyle palette={iconset.palette} />{/if}

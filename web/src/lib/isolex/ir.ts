@@ -1,4 +1,4 @@
-// The shape IR isolex compiles icons to (README §3.7; isolex SPEC §6):
+// The shape IR isolex compiles icons to (docs/icons.md; isolex SPEC §6):
 // what pages draw icons from. Mirrors internal/isolex/ir.
 
 export interface IrShape {

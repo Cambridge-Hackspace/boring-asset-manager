@@ -1,5 +1,5 @@
 <!--
-  /icons (README §3.7): every icon, what needs attention, and what all
+  /icons (docs/icons.md): every icon, what needs attention, and what all
   icons are drawn with: the library, the palette and the settings; the
   lexicon as a zip, out and in.
 -->

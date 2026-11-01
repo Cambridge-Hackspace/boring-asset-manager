@@ -1,4 +1,4 @@
-// Packages (README §2.3, #144): part of the instance, chosen as an
+// Packages (docs/packages.md, #144): part of the instance, chosen as an
 // installer's components are, with what it needs ticked and marked, then
 // downloaded by the browser as the server writes it.
 
@@ -208,7 +208,7 @@ export function base64Of(file: Blob): Promise<string> {
   });
 }
 
-// Importing (README §2.3, #145): a package, or kinds of a backup, uploaded
+// Importing (docs/packages.md, #145): a package, or kinds of a backup, uploaded
 // as backups are, checked to say what it would do, then imported as checked.
 
 /** What an import does with one thing: what clashes with nothing is created. */

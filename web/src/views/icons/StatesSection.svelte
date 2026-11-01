@@ -1,5 +1,5 @@
 <!--
-  Asset states (README §3.7): the variant each state an asset can be in is
+  Asset states (docs/icons.md): the variant each state an asset can be in is
   drawn with. An asset in a state is drawn as <its icon>-<variant> when
   the build draws that, as an icon does that opts into an axis with that
   variant, and as its plain icon otherwise; in several, the worst its icon

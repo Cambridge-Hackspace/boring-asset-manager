@@ -19,7 +19,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// The spool (README §6.2): labels gathered over time, sorted onto templates
+// The spool (docs/printing.md): labels gathered over time, sorted onto templates
 // and printers in bulk, and printed or downloaded together. Everything here
 // needs labels.print; each entry also needs its asset readable, and entries
 // for assets the requester cannot read are not shown to them.

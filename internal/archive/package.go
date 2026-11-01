@@ -17,7 +17,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Packages (#144, README §2.3): part of an instance, chosen, with what it
+// Packages (#144, docs/packages.md): part of an instance, chosen, with what it
 // needs, to share. A package is an archive like a backup, of type
 // "package", holding only the rows of what was chosen and what that needs,
 // and never people, authentication or this instance's own settings.

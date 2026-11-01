@@ -17,7 +17,7 @@ import (
 )
 
 // requireIcons skips a test that needs the icon compiler when it is not
-// built in, unless BAM_REQUIRE_ISOLEX makes that a failure (README §8.1).
+// built in, unless BAM_REQUIRE_ISOLEX makes that a failure (docs/testing.md).
 func requireIcons(t *testing.T) {
 	t.Helper()
 	if !isolex.Default().Available() {
