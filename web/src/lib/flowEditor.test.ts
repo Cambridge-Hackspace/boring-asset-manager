@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Definition, Step } from './flows';
 import type { Field } from './models';
@@ -15,6 +17,10 @@ import {
   setsOn,
   slugFrom,
   stepsUsing,
+  suggest,
+  unknownNames,
+  valuesBefore,
+  type ValueField,
   withStepIDs,
   type FlowCatalog,
 } from './flowEditor';
@@ -276,5 +282,84 @@ describe('steps', () => {
     expect(previewProgress(steps, 4)).toBeNull();
     expect(previewProgress(steps, 5)).toBeNull();
     expect(previewProgress(steps, 8)).toBeNull();
+  });
+});
+
+// The cases saving is tested against too (internal/flows/values_test.go),
+// so what the editor offers and what saving accepts cannot disagree (#169).
+interface ValueCase {
+  name: string;
+  fields: ValueField[];
+  definition: Definition;
+  available: Record<string, string[]>;
+  empty_when_skipped: Record<string, string[]>;
+}
+const valueCases: ValueCase[] = JSON.parse(readFileSync(resolve(process.cwd(), '../internal/flows/testdata/values.json'), 'utf8')).cases;
+
+describe('valuesBefore', () => {
+  it('has cases to agree with saving on', () => expect(valueCases.length).toBeGreaterThan(0));
+
+  for (const c of valueCases) {
+    it(`offers each step what saving accepts there: ${c.name}`, () => {
+      c.definition.steps.forEach((s, i) => {
+        const got = valuesBefore(c.definition, i, c.fields);
+        expect(got.map((v) => v.key).sort(), s.id).toEqual([...c.available[s.id]!].sort());
+        expect(got.filter((v) => v.note).map((v) => v.key).sort(), `${s.id}, empty when skipped`).toEqual([...(c.empty_when_skipped[s.id] ?? [])].sort());
+      });
+    });
+  }
+
+  it('starts with the values every run has, and says where each value comes from', () => {
+    const got = valuesBefore(leave, 3, [{ key: 'owner', label: 'Owner' }], { long: 'Long boards' });
+    expect(got.slice(0, 4).map((v) => [v.key, v.from])).toEqual([
+      ['today', 'Every run'],
+      ['now', 'Every run'],
+      ['user', 'Every run'],
+      ['flow', 'Every run'],
+    ]);
+    expect(got.find((v) => v.key === 'name')).toMatchObject({ label: 'What is it?', from: 'Form' });
+    expect(got.find((v) => v.key === 'owner')).toMatchObject({ label: 'Owner', from: 'Create' });
+    // Its own values are not before it.
+    expect(valuesBefore(leave, 1).map((v) => v.key)).not.toContain('name');
+  });
+
+  it('says a value a step shown only when something holds sets is empty when it is skipped, and what it compares with', () => {
+    const d: Definition = {
+      version: 2,
+      category_ids: ['short', 'long'],
+      steps: [
+        { id: 'kind', kind: 'choose_category' },
+        {
+          id: 'long',
+          kind: 'form',
+          title: 'Long boards',
+          when: { value: 'category_id', op: 'is', to: 'long' },
+          questions: [
+            { key: 'wood', label: 'Which wood?', type: 'choice', options: [{ value: 'oak', label: 'Oak' }, { value: 'pine' }] },
+            { key: 'until', label: 'Until', type: 'date' },
+            { key: 'waxed', label: 'Waxed?', type: 'yes_no' },
+          ],
+        },
+        { id: 'done', kind: 'done' },
+      ],
+    };
+    const got = valuesBefore(d, 2, [], { long: 'Long boards' });
+    const wood = got.find((v) => v.key === 'wood')!;
+    expect(wood.from).toBe('Form: Long boards');
+    expect(wood.note).toBe('Empty when Form: Long boards is skipped: it is shown only when {category_id} is “Long boards”.');
+    expect(wood.input).toEqual({ kind: 'choices', options: [{ value: 'oak', label: 'Oak' }, { value: 'pine', label: 'pine' }] });
+    expect(got.find((v) => v.key === 'until')!.input).toEqual({ kind: 'date' });
+    expect(got.find((v) => v.key === 'waxed')!.input).toEqual({ kind: 'choices', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] });
+    expect(got.find((v) => v.key === 'category_id')!.input).toEqual({ kind: 'category' });
+    expect(got.find((v) => v.key === 'category_id')!.note).toBeUndefined();
+  });
+
+  it('suggests by key, those starting with what was typed first, and finds names not available', () => {
+    const got = valuesBefore(leave, 2);
+    expect(suggest(got, 'na').map((v) => v.key)).toEqual(['name']);
+    expect(suggest(got, 'o').map((v) => v.key)).toEqual(['today', 'now', 'flow', 'category', 'category_id']);
+    expect(suggest(got, 'c').map((v) => v.key)[0]).toBe('category');
+    expect(unknownNames('{owner}: {name} {owner}', got)).toEqual(['owner']);
+    expect(unknownNames('{name}', got)).toEqual([]);
   });
 });
