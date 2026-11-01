@@ -24,14 +24,14 @@ type saveFlowIn struct {
 	NewSlug    string          `json:"new_slug,omitempty" jsonschema:"its address, /f/<slug>: lowercase letters, digits, - and _; for a new flow, required"`
 	Name       *string         `json:"name,omitempty"`
 	Enabled    *bool           `json:"enabled,omitempty"`
-	Definition json.RawMessage `json:"definition,omitempty" jsonschema:"what it does, the whole of it (README §6.7): {version: 1, description, category_ids, steps}; start from flow_starters"`
+	Definition json.RawMessage `json:"definition,omitempty" jsonschema:"what it does, the whole of it (README §6.7): {version: 2, description, category_ids, steps}; a form asks its own questions, and a set_fields step puts answers or other values into the asset's fields: {kind: set_fields, fields: [{field, value}], photo}; start from flow_starters"`
 }
 
 type runFlowIn struct {
 	Slug   string          `json:"slug" jsonschema:"the flow's address, from list_flows"`
 	RunID  string          `json:"run_id,omitempty" jsonschema:"the run to go on with; empty to start one"`
 	From   string          `json:"from_asset_id,omitempty" jsonschema:"starting: an asset to start from, for a flow that begins by finding something; it starts with that found"`
-	Answer json.RawMessage `json:"answer,omitempty" jsonschema:"the answer to the step the run is on, naming it: {step, category_id | name, fields, answers | asset_id | code | place_code}; just {step} tries a step that failed again"`
+	Answer json.RawMessage `json:"answer,omitempty" jsonschema:"the answer to the step the run is on, naming it: {step, category_id | answers (by question key) | asset_id | code | place_code}; just {step} tries a step that failed again"`
 	Search string          `json:"search,omitempty" jsonschema:"with run_id and no answer: narrows a Find step's list"`
 	End    bool            `json:"end,omitempty" jsonschema:"true to give the run up"`
 }
@@ -105,7 +105,7 @@ func flowTools() []tool {
 				}
 				return say(out, "%d flows.", count(out, "flows"))
 			}),
-		simple(&mcp.Tool{Name: "flow_starters", Description: "The ready-made flows to adjust before saving, over the categories given: Leave something (choose, form, file, label) and Collect it (find, confirm, archive).",
+		simple(&mcp.Tool{Name: "flow_starters", Description: "The ready-made flows to adjust before saving, over the categories given: Leave something (choose, form, set fields, file, label) and Collect it (find, confirm, archive). Definitions are version 2.",
 			Annotations: readOnly("Flow starters")}, "GET /api/v1/flow-starters", manage,
 			func(in struct {
 				CategoryIDs []string `json:"category_ids" jsonschema:"the categories it files into or takes from"`
@@ -188,6 +188,19 @@ func promptSummary(out map[string]any) string {
 		n, _ := pr["step"].(float64)
 		of, _ := pr["of"].(float64)
 		where = fmt.Sprintf(", %d of %d", int(n), int(of))
+	}
+	// A form is answered by its questions' keys (#174).
+	var keys []string
+	questions, _ := p["questions"].([]any)
+	for _, q := range questions {
+		if m, ok := q.(map[string]any); ok {
+			if k, ok := m["key"].(string); ok {
+				keys = append(keys, fmt.Sprintf("%q: ...", k))
+			}
+		}
+	}
+	if kind == "form" && len(keys) > 0 {
+		return fmt.Sprintf("On step %q (%s%s); answer it with {\"step\": %q, \"answers\": {%s}}.", step, kind, where, step, strings.Join(keys, ", "))
 	}
 	return fmt.Sprintf("On step %q (%s%s); answer it with {\"step\": %q, ...}.", step, kind, where, step)
 }

@@ -11,19 +11,23 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 )
 
-// Version is the version of the definition this package writes and reads.
-const Version = 1
+// Version is the version of the definition this package writes and reads:
+// 2, in which a Form asks only its own questions and a Set fields step
+// puts values into an asset's fields (#174). UpgradeV1 converts version 1.
+const Version = 2
 
 // The kinds of step.
 const (
 	KindChooseCategory = "choose_category"
 	KindForm           = "form"
+	KindSetFields      = "set_fields"
 	KindFind           = "find"
 	KindCreate         = "create"
 	KindLabel          = "label"
@@ -33,7 +37,7 @@ const (
 )
 
 // Kinds lists the kinds of step, in the order an editor offers them.
-var Kinds = []string{KindChooseCategory, KindForm, KindFind, KindCreate, KindLabel, KindChange, KindConfirm, KindDone}
+var Kinds = []string{KindChooseCategory, KindForm, KindSetFields, KindFind, KindCreate, KindLabel, KindChange, KindConfirm, KindDone}
 
 // Definition is what a flow does: the categories it files into or takes
 // from, and its steps, in order.
@@ -66,14 +70,16 @@ type Step struct {
 	Categories []string `json:"categories,omitempty"`
 	Fixed      string   `json:"fixed,omitempty"`
 
-	// Form: the creator's settings for the fields the chosen category's
-	// assets record, in the order to ask them; whether to ask for the
-	// asset's name and a photo; and questions of the run's own.
-	Fields    []FieldSetting `json:"fields,omitempty"`
-	AskName   bool           `json:"ask_name,omitempty"`
-	NameLabel string         `json:"name_label,omitempty"`
-	AskPhoto  bool           `json:"ask_photo,omitempty"`
-	Questions []Question     `json:"questions,omitempty"`
+	// Form: its questions, in the order asked. Each answer is the run's
+	// value of the question's key.
+	Questions []Question `json:"questions,omitempty"`
+
+	// Set fields: the asset's fields to set, each to a template, and its
+	// photo, a photo question's answer ("{photo}"). Before a Create it
+	// fills the new asset's fields as it is filed; after a Find or Create
+	// it updates that asset.
+	Fields []FieldValue `json:"fields,omitempty"`
+	Photo  string       `json:"photo,omitempty"`
 
 	// Find: how to find the asset (scan, search, list), and what narrows
 	// the assets found: those a flow filed (by its ID, this one's or
@@ -110,27 +116,77 @@ const (
 	OpUnset = "unset"
 )
 
-// FieldSetting is the creator's setting for one field of a Form, by its
-// key. A field with no setting is asked as its category defines it.
-type FieldSetting struct {
-	Key    string `json:"key"`
-	Hidden bool   `json:"hidden,omitempty"`
-	Label  string `json:"label,omitempty"`
-	Help   string `json:"help,omitempty"`
+// Question is one thing a Form asks. Its answer is the run's value of its
+// key, for templates, and for a Set fields step to put in a field.
+type Question struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Help  string `json:"help,omitempty"`
+	// Type is what is asked for (QuestionText when empty); Options, the
+	// choices of a choice question.
+	Type    string   `json:"type,omitempty"`
+	Options []Option `json:"options,omitempty"`
 	// Default is a template: a fixed value, {today}, or an earlier answer.
 	Default  string `json:"default,omitempty"`
 	Required bool   `json:"required,omitempty"`
 }
 
-// Question is asked by a Form for the run's own use, in templates; it is
-// recorded in no field.
-type Question struct {
-	Key      string `json:"key"`
-	Label    string `json:"label"`
-	Help     string `json:"help,omitempty"`
-	Type     string `json:"type,omitempty"` // text (the default), number or date
-	Default  string `json:"default,omitempty"`
-	Required bool   `json:"required,omitempty"`
+// The types of question. A yes/no question's answer is yes or no; a
+// photo's is the file's name, the photo itself being added by the page
+// that took it once the asset it is of exists (README §6.7).
+const (
+	QuestionText     = "text"
+	QuestionLongText = "long_text"
+	QuestionNumber   = "number"
+	QuestionDate     = "date"
+	QuestionYesNo    = "yes_no"
+	QuestionChoice   = "choice"
+	QuestionPhoto    = "photo"
+)
+
+// QuestionTypes lists the types of question, in the order an editor
+// offers them.
+var QuestionTypes = []string{QuestionText, QuestionLongText, QuestionNumber, QuestionDate, QuestionYesNo, QuestionChoice, QuestionPhoto}
+
+// Option is one choice of a choice question: its value, the answer, and
+// how it is shown (as the value, when empty).
+type Option struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
+}
+
+// Problem says why an answer does not suit a question, or is empty when it
+// does. An empty answer suits any.
+func (q *Question) Problem(answer string) string {
+	if answer == "" {
+		return ""
+	}
+	switch q.Type {
+	case QuestionNumber:
+		if _, err := strconv.ParseFloat(answer, 64); err != nil {
+			return "is a number"
+		}
+	case QuestionDate:
+		if _, err := time.Parse("2006-01-02", answer); err != nil {
+			return "is a date, as 2026-10-30"
+		}
+	case QuestionYesNo:
+		if answer != "yes" && answer != "no" {
+			return "is yes or no"
+		}
+	case QuestionChoice:
+		if !slices.ContainsFunc(q.Options, func(o Option) bool { return o.Value == answer }) {
+			return "is one of its choices"
+		}
+	}
+	return ""
+}
+
+// FieldValue is one row of a Set fields step: the key of an asset field,
+// and the value to give it, a template.
+type FieldValue struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
 }
 
 // Match narrows what Find finds to assets whose field Field has the value
@@ -179,14 +235,13 @@ type Change struct {
 	AssetID string `json:"asset_id,omitempty"`
 	// CategoryID, for ChangeCategory.
 	CategoryID string `json:"category_id,omitempty"`
-	// Fields, for ChangeFields: a template for each field key.
-	Fields map[string]string `json:"fields,omitempty"`
 	// Hook is the key of a hook to trigger, for ChangeHook.
 	Hook string `json:"hook,omitempty"`
 }
 
 // The changes a Change step can make. Archiving is how bam removes an
-// asset: it is kept, out of the lists, and can be restored.
+// asset: it is kept, out of the lists, and can be restored. Setting its
+// fields is a Set fields step's work (#174).
 const (
 	ChangeArchive   = "archive"
 	ChangeCondition = "condition"
@@ -194,7 +249,6 @@ const (
 	ChangeReturn    = "return"
 	ChangePlace     = "place"
 	ChangeCategory  = "category"
-	ChangeFields    = "fields"
 	ChangeHook      = "hook"
 )
 
@@ -213,7 +267,6 @@ const (
 	ValueFlow       = "flow"
 	ValueCategory   = "category"
 	ValueCategoryID = "category_id"
-	ValueName       = "name"
 	ValueAsset      = "asset"
 	ValueAssetID    = "asset_id"
 	ValueCode       = "code"
@@ -258,6 +311,15 @@ func References(template string) []string {
 		out = append(out, m[1])
 	}
 	return out
+}
+
+// PhotoQuestion is the key of the photo question a Set fields step's photo
+// names ("{photo}"), or empty when it names none.
+func (s *Step) PhotoQuestion() string {
+	if refs := References(s.Photo); len(refs) == 1 && s.Photo == "{"+refs[0]+"}" {
+		return refs[0]
+	}
+	return ""
 }
 
 // Holds reports whether a condition holds for these values; no condition
@@ -311,7 +373,7 @@ func (d *Definition) Ahead(i int, v Values) int {
 // asking nothing.
 func (s *Step) Auto() bool {
 	switch s.Kind {
-	case KindLabel, KindChange:
+	case KindLabel, KindChange, KindSetFields:
 		return true
 	case KindChooseCategory:
 		return s.Fixed != ""
@@ -319,6 +381,41 @@ func (s *Step) Auto() bool {
 		return s.Location == nil || s.Location.Mode != PlaceScan
 	}
 	return false
+}
+
+// The places a Set fields step can be, which decide what it sets.
+const (
+	// OnNew is before a Create, with no asset yet: it fills the new
+	// asset's fields as it is filed.
+	OnNew = "new"
+	// OnFound and OnFiled are after a Find or a Create: it updates the
+	// asset found, or filed.
+	OnFound = "found"
+	OnFiled = "filed"
+)
+
+// SetsOn says what the Set fields step at i sets: the new asset the next
+// Create files, when a Create comes after it before any Find (OnNew), or
+// else the asset the nearest Find or Create before it found or filed
+// (OnFound, OnFiled); empty when there is neither.
+func (d *Definition) SetsOn(i int) string {
+	for _, s := range d.Steps[i+1:] {
+		if s.Kind == KindCreate {
+			return OnNew
+		}
+		if s.Kind == KindFind {
+			break
+		}
+	}
+	for j := i - 1; j >= 0; j-- {
+		switch d.Steps[j].Kind {
+		case KindFind:
+			return OnFound
+		case KindCreate:
+			return OnFiled
+		}
+	}
+	return ""
 }
 
 // Permissions are those a flow uses: whoever saves it must hold each, so it
@@ -332,7 +429,7 @@ func (d *Definition) Permissions() []string {
 			if slices.Contains(s.FindBy, FindScan) {
 				set[rbac.PermAssetsScan] = true
 			}
-		case KindCreate:
+		case KindCreate, KindSetFields:
 			set[rbac.PermAssetsWrite] = true
 		case KindLabel:
 			if s.Label != nil && s.Label.Mode != LabelShow {
@@ -361,7 +458,7 @@ func changePermission(kind string) string {
 		return rbac.PermAssetsReport
 	case ChangeBorrow, ChangeReturn:
 		return rbac.PermAssetsBorrow
-	case ChangePlace, ChangeCategory, ChangeFields:
+	case ChangePlace, ChangeCategory:
 		return rbac.PermAssetsWrite
 	case ChangeHook:
 		return rbac.PermAssetsHook
@@ -383,6 +480,15 @@ type Catalog struct {
 	Destinations map[string]bool
 	Hooks        map[string]bool
 	Asset        func(id string) bool
+	// Names are the categories' names, by ID, and Labels the fields', by
+	// key, to say what is missing.
+	Names  map[string]string
+	Labels map[string]string
+	// Required lists, by the ID of each of the flow's categories, the keys
+	// of the fields its assets must have, own and inherited.
+	Required map[string][]string
+	// Suits says why a fixed value does not suit a field, if it does not.
+	Suits func(field, value string) error
 }
 
 // Problem is something that stops a flow being saved, by the step at fault
@@ -407,13 +513,23 @@ var (
 // MaxSteps is the most steps a flow has.
 const MaxSteps = 50
 
+// V1Refused is why a version 1 definition is refused, saying what changed.
+const V1Refused = "the definition is version 1, which this server no longer takes: in version 2 a Form asks only its own questions " +
+	"(its fields, ask_name and ask_photo became questions), and a Set fields step (set_fields) sets the asset's fields, " +
+	"in place of Change's fields; give version 2, or import it in a package, which converts it"
+
 // Check lists what stops a flow being saved: every step well formed, every
 // category, field, template, printer, place and hook it names existing,
-// and every template and condition naming only values set before it.
+// every template and condition naming only values set before it, and
+// every field a category Create may file into requires set before it.
 func (d *Definition) Check(c Catalog) []Problem {
 	var out []Problem
 	flowWide := func(format string, args ...any) { out = append(out, Problem{Message: fmt.Sprintf(format, args...)}) }
-	if d.Version != Version {
+	switch d.Version {
+	case Version:
+	case 1:
+		flowWide("%s", V1Refused)
+	default:
 		flowWide("the definition is version %d; this server reads version %d", d.Version, Version)
 	}
 	if len(d.CategoryIDs) == 0 {
@@ -445,13 +561,23 @@ func (d *Definition) Check(c Catalog) []Problem {
 	if len(d.CategoryIDs) == 1 {
 		set[ValueCategory], set[ValueCategoryID] = true, true
 	}
-	fieldsAsked := false
+	// The categories a Create may file into, as the last Choose category
+	// offers them; the photo questions asked so far; and the fields Set
+	// fields steps fill for the next Create, each under its condition.
+	filing := d.CategoryIDs
+	photos := map[string]bool{}
+	type filling struct {
+		when *Condition
+		keys []string
+	}
+	var pending []filling
+	fieldsKnown := false
 	ids := map[string]bool{}
 	for i, s := range d.Steps {
 		bad := func(format string, args ...any) {
 			out = append(out, Problem{Step: s.ID, Message: fmt.Sprintf(format, args...)})
 		}
-		known := func(name string) bool { return set[name] || (fieldsAsked && c.Fields[name]) }
+		known := func(name string) bool { return set[name] || (fieldsKnown && c.Fields[name]) }
 		uses := func(what, template string) {
 			for _, ref := range References(template) {
 				if !known(ref) {
@@ -500,44 +626,105 @@ func (d *Definition) Check(c Catalog) []Problem {
 			if s.Fixed != "" && !flowCats[s.Fixed] {
 				bad("its fixed category is not one the flow uses")
 			}
+			switch {
+			case s.Fixed != "":
+				filing = []string{s.Fixed}
+			case len(s.Categories) > 0:
+				filing = s.Categories
+			default:
+				filing = d.CategoryIDs
+			}
 			set[ValueCategory], set[ValueCategoryID] = true, true
 		case KindForm:
-			needsCategory()
 			seen := map[string]bool{}
-			for _, f := range s.Fields {
-				if !c.Fields[f.Key] {
-					bad("no field the flow's categories record has the key %q", f.Key)
-				}
-				if seen[f.Key] {
-					bad("the field %q is set twice", f.Key)
-				}
-				seen[f.Key] = true
-				uses("the default of "+f.Key, f.Default)
-			}
 			for _, q := range s.Questions {
 				switch {
 				case !questionKey.MatchString(q.Key):
 					bad("a question's key is lowercase letters, digits and _, starting with a letter")
-				case c.Fields[q.Key] || slices.Contains(builtIn, q.Key) || set[q.Key] || seen[q.Key] || isStepValue(q.Key):
-					bad("the question %q has the name of a field or a value the run already has", q.Key)
+				case slices.Contains(builtIn, q.Key) || isStepValue(q.Key):
+					bad("the question %q has the name of a value every run has, or a step sets", q.Key)
+				case seen[q.Key]:
+					// An earlier step's may be asked again, as by forms
+					// shown for different categories: the later answer
+					// is the value.
+					bad("the question %q is asked twice", q.Key)
 				}
 				if strings.TrimSpace(q.Label) == "" {
 					bad("the question %q needs a label", q.Key)
 				}
-				switch q.Type {
-				case "", "text", "number", "date":
-				default:
-					bad("the question %q is text, number or date", q.Key)
+				if !slices.Contains(QuestionTypes, q.Type) && q.Type != "" {
+					bad("the question %q is of a type there is not: %s", q.Key, strings.Join(QuestionTypes, ", "))
+				}
+				if q.Type == QuestionChoice {
+					values := map[string]bool{}
+					for _, o := range q.Options {
+						if strings.TrimSpace(o.Value) == "" {
+							bad("each choice of %q needs a value", q.Key)
+						} else if values[o.Value] {
+							bad("the question %q offers %q twice", q.Key, o.Value)
+						}
+						values[o.Value] = true
+					}
+					if len(q.Options) == 0 {
+						bad("the question %q needs choices to choose from", q.Key)
+					}
+				} else if len(q.Options) > 0 {
+					bad("only a choice question has choices: %q", q.Key)
 				}
 				uses("the default of "+q.Key, q.Default)
+				if len(References(q.Default)) == 0 {
+					if p := q.Problem(q.Default); p != "" {
+						bad("the default of %q %s", q.Key, p)
+					}
+				}
 				seen[q.Key] = true
 			}
-			fieldsAsked = true
 			for _, q := range s.Questions {
 				set[q.Key] = true
+				if q.Type == QuestionPhoto {
+					photos[q.Key] = true
+				}
 			}
-			if s.AskName {
-				set[ValueName] = true
+		case KindSetFields:
+			on := d.SetsOn(i)
+			onNew := on == OnNew
+			if on == "" {
+				bad("it sets fields on nothing: put it before a Create, or after a Find or Create")
+			}
+			if len(s.Fields) == 0 && s.Photo == "" {
+				bad("it needs at least one field to set")
+			}
+			seen := map[string]bool{}
+			var keys []string
+			for _, row := range s.Fields {
+				switch {
+				case row.Field == "":
+					bad("choose the field each row sets")
+					continue
+				case !c.Fields[row.Field]:
+					bad("no field the flow's categories record has the key %q", row.Field)
+				case seen[row.Field]:
+					bad("it sets %s twice", c.label(row.Field))
+				}
+				seen[row.Field] = true
+				keys = append(keys, row.Field)
+				uses("the value of "+row.Field, row.Value)
+				if len(References(row.Value)) == 0 && row.Value != "" && c.Suits != nil && c.Fields[row.Field] {
+					if err := c.Suits(row.Field, row.Value); err != nil {
+						bad("%s cannot be %q: %v", c.label(row.Field), row.Value, err)
+					}
+				}
+			}
+			if s.Photo != "" {
+				if q := s.PhotoQuestion(); q == "" || !photos[q] {
+					bad("its photo is the answer to a photo question asked before it, such as {photo}")
+				}
+			}
+			for _, k := range keys {
+				set[k] = true
+			}
+			if onNew {
+				pending = append(pending, filling{when: s.When, keys: keys})
 			}
 		case KindFind:
 			if len(s.FindBy) == 0 {
@@ -559,7 +746,7 @@ func (d *Definition) Check(c Catalog) []Problem {
 			}
 			set[ValueAsset], set[ValueAssetID], set[ValueCode] = true, true, true
 			// The asset found brings its field values.
-			fieldsAsked = true
+			fieldsKnown = true
 		case KindCreate:
 			needsCategory()
 			if strings.TrimSpace(s.Name) == "" {
@@ -574,7 +761,40 @@ func (d *Definition) Check(c Catalog) []Problem {
 					bad("its place is fixed or scanned")
 				}
 			}
+			// Every field a category it may file into requires is set by
+			// a Set fields step before it, one with no condition or one
+			// shown only for that category.
+			into := filing
+			if w := s.When; w != nil && w.Value == ValueCategoryID && w.Op == OpIs {
+				into = []string{w.To}
+			}
+			for _, cat := range into {
+				filled := map[string]bool{}
+				for _, p := range pending {
+					if p.when == nil || (p.when.Value == ValueCategoryID && p.when.Op == OpIs && p.when.To == cat) {
+						for _, k := range p.keys {
+							filled[k] = true
+						}
+					}
+				}
+				var missing []string
+				for _, k := range c.Required[cat] {
+					if !filled[k] {
+						missing = append(missing, c.label(k))
+					}
+				}
+				if len(missing) > 0 {
+					name := c.Names[cat]
+					if name == "" {
+						name = cat
+					}
+					bad("%s requires %s, which no Set fields step before it sets", name, strings.Join(missing, ", "))
+				}
+			}
+			pending = nil
 			set[ValueAsset], set[ValueAssetID], set[ValueCode] = true, true, true
+			// The asset filed brings its field values.
+			fieldsKnown = true
 		case KindLabel:
 			needsAsset()
 			l := s.Label
@@ -621,20 +841,12 @@ func (d *Definition) Check(c Catalog) []Problem {
 					if !c.Categories[ch.CategoryID] {
 						bad("the category it moves to does not exist")
 					}
-				case ChangeFields:
-					if len(ch.Fields) == 0 {
-						bad("setting fields needs at least one")
-					}
-					for key, tmpl := range ch.Fields {
-						if !c.Fields[key] {
-							bad("no field the flow's categories record has the key %q", key)
-						}
-						uses("the value of "+key, tmpl)
-					}
 				case ChangeHook:
 					if !c.Hooks[ch.Hook] {
 						bad("no hook has the key %q", ch.Hook)
 					}
+				case "fields":
+					bad("a Change no longer sets fields: a Set fields step does")
 				default:
 					bad("%q is not a change it can make", ch.Kind)
 				}
@@ -654,12 +866,44 @@ func (d *Definition) Check(c Catalog) []Problem {
 	return out
 }
 
+// label is a field's label, or its key when the catalog has none.
+func (c *Catalog) label(key string) string {
+	if l := c.Labels[key]; l != "" {
+		return l
+	}
+	return key
+}
+
 func isStepValue(name string) bool {
 	switch name {
-	case ValueCategory, ValueCategoryID, ValueName, ValueAsset, ValueAssetID, ValueCode:
+	case ValueCategory, ValueCategoryID, ValueAsset, ValueAssetID, ValueCode:
 		return true
 	}
 	return false
+}
+
+// stepBases are what a new step's ID is made from, by kind, as the editor
+// makes them (web/src/lib/flowEditor.ts newStepID).
+var stepBases = map[string]string{
+	KindChooseCategory: "kind", KindForm: "form", KindSetFields: "set", KindFind: "find", KindCreate: "file",
+	KindLabel: "label", KindChange: "change", KindConfirm: "confirm", KindDone: "done",
+}
+
+// NewStepID is an ID for a new step of a kind, not among those taken, as
+// the editor makes them: its kind's base, then base_2, base_3 and so on.
+func NewStepID(kind string, taken map[string]bool) string {
+	base := stepBases[kind]
+	if base == "" {
+		base = "step"
+	}
+	if !taken[base] {
+		return base
+	}
+	for n := 2; ; n++ {
+		if id := fmt.Sprintf("%s_%d", base, n); !taken[id] {
+			return id
+		}
+	}
 }
 
 // Starter is a ready-made flow to adjust.
@@ -671,18 +915,26 @@ type Starter struct {
 }
 
 // Starters are the two ready-made flows, filing into or taking from these
-// categories: Leave something, and Collect it.
-func Starters(categoryIDs []string) []Starter {
+// categories: Leave something, and Collect it. Leave something asks for
+// what it is and for each field the categories record, as fieldsOf gives
+// them, and sets those fields: it is the version 1 starter, which asked
+// for the categories' fields, converted (UpgradeV1). fieldsOf may be nil,
+// for categories that record none.
+func Starters(categoryIDs []string, fieldsOf func(categoryID string) ([]FieldDef, error)) ([]Starter, error) {
 	cats := append([]string{}, categoryIDs...)
-	leave := Definition{Version: Version, Description: "Scan to leave something here, with your name on it.", CategoryIDs: cats, Steps: []Step{
-		{ID: "kind", Kind: KindChooseCategory, Title: "What are you leaving?"},
-		{ID: "about", Kind: KindForm, Title: "About it", AskName: true, NameLabel: "What is it?"},
-		{ID: "file", Kind: KindCreate, Name: "{name}"},
-		{ID: "label", Kind: KindLabel, Label: &Label{Mode: LabelShow}},
-		{ID: "done", Kind: KindDone, Title: "Filed", Text: "{asset} is filed. Put its label on it."},
+	v1 := v1Definition{Version: 1, Description: "Scan to leave something here, with your name on it.", CategoryIDs: cats, Steps: []v1Step{
+		{Step: Step{ID: "kind", Kind: KindChooseCategory, Title: "What are you leaving?"}},
+		{Step: Step{ID: "about", Kind: KindForm, Title: "About it"}, AskName: true, NameLabel: "What is it?"},
+		{Step: Step{ID: "file", Kind: KindCreate, Name: "{name}"}},
+		{Step: Step{ID: "label", Kind: KindLabel, Label: &Label{Mode: LabelShow}}},
+		{Step: Step{ID: "done", Kind: KindDone, Title: "Filed", Text: "{asset} is filed. Put its label on it."}},
 	}}
 	if len(cats) == 1 {
-		leave.Steps = leave.Steps[1:]
+		v1.Steps = v1.Steps[1:]
+	}
+	leave, err := upgradeV1(v1, fieldsOf)
+	if err != nil {
+		return nil, err
 	}
 	collect := Definition{Version: Version, Description: "Scan to collect something you left here.", CategoryIDs: cats, Steps: []Step{
 		{ID: "find", Kind: KindFind, Title: "What are you collecting?", FindBy: []string{FindScan, FindSearch, FindList}},
@@ -691,7 +943,7 @@ func Starters(categoryIDs []string) []Starter {
 		{ID: "done", Kind: KindDone, Title: "Collected", Text: "{asset} is collected."},
 	}}
 	return []Starter{
-		{Key: "leave", Name: "Leave something", Description: "Choose what kind of thing it is, fill in its form, file it and label it.", Definition: leave},
+		{Key: "leave", Name: "Leave something", Description: "Choose what kind of thing it is, fill in its form, set its fields from the answers, file it and label it.", Definition: leave},
 		{Key: "collect", Name: "Collect it", Description: "Find it by its code, by search or from a list, then archive it.", Definition: collect},
-	}
+	}, nil
 }

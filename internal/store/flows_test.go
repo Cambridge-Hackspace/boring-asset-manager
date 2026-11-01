@@ -19,7 +19,7 @@ func TestSavingFlows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	def := flows.Starters([]string{cat.ID})[0].Definition
+	def := starter(t, st, 0, cat.ID)
 	f, err := st.CreateFlow(FlowInput{Slug: "leave", Name: " Leave something ", Enabled: true, Definition: def}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestFlowRunsMoveOnOnce(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
 	cat, _ := st.CreateCategory("Wood", nil, "", false, false)
-	f, err := st.CreateFlow(FlowInput{Slug: "leave", Name: "Leave", Enabled: true, Definition: flows.Starters([]string{cat.ID})[0].Definition}, "")
+	f, err := st.CreateFlow(FlowInput{Slug: "leave", Name: "Leave", Enabled: true, Definition: starter(t, st, 0, cat.ID)}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,13 +221,13 @@ func TestThingsLeftPastTheirDate(t *testing.T) {
 	if err := st.AssignCategoryField(cat.ID, until.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	def := flows.Starters([]string{cat.ID})[0].Definition
+	def := starter(t, st, 0, cat.ID)
 	def.LeaveUntil = "until"
 	c, _ := st.FlowCatalog([]string{cat.ID})
 	if problems := def.Check(c); len(problems) != 0 {
 		t.Fatalf("checked: %v", problems)
 	}
-	if bad := (flows.Definition{Version: 1, CategoryIDs: []string{cat.ID}, LeaveUntil: "colour", Steps: []flows.Step{{ID: "done", Kind: flows.KindDone}}}); len(bad.Check(c)) != 1 {
+	if bad := (flows.Definition{Version: flows.Version, CategoryIDs: []string{cat.ID}, LeaveUntil: "colour", Steps: []flows.Step{{ID: "done", Kind: flows.KindDone}}}); len(bad.Check(c)) != 1 {
 		t.Errorf("a date to collect by that is not a date field: %v", bad.Check(c))
 	}
 	f, err := st.CreateFlow(FlowInput{Slug: "leave", Name: "Leave something", Enabled: true, Definition: def}, "")
@@ -308,4 +308,15 @@ func TestTheScanTemplateOffersFlows(t *testing.T) {
 	if !strings.Contains(string(r.Spec), `"actions":["open","use","borrow","return","report","flows"]`) {
 		t.Errorf("spec: %s", r.Spec)
 	}
+}
+
+// starter is one of the starter flows over these categories, as their
+// fields make it.
+func starter(t *testing.T, st *Store, which int, ids ...string) flows.Definition {
+	t.Helper()
+	all, err := flows.Starters(ids, st.FlowFields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return all[which].Definition
 }

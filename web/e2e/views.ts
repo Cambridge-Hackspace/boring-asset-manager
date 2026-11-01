@@ -91,6 +91,33 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   const { starters } = await (await request.get(`/api/v1/flow-starters?category_ids=${cat.category.id}`)).json();
   const flowSlug = unique('a11y-leave').toLowerCase();
   await post('/flows', { slug: flowSlug, name: unique('Leave it'), definition: starters[0].definition });
+  // And one whose form asks every type of question (#174), for the run page.
+  const askSlug = unique('a11y-ask').toLowerCase();
+  await post('/flows', {
+    slug: askSlug,
+    name: unique('Ask it all'),
+    definition: {
+      version: 2,
+      category_ids: [cat.category.id],
+      steps: [
+        {
+          id: 'about',
+          kind: 'form',
+          title: 'About it',
+          questions: [
+            { key: 'name', label: 'What is it?', type: 'text', required: true },
+            { key: 'note', label: 'Anything else?', type: 'long_text', help: 'Where it came from' },
+            { key: 'boards', label: 'How many?', type: 'number' },
+            { key: 'back', label: 'Back by', type: 'date', default: '{today}' },
+            { key: 'fragile', label: 'Fragile?', type: 'yes_no', default: 'no' },
+            { key: 'wood', label: 'Which wood?', type: 'choice', options: [{ value: 'oak', label: 'Oak' }, { value: 'pine', label: 'Pine' }] },
+            { key: 'photo', label: 'A photo', type: 'photo' },
+          ],
+        },
+        { id: 'done', kind: 'done', title: 'Done' },
+      ],
+    },
+  });
   const { entries } = await (await request.get('/api/v1/spool')).json();
   const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
   await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
@@ -141,6 +168,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/flows/${flowSlug}/edit`, ''],
     [`/flows/${flowSlug}/poster`, ''],
     [`/f/${flowSlug}`, ''],
+    [`/f/${askSlug}`, ''],
     ['/spool', 'Print queue'],
     ['/relations', 'Link types'],
     ['/hooks', 'Hooks'],

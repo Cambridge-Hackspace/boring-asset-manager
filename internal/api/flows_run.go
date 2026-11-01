@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -137,7 +136,7 @@ func (s *Server) mayRun(r *http.Request, f *models.Flow) (bool, error) {
 
 // runState is a run's state as the store keeps it.
 func runState(run *models.FlowRun) store.FlowRunState {
-	return store.FlowRunState{Step: run.Step, Values: run.Values, Done: run.Done, Finished: run.Finished, Fields: run.Fields, Progress: run.Progress, Answered: run.Answered}
+	return store.FlowRunState{Step: run.Step, Values: run.Values, Done: run.Done, Finished: run.Finished, Fields: run.Fields, Progress: run.Progress, Answered: run.Answered, Photos: run.Photos}
 }
 
 // startRun begins a run of a flow by the person making the request, and
@@ -200,10 +199,7 @@ type FlowAnswer struct {
 	Step string `json:"step"`
 	// Choose category.
 	CategoryID string `json:"category_id,omitempty"`
-	// Form: the asset's name, the fields by key, and the run's own
-	// questions by key.
-	Name    string            `json:"name,omitempty"`
-	Fields  map[string]string `json:"fields,omitempty"`
+	// Form: its questions' answers, by key.
 	Answers map[string]string `json:"answers,omitempty"`
 	// Find: the asset chosen from a list or search, or a code scanned.
 	AssetID string `json:"asset_id,omitempty"`
@@ -267,7 +263,7 @@ func (f *flowRunner) take(st *store.FlowRunState, step *flows.Step, a FlowAnswer
 		err = f.find(st, step, a)
 	case flows.KindCreate:
 		err = f.create(st, step, a.PlaceCode)
-	case flows.KindLabel, flows.KindChange:
+	case flows.KindLabel, flows.KindChange, flows.KindSetFields:
 		// Answered only to try again.
 		err = f.do(st, step)
 	case flows.KindConfirm:
@@ -315,6 +311,8 @@ func (f *flowRunner) do(st *store.FlowRunState, step *flows.Step) error {
 		return f.label(st, step)
 	case flows.KindChange:
 		return f.change(st, step)
+	case flows.KindSetFields:
+		return f.setFields(st, step)
 	}
 	return nil
 }
@@ -373,118 +371,20 @@ func (f *flowRunner) chooseCategory(st *store.FlowRunState, step *flows.Step, id
 	return nil
 }
 
-// FlowField is a field a Form asks for, as the chosen category records it
-// and the flow's creator set it.
-type FlowField struct {
-	Key      string          `json:"key"`
-	Label    string          `json:"label"`
-	Help     string          `json:"help,omitempty"`
-	Type     string          `json:"type"`
-	Options  json.RawMessage `json:"options,omitempty"`
-	Default  string          `json:"default,omitempty"`
-	Required bool            `json:"required"`
-}
-
-// formFields are the fields a Form asks for, for the category chosen: the
-// union of those its assets record, own and inherited, in the creator's
-// order with their settings on top, those they hid left out. A field the
-// category requires is asked, and required, whatever the settings say.
-func (f *flowRunner) formFields(step *flows.Step, v flows.Values) ([]FlowField, error) {
-	effective, err := f.s.store.EffectiveFieldsForAsset([]string{v[flows.ValueCategoryID]})
-	if err != nil {
-		return nil, err
-	}
-	byKey := map[string]models.EffectiveField{}
-	var order []string
-	for _, ef := range effective {
-		byKey[ef.Field.Key] = ef
-		order = append(order, ef.Field.Key)
-	}
-	settings := map[string]flows.FieldSetting{}
-	var first []string
-	for _, fs := range step.Fields {
-		settings[fs.Key] = fs
-		if _, ok := byKey[fs.Key]; ok {
-			first = append(first, fs.Key)
-		}
-	}
-	for _, k := range order {
-		if !slices.Contains(first, k) {
-			first = append(first, k)
-		}
-	}
-	out := []FlowField{}
-	for _, k := range first {
-		ef, set := byKey[k], settings[k]
-		if set.Hidden && !ef.IsRequired {
-			continue
-		}
-		ff := FlowField{Key: k, Label: ef.Field.Label, Help: set.Help, Type: ef.Field.ValidationType, Options: ef.Field.Options,
-			Default: flows.Render(set.Default, v), Required: ef.IsRequired || set.Required}
-		if set.Label != "" {
-			ff.Label = set.Label
-		}
-		out = append(out, ff)
-	}
-	return out, nil
-}
-
+// takeForm takes a Form's answers, each the run's value of its question's
+// key, refusing one required and left empty or not of its question's type.
 func (f *flowRunner) takeForm(st *store.FlowRunState, step *flows.Step, a FlowAnswer) error {
-	asked, err := f.formFields(step, st.Values)
-	if err != nil {
-		return err
-	}
-	if step.AskName {
-		name := strings.TrimSpace(a.Name)
-		if name == "" {
-			return refuseStep("%s is required", nameLabel(step))
-		}
-		st.Values[flows.ValueName] = name
-	}
-	for _, ff := range asked {
-		val := strings.TrimSpace(a.Fields[ff.Key])
-		if val == "" && ff.Required {
-			return refuseStep("%s is required", ff.Label)
-		}
-		if val != "" {
-			field := models.Field{Key: ff.Key, Label: ff.Label, ValidationType: ff.Type, Options: ff.Options}
-			if err := fields.ValidateFieldValue(&field, val); err != nil {
-				return refuseStep("%s: %v", ff.Label, err)
-			}
-		}
-		st.Values[ff.Key] = val
-		if st.Fields == nil {
-			st.Fields = map[string]string{}
-		}
-		st.Fields[ff.Key] = val
-	}
 	for _, q := range step.Questions {
 		val := strings.TrimSpace(a.Answers[q.Key])
 		if val == "" && q.Required {
 			return refuseStep("%s is required", q.Label)
 		}
-		if val != "" {
-			switch q.Type {
-			case "number":
-				if _, err := strconv.ParseFloat(val, 64); err != nil {
-					return refuseStep("%s is a number", q.Label)
-				}
-			case "date":
-				if _, err := time.Parse("2006-01-02", val); err != nil {
-					return refuseStep("%s is a date, as 2026-10-30", q.Label)
-				}
-			}
+		if p := q.Problem(val); p != "" {
+			return refuseStep("%s %s", q.Label, p)
 		}
 		st.Values[q.Key] = val
 	}
 	return nil
-}
-
-func nameLabel(step *flows.Step) string {
-	if step.NameLabel != "" {
-		return step.NameLabel
-	}
-	return "Its name"
 }
 
 // candidates are the assets a Find step can find for the person: active,
@@ -631,6 +531,14 @@ func (f *flowRunner) create(st *store.FlowRunState, step *flows.Step, placeCode 
 	if err := f.s.store.RecordFiling(f.flow.ID, made.Asset.Asset.ID, CurrentUser(f.r.Context()).ID); err != nil {
 		return err
 	}
+	// What Set fields gave it is filed; a photo it was given is for the
+	// page to add to it now.
+	st.Fields = nil
+	for i := range st.Photos {
+		if st.Photos[i].AssetID == "" {
+			st.Photos[i].AssetID = made.Asset.Asset.ID
+		}
+	}
 	advanceProgress(st, step)
 	f.said(st, step, "Filed %s in %s.", name, st.Values[flows.ValueCategory])
 	return f.place(st, step, made.Asset.Asset.ID, place)
@@ -653,6 +561,87 @@ func (f *flowRunner) place(st *store.FlowRunState, step *flows.Step, id, place s
 	}
 	if n := len(placed.Asset.Location); n > 0 {
 		f.said(st, step, "Put it in %s.", placed.Asset.Location[n-1].Name)
+	}
+	return nil
+}
+
+// setFields does a Set fields step (#174): before a Create, it gives the
+// new asset that Create files its values; after a Find or Create, it
+// updates the asset found or filed (flows.Definition.SetsOn). A row naming
+// a field the asset's category does not record is passed over, as one of
+// the flow's other categories'; a value that does not suit its field fails
+// the step, saying why.
+func (f *flowRunner) setFields(st *store.FlowRunState, step *flows.Step) error {
+	id := ""
+	if f.flow.Definition.SetsOn(st.Step) != flows.OnNew {
+		if id = st.Values[flows.ValueAssetID]; id == "" {
+			return refuseStep("There is nothing to set fields on: nothing was found or filed")
+		}
+	}
+	cats := []string{st.Values[flows.ValueCategoryID]}
+	if id != "" {
+		a, err := f.s.store.GetAssetByID(id)
+		if err != nil {
+			return err
+		}
+		cats = cats[:0]
+		for _, c := range a.Categories {
+			cats = append(cats, c.ID)
+		}
+	}
+	effective, err := f.s.store.EffectiveFieldsForAsset(cats)
+	if err != nil {
+		return err
+	}
+	byKey := map[string]models.Field{}
+	for _, ef := range effective {
+		byKey[ef.Field.Key] = ef.Field
+	}
+	vals := map[string]string{}
+	for _, row := range step.Fields {
+		field, ok := byKey[row.Field]
+		if !ok {
+			continue
+		}
+		val := strings.TrimSpace(flows.Render(row.Value, st.Values))
+		if err := fields.ValidateFieldValue(&field, val); err != nil {
+			return refuseStep("%s cannot be set to %q: %s", field.Label, val, strings.TrimPrefix(err.Error(), fields.ErrInvalidFieldValue.Error()+": "))
+		}
+		vals[row.Field] = val
+	}
+	photo := ""
+	if q := step.PhotoQuestion(); q != "" && st.Values[q] != "" {
+		photo = q
+	}
+	if id == "" {
+		if st.Fields == nil {
+			st.Fields = map[string]string{}
+		}
+		for k, v := range vals {
+			st.Values[k] = v
+			if v != "" {
+				st.Fields[k] = v
+			} else {
+				delete(st.Fields, k)
+			}
+		}
+		if photo != "" {
+			st.Photos = append(st.Photos, models.FlowPhoto{Question: photo})
+		}
+		return nil
+	}
+	if len(vals) > 0 {
+		var updated struct {
+			Asset models.AssetWithDetails `json:"asset"`
+		}
+		if err := f.call(http.MethodPut, "/api/v1/assets/"+url.PathEscape(id), UpdateAssetRequest{FieldValues: vals}, &updated); err != nil {
+			return err
+		}
+		setAsset(st.Values, &updated.Asset)
+		f.said(st, step, "Updated %s.", st.Values[flows.ValueAsset])
+	}
+	if photo != "" {
+		st.Photos = append(st.Photos, models.FlowPhoto{Question: photo, AssetID: id})
 	}
 	return nil
 }
@@ -740,14 +729,6 @@ func (f *flowRunner) change(st *store.FlowRunState, step *flows.Step) error {
 			if err = f.call(http.MethodPut, path, UpdateAssetRequest{CategoryIDs: []string{c.CategoryID}}, &updated); err == nil {
 				fc, _ := f.s.flowCategories()
 				f.said(st, step, "Moved %s to %s.", name, fc.name(c.CategoryID))
-			}
-		case flows.ChangeFields:
-			vals := map[string]string{}
-			for k, tmpl := range c.Fields {
-				vals[k] = flows.Render(tmpl, st.Values)
-			}
-			if err = f.call(http.MethodPut, path, UpdateAssetRequest{FieldValues: vals}, &updated); err == nil {
-				f.said(st, step, "Updated %s.", name)
 			}
 		case flows.ChangeHook:
 			if err = f.call(http.MethodPost, path+"/hooks/"+url.PathEscape(c.Hook), nil, nil); err == nil {

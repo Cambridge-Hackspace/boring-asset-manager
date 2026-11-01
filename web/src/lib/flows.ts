@@ -4,7 +4,10 @@
 import { ApiError, request } from './api';
 import { scanTarget } from './scan';
 
-export type StepKind = 'choose_category' | 'form' | 'find' | 'create' | 'label' | 'change' | 'confirm' | 'done';
+/** The version of the definition this interface reads and writes (#174). */
+export const definitionVersion = 2;
+
+export type StepKind = 'choose_category' | 'form' | 'set_fields' | 'find' | 'create' | 'label' | 'change' | 'confirm' | 'done';
 
 export interface Condition {
   value: string;
@@ -12,22 +15,40 @@ export interface Condition {
   to?: string;
 }
 
-export interface FieldSetting {
-  key: string;
-  hidden?: boolean;
+export type QuestionType = 'text' | 'long_text' | 'number' | 'date' | 'yes_no' | 'choice' | 'photo';
+
+/** The types of question, in the order the editor offers them. */
+export const questionTypes: [QuestionType, string][] = [
+  ['text', 'Text'],
+  ['long_text', 'Long text'],
+  ['number', 'Number'],
+  ['date', 'Date'],
+  ['yes_no', 'Yes or no'],
+  ['choice', 'A choice'],
+  ['photo', 'A photo'],
+];
+
+/** One choice of a choice question: its value, the answer, and how it is shown (as the value, when empty). */
+export interface Option {
+  value: string;
   label?: string;
-  help?: string;
-  default?: string;
-  required?: boolean;
 }
 
+/** One thing a Form asks; its answer is the run's value of its key. */
 export interface Question {
   key: string;
   label: string;
   help?: string;
-  type?: 'text' | 'number' | 'date' | '';
+  type?: QuestionType | '';
+  options?: Option[];
   default?: string;
   required?: boolean;
+}
+
+/** One row of a Set fields step: an asset field, by key, and the value to give it, a template. */
+export interface FieldValue {
+  field: string;
+  value: string;
 }
 
 export interface FlowLabel {
@@ -36,7 +57,7 @@ export interface FlowLabel {
   template_id?: string;
 }
 
-export type ChangeKind = 'archive' | 'condition' | 'borrow' | 'return' | 'place' | 'category' | 'fields' | 'hook';
+export type ChangeKind = 'archive' | 'condition' | 'borrow' | 'return' | 'place' | 'category' | 'hook';
 
 export interface Change {
   kind: ChangeKind;
@@ -44,7 +65,6 @@ export interface Change {
   note?: string;
   asset_id?: string;
   category_id?: string;
-  fields?: Record<string, string>;
   hook?: string;
 }
 
@@ -56,11 +76,10 @@ export interface Step {
   when?: Condition | null;
   categories?: string[];
   fixed?: string;
-  fields?: FieldSetting[];
-  ask_name?: boolean;
-  name_label?: string;
-  ask_photo?: boolean;
   questions?: Question[];
+  /** Set fields: the fields to set, and the asset's photo, a photo question's answer as {photo}. */
+  fields?: FieldValue[];
+  photo?: string;
   find_by?: ('scan' | 'search' | 'list')[];
   filed_by?: string;
   match?: { field: string; value: string } | null;
@@ -109,15 +128,6 @@ export interface FlowProblem {
   message: string;
 }
 
-export interface FlowField {
-  key: string;
-  label: string;
-  help?: string;
-  type: 'text' | 'number' | 'date' | 'url' | 'select';
-  options?: { choices?: { label: string; value: string }[]; default?: string | null } | null;
-  default?: string;
-  required: boolean;
-}
 
 export interface FlowAsset {
   id: string;
@@ -140,10 +150,6 @@ export interface Prompt {
   title?: string;
   text?: string;
   categories?: { id: string; name: string; color_hex: string }[];
-  fields?: FlowField[];
-  ask_name?: boolean;
-  name_label?: string;
-  ask_photo?: boolean;
   questions?: Question[];
   find_by?: ('scan' | 'search' | 'list')[];
   assets?: FlowAsset[];
@@ -162,6 +168,14 @@ export interface Run {
   values: Record<string, string>;
   done: FlowDone[];
   finished: boolean;
+  /** Photos Set fields put on assets: the page holding each adds it, once the asset exists. */
+  photos?: FlowPhoto[];
+}
+
+/** A photo question's answer a Set fields step put on an asset; no asset_id until it is filed. */
+export interface FlowPhoto {
+  question: string;
+  asset_id?: string;
 }
 
 export interface RunView {
@@ -184,8 +198,7 @@ export interface Progress {
 export interface Answer {
   step: string;
   category_id?: string;
-  name?: string;
-  fields?: Record<string, string>;
+  /** A form's answers, by its questions' keys. */
   answers?: Record<string, string>;
   asset_id?: string;
   code?: string;
@@ -239,25 +252,39 @@ export function scannedCode(text: string): string | null {
   }
 }
 
-/** A form's first values: each field's and question's default, as the server rendered it. */
-export function formDefaults(p: Prompt): { fields: Record<string, string>; answers: Record<string, string> } {
-  const fields: Record<string, string> = {};
-  for (const f of p.fields ?? []) fields[f.key] = f.default ?? f.options?.default ?? '';
+/** A form's first answers: each question's default, as the server rendered it; a photo has none. */
+export function formDefaults(p: Prompt): Record<string, string> {
   const answers: Record<string, string> = {};
-  for (const q of p.questions ?? []) answers[q.key] = q.default ?? '';
-  return { fields, answers };
+  for (const q of p.questions ?? []) answers[q.key] = q.type === 'photo' ? '' : (q.default ?? '');
+  return answers;
 }
 
-/** The input type a field or question is asked with. */
-export function inputType(type: string | undefined): 'text' | 'number' | 'date' | 'url' {
-  return type === 'number' || type === 'date' || type === 'url' ? type : 'text';
+/** The input type a question is asked with, where a box asks it. */
+export function inputType(type: string | undefined): 'text' | 'number' | 'date' {
+  return type === 'number' || type === 'date' ? type : 'text';
 }
 
 /** What is missing from a form before it is sent: the labels of required answers left empty. */
-export function missing(p: Prompt, name: string, fields: Record<string, string>, answers: Record<string, string>): string[] {
-  const out: string[] = [];
-  if (p.ask_name && !name.trim()) out.push(p.name_label || 'Its name');
-  for (const f of p.fields ?? []) if (f.required && !(fields[f.key] ?? '').trim()) out.push(f.label);
-  for (const q of p.questions ?? []) if (q.required && !(answers[q.key] ?? '').trim()) out.push(q.label);
+export function missing(p: Prompt, answers: Record<string, string>): string[] {
+  return (p.questions ?? []).filter((q) => q.required && !(answers[q.key] ?? '').trim()).map((q) => q.label);
+}
+
+/** How a choice is shown. */
+export function optionLabel(o: Option): string {
+  return o.label || o.value;
+}
+
+/**
+ * The photos to add now: those the run put on an asset that exists, of
+ * the photo questions this page holds a photo for, not added already
+ * (named question:asset in added).
+ */
+export function photosToAdd(run: Run, held: Record<string, File>, added: ReadonlySet<string>): { key: string; assetID: string; file: File }[] {
+  const out: { key: string; assetID: string; file: File }[] = [];
+  for (const p of run.photos ?? []) {
+    const key = `${p.question}:${p.asset_id ?? ''}`;
+    const file = held[p.question];
+    if (p.asset_id && file && !added.has(key)) out.push({ key, assetID: p.asset_id, file });
+  }
   return out;
 }

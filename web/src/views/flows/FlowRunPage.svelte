@@ -5,7 +5,7 @@
   import { onMount, tick } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { formDefaults, inputType, missing, runRequest, runsPath, scannedCode, type Prompt, type RunView } from '../../lib/flows';
+  import { formDefaults, inputType, missing, optionLabel, photosToAdd, runRequest, runsPath, scannedCode, type Prompt, type Question, type RunView } from '../../lib/flows';
   import CodeScanner from '../../components/CodeScanner.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import RunProgress from '../../components/RunProgress.svelte';
@@ -18,17 +18,23 @@
   let busy = $state(false);
   let heading: HTMLHeadingElement | undefined = $state();
 
-  // The form's answers, filled from its defaults at each new step.
-  let name = $state('');
-  let fields = $state<Record<string, string>>({});
+  // The form's answers, by its questions' keys, filled from its defaults
+  // at each new step.
   let answers = $state<Record<string, string>>({});
-  let photo = $state<File | null>(null);
-  // A photo is added once the asset it is of exists.
-  let pendingPhoto: File | null = null;
+  // The photos taken, by question, held until a Set fields step puts each
+  // on an asset that exists (run.photos), and added then, once.
+  let photos: Record<string, File> = {};
+  let added = new Set<string>();
   let code = $state('');
   let search = $state('');
 
   const prompt = $derived<Prompt | null>(view?.prompt ?? null);
+  // What a yes/no or choice question offers to choose.
+  const choicesOf = (q: Question) => (q.type === 'yes_no' ? yesNo : (q.options ?? []));
+  const yesNo = [
+    { value: 'yes', label: 'Yes' },
+    { value: 'no', label: 'No' },
+  ];
   const flowName = $derived(view?.run.values.flow ?? 'Flow');
 
   onMount(start);
@@ -36,7 +42,8 @@
   async function start() {
     error = '';
     busy = true;
-    pendingPhoto = null;
+    photos = {};
+    added = new Set();
     try {
       // Started from an asset, a flow that begins by finding starts with it,
       // once: starting again is for the next person, and the next thing.
@@ -56,22 +63,18 @@
     view = next;
     error = next.error ?? '';
     if (moved) {
-      const d = formDefaults(next.prompt);
-      fields = d.fields;
-      answers = d.answers;
-      name = '';
-      photo = null;
+      answers = formDefaults(next.prompt);
       code = '';
       search = '';
       await tick();
       heading?.focus();
     }
-    if (pendingPhoto && next.prompt.asset) {
+    for (const p of photosToAdd(next.run, photos, added)) {
+      added.add(p.key);
       const form = new FormData();
-      form.append('file', pendingPhoto);
-      pendingPhoto = null;
+      form.append('file', p.file);
       try {
-        await request('POST', `/assets/${encodeURIComponent(next.prompt.asset.id)}/photos`, form);
+        await request('POST', `/assets/${encodeURIComponent(p.assetID)}/photos`, form);
       } catch (err) {
         error = `It is filed, but its photo was not added: ${messageOf(err)}`;
       }
@@ -94,13 +97,12 @@
   function submitForm(event: SubmitEvent) {
     event.preventDefault();
     if (!prompt) return;
-    const left = missing(prompt, name, fields, answers);
+    const left = missing(prompt, answers);
     if (left.length) {
       error = `${left.join(', ')} ${left.length === 1 ? 'is' : 'are'} required.`;
       return;
     }
-    pendingPhoto = photo;
-    void answer({ name, fields, answers });
+    void answer({ answers });
   }
 
   function submitCode(event: SubmitEvent, as: 'code' | 'place_code') {
@@ -135,8 +137,12 @@
     await start();
   }
 
-  function photoChosen(event: Event) {
-    photo = (event.currentTarget as HTMLInputElement).files?.[0] ?? null;
+  // A photo's answer is its file's name; the file waits to be added.
+  function photoChosen(key: string, event: Event) {
+    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    if (file) photos[key] = file;
+    else delete photos[key];
+    answers[key] = file?.name ?? '';
   }
 </script>
 
@@ -183,55 +189,58 @@
       {/if}
     {:else if prompt.kind === 'form'}
       <form class="space-y-4" onsubmit={submitForm} novalidate>
-        {#if prompt.ask_name}
-          <div>
-            <label class="label" for="flow-name">{prompt.name_label || 'Its name'}</label>
-            <input id="flow-name" class="flow-input" required maxlength="255" autocomplete="off" bind:value={name} />
-          </div>
-        {/if}
-        {#each prompt.fields ?? [] as f (f.key)}
-          <div>
-            <label class="label" for="flow-field-{f.key}">{f.label}{#if f.required}<span aria-hidden="true"> *</span>{/if}</label>
-            {#if f.type === 'select'}
-              <select id="flow-field-{f.key}" class="flow-input" required={f.required} aria-describedby={f.help ? `flow-help-${f.key}` : undefined} bind:value={fields[f.key]}>
-                <option value="">—</option>
-                {#each f.options?.choices ?? [] as choice (choice.value)}<option value={choice.value}>{choice.label}</option>{/each}
-              </select>
-            {:else}
-              <input
-                id="flow-field-{f.key}"
-                class="flow-input"
-                type={inputType(f.type)}
-                required={f.required}
-                autocomplete="off"
-                aria-describedby={f.help ? `flow-help-${f.key}` : undefined}
-                bind:value={fields[f.key]}
-              />
-            {/if}
-            {#if f.help}<p id="flow-help-{f.key}" class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{f.help}</p>{/if}
-          </div>
-        {/each}
         {#each prompt.questions ?? [] as q (q.key)}
+          {@const help = q.help ? `flow-qhelp-${q.key}` : undefined}
           <div>
-            <label class="label" for="flow-q-{q.key}">{q.label}{#if q.required}<span aria-hidden="true"> *</span>{/if}</label>
-            <input
-              id="flow-q-{q.key}"
-              class="flow-input"
-              type={inputType(q.type)}
-              required={q.required}
-              autocomplete="off"
-              aria-describedby={q.help ? `flow-qhelp-${q.key}` : undefined}
-              bind:value={answers[q.key]}
-            />
+            {#if q.type === 'yes_no' || (q.type === 'choice' && (q.options ?? []).length <= 8)}
+              <fieldset aria-describedby={help}>
+                <legend class="label">{q.label}{#if q.required}<span aria-hidden="true"> *</span>{/if}</legend>
+                <div class="grid gap-2 {q.type === 'yes_no' ? 'grid-cols-2' : 'sm:grid-cols-2'}">
+                  {#each choicesOf(q) as o (o.value)}
+                    <label class="flow-choice">
+                      <input type="radio" class="h-5 w-5 shrink-0" name="flow-q-{q.key}" value={o.value} bind:group={answers[q.key]} />
+                      {optionLabel(o)}
+                    </label>
+                  {/each}
+                </div>
+              </fieldset>
+            {:else}
+              <label class="label" for="flow-q-{q.key}">{q.label}{#if q.required}<span aria-hidden="true"> *</span>{/if}</label>
+              {#if q.type === 'choice'}
+                <select id="flow-q-{q.key}" class="flow-input" required={q.required} aria-describedby={help} bind:value={answers[q.key]}>
+                  <option value="">—</option>
+                  {#each q.options ?? [] as o (o.value)}<option value={o.value}>{optionLabel(o)}</option>{/each}
+                </select>
+              {:else if q.type === 'long_text'}
+                <textarea id="flow-q-{q.key}" class="flow-input min-h-32" required={q.required} aria-describedby={help} bind:value={answers[q.key]}></textarea>
+              {:else if q.type === 'photo'}
+                <input
+                  id="flow-q-{q.key}"
+                  class="block min-h-11 w-full text-base"
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  capture="environment"
+                  required={q.required}
+                  aria-describedby={help}
+                  onchange={(e) => photoChosen(q.key, e)}
+                />
+              {:else}
+                <input
+                  id="flow-q-{q.key}"
+                  class="flow-input"
+                  type={inputType(q.type)}
+                  inputmode={q.type === 'number' ? 'decimal' : undefined}
+                  required={q.required}
+                  autocomplete="off"
+                  aria-describedby={help}
+                  value={answers[q.key] ?? ''}
+                  oninput={(e) => (answers[q.key] = e.currentTarget.value)}
+                />
+              {/if}
+            {/if}
             {#if q.help}<p id="flow-qhelp-{q.key}" class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{q.help}</p>{/if}
           </div>
         {/each}
-        {#if prompt.ask_photo}
-          <div>
-            <label class="label" for="flow-photo">A photo</label>
-            <input id="flow-photo" class="block w-full text-base" type="file" accept="image/jpeg,image/png" capture="environment" onchange={photoChosen} />
-          </div>
-        {/if}
         <button type="submit" class="flow-button-primary" disabled={busy}>Next</button>
       </form>
     {:else if prompt.kind === 'find'}

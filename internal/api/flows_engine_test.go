@@ -30,8 +30,16 @@ type woodShop struct {
 func newWoodShop(t *testing.T) *woodShop {
 	t.Helper()
 	srv, admin, _ := setupTestServer(t)
-	st := srv.store
-	w := &woodShop{srv: srv, admin: admin}
+	w := woodShopIn(t, srv.store)
+	w.srv, w.admin = srv, admin
+	return w
+}
+
+// woodShopIn sets up the wood shop in a store, its server and admin left
+// to the caller.
+func woodShopIn(t *testing.T, st *store.Store) *woodShop {
+	t.Helper()
+	w := &woodShop{}
 	var err error
 	if w.scope, err = st.CreateScope("woodshop"); err != nil {
 		t.Fatal(err)
@@ -97,6 +105,29 @@ func as(t *testing.T, srv *Server, userID string) *http.Request {
 	return r.WithContext(WithUser(WithPermissions(r.Context(), perms), u))
 }
 
+// starter is one of the starter flows over these categories: 0, Leave
+// something; 1, Collect it.
+func (w *woodShop) starter(t *testing.T, which int, ids ...string) flows.Definition {
+	t.Helper()
+	all, err := flows.Starters(ids, w.srv.store.FlowFields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return all[which].Definition
+}
+
+// question is a Form step's question, by its key, to adjust.
+func question(t *testing.T, s *flows.Step, key string) *flows.Question {
+	t.Helper()
+	for i := range s.Questions {
+		if s.Questions[i].Key == key {
+			return &s.Questions[i]
+		}
+	}
+	t.Fatalf("step %s asks no %s", s.ID, key)
+	return nil
+}
+
 // saveFlow saves a flow as the admin, checked as the API checks it.
 func (w *woodShop) saveFlow(t *testing.T, slug, name string, d flows.Definition) *models.Flow {
 	t.Helper()
@@ -129,10 +160,12 @@ func statusOf(err error) int {
 func TestFlowsLeaveAndCollect(t *testing.T) {
 	w := newWoodShop(t)
 	srv := w.srv
-	leave := flows.Starters([]string{w.short.ID, w.long.ID})[0].Definition
+	leave := w.starter(t, 0, w.short.ID, w.long.ID)
 	// The owner defaults to whoever runs it; the long boards ask whether
 	// to leave them out, and only they.
-	leave.Steps[1].Fields = []flows.FieldSetting{{Key: "until", Label: "Leave until", Help: "When you'll take it home"}, {Key: "owner", Default: "{user}"}}
+	until := question(t, &leave.Steps[1], "until")
+	until.Label, until.Help = "Leave until", "When you'll take it home"
+	question(t, &leave.Steps[1], "owner").Default = "{user}"
 	leave.Steps = append(leave.Steps[:2], append([]flows.Step{
 		{ID: "long_only", Kind: flows.KindConfirm, Text: "{owner}'s {name} goes on the long rack.", When: &flows.Condition{Value: flows.ValueCategoryID, Op: flows.OpIs, To: w.long.ID}},
 	}, leave.Steps[2:]...)...)
@@ -161,33 +194,28 @@ func TestFlowsLeaveAndCollect(t *testing.T) {
 		t.Errorf("a category not offered: %v", err)
 	}
 
-	// Short boards: the form asks the owner, inherited and required, with
-	// its default, and not until, which only long boards record.
+	// The form asks its own questions, whatever the category: what it is,
+	// the owner, required as all wood requires it, with its default, and
+	// until, which only long boards record, and so is not required.
 	run, err = runner.answer(run, FlowAnswer{Step: "kind", CategoryID: w.short.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	asked, err := runner.formFields(&flow.Definition.Steps[run.Step], run.Values)
+	p, err := runner.prompt(run, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(asked) != 1 || asked[0].Key != "owner" || !asked[0].Required || asked[0].Default != "Sam" {
-		t.Errorf("short boards ask %+v", asked)
+	if len(p.Questions) != 3 || p.Questions[0].Key != "name" || p.Questions[1].Key != "owner" || !p.Questions[1].Required || p.Questions[1].Default != "Sam" ||
+		p.Questions[2].Key != "until" || p.Questions[2].Label != "Leave until" || p.Questions[2].Help != "When you'll take it home" || p.Questions[2].Required ||
+		p.Questions[2].Type != flows.QuestionDate {
+		t.Errorf("the form asks %+v", p.Questions)
 	}
-	// Changing the category rebuilds it: long boards ask until too, first,
-	// as the creator ordered and named it.
-	long := run.Values
-	long[flows.ValueCategoryID] = w.long.ID
-	asked, _ = runner.formFields(&flow.Definition.Steps[run.Step], long)
-	if len(asked) != 2 || asked[0].Key != "until" || asked[0].Label != "Leave until" || asked[0].Help != "When you'll take it home" || asked[1].Key != "owner" {
-		t.Errorf("long boards ask %+v", asked)
-	}
-	long[flows.ValueCategoryID] = w.short.ID
 
-	if _, err := runner.answer(run, FlowAnswer{Step: "about", Name: "Oak offcut"}); statusOf(err) != http.StatusBadRequest || !strings.Contains(err.Error(), "Owner is required") {
+	if _, err := runner.answer(run, FlowAnswer{Step: "about", Answers: map[string]string{"name": "Oak offcut"}}); statusOf(err) != http.StatusBadRequest || !strings.Contains(err.Error(), "Owner is required") {
 		t.Errorf("the owner left out: %v", err)
 	}
-	run, err = runner.answer(run, FlowAnswer{Step: "about", Name: "Oak offcut", Fields: map[string]string{"owner": "Sam"}})
+	// Until, which short boards do not record, is passed over.
+	run, err = runner.answer(run, FlowAnswer{Step: "about", Answers: map[string]string{"name": "Oak offcut", "owner": "Sam", "until": "2026-11-06"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +229,7 @@ func TestFlowsLeaveAndCollect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Asset.Name != "Oak offcut" || a.FieldValues["owner"] != "Sam" || len(a.Categories) != 1 || a.Categories[0].ID != w.short.ID {
+	if a.Asset.Name != "Oak offcut" || a.FieldValues["owner"] != "Sam" || a.FieldValues["until"] != "" || len(a.Categories) != 1 || a.Categories[0].ID != w.short.ID {
 		t.Errorf("filed %+v %v", a.Asset, a.FieldValues)
 	}
 	if filed, _ := srv.store.FiledBy(flow.ID); !filed[id] {
@@ -223,7 +251,7 @@ func TestFlowsLeaveAndCollect(t *testing.T) {
 
 	// Collect it: Sam's own things, filed through Leave something, found
 	// and archived.
-	collect := flows.Starters([]string{w.wood.ID})[1].Definition
+	collect := w.starter(t, 1, w.wood.ID)
 	collect.Steps[0].Match = &flows.Match{Field: "owner", Value: "{user}"}
 	collect.Steps[0].FiledBy = flow.ID
 	collect.Steps[0].FindBy = []string{flows.FindList}
@@ -285,6 +313,7 @@ func TestFlowRunsAreHeldToTheRunnersPermissions(t *testing.T) {
 	if err := st.SetUserRoleAssignments(reader.ID, []models.RoleAssignment{{RoleID: readers.ID, ScopeIDs: []string{w.scope.ID}}}); err != nil {
 		t.Fatal(err)
 	}
+	var steps []flows.Step
 	for _, c := range []flows.Change{
 		{Kind: flows.ChangeArchive},
 		{Kind: flows.ChangeCondition, Condition: "out_of_service", Note: "split"},
@@ -292,15 +321,22 @@ func TestFlowRunsAreHeldToTheRunnersPermissions(t *testing.T) {
 		{Kind: flows.ChangeReturn},
 		{Kind: flows.ChangePlace, AssetID: shelf.Asset.ID},
 		{Kind: flows.ChangeCategory, CategoryID: w.long.ID},
-		{Kind: flows.ChangeFields, Fields: map[string]string{"owner": "{user}"}},
 		{Kind: flows.ChangeHook, Hook: "identify"},
 	} {
+		steps = append(steps, flows.Step{ID: "change", Kind: flows.KindChange, Changes: []flows.Change{c}})
+	}
+	steps = append(steps, flows.Step{ID: "change", Kind: flows.KindSetFields, Fields: []flows.FieldValue{{Field: "owner", Value: "{user}"}}})
+	for _, step := range steps {
+		c := flows.Change{Kind: step.Kind}
+		if len(step.Changes) > 0 {
+			c = step.Changes[0]
+		}
 		d := flows.Definition{Version: flows.Version, CategoryIDs: []string{w.wood.ID}, Steps: []flows.Step{
 			{ID: "find", Kind: flows.KindFind, FindBy: []string{flows.FindList}},
-			{ID: "change", Kind: flows.KindChange, Changes: []flows.Change{c}},
+			step,
 			{ID: "done", Kind: flows.KindDone},
 		}}
-		f := w.saveFlow(t, "change-"+c.Kind, "Change "+c.Kind, d)
+		f := w.saveFlow(t, "change-"+strings.ReplaceAll(c.Kind, "_", "-"), "Change "+c.Kind, d)
 		runner := &flowRunner{s: srv, r: as(t, srv, reader.ID), flow: f}
 		run, err := runner.startRun()
 		if err != nil {
@@ -330,7 +366,7 @@ func TestFlowRunsAreHeldToTheRunnersPermissions(t *testing.T) {
 	if err := st.SetUserRoleAssignments(cook.ID, []models.RoleAssignment{{RoleID: cooks.ID, ScopeIDs: []string{kitchenScope.ID}}}); err != nil {
 		t.Fatal(err)
 	}
-	leave := w.saveFlow(t, "leave", "Leave something", flows.Starters([]string{w.short.ID, w.kitchen.ID})[0].Definition)
+	leave := w.saveFlow(t, "leave", "Leave something", w.starter(t, 0, w.short.ID, w.kitchen.ID))
 	if may, _ := srv.mayRun(as(t, srv, cook.ID), leave); !may {
 		t.Error("a cook may run a flow that files into the kitchen")
 	}
@@ -339,7 +375,7 @@ func TestFlowRunsAreHeldToTheRunnersPermissions(t *testing.T) {
 	if len(offered) != 1 || offered[0] != w.kitchen.ID {
 		t.Errorf("a cook is offered %v", offered)
 	}
-	woodOnly := w.saveFlow(t, "wood", "Wood", flows.Starters([]string{w.short.ID})[0].Definition)
+	woodOnly := w.saveFlow(t, "wood", "Wood", w.starter(t, 0, w.short.ID))
 	if _, err := (&flowRunner{s: srv, r: as(t, srv, cook.ID), flow: woodOnly}).startRun(); statusOf(err) != http.StatusNotFound {
 		t.Errorf("a cook running a wood shop flow: %v", err)
 	}
@@ -359,7 +395,7 @@ func TestSavingAFlowNeedsWhatItsStepsUse(t *testing.T) {
 	if err := st.SetUserRoles(maker.ID, []string{makers.ID}); err != nil {
 		t.Fatal(err)
 	}
-	collect := flows.Starters([]string{w.wood.ID})[1].Definition
+	collect := w.starter(t, 1, w.wood.ID)
 	problems, err := w.srv.checkFlow(as(t, w.srv, maker.ID), &collect)
 	if err != nil {
 		t.Fatal(err)
@@ -371,22 +407,24 @@ func TestSavingAFlowNeedsWhatItsStepsUse(t *testing.T) {
 	if got := strings.Join(said, "; "); !strings.Contains(got, "assets.delete") || !strings.Contains(got, "assets.scan") || strings.Contains(got, "assets.read") {
 		t.Errorf("problems: %s", got)
 	}
-	leave := flows.Starters([]string{w.wood.ID})[0].Definition
+	leave := w.starter(t, 0, w.wood.ID)
 	if problems, _ := w.srv.checkFlow(as(t, w.srv, maker.ID), &leave); len(problems) != 0 {
 		t.Errorf("leave, which only files: %v", problems)
 	}
 }
 
 // TestATriedAgainStepDoesNotRepeatItsWork: a Change that fails part way is
-// tried again from where it failed.
+// tried again from where it failed, and what the steps before it did is
+// not done again.
 func TestATriedAgainStepDoesNotRepeatItsWork(t *testing.T) {
 	w := newWoodShop(t)
 	srv, st := w.srv, w.srv.store
 	board, _ := st.CreateAsset("Ash", []string{w.short.ID}, nil, map[string]string{"owner": "Sam"})
 	d := flows.Definition{Version: flows.Version, CategoryIDs: []string{w.wood.ID}, Steps: []flows.Step{
 		{ID: "find", Kind: flows.KindFind, FindBy: []string{flows.FindList}},
+		{ID: "set", Kind: flows.KindSetFields, Fields: []flows.FieldValue{{Field: "owner", Value: "{owner} (left)"}}},
 		{ID: "change", Kind: flows.KindChange, Changes: []flows.Change{
-			{Kind: flows.ChangeFields, Fields: map[string]string{"owner": "{owner} (left)"}},
+			{Kind: flows.ChangeCategory, CategoryID: w.long.ID},
 			{Kind: flows.ChangeArchive},
 		}},
 		{ID: "done", Kind: flows.KindDone},
@@ -418,7 +456,10 @@ func TestATriedAgainStepDoesNotRepeatItsWork(t *testing.T) {
 		t.Fatalf("tried again: %+v %v", run, err)
 	}
 	a, _ := st.GetAssetByID(board.Asset.ID)
-	if a.FieldValues["owner"] != "Sam (left)" || a.Asset.ArchivedAt == nil {
-		t.Errorf("after trying again: %v archived %v", a.FieldValues, a.Asset.ArchivedAt)
+	if a.FieldValues["owner"] != "Sam (left)" || a.Asset.ArchivedAt == nil || len(a.Categories) != 1 || a.Categories[0].ID != w.long.ID {
+		t.Errorf("after trying again: %v archived %v in %v", a.FieldValues, a.Asset.ArchivedAt, a.Categories)
+	}
+	if len(run.Done) != 3 || run.Done[0].Said != "Updated Ash." || run.Done[1].Said != "Moved Ash to Long boards." {
+		t.Errorf("done: %+v", run.Done)
 	}
 }

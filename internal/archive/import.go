@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/flows"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
@@ -482,7 +484,46 @@ func readArchived(ctx context.Context, st *store.Store, q querier, r io.Reader, 
 	if a.header.SchemaVersion < migrations.HooksVersion {
 		hookRows(a.rows)
 	}
+	if a.header.SchemaVersion < migrations.FormQuestionsVersion && len(a.rows["flows"]) > 0 {
+		if err := questionRows(ctx, q, a.rows); err != nil {
+			return nil, err
+		}
+	}
 	return a, nil
+}
+
+// questionRows converts the flows of an archive written before forms asked
+// their own questions (#174) to version 2, as migrating would
+// (flows.UpgradeV1), against the fields and categories the archive holds,
+// and this instance's for any it does not. What cannot be read is left for
+// the plan to report.
+func questionRows(ctx context.Context, q querier, rows map[string][]map[string]any) error {
+	corpus, err := migrations.ReadFieldCorpus(func(s string) (*sql.Rows, error) { return q.QueryContext(ctx, s) })
+	if err != nil {
+		return err
+	}
+	for _, r := range rows["fields"] {
+		corpus.AddField(str(r, "id"), str(r, "field_key"), str(r, "label"), str(r, "validation_type"), str(r, "options"))
+	}
+	// The archive's categories as it holds them, in place of any here.
+	for _, r := range rows["categories"] {
+		id := str(r, "id")
+		delete(corpus.Parents, id)
+		if p := str(r, "parent_id"); p != "" {
+			corpus.Parents[id] = p
+		}
+		corpus.Assigned[id] = nil
+	}
+	for _, r := range rows["category_fields"] {
+		cat := str(r, "category_id")
+		corpus.Assigned[cat] = append(corpus.Assigned[cat], flows.FieldAssignment{FieldID: str(r, "field_id"), Required: boolOf(r["is_required"])})
+	}
+	for _, r := range rows["flows"] {
+		if def, changed, err := flows.UpgradeV1(str(r, "definition"), corpus.Effective); err == nil && changed {
+			r["definition"] = def
+		}
+	}
+	return nil
 }
 
 // hookRows brings the rows of an archive written before hooks were hooks

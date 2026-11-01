@@ -7,8 +7,20 @@
   import { messageOf } from '../../lib/errors';
   import { navigate } from '../../lib/router.svelte';
   import type { AssetHook, Category, EffectiveField, Field, Printer, PrinterPool, TemplateSummary } from '../../lib/models';
-  import type { Definition, Flow, FlowProblem, Starter, StepKind } from '../../lib/flows';
-  import { addStep, addableKinds, checkFlow, kindHelp, kindLabels, moveStep, previewProgress, problemsOf, slugFrom, withStepIDs } from '../../lib/flowEditor';
+  import { definitionVersion, type Definition, type Flow, type FlowProblem, type Starter, type StepKind } from '../../lib/flows';
+  import {
+    addStep,
+    addableKinds,
+    checkFlow,
+    kindHelp,
+    kindLabels,
+    moveStep,
+    previewProgress,
+    problemsOf,
+    slugFrom,
+    withStepIDs,
+    type FlowCatalog,
+  } from '../../lib/flowEditor';
   import CategoryPicker from '../../components/CategoryPicker.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import FlowStepEditor from './FlowStepEditor.svelte';
@@ -26,7 +38,7 @@
   let slug = $state('');
   let slugTouched = $state(false);
   let enabled = $state(true);
-  let def = $state<Definition>({ version: 1, category_ids: [], steps: [{ id: 'done', kind: 'done', title: 'Done' }] });
+  let def = $state<Definition>({ version: definitionVersion, category_ids: [], steps: [{ id: 'done', kind: 'done', title: 'Done' }] });
   let selected = $state(0);
   let adding = $state<StepKind>('form');
 
@@ -40,8 +52,17 @@
   let destinations = $state<{ value: string; label: string }[]>([]);
   let hooks = $state<{ key: string; label: string }[]>([]);
   let fields = $state<Field[]>([]);
+  // The fields each category records, own and inherited, and those it
+  // requires, for Set fields to choose from and to check.
+  let fieldsOf = $state<Record<string, EffectiveField[]>>({});
 
   const flowCategories = $derived(def.category_ids.map((id) => allCategories.find((c) => c.id === id)).filter((c): c is Category => !!c));
+  const byCategory = $derived(flowCategories.map((category) => ({ category, fields: (fieldsOf[category.id] ?? []).map((ef) => ef.field) })));
+  const catalog = $derived<FlowCatalog>({
+    fields,
+    required: Object.fromEntries(Object.entries(fieldsOf).map(([id, list]) => [id, list.filter((ef) => ef.is_required).map((ef) => ef.field.key)])),
+    names: Object.fromEntries(flowCategories.map((c) => [c.id, c.name])),
+  });
 
   onMount(async () => {
     try {
@@ -89,6 +110,7 @@
         const seen = new Map<string, Field>();
         for (const list of lists) for (const ef of list) if (!seen.has(ef.field.key)) seen.set(ef.field.key, ef.field);
         fields = [...seen.values()];
+        fieldsOf = Object.fromEntries(ids.map((id, i) => [id, lists[i] ?? []]));
       },
     );
   });
@@ -133,7 +155,7 @@
   async function save(event: SubmitEvent) {
     event.preventDefault();
     saved = error = '';
-    problems = checkFlow(def);
+    problems = checkFlow(def, catalog);
     if (problems.length) {
       error = 'The flow cannot be saved yet: see what is said beside each step.';
       return;
@@ -267,6 +289,7 @@
                       at={i}
                       categories={flowCategories}
                       {fields}
+                      {byCategory}
                       flows={flows.filter((f) => f.slug !== editing)}
                       {destinations}
                       {templates}
@@ -307,7 +330,7 @@
         Preview ·
         {#if shownProgress}step {shownProgress.step} of {shownProgress.of}{:else if def.steps[selected]?.kind === 'done'}the end{:else}asks nothing, so a run does it and moves on{/if}
       </p>
-      <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} {fields} progress={shownProgress} />
+      <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} progress={shownProgress} />
     </aside>
   </form>
 {/if}
