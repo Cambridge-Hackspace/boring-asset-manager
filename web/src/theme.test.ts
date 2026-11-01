@@ -16,7 +16,11 @@ function vars(block: string): Record<string, string> {
 
 const theme = vars(css.match(/@theme \{([\s\S]*?)\n\}/)![1]!);
 const light: Record<string, string> = { ...theme, white: '#ffffff', ...vars(css.match(/:root \{([\s\S]*?)\}/)![1]!) };
-const dark: Record<string, string> = { ...theme, white: '#ffffff', ...vars(css.match(/@media \(prefers-color-scheme: dark\) \{\s*:root \{([\s\S]*?)\}/)![1]!) };
+// Dark when chosen, or when the system is and light was not chosen (#168):
+// two blocks, which must agree.
+const chosenDark = css.match(/:root\[data-theme='dark'\] \{([\s\S]*?)\}/)![1]!;
+const systemDark = css.match(/@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme='light'\]\) \{([\s\S]*?)\}/)![1]!;
+const dark: Record<string, string> = { ...theme, white: '#ffffff', ...vars(chosenDark) };
 
 function ratio(scheme: Record<string, string>, fg: string, bg: string): number {
   const a = parseHex(scheme[fg] ?? '');
@@ -70,5 +74,9 @@ describe('the theme', () => {
   it('reads every color it checks', () => {
     expect(Object.keys(theme)).toEqual(expect.arrayContaining(['color-zinc-50', 'color-zinc-950', 'color-action', 'color-highlight']));
     expect(light['bam-focus']).not.toEqual(dark['bam-focus']);
+  });
+
+  it('is the same dark whether chosen or the system’s', () => {
+    expect(vars(systemDark)).toEqual(vars(chosenDark));
   });
 });

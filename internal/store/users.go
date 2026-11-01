@@ -20,12 +20,31 @@ var (
 )
 
 // userColumns are the columns scanUser reads, in order.
-const userColumns = "id, email, name, password_hash, totp_secret, is_active, created_at, updated_at, archived_at"
+const userColumns = "id, email, name, password_hash, totp_secret, is_active, created_at, updated_at, archived_at, theme"
 
 func scanUser(row interface{ Scan(...any) error }) (models.User, error) {
 	var u models.User
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt)
+	var theme sql.NullString
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme)
+	u.Theme = themeOf(theme)
 	return u, err
+}
+
+// ThemeSystem is the theme of someone who has not chosen one: the web
+// interface follows their system's light or dark setting. It is stored as
+// NULL.
+const ThemeSystem = "system"
+
+// themes are the themes someone may choose, ThemeSystem among them.
+var themes = map[string]bool{ThemeSystem: true, "light": true, "dark": true}
+
+// themeOf is the theme a users row's theme column holds: ThemeSystem for
+// NULL.
+func themeOf(theme sql.NullString) string {
+	if !theme.Valid || theme.String == "" {
+		return ThemeSystem
+	}
+	return theme.String
 }
 
 // GetUserByID retrieves a user by their UUID.
@@ -145,6 +164,7 @@ func (s *Store) CreateNamedUser(email, name, password string, isActive bool) (*m
 		IsActive:  isActive,
 		CreatedAt: now,
 		UpdatedAt: now,
+		Theme:     ThemeSystem,
 	}, nil
 }
 
@@ -174,6 +194,34 @@ func (s *Store) SetUserName(userID, name string) (*models.User, error) {
 		return nil, ErrUserNotFound
 	}
 	return s.GetUserByID(userID)
+}
+
+// SetUserTheme sets how the web interface looks to a user: "light",
+// "dark", or ThemeSystem to follow their system's setting. It is their
+// preference, not a change to their account, so updated_at is left as it
+// is. Archived users cannot change it.
+func (s *Store) SetUserTheme(userID, theme string) (*models.User, error) {
+	if !themes[theme] {
+		return nil, fmt.Errorf("%w: the theme must be system, light or dark", ErrInvalidUser)
+	}
+	var stored any = theme
+	if theme == ThemeSystem {
+		stored = nil
+	}
+	if _, err := s.Exec("UPDATE users SET theme = ? WHERE id = ? AND archived_at IS NULL", stored, userID); err != nil {
+		return nil, fmt.Errorf("setting the user's theme: %w", err)
+	}
+	// Rows affected cannot tell a missing user from one choosing the theme
+	// they have, which MariaDB counts as no row changed, so the user is
+	// read back.
+	u, err := s.GetUserByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	if u.ArchivedAt != nil {
+		return nil, ErrUserNotFound
+	}
+	return u, nil
 }
 
 // userArchived reports whether a user is archived, within tx, or
