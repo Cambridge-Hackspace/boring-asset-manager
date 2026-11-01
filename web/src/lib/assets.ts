@@ -180,8 +180,8 @@ export function describeEvent(e: AssetEvent): string {
       return `Returned by ${p.borrower ? personName(p.borrower) : 'someone'}`;
     case 'asset.overdue':
       return `Overdue: ${p.borrower ? personName(p.borrower) : 'the borrower'} was due to bring it back ${p.due_at ? dueDate(p.due_at) : ''}`.trim();
-    case 'asset.action':
-      return `${p.action?.label ?? 'An action'} pressed`;
+    case 'asset.hook':
+      return `${p.hook?.label ?? 'A hook'} triggered`;
     case 'asset.label_printed': {
       const l = p.label;
       if (!l) return 'Label printed';

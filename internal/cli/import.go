@@ -30,7 +30,7 @@ type ImportOptions struct {
 
 // chooseKinds are what --choose names, as the plan's kinds.
 var chooseKinds = map[string]string{
-	"category": archive.ItemCategory, "field": archive.ItemField, "action": archive.ItemAction, "link-type": archive.ItemRelationType,
+	"category": archive.ItemCategory, "field": archive.ItemField, "hook": archive.ItemHook, "link-type": archive.ItemRelationType,
 	"label-template": archive.ItemLabelTemplate, "scan-template": archive.ItemScanTemplate, "report": archive.ItemReport,
 	"flow": archive.ItemFlow, "scope": archive.ItemScope, "image": archive.ItemImage, "icon-file": archive.ItemIconFile,
 	"category-icon": archive.ItemCategoryIcon,

@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -20,6 +22,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
 )
 
 // exportPackage writes a package of a selection.
@@ -238,7 +241,7 @@ func TestConflictsResolveAsChosen(t *testing.T) {
 	blobs := filestore.NewLocal(t.TempDir())
 	ctx := context.Background()
 	serial := must[*models.Field](t)(dst.CreateField("serial", "Serial number", "text", nil))
-	open := must[*models.AssetAction](t)(dst.SaveAction("", store.ActionInput{Key: "open", Label: "Open"}))
+	open := must[*models.AssetHook](t)(dst.SaveHook("", store.HookInput{Key: "open", Label: "Open"}))
 	stores := must[*models.RelationType](t)(dst.CreateRelationType(store.RelationTypeInput{Name: "Stores", InverseName: "Stored in"}))
 	scan := must[*models.Report](t)(dst.CreateScanTemplate("Tool scan", []byte(`{"sections":[{"type":"details","title":"Here"}]}`)))
 
@@ -251,12 +254,12 @@ func TestConflictsResolveAsChosen(t *testing.T) {
 	if it := itemOf(t, plan, ItemField, "Serial (serial)"); it.Action != ChoiceCopy || it.Identical || it.Existing.ID != serial.ID || it.As != "serial_2" {
 		t.Errorf("a field that differs: %+v", it)
 	}
-	if it := itemOf(t, plan, ItemAction, "Open (open)"); it.Action != ChoiceExisting || !it.Identical || it.Existing.ID != open.ID {
-		t.Errorf("an action that is the same: %+v", it)
+	if it := itemOf(t, plan, ItemHook, "Open (open)"); it.Action != ChoiceExisting || !it.Identical || it.Existing.ID != open.ID {
+		t.Errorf("a hook that is the same: %+v", it)
 	}
 
 	choices := map[string]Choice{
-		ItemAction + ":" + itemOf(t, plan, ItemAction, "Open (open)").ID:           ChoiceCopy,
+		ItemHook + ":" + itemOf(t, plan, ItemHook, "Open (open)").ID:               ChoiceCopy,
 		ItemRelationType + ":" + itemOf(t, plan, ItemRelationType, "Stores").ID:    ChoiceSkip,
 		ItemScanTemplate + ":" + itemOf(t, plan, ItemScanTemplate, "Tool scan").ID: ChoiceExisting,
 		ItemField + ":" + itemOf(t, plan, ItemField, "Serial (serial)").ID:         ChoiceCopy,
@@ -267,8 +270,8 @@ func TestConflictsResolveAsChosen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if it := itemOf(t, done, ItemAction, "Open (open)"); it.Action != ChoiceCopy || it.As != "open_2" {
-		t.Errorf("the action copied: %+v", it)
+	if it := itemOf(t, done, ItemHook, "Open (open)"); it.Action != ChoiceCopy || it.As != "open_2" {
+		t.Errorf("the hook copied: %+v", it)
 	}
 	if done.Assets.Links != 0 || done.Assets.LinksDropped != 1 {
 		t.Errorf("links of a link type skipped: %+v", done.Assets)
@@ -295,8 +298,8 @@ func TestConflictsResolveAsChosen(t *testing.T) {
 		t.Errorf("%d link types, of %d", n, linkTypes)
 	}
 	def := idOf(t, dst, "SELECT definition FROM flows WHERE slug = 'lend-a-tool'")
-	if !strings.Contains(def, `"action":"open_2"`) {
-		t.Errorf("the flow presses %s", def)
+	if !strings.Contains(def, `"hook":"open_2"`) {
+		t.Errorf("the flow triggers %s", def)
 	}
 
 	// a choice that is not one, or for what clashes with nothing
@@ -309,11 +312,11 @@ func TestConflictsResolveAsChosen(t *testing.T) {
 			t.Errorf("%v: %v", bad, err)
 		}
 	}
-	// skipping the action a flow presses leaves it without it
+	// skipping the hook a flow triggers leaves it without it
 	before := count(t, dst, "categories")
-	skip := map[string]Choice{ItemAction + ":" + itemOf(t, plan, ItemAction, "Open (open)").ID: ChoiceSkip}
+	skip := map[string]Choice{ItemHook + ":" + itemOf(t, plan, ItemHook, "Open (open)").ID: ChoiceSkip}
 	again, err := CheckImport(ctx, dst, opener(pkg), ImportOptions{Choices: skip})
-	if err != nil || len(again.Problems) == 0 || !strings.Contains(strings.Join(again.Problems, " "), `presses the action "open", which is skipped`) {
+	if err != nil || len(again.Problems) == 0 || !strings.Contains(strings.Join(again.Problems, " "), `triggers the hook "open", which is skipped`) {
 		t.Errorf("problems %v, %v", again.Problems, err)
 	}
 	if _, err := Import(ctx, dst, blobs, opener(pkg), ImportOptions{Choices: skip}); !errors.Is(err, ErrImport) {
@@ -553,4 +556,82 @@ icon "crate-2" extends="crate-2" { badge "lid-2" corner="ne" }
 	if again := ScanIcons(got); !reflect.DeepEqual(again.Defines, []string{"crate-2"}) || !reflect.DeepEqual(again.Uses, []string{"lid-2", "mono", "crate-2"}) {
 		t.Errorf("after: %+v", again)
 	}
+}
+
+// A package written before hooks were hooks (#173) imports with them:
+// a flow's change that pressed an action triggers the same hook, a scan
+// template offering an asset's actions offers its hooks, and an action
+// event in an asset's history is a hook event. A package written now says
+// hook.
+func TestAPackageFromBeforeHooksImportsWithThem(t *testing.T) {
+	src := setupStore(t)
+	blobs := filestore.NewLocal(t.TempDir())
+	p := seedPackaged(t, src, blobs)
+	if _, err := src.Exec("UPDATE reports SET spec = ? WHERE id = ?", `{"sections":[{"type":"actions","actions":["open","hooks"]}]}`, p.scan.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := src.Exec("INSERT INTO events (id, kind, category_id, actor_user_id, payload, created_at, asset_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		uuid.NewString(), "asset.hook", p.drills.ID, nil, `{"trigger":"manual","hook":{"key":"open","label":"Open","asset":{"id":"x","name":"Hammer drill","codes":{},"fields":{}},"location":[]}}`, time.Now(), p.drill); err != nil {
+		t.Fatal(err)
+	}
+	pkg := exportPackage(t, src, blobs, Selection{Subtrees: []string{p.tools.ID}, Assets: &AssetsSelection{History: true}})
+
+	// as written now, and as it was written before
+	old := map[string]string{
+		`"kind":"hook","hook":"open"`: `"kind":"action","action":"open"`,
+		`"actions":["open","hooks"]`:  `"actions":["open","actions"]`,
+		`"asset.hook"`:                `"asset.action"`,
+		`"hook":{"key":"open"`:        `"action":{"key":"open"`,
+	}
+	ms := unpack(t, pkg)
+	for now, then := range old {
+		found := false
+		for i, m := range ms {
+			if !strings.HasPrefix(m.name, DataDir) {
+				continue
+			}
+			for _, quote := range []string{`"`, `\"`} {
+				n, th := strings.ReplaceAll(now, `"`, quote), strings.ReplaceAll(then, `"`, quote)
+				if bytes.Contains(m.data, []byte(n)) {
+					found = true
+					ms[i].data = bytes.ReplaceAll(m.data, []byte(n), []byte(th))
+					m.data = ms[i].data
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("the package does not hold %s", now)
+		}
+	}
+	before := pack(t, reseal(t, ms, func(h *Header, _ *Manifest) { h.SchemaVersion = migrations.HooksVersion - 1 }))
+
+	dst := setupStore(t)
+	plan, err := Import(context.Background(), dst, filestore.NewLocal(t.TempDir()), opener(before), ImportOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Problems) > 0 {
+		t.Errorf("problems: %v", plan.Problems)
+	}
+	if def := idOf(t, dst, "SELECT definition FROM flows WHERE slug = 'lend-a-tool'"); !strings.Contains(def, `"kind":"hook","hook":"open"`) || strings.Contains(def, `"action"`) {
+		t.Errorf("the flow: %s", def)
+	}
+	if spec := idOf(t, dst, "SELECT spec FROM reports WHERE name = 'Tool scan'"); !strings.Contains(spec, `"actions":["open","hooks"]`) {
+		t.Errorf("the scan template: %s", spec)
+	}
+	if payload := idOf(t, dst, "SELECT payload FROM events WHERE kind = 'asset.hook'"); !strings.Contains(payload, `"hook":{`) || strings.Contains(payload, `"action"`) {
+		t.Errorf("the event: %s", payload)
+	}
+	if n := countWhere(t, dst, "SELECT COUNT(*) FROM events WHERE kind = 'asset.action'"); n != 0 {
+		t.Errorf("%d action events", n)
+	}
+}
+
+func countWhere(t *testing.T, st *store.Store, query string) int {
+	t.Helper()
+	var n int
+	if err := st.QueryRow(query).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }

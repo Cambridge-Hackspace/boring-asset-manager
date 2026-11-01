@@ -4,11 +4,11 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import { endOfDay } from '../lib/assets';
-  import type { Condition, OfferedAction, ReportResult, ResolvedIcon } from '../lib/models';
+  import type { Condition, OfferedHook, ReportResult, ResolvedIcon } from '../lib/models';
   import { scanActionLabel } from '../lib/scan';
   import { session } from '../lib/session.svelte';
   import AddToSpool from '../components/AddToSpool.svelte';
-  import ActionButtons from '../components/ActionButtons.svelte';
+  import HookButtons from '../components/HookButtons.svelte';
   import AssetIcon from '../components/AssetIcon.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import ReportProblemForm from '../components/ReportProblemForm.svelte';
@@ -22,7 +22,7 @@
   const code = untrack(() => params.code ?? '');
 
   interface Scan {
-    asset: { id: string; name: string; counted: boolean; unit?: string; actions?: OfferedAction[]; icon?: ResolvedIcon; flows?: FlowLink[] };
+    asset: { id: string; name: string; counted: boolean; unit?: string; hooks?: OfferedHook[]; icon?: ResolvedIcon; flows?: FlowLink[] };
     template: { id: string; name: string };
     result: ReportResult;
   }
@@ -123,8 +123,8 @@
               </div>
             {:else if action === 'return'}
               <button type="button" class="btn-primary" disabled={busy} onclick={() => act(() => request('POST', `${path}/checkin`), 'Returned.')}>Return</button>
-            {:else if action === 'actions' && scan!.asset.actions?.length}
-              <ActionButtons assetId={scan!.asset.id} actions={scan!.asset.actions} />
+            {:else if action === 'hooks' && scan!.asset.hooks?.length}
+              <HookButtons assetId={scan!.asset.id} hooks={scan!.asset.hooks} />
             {:else if action === 'add_similar'}
               <a class="btn-secondary" href="/assets/new?like={encodeURIComponent(scan!.asset.id)}">{scanActionLabel(action)}</a>
             {:else if action === 'flows'}

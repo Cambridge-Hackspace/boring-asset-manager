@@ -174,9 +174,9 @@ const (
 	// EventAssetLabelPrinted records labels of an asset sent to a printer or
 	// downloaded from the spool, with its Label; it is for history.
 	EventAssetLabelPrinted = "asset.label_printed"
-	// EventAssetAction records an action pressed on an asset, with its
-	// Action; channels and live connections can subscribe to it.
-	EventAssetAction = "asset.action"
+	// EventAssetHook records a hook triggered on an asset, with its
+	// Hook; channels and live connections can subscribe to it.
+	EventAssetHook = "asset.hook"
 	// EventCategoryIconChanged records a new published version of a
 	// category's icon (README §3.7), so that what shows it can redraw; it
 	// is for history.
@@ -253,9 +253,9 @@ type EventPayload struct {
 	Flow *EventFlow `json:"flow,omitempty"`
 	// Label is what a label printed event printed.
 	Label *EventLabel `json:"label,omitempty"`
-	// Action is the action an action event pressed, and what a device
+	// Hook is the hook a hook event triggered, and what a device
 	// needs to find the thing.
-	Action *EventAction `json:"action,omitempty"`
+	Hook *EventHook `json:"hook,omitempty"`
 }
 
 // EventLabel describes an asset's labels printed (README §6.2): the
@@ -464,8 +464,8 @@ type AssetWithDetails struct {
 	// LabelTemplate is the label template the spool queues it with, and why;
 	// TemplateID is empty when no category names one.
 	LabelTemplate TemplateChoice `json:"label_template"`
-	// Actions are those its categories offer on it (README §5.4).
-	Actions []OfferedAction `json:"actions"`
+	// Hooks are those its categories offer on it (README §5.4).
+	Hooks []OfferedHook `json:"hooks"`
 	// ResolvedIcon is the icon it is drawn with on screen, and why; nil
 	// when neither it nor any of its categories has one.
 	ResolvedIcon *ResolvedIcon `json:"resolved_icon"`
@@ -936,10 +936,10 @@ type PoolMember struct {
 	Share     int    `json:"share"`
 }
 
-// AssetAction is an action people press on assets, such as Identify
-// (README §5.4). Pressing one records an asset.action event, which devices
+// AssetHook is a hook people trigger on assets, such as Identify
+// (README §5.4). Triggering one records an asset.hook event, which devices
 // and notification channels act on. Confirm, when set, is asked first.
-type AssetAction struct {
+type AssetHook struct {
 	ID        string    `json:"id"`
 	Key       string    `json:"key"`
 	Label     string    `json:"label"`
@@ -948,32 +948,32 @@ type AssetAction struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// CategoryAction is an action a category offers on its assets, and with
+// CategoryHook is a hook a category offers on its assets, and with
 // Cascades on those of its subcategories.
-type CategoryAction struct {
-	ActionID string `json:"action_id"`
+type CategoryHook struct {
+	HookID   string `json:"hook_id"`
 	Cascades bool   `json:"cascades"`
 }
 
-// OfferedAction is an action an asset's categories offer on it.
-type OfferedAction struct {
+// OfferedHook is a hook an asset's categories offer on it.
+type OfferedHook struct {
 	ID      string `json:"id"`
 	Key     string `json:"key"`
 	Label   string `json:"label"`
 	Confirm string `json:"confirm,omitempty"`
 }
 
-// EventAction is the action an asset.action event pressed: its key and
+// EventHook is the hook an asset.hook event triggered: its key and
 // label, and the asset and the containers it is in, outermost first, each
 // with its codes and field values, for a device to find it by.
-type EventAction struct {
+type EventHook struct {
 	Key      string       `json:"key"`
 	Label    string       `json:"label"`
 	Asset    EventThing   `json:"asset"`
 	Location []EventThing `json:"location"`
 }
 
-// EventThing is an asset as an action event carries it: its codes, by
+// EventThing is an asset as a hook event carries it: its codes, by
 // generator type, and its field values, by field key.
 type EventThing struct {
 	ID     string            `json:"id"`
@@ -993,9 +993,9 @@ type LiveConnection struct {
 	SeenAt   time.Time `json:"seen_at"`
 }
 
-// ActionReply is a device's answer to an action pressed: done or failed,
+// HookReply is a device's answer to a hook triggered: done or failed,
 // with a message, and who answered as they were named then.
-type ActionReply struct {
+type HookReply struct {
 	ID      string `json:"id"`
 	EventID string `json:"event_id"`
 	Name    string `json:"name"`

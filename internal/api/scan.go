@@ -79,9 +79,9 @@ type ScanAsset struct {
 	Name    string `json:"name"`
 	Counted bool   `json:"counted"`
 	Unit    string `json:"unit,omitempty"`
-	// Actions are those its categories offer, when the viewer may press
+	// Hooks are those its categories offer, when the viewer may trigger
 	// them.
-	Actions []models.OfferedAction `json:"actions,omitempty"`
+	Hooks []models.OfferedHook `json:"hooks,omitempty"`
 	// Icon is the icon it is drawn with (README §3.7), if any.
 	Icon *models.ResolvedIcon `json:"icon,omitempty"`
 	// Flows are the flows the viewer may start from it (README §6.7).
@@ -181,8 +181,8 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	if st := asset.Asset.Stock; st != nil {
 		out.Asset.Counted, out.Asset.Unit = true, st.Unit
 	}
-	if may["actions"] {
-		out.Asset.Actions = asset.Actions
+	if may["hooks"] {
+		out.Asset.Hooks = asset.Hooks
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -201,8 +201,8 @@ func (s *Server) scanActionsFor(r *http.Request, a *models.AssetWithDetails) map
 		"borrow": user != nil && a.Lendable && a.Loan == nil && a.Asset.Condition != models.ConditionOutOfService && can(rbac.PermAssetsBorrow),
 		"return": a.Loan != nil && (can(rbac.PermAssetsLend) || (mine && can(rbac.PermAssetsBorrow))),
 		"report": can(rbac.PermAssetsReport) || can(rbac.PermAssetsWrite),
-		// The actions its categories offer, such as Identify (README §5.4).
-		"actions": len(a.Actions) > 0 && can(rbac.PermAssetsAct),
+		// The hooks its categories offer, such as Identify (README §5.4).
+		"hooks": len(a.Hooks) > 0 && can(rbac.PermAssetsHook),
 		// A new asset like it, or in it, as the asset's page starts one (README §3.2).
 		"add_similar": can(rbac.PermAssetsWrite),
 		"add_inside":  can(rbac.PermAssetsWrite) && s.hasLocationType(),

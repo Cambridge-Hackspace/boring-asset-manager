@@ -21,17 +21,18 @@ func TestParsingScanTemplates(t *testing.T) {
 		t.Fatalf("a bin's template: %v", err)
 	}
 	for what, c := range map[string]struct{ spec, want string }{
-		"a filter":             {`{"filter":{"search":"x"},"sections":[{"type":"actions","actions":["open"]}]}`, "no filter"},
-		"no sections":          {`{"sections":[]}`, "1 to"},
-		"a chart":              {`{"sections":[{"type":"chart","chart":"bar","measure":"assets","group_by":"category"}]}`, "no charts"},
-		"a table of nothing":   {`{"sections":[{"type":"table","columns":[{"heading":"A","binding":"{{asset.name}}"}]}]}`, "source must be contents"},
-		"sorted details":       {`{"sections":[{"type":"details","sort_by":1,"columns":[{"heading":"A","binding":"x"},{"heading":"B","binding":"y"}]}]}`, "asset alone"},
-		"details of nothing":   {`{"sections":[{"type":"details","columns":[]}]}`, "1 to 30 columns"},
-		"an unknown action":    {`{"sections":[{"type":"actions","actions":["fly"]}]}`, `unknown action "fly"`},
-		"an action twice":      {`{"sections":[{"type":"actions","actions":["use","use"]}]}`, "listed twice"},
-		"no actions":           {`{"sections":[{"type":"actions","actions":[]}]}`, "at least one"},
-		"an unknown field":     {`{"sections":[{"type":"details","columns":[{"heading":"A","binding":"{{field.nope}}"}]}]}`, "unknown field"},
-		"a report's own table": {`{"sections":[{"type":"table","source":"contents","group_by":"category","columns":[{"heading":"A","binding":"x"}]}]}`, "no actions or groups"},
+		"a filter":                {`{"filter":{"search":"x"},"sections":[{"type":"actions","actions":["open"]}]}`, "no filter"},
+		"no sections":             {`{"sections":[]}`, "1 to"},
+		"a chart":                 {`{"sections":[{"type":"chart","chart":"bar","measure":"assets","group_by":"category"}]}`, "no charts"},
+		"a table of nothing":      {`{"sections":[{"type":"table","columns":[{"heading":"A","binding":"{{asset.name}}"}]}]}`, "source must be contents"},
+		"sorted details":          {`{"sections":[{"type":"details","sort_by":1,"columns":[{"heading":"A","binding":"x"},{"heading":"B","binding":"y"}]}]}`, "asset alone"},
+		"details of nothing":      {`{"sections":[{"type":"details","columns":[]}]}`, "1 to 30 columns"},
+		"an unknown action":       {`{"sections":[{"type":"actions","actions":["fly"]}]}`, `unknown action "fly"`},
+		"an action twice":         {`{"sections":[{"type":"actions","actions":["use","use"]}]}`, "listed twice"},
+		"no actions":              {`{"sections":[{"type":"actions","actions":[]}]}`, "at least one"},
+		"hooks by their old name": {`{"sections":[{"type":"actions","actions":["actions"]}]}`, `unknown action "actions"`},
+		"an unknown field":        {`{"sections":[{"type":"details","columns":[{"heading":"A","binding":"{{field.nope}}"}]}]}`, "unknown field"},
+		"a report's own table":    {`{"sections":[{"type":"table","source":"contents","group_by":"category","columns":[{"heading":"A","binding":"x"}]}]}`, "no actions or groups"},
 	} {
 		_, err := ParseScan([]byte(c.spec), func(string) bool { return false })
 		if !errors.Is(err, ErrInvalidSpec) || !strings.Contains(err.Error(), c.want) {

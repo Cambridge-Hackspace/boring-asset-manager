@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetAction, type CategoryAction } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetHook, type CategoryHook } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
@@ -63,9 +63,9 @@
   );
   const templateName = (tid: string) => labelTemplates.find((t) => t.id === tid)?.name ?? 'A deleted template';
   const canSpool = $derived(session.can('labels.print'));
-  // Actions (README §5.4): which it offers on its assets, and whether its
+  // Hooks (README §5.4): which it offers on its assets, and whether its
   // subcategories' too.
-  let actions = $state<AssetAction[]>([]);
+  let hooks = $state<AssetHook[]>([]);
   let offered = $state<Record<string, { on: boolean; cascades: boolean }>>({});
   let withSubcategories = $state(true);
   const categoryName = (cid: string) => categories.find((c) => c.id === cid)?.name ?? 'another category';
@@ -117,7 +117,7 @@
     suggestions: 'suggested links',
     scan: 'scan template',
     labels: 'label templates',
-    actions: 'actions',
+    hooks: 'hooks',
     scopes: 'who can see its assets',
     icon: 'its icon',
   };
@@ -128,7 +128,7 @@
     suggestions: JSON.stringify([...suggested].sort()),
     scan: scanTemplate,
     labels: JSON.stringify(labelList),
-    actions: JSON.stringify(offered),
+    hooks: JSON.stringify(offered),
     scopes: JSON.stringify([...scopeIds].sort()),
   });
   // The icon section keeps its own: whether its source differs from what is saved.
@@ -139,7 +139,7 @@
   // The page in tabs (#161), each a part of it, kept in the address. All
   // stay on the page, hidden but for one, so changes not saved in one
   // survive looking at another; a tab with any says so.
-  const tabOf: Record<string, string> = { details: 'about', stock: 'stock', suggestions: 'links', scan: 'links', actions: 'links', labels: 'labels', scopes: 'scopes', icon: 'icon' };
+  const tabOf: Record<string, string> = { details: 'about', stock: 'stock', suggestions: 'links', scan: 'links', hooks: 'links', labels: 'labels', scopes: 'scopes', icon: 'icon' };
   const tabs = $derived.by(() => {
     const all = [
       { key: 'about', label: 'About', on: true },
@@ -147,7 +147,7 @@
       { key: 'stock', label: 'Stock and lending', on: !!category?.is_consumable || (canManage && !isSystem) },
       { key: 'labels', label: 'Labels', on: (canManage && labelTemplates.length > 0) || canSpool || (labelConflicts[id] ?? 0) > 0 },
       { key: 'icon', label: 'Icon', on: !isSystem },
-      { key: 'links', label: 'Links and actions', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || actions.length > 0)) || (conflicts[id] ?? 0) > 0 },
+      { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
     ];
     const changed = new Set(unsaved.map((k) => tabOf[k]));
@@ -203,10 +203,10 @@
           labelTemplates = (await request<{ templates: TemplateSummary[] }>('GET', '/templates')).templates ?? [];
           labelList = [...(c.label_template_ids ?? [])];
           savedLabelList = [...labelList];
-          actions = (await request<{ actions: AssetAction[] }>('GET', '/actions')).actions ?? [];
-          const own = (await request<{ actions: CategoryAction[] }>('GET', `/categories/${encodeURIComponent(id)}/actions`)).actions ?? [];
-          offered = Object.fromEntries(actions.map((a) => {
-            const o = own.find((x) => x.action_id === a.id);
+          hooks = (await request<{ hooks: AssetHook[] }>('GET', '/hooks')).hooks ?? [];
+          const own = (await request<{ hooks: CategoryHook[] }>('GET', `/categories/${encodeURIComponent(id)}/hooks`)).hooks ?? [];
+          offered = Object.fromEntries(hooks.map((a) => {
+            const o = own.find((x) => x.hook_id === a.id);
             return [a.id, { on: !!o, cascades: o?.cascades ?? true }];
           }));
         }
@@ -311,14 +311,14 @@
     }
   }
 
-  async function saveActions(event: SubmitEvent) {
+  async function saveHooks(event: SubmitEvent) {
     event.preventDefault();
     error = saved = '';
-    const chosen = actions.filter((a) => offered[a.id]?.on).map((a) => ({ action_id: a.id, cascades: offered[a.id]!.cascades }));
+    const chosen = hooks.filter((a) => offered[a.id]?.on).map((a) => ({ hook_id: a.id, cascades: offered[a.id]!.cascades }));
     try {
-      await request('PUT', `/categories/${encodeURIComponent(id)}/actions`, { actions: chosen });
-      markSaved('actions');
-      saved = 'Actions saved.';
+      await request('PUT', `/categories/${encodeURIComponent(id)}/hooks`, { hooks: chosen });
+      markSaved('hooks');
+      saved = 'Hooks saved.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -384,7 +384,7 @@
     }
   }
 
-  // A copy beside it, as saved: settings, fields, suggestions, actions,
+  // A copy beside it, as saved: settings, fields, suggestions, hooks,
   // scopes and templates, but not its subcategories or assets.
   let duplicating = $state(false);
   async function duplicate() {
@@ -764,12 +764,12 @@
         {/if}
       </section>
     {/if}
-    {#if canManage && actions.length}
-      <section aria-labelledby="actions-heading">
-        <h2 id="actions-heading" class="mb-1 text-lg font-semibold">Actions</h2>
-        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">Buttons offered on its assets, such as Identify. <a class="underline" href="/actions">Define actions</a>.</p>
-        <form class="space-y-2" onsubmit={saveActions}>
-          {#each actions as a (a.id)}
+    {#if canManage && hooks.length}
+      <section aria-labelledby="hooks-heading">
+        <h2 id="hooks-heading" class="mb-1 text-lg font-semibold">Hooks</h2>
+        <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">Buttons offered on its assets, such as Identify. <a class="underline" href="/hooks">Define hooks</a>.</p>
+        <form class="space-y-2" onsubmit={saveHooks}>
+          {#each hooks as a (a.id)}
             <div class="flex flex-wrap items-center gap-4 text-sm">
               <label class="flex min-w-48 items-center gap-2"><input type="checkbox" bind:checked={offered[a.id]!.on} /> {a.label}</label>
               {#if offered[a.id]?.on}
@@ -777,7 +777,7 @@
               {/if}
             </div>
           {/each}
-          <button type="submit" class="btn-secondary">Save actions</button>
+          <button type="submit" class="btn-secondary">Save hooks</button>
         </form>
       </section>
     {/if}

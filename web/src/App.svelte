@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { interceptLinks, matchRoute, navigate, router } from './lib/router.svelte';
   import { session, signInPath } from './lib/session.svelte';
-  import { routes } from './routes';
+  import { movedTo, routes } from './routes';
   import Shell from './Shell.svelte';
   import Footer from './components/Footer.svelte';
   import IconPaletteStyle from './components/IconPaletteStyle.svelte';
@@ -30,6 +30,13 @@
   const workspace = $derived(allowed && !!match?.route.workspace);
   // Signed out, a page is open when the public role allows it (README §3.3).
   const openToPublic = $derived(!!match?.route.public && allowed);
+
+  // A page that moved is opened where it is now, in place of the old
+  // address in history.
+  $effect(() => {
+    const to = movedTo(router.path);
+    if (to) navigate(to + router.search + window.location.hash, true);
+  });
 
   // Other signed-out visitors go to sign-in, and come back afterward.
   $effect(() => {

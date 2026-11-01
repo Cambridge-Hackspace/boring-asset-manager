@@ -3,7 +3,7 @@
   import { messageOf } from '../../lib/errors';
   import { session } from '../../lib/session.svelte';
   import type { Flow } from '../../lib/flows';
-  import type { AssetAction, Category, Field, RelationType, Report, Scope, TemplateSummary } from '../../lib/models';
+  import type { AssetHook, Category, Field, RelationType, Report, Scope, TemplateSummary } from '../../lib/models';
   import {
     anyChosen,
     base64Of,
@@ -73,10 +73,10 @@
 
   async function load() {
     try {
-      const [cats, fields, actions, types, templates, reports, flows, scopes] = await Promise.all([
+      const [cats, fields, hooks, types, templates, reports, flows, scopes] = await Promise.all([
         request<{ categories: Category[] }>('GET', '/categories').then((r) => r.categories ?? []),
         request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? []),
-        request<{ actions: AssetAction[] }>('GET', '/actions').then((r) => r.actions ?? []),
+        request<{ hooks: AssetHook[] }>('GET', '/hooks').then((r) => r.hooks ?? []),
         request<{ relation_types: RelationType[] }>('GET', '/relation-types').then((r) => r.relation_types ?? []),
         request<{ templates: TemplateSummary[] }>('GET', '/templates').then((r) => r.templates ?? []),
         request<{ reports: Report[] }>('GET', '/reports').then((r) => r.reports ?? []),
@@ -87,7 +87,7 @@
       const byName = (list: { id: string; name: string }[]) => [...list].sort((a, b) => a.name.localeCompare(b.name));
       options = {
         field: byName(fields.map((f) => ({ id: f.id, name: f.label }))),
-        action: byName(actions.map((a) => ({ id: a.id, name: a.label }))),
+        hook: byName(hooks.map((a) => ({ id: a.id, name: a.label }))),
         relation_type: byName(types),
         label_template: byName(templates),
         scan_template: byName(reports.filter((r) => r.kind === 'scan')),
@@ -256,7 +256,7 @@
     <fieldset class="space-y-1">
       <legend class="text-sm font-medium">Categories</legend>
       <p class="text-xs text-zinc-600 dark:text-zinc-400">
-        A category brings its fields, actions, link types, label and scan templates, icon, and the flows that file into it.
+        A category brings its fields, hooks, link types, label and scan templates, icon, and the flows that file into it.
       </p>
       {#if tree.length === 0}
         <p class="text-sm">There are no categories.</p>

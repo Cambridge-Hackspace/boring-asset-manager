@@ -476,8 +476,8 @@ func describeChange(c flows.Change, v flows.Values) string {
 		return fmt.Sprintf("Move %s to another category.", name)
 	case flows.ChangeFields:
 		return fmt.Sprintf("Update %s.", name)
-	case flows.ChangeAction:
-		return fmt.Sprintf("Press %s on %s.", c.Action, name)
+	case flows.ChangeHook:
+		return fmt.Sprintf("Trigger %s on %s.", c.Hook, name)
 	}
 	return ""
 }

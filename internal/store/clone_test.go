@@ -35,9 +35,9 @@ func TestCloningACategory(t *testing.T) {
 	usedWith := relation(t, st, "used with")
 	_, err = st.SetCategoryRelationTypes(src.ID, []string{usedWith.ID})
 	must(err)
-	dry, err := st.SaveAction("", ActionInput{Key: "dry", Label: "Dry it"})
+	dry, err := st.SaveHook("", HookInput{Key: "dry", Label: "Dry it"})
 	must(err)
-	_, err = st.SetCategoryActions(src.ID, []models.CategoryAction{{ActionID: dry.ID, Cascades: false}})
+	_, err = st.SetCategoryHooks(src.ID, []models.CategoryHook{{HookID: dry.ID, Cascades: false}})
 	must(err)
 	scope, err := st.CreateScope("workshop")
 	must(err)
@@ -85,8 +85,8 @@ func TestCloningACategory(t *testing.T) {
 	if types, _ := st.CategoryRelationTypes(clone.ID); !reflect.DeepEqual(types, []string{usedWith.ID}) {
 		t.Errorf("suggested link types: %v", types)
 	}
-	if actions, _ := st.CategoryActions(clone.ID); len(actions) != 1 || actions[0].ActionID != dry.ID || actions[0].Cascades {
-		t.Errorf("actions: %+v", actions)
+	if hooks, _ := st.CategoryHooks(clone.ID); len(hooks) != 1 || hooks[0].HookID != dry.ID || hooks[0].Cascades {
+		t.Errorf("hooks: %+v", hooks)
 	}
 	if scopes, _ := st.CategoryScopes(clone.ID); !reflect.DeepEqual(scopes, []string{scope.ID}) {
 		t.Errorf("scopes: %v", scopes)

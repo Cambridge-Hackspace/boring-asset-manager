@@ -13,10 +13,10 @@ import (
 
 // Live events (README §5.4): what the servers holding devices' connections
 // read to send them events, and keep about those connections and the
-// devices' answers to actions.
+// devices' answers to hooks.
 
-// ErrNotAnAction is returned for answering an event that is no action.
-var ErrNotAnAction = errors.New("that event is not an action")
+// ErrNotAHook is returned for answering an event that is no hook.
+var ErrNotAHook = errors.New("that event is not a hook")
 
 // MaxReplyMessage bounds a device's answer.
 const MaxReplyMessage = 255
@@ -189,9 +189,9 @@ func (s *Store) ListLiveConnections(staleBefore time.Time, tokenID, userID strin
 	return out, rows.Err()
 }
 
-// RecordActionReply keeps a device's answer to an action event, from the
+// RecordHookReply keeps a device's answer to a hook event, from the
 // acting token or user.
-func (s *Store) RecordActionReply(eventID string, ok bool, message string) (*models.ActionReply, error) {
+func (s *Store) RecordHookReply(eventID string, ok bool, message string) (*models.HookReply, error) {
 	var kind string
 	err := s.QueryRow("SELECT kind FROM events WHERE id = ?", eventID).Scan(&kind)
 	if err == sql.ErrNoRows {
@@ -200,14 +200,14 @@ func (s *Store) RecordActionReply(eventID string, ok bool, message string) (*mod
 	if err != nil {
 		return nil, fmt.Errorf("reading the event: %w", err)
 	}
-	if kind != models.EventAssetAction {
-		return nil, ErrNotAnAction
+	if kind != models.EventAssetHook {
+		return nil, ErrNotAHook
 	}
 	message = strings.TrimSpace(message)
 	if len(message) > MaxReplyMessage {
 		message = message[:MaxReplyMessage]
 	}
-	r := &models.ActionReply{ID: uuid.NewString(), EventID: eventID, OK: ok, Message: message, CreatedAt: dbTime(time.Now())}
+	r := &models.HookReply{ID: uuid.NewString(), EventID: eventID, OK: ok, Message: message, CreatedAt: dbTime(time.Now())}
 	var tokenID, userID any
 	switch {
 	case s.actor != "":
@@ -229,16 +229,16 @@ func (s *Store) RecordActionReply(eventID string, ok bool, message string) (*mod
 	return r, nil
 }
 
-// ActionReplies lists the answers to an action event, oldest first.
-func (s *Store) ActionReplies(eventID string) ([]models.ActionReply, error) {
+// HookReplies lists the answers to a hook event, oldest first.
+func (s *Store) HookReplies(eventID string) ([]models.HookReply, error) {
 	rows, err := s.Query("SELECT id, event_id, name, token_id IS NOT NULL, COALESCE(token_id, user_id, ''), ok, message, created_at FROM action_replies WHERE event_id = ? ORDER BY created_at, id", eventID)
 	if err != nil {
 		return nil, fmt.Errorf("listing answers: %w", err)
 	}
 	defer rows.Close()
-	out := []models.ActionReply{}
+	out := []models.HookReply{}
 	for rows.Next() {
-		var r models.ActionReply
+		var r models.HookReply
 		if err := rows.Scan(&r.ID, &r.EventID, &r.Name, &r.Token, &r.ReplierID, &r.OK, &r.Message, &r.CreatedAt); err != nil {
 			return nil, err
 		}

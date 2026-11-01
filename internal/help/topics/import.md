@@ -16,7 +16,7 @@ The **links** column holds entries such as `contained_in:Bin A3;used_with:Drill`
 
 ## Packages
 
-**Admin › Import & export** (with the *settings.manage* permission) packages part of BAM! to share with another: categories, the fields, actions, link types, templates, reports, flows and icons they use, and their assets if you like.
+**Admin › Import & export** (with the *settings.manage* permission) packages part of BAM! to share with another: categories, the fields, hooks, link types, templates, reports, flows and icons they use, and their assets if you like.
 
 1. Tick what to share. Ticking a category ticks those under it.
 2. What your choice needs is ticked for you, marked *Needed by…*. It stays ticked until you untick what needs it.

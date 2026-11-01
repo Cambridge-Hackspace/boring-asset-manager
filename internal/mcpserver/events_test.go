@@ -21,8 +21,8 @@ func TestSubscriptionsKeepToTheirResources(t *testing.T) {
 	if err := sub("bam://events"); err == nil {
 		t.Error("subscribed to events without events.read")
 	}
-	q, err := eventsQuery("bam://events?kinds=asset.action&actions=identify&other=x")
-	if err != nil || q.Encode() != "actions=identify&kinds=asset.action" {
+	q, err := eventsQuery("bam://events?kinds=asset.hook&hooks=identify&other=x")
+	if err != nil || q.Encode() != "hooks=identify&kinds=asset.hook" {
 		t.Errorf("query: %v %v", q, err)
 	}
 	if _, err := eventsQuery("bam://eventsplus"); err == nil {

@@ -19,7 +19,7 @@ export type Permission =
   | 'reports.manage'
   | 'assets.track'
   | 'assets.scan'
-  | 'assets.act'
+  | 'assets.hook'
   | 'events.read'
   | 'flows.manage'
   | 'flows.run';
@@ -216,8 +216,8 @@ export interface AssetEvent {
     due_at?: string;
     /** What a label printed event printed: the template and printer as named then, or a download. */
     label?: { template: string; printer?: string; download?: boolean; copies: number };
-    /** What an action event pressed, and the asset and the containers it is in. */
-    action?: { key: string; label: string };
+    /** What a hook event triggered, and the asset and the containers it is in. */
+    hook?: { key: string; label: string };
   };
 }
 
@@ -259,8 +259,8 @@ export interface AssetWithDetails {
   scan_template: TemplateChoice;
   /** The label template the spool queues it with; template_id is empty when no category names one. */
   label_template: TemplateChoice;
-  /** The actions its categories offer on it, such as Identify (README §5.4). */
-  actions: OfferedAction[];
+  /** The hooks its categories offer on it, such as Identify (README §5.4). */
+  hooks: OfferedHook[];
   /** Its photos, in order; the first is the one lists show. */
   photos: AssetPhoto[];
   /** The icon it is drawn with, and why; null when neither it nor its categories have one. */
@@ -631,7 +631,7 @@ export interface ReportSection {
   actions?: ScanAction[];
 }
 
-export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report', 'actions', 'add_similar', 'add_inside', 'flows'] as const;
+export const scanActions = ['open', 'edit', 'use', 'borrow', 'return', 'report', 'hooks', 'add_similar', 'add_inside', 'flows'] as const;
 export type ScanAction = (typeof scanActions)[number];
 
 /** The scan or label template an asset uses, and why: the closest category naming one, or for scan templates the default. */
@@ -780,8 +780,8 @@ export interface PrinterPool {
   updated_at: string;
 }
 
-/** A button people press on assets, such as Identify, recording an asset.action event (README §5.4). */
-export interface AssetAction {
+/** A button people press on assets, such as Identify, triggering a hook: an asset.hook event (README §5.4). */
+export interface AssetHook {
   id: string;
   key: string;
   label: string;
@@ -791,14 +791,14 @@ export interface AssetAction {
   updated_at: string;
 }
 
-/** An action a category offers on its assets, and with cascades on its subcategories'. */
-export interface CategoryAction {
-  action_id: string;
+/** A hook a category offers on its assets, and with cascades on its subcategories'. */
+export interface CategoryHook {
+  hook_id: string;
   cascades: boolean;
 }
 
-/** An action an asset's categories offer on it. */
-export interface OfferedAction {
+/** A hook an asset's categories offer on it. */
+export interface OfferedHook {
   id: string;
   key: string;
   label: string;
@@ -815,8 +815,8 @@ export interface LiveConnection {
   seen_at: string;
 }
 
-/** A device's answer to an action pressed: done or failed, with a message. */
-export interface ActionReply {
+/** A device's answer to a hook triggered: done or failed, with a message. */
+export interface HookReply {
   id: string;
   event_id: string;
   name: string;

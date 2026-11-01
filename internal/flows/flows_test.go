@@ -14,7 +14,7 @@ var catalog = Catalog{
 	Fields:       map[string]bool{"owner": true, "until": true, "length": true},
 	Templates:    map[string]bool{"tpl": true},
 	Destinations: map[string]bool{"printer:p1": true, "pool:q1": true},
-	Actions:      map[string]bool{"identify": true},
+	Hooks:        map[string]bool{"identify": true},
 	Asset:        func(id string) bool { return id == "shelf" },
 }
 
@@ -73,7 +73,7 @@ func TestCheckFindsWhatStopsAFlow(t *testing.T) {
 		{"a place that isn't", base(choose, Step{ID: "c", Kind: KindCreate, Name: "x", Location: &Location{Mode: PlaceFixed, AssetID: "nowhere"}}), "its place is not an asset"},
 		{"find by nothing", base(Step{ID: "f", Kind: KindFind}), "a way to find"},
 		{"an unknown change", base(Step{ID: "f", Kind: KindFind, FindBy: []string{FindList}}, Step{ID: "x", Kind: KindChange, Changes: []Change{{Kind: "burn"}}}), `"burn" is not a change`},
-		{"an unknown action", base(Step{ID: "f", Kind: KindFind, FindBy: []string{FindList}}, Step{ID: "x", Kind: KindChange, Changes: []Change{{Kind: ChangeAction, Action: "dance"}}}), `no action has the key "dance"`},
+		{"an unknown hook", base(Step{ID: "f", Kind: KindFind, FindBy: []string{FindList}}, Step{ID: "x", Kind: KindChange, Changes: []Change{{Kind: ChangeHook, Hook: "dance"}}}), `no hook has the key "dance"`},
 	}
 	for _, c := range cases {
 		got := strings.Join(problems(c.def), "; ")
@@ -93,14 +93,14 @@ func TestCheckFindsWhatStopsAFlow(t *testing.T) {
 		Step{ID: "change", Kind: KindChange, Changes: []Change{
 			{Kind: ChangeCondition, Condition: "needs_maintenance", Note: "left by {owner}"},
 			{Kind: ChangePlace, AssetID: "shelf"}, {Kind: ChangeCategory, CategoryID: "other"},
-			{Kind: ChangeFields, Fields: map[string]string{"length": "{what}"}}, {Kind: ChangeAction, Action: "identify"},
+			{Kind: ChangeFields, Fields: map[string]string{"length": "{what}"}}, {Kind: ChangeHook, Hook: "identify"},
 			{Kind: ChangeBorrow}, {Kind: ChangeReturn}, {Kind: ChangeArchive},
 		}},
 	)
 	if got := problems(full); len(got) != 0 {
 		t.Errorf("a full flow: %v", got)
 	}
-	want := []string{rbac.PermAssetsBorrow, rbac.PermAssetsAct, rbac.PermAssetsDelete, rbac.PermAssetsReport, rbac.PermAssetsWrite, rbac.PermLabelsPrint}
+	want := []string{rbac.PermAssetsBorrow, rbac.PermAssetsHook, rbac.PermAssetsDelete, rbac.PermAssetsReport, rbac.PermAssetsWrite, rbac.PermLabelsPrint}
 	if got := full.Permissions(); !reflect.DeepEqual(got, sorted(want)) {
 		t.Errorf("permissions: %v", got)
 	}

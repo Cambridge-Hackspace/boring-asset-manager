@@ -143,15 +143,15 @@ describe('ScanPage', () => {
     session.permissions = [];
   });
 
-  it('offers the actions its categories offer, where the template says', async () => {
-    const scan = scanOf(10, ['actions']);
+  it('offers the hooks its categories offer, where the template says', async () => {
+    const scan = scanOf(10, ['hooks']);
     const { sent } = fakeApi({
-      'GET /scan/BIN-A3': () => ({ ...scan, asset: { ...scan.asset, actions: [{ id: '1', key: 'identify', label: 'Identify' }] } }),
-      'POST /assets/b1/actions/identify': () => ({ status: 201, body: { event_id: 'e' } }),
+      'GET /scan/BIN-A3': () => ({ ...scan, asset: { ...scan.asset, hooks: [{ id: '1', key: 'identify', label: 'Identify' }] } }),
+      'POST /assets/b1/hooks/identify': () => ({ status: 201, body: { event_id: 'e' } }),
     });
     render(ScanPage, { params: { code: 'BIN-A3' } });
     await fireEvent.click(await screen.findByRole('button', { name: 'Identify' }));
     expect(await screen.findByText('Identify: sent.')).toBeTruthy();
-    expect(sent.at(-1)!.path).toBe('/assets/b1/actions/identify');
+    expect(sent.at(-1)!.path).toBe('/assets/b1/hooks/identify');
   });
 });

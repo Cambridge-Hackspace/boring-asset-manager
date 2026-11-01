@@ -73,7 +73,7 @@ test('scan templates: make one, and have a category choose it', async ({ signedI
   await expect(section).toContainText(name);
 
   await page.goto(`/categories/${category.id}`);
-  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Links and actions' }).click();
+  await page.getByRole('navigation', { name: 'Parts of this category' }).getByRole('link', { name: 'Links and hooks' }).click();
   await page.getByLabel('Shows').selectOption({ label: name });
   await page.getByRole('button', { name: 'Save scan template' }).click();
   await expect(page.getByRole('status')).toHaveText('Scan template saved.');

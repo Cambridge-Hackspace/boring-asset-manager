@@ -45,12 +45,12 @@ func TestLiveConnectionsAndReplies(t *testing.T) {
 		t.Errorf("after closing: %+v", left)
 	}
 
-	// Answers to actions, and only to actions.
-	identify, _ := st.SaveAction("", ActionInput{Key: "identify", Label: "Identify"})
+	// Answers to hooks, and only to hooks.
+	identify, _ := st.SaveHook("", HookInput{Key: "identify", Label: "Identify"})
 	cat, _ := st.CreateCategory("Parts", nil, "", false, false)
-	_, _ = st.SetCategoryActions(cat.ID, []models.CategoryAction{{ActionID: identify.ID}})
+	_, _ = st.SetCategoryHooks(cat.ID, []models.CategoryHook{{HookID: identify.ID}})
 	asset, _ := st.CreateAsset("Drawer", []string{cat.ID}, nil, nil)
-	eventID, err := st.RecordAssetAction(asset.Asset.ID, "identify")
+	eventID, err := st.RecordAssetHook(asset.Asset.ID, "identify")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,11 +58,11 @@ func TestLiveConnectionsAndReplies(t *testing.T) {
 	for len(long) < 300 {
 		long += "lit "
 	}
-	r, err := st.AsToken(tok.ID).RecordActionReply(eventID, true, long)
+	r, err := st.AsToken(tok.ID).RecordHookReply(eventID, true, long)
 	if err != nil || r.Name != "Cabinet A" || !r.Token || len(r.Message) != MaxReplyMessage {
 		t.Errorf("an answer: %+v, %v", r, err)
 	}
-	if replies, _ := st.ActionReplies(eventID); len(replies) != 1 || !replies[0].OK || !replies[0].Token {
+	if replies, _ := st.HookReplies(eventID); len(replies) != 1 || !replies[0].OK || !replies[0].Token {
 		t.Errorf("answers: %+v", replies)
 	}
 	events, _, _ := st.ListAssetEvents(asset.Asset.ID, "", 10)
@@ -72,10 +72,10 @@ func TestLiveConnectionsAndReplies(t *testing.T) {
 			created = e.ID
 		}
 	}
-	if _, err := st.RecordActionReply(created, true, ""); !errors.Is(err, ErrNotAnAction) {
+	if _, err := st.RecordHookReply(created, true, ""); !errors.Is(err, ErrNotAHook) {
 		t.Errorf("answering something else: %v", err)
 	}
-	if _, err := st.RecordActionReply("nope", true, ""); !errors.Is(err, ErrEventNotFound) {
+	if _, err := st.RecordHookReply("nope", true, ""); !errors.Is(err, ErrEventNotFound) {
 		t.Errorf("answering nothing: %v", err)
 	}
 	if got, err := st.EventAsset(eventID); err != nil || got != asset.Asset.ID {

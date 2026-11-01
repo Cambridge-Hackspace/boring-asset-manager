@@ -181,8 +181,8 @@ type Change struct {
 	CategoryID string `json:"category_id,omitempty"`
 	// Fields, for ChangeFields: a template for each field key.
 	Fields map[string]string `json:"fields,omitempty"`
-	// Action is the key of an action to press, for ChangeAction.
-	Action string `json:"action,omitempty"`
+	// Hook is the key of a hook to trigger, for ChangeHook.
+	Hook string `json:"hook,omitempty"`
 }
 
 // The changes a Change step can make. Archiving is how bam removes an
@@ -195,7 +195,7 @@ const (
 	ChangePlace     = "place"
 	ChangeCategory  = "category"
 	ChangeFields    = "fields"
-	ChangeAction    = "action"
+	ChangeHook      = "hook"
 )
 
 // The ways Find finds an asset.
@@ -363,8 +363,8 @@ func changePermission(kind string) string {
 		return rbac.PermAssetsBorrow
 	case ChangePlace, ChangeCategory, ChangeFields:
 		return rbac.PermAssetsWrite
-	case ChangeAction:
-		return rbac.PermAssetsAct
+	case ChangeHook:
+		return rbac.PermAssetsHook
 	}
 	return ""
 }
@@ -372,7 +372,7 @@ func changePermission(kind string) string {
 // Catalog is what a flow's settings may name, as the instance has it: the
 // categories, the keys of the fields their assets record (own and
 // inherited, across all the flow's categories), label templates, printers
-// and pools as destinations, actions by key, flows by ID, and assets (for
+// and pools as destinations, hooks by key, flows by ID, and assets (for
 // places).
 type Catalog struct {
 	Flows        map[string]bool
@@ -381,7 +381,7 @@ type Catalog struct {
 	DateFields   map[string]bool
 	Templates    map[string]bool
 	Destinations map[string]bool
-	Actions      map[string]bool
+	Hooks        map[string]bool
 	Asset        func(id string) bool
 }
 
@@ -408,7 +408,7 @@ var (
 const MaxSteps = 50
 
 // Check lists what stops a flow being saved: every step well formed, every
-// category, field, template, printer, place and action it names existing,
+// category, field, template, printer, place and hook it names existing,
 // and every template and condition naming only values set before it.
 func (d *Definition) Check(c Catalog) []Problem {
 	var out []Problem
@@ -631,9 +631,9 @@ func (d *Definition) Check(c Catalog) []Problem {
 						}
 						uses("the value of "+key, tmpl)
 					}
-				case ChangeAction:
-					if !c.Actions[ch.Action] {
-						bad("no action has the key %q", ch.Action)
+				case ChangeHook:
+					if !c.Hooks[ch.Hook] {
+						bad("no hook has the key %q", ch.Hook)
 					}
 				default:
 					bad("%q is not a change it can make", ch.Kind)

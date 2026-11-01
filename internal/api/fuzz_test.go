@@ -102,16 +102,16 @@ var fuzzRoutes = []route{
 	{method: "PUT", path: "/api/v1/categories/{category}/scan-template", body: `{"scan_template_id":"{report}"}`},
 	{method: "GET", path: "/api/v1/categories/scan-conflicts"},
 	{method: "PUT", path: "/api/v1/categories/{category}/label-template", body: `{"label_template_id":"{template}"}`},
-	{method: "GET", path: "/api/v1/actions"},
-	{method: "POST", path: "/api/v1/actions", body: `{"key":"identify-{n}","label":"Identify {n}","confirm":"Sure?"}`},
-	{method: "PUT", path: "/api/v1/actions/{action}", body: `{"key":"light-{n}","label":"Light {n}"}`},
-	{method: "GET", path: "/api/v1/categories/{category}/actions"},
-	{method: "PUT", path: "/api/v1/categories/{category}/actions", body: `{"actions":[{"action_id":"{action}","cascades":true}]}`},
-	{method: "POST", path: "/api/v1/assets/{asset}/actions/identify-1"},
-	{method: "GET", path: "/api/v1/assets/{asset}/actions/replies", query: map[string][]string{"event_id": {"nope", ""}}},
-	{method: "GET", path: "/api/v1/events/live", query: map[string][]string{"kinds": {"asset.action"}}},
+	{method: "GET", path: "/api/v1/hooks"},
+	{method: "POST", path: "/api/v1/hooks", body: `{"key":"identify-{n}","label":"Identify {n}","confirm":"Sure?"}`},
+	{method: "PUT", path: "/api/v1/hooks/{hook}", body: `{"key":"light-{n}","label":"Light {n}"}`},
+	{method: "GET", path: "/api/v1/categories/{category}/hooks"},
+	{method: "PUT", path: "/api/v1/categories/{category}/hooks", body: `{"hooks":[{"hook_id":"{hook}","cascades":true}]}`},
+	{method: "POST", path: "/api/v1/assets/{asset}/hooks/identify-1"},
+	{method: "GET", path: "/api/v1/assets/{asset}/hooks/replies", query: map[string][]string{"event_id": {"nope", ""}}},
+	{method: "GET", path: "/api/v1/events/live", query: map[string][]string{"kinds": {"asset.hook"}}},
 	{method: "GET", path: "/api/v1/tokens/connections"},
-	{method: "DELETE", path: "/api/v1/actions/{action}"},
+	{method: "DELETE", path: "/api/v1/hooks/{hook}"},
 	{method: "GET", path: "/api/v1/categories/label-conflicts", query: map[string][]string{"category_id": {"{category}"}, "label_template_id": {"{template}", ""}}},
 	{method: "GET", path: "/api/v1/scan/{asset}"},
 	{method: "GET", path: "/api/v1/reports/{report}/sections/1/csv"},
@@ -346,8 +346,8 @@ func kindOf(path string) string {
 		return "pool"
 	case "/api/v1/label-stock":
 		return "stock"
-	case "/api/v1/actions":
-		return "action"
+	case "/api/v1/hooks":
+		return "hook"
 	case "/api/v1/icon-library":
 		return "library"
 	case "/api/v1/flows":
@@ -399,7 +399,7 @@ func (fz *fuzzer) fill(s string, rng *rand.Rand, escape bool) (string, string, s
 		fz.n++
 		s = strings.Replace(s, "{n}", strconv.Itoa(fz.n), 1)
 	}
-	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job", "pool", "action", "stock", "flow", "run"} {
+	for _, kind := range []string{"user", "role", "token", "relation", "report", "scope", "field", "category", "asset", "template", "image", "printer", "channel", "spool", "job", "pool", "hook", "stock", "flow", "run"} {
 		for strings.Contains(s, "{"+kind+"}") {
 			id := fz.id(kind, rng)
 			if !escape {

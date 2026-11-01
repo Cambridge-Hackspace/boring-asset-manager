@@ -19,20 +19,20 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type pressIn struct {
+type triggerIn struct {
 	Asset string `json:"asset" jsonschema:"the asset, by ID or code"`
-	Key   string `json:"key" jsonschema:"the action's key, from get_asset's actions"`
+	Key   string `json:"key" jsonschema:"the hook's key, from get_asset's hooks"`
 	Wait  *int   `json:"wait_seconds,omitempty" jsonschema:"how long to wait for devices to answer, 0 to 10 seconds (5 if not given)"`
 }
 
-type pressOut struct {
-	EventID string               `json:"event_id"`
-	Replies []models.ActionReply `json:"replies" jsonschema:"what the devices that acted on it answered"`
+type triggerOut struct {
+	EventID string             `json:"event_id"`
+	Replies []models.HookReply `json:"replies" jsonschema:"what the devices that acted on it answered"`
 }
 
 type repliesIn struct {
 	Asset   string `json:"asset" jsonschema:"the asset, by ID or code"`
-	EventID string `json:"event_id" jsonschema:"the press, as press_action answered"`
+	EventID string `json:"event_id" jsonschema:"the trigger, as trigger_hook answered"`
 }
 
 type photosIn struct {
@@ -107,36 +107,36 @@ func multipartBody(field, filename string, data []byte, values map[string]string
 func extraTools() []tool {
 	return []tool{
 		define(&mcp.Tool{
-			Name: "press_action",
-			Description: "Press one of an asset's actions, such as Identify, which devices act on (a cabinet lights the drawer it is in), and wait a moment " +
-				"for their answers. Ask the person first when the action has a confirm question.",
-			Annotations: changes("Press an action", false),
-		}, []string{"POST /api/v1/assets/{id}/actions/{key}", "GET /api/v1/assets/{id}/actions/replies"}, []string{rbac.PermAssetsAct}, func(ctx context.Context, e *env, in pressIn) (reply[pressOut], error) {
+			Name: "trigger_hook",
+			Description: "Trigger one of an asset's hooks, such as Identify, which devices act on (a cabinet lights the drawer it is in), and wait a moment " +
+				"for their answers. Ask the person first when the hook has a confirm question.",
+			Annotations: changes("Trigger a hook", false),
+		}, []string{"POST /api/v1/assets/{id}/hooks/{key}", "GET /api/v1/assets/{id}/hooks/replies"}, []string{rbac.PermAssetsHook}, func(ctx context.Context, e *env, in triggerIn) (reply[triggerOut], error) {
 			wait := 5
 			if in.Wait != nil {
 				wait = *in.Wait
 			}
 			if wait < 0 || wait > 10 {
-				return reply[pressOut]{}, fmt.Errorf("wait_seconds must be from 0 to 10")
+				return reply[triggerOut]{}, fmt.Errorf("wait_seconds must be from 0 to 10")
 			}
 			id, err := e.assetID(ctx, in.Asset)
 			if err != nil {
-				return reply[pressOut]{}, err
+				return reply[triggerOut]{}, err
 			}
-			var pressed struct {
+			var triggered struct {
 				EventID string `json:"event_id"`
 			}
-			if err := e.call(ctx, http.MethodPost, assetPath(id, "/actions/", url.PathEscape(in.Key)), nil, &pressed); err != nil {
-				return reply[pressOut]{}, err
+			if err := e.call(ctx, http.MethodPost, assetPath(id, "/hooks/", url.PathEscape(in.Key)), nil, &triggered); err != nil {
+				return reply[triggerOut]{}, err
 			}
-			out := pressOut{EventID: pressed.EventID, Replies: []models.ActionReply{}}
+			out := triggerOut{EventID: triggered.EventID, Replies: []models.HookReply{}}
 			deadline := time.Now().Add(time.Duration(wait) * time.Second)
 			for {
 				var res struct {
-					Replies []models.ActionReply `json:"replies"`
+					Replies []models.HookReply `json:"replies"`
 				}
-				if err := e.call(ctx, http.MethodGet, assetPath(id, "/actions/replies?event_id=", url.QueryEscape(pressed.EventID)), nil, &res); err != nil {
-					return reply[pressOut]{}, err
+				if err := e.call(ctx, http.MethodGet, assetPath(id, "/hooks/replies?event_id=", url.QueryEscape(triggered.EventID)), nil, &res); err != nil {
+					return reply[triggerOut]{}, err
 				}
 				if res.Replies != nil {
 					out.Replies = res.Replies
@@ -146,34 +146,34 @@ func extraTools() []tool {
 				}
 				select {
 				case <-ctx.Done():
-					return reply[pressOut]{}, ctx.Err()
+					return reply[triggerOut]{}, ctx.Err()
 				case <-time.After(250 * time.Millisecond):
 				}
 			}
 			if len(out.Replies) == 0 {
-				return say(out, "Pressed %s; nothing answered in %d seconds (action_replies looks again).", in.Key, wait)
+				return say(out, "Triggered %s; nothing answered in %d seconds (hook_replies looks again).", in.Key, wait)
 			}
 			var said []string
 			for _, r := range out.Replies {
 				said = append(said, fmt.Sprintf("%s: %s", r.Name, r.Message))
 			}
-			return say(out, "Pressed %s. %s", in.Key, strings.Join(said, "; "))
+			return say(out, "Triggered %s. %s", in.Key, strings.Join(said, "; "))
 		}),
 		define(&mcp.Tool{
-			Name:        "action_replies",
-			Description: "What devices answered to an action pressed on an asset.",
-			Annotations: readOnly("Action replies"),
-		}, []string{"GET /api/v1/assets/{id}/actions/replies"}, []string{rbac.PermAssetsAct}, func(ctx context.Context, e *env, in repliesIn) (reply[pressOut], error) {
+			Name:        "hook_replies",
+			Description: "What devices answered to a hook triggered on an asset.",
+			Annotations: readOnly("Hook replies"),
+		}, []string{"GET /api/v1/assets/{id}/hooks/replies"}, []string{rbac.PermAssetsHook}, func(ctx context.Context, e *env, in repliesIn) (reply[triggerOut], error) {
 			id, err := e.assetID(ctx, in.Asset)
 			if err != nil {
-				return reply[pressOut]{}, err
+				return reply[triggerOut]{}, err
 			}
-			out := pressOut{EventID: in.EventID, Replies: []models.ActionReply{}}
+			out := triggerOut{EventID: in.EventID, Replies: []models.HookReply{}}
 			var res struct {
-				Replies []models.ActionReply `json:"replies"`
+				Replies []models.HookReply `json:"replies"`
 			}
-			if err := e.call(ctx, http.MethodGet, assetPath(id, "/actions/replies?event_id=", url.QueryEscape(in.EventID)), nil, &res); err != nil {
-				return reply[pressOut]{}, err
+			if err := e.call(ctx, http.MethodGet, assetPath(id, "/hooks/replies?event_id=", url.QueryEscape(in.EventID)), nil, &res); err != nil {
+				return reply[triggerOut]{}, err
 			}
 			if res.Replies != nil {
 				out.Replies = res.Replies

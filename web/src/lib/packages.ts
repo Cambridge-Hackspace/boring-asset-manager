@@ -8,7 +8,7 @@ import { request } from './api';
 export interface Selection {
   categories?: string[];
   fields?: string[];
-  actions?: string[];
+  hooks?: string[];
   relation_types?: string[];
   label_templates?: string[];
   scan_templates?: string[];
@@ -22,7 +22,7 @@ export interface Selection {
 export type ItemKind =
   | 'category'
   | 'field'
-  | 'action'
+  | 'hook'
   | 'relation_type'
   | 'label_template'
   | 'scan_template'
@@ -59,7 +59,7 @@ export interface Plan {
 /** The kinds a selection lists, each with its selection's key, in the order the page shows them. */
 export const groups: { kind: ItemKind; key: keyof Selection; label: string }[] = [
   { kind: 'field', key: 'fields', label: 'Fields' },
-  { kind: 'action', key: 'actions', label: 'Actions' },
+  { kind: 'hook', key: 'hooks', label: 'Hooks' },
   { kind: 'relation_type', key: 'relation_types', label: 'Link types' },
   { kind: 'label_template', key: 'label_templates', label: 'Label templates' },
   { kind: 'scan_template', key: 'scan_templates', label: 'Scan templates' },
@@ -72,7 +72,7 @@ export const groups: { kind: ItemKind; key: keyof Selection; label: string }[] =
 export const kindNames: Record<ItemKind, string> = {
   category: 'category',
   field: 'field',
-  action: 'action',
+  hook: 'hook',
   relation_type: 'link type',
   label_template: 'label template',
   scan_template: 'scan template',

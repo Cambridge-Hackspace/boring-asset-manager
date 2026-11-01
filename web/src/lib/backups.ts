@@ -15,8 +15,8 @@ export const kinds: Record<Kind, { label: string; holds: string; replacing: stri
   },
   catalog: {
     label: 'The catalog',
-    holds: 'categories, fields, actions, link types and scopes',
-    replacing: 'Categories, fields and actions become the backup’s; assets in a category it lacks lose that category.',
+    holds: 'categories, fields, hooks, link types and scopes',
+    replacing: 'Categories, fields and hooks become the backup’s; assets in a category it lacks lose that category.',
   },
   labels: {
     label: 'Labels',

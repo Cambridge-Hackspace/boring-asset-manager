@@ -236,17 +236,17 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/categories/{id}/label-template", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryLabelTemplate)))
 	handle("GET /api/v1/categories/label-conflicts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleLabelConflicts)))
 
-	// Actions on assets (README §5.4)
-	handle("GET /api/v1/actions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListActions)))
-	handle("POST /api/v1/actions", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveAction)))
-	handle("PUT /api/v1/actions/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveAction)))
-	handle("DELETE /api/v1/actions/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteAction)))
-	handle("GET /api/v1/categories/{id}/actions", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryActions)))
-	handle("PUT /api/v1/categories/{id}/actions", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryActions)))
-	handle("POST /api/v1/assets/{id}/actions/{key}", RequirePermission(rbac.PermAssetsAct)(http.HandlerFunc(s.handlePressAction)))
-	handle("GET /api/v1/assets/{id}/actions/replies", RequirePermission(rbac.PermAssetsAct)(http.HandlerFunc(s.handleActionReplies)))
+	// Hooks on assets (README §5.4)
+	handle("GET /api/v1/hooks", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListHooks)))
+	handle("POST /api/v1/hooks", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveHook)))
+	handle("PUT /api/v1/hooks/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSaveHook)))
+	handle("DELETE /api/v1/hooks/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteHook)))
+	handle("GET /api/v1/categories/{id}/hooks", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleCategoryHooks)))
+	handle("PUT /api/v1/categories/{id}/hooks", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryHooks)))
+	handle("POST /api/v1/assets/{id}/hooks/{key}", RequirePermission(rbac.PermAssetsHook)(http.HandlerFunc(s.handleTriggerHook)))
+	handle("GET /api/v1/assets/{id}/hooks/replies", RequirePermission(rbac.PermAssetsHook)(http.HandlerFunc(s.handleHookReplies)))
 	handle("GET /api/v1/events/live", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleLiveEvents)))
-	// The same events, for those who poll, and answers to actions from them.
+	// The same events, for those who poll, and answers to hooks from them.
 	handle("GET /api/v1/events", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleListEvents)))
 	handle("POST /api/v1/events/{id}/reply", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleReplyToEvent)))
 
@@ -403,7 +403,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /", webui.Handler())
 
 	// Wrap root handler with session extraction middleware
-	rootHandler := LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(s.PokeLive(mux))))
+	rootHandler := LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(s.PokeLive(unknownAPIRoutes(mux)))))
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
@@ -414,6 +414,36 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	}
 
 	return s
+}
+
+// unknownAPIRoutes answers 404 for a path under /api/ that no route has,
+// by any method, as an unknown GET is answered: the mux would say 405, as
+// the web interface takes every other GET. A route that has the path by
+// another method is still 405. So a route that is gone, such as those of
+// actions before they were hooks (#173), is not found whatever the method.
+func unknownAPIRoutes(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/") {
+			if _, pattern := mux.Handler(r); pattern == "" && !routed(mux, r) {
+				writeJSONError(w, http.StatusNotFound, "Not found")
+				return
+			}
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+// routed reports whether any route but the web interface's has r's path,
+// by any method.
+func routed(mux *http.ServeMux, r *http.Request) bool {
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		probe := r.Clone(r.Context())
+		probe.Method = method
+		if _, pattern := mux.Handler(probe); pattern != "" && pattern != "GET /" {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckStorage says which store holds uploaded files, and checks that it

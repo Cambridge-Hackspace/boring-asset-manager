@@ -13,7 +13,7 @@
     flows,
     destinations,
     templates,
-    actions,
+    hooks,
   }: {
     /** Unique on the page, for the ids of its controls. */
     prefix: string;
@@ -25,7 +25,7 @@
     flows: Flow[];
     destinations: { value: string; label: string }[];
     templates: { id: string; name: string }[];
-    actions: { key: string; label: string }[];
+    hooks: { key: string; label: string }[];
   } = $props();
 
   const p = $derived(prefix);
@@ -37,7 +37,7 @@
     ['place', 'Move it to a place'],
     ['category', 'Move it to another category'],
     ['fields', 'Set fields'],
-    ['action', 'Press an action'],
+    ['hook', 'Trigger a hook'],
   ];
 
   // Form: a field's setting, made when first changed.
@@ -302,10 +302,10 @@
               <option value="">Choose…</option>
               {#each categories as cat (cat.id)}<option value={cat.id}>{cat.name}</option>{/each}
             </select>
-          {:else if c.kind === 'action'}
-            <select class="input w-auto" aria-label="Action for change {i + 1}" value={c.action ?? ''} onchange={(e) => setChange(i, { action: e.currentTarget.value })}>
+          {:else if c.kind === 'hook'}
+            <select class="input w-auto" aria-label="Hook for change {i + 1}" value={c.hook ?? ''} onchange={(e) => setChange(i, { hook: e.currentTarget.value })}>
               <option value="">Choose…</option>
-              {#each actions as a (a.key)}<option value={a.key}>{a.label}</option>{/each}
+              {#each hooks as a (a.key)}<option value={a.key}>{a.label}</option>{/each}
             </select>
           {:else if c.kind === 'fields'}
             {#each fields as f (f.key)}

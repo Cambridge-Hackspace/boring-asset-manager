@@ -66,18 +66,18 @@ type linkView struct {
 
 type assetDetail struct {
 	assetSummary
-	CategoryRefs []ref        `json:"category_refs,omitempty"`
-	Fields       []fieldView  `json:"fields,omitempty" jsonschema:"its fields, those its categories give it, with their values"`
-	Location     []ref        `json:"location,omitempty" jsonschema:"the places it is in, outermost first"`
-	Contents     []ref        `json:"contents,omitempty" jsonschema:"what is in it, directly"`
-	Links        []linkView   `json:"links,omitempty"`
-	Photos       []photoView  `json:"photos,omitempty"`
-	Actions      []actionView `json:"actions,omitempty" jsonschema:"the actions it offers, to press_action"`
-	Lendable     bool         `json:"lendable"`
-	Scopes       []string     `json:"scopes,omitempty"`
-	ScanURL      string       `json:"scan_url,omitempty" jsonschema:"what its QR labels open"`
-	Icon         *iconView    `json:"icon,omitempty" jsonschema:"the icon it is drawn with, when it or a category has one"`
-	LabelIcon    *iconView    `json:"label_icon,omitempty" jsonschema:"the icon its labels draw, when it is not icon: its own label icon or its categories'"`
+	CategoryRefs []ref       `json:"category_refs,omitempty"`
+	Fields       []fieldView `json:"fields,omitempty" jsonschema:"its fields, those its categories give it, with their values"`
+	Location     []ref       `json:"location,omitempty" jsonschema:"the places it is in, outermost first"`
+	Contents     []ref       `json:"contents,omitempty" jsonschema:"what is in it, directly"`
+	Links        []linkView  `json:"links,omitempty"`
+	Photos       []photoView `json:"photos,omitempty"`
+	Hooks        []hookView  `json:"hooks,omitempty" jsonschema:"the hooks it offers, to trigger_hook"`
+	Lendable     bool        `json:"lendable"`
+	Scopes       []string    `json:"scopes,omitempty"`
+	ScanURL      string      `json:"scan_url,omitempty" jsonschema:"what its QR labels open"`
+	Icon         *iconView   `json:"icon,omitempty" jsonschema:"the icon it is drawn with, when it or a category has one"`
+	LabelIcon    *iconView   `json:"label_icon,omitempty" jsonschema:"the icon its labels draw, when it is not icon: its own label icon or its categories'"`
 }
 
 type iconView struct {
@@ -104,10 +104,10 @@ type photoView struct {
 	Filename string `json:"filename"`
 }
 
-type actionView struct {
+type hookView struct {
 	Key     string `json:"key"`
 	Label   string `json:"label"`
-	Confirm string `json:"confirm,omitempty" jsonschema:"a question to ask the person before pressing it"`
+	Confirm string `json:"confirm,omitempty" jsonschema:"a question to ask the person before triggering it"`
 }
 
 func summarize(a *models.AssetWithDetails, base string) assetSummary {
@@ -182,8 +182,8 @@ func (e *env) detail(ctx context.Context, a *models.AssetWithDetails) (assetDeta
 	for _, p := range a.Photos {
 		d.Photos = append(d.Photos, photoView{ID: p.ID, Filename: p.Filename})
 	}
-	for _, o := range a.Actions {
-		d.Actions = append(d.Actions, actionView{Key: o.Key, Label: o.Label, Confirm: o.Confirm})
+	for _, o := range a.Hooks {
+		d.Hooks = append(d.Hooks, hookView{Key: o.Key, Label: o.Label, Confirm: o.Confirm})
 	}
 	d.Icon = iconViewOf(a.ResolvedIcon)
 	if label := a.ResolvedIcons[models.RenditionLabel]; label != a.ResolvedIcon {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -48,17 +49,21 @@ const (
 	liveQueue = 256
 	// liveReadLimit bounds a message from a device.
 	liveReadLimit = 16 << 10
-	// liveRemembered bounds the action events a connection may answer.
+	// liveRemembered bounds the hook events a connection may answer.
 	liveRemembered = 1000
 )
 
-// liveFilter narrows what a connection is sent: event kinds, action keys,
+// liveFilter narrows what a connection is sent: event kinds, hook keys,
 // and categories with their subcategories. An empty list does not narrow.
 type liveFilter struct {
 	Kinds      []string `json:"kinds"`
-	Actions    []string `json:"actions"`
+	Hooks      []string `json:"hooks"`
 	Categories []string `json:"categories"`
 }
+
+// errOldFilter refuses the filter hooks had before they were hooks (#173),
+// rather than sending everything to a device that asked for less.
+var errOldFilter = errors.New("actions is no longer a filter: hooks narrows to hook keys")
 
 func (f liveFilter) matches(e models.Event, categories map[string]bool) bool {
 	has := func(list []string, v string) bool {
@@ -72,7 +77,7 @@ func (f liveFilter) matches(e models.Event, categories map[string]bool) bool {
 	if len(f.Kinds) > 0 && !has(f.Kinds, e.Kind) {
 		return false
 	}
-	if len(f.Actions) > 0 && (e.Payload.Action == nil || !has(f.Actions, e.Payload.Action.Key)) {
+	if len(f.Hooks) > 0 && (e.Payload.Hook == nil || !has(f.Hooks, e.Payload.Hook.Key)) {
 		return false
 	}
 	if len(f.Categories) > 0 {
@@ -86,8 +91,11 @@ func (f liveFilter) matches(e models.Event, categories map[string]bool) bool {
 }
 
 // liveFilterOf reads a filter from a connection's query: comma-separated
-// kinds, actions and categories.
-func liveFilterOf(q url.Values) liveFilter {
+// kinds, hooks and categories.
+func liveFilterOf(q url.Values) (liveFilter, error) {
+	if q.Has("actions") {
+		return liveFilter{}, errOldFilter
+	}
 	list := func(key string) []string {
 		var out []string
 		for _, v := range strings.Split(q.Get(key), ",") {
@@ -97,7 +105,7 @@ func liveFilterOf(q url.Values) liveFilter {
 		}
 		return out
 	}
-	return liveFilter{Kinds: list("kinds"), Actions: list("actions"), Categories: list("categories")}
+	return liveFilter{Kinds: list("kinds"), Hooks: list("hooks"), Categories: list("categories")}, nil
 }
 
 // liveHub holds a server's live connections.
@@ -128,9 +136,9 @@ type liveConn struct {
 	mu sync.Mutex
 	// req carries the identity and permissions it is sent events with,
 	// refreshed every liveRefresh.
-	req     *http.Request
-	filter  liveFilter
-	actions map[string]bool
+	req    *http.Request
+	filter liveFilter
+	hooks  map[string]bool
 }
 
 // close closes the connection from the server's side, telling the device
@@ -292,12 +300,12 @@ func (c *liveConn) deliver(e models.Event, categories map[string]bool, scopes []
 	if err != nil {
 		return
 	}
-	if e.Kind == models.EventAssetAction {
+	if e.Kind == models.EventAssetHook {
 		c.mu.Lock()
-		if len(c.actions) >= liveRemembered {
-			c.actions = map[string]bool{}
+		if len(c.hooks) >= liveRemembered {
+			c.hooks = map[string]bool{}
 		}
-		c.actions[e.ID] = true
+		c.hooks[e.ID] = true
 		c.mu.Unlock()
 	}
 	select {
@@ -307,18 +315,18 @@ func (c *liveConn) deliver(e models.Event, categories map[string]bool, scopes []
 	}
 }
 
-// liveMessage is a message from a device: a new filter, or an answer to an
-// action event.
+// liveMessage is a message from a device: a new filter, or an answer to a
+// hook event.
 type liveMessage struct {
-	Type    string      `json:"type"`
-	Filter  *liveFilter `json:"filter,omitempty"`
-	EventID string      `json:"event_id,omitempty"`
-	OK      bool        `json:"ok"`
-	Message string      `json:"message,omitempty"`
+	Type    string          `json:"type"`
+	Filter  json.RawMessage `json:"filter,omitempty"`
+	EventID string          `json:"event_id,omitempty"`
+	OK      bool            `json:"ok"`
+	Message string          `json:"message,omitempty"`
 }
 
 // handleLiveEvents opens a live connection: GET /api/v1/events/live, with
-// an API token (or a session), and optionally ?kinds=, ?actions= and
+// an API token (or a session), and optionally ?kinds=, ?hooks= and
 // ?categories=, each comma-separated.
 func (s *Server) handleLiveEvents(w http.ResponseWriter, r *http.Request) {
 	// Answered here rather than by the WebSocket library, so the answer is
@@ -326,6 +334,11 @@ func (s *Server) handleLiveEvents(w http.ResponseWriter, r *http.Request) {
 	if !webSocketRequest(r) {
 		w.Header().Set("Upgrade", "websocket")
 		writeJSONError(w, http.StatusUpgradeRequired, "Connect with a WebSocket (version 13) to receive events live")
+		return
+	}
+	filter, err := liveFilterOf(r.URL.Query())
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	// A personal token's connections count against its user.
@@ -368,7 +381,7 @@ func (s *Server) handleLiveEvents(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
 	defer cancel()
 	c := &liveConn{id: id, tokenID: tokenID, userID: userID, ws: ws, out: make(chan []byte, liveQueue), opened: time.Now().UTC().Truncate(time.Microsecond),
-		req: r, filter: liveFilterOf(r.URL.Query()), actions: map[string]bool{}}
+		req: r, filter: filter, hooks: map[string]bool{}}
 	s.live.add(c)
 	defer s.live.remove(c)
 
@@ -471,27 +484,33 @@ func (s *Server) liveMessage(c *liveConn, data []byte) {
 	}
 	switch m.Type {
 	case "filter":
-		if m.Filter == nil {
-			m.Filter = &liveFilter{}
+		var f liveFilter
+		if len(m.Filter) > 0 && string(m.Filter) != "null" {
+			d := json.NewDecoder(bytes.NewReader(m.Filter))
+			d.DisallowUnknownFields()
+			if err := d.Decode(&f); err != nil {
+				c.send(map[string]string{"type": "error", "message": "a filter has kinds, hooks and categories, each a list"})
+				return
+			}
 		}
 		c.mu.Lock()
-		c.filter = *m.Filter
+		c.filter = f
 		c.mu.Unlock()
-		c.send(map[string]any{"type": "filter", "filter": *m.Filter})
+		c.send(map[string]any{"type": "filter", "filter": f})
 	case "reply":
 		c.mu.Lock()
-		sent := c.actions[m.EventID]
-		delete(c.actions, m.EventID)
+		sent := c.hooks[m.EventID]
+		delete(c.hooks, m.EventID)
 		c.mu.Unlock()
 		if !sent {
-			c.send(map[string]string{"type": "error", "message": "answer only the actions this connection was sent, once each"})
+			c.send(map[string]string{"type": "error", "message": "answer only the hooks this connection was sent, once each"})
 			return
 		}
 		acting := s.store.As(c.userID)
 		if c.tokenID != "" {
 			acting = s.store.AsToken(c.tokenID)
 		}
-		if _, err := acting.RecordActionReply(m.EventID, m.OK, m.Message); err != nil {
+		if _, err := acting.RecordHookReply(m.EventID, m.OK, m.Message); err != nil {
 			if !errors.Is(err, store.ErrEventNotFound) {
 				log.Printf("live events: %v", err)
 			}
@@ -504,11 +523,11 @@ func (s *Server) liveMessage(c *liveConn, data []byte) {
 	}
 }
 
-// handleActionReplies lists the answers devices gave to an action pressed
-// on an asset: GET /api/v1/assets/{id}/actions/replies?event_id=
-func (s *Server) handleActionReplies(w http.ResponseWriter, r *http.Request) {
+// handleHookReplies lists the answers devices gave to a hook triggered
+// on an asset: GET /api/v1/assets/{id}/hooks/replies?event_id=
+func (s *Server) handleHookReplies(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, ok := s.assetFor(w, r, id, rbac.PermAssetsAct); !ok {
+	if _, ok := s.assetFor(w, r, id, rbac.PermAssetsHook); !ok {
 		return
 	}
 	eventID := r.URL.Query().Get("event_id")
@@ -521,7 +540,7 @@ func (s *Server) handleActionReplies(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the event")
 		return
 	}
-	replies, err := s.store.ActionReplies(eventID)
+	replies, err := s.store.HookReplies(eventID)
 	if err != nil {
 		writeServerError(w, err, "read the answers")
 		return

@@ -79,10 +79,10 @@ type categoryTraits struct {
 	// holds when each category was made, for choosing between templates.
 	scan, label map[string]string
 	labels      map[string][]string
-	// actions holds the actions by ID, and offers those each category
+	// hooks holds the hooks by ID, and offers those each category
 	// offers itself.
-	actions map[string]models.AssetAction
-	offers  map[string][]models.CategoryAction
+	hooks   map[string]models.AssetHook
+	offers  map[string][]models.CategoryHook
 	created map[string]time.Time
 	// depth and descendants count each category's ancestors and
 	// descendants.
@@ -157,7 +157,7 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	actions, offers, err := readActionTraits(q)
+	hooks, offers, err := readHookTraits(q)
 	if err != nil {
 		return categoryTraits{}, err
 	}
@@ -165,7 +165,7 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, actions: actions, offers: offers, icons: icons, colors: colors, names: names}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, hooks: hooks, offers: offers, icons: icons, colors: colors, names: names}
 	t.depth, t.descendants = shape(parents)
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {

@@ -14,15 +14,15 @@ import (
 )
 
 // TestEventsToPoll lists the events a live connection would be sent, and
-// takes answers to actions from those who poll.
+// takes answers to hooks from those who poll.
 func TestEventsToPoll(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
 	cookie := sessionCookie(t, srv, admin.ID)
 	scope := mustID(t, doJSON(t, srv, cookie, http.MethodPost, "/api/v1/scopes", `{"name":"lab"}`).Body.Bytes(), "scope")
 	cat := mustID(t, doJSON(t, srv, cookie, http.MethodPost, "/api/v1/categories", `{"name":"Lab"}`).Body.Bytes(), "category")
 	doJSON(t, srv, cookie, http.MethodPut, "/api/v1/categories/"+cat+"/scopes", `{"scope_ids":["`+scope+`"]}`)
-	action := mustID(t, doJSON(t, srv, cookie, http.MethodPost, "/api/v1/actions", `{"key":"identify","label":"Identify"}`).Body.Bytes(), "action")
-	doJSON(t, srv, cookie, http.MethodPut, "/api/v1/categories/"+cat+"/actions", `{"actions":[{"action_id":"`+action+`","cascades":true}]}`)
+	hook := mustID(t, doJSON(t, srv, cookie, http.MethodPost, "/api/v1/hooks", `{"key":"identify","label":"Identify"}`).Body.Bytes(), "hook")
+	doJSON(t, srv, cookie, http.MethodPut, "/api/v1/categories/"+cat+"/hooks", `{"hooks":[{"hook_id":"`+hook+`","cascades":true}]}`)
 	scope2 := mustID(t, doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets", `{"name":"Scope","category_ids":["`+cat+`"]}`).Body.Bytes(), "asset")
 	doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets", `{"name":"Elsewhere"}`)
 
@@ -40,12 +40,12 @@ func TestEventsToPoll(t *testing.T) {
 	}
 	first := list.Events[0].ID
 
-	pressed := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/"+scope2+"/actions/identify", "")
+	pressed := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/"+scope2+"/hooks/identify", "")
 	var press struct {
 		EventID string `json:"event_id"`
 	}
 	_ = json.Unmarshal(pressed.Body.Bytes(), &press)
-	_ = json.Unmarshal(withBearer(t, srv, lab, http.MethodGet, "/api/v1/events?after="+first+"&kinds=asset.action", "").Body.Bytes(), &list)
+	_ = json.Unmarshal(withBearer(t, srv, lab, http.MethodGet, "/api/v1/events?after="+first+"&kinds=asset.hook", "").Body.Bytes(), &list)
 	if len(list.Events) != 1 || list.Events[0].ID != press.EventID {
 		t.Fatalf("after: %+v", list)
 	}
@@ -64,7 +64,7 @@ func TestEventsToPoll(t *testing.T) {
 	if rec := withBearer(t, srv, other, http.MethodPost, "/api/v1/events/"+press.EventID+"/reply", `{"ok":true}`); rec.Code != http.StatusNotFound {
 		t.Errorf("out of scope: %d", rec.Code)
 	}
-	rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/assets/"+scope2+"/actions/replies?event_id="+press.EventID, "")
+	rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/assets/"+scope2+"/hooks/replies?event_id="+press.EventID, "")
 	if !strings.Contains(rec.Body.String(), "Lit drawer A3") {
 		t.Errorf("replies: %s", rec.Body)
 	}

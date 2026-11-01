@@ -36,7 +36,7 @@ import ScanPage from './views/ScanPage.svelte';
 import ScanLookupPage from './views/ScanLookupPage.svelte';
 import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
-import ActionsPage from './views/ActionsPage.svelte';
+import HooksPage from './views/HooksPage.svelte';
 import IconsPage from './views/icons/IconsPage.svelte';
 import FlowsPage from './views/flows/FlowsPage.svelte';
 import FlowRunPage from './views/flows/FlowRunPage.svelte';
@@ -87,7 +87,7 @@ export const routes: Route[] = [
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets.read'] },
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields', group: 'Catalog' },
   { pattern: '/relations', component: RelationsPage, title: 'Link types', permissions: ['categories.manage'], nav: 'Link types', group: 'Catalog' },
-  { pattern: '/actions', component: ActionsPage, title: 'Actions', permissions: ['categories.manage'], nav: 'Actions', group: 'Catalog' },
+  { pattern: '/hooks', component: HooksPage, title: 'Hooks', permissions: ['categories.manage'], nav: 'Hooks', group: 'Catalog' },
   { pattern: '/icons', component: IconsPage, title: 'Icons', permissions: ['categories.manage', 'icons.manage'], nav: 'Icons', group: 'Catalog' },
   { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates.manage'], nav: 'Templates', group: 'Labels' },
   { pattern: '/templates/new', component: TemplateEditor, title: 'New template', permissions: ['templates.manage'], workspace: true },
@@ -106,3 +106,16 @@ export const routes: Route[] = [
   { pattern: '/help', component: HelpPage, title: 'Help', public: true },
   { pattern: '/help/:topic', component: HelpPage, title: 'Help', public: true },
 ];
+
+// Pages that moved, from the address they had to the one they have: only
+// a bookmark is at stake, so the old address goes to the new one.
+export const moved: Record<string, string> = {
+  // Actions became hooks (#173).
+  '/actions': '/hooks',
+  '/help/actions': '/help/hooks',
+};
+
+/** Where a page that moved is now, or null for any other path. */
+export function movedTo(path: string): string | null {
+  return moved[path.length > 1 ? path.replace(/\/+$/, '') : path] ?? null;
+}

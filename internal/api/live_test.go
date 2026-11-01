@@ -136,15 +136,15 @@ func write(t *testing.T, d *device, msg string) {
 	}
 }
 
-// actionFixture is a drawer in a cabinet with an Identify action offered.
-func actionFixture(t *testing.T, st *store.Store, categories ...string) (drawer *models.AssetWithDetails) {
+// hookFixture is a drawer in a cabinet with an Identify hook offered.
+func hookFixture(t *testing.T, st *store.Store, categories ...string) (drawer *models.AssetWithDetails) {
 	t.Helper()
-	identify, err := st.SaveAction("", store.ActionInput{Key: "identify", Label: "Identify"})
+	identify, err := st.SaveHook("", store.HookInput{Key: "identify", Label: "Identify"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range categories {
-		if _, err := st.SetCategoryActions(c, []models.CategoryAction{{ActionID: identify.ID, Cascades: true}}); err != nil {
+		if _, err := st.SetCategoryHooks(c, []models.CategoryHook{{HookID: identify.ID, Cascades: true}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -161,11 +161,11 @@ func TestLiveEventsReachDevicesThatAnswer(t *testing.T) {
 	cookie := sessionCookie(t, srv, admin.ID)
 	st := srv.store
 	parts, _ := st.CreateCategory("Parts", nil, "", false, false)
-	drawer := actionFixture(t, st, parts.ID)
+	drawer := hookFixture(t, st, parts.ID)
 	ts := liveServer(t, srv)
 	_, secret := deviceToken(t, st, "Cabinet A", rbac.PermEventsRead)
 
-	c, _, err := dial(t, ts, secret, "?kinds=asset.action&actions=identify")
+	c, _, err := dial(t, ts, secret, "?kinds=asset.hook&hooks=identify")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,11 +173,11 @@ func TestLiveEventsReachDevicesThatAnswer(t *testing.T) {
 		t.Fatalf("hello: %+v", hello)
 	}
 
-	// Something else happening is not sent; the action is, at once.
+	// Something else happening is not sent; the hook is, at once.
 	if rec := doJSON(t, srv, cookie, http.MethodPut, "/api/v1/assets/"+drawer.Asset.ID+"/condition", `{"condition":"needs_maintenance","note":"Sticks"}`); rec.Code != http.StatusOK {
 		t.Fatal(rec.Body)
 	}
-	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/"+drawer.Asset.ID+"/actions/identify", "")
+	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets/"+drawer.Asset.ID+"/hooks/identify", "")
 	if rec.Code != http.StatusCreated {
 		t.Fatal(rec.Body)
 	}
@@ -186,10 +186,10 @@ func TestLiveEventsReachDevicesThatAnswer(t *testing.T) {
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &pressed)
 	got := next(t, c)
-	if got.Type != "event" || got.Event.ID != pressed.EventID || got.Event.Payload.Action == nil || got.Event.Payload.Action.Key != "identify" {
-		t.Fatalf("the action: %+v", got)
+	if got.Type != "event" || got.Event.ID != pressed.EventID || got.Event.Payload.Hook == nil || got.Event.Payload.Hook.Key != "identify" {
+		t.Fatalf("the hook: %+v", got)
 	}
-	if loc := got.Event.Payload.Action.Location; len(loc) != 1 || loc[0].Codes["qr"] != "CAB-A" {
+	if loc := got.Event.Payload.Hook.Location; len(loc) != 1 || loc[0].Codes["qr"] != "CAB-A" {
 		t.Errorf("its location: %+v", loc)
 	}
 	// A device that does not track people is not told who pressed it.
@@ -207,12 +207,22 @@ func TestLiveEventsReachDevicesThatAnswer(t *testing.T) {
 	if again := next(t, c); again.Type != "error" {
 		t.Errorf("answering twice: %+v", again)
 	}
-	rec = doJSON(t, srv, cookie, http.MethodGet, "/api/v1/assets/"+drawer.Asset.ID+"/actions/replies?event_id="+pressed.EventID, "")
+	rec = doJSON(t, srv, cookie, http.MethodGet, "/api/v1/assets/"+drawer.Asset.ID+"/hooks/replies?event_id="+pressed.EventID, "")
 	if !strings.Contains(rec.Body.String(), `"name":"Cabinet A","token":true,"ok":true,"message":"Lit drawer A3"`) {
 		t.Errorf("the answers: %s", rec.Body)
 	}
-	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/assets/"+drawer.Asset.ID+"/actions/replies?event_id=nope", ""); rec.Code != http.StatusNotFound {
+	if rec := doJSON(t, srv, cookie, http.MethodGet, "/api/v1/assets/"+drawer.Asset.ID+"/hooks/replies?event_id=nope", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("answers to a missing event: %d", rec.Code)
+	}
+
+	// The filter's name from before hooks were hooks is refused, in a
+	// message as in the query, and the filter stays as it was.
+	write(t, c, `{"type":"filter","filter":{"actions":["identify"]}}`)
+	if e := next(t, c); e.Type != "error" {
+		t.Errorf("the old filter in a message: %+v", e)
+	}
+	if _, resp, err := dial(t, ts, secret, "?actions=identify"); err == nil || resp == nil || resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("the old filter in the query: %v %v", resp, err)
 	}
 
 	// A new filter: everything now.
@@ -232,7 +242,7 @@ func TestLiveEventsReachDevicesThatAnswer(t *testing.T) {
 	}
 	write(t, c, `{"type":"reply","event_id":"nope","ok":true}`)
 	if e := next(t, c); e.Type != "error" {
-		t.Errorf("answering an action never sent: %+v", e)
+		t.Errorf("answering a hook never sent: %+v", e)
 	}
 
 	// The tokens page lists it.
@@ -309,20 +319,20 @@ func TestLiveEventsKeepToTheirScopes(t *testing.T) {
 		t.Fatal(err)
 	}
 	kitchen, _ := st.CreateCategory("Kitchen", nil, "", false, false)
-	drill := actionFixture(t, st, toolsCat.ID, kitchen.ID)
+	drill := hookFixture(t, st, toolsCat.ID, kitchen.ID)
 	kettle, _ := st.CreateAsset("Kettle", []string{kitchen.ID}, nil, nil)
 	ts := liveServer(t, srv)
 	_, secret := deviceToken(t, st, "Tool cabinet", "tools:"+rbac.PermEventsRead)
-	c, _, err := dial(t, ts, secret, "?kinds=asset.action")
+	c, _, err := dial(t, ts, secret, "?kinds=asset.hook")
 	if err != nil {
 		t.Fatal(err)
 	}
 	next(t, c)
 	as := st.As(admin.ID)
-	if _, err := as.RecordAssetAction(kettle.Asset.ID, "identify"); err != nil {
+	if _, err := as.RecordAssetHook(kettle.Asset.ID, "identify"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := as.RecordAssetAction(drill.Asset.ID, "identify"); err != nil {
+	if _, err := as.RecordAssetHook(drill.Asset.ID, "identify"); err != nil {
 		t.Fatal(err)
 	}
 	// Recorded outside a request: read on the next poll.
@@ -343,7 +353,7 @@ func TestLiveEventsAcrossServers(t *testing.T) {
 	st := first.store
 	parts, _ := st.CreateCategory("Parts", nil, "", false, false)
 	small, _ := st.CreateCategory("Small parts", &parts.ID, "", false, false)
-	drawer := actionFixture(t, st, small.ID)
+	drawer := hookFixture(t, st, small.ID)
 	ts := liveServer(t, second)
 	_, secret := deviceToken(t, st, "Cabinet", rbac.PermEventsRead)
 	c, _, err := dial(t, ts, secret, "?categories="+parts.ID)
@@ -351,40 +361,45 @@ func TestLiveEventsAcrossServers(t *testing.T) {
 		t.Fatal(err)
 	}
 	next(t, c)
-	if rec := doJSON(t, first, sessionCookie(t, first, admin.ID), http.MethodPost, "/api/v1/assets/"+drawer.Asset.ID+"/actions/identify", ""); rec.Code != http.StatusCreated {
+	if rec := doJSON(t, first, sessionCookie(t, first, admin.ID), http.MethodPost, "/api/v1/assets/"+drawer.Asset.ID+"/hooks/identify", ""); rec.Code != http.StatusCreated {
 		t.Fatal(rec.Body)
 	}
-	if e := next(t, c); e.Event.Kind != models.EventAssetAction {
+	if e := next(t, c); e.Event.Kind != models.EventAssetHook {
 		t.Errorf("from the other server: %+v", e)
 	}
 }
 
 func TestLiveFilters(t *testing.T) {
-	q := liveFilterOf(map[string][]string{"kinds": {"asset.action, asset.running_low"}, "actions": {""}, "categories": {"c1"}})
-	if len(q.Kinds) != 2 || q.Actions != nil || len(q.Categories) != 1 {
-		t.Errorf("parsed: %+v", q)
+	q, err := liveFilterOf(map[string][]string{"kinds": {"asset.hook, asset.running_low"}, "hooks": {""}, "categories": {"c1"}})
+	if err != nil || len(q.Kinds) != 2 || q.Hooks != nil || len(q.Categories) != 1 {
+		t.Errorf("parsed: %+v %v", q, err)
 	}
-	action := models.Event{Kind: models.EventAssetAction, Payload: models.EventPayload{Action: &models.EventAction{Key: "identify"}}}
+	// The name the filter had before hooks were hooks is refused, not
+	// ignored, so a device asking for less is not sent everything.
+	if _, err := liveFilterOf(map[string][]string{"actions": {"identify"}}); !errors.Is(err, errOldFilter) {
+		t.Errorf("the old filter: %v", err)
+	}
+	hook := models.Event{Kind: models.EventAssetHook, Payload: models.EventPayload{Hook: &models.EventHook{Key: "identify"}}}
 	for name, c := range map[string]struct {
 		f    liveFilter
 		cats map[string]bool
 		want bool
 	}{
-		"nothing narrows":       {liveFilter{}, nil, true},
-		"its kind":              {liveFilter{Kinds: []string{"asset.action"}}, nil, true},
-		"another kind":          {liveFilter{Kinds: []string{"asset.overdue"}}, nil, false},
-		"its action":            {liveFilter{Actions: []string{"identify"}}, nil, true},
-		"another action":        {liveFilter{Actions: []string{"open"}}, nil, false},
-		"in the category":       {liveFilter{Categories: []string{"c1"}}, map[string]bool{"c1": true}, true},
-		"not in the category":   {liveFilter{Categories: []string{"c1"}}, map[string]bool{"c2": true}, false},
-		"an action filter only": {liveFilter{Actions: []string{"identify"}, Kinds: []string{"asset.action"}}, nil, true},
+		"nothing narrows":     {liveFilter{}, nil, true},
+		"its kind":            {liveFilter{Kinds: []string{"asset.hook"}}, nil, true},
+		"another kind":        {liveFilter{Kinds: []string{"asset.overdue"}}, nil, false},
+		"its hook":            {liveFilter{Hooks: []string{"identify"}}, nil, true},
+		"another hook":        {liveFilter{Hooks: []string{"open"}}, nil, false},
+		"in the category":     {liveFilter{Categories: []string{"c1"}}, map[string]bool{"c1": true}, true},
+		"not in the category": {liveFilter{Categories: []string{"c1"}}, map[string]bool{"c2": true}, false},
+		"a hook filter only":  {liveFilter{Hooks: []string{"identify"}, Kinds: []string{"asset.hook"}}, nil, true},
 	} {
-		if got := c.f.matches(action, c.cats); got != c.want {
+		if got := c.f.matches(hook, c.cats); got != c.want {
 			t.Errorf("%s: %v", name, got)
 		}
 	}
-	if (liveFilter{Actions: []string{"identify"}}).matches(models.Event{Kind: models.EventAssetOverdue}, nil) {
-		t.Error("an action filter let a non-action through")
+	if (liveFilter{Hooks: []string{"identify"}}).matches(models.Event{Kind: models.EventAssetOverdue}, nil) {
+		t.Error("a hook filter let a non-hook through")
 	}
 }
 
@@ -394,7 +409,7 @@ func TestLiveConnectionsOutlastServerTimeouts(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
 	st := srv.store
 	parts, _ := st.CreateCategory("Parts", nil, "", false, false)
-	drawer := actionFixture(t, st, parts.ID)
+	drawer := hookFixture(t, st, parts.ID)
 	saved := livePoll
 	livePoll = 20 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
@@ -419,10 +434,10 @@ func TestLiveConnectionsOutlastServerTimeouts(t *testing.T) {
 	}
 	next(t, d)
 	time.Sleep(time.Second)
-	if _, err := st.As(admin.ID).RecordAssetAction(drawer.Asset.ID, "identify"); err != nil {
+	if _, err := st.As(admin.ID).RecordAssetHook(drawer.Asset.ID, "identify"); err != nil {
 		t.Fatal(err)
 	}
-	if e := next(t, d); e.Event.Kind != models.EventAssetAction {
+	if e := next(t, d); e.Event.Kind != models.EventAssetHook {
 		t.Errorf("after the timeouts: %+v", e)
 	}
 }

@@ -23,7 +23,7 @@ import (
 // here is what the instance has that an import is matched against.
 type here struct {
 	fields    map[string]hereField // by key
-	actions   map[string][]string  // by key: id, label, confirm question
+	hooks     map[string][]string  // by key: id, label, confirm question
 	relTypes  map[string][]string  // by name: id, inverse name, symmetric, single, location
 	scopes    map[string]string    // by name: id
 	templates map[string][]string  // by name: id, units, width, height, dpi, layout
@@ -76,7 +76,7 @@ func queryRows(ctx context.Context, st *store.Store, q querier, query string) ([
 }
 
 func loadHere(ctx context.Context, st *store.Store, q querier) (*here, error) {
-	h := &here{fields: map[string]hereField{}, actions: map[string][]string{}, relTypes: map[string][]string{}, scopes: map[string]string{},
+	h := &here{fields: map[string]hereField{}, hooks: map[string][]string{}, relTypes: map[string][]string{}, scopes: map[string]string{},
 		templates: map[string][]string{}, reports: map[string][]string{}, flows: map[string][]string{}, images: map[string]string{},
 		library: map[string][]string{}, defined: map[string]bool{}, iconNames: map[string]bool{}, palette: map[string][2]string{}, cats: map[string]*hereCat{}}
 	scopeNames := map[string]string{}
@@ -85,7 +85,7 @@ func loadHere(ctx context.Context, st *store.Store, q querier) (*here, error) {
 		each  func([]string)
 	}{
 		{"SELECT field_key, id, label, validation_type, options FROM fields", func(r []string) { h.fields[r[0]] = hereField{r[1], r[2], r[3], r[4]} }},
-		{"SELECT action_key, id, label, confirm_question FROM asset_actions", func(r []string) { h.actions[r[0]] = r[1:] }},
+		{"SELECT action_key, id, label, confirm_question FROM asset_actions", func(r []string) { h.hooks[r[0]] = r[1:] }},
 		{"SELECT name, id, inverse_name, is_symmetric, is_single, is_location FROM relation_types", func(r []string) { h.relTypes[r[0]] = r[1:] }},
 		{"SELECT name, id FROM scopes", func(r []string) { h.scopes[r[0]], scopeNames[r[1]] = r[1], r[0] }},
 		{"SELECT name, id, units, width, height, dpi, layout_json FROM templates ORDER BY id", func(r []string) {
@@ -185,10 +185,10 @@ type matcher struct {
 	// items by kind and archive ID, and the choices used
 	items map[string]*ImportItem
 	used  map[string]bool
-	// keys an archive's field and action keys have here, and those
+	// keys an archive's field and hook keys have here, and those
 	// skipped
-	fieldKeys, actionKeys     map[string]string
-	skipKeys, skipActionKeys  map[string]bool
+	fieldKeys, hookKeys       map[string]string
+	skipKeys, skipHookKeys    map[string]bool
 	reports, templates, flows map[string]string
 	skippedFlows              map[string]bool
 	skippedTemplates          map[string]bool
@@ -295,7 +295,7 @@ func build(ctx context.Context, st *store.Store, q querier, a *archived, opts Im
 		may = func(string, []string) bool { return true }
 	}
 	m := &matcher{ctx: ctx, h: h, a: a, opts: opts, plan: plan, b: b, may: may, items: map[string]*ImportItem{}, used: map[string]bool{},
-		fieldKeys: map[string]string{}, actionKeys: map[string]string{}, skipKeys: map[string]bool{}, skipActionKeys: map[string]bool{},
+		fieldKeys: map[string]string{}, hookKeys: map[string]string{}, skipKeys: map[string]bool{}, skipHookKeys: map[string]bool{},
 		reports: map[string]string{}, templates: map[string]string{}, flows: map[string]string{}, skippedFlows: map[string]bool{},
 		skippedTemplates: map[string]bool{}, scopeNames: map[string]string{}}
 	m.match()
@@ -349,11 +349,11 @@ func (m *matcher) match() {
 		var ex *Ref
 		same := false
 		key := str(r, "action_key")
-		if e, ok := h.actions[key]; ok {
-			ex = &Ref{Kind: ItemAction, ID: e[0], Name: e[1] + " (" + key + ")"}
+		if e, ok := h.hooks[key]; ok {
+			ex = &Ref{Kind: ItemHook, ID: e[0], Name: e[1] + " (" + key + ")"}
 			same = e[1] == str(r, "label") && e[2] == str(r, "confirm_question")
 		}
-		m.item(ItemAction, str(r, "id"), str(r, "label")+" ("+key+")", ex, same, allChoices)
+		m.item(ItemHook, str(r, "id"), str(r, "label")+" ("+key+")", ex, same, allChoices)
 	}
 	for _, r := range rows["reports"] {
 		kind := ItemReport
@@ -529,7 +529,7 @@ func (m *matcher) name() {
 		return ""
 	}
 
-	// fields and actions, by key
+	// fields and hooks, by key
 	keysTaken := map[string]bool{}
 	for k := range h.fields {
 		keysTaken[k] = true
@@ -552,23 +552,23 @@ func (m *matcher) name() {
 			m.b.fields[it.ID] = id
 		}
 	}
-	actionsTaken := map[string]bool{}
-	for k := range h.actions {
-		actionsTaken[k] = true
+	hooksTaken := map[string]bool{}
+	for k := range h.hooks {
+		hooksTaken[k] = true
 	}
 	for _, r := range m.a.rows["asset_actions"] {
-		actionsTaken[str(r, "action_key")] = true
+		hooksTaken[str(r, "action_key")] = true
 	}
-	for _, it := range byKind(ItemAction) {
+	for _, it := range byKind(ItemHook) {
 		key := str(rowOf("asset_actions", "id", it.ID), "action_key")
 		switch it.Action {
 		case ChoiceCopy:
-			it.As = unique(key, actionsTaken, "_%d", 64, func(string) bool { return true })
-			m.actionKeys[key] = it.As
+			it.As = unique(key, hooksTaken, "_%d", 64, func(string) bool { return true })
+			m.hookKeys[key] = it.As
 		case ChoiceSkip:
-			m.skipActionKeys[key] = true
+			m.skipHookKeys[key] = true
 		default:
-			m.actionKeys[key] = key
+			m.hookKeys[key] = key
 		}
 	}
 	named := func(kind string, here map[string]bool, format string, limit int, valid func(string) bool, into map[string]string) {
@@ -790,7 +790,7 @@ func (m *matcher) rows() {
 		return it.Name
 	}
 
-	var scopes, relTypes, fields, actions, reports []map[string]any
+	var scopes, relTypes, fields, hooks, reports []map[string]any
 	for _, r := range a.rows["scopes"] {
 		if it, ok := copied(ItemScope, str(r, "id")); ok {
 			scopes = append(scopes, with(r, "id", b.ids.of(it.ID), "name", as(it)))
@@ -807,8 +807,8 @@ func (m *matcher) rows() {
 		}
 	}
 	for _, r := range a.rows["asset_actions"] {
-		if it, ok := copied(ItemAction, str(r, "id")); ok {
-			actions = append(actions, with(r, "id", b.ids.of(it.ID), "action_key", m.actionKeys[str(r, "action_key")]))
+		if it, ok := copied(ItemHook, str(r, "id")); ok {
+			hooks = append(hooks, with(r, "id", b.ids.of(it.ID), "action_key", m.hookKeys[str(r, "action_key")]))
 		}
 	}
 	for _, r := range a.rows["reports"] {
@@ -824,7 +824,7 @@ func (m *matcher) rows() {
 	add("scopes", scopes)
 	add("relation_types", relTypes)
 	add("fields", fields)
-	add("asset_actions", actions)
+	add("asset_actions", hooks)
 	add("reports", reports)
 
 	// categories, each after its parent; the top ones under the anchor
@@ -874,14 +874,14 @@ func (m *matcher) rows() {
 		}
 		add(table, out)
 	}
-	actionIDs := map[string]string{}
+	hookIDs := map[string]string{}
 	for _, it := range m.items {
-		if it.Kind == ItemAction {
+		if it.Kind == ItemHook {
 			switch it.Action {
 			case ChoiceCreate, ChoiceCopy:
-				actionIDs[it.ID] = b.ids.of(it.ID)
+				hookIDs[it.ID] = b.ids.of(it.ID)
 			case ChoiceExisting:
-				actionIDs[it.ID] = it.Existing.ID
+				hookIDs[it.ID] = it.Existing.ID
 			}
 		}
 	}
@@ -897,7 +897,7 @@ func (m *matcher) rows() {
 		}
 	}
 	join("category_fields", "field_id", ItemField, b.fields)
-	join("category_actions", "action_id", ItemAction, actionIDs)
+	join("category_actions", "action_id", ItemHook, hookIDs)
 	join("category_relation_types", "relation_type_id", ItemRelationType, b.relTypes)
 	join("category_scopes", "scope_id", ItemScope, scopeIDs)
 
@@ -1216,13 +1216,13 @@ func (m *matcher) flow(it *ImportItem, d *flows.Definition) bool {
 		for _, c := range s.Changes {
 			c.Note = m.flowText(c.Note)
 			c.CategoryID = cat(c.CategoryID)
-			if c.Action != "" {
-				if m.skipActionKeys[c.Action] {
-					m.problem("%s presses the action %q, which is skipped", who, c.Action)
-				} else if k, ok := m.actionKeys[c.Action]; ok {
-					c.Action = k
-				} else if _, ok := m.h.actions[c.Action]; !ok {
-					m.problem("%s presses the action %q, which neither the archive nor this instance has", who, c.Action)
+			if c.Hook != "" {
+				if m.skipHookKeys[c.Hook] {
+					m.problem("%s triggers the hook %q, which is skipped", who, c.Hook)
+				} else if k, ok := m.hookKeys[c.Hook]; ok {
+					c.Hook = k
+				} else if _, ok := m.h.hooks[c.Hook]; !ok {
+					m.problem("%s triggers the hook %q, which neither the archive nor this instance has", who, c.Hook)
 				}
 			}
 			if len(c.Fields) > 0 {
@@ -1258,7 +1258,7 @@ func (m *matcher) permissions() {
 			continue
 		}
 		switch it.Kind {
-		case ItemCategory, ItemField, ItemAction, ItemRelationType, ItemScope:
+		case ItemCategory, ItemField, ItemHook, ItemRelationType, ItemScope:
 			need[rbac.PermCategoriesManage] = true
 		case ItemLabelTemplate, ItemImage:
 			need[rbac.PermTemplatesManage] = true
