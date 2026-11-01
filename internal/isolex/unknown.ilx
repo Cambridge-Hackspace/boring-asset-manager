@@ -1,4 +1,4 @@
-// The one icon bam ships (README §1, "Icon compiler"): drawn wherever an
+// The one icon bam ships (docs/architecture.md, "Icon compiler"): drawn wherever an
 // icon is named that the current lexicon does not have. It is compiled
 // on its own, never into a lexicon, so its name cannot collide with one
 // of yours. unknown.ir.json is its IR; TestUnknownIconIsCompiled holds

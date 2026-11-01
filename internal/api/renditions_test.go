@@ -15,7 +15,7 @@ import (
 // A flat crate for labels: a tile, where the screen's is a box.
 const crateLabelSource = `icon "crate-label" { category "storage"; footprint 1 1 1; part "lid" { tile 0 0 1 1 1 } }`
 
-// A category's label icon (README §3.7), through the routes, on the
+// A category's label icon (docs/icons.md), through the routes, on the
 // asset, on its labels and to an assistant.
 func TestLabelIconsThroughTheAPI(t *testing.T) {
 	requireIcons(t)

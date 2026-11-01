@@ -1,5 +1,5 @@
 // Package render lays out a label template for one asset on a grid of whole
-// printer dots, then draws that scene as SVG, PNG or PDF (README §4).
+// printer dots, then draws that scene as SVG, PNG or PDF (docs/labels.md).
 //
 // Every backend draws the same scene, item by item, in the order the
 // template lists its elements, each over those before it. Text is drawn as

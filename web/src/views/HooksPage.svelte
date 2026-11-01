@@ -8,7 +8,7 @@
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
   // /hooks: the buttons categories can offer on their assets, such as
-  // Identify (README §5.4). Which categories offer them is set on each
+  // Identify (docs/hooks.md). Which categories offer them is set on each
   // category's page.
   let { params: _params }: { params: Record<string, string> } = $props();
 

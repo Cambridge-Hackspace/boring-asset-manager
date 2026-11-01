@@ -1,5 +1,5 @@
 <!--
-  An icon's params bound to what each asset has (README §3.7): each param
+  An icon's params bound to what each asset has (docs/icons.md): each param
   the category's icon has, its own or inherited, set for each asset drawn
   with it. A number param takes a number field's value, so a server with
   2 rack units is drawn 2 units high; a text param takes the asset's name,

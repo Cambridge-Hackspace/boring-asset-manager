@@ -1,4 +1,4 @@
--- 021_public_role.sql: the public role and scope (README §3.3).
+-- 021_public_role.sql: the public role and scope (docs/access.md).
 --
 -- Everyone holds the public role, signed in or not; it may only read. It
 -- reads the assets in the public scope, which labels no categories until

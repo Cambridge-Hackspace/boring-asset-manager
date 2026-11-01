@@ -11,7 +11,7 @@
   // Export or print labels for one or more assets. With a single asset it
   // also previews the label and offers direct downloads. Only the printers
   // a template suits are offered, and a template that cannot label an
-  // asset says why before anything is tried (README §4.4).
+  // asset says why before anything is tried (docs/printing.md).
   let {
     assetIds,
     templateId: fixedTemplate,

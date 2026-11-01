@@ -3,7 +3,7 @@
   import { tooSmall, withProp, type Anchor, type TemplateDoc, type TemplateElement } from '../../lib/template';
 
   // How an element of an adaptive template follows the label, its limits,
-  // and what it does where it does not fit (README §4.1).
+  // and what it does where it does not fit (docs/labels.md).
   let {
     doc,
     e,

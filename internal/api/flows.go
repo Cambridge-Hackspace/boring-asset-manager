@@ -16,7 +16,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// FlowRequest makes or changes a flow (README §6.7).
+// FlowRequest makes or changes a flow (docs/flows.md).
 type FlowRequest struct {
 	Slug       string           `json:"slug"`
 	Name       string           `json:"name"`
@@ -720,8 +720,8 @@ type FlowLink struct {
 	Name string `json:"name"`
 }
 
-// flowsFrom lists the flows the request may start from an asset (README
-// §6.7): those turned on whose first step is a Find that would find it, so
+// flowsFrom lists the flows the request may start from an asset
+// (docs/flows.md): those turned on whose first step is a Find that would find it, so
 // that starting one skips the finding.
 func (s *Server) flowsFrom(r *http.Request, a *models.AssetWithDetails) ([]FlowLink, error) {
 	if CurrentUser(r.Context()) == nil || !HasPermission(r.Context(), rbac.PermFlowsRun) {

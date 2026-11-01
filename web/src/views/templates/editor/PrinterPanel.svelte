@@ -10,7 +10,7 @@
   import { useEditor } from './editor.svelte';
 
   // A printer to design for: the template checked against it as it
-  // changes (README §4.4), against the printer last used with it or the
+  // changes (docs/printing.md), against the printer last used with it or the
   // first that takes it; its label size taken from it; a test label printed
   // there; and which way labels go through it.
   let { assetId, onfit }: { assetId?: string; onfit: (area: PrintArea | null) => void } = $props();

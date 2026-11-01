@@ -1,6 +1,6 @@
 // Package printers holds label printers: the drivers that turn rendered
 // labels into a printer's own language, the validation of printer
-// definitions, and the transports that deliver jobs (README §4.4).
+// definitions, and the transports that deliver jobs (docs/printing.md).
 package printers
 
 import (

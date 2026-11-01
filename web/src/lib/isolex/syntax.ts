@@ -1,4 +1,4 @@
-// Reading isolex sources (README §3.7) for the editor: tokens to color
+// Reading isolex sources (docs/icons.md) for the editor: tokens to color
 // them, and an outline of what they define, for completion. This is a
 // reader for an editor, forgiving of half-typed text; the compiler is the
 // judge of what is valid.

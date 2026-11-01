@@ -15,7 +15,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// An icon's params bound to asset fields (README §3.7). A category's own
+// An icon's params bound to asset fields (docs/icons.md). A category's own
 // icon may bind any of its params to a number field; every build then
 // generates, for each icon with bindings, a wrapper icon for each distinct
 // set of values the active assets drawn with it have,

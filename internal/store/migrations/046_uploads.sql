@@ -1,5 +1,5 @@
 -- 046_uploads.sql: archives uploaded through the web in chunks, resumably
--- (README §2.3, #141). An upload is staged apart from the files (in a
+-- (docs/backups.md, #141). An upload is staged apart from the files (in a
 -- staging directory, or as an S3 multipart upload), and only the person who
 -- began it may add to it or use it. received is how many bytes have
 -- arrived, in order; hash_state is the SHA-256 of those so far, as Go's

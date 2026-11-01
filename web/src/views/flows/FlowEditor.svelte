@@ -1,7 +1,7 @@
 <script lang="ts">
   // /flows/new and /flows/:slug/edit: a flow's steps in order, one open at a
   // time with its settings, beside a preview of that step as a phone shows
-  // it (README §6.7), laid out as form builders lay out questions.
+  // it (docs/flows.md), laid out as form builders lay out questions.
   import { onMount } from 'svelte';
   import { ApiError, request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';

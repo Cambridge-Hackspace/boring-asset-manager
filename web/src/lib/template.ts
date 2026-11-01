@@ -1,4 +1,4 @@
-// Label templates as the editor works on them (README §4.1), and the pure
+// Label templates as the editor works on them (docs/labels.md), and the pure
 // geometry the editor applies to them.
 
 export type Units = 'mm' | 'in';
@@ -63,7 +63,7 @@ export interface TemplateElement {
   max_font_size?: number;
   // static_image
   image_id?: string;
-  /** An icon (README §3.7): ICON_OF_ASSET, the asset's own or its categories', or an icon by name. */
+  /** An icon (docs/icons.md): ICON_OF_ASSET, the asset's own or its categories', or an icon by name. */
   icon?: string;
   /** Shaded, its faces in grays (absent), or an outline, its strokes alone. */
   shading?: 'shaded' | 'outline';
@@ -258,7 +258,7 @@ function mapMargin(m: Margin, f: (v: number) => number): Margin {
   return Object.fromEntries(Object.entries(m).map(([side, v]) => [side, f(v)]));
 }
 
-/** Where a printer prints on a template, in its units, from the fit check (README §4.4). */
+/** Where a printer prints on a template, in its units, from the fit check (docs/printing.md). */
 export interface PrintArea {
   /** The part of the label it prints. */
   printable: { x: number; y: number; width: number; height: number };
@@ -303,7 +303,7 @@ export function resizeLabel(doc: TemplateDoc, width: number, height: number): Te
   };
 }
 
-/** An icon element's icon when it draws each asset's own (README §3.7). */
+/** An icon element's icon when it draws each asset's own (docs/icons.md). */
 export const ICON_OF_ASSET = '{{asset.icon}}';
 
 /** A new element of a type, sized to suit the canvas, near its top-left, on the grid. */
@@ -522,7 +522,7 @@ function resizeTurned(doc: TemplateDoc, e: TemplateElement, handle: Handle, dx: 
   return { ...e, x: tidy(cx - width / 2, doc.units), y: tidy(cy - height / 2, doc.units), width: tidy(width, doc.units), height: tidy(height, doc.units) };
 }
 
-/** The placeholder for an asset's scan page address (README §6.4). */
+/** The placeholder for an asset's scan page address (docs/scanning.md). */
 export const SCAN_URL = '{{scan_url}}';
 
 /**
@@ -782,7 +782,7 @@ function reversed(a: Anchor | undefined): Anchor | undefined {
  * it: its sides swap, as do an adaptive template's ranges, and each element
  * turns about the label's center, its box keeping its size, so the design
  * reads the same, turned. Anchors follow the sides they were on. As the
- * server turns it (README §4.1).
+ * server turns it (docs/labels.md).
  */
 export function turnTemplate(doc: TemplateDoc, clockwise: boolean): TemplateDoc {
   const fine = (v: number) => Math.round(v * 1e6) / 1e6;
@@ -974,7 +974,7 @@ export type Alignment = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom
 /**
  * Lines elements up as they lie turned: with each other, or with the label;
  * or, with distribute, spreads three or more out evenly, the outermost
- * staying put. As the server arranges them (README §4.1).
+ * staying put. As the server arranges them (docs/labels.md).
  */
 export function arrange(
   doc: TemplateDoc,

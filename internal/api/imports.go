@@ -64,7 +64,7 @@ func readImport(w http.ResponseWriter, r *http.Request) (data []byte, mapping []
 }
 
 // readableSource is the store as an import by this request sees it: assets
-// it cannot read are not there (README §3.3).
+// it cannot read are not there (docs/access.md).
 type readableSource struct {
 	*store.Store
 	s *Server

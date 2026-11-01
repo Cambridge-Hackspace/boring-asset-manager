@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test, unique } from './fixtures';
 
-// Assets' icons (README §3.7): an asset is drawn with its nearest
+// Assets' icons (docs/icons.md): an asset is drawn with its nearest
 // category's icon, in lists and on its page, unless it is given one of
 // its own on its form.
 

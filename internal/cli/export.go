@@ -16,7 +16,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// ExportOptions are what bam export packages (#144, README §2.3).
+// ExportOptions are what bam export packages (#144, docs/packages.md).
 type ExportOptions struct {
 	// Select are what to package, each kind:name, as SelectKinds lists.
 	Select []string

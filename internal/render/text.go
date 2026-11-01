@@ -203,7 +203,7 @@ func (b *textBlock) fits(width, height float64) bool {
 	return true
 }
 
-// layoutText sets text in box following README §4.1: break lines at "\n"
+// layoutText sets text in box following docs/labels.md: break lines at "\n"
 // (and at spaces when wrapping), shrink in 0.5 pt steps until it fits, and at
 // the minimum size cut it short with an ellipsis. The block is centered
 // vertically.

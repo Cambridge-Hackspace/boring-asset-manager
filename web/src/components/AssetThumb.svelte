@@ -1,6 +1,6 @@
 <!--
   An asset as a list shows it beside its name: its first photo, with its
-  icon (README §3.7) as a chip in the corner, or, with no photo, its icon.
+  icon (docs/icons.md) as a chip in the corner, or, with no photo, its icon.
   Nothing when it has neither.
 -->
 <script lang="ts">

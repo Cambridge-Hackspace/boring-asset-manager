@@ -547,7 +547,7 @@ func (s *Store) holdsActiveTx(tx *sql.Tx, id string) (int, error) {
 }
 
 // RelationSlug is how a relation's name is written as a verb in CSV files
-// (README §6.1): in lower case, with each run of characters that are not
+// (docs/csv.md): in lower case, with each run of characters that are not
 // letters or digits as one underscore, so "contained in" is contained_in.
 func RelationSlug(name string) string {
 	var b strings.Builder

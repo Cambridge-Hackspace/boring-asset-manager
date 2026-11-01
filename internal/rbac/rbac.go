@@ -15,7 +15,7 @@ const (
 	PermTemplatesManage  = "templates.manage"
 	PermCategoriesManage = "categories.manage"
 	// PermIconsManage changes what every icon is drawn with: the icon
-	// library, the palette and the lexicon settings (README §3.7). Each
+	// library, the palette and the lexicon settings (docs/icons.md). Each
 	// category's own icon is categories.manage.
 	PermIconsManage    = "icons.manage"
 	PermSettingsManage = "settings.manage"
@@ -39,9 +39,9 @@ const (
 	PermAssetsScan = "assets.scan"
 	// PermAssetsHook triggers hooks on assets, such as Identify.
 	PermAssetsHook = "assets.hook"
-	// PermEventsRead receives events live, as devices do (README §5.4).
+	// PermEventsRead receives events live, as devices do (docs/hooks.md).
 	PermEventsRead = "events.read"
-	// PermFlowsManage makes and changes flows (README §6.7).
+	// PermFlowsManage makes and changes flows (docs/flows.md).
 	PermFlowsManage = "flows.manage"
 	// PermFlowsRun runs flows, in the scopes of their categories.
 	PermFlowsRun = "flows.run"
@@ -128,7 +128,7 @@ func Allows(effective map[string]bool, perm string, scopes []string) bool {
 	return false
 }
 
-// Scoped permissions (README §3.3) are written scope:key, as tools:assets.read;
+// Scoped permissions (docs/access.md) are written scope:key, as tools:assets.read;
 // a key alone holds in every scope.
 const ScopeSeparator = ":"
 
@@ -153,7 +153,7 @@ var scopable = map[string]bool{
 func Scopable(perm string) bool { return scopable[perm] }
 
 // Narrow gives what a role's keys grant through an assignment narrowed to
-// scopes (README §3.3): a scopable permission held in every scope is held in
+// scopes (docs/access.md): a scopable permission held in every scope is held in
 // each of those scopes; one held in some scopes, in those both name; and a
 // permission that is not scopable is dropped, so a role narrowed to a scope
 // never manages what lies outside it. No scopes leaves keys as they are.
@@ -278,7 +278,7 @@ func ValidateAntiLockout(activeAdminsCount int, willRemoveAdmin bool) error {
 	return nil
 }
 
-// The public role is everyone's, signed in or not (README §3.3), and its
+// The public role is everyone's, signed in or not (docs/access.md), and its
 // scope, on no categories until some are put in it, holds what it may see.
 const (
 	PublicRole  = "public"

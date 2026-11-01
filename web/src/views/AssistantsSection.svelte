@@ -7,7 +7,7 @@
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
-  // Personal tokens, for assistants such as Claude (README §3.4, §6.6): each
+  // Personal tokens, for assistants such as Claude (docs/access.md, docs/mcp.md): each
   // acts as you, with whatever you may do at the time.
 
   let tokens = $state<APIToken[]>([]);

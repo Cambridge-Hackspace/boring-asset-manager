@@ -1,4 +1,4 @@
-# The isolex compiler as WebAssembly (README §1, "Icon compiler"), by
+# The isolex compiler as WebAssembly (docs/architecture.md, "Icon compiler"), by
 # Axonibyte Innovations, LLC, under the Apache License 2.0 (NOTICE).
 # tools/isolex/fetch.sh downloads it into wasm/isolex.wasm, which go build
 # embeds; both it and the server refuse a module whose SHA-256 is not this

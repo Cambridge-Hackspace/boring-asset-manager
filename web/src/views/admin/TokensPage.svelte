@@ -39,7 +39,7 @@
   const described = (a: RoleAssignment) => describeAssignment(roleName(a.role_id), a.scope_ids.map(scopeName));
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : '');
 
-  // Live connections each token holds open now, on any server (README §5.4).
+  // Live connections each token holds open now, on any server (docs/hooks.md).
   let connections = $state<LiveConnection[]>([]);
   const liveFor = (id: string) => connections.filter((c) => c.token_id === id);
 

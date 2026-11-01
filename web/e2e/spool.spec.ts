@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { FakePrinter, expect, goTo, test, unique } from './fixtures';
 
-// The spool (README §6.2): labels gathered from a category and an asset's
+// The spool (docs/printing.md): labels gathered from a category and an asset's
 // page, sorted onto a download, downloaded, then found in the Printed list
 // and the assets' histories.
 test('gather labels in the print queue, sort them, and download them', async ({ signedIn: page, api }) => {

@@ -1,4 +1,4 @@
-// The spool, a print queue for labels (README §6.2): adding to it from
+// The spool, a print queue for labels (docs/printing.md): adding to it from
 // anywhere assets are, and sorting its entries onto templates and printers.
 
 import { request } from './api';

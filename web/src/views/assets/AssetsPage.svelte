@@ -35,7 +35,7 @@
   // scan_template or label_template lists only assets whose scan or label
   // template was chosen by a tie.
   let conflict = $state(router.query.get('conflict') ?? '');
-  // An icon's name lists only assets with it as their own (README §3.7),
+  // An icon's name lists only assets with it as their own (docs/icons.md),
   // as the Icons page's report of names nothing draws links to.
   let icon = $state(router.query.get('icon') ?? '');
   let selected = $state<string[]>([]);

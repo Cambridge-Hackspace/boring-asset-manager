@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The settings of one step of a flow (README §6.7), as its card in the
+  // The settings of one step of a flow (docs/flows.md), as its card in the
   // editor shows them.
   import { untrack } from 'svelte';
   import type { Category, Field } from '../../lib/models';

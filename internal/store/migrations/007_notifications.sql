@@ -1,5 +1,5 @@
 -- 007_notifications.sql: notification channels and their deliveries
--- (README §5.2). options is the driver's options as a JSON object of strings,
+-- (docs/notifications.md). options is the driver's options as a JSON object of strings,
 -- secrets included; events is a JSON array of the event kinds the channel
 -- subscribes to. A delivery is one event for one channel: pending until it is
 -- sent or fails for good. A worker claims it by setting lease_token and

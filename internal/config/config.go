@@ -36,7 +36,7 @@ type DatabaseConfig struct {
 	DSN  string `toml:"dsn"`
 }
 
-// StorageConfig says where uploaded files are kept (README §2): in a
+// StorageConfig says where uploaded files are kept (docs/configuration.md): in a
 // directory, LocalPath, or with Backend "s3", in a bucket of an
 // S3-compatible store.
 type StorageConfig struct {
@@ -93,7 +93,7 @@ type PrintersConfig struct {
 	Devices []string `toml:"devices"`
 }
 
-// MCPConfig turns the MCP endpoint, for assistants, on or off (README §6.6).
+// MCPConfig turns the MCP endpoint, for assistants, on or off (docs/mcp.md).
 type MCPConfig struct {
 	// Enabled serves /api/v1/mcp. It is on unless turned off, so a config
 	// file written before it existed, which has no [mcp] table, keeps it on.

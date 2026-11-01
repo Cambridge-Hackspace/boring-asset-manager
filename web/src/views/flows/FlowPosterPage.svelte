@@ -1,6 +1,6 @@
 <script lang="ts">
   // /flows/:slug/poster: a page to print and put up where a flow is used,
-  // with its name, its QR code and one line of instructions (README §6.7);
+  // with its name, its QR code and one line of instructions (docs/flows.md);
   // or the same as a label template, for a label printer.
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';

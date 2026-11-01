@@ -1,4 +1,4 @@
--- 045_scan_flows.sql: flows offered on scan pages (README §6.4, §6.7). The
+-- 045_scan_flows.sql: flows offered on scan pages (docs/scanning.md, docs/flows.md). The
 -- built-in Scanned template, if its quick actions are still as it was
 -- seeded with, also offers the flows that start from what was scanned, such
 -- as Collect it; the quick action shows only when there is one. Templates

@@ -1,4 +1,4 @@
--- 042_flows.sql: flows (README §6.7, #121), guided pages for doing one
+-- 042_flows.sql: flows (docs/flows.md, #121), guided pages for doing one
 -- everyday thing with assets, such as filing a new one or finishing with
 -- one, built from configurable steps.
 --

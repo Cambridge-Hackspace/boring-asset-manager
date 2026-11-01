@@ -3,7 +3,7 @@ import { gunzipSync } from 'node:zlib';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, goTo, test, unique } from './fixtures';
 
-// Packages (README §2.3): part of the instance chosen as an installer's
+// Packages (docs/packages.md): part of the instance chosen as an installer's
 // components are, what it needs ticked and marked, and downloaded by the
 // browser as the server writes it.
 test('choose a category, see what it needs, and download it as a package', async ({ signedIn: page, api }, testInfo) => {
@@ -53,7 +53,7 @@ test('choose a category, see what it needs, and download it as a package', async
   await expect(page.getByText(`Your browser is saving ${name}.`)).toBeVisible();
 });
 
-// Importing one (README §2.3): uploaded, checked, what clashes chosen for,
+// Importing one (docs/backups.md): uploaded, checked, what clashes chosen for,
 // put under a category, and imported as checked.
 test('upload a package, choose for what clashes and where it goes, and import it', async ({ signedIn: page, api }) => {
   const parent = unique('Bench');

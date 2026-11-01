@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { expect, test, unique } from './fixtures';
 
-// Category icons (README §3.7): drawn on the category's page, checked as
+// Category icons (docs/icons.md): drawn on the category's page, checked as
 // typed, published or kept as a draft, inherited, and guarded.
 
 const editor = (page: Page, category: string) => page.getByRole('textbox', { name: `${category}'s icon source` });

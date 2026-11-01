@@ -1,4 +1,4 @@
--- 009_asset_stock.sql: stock counted by quantity on an asset (README §5.1).
+-- 009_asset_stock.sql: stock counted by quantity on an asset (docs/stock-and-lending.md).
 -- stock_quantity is NULL for an asset whose stock is not counted that way;
 -- the unit, threshold and running-low flag only mean something when it is
 -- set. Events about an asset name it in asset_id, which, like category_id,

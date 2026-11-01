@@ -1,5 +1,5 @@
-"""Writes internal/archive/tables.go, the tables an archive holds (README
-§2.3), from a migrated SQLite database: each archived table, in the order a
+"""Writes internal/archive/tables.go, the tables an archive holds
+(docs/backups.md), from a migrated SQLite database: each archived table, in the order a
 restore writes them, with its kind of information, columns, types and key.
 
 What is decided by hand is here: ORDER (every archived table, its kind, and

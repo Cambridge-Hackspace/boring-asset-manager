@@ -1,4 +1,4 @@
--- 022_scan_templates.sql: what scanning an asset's code shows (README §6.4).
+-- 022_scan_templates.sql: what scanning an asset's code shows (docs/scanning.md).
 --
 -- A scan template is a report of kind scan: details of the asset scanned,
 -- tables of what it holds, and quick actions. A category names the one its

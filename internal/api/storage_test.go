@@ -15,7 +15,7 @@ import (
 
 // testStorage gives a test server a store of its own for uploaded files: a
 // temporary directory, or, when BAM_TEST_S3_ENDPOINT names an S3-compatible
-// store (README §8.3), a prefix of its own in that bucket, so the photo,
+// store (docs/testing.md), a prefix of its own in that bucket, so the photo,
 // image and label suites run on either.
 func testStorage(tb testing.TB, cfg *config.Config) {
 	tb.Helper()

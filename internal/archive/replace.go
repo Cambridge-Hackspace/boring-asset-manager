@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Replacing an instance in use (#142, README §2.3) with a backup of itself:
+// Replacing an instance in use (#142, docs/backups.md) with a backup of itself:
 // each table of the kinds chosen ends as the archive has it. Rows are
 // matched by key, so what still names them (in kinds not chosen) is left
 // alone: those the archive has are updated or added, and those it lacks

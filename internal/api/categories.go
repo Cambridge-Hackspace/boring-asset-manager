@@ -130,7 +130,7 @@ type CloneCategoryRequest struct {
 }
 
 // handleCloneCategory: POST /api/v1/categories/{id}/clone copies a category
-// beside it, without its subcategories or assets (README §3.1). Its scopes
+// beside it, without its subcategories or assets (docs/data-model.md). Its scopes
 // are copied too, though setting them otherwise needs users.manage: a copy
 // without them would put its assets where its original's scopes keep them
 // from being seen.

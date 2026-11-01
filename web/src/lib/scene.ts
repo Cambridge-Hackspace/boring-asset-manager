@@ -1,4 +1,4 @@
-// Scenes (README §3.7): a location's contents as the server lays them out
+// Scenes (docs/icons.md): a location's contents as the server lays them out
 // (internal/scene), drawn as they are given, and the view of one: its
 // floor's grid, an item's outline, and panning and zooming.
 

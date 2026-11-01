@@ -19,7 +19,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Flows are run here (README §6.7): each step that changes something asks
+// Flows are run here (docs/flows.md): each step that changes something asks
 // the API's own handlers, in process, as the person running the flow, so it
 // is held to their permissions and scopes and to every rule the endpoint
 // behind it keeps, and recorded in history as made through the flow.
@@ -183,7 +183,7 @@ func (f *flowRunner) startValues() flows.Values {
 }
 
 // firstFind is the flow's first step, if it is a Find: a flow that starts
-// by finding something can be started from it (README §6.7).
+// by finding something can be started from it (docs/flows.md).
 func (f *flowRunner) firstFind() *flows.Step {
 	d := &f.flow.Definition
 	i := d.Next(0, f.startValues())

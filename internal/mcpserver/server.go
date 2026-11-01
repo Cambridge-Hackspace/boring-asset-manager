@@ -1,5 +1,5 @@
 // Package mcpserver serves BAM!'s API to assistants over the Model Context
-// Protocol (README §6.6). Each tool does something the API does, by asking
+// Protocol (docs/mcp.md). Each tool does something the API does, by asking
 // the API in process as the caller, so it is held to the same permissions,
 // scopes, text rules and limits, and records the same history.
 package mcpserver
@@ -114,7 +114,7 @@ func Handler(o Options) http.Handler {
 		Stateless: true,
 		// Requests must carry an API token, which browsers never send by
 		// themselves, so DNS rebinding gains nothing; and behind a reverse
-		// proxy on the same machine (README §2.1) every request arrives from
+		// proxy on the same machine (docs/installing.md) every request arrives from
 		// localhost with the site's own Host, which the protection refuses.
 		DisableLocalhostProtection: true,
 	})

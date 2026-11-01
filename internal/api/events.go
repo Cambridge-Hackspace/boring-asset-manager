@@ -15,8 +15,8 @@ import (
 // eventsWindow is how far back GET /api/v1/events looks without ?after=.
 const eventsWindow = time.Hour
 
-// handleListEvents lists the events the requester would be sent live (README
-// §5.4), oldest first, for those who poll rather than hold a WebSocket open,
+// handleListEvents lists the events the requester would be sent live
+// (docs/hooks.md), oldest first, for those who poll rather than hold a WebSocket open,
 // such as an assistant's subscription: GET /api/v1/events, with ?after= an
 // event's ID (those recorded since it; the last hour's otherwise), ?kinds=,
 // ?hooks= and ?categories= as a live connection takes them, and ?limit=

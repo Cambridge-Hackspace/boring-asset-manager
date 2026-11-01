@@ -1,4 +1,4 @@
-// Helpers for CSV import and export (README §6.1).
+// Helpers for CSV import and export (docs/csv.md).
 
 import type { Field, GeneratorInfo, ImportPlan, ImportProblem, LinkChange } from './models';
 

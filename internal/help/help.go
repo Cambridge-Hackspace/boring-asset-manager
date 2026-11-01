@@ -1,4 +1,4 @@
-// Package help holds the user help (README §6.5): Markdown topics the web
+// Package help holds the user help (docs/architecture.md): Markdown topics the web
 // app bundles and shows at /help, and the MCP server offers assistants, so
 // both read the same words.
 package help

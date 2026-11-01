@@ -1,4 +1,4 @@
-// Package assetcsv reads and writes assets as CSV (README §6.1).
+// Package assetcsv reads and writes assets as CSV (docs/csv.md).
 package assetcsv
 
 import (

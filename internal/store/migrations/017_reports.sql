@@ -1,4 +1,4 @@
--- 017_reports.sql: saved reports (README §6.3). A report's spec is JSON, as
+-- 017_reports.sql: saved reports (docs/reports.md). A report's spec is JSON, as
 -- a label template's is: a filter over assets and sections showing them.
 --
 -- reports:manage creates and edits reports; reading them needs only

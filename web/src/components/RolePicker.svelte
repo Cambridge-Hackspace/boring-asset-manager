@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Roles to hold, each in every scope or narrowed to some (README §3.3):
+  // Roles to hold, each in every scope or narrowed to some (docs/access.md):
   // ticking scopes under a role narrows it to them, and says what that leaves
   // out. Ticking none holds it in every scope its permissions name.
   import type { Role, RoleAssignment, Scope } from '../lib/models';

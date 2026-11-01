@@ -18,7 +18,7 @@
   let { params: _params }: { params: Record<string, string> } = $props();
 
   // Backing the instance up, and replacing what it holds with a backup
-  // (README §2.3): both need users.manage and settings.manage.
+  // (docs/backups.md): both need users.manage and settings.manage.
   const allowed = $derived(session.can('users.manage') && session.can('settings.manage'));
 
   let uploaded = $state<UploadState | null>(null);

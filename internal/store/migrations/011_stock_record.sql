@@ -1,4 +1,4 @@
--- 011_stock_record.sql: the stock:record permission (README §3.3), which
+-- 011_stock_record.sql: the stock:record permission (docs/access.md), which
 -- uses, restocks and flags stock without being able to edit assets. Those
 -- actions needed assets:write before, so every role that has it is granted
 -- stock:record, and nobody loses what they could do. Both steps skip what is

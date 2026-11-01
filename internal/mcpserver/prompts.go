@@ -12,7 +12,7 @@ import (
 )
 
 // Prompts are the tasks people most often bring to an assistant, as a
-// first message it can start from (README §6.6).
+// first message it can start from (docs/mcp.md).
 
 type prompt struct {
 	def  *mcp.Prompt

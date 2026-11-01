@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { readFileSync } from 'node:fs';
 import { expect, test, unique } from './fixtures';
 
-// Scenes (README §3.7): what is in a location, drawn where it stands; one
+// Scenes (docs/icons.md): what is in a location, drawn where it stands; one
 // thing in it chosen, opened, looked inside, and shown in place.
 
 test('a location is seen from inside, things in it chosen, entered, and one shown in place', async ({ signedIn: page, api }) => {

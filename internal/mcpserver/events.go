@@ -14,8 +14,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Live events reach assistants as resources they subscribe to (README
-// §6.6): bam://events, narrowed as a live connection is, and
+// Live events reach assistants as resources they subscribe to
+// (docs/mcp.md): bam://events, narrowed as a live connection is, and
 // bam://asset/{id}. A subscription asks the API every second, as its
 // caller, whether anything new happened, and tells the client which
 // resource changed; reading it gives what did.

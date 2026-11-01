@@ -154,7 +154,7 @@
 @utility error-text {
   @apply text-sm text-red-700 dark:text-red-400;
 }
-/* Flow pages' large controls (README §6.7), for phones and tablets. */
+/* Flow pages' large controls (docs/flows.md), for phones and tablets. */
 @utility flow-input {
   @apply input min-h-12 text-lg;
 }

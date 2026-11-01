@@ -23,7 +23,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
-// Backups from the web, and replacing an instance with one (README §2.3,
+// Backups from the web, and replacing an instance with one (docs/backups.md,
 // #142). A backup from the web never holds authentication; replacing one
 // never touches it, so no one is signed out. Checking and replacing take as
 // long as the archive does, so each runs as a job, which the page asks

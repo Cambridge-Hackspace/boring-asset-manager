@@ -14,7 +14,7 @@
   import PageHeader from '../components/PageHeader.svelte';
   import FitWarnings from '../components/FitWarnings.svelte';
 
-  // The spool (README §6.2): labels waiting to print, sorted onto templates
+  // The spool (docs/printing.md): labels waiting to print, sorted onto templates
   // and printers in bulk and printed in the background; the jobs printing
   // them; and the Printed list, to print again from.
   let { params: _params }: { params: Record<string, string> } = $props();

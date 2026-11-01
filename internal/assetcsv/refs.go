@@ -7,7 +7,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// AssetRefs names assets in a links cell (README §6.1): by ID, by name when
+// AssetRefs names assets in a links cell (docs/csv.md): by ID, by name when
 // no other active asset has it, or by one of its codes.
 type AssetRefs struct {
 	names  map[string]string   // ID → name

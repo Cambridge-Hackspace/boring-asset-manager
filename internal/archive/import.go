@@ -22,7 +22,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store/migrations"
 )
 
-// Importing (#145, README §2.3): a package, or parts of a backup, merged
+// Importing (#145, docs/packages.md): a package, or parts of a backup, merged
 // into an instance in use, rather than restored. What the archive holds is
 // matched against what the instance has, by the keys that are the same
 // everywhere (field and hook keys, names, flow addresses, icon names),

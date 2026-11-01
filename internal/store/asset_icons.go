@@ -11,7 +11,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// Which icon an asset is drawn with (README §3.7), for each rendition: its
+// Which icon an asset is drawn with (docs/icons.md), for each rendition: its
 // own, if it has one, or else that of the nearest category up from its
 // categories with one, chosen as its templates are. An icon of its own
 // names anything the build draws, variants and library icons included,

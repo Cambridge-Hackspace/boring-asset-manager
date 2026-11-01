@@ -3,7 +3,7 @@
   import { helpTopic, helpTopics } from '../lib/help';
   import { renderMarkdown } from '../lib/markdown';
 
-  // /help and /help/:topic: the user help (README §6.5).
+  // /help and /help/:topic: the user help (docs/architecture.md).
   let { params }: { params: Record<string, string> } = $props();
   const slug = untrack(() => params.topic ?? '');
   const topic = slug ? helpTopic(slug) : undefined;

@@ -35,7 +35,7 @@ export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hoo
 
 /**
  * The permissions of a role that assigning it in these scopes only leaves
- * out entirely, as the server narrows it (README §3.3): those not scopable,
+ * out entirely, as the server narrows it (docs/access.md): those not scopable,
  * and those the role holds only in other scopes. None when no scopes are
  * named, the role then holding everything it grants.
  */

@@ -16,7 +16,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// MQTT publishes events to an MQTT broker (README §5.2), for those running
+// MQTT publishes events to an MQTT broker (docs/notifications.md), for those running
 // one, such as Home Assistant's: each to <prefix>/<kind>/<asset or category
 // ID> as JSON.
 type MQTT struct{}

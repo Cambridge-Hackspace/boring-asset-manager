@@ -13,7 +13,7 @@ import (
 )
 
 // inventoryLock names the lock row that serializes changes able to move a
-// category's active count or running-low flag (README §5.1).
+// category's active count or running-low flag (docs/stock-and-lending.md).
 const inventoryLock = "inventory"
 
 // MaxLowStockThreshold bounds low_stock_threshold.

@@ -358,7 +358,7 @@ func findingTools() []tool {
 				return reply[loansOut]{}, err
 			}
 			for i := range shown {
-				shown[i].Borrower.Email = "" // never shown on loans (README §3.3)
+				shown[i].Borrower.Email = "" // never shown on loans (docs/access.md)
 			}
 			if shown == nil {
 				shown = []models.Loan{}

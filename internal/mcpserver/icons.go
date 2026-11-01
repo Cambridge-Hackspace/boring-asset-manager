@@ -14,7 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Icons (README §3.7): an assistant can read, check and write isolex
+// Icons (docs/icons.md): an assistant can read, check and write isolex
 // sources, and is told exactly what the compiler said.
 
 type categoryIconIn struct {

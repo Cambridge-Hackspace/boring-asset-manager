@@ -1,5 +1,5 @@
 <!--
-  The icon an asset is drawn with (README §3.7), as the server resolved
+  The icon an asset is drawn with (docs/icons.md), as the server resolved
   it: its own or its categories', in its category's color, or the unknown
   icon for a name the build no longer draws. Nothing when it has none, or
   when icons cannot be read here.

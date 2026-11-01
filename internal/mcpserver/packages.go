@@ -11,7 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Packages (README §2.3, #144): part of the instance, chosen with what it
+// Packages (docs/packages.md, #144): part of the instance, chosen with what it
 // needs, to share. A package holds only what the caller may read.
 
 type packageIn struct {

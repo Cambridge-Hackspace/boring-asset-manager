@@ -239,7 +239,7 @@ func (s *Store) validateTemplate(t *labels.Template) error {
 
 // LongestLabelValues finds, among active assets, the longest code assigned
 // with each generator and the longest value of each field, by key: what
-// adaptive templates' codes are checked against (README §4.1).
+// adaptive templates' codes are checked against (docs/labels.md).
 func (s *Store) LongestLabelValues() (codes, fields map[string]string, err error) {
 	codes, fields = map[string]string{}, map[string]string{}
 	longest := func(into map[string]string, query string) error {

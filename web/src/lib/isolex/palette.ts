@@ -1,4 +1,4 @@
-// The palette as CSS (README §3.7): each token a custom property,
+// The palette as CSS (docs/icons.md): each token a custom property,
 // --iso-<token>, so an icon drawn with var(--iso-ink) follows light and
 // dark mode, and a palette change, without being drawn again. iso-light
 // and iso-dark force one mode, for showing both side by side.

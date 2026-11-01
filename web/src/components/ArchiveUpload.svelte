@@ -12,7 +12,7 @@
   } from '../lib/upload';
   import ErrorMessage from './ErrorMessage.svelte';
 
-  // Uploads an archive of any size in parts (README §2.3): its progress,
+  // Uploads an archive of any size in parts (docs/backups.md): its progress,
   // pause and resume, and an unfinished upload offered again when its file
   // is chosen. onuploaded is given the complete upload, to use by its ID.
   let {

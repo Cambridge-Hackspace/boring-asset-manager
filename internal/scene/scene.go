@@ -1,5 +1,5 @@
 // Package scene lays out a location's contents as an isometric scene
-// (README §3.7): where on its floor each stands, which is drawn over which,
+// (docs/icons.md): where on its floor each stands, which is drawn over which,
 // and where each is drawn on the page, by isolex's projection. Everything
 // that draws a scene draws what Layout returns, so the page and an export
 // agree.
