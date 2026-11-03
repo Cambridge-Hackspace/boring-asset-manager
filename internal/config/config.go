@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ type Config struct {
 	// channels are turned off (docs/notifications.md).
 	Notifications NotificationsConfig `toml:"notifications"`
 	Email         EmailConfig         `toml:"email"`
+	Auth          AuthConfig          `toml:"auth"`
 }
 
 // ServerConfig holds HTTP server listening configuration.
@@ -124,6 +126,28 @@ type MCPConfig struct {
 	// Enabled serves /api/v1/mcp. It is on unless turned off, so a config
 	// file written before it existed, which has no [mcp] table, keeps it on.
 	Enabled bool `toml:"enabled"`
+}
+
+// AuthConfig holds what signing in needs beyond the database
+// (docs/access.md).
+type AuthConfig struct {
+	// SecretKey encrypts second factors' secrets in the database, so that a
+	// copy of the database alone cannot make their codes: 32 random bytes,
+	// as base64, which bam init writes. Without it, two-factor sign-in
+	// cannot be set up.
+	SecretKey string `toml:"secret_key"`
+}
+
+// Key is the secret key's bytes, or nil when there is none.
+func (a AuthConfig) Key() ([]byte, error) {
+	if a.SecretKey == "" {
+		return nil, nil
+	}
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(a.SecretKey))
+	if err != nil || len(key) != 32 {
+		return nil, errors.New("auth.secret_key must be 32 bytes as base64, such as bam init writes")
+	}
+	return key, nil
 }
 
 // EmailConfig is the SMTP server BAM! sends email through
@@ -312,13 +336,14 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 
 	for env, field := range map[string]*string{
-		"BAM_EMAIL_HOST":     &cfg.Email.Host,
-		"BAM_EMAIL_TLS":      &cfg.Email.TLS,
-		"BAM_EMAIL_USERNAME": &cfg.Email.Username,
-		"BAM_EMAIL_PASSWORD": &cfg.Email.Password,
-		"BAM_EMAIL_FROM":     &cfg.Email.From,
-		"BAM_EMAIL_REPLY_TO": &cfg.Email.ReplyTo,
-		"BAM_EMAIL_CA":       &cfg.Email.CA,
+		"BAM_EMAIL_HOST":      &cfg.Email.Host,
+		"BAM_EMAIL_TLS":       &cfg.Email.TLS,
+		"BAM_EMAIL_USERNAME":  &cfg.Email.Username,
+		"BAM_EMAIL_PASSWORD":  &cfg.Email.Password,
+		"BAM_EMAIL_FROM":      &cfg.Email.From,
+		"BAM_EMAIL_REPLY_TO":  &cfg.Email.ReplyTo,
+		"BAM_EMAIL_CA":        &cfg.Email.CA,
+		"BAM_AUTH_SECRET_KEY": &cfg.Auth.SecretKey,
 	} {
 		if v := os.Getenv(env); v != "" {
 			*field = v
@@ -376,6 +401,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Email.validate(); err != nil {
+		return err
+	}
+	if _, err := c.Auth.Key(); err != nil {
 		return err
 	}
 	for _, pattern := range c.Printers.Devices {

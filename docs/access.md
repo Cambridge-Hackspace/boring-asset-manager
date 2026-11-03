@@ -15,7 +15,8 @@ People sign in with an email and a password.
 - Emails are case-insensitive and unique.
 - A new password must be 8 to 72 bytes. 72 is the most bcrypt uses, so a longer password is
   refused rather than silently cut short.
-- Two-factor authentication with TOTP (RFC 6238) is optional, turned on per user.
+- Anyone can add a second factor: a code from an authenticator app (see
+  [Two-factor sign-in](#two-factor-sign-in)).
 
 Signing in starts a session. The session lives in the database, and the browser holds a cookie
 that refers to it (see [Sessions](#sessions)).
@@ -45,6 +46,57 @@ about no asset or category, so live connections and the events list never show i
 
 Behind a reverse proxy, every request comes from the proxy's address unless the proxy is named in
 `server.trusted_proxies` (see [Configuration](configuration.md#behind-a-reverse-proxy)).
+
+### Two-factor sign-in
+
+Anyone can ask for a code from an authenticator app as well as their password, so that the password
+alone is not enough. It is set up under **Your account**, and is off until they turn it on.
+
+**Setting it up:**
+
+1. **Set up an authenticator app** shows a QR code, and the same key as text. Any app that takes
+   TOTP codes (RFC 6238) works, such as Aegis, Google Authenticator or 1Password. The app shows the
+   codes under BAM! and the instance's host.
+2. The code the app shows turns it on. Until then, nothing changes.
+
+**Signing in:** after the password, the sign-in page asks for the app's code. Signing in is two
+steps:
+
+- **The password** answers `{"factor_required": true, "factors": ["totp"]}`, with no session. It
+  sets a cookie for the second step instead, which is sent only to the sign-in routes, lasts five
+  minutes, and grants nothing else.
+- **The code** (`POST /api/v1/auth/login/factor` with `{"code"}`) finishes the sign-in, and starts
+  the session.
+
+**Codes:**
+
+- Six digits, changing every 30 seconds (SHA-1, as apps use). A code from 30 seconds either side
+  is taken too, for a phone's clock a little out.
+- Each code is taken once. A code used already, or one older than it, is refused, even when two
+  servers are given it at the same moment.
+- Wrong codes count with wrong passwords (see [Too many wrong passwords](#too-many-wrong-passwords)).
+  The right password does not clear the count while a code is still to come, so knowing the
+  password does not allow more guesses at the code.
+
+**Turning it off** takes the password and a current code, under **Your account**.
+
+**Lost phones:** whoever manages users removes someone's second factors with **Remove second
+factors** on the Users page (`DELETE /api/v1/users/{id}/factors`). That signs them out everywhere,
+and they sign in with their password alone until they set one up again. On the command line,
+`bam admin mfa reset --email …` does the same for anyone, admins included. Either way,
+`auth.factors_reset` is recorded, naming whose they were and who removed them, and notification
+channels can subscribe to it.
+
+**The secret key:** each app's secret is kept in the database sealed with `[auth] secret_key` from
+the configuration (see [Configuration](configuration.md#the-configuration-file)), so a copy of the
+database alone cannot make codes. `bam init` writes a key. An instance set up before it has none,
+and its people cannot set up an app until one is added: 32 random bytes as base64, such as
+`openssl rand -base64 32` makes. Keep it with the configuration, and keep it the same: with another
+key, apps already set up cannot be checked. Signing in then says so, rather than counting a wrong
+code, and an admin removes the factor for the person to set it up again. This is also what happens
+after restoring a backup into an instance with another key (see [Backups](backups.md#authentication)).
+
+API tokens are not affected: a token is a separate credential, and is never asked for a code.
 
 ### Forgotten passwords
 
@@ -358,11 +410,16 @@ turning the user back on brings no assistant back.
 | `PUT /api/v1/auth/name` | Signed in, or a personal token | Change your own name, with `{"name": "..."}`. |
 | `PUT /api/v1/auth/theme` | Signed in, or a personal token | Change your own theme, with `{"theme": "dark"}`. Answers `{"user"}`, as a rename does. |
 | `PUT /api/v1/auth/email` | Signed in, or a personal token | Turn email sent to your roles off or on, with `{"notifications": false}` (see [Notifications](notifications.md#who-receives-it)). Answers `{"user"}`. |
-| `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`, and `sign_in_delayed_until` while wrong passwords hold their sign-ins back. |
+| `GET /api/v1/auth/me/factors` | Signed in, or a personal token | Your second factors, never their secrets, and whether they `available`: whether the configuration has a secret key. |
+| `POST /api/v1/auth/me/factors/totp` | Signed in | Start setting up an authenticator app: answers its `secret` as text, its `otpauth://` `uri`, and a QR code of it as `qr_svg`. |
+| `POST /api/v1/auth/me/factors/totp/confirm` | Signed in | Turn the app on, with `{"code"}` from it. |
+| `DELETE /api/v1/auth/me/factors/{id}` | Signed in | Turn a factor off, with `{"password", "code"}`. |
+| `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`, `two_factor`, and `sign_in_delayed_until` while wrong passwords hold their sign-ins back. |
 | `POST /api/v1/users` | `users.manage` | Create a user; `name` is required. |
 | `PUT /api/v1/users/{id}/name` | `users.manage` | Change a user's name, with `{"name": "..."}`. |
 | `PUT /api/v1/users/{id}/password` | `users.manage` | Set a user's password, with `{"password"}`. Signs them out everywhere, and clears their sign-in delay. |
 | `DELETE /api/v1/users/{id}/sign-in-delay` | `users.manage` | Let a user sign in again at once, forgetting their wrong passwords. |
+| `DELETE /api/v1/users/{id}/factors` | `users.manage` | Remove a user's second factors, and sign them out everywhere. Answers `{"removed"}`. |
 | `PUT /api/v1/users/{id}/roles` | `users.manage` | Set a user's roles. |
 
 `PUT /api/v1/users/{id}/roles` takes `{"roles": [{"role_id", "scope_ids": [...]}]}`. An empty or
@@ -440,3 +497,4 @@ is an RFC 3339 time, or `null` for never.
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |
+| `054` | Second factors (`user_factors`) and the second step of signing in (`sign_in_challenges`). |

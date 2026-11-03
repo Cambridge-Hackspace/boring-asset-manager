@@ -19,6 +19,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/archive"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
@@ -37,6 +38,11 @@ func Init(configPath string) error {
 	}
 
 	cfg := config.DefaultConfig()
+	key, err := auth.NewSecretKey()
+	if err != nil {
+		return err
+	}
+	cfg.Auth.SecretKey = key
 	if err := cfg.SaveTOML(configPath); err != nil {
 		return fmt.Errorf("generating default configuration file: %w", err)
 	}
@@ -140,6 +146,38 @@ func AdminPassword(configPath, email, password string) error {
 		return fmt.Errorf("setting the password: %w", err)
 	}
 	fmt.Printf("Password set for %s; they are signed out everywhere.\n", user.Email)
+	return nil
+}
+
+// AdminResetFactors removes someone's second factors, admins included, for
+// one who has lost theirs, and signs them out everywhere. It is recorded in
+// history as done by nobody: on the command line.
+func AdminResetFactors(configPath, email string) error {
+	if email == "" {
+		return errors.New("--email is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
+		return fmt.Errorf("opening database (%s): %w", cfg.Database.Type, err)
+	}
+	defer st.Close()
+	user, err := st.GetUserByEmail(email)
+	if err != nil {
+		return fmt.Errorf("finding %s: %w", email, err)
+	}
+	n, err := st.As("").ResetFactors(user.ID)
+	if err != nil {
+		return fmt.Errorf("removing the second factors: %w", err)
+	}
+	if n == 0 {
+		fmt.Printf("%s had no second factors; they are signed out everywhere.\n", user.Email)
+		return nil
+	}
+	fmt.Printf("Removed %d second factor(s) from %s; they sign in with their password, and are signed out everywhere.\n", n, user.Email)
 	return nil
 }
 

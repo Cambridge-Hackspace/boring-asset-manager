@@ -53,7 +53,7 @@ uploaded, a part at a time.
 
 Authentication is:
 
-- password hashes and second factors (`users.password_hash`, `users.totp_secret`);
+- password hashes (`users.password_hash`) and second factors (`user_factors`);
 - sessions;
 - API tokens;
 - OAuth;
@@ -62,6 +62,10 @@ Authentication is:
 It is kept apart in the archive, under `auth/`. That holds the tables that are nothing but
 authentication, whole, and the secret columns of the other tables with their key. So it can be
 left out, or skipped whole.
+
+Second factors' secrets are sealed with the configuration's `[auth] secret_key` (see
+[Access](access.md#two-factor-sign-in)). Restored into an instance with another key, they are kept
+but cannot be used: signing in says so, and an admin removes them for the person to set up again.
 
 Only the command line writes authentication, and `--without-secrets` leaves it out. A backup from
 the web never holds it. Keep an archive that holds it as carefully as the database.
@@ -81,7 +85,7 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, `asset_photos` and their files, and their history, `events` |
 | Flows | `flows` | `flows`, `flow_filings` |
 | Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries` |
-| Authentication | `auth` | `sessions`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, and the secret columns described under [Authentication](#authentication) |
+| Authentication | `auth` | `sessions`, `user_factors`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, and the secret columns described under [Authentication](#authentication) |
 
 The tables are listed, and restored, in that order: each after the tables its rows name.
 
@@ -103,6 +107,7 @@ These tables are left out, because they are not information or are made again:
 | `sign_in_throttles` | Wrong passwords being counted, which lapse within the hour. |
 | `hook_trigger_seen`, `hook_trigger_fired` | Events hooks have looked at, and when each hook last fired on each asset: state for firing each once (see [Hooks](hooks.md#several-servers)). |
 | `hook_schedule_runs` | When each hook's schedule last ran. A restored instance starts its schedules afresh, at their next time. |
+| `sign_in_challenges` | Sign-ins waiting for a second factor, which lapse in five minutes. |
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys.
 `tools/archive/tables.py` writes it from a migrated database. A test fails, on every dialect, when

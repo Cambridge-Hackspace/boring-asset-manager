@@ -127,11 +127,24 @@ func summarize(n Notification, esc func(string) string) summary {
 		until := p.Throttle.Until.UTC().Format("15:04 on 2 January 2006") + " (UTC)"
 		if p.Throttle.User != nil {
 			out.Title = "Sign-ins held back: " + esc(truncate(p.Throttle.User.Display(), 200))
-			out.Description = "Too many wrong passwords for their account. Signing in waits until " + until +
+			out.Description = "Too many wrong passwords or codes for their account. Signing in waits until " + until +
 				", longer with each further wrong one. Someone may be guessing it."
 		} else {
 			out.Title = "Sign-ins held back from " + esc(truncate(p.Throttle.Address, 64))
-			out.Description = "Too many wrong passwords from this address, across accounts. It may sign in again at " + until + "."
+			out.Description = "Too many wrong passwords or codes from this address, across accounts. It may sign in again at " + until + "."
+		}
+	case e.Kind == models.EventAuthFactorsReset && p.Account != nil:
+		out.URL = ""
+		if base != "" {
+			out.URL = base + "/users"
+		}
+		out.Color = discordWarning
+		out.Title = "Second factors removed: " + esc(truncate(p.Account.Display(), 200))
+		out.Description = "They sign in with their password alone until they set one up again, and were signed out everywhere."
+		if by != "" {
+			out.Description += " Removed by " + by + "."
+		} else {
+			out.Description += " Removed on the command line."
 		}
 	case e.Kind == models.EventNotifierDisabled && p.Channel != nil:
 		// About no asset or category: the link is to the channels.

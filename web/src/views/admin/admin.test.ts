@@ -275,8 +275,13 @@ describe('UsersPage', () => {
 });
 
 describe('AccountPage', () => {
-  // The Assistants section reads the account's personal tokens.
-  const assistants = { 'GET /auth/tokens': () => ({ tokens: [] }), 'GET /info': () => ({ mcp: true, base_url: 'https://bam.example.org' }) };
+  // The Assistants section reads the account's personal tokens, and the
+  // two-factor section its factors.
+  const assistants = {
+    'GET /auth/tokens': () => ({ tokens: [] }),
+    'GET /info': () => ({ mcp: true, base_url: 'https://bam.example.org' }),
+    'GET /auth/me/factors': () => ({ factors: [], available: true }),
+  };
   const changes = <R extends { method: string }>(sent: R[]) => sent.filter((r) => r.method !== 'GET');
 
   it('refuses mismatched passwords without asking the server', async () => {

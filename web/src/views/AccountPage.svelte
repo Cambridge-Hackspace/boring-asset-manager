@@ -7,6 +7,7 @@
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import AssistantsSection from './AssistantsSection.svelte';
+  import TwoFactorSection from './TwoFactorSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -146,5 +147,7 @@
       {#if status}<p class="text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
       <button type="submit" class="btn-primary" disabled={busy}>Change password</button>
     </form>
+
+    <TwoFactorSection />
   </div>
 </div>

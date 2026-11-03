@@ -72,13 +72,26 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
-	if err := s.store.ClearSignInFailures(req.Email); err != nil {
-		writeServerError(w, err, "clear the sign-in throttle")
+	if !user.IsActive {
+		writeJSONError(w, http.StatusUnauthorized, "Account is disabled")
 		return
 	}
 
-	if !user.IsActive {
-		writeJSONError(w, http.StatusUnauthorized, "Account is disabled")
+	// With a second factor, the password is the first step of two
+	// (docs/access.md). Its failures are forgotten only once the second is
+	// done too, so that knowing the password does not reset the count of
+	// wrong codes.
+	factors, err := s.store.SealedFactors(user.ID)
+	if err != nil {
+		writeServerError(w, err, "read the second factors")
+		return
+	}
+	if len(factors) > 0 {
+		s.startSecondStep(w, r, user, factors)
+		return
+	}
+	if err := s.store.ClearSignInFailures(req.Email); err != nil {
+		writeServerError(w, err, "clear the sign-in throttle")
 		return
 	}
 

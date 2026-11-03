@@ -4,6 +4,12 @@ On **Your account** you can change the name others see, and your password. Chang
 
 What you can do depends on your roles, listed on the same page with what each permission lets you do. A page you may not open says what it needs. If you forget your password, whoever manages users can set a new one for you. After several wrong passwords, signing in makes you wait a little before trying again, and says how long. Under **Email**, you can stop email that notification channels send to your roles from reaching you.
 
+## Two-factor sign-in
+
+Under **Two-factor sign-in**, you can ask for a code from an authenticator app on your phone, such as Aegis, Google Authenticator or 1Password, as well as your password. Choose **Set up an authenticator app**, scan the QR code with the app, and enter the code it shows. From then on, signing in asks for the app's code after your password, so your password alone is not enough. Each code works once.
+
+To turn it off, choose **Turn off** and give your password and a code. If you lose your phone, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again.
+
 ## Assistants
 
 An assistant, such as Claude, can work with BAM! for you over MCP: find things, add them, lend and return them, print labels. Under **Assistants** on Your account, choose **New assistant**, name it, and copy what it needs to connect: the token is shown only once. The assistant acts as you, with whatever you may do at the time, and what it changes is recorded as yours. It cannot change your password or make tokens.

@@ -193,6 +193,9 @@
               {#if u.sign_in_delayed_until}
                 <span class="block text-xs text-amber-900 dark:text-amber-200">Wrong passwords: signing in waits until {new Date(u.sign_in_delayed_until).toLocaleTimeString()}</span>
               {/if}
+              {#if u.two_factor}
+                <span class="block text-xs text-zinc-600 dark:text-zinc-400">Two-factor sign-in</span>
+              {/if}
             </td>
             <td class="py-2 pr-4">
               {#if editingRoles === u.id}
@@ -223,6 +226,13 @@
                     aria-label="Clear sign-in delay for {u.email}"
                     onclick={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}/sign-in-delay`), `${u.email} can sign in again at once.`)}
                   >Clear sign-in delay</button>
+                {/if}
+                {#if u.two_factor}
+                  <ConfirmButton
+                    label="Remove second factors"
+                    question="Remove the second factors of {u.email}? They will be signed out everywhere, and sign in with their password alone until they set one up again. Do this only for someone who has lost theirs, and is who they say."
+                    onconfirm={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}/factors`), `${u.email} signs in with their password alone now.`)}
+                  />
                 {/if}
                 <button
                   type="button"
