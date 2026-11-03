@@ -396,6 +396,17 @@ export interface UserWithRoles extends User {
   roles: RoleAssignment[];
   /** Set while too many wrong passwords hold their sign-ins back (docs/access.md). */
   sign_in_delayed_until?: string;
+  /** Whether they have a second factor, such as an authenticator app (docs/access.md). */
+  two_factor?: boolean;
+}
+
+/** A second factor of one's own: never its secret. */
+export interface Factor {
+  id: string;
+  kind: 'totp';
+  created_at: string;
+  confirmed_at?: string;
+  last_used_at?: string;
 }
 
 export interface ImageInfo {

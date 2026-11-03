@@ -58,7 +58,7 @@ async function errorFrom(res: Response, path: string): Promise<ApiError> {
     // Not JSON; keep the status line.
   }
   // A failed sign-in is not a lost session.
-  if (res.status === 401 && path !== '/auth/login') onUnauthorized();
+  if (res.status === 401 && !path.startsWith('/auth/login')) onUnauthorized();
   return new ApiError(res.status, message, details, body);
 }
 

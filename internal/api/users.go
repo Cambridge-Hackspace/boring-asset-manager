@@ -43,12 +43,18 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list sign-in delays")
 		return
 	}
+	twoFactor, err := s.store.HasFactors()
+	if err != nil {
+		writeServerError(w, err, "list second factors")
+		return
+	}
 	list := make([]userWithRoles, 0, len(users))
 	for _, u := range users {
 		item := withRoles(u, assignments[u.ID])
 		if until, ok := delays[auth.NormalizeEmail(u.Email)]; ok {
 			item.SignInDelayedUntil = &until
 		}
+		item.TwoFactor = twoFactor[u.ID]
 		list = append(list, item)
 	}
 
@@ -168,6 +174,8 @@ type userWithRoles struct {
 	// SignInDelayedUntil is set while too many failed passwords hold back
 	// their sign-ins (#246).
 	SignInDelayedUntil *time.Time `json:"sign_in_delayed_until,omitempty"`
+	// TwoFactor is whether they have a second factor (docs/access.md).
+	TwoFactor bool `json:"two_factor"`
 }
 
 func withRoles(u models.User, assignments []models.RoleAssignment) userWithRoles {

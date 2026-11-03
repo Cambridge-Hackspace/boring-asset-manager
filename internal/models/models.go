@@ -192,6 +192,10 @@ const (
 	// failing (docs/notifications.md), with the Channel and why as the
 	// Note; other channels can subscribe to it.
 	EventNotifierDisabled = "notifier.disabled"
+	// EventAuthFactorsReset records that someone's second factors were
+	// removed for them, by an admin or on the command line, with the
+	// Account; channels can subscribe to it.
+	EventAuthFactorsReset = "auth.factors_reset"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -273,6 +277,9 @@ type EventPayload struct {
 	Throttle *EventThrottle `json:"throttle,omitempty"`
 	// Channel is the notification channel a notifier event is about.
 	Channel *EventChannel `json:"channel,omitempty"`
+	// Account is whose sign-in an auth event is about, such as whose
+	// second factors were reset.
+	Account *EventActor `json:"account,omitempty"`
 }
 
 // Throttle kinds: what a sign-in throttle counts failures against.

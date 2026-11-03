@@ -88,6 +88,14 @@ from = "BAM! <bam@example.org>"
 reply_to = ""
 ca = ""
 
+[auth]
+# Seals second factors' secrets in the database, so a copy of the database
+# alone cannot make their codes (docs/access.md): 32 random bytes as base64.
+# bam init writes one. Keep it, and keep it the same: with another key, apps
+# set up before cannot be checked. Without it, two-factor sign-in cannot be
+# set up. Environment: BAM_AUTH_SECRET_KEY.
+secret_key = "…"
+
 ```
 
 ### Environment overrides
@@ -112,6 +120,7 @@ Several settings can also be given in the environment:
 | `email.host`, `email.port`, `email.tls` | `BAM_EMAIL_HOST`, `BAM_EMAIL_PORT`, `BAM_EMAIL_TLS` |
 | `email.username`, `email.password` | `BAM_EMAIL_USERNAME`, `BAM_EMAIL_PASSWORD` |
 | `email.from`, `email.reply_to`, `email.ca` | `BAM_EMAIL_FROM`, `BAM_EMAIL_REPLY_TO`, `BAM_EMAIL_CA` |
+| `auth.secret_key` | `BAM_AUTH_SECRET_KEY` |
 
 How to set them for an installed service is in [Installing](installing.md).
 
@@ -212,6 +221,10 @@ with the `bam` command:
 # Later, for anyone locked out: set their password, signing them out everywhere
 ./bam admin password --email "admin@example.com" --password "another-password" --config ./config.toml
 
+# For anyone who has lost their authenticator app: remove their second factors,
+# signing them out everywhere (docs/access.md)
+./bam admin mfa reset --email "admin@example.com" --config ./config.toml
+
 # Start the daemon
 ./bam serve --config ./config.toml
 
@@ -248,10 +261,11 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 
 | Command | What it does | Read more |
 |---|---|---|
-| `bam init` | Writes a default configuration file. | |
+| `bam init` | Writes a default configuration file, with a new `[auth] secret_key`. | |
 | `bam migrate` | Runs database migrations. | |
 | `bam admin create` | Provisions the first administrator, bypassing lockout guards. | [Access](access.md) |
 | `bam admin password` | Sets a locked-out user's password, signing them out everywhere. | [Access](access.md) |
+| `bam admin mfa reset` | Removes a user's second factors, admins included, signing them out everywhere. | [Access](access.md#two-factor-sign-in) |
 | `bam serve` | Starts the server. | |
 | `bam backup` | Backs up the instance as an archive, files and all, on any database, safely while running. With a `--to` ending in `.db`, copies a SQLite database instead. | [Backups](backups.md) |
 | `bam restore` | Restores an archive into a new instance, with BAM stopped, or puts back a SQLite `.db` copy. | [Backups](backups.md), [Installing](installing.md) |

@@ -88,7 +88,8 @@ Messages look like this:
 | An overdue loan | "Overdue" (amber), naming the borrower and the day it was due (UTC) |
 | A hook | For example "Identify: Drawer A3", triggered by whom (see [Hooks](hooks.md)) |
 | A channel turned off | "Notification channel turned off: Workshop hook" (red), saying why, and a link to the Notifications page |
-| Sign-ins held back | "Sign-ins held back: Ada" (red), for an account getting too many wrong passwords, or "Sign-ins held back from 203.0.113.7", for an address; when it may sign in again, and a link to the Users page (see [Access](access.md#too-many-wrong-passwords)) |
+| Sign-ins held back | "Sign-ins held back: Ada" (red), for an account getting too many wrong passwords or codes, or "Sign-ins held back from 203.0.113.7", for an address; when it may sign in again, and a link to the Users page (see [Access](access.md#too-many-wrong-passwords)) |
+| Second factors removed | "Second factors removed: Ada" (amber), when an admin, or someone on the command line, removes their second factors, saying who; a link to the Users page (see [Access](access.md#two-factor-sign-in)) |
 
 ## MQTT
 
