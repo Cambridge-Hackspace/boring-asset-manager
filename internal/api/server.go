@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
@@ -63,6 +64,9 @@ type Server struct {
 	iconsDirty chan struct{}
 	// built is the current icon build's IR, parsed, for scenes.
 	built builtIcons
+	// sealer seals second factors' secrets with [auth] secret_key; without
+	// a key it refuses, and two-factor sign-in cannot be set up.
+	sealer *auth.Sealer
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -80,6 +84,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		icons:      isolex.Default(),
 		iconsDirty: make(chan struct{}, 1),
 	}
+	// The configuration was checked as it loaded, so its key reads.
+	key, _ := cfg.Auth.Key()
+	s.sealer, _ = auth.NewSealer(key)
 	// The settings were checked as they loaded, so the store opens; one
 	// that does not reach, or cannot be written, is found by CheckStorage.
 	blobs, err := filestore.Open(cfg.Storage)
@@ -103,6 +110,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handleFunc("GET /readyz", s.handleReadyz)
 	handleFunc("GET /api/v1/info", s.handleInfo)
 	handleFunc("POST /api/v1/auth/login", s.handleLogin)
+	handleFunc("POST /api/v1/auth/login/factor", s.handleLoginFactor)
 
 	// Signed-out visitors hold the public role's permissions on the routes
 	// wrapped in OpenToPublic only: one asset's page, never the catalog.
@@ -121,6 +129,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/auth/tokens", RequireAuth(http.HandlerFunc(s.handleCreateOwnToken)))
 	handle("DELETE /api/v1/auth/tokens/{id}", RequirePerson(http.HandlerFunc(s.handleRevokeOwnToken)))
 	handle("PUT /api/v1/auth/password", RequireAuth(http.HandlerFunc(s.handleChangePassword)))
+	handle("GET /api/v1/auth/me/factors", RequirePerson(http.HandlerFunc(s.handleListOwnFactors)))
+	handle("POST /api/v1/auth/me/factors/totp", RequireAuth(http.HandlerFunc(s.handleStartTOTP)))
+	handle("POST /api/v1/auth/me/factors/totp/confirm", RequireAuth(http.HandlerFunc(s.handleConfirmTOTP)))
+	handle("DELETE /api/v1/auth/me/factors/{id}", RequireAuth(http.HandlerFunc(s.handleDeleteOwnFactor)))
 
 	// User administration endpoints (requires users.manage)
 	handle("GET /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListUsers)))
@@ -130,6 +142,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/users/{id}/name", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserName)))
 	handle("PUT /api/v1/users/{id}/password", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserPassword)))
 	handle("DELETE /api/v1/users/{id}/sign-in-delay", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleClearSignInDelay)))
+	handle("DELETE /api/v1/users/{id}/factors", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleResetUserFactors)))
 	handle("PUT /api/v1/users/{id}/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserRoles)))
 	handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 	handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))

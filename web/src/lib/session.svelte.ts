@@ -44,8 +44,20 @@ class Session {
     }
   }
 
-  async signIn(email: string, password: string): Promise<void> {
-    await request('POST', '/auth/login', { email, password });
+  /**
+   * Signs in with a password. With a second factor, that is the first step
+   * of two: it answers true, and finishSignIn takes the code.
+   */
+  async signIn(email: string, password: string): Promise<boolean> {
+    const res = await request<{ factor_required?: boolean }>('POST', '/auth/login', { email, password });
+    if (res?.factor_required) return true;
+    await this.load();
+    return false;
+  }
+
+  /** The second step of signing in: a code from their authenticator app. */
+  async finishSignIn(code: string): Promise<void> {
+    await request('POST', '/auth/login/factor', { code });
     await this.load();
   }
 

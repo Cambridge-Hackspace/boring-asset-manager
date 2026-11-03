@@ -154,6 +154,11 @@ var Tables = []Table{
 	{Name: "sessions", Kind: KindAuth, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"user_id", Text}, {"expires_at", Time}, {"created_at", Time}},
 	},
+	// Second factors' secrets are sealed with the configuration's key: an
+	// instance with another key keeps them, but cannot use them.
+	{Name: "user_factors", Kind: KindAuth, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"user_id", Text}, {"kind", Text}, {"secret", Text}, {"last_step", Int}, {"created_at", Time}, {"confirmed_at", Time}, {"last_used_at", Time}},
+	},
 	{Name: "oauth_clients", Kind: KindAuth, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"name", Text}, {"redirect_uris", JSON}, {"created_at", Time}},
 	},

@@ -97,6 +97,15 @@ func adminTools() []tool {
 				return request{path: pathOf("/api/v1/users/{id}/sign-in-delay", in.ID)}, need(in.ID, "id")
 			},
 			func(userIn, map[string]any) string { return "They can sign in again at once." }),
+		simple(&mcp.Tool{Name: "reset_user_factors", Description: "Remove someone's second factors (their authenticator app), for one who has lost it, and sign them out everywhere: " +
+			"they sign in with their password alone until they set one up again. list_users gives two_factor. Only for someone who asked, and is who they say.",
+			Annotations: destroys("Remove second factors", true)}, "DELETE /api/v1/users/{id}/factors", users,
+			func(in userIn) (request, error) {
+				return request{path: pathOf("/api/v1/users/{id}/factors", in.ID)}, need(in.ID, "id")
+			},
+			func(userIn, map[string]any) string {
+				return "Removed their second factors; they are signed out everywhere."
+			}),
 		simple(&mcp.Tool{Name: "set_user_name", Description: "Change someone's name, as others see them.",
 			Annotations: changes("Rename a user", true)}, "PUT /api/v1/users/{id}/name", users,
 			func(in struct {

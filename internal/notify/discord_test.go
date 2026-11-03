@@ -400,7 +400,7 @@ func TestDiscordThrottledEmbeds(t *testing.T) {
 		}},
 	}}).Embeds[0]
 	if account.Title != `Sign-ins held back: Ada\_L` || account.Color != discordDanger || account.URL != "https://bam.example/users" ||
-		account.Description != "Too many wrong passwords for their account. Signing in waits until 12:15 on 2 November 2026 (UTC), longer with each further wrong one. Someone may be guessing it." {
+		account.Description != "Too many wrong passwords or codes for their account. Signing in waits until 12:15 on 2 November 2026 (UTC), longer with each further wrong one. Someone may be guessing it." {
 		t.Errorf("account: %+v", account)
 	}
 	address := discordPayload(Notification{Event: models.Event{
@@ -410,7 +410,7 @@ func TestDiscordThrottledEmbeds(t *testing.T) {
 		}},
 	}}).Embeds[0]
 	if address.Title != "Sign-ins held back from 203.0.113.7" || address.URL != "" ||
-		address.Description != "Too many wrong passwords from this address, across accounts. It may sign in again at 12:15 on 2 November 2026 (UTC)." {
+		address.Description != "Too many wrong passwords or codes from this address, across accounts. It may sign in again at 12:15 on 2 November 2026 (UTC)." {
 		t.Errorf("address: %+v", address)
 	}
 }

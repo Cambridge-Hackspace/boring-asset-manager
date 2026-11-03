@@ -17,6 +17,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -39,6 +40,10 @@ func TestFullCLILifecycle(t *testing.T) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		t.Fatalf("Load config failed: %v", err)
+	}
+	// Init writes a secret key of its own, for second factors.
+	if key, err := cfg.Auth.Key(); err != nil || len(key) != 32 {
+		t.Errorf("Init's secret key: %d bytes, %v", len(key), err)
 	}
 	cfg.Database.DSN = dbPath + "?_journal=WAL&_busy_timeout=5000"
 	cfg.Server.Port = 18080 // Unique test port
@@ -97,6 +102,35 @@ func TestFullCLILifecycle(t *testing.T) {
 	}
 	if err := AdminPassword(configPath, "nobody@example.com", "BrandNew456!"); err == nil {
 		t.Error("setting the password of nobody worked")
+	}
+
+	// 4b. Second factors removed from the command line, for an admin who
+	// has lost theirs, sign them out everywhere, recorded as by nobody.
+	factor, err := st.StartTOTP(admin.ID, func(string) (string, error) { return "v1:sealed", nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ConfirmTOTP(admin.ID, factor.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateSession(admin.ID, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := AdminResetFactors(configPath, "superadmin@example.com"); err != nil {
+		t.Fatalf("AdminResetFactors: %v", err)
+	}
+	if factors, err := st.Factors(admin.ID); err != nil || len(factors) != 0 {
+		t.Errorf("factors left: %+v, %v", factors, err)
+	}
+	if err := st.QueryRow("SELECT COUNT(*) FROM sessions WHERE user_id = ?", admin.ID).Scan(&sessions); err != nil || sessions != 0 {
+		t.Errorf("sessions left after removing factors: %d, %v", sessions, err)
+	}
+	if events, err := st.ListEvents(1); err != nil || len(events) != 1 || events[0].Kind != models.EventAuthFactorsReset ||
+		events[0].Payload.Account == nil || events[0].Payload.Account.ID != admin.ID || events[0].Payload.Actor != nil {
+		t.Errorf("the reset in history: %+v, %v", events, err)
+	}
+	if err := AdminResetFactors(configPath, "nobody@example.com"); err == nil {
+		t.Error("removing the factors of nobody worked")
 	}
 
 	// 5. Test Server Lifecycle

@@ -24,6 +24,7 @@ Available Commands:
   migrate       Execute pending database migrations and seed system roles
   admin create  Provision an initial superuser account (requires --email and --password; --name optional)
   admin password Set an account's password, signing it out everywhere (requires --email and --password)
+  admin mfa reset Remove an account's second factors, signing it out everywhere (requires --email)
   serve         Start the HTTP daemon
   backup        Write an archive of the instance, files included (requires --to; --split <size>, --without-secrets);
                 a --to ending in .db copies a SQLite database instead, and exits 3 for other databases
@@ -77,10 +78,23 @@ func main() {
 		}
 
 	case "admin":
-		if len(os.Args) < 3 || (os.Args[2] != "create" && os.Args[2] != "password") {
+		mfaReset := len(os.Args) >= 4 && os.Args[2] == "mfa" && os.Args[3] == "reset"
+		if !mfaReset && (len(os.Args) < 3 || (os.Args[2] != "create" && os.Args[2] != "password")) {
 			fmt.Fprintf(os.Stderr, "Usage: bam admin create --email <email> --password <password> [--name <name>] [--config <path>]\n")
 			fmt.Fprintf(os.Stderr, "       bam admin password --email <email> --password <password> [--config <path>]\n")
+			fmt.Fprintf(os.Stderr, "       bam admin mfa reset --email <email> [--config <path>]\n")
 			os.Exit(1)
+		}
+		if mfaReset {
+			resetCmd := flag.NewFlagSet("admin mfa reset", flag.ExitOnError)
+			email := resetCmd.String("email", "", "Account email address")
+			configPath := resetCmd.String("config", "config.toml", "Path to configuration file")
+			_ = resetCmd.Parse(os.Args[4:])
+			if err := cli.AdminResetFactors(*configPath, *email); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
 		adminCmd := flag.NewFlagSet("admin "+os.Args[2], flag.ExitOnError)
 		email := adminCmd.String("email", "", "Account email address")
