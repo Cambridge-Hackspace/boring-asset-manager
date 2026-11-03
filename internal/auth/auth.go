@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -52,8 +54,39 @@ func HashPassword(password string) (string, error) {
 
 // CheckPassword verifies a raw password against the stored bcrypt hash.
 func CheckPassword(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	err := compareHash([]byte(hash), []byte(password))
 	return err == nil
+}
+
+// compareHash is bcrypt's comparison, counted.
+func compareHash(hash, password []byte) error {
+	comparisons.Add(1)
+	return bcrypt.CompareHashAndPassword(hash, password)
+}
+
+var comparisons atomic.Int64
+
+// Comparisons is how many passwords have been checked against a hash, for
+// tests that a sign-in does the same work whether or not its email has an
+// account.
+func Comparisons() int64 { return comparisons.Load() }
+
+// dummy is a hash of no one's password, made at BcryptCost when first
+// needed.
+var dummy struct {
+	once sync.Once
+	hash []byte
+}
+
+// CheckNoPassword spends as long as CheckPassword does on a real account's
+// hash, for a sign-in naming no account, so how long the answer takes does
+// not say whether an email has one (#246). It always fails.
+func CheckNoPassword(password string) bool {
+	dummy.once.Do(func() {
+		dummy.hash, _ = bcrypt.GenerateFromPassword([]byte("no one's password"), BcryptCost)
+	})
+	_ = compareHash(dummy.hash, []byte(password))
+	return false
 }
 
 // GenerateSessionToken creates a cryptographically secure random session ID (32 bytes / 64 hex characters).

@@ -90,6 +90,13 @@ func adminTools() []tool {
 				return request{path: pathOf("/api/v1/users/{id}", in.ID)}, need(in.ID, "id")
 			},
 			func(userIn, map[string]any) string { return "Archived the user." }),
+		simple(&mcp.Tool{Name: "clear_sign_in_delay", Description: "Let someone sign in again at once, when too many wrong passwords hold their sign-ins back " +
+			"(list_users gives sign_in_delayed_until). Only for someone who asked: the delay is there in case another is guessing their password.",
+			Annotations: changes("Clear a sign-in delay", true)}, "DELETE /api/v1/users/{id}/sign-in-delay", users,
+			func(in userIn) (request, error) {
+				return request{path: pathOf("/api/v1/users/{id}/sign-in-delay", in.ID)}, need(in.ID, "id")
+			},
+			func(userIn, map[string]any) string { return "They can sign in again at once." }),
 		simple(&mcp.Tool{Name: "set_user_name", Description: "Change someone's name, as others see them.",
 			Annotations: changes("Rename a user", true)}, "PUT /api/v1/users/{id}/name", users,
 			func(in struct {

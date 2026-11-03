@@ -20,6 +20,32 @@ People sign in with an email and a password.
 Signing in starts a session. The session lives in the database, and the browser holds a cookie
 that refers to it (see [Sessions](#sessions)).
 
+### Too many wrong passwords
+
+Guessing passwords is slowed down, by account and by address:
+
+- **An account** that has had 5 wrong passwords in 15 minutes waits before its next try: 1 second
+  after the 5th, then twice as long after each further wrong one, up to 15 minutes. It is never
+  locked, so nobody can lock someone out by guessing badly. The right password clears the count,
+  and so does setting their password or clearing their delay on the Users page.
+- **An address** that has had 20 wrong passwords in 15 minutes, across any accounts, waits
+  15 minutes. This catches one password tried against many emails.
+- **While either waits,** signing in answers `429` with `Retry-After` and no password is checked.
+  The sign-in page says how long to wait.
+
+A count lapses 15 minutes after the last wrong password, or after the wait it set ends, whichever
+is later. Counts are kept in the database, so servers sharing it count together.
+
+An email with no account is counted the same way, and checks the password against a stand-in hash,
+so neither the answer nor how long it takes says whether an email has an account.
+
+When an account (one that exists) or an address first has to wait, `auth.throttled` is recorded.
+Notification channels can subscribe to it, so an admin hears that someone may be guessing. It is
+about no asset or category, so live connections and the events list never show it.
+
+Behind a reverse proxy, every request comes from the proxy's address unless the proxy is named in
+`server.trusted_proxies` (see [Configuration](configuration.md#behind-a-reverse-proxy)).
+
 ### Forgotten passwords
 
 Whoever manages users sets a new password for someone who has forgotten theirs. The sign-in page
@@ -332,10 +358,11 @@ turning the user back on brings no assistant back.
 | `PUT /api/v1/auth/name` | Signed in, or a personal token | Change your own name, with `{"name": "..."}`. |
 | `PUT /api/v1/auth/theme` | Signed in, or a personal token | Change your own theme, with `{"theme": "dark"}`. Answers `{"user"}`, as a rename does. |
 | `PUT /api/v1/auth/email` | Signed in, or a personal token | Turn email sent to your roles off or on, with `{"notifications": false}` (see [Notifications](notifications.md#who-receives-it)). Answers `{"user"}`. |
-| `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`. |
+| `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`, and `sign_in_delayed_until` while wrong passwords hold their sign-ins back. |
 | `POST /api/v1/users` | `users.manage` | Create a user; `name` is required. |
 | `PUT /api/v1/users/{id}/name` | `users.manage` | Change a user's name, with `{"name": "..."}`. |
-| `PUT /api/v1/users/{id}/password` | `users.manage` | Set a user's password, with `{"password"}`. Signs them out everywhere. |
+| `PUT /api/v1/users/{id}/password` | `users.manage` | Set a user's password, with `{"password"}`. Signs them out everywhere, and clears their sign-in delay. |
+| `DELETE /api/v1/users/{id}/sign-in-delay` | `users.manage` | Let a user sign in again at once, forgetting their wrong passwords. |
 | `PUT /api/v1/users/{id}/roles` | `users.manage` | Set a user's roles. |
 
 `PUT /api/v1/users/{id}/roles` takes `{"roles": [{"role_id", "scope_ids": [...]}]}`. An empty or
@@ -390,7 +417,8 @@ is an RFC 3339 time, or `null` for never.
 | `scopes`, `category_scopes`, `role_permission_scopes` | Scopes, the categories they label, and the scopes of roles' permissions. |
 | `user_role_scopes`, `api_token_role_scopes` | Roles assigned in some scopes only, to users and to tokens. |
 | `sessions` | Sessions, by the SHA-256 hash of their token. |
-| `app_locks` | The `users_manage` row, taken by each change the anti-lockout rule checks. |
+| `sign_in_throttles` | Wrong passwords being counted, by account and by address, and until when each waits. |
+| `app_locks` | The `users_manage` row, taken by each change the anti-lockout rule checks, and the `sign_in` row, taken to count a wrong password. |
 
 ### Migrations
 
@@ -410,4 +438,5 @@ is an RFC 3339 time, or `null` for never.
 | `041` | Roles narrowed to scopes (`user_role_scopes`, `api_token_role_scopes`). |
 | `043` | Grants `flows.manage` to every role that manages categories, and `flows.run` to every role that writes assets, in the same scopes. |
 | `048` | Users' themes. |
+| `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

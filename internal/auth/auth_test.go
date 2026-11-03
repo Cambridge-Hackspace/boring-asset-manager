@@ -89,3 +89,13 @@ func TestPasswordLengthLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckNoPasswordChecksAHashAndFails(t *testing.T) {
+	before := Comparisons()
+	if CheckNoPassword("anything") {
+		t.Fatal("CheckNoPassword succeeded")
+	}
+	if got := Comparisons() - before; got != 1 {
+		t.Errorf("checked %d hashes, want 1, as CheckPassword does", got)
+	}
+}

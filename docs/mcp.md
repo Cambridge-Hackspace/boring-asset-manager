@@ -280,6 +280,7 @@ People, roles and scopes need `users.manage`. Channels need `settings.manage`.
 | :--- | :--- | :--- |
 | `list_users`, `create_user`, `set_user_active`, `archive_user`, `set_user_name` | `users.manage` | |
 | `set_user_password` | `users.manage` | Someone else's. The anti-lockout rule holds, as anywhere. |
+| `clear_sign_in_delay` | `users.manage` | Lets someone sign in again at once, when wrong passwords hold them back. |
 | `set_user_roles` | `users.manage` | Each role in every scope, or narrowed to some. |
 | `list_roles`, `save_role` (changing only what is given), `delete_role` | `users.manage` | |
 | `list_scopes` | `users.manage` or `categories.manage` | |

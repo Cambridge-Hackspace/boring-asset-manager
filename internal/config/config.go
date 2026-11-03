@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -33,6 +34,10 @@ type ServerConfig struct {
 	Host    string `toml:"host"`
 	Port    int    `toml:"port"`
 	BaseURL string `toml:"base_url"`
+	// TrustedProxies are the addresses and CIDR ranges of reverse proxies
+	// whose X-Forwarded-For and Forwarded headers say who the client is
+	// (#246). Empty, the default, trusts no header.
+	TrustedProxies []string `toml:"trusted_proxies"`
 }
 
 // DatabaseConfig holds database connection configuration.
@@ -237,6 +242,9 @@ func applyEnvOverrides(cfg *Config) error {
 	if baseURL := os.Getenv("BAM_SERVER_BASE_URL"); baseURL != "" {
 		cfg.Server.BaseURL = baseURL
 	}
+	if proxies := os.Getenv("BAM_SERVER_TRUSTED_PROXIES"); proxies != "" {
+		cfg.Server.TrustedProxies = strings.Split(proxies, ",")
+	}
 
 	if dbType := os.Getenv("BAM_DATABASE_TYPE"); dbType != "" {
 		cfg.Database.Type = dbType
@@ -344,6 +352,9 @@ func (c *Config) Validate() error {
 	if err := c.Storage.validate(); err != nil {
 		return err
 	}
+	if _, err := ParseProxies(c.Server.TrustedProxies); err != nil {
+		return err
+	}
 	if err := c.Email.validate(); err != nil {
 		return err
 	}
@@ -408,4 +419,24 @@ func (c *Config) SaveTOML(path string) error {
 		return fmt.Errorf("writing config file %s: %w", path, err)
 	}
 	return nil
+}
+
+// ParseProxies reads trusted proxies as networks: each an address, which is
+// a network of one, or a CIDR range.
+func ParseProxies(proxies []string) ([]netip.Prefix, error) {
+	out := make([]netip.Prefix, 0, len(proxies))
+	for _, p := range proxies {
+		p = strings.TrimSpace(p)
+		if prefix, err := netip.ParsePrefix(p); err == nil {
+			out = append(out, prefix.Masked())
+			continue
+		}
+		addr, err := netip.ParseAddr(p)
+		if err != nil {
+			return nil, fmt.Errorf("server.trusted_proxies: %q is neither an address nor a CIDR range", p)
+		}
+		addr = addr.Unmap()
+		out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
+	}
+	return out, nil
 }

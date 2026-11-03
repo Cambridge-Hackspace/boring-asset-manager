@@ -390,3 +390,27 @@ func TestDiscordNamesTheAssistant(t *testing.T) {
 		t.Errorf("through an assistant: %+v", e)
 	}
 }
+
+func TestDiscordThrottledEmbeds(t *testing.T) {
+	until := time.Date(2026, 11, 2, 12, 15, 0, 0, time.UTC)
+	account := discordPayload(Notification{BaseURL: "https://bam.example", Event: models.Event{
+		Kind: models.EventAuthThrottled,
+		Payload: models.EventPayload{Trigger: models.TriggerThreshold, Throttle: &models.EventThrottle{
+			Kind: models.ThrottleAccount, User: &models.EventActor{ID: "u1", Name: "Ada_L"}, Until: until,
+		}},
+	}}).Embeds[0]
+	if account.Title != `Sign-ins held back: Ada\_L` || account.Color != discordDanger || account.URL != "https://bam.example/users" ||
+		account.Description != "Too many wrong passwords for their account. Signing in waits until 12:15 on 2 November 2026 (UTC), longer with each further wrong one. Someone may be guessing it." {
+		t.Errorf("account: %+v", account)
+	}
+	address := discordPayload(Notification{Event: models.Event{
+		Kind: models.EventAuthThrottled,
+		Payload: models.EventPayload{Throttle: &models.EventThrottle{
+			Kind: models.ThrottleAddress, Address: "203.0.113.7", Until: until,
+		}},
+	}}).Embeds[0]
+	if address.Title != "Sign-ins held back from 203.0.113.7" || address.URL != "" ||
+		address.Description != "Too many wrong passwords from this address, across accounts. It may sign in again at 12:15 on 2 November 2026 (UTC)." {
+		t.Errorf("address: %+v", address)
+	}
+}

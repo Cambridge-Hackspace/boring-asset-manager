@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -37,9 +38,18 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list user roles")
 		return
 	}
+	delays, err := s.store.SignInDelays(time.Now())
+	if err != nil {
+		writeServerError(w, err, "list sign-in delays")
+		return
+	}
 	list := make([]userWithRoles, 0, len(users))
 	for _, u := range users {
-		list = append(list, withRoles(u, assignments[u.ID]))
+		item := withRoles(u, assignments[u.ID])
+		if until, ok := delays[auth.NormalizeEmail(u.Email)]; ok {
+			item.SignInDelayedUntil = &until
+		}
+		list = append(list, item)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -155,6 +165,9 @@ type userWithRoles struct {
 	models.User
 	RoleIDs []string                `json:"role_ids"`
 	Roles   []models.RoleAssignment `json:"roles"`
+	// SignInDelayedUntil is set while too many failed passwords hold back
+	// their sign-ins (#246).
+	SignInDelayedUntil *time.Time `json:"sign_in_delayed_until,omitempty"`
 }
 
 func withRoles(u models.User, assignments []models.RoleAssignment) userWithRoles {
@@ -343,8 +356,36 @@ func (s *Server) handleSetUserPassword(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeServerError(w, err, "set the password")
 	default:
+		// A new password is a fresh start: guesses at the old one no
+		// longer hold them back.
+		if err := s.clearSignInDelay(r.PathValue("id")); err != nil {
+			writeServerError(w, err, "clear the sign-in delay")
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"message": "Password set"})
 	}
+}
+
+// handleClearSignInDelay forgets someone's failed sign-ins, so they may try
+// again at once (#246): DELETE /api/v1/users/{id}/sign-in-delay
+func (s *Server) handleClearSignInDelay(w http.ResponseWriter, r *http.Request) {
+	err := s.clearSignInDelay(r.PathValue("id"))
+	switch {
+	case errors.Is(err, store.ErrUserNotFound):
+		writeJSONError(w, http.StatusNotFound, "User not found")
+	case err != nil:
+		writeServerError(w, err, "clear the sign-in delay")
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"message": "They can sign in again at once"})
+	}
+}
+
+func (s *Server) clearSignInDelay(id string) error {
+	u, err := s.store.GetUserByID(id)
+	if err != nil {
+		return err
+	}
+	return s.store.ClearSignInFailures(u.Email)
 }
 
 // RoleRequest creates or edits a role.

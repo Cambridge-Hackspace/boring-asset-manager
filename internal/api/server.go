@@ -129,6 +129,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("DELETE /api/v1/users/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteUser)))
 	handle("PUT /api/v1/users/{id}/name", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserName)))
 	handle("PUT /api/v1/users/{id}/password", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserPassword)))
+	handle("DELETE /api/v1/users/{id}/sign-in-delay", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleClearSignInDelay)))
 	handle("PUT /api/v1/users/{id}/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserRoles)))
 	handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 	handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))
@@ -409,7 +410,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	mux.Handle("GET /", webui.Handler())
 
 	// Wrap root handler with session extraction middleware
-	rootHandler := LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(s.PokeLive(unknownAPIRoutes(mux)))))
+	// The configuration was validated when loaded, so the proxies parse.
+	proxies, _ := config.ParseProxies(cfg.Server.TrustedProxies)
+	rootHandler := ClientAddresses(proxies)(LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(s.PokeLive(unknownAPIRoutes(mux))))))
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
