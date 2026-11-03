@@ -14,8 +14,9 @@ async function audit(page: Page, label: string): Promise<void> {
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`every view passes axe in ${scheme} mode`, async ({ signedIn: page }) => {
-    // It audits every view in turn, so it takes longer than most tests.
-    test.setTimeout(120_000);
+    // It audits every view in turn, so it takes longer than most tests:
+    // over a minute alone, and twice that with the whole suite running.
+    test.setTimeout(300_000);
     await page.emulateMedia({ colorScheme: scheme });
     const views = await seedViews(page);
     for (const [path, heading] of views) {
