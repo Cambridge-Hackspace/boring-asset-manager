@@ -292,3 +292,22 @@ func TestEmailSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestNotificationSettings(t *testing.T) {
+	cfg := DefaultConfig()
+	if n := cfg.Notifications; n.KeepDays != 30 || n.DisableAfterHours != 24 || n.DisableAfterFailures != 0 {
+		t.Errorf("defaults: %+v", n)
+	}
+	// A file written before [notifications] existed keeps the defaults.
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("[server]\nport = 8080\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if loaded, err := Load(configPath); err != nil || loaded.Notifications != cfg.Notifications {
+		t.Errorf("loaded %+v, %v", loaded.Notifications, err)
+	}
+	cfg.Notifications.DisableAfterFailures = -1
+	if err := cfg.Validate(); err == nil {
+		t.Error("a negative limit was accepted")
+	}
+}

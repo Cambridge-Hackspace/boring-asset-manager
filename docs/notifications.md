@@ -39,7 +39,37 @@ servers sharing a database send it once.
 | Any other `4xx` | Fails at once |
 | Still unsent after 24 hours | Given up |
 
-The outcome of recent deliveries is visible in `GET /api/v1/notifiers/deliveries`.
+### The delivery log
+
+**Recent deliveries**, on the Notifications page, lists every channel's deliveries, or one channel's
+(its **Deliveries** button):
+
+- the event, and when;
+- the outcome, after how many attempts, and when the next is due;
+- the last error;
+- for a webhook, what the receiver answered: its HTTP status and the first kilobyte of its body. The
+  channel's secrets are taken out of it, as a receiver may echo what it was sent.
+
+**Send again** queues a failed delivery to be sent at once, with its attempts started again, once
+whatever made it fail is fixed. Its channel must be on.
+
+Finished deliveries are kept for 30 days, then removed: `[notifications] keep_days` in the
+configuration (see [Configuration](configuration.md#the-configuration-file)), and `0` keeps them.
+
+### Channels that keep failing
+
+A channel that fails every attempt for 24 hours is turned off, so that a receiver gone for good is
+not tried forever:
+
+- **Counting:** each failed attempt counts, retries included; a delivered one starts the count again.
+- **Other limits:** `[notifications] disable_after_hours` sets the 24, and `disable_after_failures`,
+  when set, turns a channel off after that many failed attempts in a row, however soon. `0` turns
+  either off.
+- **Turned off,** the channel says why on the Notifications page, and `notifier.disabled` is
+  recorded once, so the other channels subscribed to it can say so.
+- **Turned on again,** by editing it, it starts its count again.
+
+A test message does not count.
 
 ## Discord
 
@@ -57,6 +87,7 @@ Messages look like this:
 | A change of condition | "Out of service" (red), "Needs maintenance" (amber) or "Working again" (neutral), with the note and who reported it |
 | An overdue loan | "Overdue" (amber), naming the borrower and the day it was due (UTC) |
 | A hook | For example "Identify: Drawer A3", triggered by whom (see [Hooks](hooks.md)) |
+| A channel turned off | "Notification channel turned off: Workshop hook" (red), saying why, and a link to the Notifications page |
 | Sign-ins held back | "Sign-ins held back: Ada" (red), for an account getting too many wrong passwords, or "Sign-ins held back from 203.0.113.7", for an address; when it may sign in again, and a link to the Users page (see [Access](access.md#too-many-wrong-passwords)) |
 
 ## MQTT
@@ -281,7 +312,8 @@ settings are not used for webhooks.
 | `GET /api/v1/notifiers/drivers` | `settings.manage` | List notifier drivers |
 | `/api/v1/notifiers` | `settings.manage` | Configure channels |
 | `POST /api/v1/notifiers/{id}/test` | `settings.manage` | Send a test message |
-| `GET /api/v1/notifiers/deliveries` | `settings.manage` | Outcome of recent deliveries |
+| `GET /api/v1/notifiers/deliveries` | `settings.manage` | Recent deliveries, newest first, of one channel (`channel_id`) or all; `limit` up to 200, 50 unless given |
+| `POST /api/v1/notifiers/deliveries/{id}/retry` | `settings.manage` | Send a failed delivery again at once. `409` if it has not failed, or its channel is off |
 
 ## Storage
 

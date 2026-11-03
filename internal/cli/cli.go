@@ -211,7 +211,10 @@ func Serve(configPath string) error {
 	// Send queued notifications until the server stops.
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
-	worker := &notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL}
+	n := cfg.Notifications
+	worker := &notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL,
+		KeepFor: time.Duration(n.KeepDays) * 24 * time.Hour,
+		Policy:  store.ChannelPolicy{FailingFor: time.Duration(n.DisableAfterHours) * time.Hour, Failures: n.DisableAfterFailures}}
 	if mailer := email.New(cfg.Email); mailer != nil {
 		worker.Mailer = mailer
 		log.Printf("Email is sent through %s", cfg.Email.Address())

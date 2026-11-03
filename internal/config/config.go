@@ -26,7 +26,10 @@ type Config struct {
 	Storage  StorageConfig  `toml:"storage"`
 	Printers PrintersConfig `toml:"printers"`
 	MCP      MCPConfig      `toml:"mcp"`
-	Email    EmailConfig    `toml:"email"`
+	// Notifications holds how deliveries are kept and when failing
+	// channels are turned off (docs/notifications.md).
+	Notifications NotificationsConfig `toml:"notifications"`
+	Email         EmailConfig         `toml:"email"`
 }
 
 // ServerConfig holds HTTP server listening configuration.
@@ -101,6 +104,19 @@ type PrintersConfig struct {
 	// printers may be connected to directly. Empty means none: anyone who can
 	// manage printers could otherwise make BAM write to any file it can open.
 	Devices []string `toml:"devices"`
+}
+
+// NotificationsConfig is how long the delivery log is kept, and when a
+// channel that keeps failing is turned off (#196). Zero turns each off.
+type NotificationsConfig struct {
+	// KeepDays is how many days finished deliveries stay in the log.
+	KeepDays int `toml:"keep_days"`
+	// DisableAfterHours turns a channel off once every attempt has failed
+	// for this many hours.
+	DisableAfterHours int `toml:"disable_after_hours"`
+	// DisableAfterFailures, when set, turns a channel off after this many
+	// failed attempts in a row, however soon.
+	DisableAfterFailures int `toml:"disable_after_failures"`
 }
 
 // MCPConfig turns the MCP endpoint, for assistants, on or off (docs/mcp.md).
@@ -197,7 +213,8 @@ func DefaultConfig() *Config {
 		Storage: StorageConfig{
 			LocalPath: "./data/uploads",
 		},
-		MCP: MCPConfig{Enabled: true},
+		MCP:           MCPConfig{Enabled: true},
+		Notifications: NotificationsConfig{KeepDays: 30, DisableAfterHours: 24},
 	}
 }
 
@@ -340,6 +357,9 @@ func parseSwitch(v string) (bool, error) {
 
 // Validate checks that required fields are present and valid.
 func (c *Config) Validate() error {
+	if n := c.Notifications; n.KeepDays < 0 || n.DisableAfterHours < 0 || n.DisableAfterFailures < 0 {
+		return errors.New("notifications.keep_days, disable_after_hours and disable_after_failures cannot be negative")
+	}
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}

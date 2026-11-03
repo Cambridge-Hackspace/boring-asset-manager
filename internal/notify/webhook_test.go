@@ -250,3 +250,19 @@ func TestWebhookOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestWebhookReportsWhatTheReceiverAnswered(t *testing.T) {
+	r := newReceiver(t)
+	r.status = http.StatusServiceUnavailable
+	var status int
+	var body string
+	n := lent()
+	n.Report = func(s int, b string) { status, body = s, b }
+	opts := map[string]string{"url": "http://hooks.example/", "allow_private_networks": "true"}
+	if err := webhookTo(r).Send(context.Background(), opts, n); !errors.Is(err, ErrTemporary) {
+		t.Fatalf("503: %v", err)
+	}
+	if status != http.StatusServiceUnavailable || body != "" {
+		t.Errorf("reported %d %q", status, body)
+	}
+}

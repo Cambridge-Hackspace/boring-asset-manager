@@ -136,7 +136,7 @@ var Tables = []Table{
 		Columns: []Column{{"pool_id", Text}, {"printer_id", Text}, {"share", Int}},
 	},
 	{Name: "notification_channels", Kind: KindSettings, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"name", Text}, {"driver", Text}, {"options", JSON}, {"enabled", Bool}, {"events", JSON}, {"created_at", Time}, {"updated_at", Time}},
+		Columns: []Column{{"id", Text}, {"name", Text}, {"driver", Text}, {"options", JSON}, {"enabled", Bool}, {"events", JSON}, {"created_at", Time}, {"updated_at", Time}, {"failures", Int}, {"failing_since", Time}, {"disabled_reason", Text}},
 		Secret:  []string{"options"},
 	},
 	{Name: "spool_jobs", Kind: KindSettings, Key: []string{"id"},

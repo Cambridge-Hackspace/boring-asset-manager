@@ -63,6 +63,15 @@ devices = []
 # Environment: BAM_MCP_ENABLED (true or false).
 enabled = true
 
+[notifications]
+# How many days finished deliveries stay in the delivery log, and when a
+# channel that keeps failing is turned off: after failing every attempt for
+# disable_after_hours, or, when set, after disable_after_failures failed
+# attempts in a row (docs/notifications.md). 0 turns each off.
+keep_days = 30
+disable_after_hours = 24
+disable_after_failures = 0
+
 [email]
 # The SMTP server email is sent through (docs/notifications.md). Email is off
 # while host is empty. tls is "starttls" (the default, port 587), "implicit"

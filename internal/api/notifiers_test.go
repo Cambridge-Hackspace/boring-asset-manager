@@ -170,6 +170,28 @@ func TestNotifierAPI(t *testing.T) {
 		t.Errorf("limit 500: %d", rec.Code)
 	}
 
+	// One channel's log, and sending one again by hand (#196).
+	for id, want := range map[string]int{c.ID: 1, "another": 0} {
+		rec = doJSON(t, srv, cookie, http.MethodGet, "/api/v1/notifiers/deliveries?channel_id="+id, "")
+		var own struct {
+			Deliveries []struct {
+				ID string `json:"id"`
+			} `json:"deliveries"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &own)
+		if len(own.Deliveries) != want {
+			t.Errorf("channel %s's deliveries: %s", id, rec.Body)
+		}
+		if id == c.ID && len(own.Deliveries) == 1 {
+			if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/notifiers/deliveries/"+own.Deliveries[0].ID+"/retry", ""); rec.Code != http.StatusConflict {
+				t.Errorf("retrying one still being tried: %d %s", rec.Code, rec.Body)
+			}
+		}
+	}
+	if rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/notifiers/deliveries/nothing/retry", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("retrying nothing: %d", rec.Code)
+	}
+
 	if rec := doJSON(t, srv, cookie, http.MethodDelete, path, ""); rec.Code != http.StatusOK {
 		t.Errorf("delete: %d", rec.Code)
 	}
