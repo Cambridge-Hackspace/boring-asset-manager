@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,7 +116,27 @@ func TestImportMergesAPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b[len(b)/2] ^= 0xff
+	// Some bits of a deflate stream decode to the same bytes either way, so
+	// flipping one changes nothing: flip one that does.
+	inflated := func(b []byte) []byte {
+		gz, err := gzip.NewReader(bytes.NewReader(b))
+		if err != nil {
+			return nil
+		}
+		out, _ := io.ReadAll(gz)
+		return out
+	}
+	good := inflated(b)
+	for i := len(b) / 2; ; i++ {
+		if i == len(b) {
+			t.Fatal("no byte changes what the package holds")
+		}
+		b[i] ^= 0x40
+		if !bytes.Equal(inflated(b), good) {
+			break
+		}
+		b[i] ^= 0x40
+	}
 	if err := os.WriteFile(bad, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
