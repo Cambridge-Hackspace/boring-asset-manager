@@ -1,6 +1,6 @@
 # Hooks
 
-**Hooks** are buttons on assets, such as **Identify**. Pressing one triggers the hook, which tells whatever is listening for it: a cabinet that lights up the drawer the asset is in, or a channel on the **Notifications** page that posts it somewhere. Older releases called them actions.
+**Hooks** tell whatever is listening for them that something is happening to an asset, such as **Identify**: a cabinet that lights up the drawer the asset is in, or a channel on the **Notifications** page that posts it somewhere. A hook can be a button people press, fire by itself when something happens to an asset, or fire on a schedule. Older releases called them actions.
 
 ## Triggering one
 
@@ -11,6 +11,14 @@ Every hook triggered is kept in the asset's history.
 ## Setting them up
 
 Whoever manages categories defines hooks on the **Hooks** page: a label people see, such as "Identify"; a key devices listen for, made from the label as you type it, such as `identify`, which **Change** sets otherwise; and, if wanted, a question to ask first. Devices, and flows that trigger the hook, know it by its key, so changing the key of a hook in use says so first.
+
+Under **Fired by**, choose what fires it:
+
+- **A button people press on assets**, as above.
+- **Events**: when an asset is lent, returned, runs low, has its condition change, and so on. Narrow it to when the asset's condition, or one of its fields, has a value, and to at most once every so many minutes, so a burst of changes fires it once.
+- **A schedule**, in cron's five fields (minute, hour, day of the month, month, day of the week) and a time zone: `0 9 * * 1` is 9:00 on Mondays. It fires on each asset that is running low, lent, overdue or in a condition, as you choose.
+
+A hook with no button is not shown on assets. Whatever fires it, a hook only ever fires on assets in the categories that offer it, and its history says what fired it.
 
 Then, on a category's **Links and hooks** tab, choose which of them it offers on its assets, and whether on its subcategories' assets too.
 

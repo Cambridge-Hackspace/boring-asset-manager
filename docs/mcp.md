@@ -186,7 +186,7 @@ Reading needs `assets.read`; changing needs `categories.manage`. Deleting is mar
 | `list_link_types` | `assets.read` | |
 | `save_link_type`, `delete_link_type` | `categories.manage` | |
 | `list_hooks` | `assets.read` | |
-| `save_hook`, `delete_hook` | `categories.manage` | |
+| `save_hook`, `delete_hook` | `categories.manage` | `save_hook` takes `triggers`: a button, events or a schedule (see [Hooks](hooks.md#triggers)); left out, they stay as they were. |
 
 ### Icons
 

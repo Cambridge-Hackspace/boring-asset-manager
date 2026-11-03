@@ -2,15 +2,18 @@
   import { onMount } from 'svelte';
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
-  import type { AssetHook } from '../lib/models';
+  import type { AssetHook, Field, HookTrigger } from '../lib/models';
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import DerivedKey from '../components/DerivedKey.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
+  import HookTriggers, { describeTriggers } from './HookTriggers.svelte';
 
-  // /hooks: the buttons categories can offer on their assets, such as
-  // Identify (docs/hooks.md). Which categories offer them is set on each
-  // category's page.
+  // /hooks: what categories can offer on their assets, such as Identify,
+  // fired by a button, by events or on a schedule (docs/hooks.md). Which
+  // categories offer them is set on each category's page.
   let { params: _params }: { params: Record<string, string> } = $props();
+  let triggers = $state<HookTrigger[]>([{ type: 'button' }]);
+  let fields = $state<Field[]>([]);
 
   let hooks = $state<AssetHook[]>([]);
   let loading = $state(true);
@@ -41,12 +44,19 @@
     key = had = a?.key ?? '';
     label = a?.label ?? '';
     confirm = a?.confirm ?? '';
+    triggers = $state.snapshot(a?.triggers ?? [{ type: 'button' }]) as HookTrigger[];
+    // Conditions name fields; they are read once, when first needed.
+    if (fields.length === 0) void request<{ fields: Field[] }>('GET', '/fields').then((r) => (fields = r.fields ?? []), () => {});
   }
 
   async function save(event: SubmitEvent) {
     event.preventDefault();
     error = '';
-    const body = { key: key.trim(), label, confirm };
+    if (triggers.length === 0) {
+      error = 'Choose what fires it: a button, events or a schedule.';
+      return;
+    }
+    const body = { key: key.trim(), label, confirm, triggers };
     try {
       if (editing === 'new') await request('POST', '/hooks', body);
       else await request('PUT', `/hooks/${encodeURIComponent(editing!)}`, body);
@@ -75,9 +85,9 @@
   {#if editing === null}<button type="button" class="btn-primary" onclick={() => edit()}>New hook</button>{/if}
 </div>
 <p class="mb-4 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
-  Buttons on assets, such as <strong>Identify</strong>. Pressing one tells the devices and notification channels listening
-  for it, such as a cabinet that lights the drawer an asset is in. Choose which categories offer each one on the
-  category's page.
+  What happens to assets, such as <strong>Identify</strong>, told to the devices and notification channels listening for it,
+  such as a cabinet that lights the drawer an asset is in. A hook fires when someone presses its button on an asset, when
+  something happens to an asset, or on a schedule. Choose which categories offer each one on the category's page.
 </p>
 <ErrorMessage {error} />
 {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
@@ -105,6 +115,7 @@
       <label class="label" for="hook-confirm">Ask first (optional)</label>
       <input id="hook-confirm" class="input" maxlength="255" placeholder="Light up its drawer?" bind:value={confirm} />
     </div>
+    <HookTriggers bind:triggers {fields} />
     <div class="flex gap-2">
       <button type="submit" class="btn-primary">Save hook</button>
       <button type="button" class="btn-secondary" onclick={() => (editing = null)}>Cancel</button>
@@ -123,6 +134,7 @@
         <div>
           <span class="font-semibold">{a.label}</span> <span class="font-mono text-sm text-zinc-600 dark:text-zinc-400">{a.key}</span>
           {#if a.confirm}<span class="block text-sm text-zinc-600 dark:text-zinc-400">Asks: {a.confirm}</span>{/if}
+          <span class="block text-sm text-zinc-600 dark:text-zinc-400">{describeTriggers(a.triggers ?? [{ type: 'button' }])}</span>
         </div>
         <div class="flex gap-2">
           <button type="button" class="btn-secondary" aria-label="Edit {a.label}" onclick={() => edit(a)}>Edit</button>

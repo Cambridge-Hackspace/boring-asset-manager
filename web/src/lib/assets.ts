@@ -159,6 +159,22 @@ export function amount(quantity: number, unit: string | undefined): string {
   return unit ? `${quantity} ${unit}` : String(quantity);
 }
 
+/** What fired a hook, as "… fired" ends, by the kind of event (docs/hooks.md). */
+const hookCauses: Record<string, string> = {
+  'asset.created': 'as it was added',
+  'asset.edited': 'as it was edited',
+  'asset.restored': 'as it was restored',
+  'asset.quantity_changed': 'as its quantity changed',
+  'asset.running_low': 'as it ran low',
+  'asset.restocked': 'as it was restocked',
+  'asset.condition_changed': 'as its condition changed',
+  'asset.checked_out': 'as it was lent',
+  'asset.checked_in': 'as it was returned',
+  'asset.overdue': 'as its loan became overdue',
+  'asset.flow_overdue': 'as it passed its date',
+  'asset.label_printed': 'as its label was printed',
+};
+
 /** What an event in an asset's history says, without who did it. */
 export function describeEvent(e: AssetEvent): string {
   const p = e.payload;
@@ -195,8 +211,12 @@ export function describeEvent(e: AssetEvent): string {
       return `Returned by ${p.borrower ? personName(p.borrower) : 'someone'}`;
     case 'asset.overdue':
       return `Overdue: ${p.borrower ? personName(p.borrower) : 'the borrower'} was due to bring it back ${p.due_at ? dueDate(p.due_at) : ''}`.trim();
-    case 'asset.hook':
-      return `${p.hook?.label ?? 'A hook'} triggered`;
+    case 'asset.hook': {
+      const label = p.hook?.label ?? 'A hook';
+      if (p.hook?.trigger === 'schedule') return `${label} fired on its schedule`;
+      if (p.hook?.trigger === 'event') return `${label} fired ${hookCauses[p.hook.cause?.kind ?? ''] ?? 'by an event'}`;
+      return `${label} triggered`;
+    }
     case 'asset.label_printed': {
       const l = p.label;
       if (!l) return 'Label printed';

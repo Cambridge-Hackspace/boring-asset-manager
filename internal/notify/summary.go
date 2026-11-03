@@ -149,7 +149,12 @@ func summarize(n Notification, esc func(string) string) summary {
 			label = p.Hook.Label
 		}
 		out.Title, out.Color = esc(truncate(label, 100))+": "+name, discordNeutral
-		if by != "" {
+		switch {
+		case p.Hook != nil && p.Hook.Trigger == models.HookTriggerSchedule:
+			out.Description = "Fired on its schedule."
+		case p.Hook != nil && p.Hook.Trigger == models.HookTriggerEvent && p.Hook.Cause != nil:
+			out.Description = "Fired " + hookCause(p.Hook.Cause.Kind) + "."
+		case by != "":
 			out.Description = "Pressed by " + by + "."
 		}
 	default:
@@ -157,4 +162,35 @@ func summarize(n Notification, esc func(string) string) summary {
 		out.Color = discordNeutral
 	}
 	return out
+}
+
+// hookCause says what event fired a hook, as "Fired ..." ends.
+func hookCause(kind string) string {
+	switch kind {
+	case models.EventAssetCreated:
+		return "as it was added"
+	case models.EventAssetEdited:
+		return "as it was edited"
+	case models.EventAssetRestored:
+		return "as it was restored"
+	case models.EventQuantityChanged:
+		return "as its quantity changed"
+	case models.EventAssetRunningLow:
+		return "as it ran low"
+	case models.EventAssetRestocked:
+		return "as it was restocked"
+	case models.EventAssetConditionChanged:
+		return "as its condition changed"
+	case models.EventAssetCheckedOut:
+		return "as it was lent"
+	case models.EventAssetCheckedIn:
+		return "as it was returned"
+	case models.EventAssetOverdue:
+		return "as its loan became overdue"
+	case models.EventFlowOverdue:
+		return "as it passed its date"
+	case models.EventAssetLabelPrinted:
+		return "as its label was printed"
+	}
+	return "by an event"
 }

@@ -13,7 +13,7 @@ var domainTables = []string{
 	"notification_deliveries", "action_replies", "live_connections", "events", "notification_channels", "spool_entries", "spool_batches", "spool_job_members", "spool_jobs", "printer_pool_members", "printer_pools",
 	"flow_filings", "flow_runs", "flows",
 	"icon_param_bindings", "icon_text_bindings", "icon_revisions", "category_icons", "icon_library", "icon_palette", "icon_settings", "icon_build",
-	"asset_loans", "asset_placements", "asset_links", "asset_photos", "category_relation_types", "category_scopes", "category_actions", "category_label_templates", "asset_actions", "asset_field_values", "asset_generator_keys", "asset_categories", "category_fields",
+	"asset_loans", "asset_placements", "asset_links", "asset_photos", "category_relation_types", "category_scopes", "category_actions", "category_label_templates", "hook_trigger_fired", "hook_schedule_runs", "hook_trigger_seen", "asset_actions", "asset_field_values", "asset_generator_keys", "asset_categories", "category_fields",
 	"assets", "categories", "relation_types", "reports", "fields", "templates", "images", "printers", "label_stock",
 }
 
