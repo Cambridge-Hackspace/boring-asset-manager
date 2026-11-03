@@ -1,8 +1,9 @@
 # Hooks and live connections
 
-A hook is a button people press on assets, such as **Identify**. Pressing it records an event for
-devices and notification channels to act on, such as a cabinet that lights the drawer an asset is
-in.
+A hook is something that happens to an asset, such as **Identify**, told to the devices and
+notification channels listening for it: a cabinet that lights the drawer an asset is in, say. A hook
+fires when someone presses its button on an asset, when something happens to an asset, or on a
+schedule (see [Triggers](#triggers)). Each firing records an event for them to act on.
 
 Devices hear about hooks, and about other events, through live connections: a device dials in over
 a WebSocket and is sent the events meant for it as they happen.
@@ -23,6 +24,80 @@ Anyone who reads assets can list hooks.
 The API takes the key as given. The Hooks page makes a new hook's key from its label, as field keys
 are made, and warns before an existing hook's key is changed, since devices and flows know the hook
 by it.
+
+### Triggers
+
+A hook has one or more triggers, saying what fires it:
+
+| Trigger | Fires | Takes |
+|---|---|---|
+| `button` | When someone presses it on an asset's page or scan page | Nothing more. A hook has one button at most. |
+| `event` | When an event of one of its `kinds` is recorded about an asset | `kinds`; optionally a `condition` and `interval_seconds` |
+| `schedule` | At the times its `cron` names, for the assets its `filter` finds | `cron`; optionally `time_zone` and `filter` |
+
+A hook saved without triggers is a button, as every hook was before triggers.
+
+Whatever fires it, a hook fires only on assets in the categories offering it
+([below](#offering-hooks-on-assets)). A hook with no button is not shown for pressing.
+
+#### Events
+
+An event trigger fires when an event about an asset is recorded, for any of these `kinds`:
+
+| Kind | When an asset is… |
+|---|---|
+| `asset.created` | Added |
+| `asset.edited` | Edited |
+| `asset.restored` | Restored from the archive |
+| `asset.quantity_changed` | Used or restocked: its quantity changes |
+| `asset.running_low`, `asset.restocked` | Running low, or restocked |
+| `asset.condition_changed` | Reported as needing maintenance or out of service, or working again |
+| `asset.checked_out`, `asset.checked_in` | Lent, or returned |
+| `asset.overdue` | Overdue: its loan is past due |
+| `asset.flow_overdue` | Past the date a flow left it until |
+| `asset.label_printed` | Its label printed or downloaded |
+
+A hook's own events (`asset.hook`) never fire a hook, so hooks cannot fire each other in a loop.
+Archiving does not either: no hook fires on an archived asset.
+
+- `condition`, `{"field", "equals"}`, fires only when the asset's field with that key, or with
+  `"field": "condition"` its condition (`ok`, `needs_maintenance` or `out_of_service`), equals the
+  value.
+- `interval_seconds`, up to a week, is the least time between two firings on one asset, so a burst
+  of events fires it once.
+
+An event recorded before the hook was last saved does not fire it. Events are looked at for 10
+minutes after they are recorded: those recorded while no server was running do not fire hooks
+later.
+
+#### Schedules
+
+A schedule trigger fires at the times its `cron` names, a cron expression of five fields: minute,
+hour, day of the month, month, and day of the week (0-6 from Sunday, or 7 for Sunday). Each field
+is `*`, a number, a range `a-b`, a list `a,b`, or any of these with a step `/n`. When both day
+fields are restricted, a day matching either matches, as in cron. `0 9 * * 1` is 9:00 on Mondays;
+`*/30 8-18 * * 1-5` is every half hour from 8:00 to 18:30 on weekdays.
+
+- `time_zone` is an IANA time zone, such as `Europe/London`, that `cron` is read in: UTC when left
+  out. Changes of daylight saving time are followed.
+- `filter` chooses the assets, as a report's filter does (see [Reports](reports.md)): `running_low`,
+  `loan` (`open` or `overdue`), `condition` (a condition or `problem`), `category_ids` and `search`.
+  Archived assets are never chosen. Left out, every asset the hook is offered on.
+- One run fires the hook on each asset found, at most 500.
+
+A schedule seen for the first time starts then, firing at its next time. When servers were down
+across several of its times, it fires once, for the latest.
+
+#### Who fires it
+
+A button is fired by whoever pressed it. Events and schedules fire a hook by itself: its event
+records no person, and says which trigger fired it.
+
+#### Several servers
+
+Every server looks for events and schedules every 10 seconds. Each event, each firing within an
+interval, and each run of a schedule is claimed in the database first, so servers sharing a
+database fire each once.
 
 ### Offering hooks on assets
 
@@ -49,6 +124,8 @@ scan template includes the `hooks` quick action. A hook with a question asks it 
 The event's `hook` carries:
 
 - the hook's key and label;
+- `trigger`: `button`, `event` or `schedule`, and for an event trigger `cause`, the event that fired
+  it (`{"id", "kind"}`);
 - the asset;
 - the containers the asset is in through location links (see [Data model](data-model.md)),
   outermost first, each with its codes by generator type and its field values by key.
@@ -57,7 +134,8 @@ This lets a device find the thing. Give each drawer an `led` field, and identify
 lights its drawer.
 
 The event is kept in the asset's history, and notification channels can subscribe to it (see
-[Notifications](notifications.md)). Discord shows it as "Identify: Drawer A3", triggered by whom.
+[Notifications](notifications.md)). Discord shows it as "Identify: Drawer A3", pressed by whom, or
+fired by an event, such as "Fired as it was lent", or on its schedule.
 
 ### Device replies
 
@@ -167,8 +245,8 @@ A package written before migration `049` is imported the same way. The tables ke
 | Method and route | Permission | Purpose |
 |---|---|---|
 | `GET /api/v1/hooks` | anyone who reads assets | List hooks |
-| `POST /api/v1/hooks` | `categories.manage` | Define a hook |
-| `PUT /api/v1/hooks/{id}` | `categories.manage` | Change a hook |
+| `POST /api/v1/hooks` | `categories.manage` | Define a hook, with `key`, `label`, `confirm` and `triggers` |
+| `PUT /api/v1/hooks/{id}` | `categories.manage` | Change a hook; left out, `triggers` stay as they were |
 | `DELETE /api/v1/hooks/{id}` | `categories.manage` | Delete a hook, taking it off every category |
 | `GET /api/v1/categories/{id}/hooks` | `assets.read` | List the hooks a category offers |
 | `PUT /api/v1/categories/{id}/hooks` | `categories.manage` | Set the hooks a category offers |

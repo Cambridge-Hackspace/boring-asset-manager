@@ -141,6 +141,8 @@ func TestPressingAnHook(t *testing.T) {
 			{ID: cabinet.Asset.ID, Name: "Cabinet A", Codes: map[string]string{"qr": "CAB-A"}, Fields: map[string]string{}},
 			{ID: drawer.Asset.ID, Name: "Drawer A3", Codes: map[string]string{"qr": "DRW-A3"}, Fields: map[string]string{"led": "12"}},
 		},
+		// Pressed: a button fired it (#194).
+		Trigger: models.HookTriggerButton,
 	}
 	if !reflect.DeepEqual(act, want) {
 		t.Errorf("the hook:\n%+v\nwant\n%+v", act, want)

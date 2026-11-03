@@ -103,6 +103,9 @@ var Excluded = map[string]string{
 	"uploads":                 "archives being uploaded, staged apart from the files and gone after a day",
 	"upload_parts":            "the parts of uploads under way",
 	"sign_in_throttles":       "failed sign-ins being counted, which lapse within the hour",
+	"hook_trigger_seen":       "events hooks have looked at, forgotten within the hour",
+	"hook_trigger_fired":      "when each hook last fired for each asset, for the least time between firings",
+	"hook_schedule_runs":      "when each schedule last ran; a restored instance starts its schedules afresh",
 }
 
 // Header is header.json, the first member: what the archive is, before

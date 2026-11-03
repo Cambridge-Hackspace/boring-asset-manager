@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -28,10 +29,16 @@ var (
 // starting with a letter.
 var hookKeys = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
-// HookInput is a hook to save.
+// HookInput is a hook to save. Triggers nil or empty is a button alone.
+// The API checks each trigger's details (docs/hooks.md); here only that
+// there are not too many.
 type HookInput struct {
 	Key, Label, Confirm string
+	Triggers            []models.HookTrigger
 }
+
+// MaxHookTriggers is the most triggers a hook has.
+const MaxHookTriggers = 10
 
 func (in *HookInput) check() error {
 	in.Key, in.Label, in.Confirm = strings.TrimSpace(in.Key), strings.TrimSpace(in.Label), strings.TrimSpace(in.Confirm)
@@ -42,16 +49,44 @@ func (in *HookInput) check() error {
 		return fmt.Errorf("%w: a label of 1-255 characters is required", ErrInvalidHook)
 	case len(in.Confirm) > 255:
 		return fmt.Errorf("%w: the question is at most 255 characters", ErrInvalidHook)
+	case len(in.Triggers) > MaxHookTriggers:
+		return fmt.Errorf("%w: at most %d triggers", ErrInvalidHook, MaxHookTriggers)
 	}
 	return nil
 }
 
-const hookColumns = "id, action_key, label, confirm_question, created_at, updated_at"
+// buttonOnly is the triggers of a hook stored without any.
+func buttonOnly() []models.HookTrigger {
+	return []models.HookTrigger{{Type: models.HookTriggerButton}}
+}
+
+// storedTriggers is how triggers are stored: NULL for a button alone.
+func storedTriggers(triggers []models.HookTrigger) (any, error) {
+	if len(triggers) == 0 || (len(triggers) == 1 && triggers[0].Type == models.HookTriggerButton) {
+		return nil, nil
+	}
+	raw, err := json.Marshal(triggers)
+	if err != nil {
+		return nil, fmt.Errorf("encoding triggers: %w", err)
+	}
+	return string(raw), nil
+}
+
+const hookColumns = "id, action_key, label, confirm_question, triggers, created_at, updated_at"
 
 func scanHook(row interface{ Scan(...any) error }) (models.AssetHook, error) {
 	var a models.AssetHook
-	err := row.Scan(&a.ID, &a.Key, &a.Label, &a.Confirm, &a.CreatedAt, &a.UpdatedAt)
-	return a, err
+	var triggers sql.NullString
+	if err := row.Scan(&a.ID, &a.Key, &a.Label, &a.Confirm, &triggers, &a.CreatedAt, &a.UpdatedAt); err != nil {
+		return a, err
+	}
+	a.Triggers = buttonOnly()
+	if triggers.Valid && triggers.String != "" {
+		if err := json.Unmarshal([]byte(triggers.String), &a.Triggers); err != nil {
+			return a, fmt.Errorf("reading hook %s's triggers: %w", a.Key, err)
+		}
+	}
+	return a, nil
 }
 
 // ListHooks lists the hooks by label.
@@ -96,15 +131,19 @@ func (s *Store) SaveHook(id string, in HookInput) (*models.AssetHook, error) {
 	if taken > 0 {
 		return nil, ErrHookKeyExists
 	}
+	triggers, err := storedTriggers(in.Triggers)
+	if err != nil {
+		return nil, err
+	}
 	now := dbTime(time.Now())
 	if id == "" {
 		id = uuid.NewString()
-		if _, err := s.Exec("INSERT INTO asset_actions ("+hookColumns+") VALUES (?, ?, ?, ?, ?, ?)", id, in.Key, in.Label, in.Confirm, now, now); err != nil {
+		if _, err := s.Exec("INSERT INTO asset_actions ("+hookColumns+") VALUES (?, ?, ?, ?, ?, ?, ?)", id, in.Key, in.Label, in.Confirm, triggers, now, now); err != nil {
 			return nil, fmt.Errorf("saving the hook: %w", err)
 		}
 		return s.GetHook(id)
 	}
-	res, err := s.Exec("UPDATE asset_actions SET action_key = ?, label = ?, confirm_question = ?, updated_at = ? WHERE id = ?", in.Key, in.Label, in.Confirm, now, id)
+	res, err := s.Exec("UPDATE asset_actions SET action_key = ?, label = ?, confirm_question = ?, triggers = ?, updated_at = ? WHERE id = ?", in.Key, in.Label, in.Confirm, triggers, now, id)
 	if err != nil {
 		return nil, fmt.Errorf("saving the hook: %w", err)
 	}
@@ -223,11 +262,25 @@ func readHookTraits(q interface {
 	return defs, offers, rows.Err()
 }
 
-// offered lists the hooks offered on an asset in these categories: those
-// its categories offer, and those cascading from their ancestors, by label.
+// offered lists the hooks offered as buttons on an asset in these
+// categories: those its categories offer, and those cascading from their
+// ancestors, by label. Hooks that only events or a schedule fire are left
+// out, as nobody presses them.
 func (t categoryTraits) offered(categoryIDs []string) []models.OfferedHook {
-	seen := map[string]bool{}
 	out := []models.OfferedHook{}
+	for _, def := range t.offeredHooks(categoryIDs) {
+		if def.Button() {
+			out = append(out, models.OfferedHook{ID: def.ID, Key: def.Key, Label: def.Label, Confirm: def.Confirm})
+		}
+	}
+	return out
+}
+
+// offeredHooks lists every hook offered on an asset in these categories,
+// whatever fires it, by label.
+func (t categoryTraits) offeredHooks(categoryIDs []string) []models.AssetHook {
+	seen := map[string]bool{}
+	out := []models.AssetHook{}
 	for _, c := range categoryIDs {
 		for id, d := c, 0; id != "" && d < 100; id, d = t.parents[id], d+1 {
 			for _, ca := range t.offers[id] {
@@ -236,7 +289,7 @@ func (t categoryTraits) offered(categoryIDs []string) []models.OfferedHook {
 					continue
 				}
 				seen[ca.HookID] = true
-				out = append(out, models.OfferedHook{ID: def.ID, Key: def.Key, Label: def.Label, Confirm: def.Confirm})
+				out = append(out, def)
 			}
 		}
 	}
@@ -270,7 +323,13 @@ func (s *Store) RecordAssetHook(assetID, key string) (string, error) {
 	if offered == nil {
 		return "", ErrHookNotOffered
 	}
-	hook := &models.EventHook{Key: offered.Key, Label: offered.Label, Asset: thingOf(a), Location: []models.EventThing{}}
+	return s.recordHook(a, offered.Key, offered.Label, models.TriggerManual, models.HookTriggerButton, nil)
+}
+
+// recordHook records an asset.hook event for the hook keyed key, fired on
+// asset a by trigger, with the asset and the containers it is in.
+func (s *Store) recordHook(a *models.AssetWithDetails, key, label, payloadTrigger, trigger string, cause *models.EventCause) (string, error) {
+	hook := &models.EventHook{Key: key, Label: label, Asset: thingOf(a), Location: []models.EventThing{}, Trigger: trigger, Cause: cause}
 	for _, place := range a.Location {
 		container, err := s.GetAssetByID(place.ID)
 		if errors.Is(err, ErrAssetNotFound) {
@@ -286,11 +345,123 @@ func (s *Store) RecordAssetHook(assetID, key string) (string, error) {
 		return "", fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer tx.Rollback()
-	id, err := s.recordAssetEventID(tx, models.EventAssetHook, assetID, models.EventPayload{Trigger: models.TriggerManual, Hook: hook})
+	id, err := s.recordAssetEventID(tx, models.EventAssetHook, a.Asset.ID, models.EventPayload{Trigger: payloadTrigger, Hook: hook})
 	if err != nil {
 		return "", err
 	}
 	return id, tx.Commit()
+}
+
+// HooksOffered reads which categories offer hooks once, and returns what
+// is offered on an asset in given categories, whatever fires it, as it is
+// now.
+func (s *Store) HooksOffered() (func(categoryIDs []string) []models.AssetHook, error) {
+	traits, err := s.categoryTraits(storeQuerier{s})
+	if err != nil {
+		return nil, err
+	}
+	return traits.offeredHooks, nil
+}
+
+// RecordTriggeredHook records hook firing on an active asset by an event
+// or a schedule (trigger), and returns the event's ID. It is recorded by
+// nobody: the hook fired by itself. An archived asset is skipped, with
+// ErrAssetArchived.
+func (s *Store) RecordTriggeredHook(assetID string, hook models.AssetHook, trigger string, cause *models.EventCause) (string, error) {
+	a, err := s.GetAssetByID(assetID)
+	if err != nil {
+		return "", err
+	}
+	if a.Asset.ArchivedAt != nil {
+		return "", ErrAssetArchived
+	}
+	payloadTrigger := models.TriggerSchedule
+	if trigger == models.HookTriggerEvent {
+		payloadTrigger = models.TriggerEvent
+	}
+	return s.As("").recordHook(a, hook.Key, hook.Label, payloadTrigger, trigger, cause)
+}
+
+// ClaimHookEvent claims an event for firing hooks on, so that of several
+// servers sharing the database only one acts on it: false when one already
+// has.
+func (s *Store) ClaimHookEvent(eventID string, now time.Time) (bool, error) {
+	_, err := s.Exec("INSERT INTO hook_trigger_seen (event_id, seen_at) VALUES (?, ?)", eventID, dbTime(now))
+	if IsUniqueViolation(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("claiming an event for hooks: %w", err)
+	}
+	return true, nil
+}
+
+// PruneHookEvents forgets events claimed before before, which are too old
+// to be looked at again.
+func (s *Store) PruneHookEvents(before time.Time) error {
+	if _, err := s.Exec("DELETE FROM hook_trigger_seen WHERE seen_at < ?", dbTime(before)); err != nil {
+		return fmt.Errorf("pruning hook events: %w", err)
+	}
+	return nil
+}
+
+// ClaimHookFiring claims firing a hook on an asset at now, unless it fired
+// on it less than interval ago: false then, or when another server claimed
+// it first.
+func (s *Store) ClaimHookFiring(hookID, assetID string, interval time.Duration, now time.Time) (bool, error) {
+	now = dbTime(now)
+	res, err := s.Exec("UPDATE hook_trigger_fired SET fired_at = ? WHERE hook_id = ? AND asset_id = ? AND fired_at <= ?", now, hookID, assetID, now.Add(-interval))
+	if err != nil {
+		return false, fmt.Errorf("claiming a hook's firing: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil
+	}
+	_, err = s.Exec("INSERT INTO hook_trigger_fired (hook_id, asset_id, fired_at) VALUES (?, ?, ?)", hookID, assetID, now)
+	if IsUniqueViolation(err) {
+		// It fired within the interval, or another server just claimed it.
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("claiming a hook's firing: %w", err)
+	}
+	return true, nil
+}
+
+// HookScheduleRan is when a hook's index-th trigger, a schedule, last ran:
+// false when it never has.
+func (s *Store) HookScheduleRan(hookID string, index int) (time.Time, bool, error) {
+	var at time.Time
+	err := s.QueryRow("SELECT ran_at FROM hook_schedule_runs WHERE hook_id = ? AND trigger_index = ?", hookID, index).Scan(&at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("reading a schedule's last run: %w", err)
+	}
+	return at, true, nil
+}
+
+// ClaimHookSchedule claims a schedule's run at at, from the last run was
+// (zero when it never ran), so that of several servers only one runs it:
+// false when another already moved it on.
+func (s *Store) ClaimHookSchedule(hookID string, index int, was, at time.Time) (bool, error) {
+	if was.IsZero() {
+		_, err := s.Exec("INSERT INTO hook_schedule_runs (hook_id, trigger_index, ran_at) VALUES (?, ?, ?)", hookID, index, dbTime(at))
+		if IsUniqueViolation(err) {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("claiming a schedule's run: %w", err)
+		}
+		return true, nil
+	}
+	res, err := s.Exec("UPDATE hook_schedule_runs SET ran_at = ? WHERE hook_id = ? AND trigger_index = ? AND ran_at = ?", dbTime(at), hookID, index, dbTime(was))
+	if err != nil {
+		return false, fmt.Errorf("claiming a schedule's run: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // thingOf is an asset as a hook event carries it.

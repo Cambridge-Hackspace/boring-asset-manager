@@ -19,7 +19,7 @@ var Tables = []Table{
 		Columns: []Column{{"id", Text}, {"field_key", Text}, {"label", Text}, {"validation_type", Text}, {"options", JSON}, {"created_at", Time}, {"updated_at", Time}},
 	},
 	{Name: "asset_actions", Kind: KindCatalog, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"action_key", Text}, {"label", Text}, {"confirm_question", Text}, {"created_at", Time}, {"updated_at", Time}},
+		Columns: []Column{{"id", Text}, {"action_key", Text}, {"label", Text}, {"confirm_question", Text}, {"created_at", Time}, {"updated_at", Time}, {"triggers", JSON}},
 	},
 	{Name: "categories", Kind: KindCatalog, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"name", Text}, {"parent_id", Text}, {"color_hex", Text}, {"is_consumable", Bool}, {"is_running_low", Bool}, {"created_at", Time}, {"updated_at", Time}, {"low_stock_threshold", Int}, {"is_lendable", Bool}, {"stock_unit", Text}, {"scan_template_id", Text}},

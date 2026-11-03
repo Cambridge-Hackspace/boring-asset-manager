@@ -414,3 +414,20 @@ func TestDiscordThrottledEmbeds(t *testing.T) {
 		t.Errorf("address: %+v", address)
 	}
 }
+
+func TestDiscordSaysWhatFiredAHook(t *testing.T) {
+	hook := func(h *models.EventHook, actor *models.EventActor) string {
+		return discordPayload(Notification{Event: models.Event{Kind: models.EventAssetHook, Payload: models.EventPayload{
+			Asset: &models.EventAsset{ID: "a1", Name: "Drill"}, Actor: actor, Hook: h,
+		}}}).Embeds[0].Description
+	}
+	if got := hook(&models.EventHook{Label: "Identify", Trigger: models.HookTriggerButton}, &models.EventActor{ID: "u1", Name: "Ada"}); got != "Pressed by Ada." {
+		t.Errorf("button: %q", got)
+	}
+	if got := hook(&models.EventHook{Label: "Identify", Trigger: models.HookTriggerEvent, Cause: &models.EventCause{ID: "e1", Kind: models.EventAssetCheckedOut}}, nil); got != "Fired as it was lent." {
+		t.Errorf("event: %q", got)
+	}
+	if got := hook(&models.EventHook{Label: "Identify", Trigger: models.HookTriggerSchedule}, nil); got != "Fired on its schedule." {
+		t.Errorf("schedule: %q", got)
+	}
+}

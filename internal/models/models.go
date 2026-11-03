@@ -216,6 +216,8 @@ const (
 	// TriggerSchedule marks an event BAM recorded by itself, such as a loan
 	// becoming overdue.
 	TriggerSchedule = "schedule"
+	// TriggerEvent marks a hook fired by another event (docs/hooks.md).
+	TriggerEvent = "event"
 )
 
 // Event records something notifiers may announce. Its payload is a snapshot
@@ -964,12 +966,60 @@ type PoolMember struct {
 // (docs/hooks.md). Triggering one records an asset.hook event, which devices
 // and notification channels act on. Confirm, when set, is asked first.
 type AssetHook struct {
-	ID        string    `json:"id"`
-	Key       string    `json:"key"`
-	Label     string    `json:"label"`
-	Confirm   string    `json:"confirm"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID      string `json:"id"`
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+	Confirm string `json:"confirm"`
+	// Triggers are what fire it: a button people press, events, or a
+	// schedule. A hook saved without any is a button.
+	Triggers  []HookTrigger `json:"triggers"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+}
+
+// Hook triggers (docs/hooks.md).
+const (
+	HookTriggerButton   = "button"
+	HookTriggerEvent    = "event"
+	HookTriggerSchedule = "schedule"
+)
+
+// HookTrigger is one way a hook fires. Kinds, Condition and
+// IntervalSeconds are an event trigger's; Cron, TimeZone and Filter a
+// schedule's.
+type HookTrigger struct {
+	Type string `json:"type"`
+	// Kinds are the kinds of event about an asset that fire it.
+	Kinds []string `json:"kinds,omitempty"`
+	// Condition, when set, must hold of the asset.
+	Condition *HookCondition `json:"condition,omitempty"`
+	// IntervalSeconds is the least time between two firings for one
+	// asset, so a burst of events fires it once.
+	IntervalSeconds int `json:"interval_seconds,omitempty"`
+	// Cron is five fields: minute, hour, day of the month, month, day of
+	// the week; TimeZone the IANA zone it is read in, UTC when empty.
+	Cron     string `json:"cron,omitempty"`
+	TimeZone string `json:"time_zone,omitempty"`
+	// Filter chooses the assets a schedule fires for, as a report's filter
+	// does (docs/reports.md).
+	Filter json.RawMessage `json:"filter,omitempty"`
+}
+
+// HookCondition holds when the asset's Field (a field's key, or
+// "condition") is Equals.
+type HookCondition struct {
+	Field  string `json:"field"`
+	Equals string `json:"equals"`
+}
+
+// Button reports whether people can press the hook.
+func (h AssetHook) Button() bool {
+	for _, t := range h.Triggers {
+		if t.Type == HookTriggerButton {
+			return true
+		}
+	}
+	return false
 }
 
 // CategoryHook is a hook a category offers on its assets, and with
@@ -995,6 +1045,16 @@ type EventHook struct {
 	Label    string       `json:"label"`
 	Asset    EventThing   `json:"asset"`
 	Location []EventThing `json:"location"`
+	// Trigger is what fired it: HookTriggerButton, HookTriggerEvent or
+	// HookTriggerSchedule. Cause is the event that fired an event trigger.
+	Trigger string      `json:"trigger,omitempty"`
+	Cause   *EventCause `json:"cause,omitempty"`
+}
+
+// EventCause is the event that fired a hook.
+type EventCause struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
 }
 
 // EventThing is an asset as a hook event carries it: its codes, by
