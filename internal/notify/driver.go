@@ -58,6 +58,9 @@ type Notification struct {
 	BaseURL string
 	// Test marks the message sent by a channel's test button.
 	Test bool
+	// DeliveryID names this delivery, the same at each attempt, so a
+	// receiver can drop one it already had; "test" for a test message.
+	DeliveryID string
 	// Mailer sends email, for the email driver; nil when email is not set
 	// up in the configuration.
 	Mailer Mailer
@@ -141,6 +144,9 @@ func init() {
 		panic(err)
 	}
 	if err := Register(Email{}); err != nil {
+		panic(err)
+	}
+	if err := Register(Webhook{}); err != nil {
 		panic(err)
 	}
 }

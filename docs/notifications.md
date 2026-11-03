@@ -2,10 +2,11 @@
 
 BAM! sends notifications when something happens that people should hear about: a category or
 asset running low, a loan overdue, an asset out of service, a hook pressed. You set up any number
-of channels, each sending through a notifier driver: to Discord, an MQTT broker, or email.
+of channels, each sending through a notifier driver: to Discord, an MQTT broker, email, or any
+URL as a webhook.
 
 Notifications go out through pluggable notifier drivers, in the same way printers use print drivers
-(see [Printing](printing.md)). Three drivers ship: Discord, MQTT and email.
+(see [Printing](printing.md)). Four drivers ship: Discord, MQTT, email and webhooks.
 
 ## Channels
 
@@ -145,6 +146,132 @@ A channel needs addresses, roles or both.
 |---|---|
 | Unreachable, or a `4xx` reply | Retried with exponential backoff, as other deliveries are |
 | A `5xx` reply, such as an address refused | Fails at once |
+
+## Webhooks
+
+The webhook driver (`webhook`) posts each event to a URL, for anything that takes HTTP: your own
+service, a home automation system, a chat service's incoming webhook, a status board.
+
+### Options
+
+| Option | Notes |
+|---|---|
+| URL | `https://…`, or `http://…` to send without encryption, chosen by writing it |
+| Signing secret | Signs each request (below). Secret: written, never returned. Left empty, requests are not signed |
+| Extra headers | `Name: value`, one per line, such as an `Authorization` the receiver wants. Secret, as a whole. The `BAM-*`, `Host`, `Content-Type` and `Content-Length` headers are BAM!'s own |
+| Body template | Empty for BAM!'s own JSON (below), or a template of your own |
+| Content type | `application/json` unless given |
+| Allow private networks | `true` to post to a private address (below) |
+
+### The request
+
+Each event is a `POST` with a JSON body:
+
+```json
+{"version": 1, "id": "<delivery ID>", "event": {...}, "instance": "https://bam.example.org"}
+```
+
+- `event` is the event as MQTT publishes it: its `id`, `kind`, `asset_id` or `category_id`, a `url`
+  to what it is about, its `payload` and `created_at`. People appear by name only.
+- `id` names the delivery, the same at every retry, so a receiver can drop one it already had.
+
+Its headers are:
+
+| Header | Holds |
+|---|---|
+| `BAM-Event` | The event's kind, or `test` for a test message |
+| `BAM-Delivery` | The delivery's ID, as in the body |
+| `BAM-Timestamp` | When it was sent, in seconds since 1970 (UTC) |
+| `BAM-Signature` | With a signing secret: `v1=` and the hex HMAC-SHA256, keyed by the secret, of the timestamp, a `.`, and the body |
+
+A redirect is not followed, since it could lead anywhere: the delivery fails, saying so, and the URL
+it leads to should be given instead. Other answers are treated as for every channel (see
+[Delivery](#delivery)).
+
+### Checking the signature
+
+A receiver recomputes the signature over the body exactly as it arrived, compares it in constant
+time, and refuses a timestamp more than a few minutes old, so a request recorded on its way cannot
+be sent again later.
+
+Go:
+
+```go
+func signed(secret string, r *http.Request, body []byte) bool {
+	ts, err := strconv.ParseInt(r.Header.Get("BAM-Timestamp"), 10, 64)
+	if err != nil || math.Abs(float64(time.Now().Unix()-ts)) > 300 {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(r.Header.Get("BAM-Timestamp") + "."))
+	mac.Write(body)
+	want := "v1=" + hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(want), []byte(r.Header.Get("BAM-Signature")))
+}
+```
+
+Python:
+
+```python
+import hashlib, hmac, time
+
+def signed(secret: bytes, headers, body: bytes) -> bool:
+    ts = headers.get("BAM-Timestamp", "")
+    if not ts.isdigit() or abs(time.time() - int(ts)) > 300:
+        return False
+    want = "v1=" + hmac.new(secret, ts.encode() + b"." + body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(want, headers.get("BAM-Signature", ""))
+```
+
+JavaScript (Node.js):
+
+```js
+const crypto = require("node:crypto");
+
+function signed(secret, headers, body /* a Buffer */) {
+  const ts = headers["bam-timestamp"] ?? "";
+  if (!/^\d+$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false;
+  const want = "v1=" + crypto.createHmac("sha256", secret).update(ts + ".").update(body).digest("hex");
+  const got = headers["bam-signature"] ?? "";
+  return got.length === want.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got));
+}
+```
+
+### A body of your own
+
+For a receiver that wants its own shape, such as a chat service's, a body template replaces the JSON
+above. It is a Go text template over the same data (`.version`, `.id`, `.event`, `.instance`), with a
+`json` function that writes a value as JSON:
+
+```
+{"text": {{json (printf "%s: %s" .event.kind .event.payload.asset.name)}}}
+```
+
+Unless a content type is given, the result must be valid JSON. A template is checked when saved, but
+one that fails on an event, such as reading an asset on an event about a category, fails that
+delivery and says why; `{{with .event.payload.asset}}…{{end}}` reads it only when there is one. The
+test button shows what a channel sends.
+
+### Private networks
+
+A webhook could otherwise be pointed at what sits behind BAM!: the machine itself, other servers on
+its network, or a cloud provider's metadata address. So by default a URL is refused when its host is,
+or resolves to, any of:
+
+- loopback (`127.0.0.0/8`, `::1`) or unspecified (`0.0.0.0`, `::`);
+- private (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`);
+- link-local (`169.254.0.0/16`, the metadata address among them, and `fe80::/10`);
+- shared address space (`100.64.0.0/10`), multicast, or the IETF's and benchmarking ranges;
+- IPv4-mapped IPv6 forms of any of these.
+
+A name is looked up for each request, and the request is sent to the very addresses that were checked,
+so DNS changing in between cannot redirect it. An address written in the URL is refused when the
+channel is saved.
+
+**Allow private networks** lifts this for a channel, for receivers on the local network, such as a
+cabinet controller or Home Assistant. Like every channel option, it is set by those holding
+`settings.manage`, which is never narrowed to scopes, so in practice by admins. Environment proxy
+settings are not used for webhooks.
 
 ## API
 

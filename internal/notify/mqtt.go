@@ -129,8 +129,9 @@ type mqttEvent struct {
 	Test       bool                `json:"test,omitempty"`
 }
 
-// mqttMessageFor is a notification as published.
-func mqttMessageFor(prefix string, n Notification) (mqttMessage, error) {
+// outbound is an event as it leaves BAM! for MQTT and webhooks: people by
+// name only, and a link to what it is about.
+func outbound(n Notification) mqttEvent {
 	e := n.Event
 	p := e.Payload
 	for _, who := range []**models.EventActor{&p.Actor, &p.Borrower} {
@@ -141,17 +142,29 @@ func mqttMessageFor(prefix string, n Notification) (mqttMessage, error) {
 		}
 	}
 	out := mqttEvent{ID: e.ID, Kind: e.Kind, AssetID: e.AssetID, CategoryID: e.CategoryID, Payload: p, CreatedAt: e.CreatedAt, Test: n.Test}
-	topic := prefix + "/" + e.Kind
 	base := strings.TrimRight(n.BaseURL, "/")
+	switch {
+	case n.Test:
+	case e.AssetID != nil:
+		out.URL = base + "/assets/" + *e.AssetID
+	case e.CategoryID != nil:
+		out.URL = base + "/categories/" + *e.CategoryID
+	}
+	return out
+}
+
+// mqttMessageFor is a notification as published.
+func mqttMessageFor(prefix string, n Notification) (mqttMessage, error) {
+	e := n.Event
+	out := outbound(n)
+	topic := prefix + "/" + e.Kind
 	switch {
 	case n.Test:
 		topic = prefix + "/test"
 	case e.AssetID != nil:
 		topic += "/" + *e.AssetID
-		out.URL = base + "/assets/" + *e.AssetID
 	case e.CategoryID != nil:
 		topic += "/" + *e.CategoryID
-		out.URL = base + "/categories/" + *e.CategoryID
 	}
 	data, err := json.Marshal(out)
 	if err != nil {
