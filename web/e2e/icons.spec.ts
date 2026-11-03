@@ -8,12 +8,17 @@ import { expect, test, unique } from './fixtures';
 const editor = (page: Page, category: string) => page.getByRole('textbox', { name: `${category}'s icon source` });
 const iconSection = (page: Page) => page.getByRole('region', { name: 'Icon' });
 
+// A check or a save compiles every icon in the instance, which takes a while
+// on a busy machine, as when the whole suite runs at once.
+const compiled = { timeout: 30_000 };
+
 async function noViolations(page: Page) {
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(' ')).join('; ')})`)).toEqual([]);
 }
 
 test('a category is drawn an icon, checked as typed, published, and a draft kept with its problems', async ({ signedIn: page, api }) => {
+  test.slow();
   const name = unique('Crates');
   const { category } = await api.call('POST', '/categories', { name, color_hex: '#b45309' });
   await page.goto(`/categories/${category.id}?tab=icon`);
@@ -24,24 +29,24 @@ test('a category is drawn an icon, checked as typed, published, and a draft kept
   await expect(editor(page, name)).toHaveValue(/box 0 0 0 1 1 1/);
   const iconName = await section.getByLabel('Its name').inputValue();
   // checked as typed: the preview comes from the check, in light and dark
-  await expect(section.getByRole('img', { name: `${iconName}, light` })).toBeVisible();
+  await expect(section.getByRole('img', { name: `${iconName}, light` })).toBeVisible(compiled);
   await expect(section.getByRole('img', { name: `${iconName}, dark` })).toBeVisible();
-  await expect(section.getByText('No problems')).toBeVisible();
+  await expect(section.getByText('No problems')).toBeVisible(compiled);
   await noViolations(page);
 
   await section.getByRole('button', { name: 'Save' }).click();
-  await expect(section.getByText('Published.')).toBeVisible();
+  await expect(section.getByText('Published.')).toBeVisible(compiled);
 
   // a mistake: underlined, listed, and kept as a draft when saved
   await editor(page, name).fill((await editor(page, name).inputValue()).replace('box 0 0 0 1 1 1', 'bxo 0 0 0 1 1 1'));
   const problem = section.getByRole('button', { name: /^Error, line 5, column 5: unknown .*'bxo'/ });
-  await expect(problem).toBeVisible();
+  await expect(problem).toBeVisible(compiled);
   await problem.click();
   await expect(editor(page, name)).toBeFocused();
   // the preview is still the published icon
   await expect(section.getByText('The published icon: this source does not compile yet.')).toBeVisible();
   await section.getByRole('button', { name: 'Save' }).click();
-  await expect(section.getByText(/Kept as a draft: 1 problem/)).toBeVisible();
+  await expect(section.getByText(/Kept as a draft: 1 problem/)).toBeVisible(compiled);
 
   // leaving with it says it is not saved, until the draft goes
   await section.getByRole('button', { name: 'Discard the draft' }).click();
