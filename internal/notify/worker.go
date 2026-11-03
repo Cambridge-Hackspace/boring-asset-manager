@@ -119,7 +119,7 @@ func (w *Worker) attempt(ctx context.Context, c store.Claim) store.Outcome {
 		return store.Outcome{Status: models.DeliveryFailed, Error: fmt.Sprintf("unknown driver %q", c.Channel.Driver)}
 	}
 	sendCtx, cancel := context.WithTimeout(ctx, w.SendTimeout)
-	err := d.Send(sendCtx, c.Channel.Options, Notification{Event: c.Event, BaseURL: w.BaseURL, Mailer: w.Mailer,
+	err := d.Send(sendCtx, c.Channel.Options, Notification{Event: c.Event, BaseURL: w.BaseURL, DeliveryID: c.Delivery.ID, Mailer: w.Mailer,
 		Recipients: func(roles []string) ([]string, error) { return w.Store.EmailRecipients(roles, c.Event, false) }})
 	cancel()
 	if err == nil {
@@ -163,10 +163,11 @@ func SendTest(ctx context.Context, c models.NotificationChannel, baseURL string,
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	return d.Send(ctx, c.Options, Notification{
-		Event:   models.Event{Kind: "test", CreatedAt: time.Now().UTC(), Payload: models.EventPayload{Trigger: models.TriggerManual}},
-		BaseURL: baseURL,
-		Test:    true,
-		Mailer:  mailer,
+		Event:      models.Event{Kind: "test", CreatedAt: time.Now().UTC(), Payload: models.EventPayload{Trigger: models.TriggerManual}},
+		BaseURL:    baseURL,
+		Test:       true,
+		DeliveryID: "test",
+		Mailer:     mailer,
 		Recipients: func(roles []string) ([]string, error) {
 			return st.EmailRecipients(roles, models.Event{Kind: "test"}, true)
 		},
