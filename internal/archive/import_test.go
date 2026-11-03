@@ -360,8 +360,7 @@ func TestAnImportIsRefusedBeforeAnythingChanges(t *testing.T) {
 		t.Errorf("assets under lab: %v, %+v", err, plan)
 	}
 
-	bad := append([]byte(nil), pkg...)
-	bad[len(bad)/2] ^= 0xff
+	bad := flipped(t, pkg)
 	if _, err := CheckImport(ctx, dst, opener(bad), ImportOptions{}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("checking a corrupted package: %v", err)
 	}

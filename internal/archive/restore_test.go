@@ -331,19 +331,7 @@ func TestRestoreChecksFirst(t *testing.T) {
 		"two archives": func() []byte {
 			return append(append([]byte{}, good...), good...)
 		},
-		"a byte flipped": func() []byte {
-			// Some bits of a deflate stream decode to the same bytes either
-			// way, so flipping one changes nothing: flip one that does.
-			for i := len(good) / 2; i < len(good); i++ {
-				b := append([]byte{}, good...)
-				b[i] ^= 0x40
-				if !sameInflated(good, b) {
-					return b
-				}
-			}
-			t.Fatal("no byte changes what the archive holds")
-			return nil
-		},
+		"a byte flipped": func() []byte { return flipped(t, good) },
 		"a row changed": func() []byte {
 			ms := unpack(t, good)
 			i := find(ms, DataDir+"users/")
@@ -787,6 +775,22 @@ func signsIn(t *testing.T, st *store.Store, email, password string) bool {
 func layoutJSON(text string) string {
 	b, _ := json.Marshal(map[string]any{"layers": []any{map[string]string{"text": text}}})
 	return string(b)
+}
+
+// flipped is good with a byte flipped from halfway on. Some bits of a
+// deflate stream decode to the same bytes either way, so flipping one
+// changes nothing: it flips one that does.
+func flipped(t *testing.T, good []byte) []byte {
+	t.Helper()
+	for i := len(good) / 2; i < len(good); i++ {
+		b := append([]byte{}, good...)
+		b[i] ^= 0x40
+		if !sameInflated(good, b) {
+			return b
+		}
+	}
+	t.Fatal("no byte changes what the archive holds")
+	return nil
 }
 
 // sameInflated reports whether two gzip streams inflate to the same bytes,
