@@ -47,6 +47,8 @@ export interface User {
   name: string;
   /** Light or dark, or the system's (#168). */
   theme?: 'system' | 'light' | 'dark';
+  /** Whether email notification channels send to a role they hold reaches them (docs/notifications.md). */
+  email_notifications?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

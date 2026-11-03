@@ -40,6 +40,10 @@ type nameOut struct {
 	Name string `json:"name"`
 }
 
+type emailNotificationsIn struct {
+	Notifications bool `json:"notifications" jsonschema:"true to receive email sent to a role they hold, false to stop it"`
+}
+
 type generatorsOut struct {
 	Generators []generators.Info `json:"generators" jsonschema:"the kinds of code an asset can have, with what each may hold"`
 }
@@ -74,6 +78,29 @@ func basicTools() []tool {
 					return reply[nameOut]{}, err
 				}
 				return say(nameOut{Name: res.User.Name}, "Now named %q.", res.User.Name)
+			})
+			t.person = true
+			return t
+		}(),
+		func() tool {
+			t := define(&mcp.Tool{
+				Name: "set_my_email_notifications",
+				Description: "Whether email that notification channels send to a role reaches the person you act for. " +
+					"Addresses a channel lists by hand are not affected.",
+				Annotations: changes("Set my email notifications", true),
+			}, []string{"PUT /api/v1/auth/email"}, nil, func(ctx context.Context, e *env, in emailNotificationsIn) (reply[emailNotificationsIn], error) {
+				var res struct {
+					User struct {
+						EmailNotifications bool `json:"email_notifications"`
+					} `json:"user"`
+				}
+				if err := e.call(ctx, http.MethodPut, "/api/v1/auth/email", in, &res); err != nil {
+					return reply[emailNotificationsIn]{}, err
+				}
+				if res.User.EmailNotifications {
+					return say(emailNotificationsIn{Notifications: true}, "Email sent to their roles reaches them.")
+				}
+				return say(emailNotificationsIn{}, "Email sent to their roles no longer reaches them.")
 			})
 			t.person = true
 			return t

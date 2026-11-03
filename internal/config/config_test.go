@@ -229,3 +229,42 @@ func TestStorageSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestEmailSettings(t *testing.T) {
+	if cfg := DefaultConfig(); cfg.Email.Enabled() {
+		t.Error("email is on by default")
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("[email]\nhost = \"smtp.example.org\"\nfrom = \"BAM! <bam@example.org>\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Email.TLS != EmailSTARTTLS || cfg.Email.Address() != "smtp.example.org:587" {
+		t.Errorf("defaults: tls %q, address %q", cfg.Email.TLS, cfg.Email.Address())
+	}
+	t.Setenv("BAM_EMAIL_TLS", "implicit")
+	t.Setenv("BAM_EMAIL_PASSWORD", "secret")
+	if cfg, err := Load(configPath); err != nil || cfg.Email.Address() != "smtp.example.org:465" || cfg.Email.Password != "secret" {
+		t.Errorf("environment: %+v, %v", cfg.Email, err)
+	}
+	t.Setenv("BAM_EMAIL_PORT", "2525")
+	if cfg, err := Load(configPath); err != nil || cfg.Email.Address() != "smtp.example.org:2525" {
+		t.Errorf("port: %+v, %v", cfg.Email, err)
+	}
+
+	for name, bad := range map[string]EmailConfig{
+		"tls":      {Host: "h", From: "bam@example.org", TLS: "ssl"},
+		"from":     {Host: "h", From: "not an address"},
+		"reply_to": {Host: "h", From: "bam@example.org", ReplyTo: "nope"},
+		"ca":       {Host: "h", From: "bam@example.org", CA: "not PEM"},
+	} {
+		cfg := DefaultConfig()
+		cfg.Email = bad
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("bad %s accepted", name)
+		}
+	}
+}

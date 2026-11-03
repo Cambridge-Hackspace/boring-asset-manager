@@ -481,7 +481,9 @@ func TestAThemeIsRestored(t *testing.T) {
 			if _, ok := row["theme"]; !ok {
 				t.Fatalf("a users row has no theme: %s", line)
 			}
+			// Nor the email preference, which came later still (052).
 			delete(row, "theme")
+			delete(row, "email_notifications")
 			stripped++
 			data, _ := json.Marshal(row)
 			out.Write(append(data, '\n'))
@@ -502,6 +504,9 @@ func TestAThemeIsRestored(t *testing.T) {
 	}
 	if got := themeOf(dst); got != "system" {
 		t.Errorf("restored from before themes with %q", got)
+	}
+	if u, err := dst.GetUserByID(s.user.ID); err != nil || !u.EmailNotifications {
+		t.Errorf("restored from before email preferences with email off: %+v, %v", u, err)
 	}
 
 	// One at this schema whose rows lack it is restored the same way.

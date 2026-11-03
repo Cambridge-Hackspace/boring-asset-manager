@@ -331,6 +331,7 @@ turning the user back on brings no assistant back.
 | `GET /api/v1/auth/me` | Signed in, signed out, or a personal token | The current user, their permissions after narrowing, and `role_scopes`. |
 | `PUT /api/v1/auth/name` | Signed in, or a personal token | Change your own name, with `{"name": "..."}`. |
 | `PUT /api/v1/auth/theme` | Signed in, or a personal token | Change your own theme, with `{"theme": "dark"}`. Answers `{"user"}`, as a rename does. |
+| `PUT /api/v1/auth/email` | Signed in, or a personal token | Turn email sent to your roles off or on, with `{"notifications": false}` (see [Notifications](notifications.md#who-receives-it)). Answers `{"user"}`. |
 | `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`. |
 | `POST /api/v1/users` | `users.manage` | Create a user; `name` is required. |
 | `PUT /api/v1/users/{id}/name` | `users.manage` | Change a user's name, with `{"name": "..."}`. |
@@ -409,3 +410,4 @@ is an RFC 3339 time, or `null` for never.
 | `041` | Roles narrowed to scopes (`user_role_scopes`, `api_token_role_scopes`). |
 | `043` | Grants `flows.manage` to every role that manages categories, and `flows.run` to every role that writes assets, in the same scopes. |
 | `048` | Users' themes. |
+| `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

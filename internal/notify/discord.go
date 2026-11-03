@@ -141,128 +141,13 @@ func (d Discord) Send(ctx context.Context, options map[string]string, n Notifica
 
 // discordPayload presents a notification as a Discord embed.
 func discordPayload(n Notification) discordMessage {
-	e := n.Event
-	p := e.Payload
-	embed := discordEmbed{Footer: &discordFooter{Text: "BAM! Boring Asset Manager"}}
-	if !e.CreatedAt.IsZero() {
-		embed.Timestamp = e.CreatedAt.UTC().Format(time.RFC3339)
+	sum := summarize(n, escapeMarkdown)
+	embed := discordEmbed{
+		Title: sum.Title, URL: sum.URL, Description: sum.Description, Color: sum.Color,
+		Footer: &discordFooter{Text: "BAM! Boring Asset Manager"},
 	}
-	name := "a category"
-	base := strings.TrimRight(n.BaseURL, "/")
-	switch {
-	case p.Category != nil:
-		name = escapeMarkdown(truncate(p.Category.Name, 200))
-		if base != "" {
-			embed.URL = base + "/categories/" + url.PathEscape(p.Category.ID)
-		}
-	case p.Asset != nil:
-		name = escapeMarkdown(truncate(p.Asset.Name, 200))
-		if base != "" {
-			embed.URL = base + "/assets/" + url.PathEscape(p.Asset.ID)
-		}
-	}
-	by := ""
-	if p.Actor != nil && p.Actor.Display() != "" {
-		by = escapeMarkdown(p.Actor.Signature())
-	}
-
-	switch {
-	case n.Test:
-		embed.Title = "Test message from BAM!"
-		embed.Description = "This channel is set up correctly."
-		embed.Color = discordTest
-		embed.URL = ""
-	case e.Kind == models.EventRunningLow:
-		embed.Title = "Running low: " + name
-		embed.Color = categoryColor(p.Category)
-		if p.Trigger == models.TriggerThreshold && p.ActiveCount != nil && p.Threshold != nil {
-			level, threshold := categoryLevel(p)
-			embed.Description = fmt.Sprintf("Down to %s, below the threshold of %s.", level, threshold)
-			if by != "" {
-				embed.Description += " Last change by " + by + "."
-			}
-		} else if by != "" {
-			embed.Description = "Flagged as running low by " + by + "."
-		} else {
-			embed.Description = "Flagged as running low."
-		}
-	case e.Kind == models.EventRestocked:
-		embed.Title = "Restocked: " + name
-		embed.Color = discordNeutral
-		if p.Trigger == models.TriggerThreshold && p.ActiveCount != nil && p.Threshold != nil {
-			level, threshold := categoryLevel(p)
-			embed.Description = fmt.Sprintf("Back to %s, at or above the threshold of %s.", level, threshold)
-			if by != "" {
-				embed.Description += " Last change by " + by + "."
-			}
-		} else if by != "" {
-			embed.Description = "Marked as restocked by " + by + "."
-		} else {
-			embed.Description = "Marked as restocked."
-		}
-	case e.Kind == models.EventAssetRunningLow:
-		embed.Title = "Running low: " + name
-		embed.Color = discordWarning
-		embed.Description = assetDescription(p, by, "Down to %s, below the threshold of %s.", "Flagged as running low")
-	case e.Kind == models.EventAssetRestocked:
-		embed.Title = "Restocked: " + name
-		embed.Color = discordNeutral
-		embed.Description = assetDescription(p, by, "Back to %s, at or above the threshold of %s.", "Marked as restocked")
-	case e.Kind == models.EventAssetConditionChanged:
-		to := ""
-		if len(p.Changes) > 0 {
-			to = p.Changes[0].To
-		}
-		switch to {
-		case models.ConditionOutOfService:
-			embed.Title, embed.Color = "Out of service: "+name, discordDanger
-		case models.ConditionNeedsMaintenance:
-			embed.Title, embed.Color = "Needs maintenance: "+name, discordWarning
-		default:
-			embed.Title, embed.Color = "Working again: "+name, discordNeutral
-		}
-		if p.Note != "" {
-			embed.Description = escapeMarkdown(truncate(p.Note, 1000))
-		}
-		if by != "" {
-			if embed.Description != "" {
-				embed.Description += "\n"
-			}
-			embed.Description += "Reported by " + by + "."
-		}
-	case e.Kind == models.EventAssetOverdue:
-		embed.Title, embed.Color = "Overdue: "+name, discordWarning
-		who := "someone"
-		if p.Borrower != nil {
-			who = escapeMarkdown(truncate(p.Borrower.Display(), 200))
-		}
-		embed.Description = "Lent to " + who
-		if p.DueAt != nil {
-			embed.Description += ", due back " + p.DueAt.UTC().Format("2 January 2006") + " (UTC)"
-		}
-		embed.Description += "."
-	case e.Kind == models.EventFlowOverdue:
-		embed.Title, embed.Color = "Past its date: "+name, discordWarning
-		embed.Description = "Left"
-		if p.Flow != nil {
-			embed.Description += " through " + escapeMarkdown(truncate(p.Flow.Name, 200))
-		}
-		if p.DueAt != nil {
-			embed.Description += ", to be collected by " + p.DueAt.UTC().Format("2 January 2006")
-		}
-		embed.Description += "."
-	case e.Kind == models.EventAssetHook:
-		label := "Hook"
-		if p.Hook != nil {
-			label = p.Hook.Label
-		}
-		embed.Title, embed.Color = escapeMarkdown(truncate(label, 100))+": "+name, discordNeutral
-		if by != "" {
-			embed.Description = "Pressed by " + by + "."
-		}
-	default:
-		embed.Title = truncate(e.Kind, 200)
-		embed.Color = discordNeutral
+	if !n.Event.CreatedAt.IsZero() {
+		embed.Timestamp = n.Event.CreatedAt.UTC().Format(time.RFC3339)
 	}
 	return discordMessage{
 		Username: "BAM!",
@@ -281,9 +166,9 @@ func items(n int) string {
 
 // assetDescription describes an asset's threshold event with crossed, given
 // the quantity and threshold, or its manual one with manual, given who.
-func assetDescription(p models.EventPayload, by, crossed, manual string) string {
+func assetDescription(p models.EventPayload, by string, esc func(string) string, crossed, manual string) string {
 	if p.Trigger == models.TriggerThreshold && p.Quantity != nil && p.Threshold != nil {
-		d := fmt.Sprintf(crossed, amount(*p.Quantity, p.Unit), amount(*p.Threshold, p.Unit))
+		d := fmt.Sprintf(crossed, amount(*p.Quantity, p.Unit, esc), amount(*p.Threshold, p.Unit, esc))
 		if by != "" {
 			d += " Last change by " + by + "."
 		}
@@ -295,17 +180,17 @@ func assetDescription(p models.EventPayload, by, crossed, manual string) string 
 	}
 	d += "."
 	if p.Quantity != nil {
-		d += " " + amount(*p.Quantity, p.Unit) + " left."
+		d += " " + amount(*p.Quantity, p.Unit, esc) + " left."
 	}
 	return d
 }
 
 // amount is a quantity with its unit, if it has one.
-func amount(n int, unit string) string {
+func amount(n int, unit string, esc func(string) string) string {
 	if unit == "" {
 		return strconv.Itoa(n)
 	}
-	return strconv.Itoa(n) + " " + escapeMarkdown(truncate(unit, 32))
+	return strconv.Itoa(n) + " " + esc(truncate(unit, 32))
 }
 
 // categoryColor is a category's color as Discord wants it.
@@ -335,9 +220,9 @@ func escapeMarkdown(s string) string { return markdownChars.Replace(s) }
 
 // categoryLevel gives a category's level and threshold: counts of items, or
 // for a category with a unit, amounts in it.
-func categoryLevel(p models.EventPayload) (level, threshold string) {
+func categoryLevel(p models.EventPayload, esc func(string) string) (level, threshold string) {
 	if p.Unit != "" {
-		return amount(*p.ActiveCount, p.Unit), amount(*p.Threshold, p.Unit)
+		return amount(*p.ActiveCount, p.Unit, esc), amount(*p.Threshold, p.Unit, esc)
 	}
 	return items(*p.ActiveCount), strconv.Itoa(*p.Threshold)
 }

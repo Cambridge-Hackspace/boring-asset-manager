@@ -2,10 +2,10 @@
 
 BAM! sends notifications when something happens that people should hear about: a category or
 asset running low, a loan overdue, an asset out of service, a hook pressed. You set up any number
-of channels, each sending through a notifier driver to a service such as Discord or an MQTT broker.
+of channels, each sending through a notifier driver: to Discord, an MQTT broker, or email.
 
 Notifications go out through pluggable notifier drivers, in the same way printers use print drivers
-(see [Printing](printing.md)). Two drivers ship: Discord and MQTT.
+(see [Printing](printing.md)). Three drivers ship: Discord, MQTT and email.
 
 ## Channels
 
@@ -91,6 +91,61 @@ connection is kept alive between them.
 The client is the part of MQTT 3.1.1 publishing needs, written here rather than taken from a
 library.
 
+## Email
+
+The email driver (`email`) sends each event as an email, saying what Discord would say, with a
+link to what it is about. Every message has an HTML part and a plain-text part, built from the same
+template.
+
+### Setting it up
+
+Email goes out through the SMTP server in the configuration file's `[email]` table (see
+[Configuration](configuration.md#the-configuration-file)). No provider's own API is used, so any
+server that speaks SMTP will do: your own, or a provider's SMTP relay.
+
+- `tls` is `starttls` (the default, on port 587), `implicit` (port 465), or `none`, which sends in
+  the clear and must be chosen explicitly. With `starttls`, a server that does not offer STARTTLS is
+  refused.
+- The server's certificate is checked against the system's authorities, or against `ca`.
+- With a `username`, BAM! signs in with PLAIN authentication, which is sent only over TLS (or to the
+  machine itself).
+- `bam email test --to you@example.org` sends a test email, so a mistake shows straight away.
+
+While `[email]` has no `host`, an email channel cannot be created (`400`), and one made earlier
+fails its deliveries, saying email is not set up.
+
+### Options
+
+| Option | Notes |
+|---|---|
+| Addresses | Email addresses, one per line or separated by commas; at most 100 |
+| Roles | Role names, separated by commas: everyone holding one of them, as below |
+
+A channel needs addresses, roles or both.
+
+### Who receives it
+
+- **Addresses** listed in the channel always receive it.
+- **Roles** reach every active person holding one of them, at the email they sign in with:
+  - A role narrowed to scopes (see [Access](access.md#scopes)) reaches its holder only for events
+    about something in one of those scopes.
+  - An event about no asset or category, such as sign-ins held back, reaches only those holding the
+    role in every scope.
+  - Anyone can turn off email reaching them through a role, under **Your account**
+    (`PUT /api/v1/auth/email` with `{"notifications": false}`). Addresses listed in the channel are
+    not affected.
+  - A test message reaches everyone holding the roles, wherever narrowed.
+- Each event is one message to everyone it reaches. With more than one recipient, it is addressed to
+  `undisclosed-recipients`, so nobody sees the others' addresses.
+- When nobody is left to receive it, nothing is sent and the delivery succeeds.
+
+### Errors
+
+| Server's answer | What happens |
+|---|---|
+| Unreachable, or a `4xx` reply | Retried with exponential backoff, as other deliveries are |
+| A `5xx` reply, such as an address refused | Fails at once |
+
 ## API
 
 | Method and route | Permission | Purpose |
@@ -102,7 +157,8 @@ library.
 
 ## Storage
 
-Channels are stored in the `notification_channels` table.
+Channels are stored in the `notification_channels` table. Whether email reaching someone through a
+role reaches them is `users.email_notifications` (migration `052`).
 
 ## Internals
 

@@ -1,0 +1,8 @@
+{{.Title}}
+{{range .Paragraphs}}
+{{.}}
+{{end}}{{if .Link}}
+{{.LinkLabel}}: {{.Link}}
+{{end}}
+--
+{{.Footer}}

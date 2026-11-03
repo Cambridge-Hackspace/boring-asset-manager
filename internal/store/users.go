@@ -20,12 +20,12 @@ var (
 )
 
 // userColumns are the columns scanUser reads, in order.
-const userColumns = "id, email, name, password_hash, totp_secret, is_active, created_at, updated_at, archived_at, theme"
+const userColumns = "id, email, name, password_hash, totp_secret, is_active, created_at, updated_at, archived_at, theme, email_notifications"
 
 func scanUser(row interface{ Scan(...any) error }) (models.User, error) {
 	var u models.User
 	var theme sql.NullString
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme)
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme, &u.EmailNotifications)
 	u.Theme = themeOf(theme)
 	return u, err
 }
@@ -194,6 +194,23 @@ func (s *Store) SetUserName(userID, name string) (*models.User, error) {
 		return nil, ErrUserNotFound
 	}
 	return s.GetUserByID(userID)
+}
+
+// SetUserEmailNotifications sets whether email sent to a role a user holds
+// reaches them. Like the theme, it is their preference, so updated_at is
+// left as it is. Archived users cannot change it.
+func (s *Store) SetUserEmailNotifications(userID string, on bool) (*models.User, error) {
+	if _, err := s.Exec("UPDATE users SET email_notifications = ? WHERE id = ? AND archived_at IS NULL", on, userID); err != nil {
+		return nil, fmt.Errorf("setting the user's email notifications: %w", err)
+	}
+	u, err := s.GetUserByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	if u.ArchivedAt != nil {
+		return nil, ErrUserNotFound
+	}
+	return u, nil
 }
 
 // SetUserTheme sets how the web interface looks to a user: "light",
