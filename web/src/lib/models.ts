@@ -394,6 +394,8 @@ export interface RoleAssignment {
 export interface UserWithRoles extends User {
   role_ids: string[];
   roles: RoleAssignment[];
+  /** Set while too many wrong passwords hold their sign-ins back (docs/access.md). */
+  sign_in_delayed_until?: string;
 }
 
 export interface ImageInfo {

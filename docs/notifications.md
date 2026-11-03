@@ -23,7 +23,7 @@ Secret options can be written but are never returned; reads show only whether th
 `POST /api/v1/notifiers/{id}/test` sends a test message.
 
 Which events a channel can subscribe to is listed with each feature; see
-[Stock and lending](stock-and-lending.md) and [Hooks](hooks.md).
+[Stock and lending](stock-and-lending.md), [Hooks](hooks.md) and [Access](access.md#too-many-wrong-passwords).
 
 ## Delivery
 
@@ -56,6 +56,7 @@ Messages look like this:
 | A change of condition | "Out of service" (red), "Needs maintenance" (amber) or "Working again" (neutral), with the note and who reported it |
 | An overdue loan | "Overdue" (amber), naming the borrower and the day it was due (UTC) |
 | A hook | For example "Identify: Drawer A3", triggered by whom (see [Hooks](hooks.md)) |
+| Sign-ins held back | "Sign-ins held back: Ada" (red), for an account getting too many wrong passwords, or "Sign-ins held back from 203.0.113.7", for an address; when it may sign in again, and a link to the Users page (see [Access](access.md#too-many-wrong-passwords)) |
 
 ## MQTT
 

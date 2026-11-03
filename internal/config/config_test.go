@@ -230,6 +230,30 @@ func TestStorageSettings(t *testing.T) {
 	}
 }
 
+func TestTrustedProxies(t *testing.T) {
+	if cfg := DefaultConfig(); len(cfg.Server.TrustedProxies) != 0 {
+		t.Errorf("proxies trusted by default: %v", cfg.Server.TrustedProxies)
+	}
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("[server]\ntrusted_proxies = [\"127.0.0.1\", \"10.0.0.0/8\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(configPath)
+	if err != nil || len(cfg.Server.TrustedProxies) != 2 {
+		t.Fatalf("loaded %v, %v", cfg, err)
+	}
+	t.Setenv("BAM_SERVER_TRUSTED_PROXIES", "192.0.2.1,2001:db8::/32")
+	if cfg, err := Load(configPath); err != nil || len(cfg.Server.TrustedProxies) != 2 || cfg.Server.TrustedProxies[1] != "2001:db8::/32" {
+		t.Errorf("environment override gave %v, %v", cfg.Server.TrustedProxies, err)
+	}
+
+	bad := DefaultConfig()
+	bad.Server.TrustedProxies = []string{"proxy.local"}
+	if err := bad.Validate(); err == nil {
+		t.Error("a host name was accepted as a trusted proxy")
+	}
+}
+
 func TestEmailSettings(t *testing.T) {
 	if cfg := DefaultConfig(); cfg.Email.Enabled() {
 		t.Error("email is on by default")

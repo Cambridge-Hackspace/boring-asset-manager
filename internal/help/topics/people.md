@@ -2,6 +2,10 @@
 
 Those who manage users add people on the **Users** page, with their name and email. Everyone signs in with their email; asset pages show their name, never their email.
 
+## Wrong passwords
+
+After 5 wrong passwords in 15 minutes, an account waits before its next try, longer after each further wrong one, up to 15 minutes. It is never locked. The **Users** page shows who is waiting, and **Clear sign-in delay** lets them try again at once; setting their password does too. A channel subscribed to *Sign-ins are held back* tells you when it starts, since someone may be guessing.
+
 ## Roles
 
 A **role** is a set of permissions, and people hold any number of roles. The **admin** role holds everything. The **public** role is everyone's, signed in or not, and can only look.

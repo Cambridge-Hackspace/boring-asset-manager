@@ -81,6 +81,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventAssetOverdue, Label: "A loan is overdue"},
 	{Kind: models.EventFlowOverdue, Label: "Something left through a flow is past its date"},
 	{Kind: models.EventAssetHook, Label: "A hook, such as Identify, is triggered on an asset"},
+	{Kind: models.EventAuthThrottled, Label: "Sign-ins are held back after too many wrong passwords"},
 }
 
 // EventKind is an event channels can subscribe to.
