@@ -222,6 +222,8 @@ func Serve(configPath string) error {
 	// Send live connections the events they ask for.
 	go server.RunLive(workerCtx)
 	go server.RunIcons(workerCtx)
+	// Fire hooks on events and schedules (docs/hooks.md).
+	go server.RunHookTriggers(workerCtx)
 	// Keep the file store in step with the database.
 	go server.RunSweep(workerCtx)
 	// Remove archives uploaded and left unused for a day.

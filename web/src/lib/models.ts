@@ -219,7 +219,7 @@ export interface AssetEvent {
     /** What a label printed event printed: the template and printer as named then, or a download. */
     label?: { template: string; printer?: string; download?: boolean; copies: number };
     /** What a hook event triggered, and the asset and the containers it is in. */
-    hook?: { key: string; label: string };
+    hook?: { key: string; label: string; trigger?: 'button' | 'event' | 'schedule'; cause?: { id: string; kind: string } };
   };
 }
 
@@ -791,9 +791,24 @@ export interface AssetHook {
   label: string;
   /** Asked before it is taken, when set. */
   confirm: string;
+  /** What fires it: a button people press, events, or a schedule (docs/hooks.md). */
+  triggers: HookTrigger[];
   created_at: string;
   updated_at: string;
 }
+
+/** A report's filter, as a schedule chooses its assets by (docs/reports.md). */
+export interface HookFilter {
+  running_low?: boolean;
+  loan?: '' | 'open' | 'overdue';
+  condition?: string;
+  search?: string;
+}
+
+export type HookTrigger =
+  | { type: 'button' }
+  | { type: 'event'; kinds: string[]; condition?: { field: string; equals: string } | null; interval_seconds?: number }
+  | { type: 'schedule'; cron: string; time_zone?: string; filter?: HookFilter };
 
 /** A hook a category offers on its assets, and with cascades on its subcategories'. */
 export interface CategoryHook {

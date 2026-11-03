@@ -78,6 +78,8 @@ type hookIn struct {
 	Key     *string `json:"key,omitempty" jsonschema:"what devices listen for: lowercase letters, digits, - and _, starting with a letter"`
 	Label   *string `json:"label,omitempty" jsonschema:"what people see on the button"`
 	Confirm *string `json:"confirm,omitempty" jsonschema:"a question to ask before pressing it; empty for none"`
+	// Triggers replace the hook's when given.
+	Triggers []models.HookTrigger `json:"triggers,omitempty" jsonschema:"what fires it, replacing what did: {type: button}; {type: event, kinds: [asset.checked_out, ...], condition?: {field, equals}, interval_seconds?}; {type: schedule, cron: five fields, time_zone?: IANA name, filter?: a report filter}. Left out, a new hook is a button and a changed one keeps its triggers"`
 }
 
 type categoryFieldIn struct {
@@ -409,7 +411,7 @@ func catalogTools() []tool {
 			func(idIn, map[string]any) string { return "Deleted the link type." }),
 
 		// Hooks.
-		simple(&mcp.Tool{Name: "list_hooks", Description: "Every hook categories can offer on assets: its key (what devices listen for), label and question.",
+		simple(&mcp.Tool{Name: "list_hooks", Description: "Every hook categories can offer on assets: its key (what devices listen for), label, question, and triggers: a button people press, events about an asset, or a schedule.",
 			Annotations: readOnly("List hooks")}, "GET /api/v1/hooks", read,
 			func(none) (request, error) { return request{path: "/api/v1/hooks"}, nil },
 			func(_ none, out map[string]any) string { return fmt.Sprintf("%d hooks.", count(out, "hooks")) }),
@@ -417,6 +419,9 @@ func catalogTools() []tool {
 			Annotations: changes("Save a hook", true)}, []string{"POST /api/v1/hooks", "PUT /api/v1/hooks/{id}"}, manage,
 			func(ctx context.Context, e *env, in hookIn) (reply[map[string]any], error) {
 				c := given(map[string]any{"key": in.Key, "label": in.Label, "confirm": in.Confirm})
+				if in.Triggers != nil {
+					c["triggers"] = in.Triggers
+				}
 				out := map[string]any{}
 				if in.ID == "" {
 					if err := e.call(ctx, http.MethodPost, "/api/v1/hooks", c, &out); err != nil {
