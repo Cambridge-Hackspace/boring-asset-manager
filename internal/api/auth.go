@@ -3,8 +3,11 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"sort"
+	"strconv"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -29,16 +32,48 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.store.GetUserByEmail(req.Email)
-	if err != nil || user == nil {
-		writeJSONError(w, http.StatusUnauthorized, "Invalid email or password")
+	// Too many failed passwords for this account, or from this address,
+	// hold sign-ins back before any password is checked (#246).
+	address := ClientAddress(r)
+	wait, err := s.store.SignInWait(req.Email, address, time.Now())
+	if err != nil {
+		writeServerError(w, err, "check the sign-in throttle")
+		return
+	}
+	if wait > 0 {
+		writeThrottled(w, wait)
 		return
 	}
 
+	user, err := s.store.GetUserByEmail(req.Email)
+	if err != nil && !errors.Is(err, store.ErrUserNotFound) {
+		writeServerError(w, err, "read the user")
+		return
+	}
 	// Verify the password before revealing account state, so the disabled-account
-	// message cannot be used to probe which emails exist.
-	if !auth.CheckPassword(req.Password, user.PasswordHash) {
+	// message cannot be used to probe which emails exist. An email with no
+	// account checks a password too, so it takes as long (#246).
+	var ok bool
+	if user == nil {
+		ok = auth.CheckNoPassword(req.Password)
+	} else {
+		ok = auth.CheckPassword(req.Password, user.PasswordHash)
+	}
+	if !ok {
+		wait, err := s.store.RecordSignInFailure(req.Email, address, time.Now())
+		if err != nil {
+			writeServerError(w, err, "count the failed sign-in")
+			return
+		}
+		if wait > 0 {
+			writeThrottled(w, wait)
+			return
+		}
 		writeJSONError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+	if err := s.store.ClearSignInFailures(req.Email); err != nil {
+		writeServerError(w, err, "clear the sign-in throttle")
 		return
 	}
 
@@ -148,5 +183,28 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "change password")
 	default:
 		writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed"})
+	}
+}
+
+// writeThrottled answers a sign-in held back for wait: 429, with
+// Retry-After, saying how long in words the sign-in page shows.
+func writeThrottled(w http.ResponseWriter, wait time.Duration) {
+	seconds := int(math.Ceil(wait.Seconds()))
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	writeJSONError(w, http.StatusTooManyRequests, "Too many failed sign-ins. Try again in "+waitWords(seconds)+".")
+}
+
+// waitWords says a wait in seconds as people read it: "1 second", "40
+// seconds", "3 minutes".
+func waitWords(seconds int) string {
+	switch {
+	case seconds <= 1:
+		return "1 second"
+	case seconds < 60:
+		return strconv.Itoa(seconds) + " seconds"
+	case seconds <= 60:
+		return "1 minute"
+	default:
+		return strconv.Itoa((seconds+59)/60) + " minutes"
 	}
 }

@@ -15,6 +15,10 @@ Everything else lives in the database and is managed through the web interface o
 host = "0.0.0.0"
 port = 8080
 base_url = "http://localhost:8080"
+# Reverse proxies whose X-Forwarded-For and Forwarded headers say who the
+# client is, as addresses or CIDR ranges. Empty trusts no header.
+# Environment: BAM_SERVER_TRUSTED_PROXIES, comma-separated.
+# trusted_proxies = ["127.0.0.1", "10.0.0.0/8"]
 
 [database]
 # Drivers: "sqlite", "postgres", "mariadb"
@@ -93,6 +97,7 @@ Several settings can also be given in the environment:
 | `storage.s3.path_style` | `BAM_STORAGE_S3_PATH_STYLE` (`true` or `false`) |
 | `storage.s3.access_key_id` | `BAM_STORAGE_S3_ACCESS_KEY_ID` |
 | `storage.s3.secret_access_key` | `BAM_STORAGE_S3_SECRET_ACCESS_KEY` |
+| `server.trusted_proxies` | `BAM_SERVER_TRUSTED_PROXIES`, comma-separated |
 | `printers.devices` | `BAM_PRINTERS_DEVICES`, comma-separated |
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
 | `email.host`, `email.port`, `email.tls` | `BAM_EMAIL_HOST`, `BAM_EMAIL_PORT`, `BAM_EMAIL_TLS` |
@@ -100,6 +105,20 @@ Several settings can also be given in the environment:
 | `email.from`, `email.reply_to`, `email.ca` | `BAM_EMAIL_FROM`, `BAM_EMAIL_REPLY_TO`, `BAM_EMAIL_CA` |
 
 How to set them for an installed service is in [Installing](installing.md).
+
+### Behind a reverse proxy
+
+BAM! knows who a request comes from by the address that connected to it. Behind a reverse proxy,
+that is always the proxy, so slowing down password guessing by address would hold back everyone at
+once, and the live connections list would show only the proxy.
+
+Name the proxies in `server.trusted_proxies`, as addresses (`127.0.0.1`) or CIDR ranges
+(`10.0.0.0/8`). A request from one of them comes from the rightmost address in its
+`X-Forwarded-For` header (or, without one, its `Forwarded` header) that is not itself a trusted
+proxy. Addresses further left are whatever the client chose to send, and are ignored.
+
+A request from anywhere else comes from its own address, whatever its headers say, so a client
+cannot claim another address by sending them. Leave the list empty when BAM! is reached directly.
 
 ## Where uploaded files are kept
 

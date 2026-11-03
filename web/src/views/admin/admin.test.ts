@@ -182,6 +182,29 @@ describe('UsersPage', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('would remove the last one');
   });
 
+  it('shows who wrong passwords hold back, and lets them sign in again at once', async () => {
+    const { sent } = fakeApi({
+      'GET /users': () => ({
+        users: [
+          { id: 'u2', email: 'bo@hackspace.org', name: 'Bo', is_active: true, created_at: '', updated_at: '', role_ids: [], roles: [], sign_in_delayed_until: '2026-11-02T12:00:00Z' },
+          { id: 'u3', email: 'cy@hackspace.org', name: 'Cy', is_active: true, created_at: '', updated_at: '', role_ids: [], roles: [] },
+        ],
+      }),
+      'GET /roles': () => ({ roles: [] }),
+      'DELETE /users/u2/sign-in-delay': () => ({ message: 'They can sign in again at once' }),
+    });
+    render(UsersPage, { params: {} });
+
+    const bo = (await screen.findByRole('cell', { name: 'bo@hackspace.org' })).closest('tr')!;
+    expect(bo.textContent).toContain('Wrong passwords: signing in waits until');
+    const cy = screen.getByRole('cell', { name: 'cy@hackspace.org' }).closest('tr')!;
+    expect(within(cy).queryByRole('button', { name: /Clear sign-in delay/ })).toBeNull();
+
+    await fireEvent.click(within(bo).getByRole('button', { name: 'Clear sign-in delay for bo@hackspace.org' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'DELETE' && r.path === '/users/u2/sign-in-delay')).toBe(true));
+    await screen.findByText('bo@hackspace.org can sign in again at once.');
+  });
+
   it('gives a role in some scopes only, saying what that leaves out', async () => {
     const { sent } = fakeApi({
       'GET /users': () => ({

@@ -184,6 +184,10 @@ const (
 	// category's icon (docs/icons.md), so that what shows it can redraw; it
 	// is for history.
 	EventCategoryIconChanged = "category.icon_changed"
+	// EventAuthThrottled records sign-ins held back for too many failed
+	// passwords (docs/access.md), with Throttle; it is about no asset or
+	// category, so it reaches notification channels only.
+	EventAuthThrottled = "auth.throttled"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -259,6 +263,23 @@ type EventPayload struct {
 	// Hook is the hook a hook event triggered, and what a device
 	// needs to find the thing.
 	Hook *EventHook `json:"hook,omitempty"`
+	// Throttle is what an auth.throttled event held back.
+	Throttle *EventThrottle `json:"throttle,omitempty"`
+}
+
+// Throttle kinds: what a sign-in throttle counts failures against.
+const (
+	ThrottleAccount = "account"
+	ThrottleAddress = "address"
+)
+
+// EventThrottle is what an auth.throttled event held back: an account,
+// named by its user, or a client address; and until when.
+type EventThrottle struct {
+	Kind    string      `json:"kind"`
+	User    *EventActor `json:"user,omitempty"`
+	Address string      `json:"address,omitempty"`
+	Until   time.Time   `json:"until"`
 }
 
 // EventLabel describes an asset's labels printed (docs/printing.md): the

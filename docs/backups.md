@@ -100,6 +100,7 @@ These tables are left out, because they are not information or are made again:
 | `action_replies` | Devices' answers to a hook, for the moment it is triggered. |
 | `notification_deliveries` | The queue of notices to send, which a restore must not send again. |
 | `uploads` and `upload_parts` | Archives being uploaded through the web, staged apart from the files and removed after a day. |
+| `sign_in_throttles` | Wrong passwords being counted, which lapse within the hour. |
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys.
 `tools/archive/tables.py` writes it from a migrated database. A test fails, on every dialect, when

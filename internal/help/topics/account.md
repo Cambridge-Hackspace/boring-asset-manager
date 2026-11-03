@@ -2,7 +2,7 @@
 
 On **Your account** you can change the name others see, and your password. Changing your password signs you out everywhere else.
 
-What you can do depends on your roles, listed on the same page with what each permission lets you do. A page you may not open says what it needs. If you forget your password, whoever manages users can set a new one for you. Under **Email**, you can stop email that notification channels send to your roles from reaching you.
+What you can do depends on your roles, listed on the same page with what each permission lets you do. A page you may not open says what it needs. If you forget your password, whoever manages users can set a new one for you. After several wrong passwords, signing in makes you wait a little before trying again, and says how long. Under **Email**, you can stop email that notification channels send to your roles from reaching you.
 
 ## Assistants
 

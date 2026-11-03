@@ -188,7 +188,12 @@
               {/if}
             </td>
             <td class="py-2 pr-4 font-medium">{u.email}{#if u.id === session.user?.id}{' '}<span class="text-xs text-zinc-600 dark:text-zinc-400">(you)</span>{/if}</td>
-            <td class="py-2 pr-4">{u.is_active ? 'Active' : 'Disabled'}</td>
+            <td class="py-2 pr-4">
+              {u.is_active ? 'Active' : 'Disabled'}
+              {#if u.sign_in_delayed_until}
+                <span class="block text-xs text-amber-900 dark:text-amber-200">Wrong passwords: signing in waits until {new Date(u.sign_in_delayed_until).toLocaleTimeString()}</span>
+              {/if}
+            </td>
             <td class="py-2 pr-4">
               {#if editingRoles === u.id}
                 <RolePicker id="roles-{u.id}" legend="Roles for {u.email}" {roles} {scopes} bind:value={roleDraft} />
@@ -210,6 +215,14 @@
                 {/if}
                 {#if settingPassword !== u.id}
                   <button type="button" class="btn-secondary" aria-label="Set password for {u.email}" onclick={() => { settingPassword = u.id; passwordDraft = ''; }}>Set password</button>
+                {/if}
+                {#if u.sign_in_delayed_until}
+                  <button
+                    type="button"
+                    class="btn-secondary"
+                    aria-label="Clear sign-in delay for {u.email}"
+                    onclick={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}/sign-in-delay`), `${u.email} can sign in again at once.`)}
+                  >Clear sign-in delay</button>
                 {/if}
                 <button
                   type="button"
