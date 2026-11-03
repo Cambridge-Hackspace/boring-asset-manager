@@ -114,6 +114,32 @@ describe('NotificationsPage', () => {
     expect(rows[1]!.textContent).toContain('temporary failure: HTTP 502');
     expect(rows[2]!.textContent).toContain('An asset counted by quantity is running low: M3 screws');
   });
+
+  it('says why a channel was turned off, shows its deliveries, and sends a failed one again', async () => {
+    const off: Channel = { ...channel, enabled: false, failures: 5, disabled_reason: 'Turned off after 5 failed attempts in a row.' };
+    const { sent, fetchMock } = fakeApi({
+      'GET /notifiers/drivers': () => ({ drivers, events }),
+      'GET /notifiers': () => ({ channels: [off] }),
+      'GET /notifiers/deliveries': () => ({
+        deliveries: [delivery({ status: 'failed', attempts: 3, last_error: 'HTTP 404: gone', response_status: 404, response_body: '{"error":"gone"}' })],
+      }),
+      'POST /notifiers/deliveries/d1/retry': () => ({ message: 'Queued to be sent again.' }),
+    });
+    render(NotificationsPage, { params: {} });
+    expect(await screen.findByText('Turned off after 5 failed attempts in a row. Edit it to turn it on again once it is fixed.')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Show the deliveries of Stores' }));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('channel_id=c1'))).toBe(true));
+
+    const log = screen.getByRole('region', { name: 'Recent deliveries' });
+    const row = within(log).getAllByRole('row')[1]!;
+    expect(row.textContent).toContain('Failed after 3 attempts');
+    expect(row.textContent).toContain('Answered HTTP 404');
+    expect(row.textContent).toContain('{"error":"gone"}');
+    await fireEvent.click(within(row).getByRole('button', { name: 'Send the delivery to Stores again' }));
+    expect(await screen.findByText('Sending again to Stores.')).toBeTruthy();
+    expect(sent.some((r) => r.method === 'POST' && r.path === '/notifiers/deliveries/d1/retry')).toBe(true);
+  });
 });
 
 describe('outcome', () => {

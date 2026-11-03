@@ -61,6 +61,9 @@ type Notification struct {
 	// DeliveryID names this delivery, the same at each attempt, so a
 	// receiver can drop one it already had; "test" for a test message.
 	DeliveryID string
+	// Report, when set, takes what the receiver answered, for the
+	// delivery log (#196): an HTTP status and the start of the body.
+	Report func(status int, body string)
 	// Mailer sends email, for the email driver; nil when email is not set
 	// up in the configuration.
 	Mailer Mailer
@@ -85,6 +88,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventFlowOverdue, Label: "Something left through a flow is past its date"},
 	{Kind: models.EventAssetHook, Label: "A hook, such as Identify, is triggered on an asset"},
 	{Kind: models.EventAuthThrottled, Label: "Sign-ins are held back after too many wrong passwords"},
+	{Kind: models.EventNotifierDisabled, Label: "A notification channel is turned off for failing"},
 }
 
 // EventKind is an event channels can subscribe to.

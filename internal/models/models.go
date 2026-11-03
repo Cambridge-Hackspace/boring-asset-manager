@@ -188,6 +188,10 @@ const (
 	// passwords (docs/access.md), with Throttle; it is about no asset or
 	// category, so it reaches notification channels only.
 	EventAuthThrottled = "auth.throttled"
+	// EventNotifierDisabled records a notification channel turned off for
+	// failing (docs/notifications.md), with the Channel and why as the
+	// Note; other channels can subscribe to it.
+	EventNotifierDisabled = "notifier.disabled"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -267,6 +271,8 @@ type EventPayload struct {
 	Hook *EventHook `json:"hook,omitempty"`
 	// Throttle is what an auth.throttled event held back.
 	Throttle *EventThrottle `json:"throttle,omitempty"`
+	// Channel is the notification channel a notifier event is about.
+	Channel *EventChannel `json:"channel,omitempty"`
 }
 
 // Throttle kinds: what a sign-in throttle counts failures against.
@@ -282,6 +288,13 @@ type EventThrottle struct {
 	User    *EventActor `json:"user,omitempty"`
 	Address string      `json:"address,omitempty"`
 	Until   time.Time   `json:"until"`
+}
+
+// EventChannel is a notification channel, as an event names it.
+type EventChannel struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Driver string `json:"driver"`
 }
 
 // EventLabel describes an asset's labels printed (docs/printing.md): the
@@ -709,6 +722,12 @@ type NotificationChannel struct {
 	Events    []string          `json:"events"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
+	// Failures counts failed attempts since the channel last delivered,
+	// the first at FailingSince. A channel failing long enough is turned
+	// off, saying why in DisabledReason (#196, docs/notifications.md).
+	Failures       int        `json:"failures"`
+	FailingSince   *time.Time `json:"failing_since,omitempty"`
+	DisabledReason string     `json:"disabled_reason,omitempty"`
 }
 
 // Delivery states.
@@ -729,6 +748,11 @@ type Delivery struct {
 	LastError     string     `json:"last_error,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	// ResponseStatus and ResponseBody are what the receiver last answered,
+	// when its driver says: a webhook's HTTP status and the first kilobyte
+	// of its body, with the channel's secrets taken out.
+	ResponseStatus *int   `json:"response_status,omitempty"`
+	ResponseBody   string `json:"response_body,omitempty"`
 }
 
 // An asset's condition (docs/data-model.md).

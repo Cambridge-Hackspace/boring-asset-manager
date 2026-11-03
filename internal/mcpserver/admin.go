@@ -310,21 +310,33 @@ func adminTools() []tool {
 				return request{path: pathOf("/api/v1/notifiers/{id}/test", in.ID)}, need(in.ID, "id")
 			},
 			func(idIn, map[string]any) string { return "Sent a test message." }),
-		simple(&mcp.Tool{Name: "list_deliveries", Description: "Recent notification deliveries: what was announced where, and whether it went or why not.",
+		simple(&mcp.Tool{Name: "list_deliveries", Description: "Recent notification deliveries, of one channel (channel_id) or all: what was announced where, " +
+			"whether it went or why not, and for a webhook what its receiver answered.",
 			Annotations: readOnly("Deliveries")}, "GET /api/v1/notifiers/deliveries", settings,
-			func(in struct {
-				Limit int `json:"limit,omitempty"`
-			}) (request, error) {
+			func(in deliveriesIn) (request, error) {
 				q := url.Values{}
 				if in.Limit > 0 {
 					q.Set("limit", strconv.Itoa(in.Limit))
 				}
+				if in.ChannelID != "" {
+					q.Set("channel_id", in.ChannelID)
+				}
 				return request{path: "/api/v1/notifiers/deliveries", query: q}, nil
 			},
-			func(_ struct {
-				Limit int `json:"limit,omitempty"`
-			}, out map[string]any) string {
+			func(_ deliveriesIn, out map[string]any) string {
 				return fmt.Sprintf("%d deliveries.", count(out, "deliveries"))
 			}),
+		simple(&mcp.Tool{Name: "retry_delivery", Description: "Send a failed delivery again, at once, once whatever made it fail is fixed. Its channel must be on.",
+			Annotations: changes("Send a delivery again", false)}, "POST /api/v1/notifiers/deliveries/{id}/retry", settings,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/notifiers/deliveries/{id}/retry", in.ID)}, need(in.ID, "id")
+			},
+			func(idIn, map[string]any) string { return "Queued to be sent again." }),
 	}
+}
+
+// deliveriesIn narrows the delivery log.
+type deliveriesIn struct {
+	ChannelID string `json:"channel_id,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
 }
