@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -103,6 +104,10 @@ func (s *Server) handleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if c.Driver == "email" && s.mailer == nil {
+		writeJSONError(w, http.StatusBadRequest, email.ErrNotSetUp.Error())
+		return
+	}
 	created, err := s.store.CreateChannel(c)
 	if s.channelError(w, err) {
 		return
@@ -148,7 +153,11 @@ func (s *Server) handleTestChannel(w http.ResponseWriter, r *http.Request) {
 	if s.channelError(w, err) {
 		return
 	}
-	if err := notify.SendTest(r.Context(), *c, s.cfg.Server.BaseURL); err != nil {
+	var mailer notify.Mailer
+	if s.mailer != nil {
+		mailer = s.mailer
+	}
+	if err := notify.SendTest(r.Context(), *c, s.cfg.Server.BaseURL, mailer, s.store); err != nil {
 		writeJSONError(w, http.StatusBadGateway, "The test message was not delivered: "+err.Error())
 		return
 	}

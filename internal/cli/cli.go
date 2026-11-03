@@ -20,6 +20,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/archive"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -142,6 +143,39 @@ func AdminPassword(configPath, email, password string) error {
 	return nil
 }
 
+// EmailTest sends a test email to the address given, through the [email]
+// server in the configuration, so a mistake there shows before a
+// notification is missed.
+func EmailTest(ctx context.Context, configPath, to string) error {
+	if to == "" {
+		return errors.New("--to is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	sender := email.New(cfg.Email)
+	if sender == nil {
+		return email.ErrNotSetUp
+	}
+	html, text, err := email.Render(email.Content{
+		Title:      "Test email from BAM!",
+		Paragraphs: []string{"Email from " + cfg.Server.BaseURL + " reaches you. Notification channels can now send email."},
+		Accent:     "#3b82f6",
+		Footer:     "Sent by bam email test.",
+	})
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := sender.Send(ctx, email.Message{To: []string{to}, Subject: "Test email from BAM!", Text: text, HTML: html}); err != nil {
+		return fmt.Errorf("sending through %s: %w", cfg.Email.Address(), err)
+	}
+	fmt.Printf("Sent a test email to %s through %s.\n", to, cfg.Email.Address())
+	return nil
+}
+
 // Serve starts the BAM HTTP daemon with graceful shutdown.
 func Serve(configPath string) error {
 	cfg, err := config.Load(configPath)
@@ -177,7 +211,12 @@ func Serve(configPath string) error {
 	// Send queued notifications until the server stops.
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
-	go (&notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL}).Run(workerCtx)
+	worker := &notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL}
+	if mailer := email.New(cfg.Email); mailer != nil {
+		worker.Mailer = mailer
+		log.Printf("Email is sent through %s", cfg.Email.Address())
+	}
+	go worker.Run(workerCtx)
 	// Print jobs from the spool until the server stops.
 	go server.RunSpool(workerCtx)
 	// Send live connections the events they ask for.

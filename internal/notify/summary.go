@@ -1,0 +1,144 @@
+package notify
+
+import (
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+)
+
+// summary is what a notification says, whatever carries it: a title, a
+// description, a link to what it is about, and a color for how much it
+// matters. Discord shows it as an embed and email as a message.
+type summary struct {
+	Title, Description, URL string
+	Color                   int
+}
+
+// summarize describes a notification. Text that comes from people (names,
+// notes) passes through esc, which makes it safe for the medium: Discord
+// escapes its markdown, while email's templates escape HTML themselves.
+func summarize(n Notification, esc func(string) string) summary {
+	e := n.Event
+	p := e.Payload
+	var out summary
+	name := "a category"
+	base := strings.TrimRight(n.BaseURL, "/")
+	switch {
+	case p.Category != nil:
+		name = esc(truncate(p.Category.Name, 200))
+		if base != "" {
+			out.URL = base + "/categories/" + url.PathEscape(p.Category.ID)
+		}
+	case p.Asset != nil:
+		name = esc(truncate(p.Asset.Name, 200))
+		if base != "" {
+			out.URL = base + "/assets/" + url.PathEscape(p.Asset.ID)
+		}
+	}
+	by := ""
+	if p.Actor != nil && p.Actor.Display() != "" {
+		by = esc(p.Actor.Signature())
+	}
+
+	switch {
+	case n.Test:
+		out.Title = "Test message from BAM!"
+		out.Description = "This channel is set up correctly."
+		out.Color = discordTest
+		out.URL = ""
+	case e.Kind == models.EventRunningLow:
+		out.Title = "Running low: " + name
+		out.Color = categoryColor(p.Category)
+		if p.Trigger == models.TriggerThreshold && p.ActiveCount != nil && p.Threshold != nil {
+			level, threshold := categoryLevel(p, esc)
+			out.Description = fmt.Sprintf("Down to %s, below the threshold of %s.", level, threshold)
+			if by != "" {
+				out.Description += " Last change by " + by + "."
+			}
+		} else if by != "" {
+			out.Description = "Flagged as running low by " + by + "."
+		} else {
+			out.Description = "Flagged as running low."
+		}
+	case e.Kind == models.EventRestocked:
+		out.Title = "Restocked: " + name
+		out.Color = discordNeutral
+		if p.Trigger == models.TriggerThreshold && p.ActiveCount != nil && p.Threshold != nil {
+			level, threshold := categoryLevel(p, esc)
+			out.Description = fmt.Sprintf("Back to %s, at or above the threshold of %s.", level, threshold)
+			if by != "" {
+				out.Description += " Last change by " + by + "."
+			}
+		} else if by != "" {
+			out.Description = "Marked as restocked by " + by + "."
+		} else {
+			out.Description = "Marked as restocked."
+		}
+	case e.Kind == models.EventAssetRunningLow:
+		out.Title = "Running low: " + name
+		out.Color = discordWarning
+		out.Description = assetDescription(p, by, esc, "Down to %s, below the threshold of %s.", "Flagged as running low")
+	case e.Kind == models.EventAssetRestocked:
+		out.Title = "Restocked: " + name
+		out.Color = discordNeutral
+		out.Description = assetDescription(p, by, esc, "Back to %s, at or above the threshold of %s.", "Marked as restocked")
+	case e.Kind == models.EventAssetConditionChanged:
+		to := ""
+		if len(p.Changes) > 0 {
+			to = p.Changes[0].To
+		}
+		switch to {
+		case models.ConditionOutOfService:
+			out.Title, out.Color = "Out of service: "+name, discordDanger
+		case models.ConditionNeedsMaintenance:
+			out.Title, out.Color = "Needs maintenance: "+name, discordWarning
+		default:
+			out.Title, out.Color = "Working again: "+name, discordNeutral
+		}
+		if p.Note != "" {
+			out.Description = esc(truncate(p.Note, 1000))
+		}
+		if by != "" {
+			if out.Description != "" {
+				out.Description += "\n"
+			}
+			out.Description += "Reported by " + by + "."
+		}
+	case e.Kind == models.EventAssetOverdue:
+		out.Title, out.Color = "Overdue: "+name, discordWarning
+		who := "someone"
+		if p.Borrower != nil {
+			who = esc(truncate(p.Borrower.Display(), 200))
+		}
+		out.Description = "Lent to " + who
+		if p.DueAt != nil {
+			out.Description += ", due back " + p.DueAt.UTC().Format("2 January 2006") + " (UTC)"
+		}
+		out.Description += "."
+	case e.Kind == models.EventFlowOverdue:
+		out.Title, out.Color = "Past its date: "+name, discordWarning
+		out.Description = "Left"
+		if p.Flow != nil {
+			out.Description += " through " + esc(truncate(p.Flow.Name, 200))
+		}
+		if p.DueAt != nil {
+			out.Description += ", to be collected by " + p.DueAt.UTC().Format("2 January 2006")
+		}
+		out.Description += "."
+	case e.Kind == models.EventAssetHook:
+		label := "Hook"
+		if p.Hook != nil {
+			label = p.Hook.Label
+		}
+		out.Title, out.Color = esc(truncate(label, 100))+": "+name, discordNeutral
+		if by != "" {
+			out.Description = "Pressed by " + by + "."
+		}
+	default:
+		out.Title = truncate(e.Kind, 200)
+		out.Color = discordNeutral
+	}
+	return out
+}

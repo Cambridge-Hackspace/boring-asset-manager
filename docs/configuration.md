@@ -2,7 +2,8 @@
 
 BAM! reads a small TOML file at startup, and is set up and maintained from the `bam` command line.
 The file holds only what is needed to start: the listening address, the database connection, where
-uploaded files are kept, which printer devices may be used, and whether the MCP endpoint is on.
+uploaded files are kept, which printer devices may be used, whether the MCP endpoint is on, and the
+email server, if any.
 Everything else lives in the database and is managed through the web interface or the API.
 
 ## The configuration file
@@ -58,6 +59,22 @@ devices = []
 # Environment: BAM_MCP_ENABLED (true or false).
 enabled = true
 
+[email]
+# The SMTP server email is sent through (docs/notifications.md). Email is off
+# while host is empty. tls is "starttls" (the default, port 587), "implicit"
+# (port 465) or "none", which sends in the clear. ca is a PEM certificate to
+# trust, for a server whose certificate no public authority signed.
+# Environment: BAM_EMAIL_HOST, _PORT, _TLS, _USERNAME, _PASSWORD, _FROM,
+# _REPLY_TO and _CA.
+host = ""
+port = 0
+tls = "starttls"
+username = ""
+password = ""
+from = "BAM! <bam@example.org>"
+reply_to = ""
+ca = ""
+
 ```
 
 ### Environment overrides
@@ -78,6 +95,9 @@ Several settings can also be given in the environment:
 | `storage.s3.secret_access_key` | `BAM_STORAGE_S3_SECRET_ACCESS_KEY` |
 | `printers.devices` | `BAM_PRINTERS_DEVICES`, comma-separated |
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
+| `email.host`, `email.port`, `email.tls` | `BAM_EMAIL_HOST`, `BAM_EMAIL_PORT`, `BAM_EMAIL_TLS` |
+| `email.username`, `email.password` | `BAM_EMAIL_USERNAME`, `BAM_EMAIL_PASSWORD` |
+| `email.from`, `email.reply_to`, `email.ca` | `BAM_EMAIL_FROM`, `BAM_EMAIL_REPLY_TO`, `BAM_EMAIL_CA` |
 
 How to set them for an installed service is in [Installing](installing.md).
 
@@ -191,6 +211,9 @@ with the `bam` command:
 # as the API token in $BAM_TOKEN (docs/mcp.md)
 BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 
+# Send a test email through the [email] server (docs/notifications.md)
+./bam email test --config ./config.toml --to you@example.org
+
 ```
 
 ### Commands at a glance
@@ -209,3 +232,4 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 | `bam storage sweep` | Removes uploaded files no row names, older than a day, and lists rows whose file is missing. `--dry-run` removes nothing. | [Above](#keeping-files-and-rows-in-step) |
 | `bam storage copy` | Copies every uploaded file to the store another configuration file's `[storage]` names. | [Above](#moving-between-stores) |
 | `bam mcp` | Relays an assistant that starts local programs to a server's MCP endpoint, as the API token in `$BAM_TOKEN`. | [MCP](mcp.md) |
+| `bam email test` | Sends a test email through the `[email]` server, so a mistake shows before a notification is missed. | [Notifications](notifications.md#email) |

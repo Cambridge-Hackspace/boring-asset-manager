@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
@@ -40,8 +41,11 @@ type Server struct {
 	// backupJobs are the checks and replaces of backups under way (#142).
 	backupJobs backupJobs
 	// exports are packages posted to download (#144).
-	exports    exportsPending
-	transport  printers.Transport
+	exports   exportsPending
+	transport printers.Transport
+	// mailer sends email (docs/notifications.md); nil when [email] is not
+	// set up.
+	mailer     *email.Sender
 	spool      *spooler
 	presses    *pressLimiter
 	live       *liveHub
@@ -69,6 +73,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		cfg:        cfg,
 		store:      st,
 		transport:  printers.NewDispatcher(cfg.Printers.Devices),
+		mailer:     email.New(cfg.Email),
 		spool:      newSpooler(),
 		presses:    newPressLimiter(),
 		live:       newLiveHub(),
@@ -107,6 +112,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handleFunc("GET /api/v1/auth/me", s.handleAuthMe)
 	handle("PUT /api/v1/auth/name", RequirePerson(http.HandlerFunc(s.handleSetOwnName)))
 	handle("PUT /api/v1/auth/theme", RequirePerson(http.HandlerFunc(s.handleSetOwnTheme)))
+	handle("PUT /api/v1/auth/email", RequirePerson(http.HandlerFunc(s.handleSetOwnEmailNotifications)))
 	// Personal tokens, for assistants (docs/access.md): made, listed and revoked
 	// by their own user, from a signed-in session.
 	// A personal token lists and revokes its user's too (#43), but only a

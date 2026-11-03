@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
@@ -57,6 +58,17 @@ type Notification struct {
 	BaseURL string
 	// Test marks the message sent by a channel's test button.
 	Test bool
+	// Mailer sends email, for the email driver; nil when email is not set
+	// up in the configuration.
+	Mailer Mailer
+	// Recipients gives the addresses of those holding the roles named who
+	// the event reaches, for the email driver.
+	Recipients func(roleNames []string) ([]string, error)
+}
+
+// Mailer sends one email. *email.Sender is one.
+type Mailer interface {
+	Send(ctx context.Context, m email.Message) error
 }
 
 // EventKinds lists the events channels can subscribe to, with labels.
@@ -126,6 +138,9 @@ func init() {
 		panic(err)
 	}
 	if err := Register(MQTT{}); err != nil {
+		panic(err)
+	}
+	if err := Register(Email{}); err != nil {
 		panic(err)
 	}
 }

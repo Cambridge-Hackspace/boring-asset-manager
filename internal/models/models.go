@@ -23,6 +23,9 @@ type User struct {
 	// Theme is how the web interface looks to them: "light" or "dark", as
 	// they chose, or "system" to follow their system's setting.
 	Theme string `json:"theme"`
+	// EmailNotifications is whether email sent to a role they hold reaches
+	// them (docs/notifications.md). It is on until they turn it off.
+	EmailNotifications bool `json:"email_notifications"`
 }
 
 // Role represents a defined RBAC role.

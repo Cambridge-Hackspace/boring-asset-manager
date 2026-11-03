@@ -17,6 +17,8 @@ import (
 type Worker struct {
 	Store   *store.Store
 	BaseURL string
+	// Mailer sends email channels' messages; nil when email is not set up.
+	Mailer Mailer
 	// Poll is how often to look for due deliveries (default 5s).
 	Poll time.Duration
 	// Lease is how long a claimed delivery is reserved (default 2m). It
@@ -117,7 +119,8 @@ func (w *Worker) attempt(ctx context.Context, c store.Claim) store.Outcome {
 		return store.Outcome{Status: models.DeliveryFailed, Error: fmt.Sprintf("unknown driver %q", c.Channel.Driver)}
 	}
 	sendCtx, cancel := context.WithTimeout(ctx, w.SendTimeout)
-	err := d.Send(sendCtx, c.Channel.Options, Notification{Event: c.Event, BaseURL: w.BaseURL})
+	err := d.Send(sendCtx, c.Channel.Options, Notification{Event: c.Event, BaseURL: w.BaseURL, Mailer: w.Mailer,
+		Recipients: func(roles []string) ([]string, error) { return w.Store.EmailRecipients(roles, c.Event, false) }})
 	cancel()
 	if err == nil {
 		return store.Outcome{Status: models.DeliverySent}
@@ -151,7 +154,8 @@ func backoff(attempts int) time.Duration {
 }
 
 // SendTest sends a channel's test message straight away, outside the queue.
-func SendTest(ctx context.Context, c models.NotificationChannel, baseURL string) error {
+// An email channel's reaches everyone holding its roles, wherever narrowed.
+func SendTest(ctx context.Context, c models.NotificationChannel, baseURL string, mailer Mailer, st *store.Store) error {
 	d, ok := Lookup(c.Driver)
 	if !ok {
 		return fmt.Errorf("unknown driver %q", c.Driver)
@@ -162,5 +166,9 @@ func SendTest(ctx context.Context, c models.NotificationChannel, baseURL string)
 		Event:   models.Event{Kind: "test", CreatedAt: time.Now().UTC(), Payload: models.EventPayload{Trigger: models.TriggerManual}},
 		BaseURL: baseURL,
 		Test:    true,
+		Mailer:  mailer,
+		Recipients: func(roles []string) ([]string, error) {
+			return st.EmailRecipients(roles, models.Event{Kind: "test"}, true)
+		},
 	})
 }

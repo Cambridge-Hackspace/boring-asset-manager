@@ -279,4 +279,21 @@ describe('AccountPage', () => {
     expect(changes(sent)[0]!.body).toEqual({ name: 'Ada Lovelace' });
     expect(session.user!.name).toBe('Ada Lovelace');
   });
+
+  it('turns off email sent to your roles, and back on', async () => {
+    const { sent } = fakeApi({
+      ...assistants,
+      'PUT /auth/email': (body) => ({ user: { ...session.user, email_notifications: (body as { notifications: boolean }).notifications } }),
+    });
+    render(AccountPage, { params: {} });
+    const box = screen.getByRole('checkbox', { name: 'Send me email that notification channels send to my roles' }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    await fireEvent.click(box);
+    await screen.findByText('Email sent to your roles will no longer reach you.');
+    expect(changes(sent)[0]!.body).toEqual({ notifications: false });
+    expect(session.user!.email_notifications).toBe(false);
+    await fireEvent.click(box);
+    await screen.findByText('Email sent to your roles will reach you.');
+    expect(changes(sent)[1]!.body).toEqual({ notifications: true });
+  });
 });

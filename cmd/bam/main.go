@@ -37,6 +37,7 @@ Available Commands:
                 --plan says what it would hold, writing nothing)
   import        Merge a package, or kinds of a backup, into the instance (requires --from; --anchor <category>;
                 --choose kind:name=existing|copy|skip for what clashes; --only <kinds> of a backup; --check changes nothing)
+  email test    Send a test email through the [email] server in the config file (requires --to)
   mcp           Relay MCP between stdio and a server, for assistants (requires --url; API token in $BAM_TOKEN)
   version       Print version information
 
@@ -220,6 +221,23 @@ func main() {
 		} else {
 			err = cli.StorageCopy(*configPath, *to)
 		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "email":
+		if len(os.Args) < 3 || os.Args[2] != "test" {
+			fmt.Fprintf(os.Stderr, "Usage: bam email test --to <address> [--config <path>]\n")
+			os.Exit(1)
+		}
+		cmd := flag.NewFlagSet("email test", flag.ExitOnError)
+		configPath := cmd.String("config", "config.toml", "Path to configuration file")
+		to := cmd.String("to", "", "Address to send the test email to")
+		_ = cmd.Parse(os.Args[3:])
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		err := cli.EmailTest(ctx, *configPath, *to)
+		stop()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
