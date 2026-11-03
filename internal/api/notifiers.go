@@ -164,8 +164,9 @@ func (s *Server) handleTestChannel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Test message sent"})
 }
 
-// handleListDeliveries shows the delivery log, newest first:
-// GET /api/v1/notifiers/deliveries?limit=n (default 50, at most 200)
+// handleListDeliveries shows the delivery log, newest first, of one
+// channel or all:
+// GET /api/v1/notifiers/deliveries?channel_id=&limit=n (default 50, at most 200)
 func (s *Server) handleListDeliveries(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -176,12 +177,28 @@ func (s *Server) handleListDeliveries(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
-	list, err := s.store.ListDeliveries(limit)
+	list, err := s.store.ListChannelDeliveries(r.URL.Query().Get("channel_id"), limit)
 	if err != nil {
 		writeServerError(w, err, "list deliveries")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deliveries": list})
+}
+
+// handleRetryDelivery queues a failed delivery to be sent again at once:
+// POST /api/v1/notifiers/deliveries/{id}/retry
+func (s *Server) handleRetryDelivery(w http.ResponseWriter, r *http.Request) {
+	err := s.store.RetryDelivery(r.PathValue("id"), time.Now())
+	switch {
+	case errors.Is(err, store.ErrDeliveryNotFound):
+		writeJSONError(w, http.StatusNotFound, "Delivery not found")
+	case errors.Is(err, store.ErrDeliveryNotFailed), errors.Is(err, store.ErrChannelOff):
+		writeJSONError(w, http.StatusConflict, strings.ToUpper(err.Error()[:1])+err.Error()[1:]+".")
+	case err != nil:
+		writeServerError(w, err, "retry the delivery")
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"message": "Queued to be sent again."})
+	}
 }
 
 // channelError writes the response for a channel store error, reporting

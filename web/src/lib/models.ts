@@ -496,6 +496,11 @@ export interface Channel {
   events: string[];
   created_at: string;
   updated_at: string;
+  /** Failed attempts since it last delivered (docs/notifications.md). */
+  failures?: number;
+  failing_since?: string;
+  /** Why BAM! turned it off, when it did, for failing. */
+  disabled_reason?: string;
 }
 
 export interface Delivery {
@@ -512,6 +517,9 @@ export interface Delivery {
   event_kind: string;
   category_name?: string;
   asset_name?: string;
+  /** What the receiver last answered, when its driver says: a webhook's HTTP status and the start of its body. */
+  response_status?: number;
+  response_body?: string;
 }
 
 /** An API token for scripts and dashboards; its secret is shown only once. */

@@ -390,6 +390,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	manage := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermSettingsManage)(h) }
 	handle("GET /api/v1/notifiers/drivers", manage(s.handleNotifierDrivers))
 	handle("GET /api/v1/notifiers/deliveries", manage(s.handleListDeliveries))
+	handle("POST /api/v1/notifiers/deliveries/{id}/retry", manage(s.handleRetryDelivery))
 	handle("GET /api/v1/notifiers", manage(s.handleListChannels))
 	handle("POST /api/v1/notifiers", manage(s.handleCreateChannel))
 	handle("GET /api/v1/notifiers/{id}", manage(s.handleGetChannel))

@@ -22,14 +22,25 @@ func dbTime(t time.Time) time.Time { return t.UTC().Truncate(time.Microsecond) }
 
 const channelColumns = "id, name, driver, options, enabled, events, created_at, updated_at"
 
+// channelSelect is what a channel is read with: its columns, and how it is
+// faring (#196).
+const channelSelect = channelColumns + ", failures, failing_since, disabled_reason"
+
 func scanChannel(row interface{ Scan(...any) error }) (models.NotificationChannel, error) {
 	var (
 		c               models.NotificationChannel
 		options, events string
+		failingSince    sql.NullTime
+		disabledReason  sql.NullString
 	)
-	if err := row.Scan(&c.ID, &c.Name, &c.Driver, &options, &c.Enabled, &events, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.Driver, &options, &c.Enabled, &events, &c.CreatedAt, &c.UpdatedAt,
+		&c.Failures, &failingSince, &disabledReason); err != nil {
 		return c, err
 	}
+	if failingSince.Valid {
+		c.FailingSince = &failingSince.Time
+	}
+	c.DisabledReason = disabledReason.String
 	if err := json.Unmarshal([]byte(options), &c.Options); err != nil {
 		return c, fmt.Errorf("decoding options of channel %s: %w", c.ID, err)
 	}
@@ -89,7 +100,7 @@ func (s *Store) CreateChannel(c models.NotificationChannel) (*models.Notificatio
 
 // GetChannel reads a notification channel.
 func (s *Store) GetChannel(id string) (*models.NotificationChannel, error) {
-	c, err := scanChannel(s.QueryRow(`SELECT `+channelColumns+` FROM notification_channels WHERE id = ?`, id))
+	c, err := scanChannel(s.QueryRow(`SELECT `+channelSelect+` FROM notification_channels WHERE id = ?`, id))
 	if err == sql.ErrNoRows {
 		return nil, ErrChannelNotFound
 	}
@@ -101,7 +112,7 @@ func (s *Store) GetChannel(id string) (*models.NotificationChannel, error) {
 
 // ListChannels lists notification channels by name.
 func (s *Store) ListChannels() ([]models.NotificationChannel, error) {
-	rows, err := s.Query(`SELECT ` + channelColumns + ` FROM notification_channels ORDER BY name ASC`)
+	rows, err := s.Query(`SELECT ` + channelSelect + ` FROM notification_channels ORDER BY name ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing channels: %w", err)
 	}
@@ -118,7 +129,8 @@ func (s *Store) ListChannels() ([]models.NotificationChannel, error) {
 }
 
 // UpdateChannel replaces a channel's name, driver, options, switch and
-// subscriptions.
+// subscriptions. Turning a channel on starts its count of failures again
+// (#196).
 func (s *Store) UpdateChannel(c models.NotificationChannel) (*models.NotificationChannel, error) {
 	existing, err := s.GetChannel(c.ID)
 	if err != nil {
@@ -138,7 +150,12 @@ func (s *Store) UpdateChannel(c models.NotificationChannel) (*models.Notificatio
 		}
 		return nil, fmt.Errorf("updating channel: %w", err)
 	}
-	return &c, nil
+	if c.Enabled && !existing.Enabled {
+		if _, err := s.Exec(`UPDATE notification_channels SET failures = 0, failing_since = NULL, disabled_reason = NULL WHERE id = ?`, c.ID); err != nil {
+			return nil, fmt.Errorf("starting the channel's count again: %w", err)
+		}
+	}
+	return s.GetChannel(c.ID)
 }
 
 // DeleteChannel deletes a channel and its deliveries.
@@ -298,6 +315,10 @@ type Outcome struct {
 	Error string
 	// NextAttemptAt is when to retry a pending delivery.
 	NextAttemptAt time.Time
+	// ResponseStatus and ResponseBody are what the receiver answered, when
+	// the driver says (a webhook's HTTP status and the start of its body).
+	ResponseStatus int
+	ResponseBody   string
 }
 
 // FinishDelivery records an attempt and releases the lease. It reports false,
@@ -313,14 +334,18 @@ func (s *Store) FinishDelivery(id, token string, now time.Time, o Outcome) (bool
 	if o.Status != models.DeliveryPending {
 		next = now
 	}
-	var lastErr any
+	var lastErr, status, body any
 	if o.Error != "" {
 		lastErr = o.Error
 	}
+	if o.ResponseStatus != 0 {
+		status, body = o.ResponseStatus, o.ResponseBody
+	}
 	res, err := s.Exec(`UPDATE notification_deliveries
-		SET status = ?, attempts = attempts + 1, next_attempt_at = ?, last_error = ?, finished_at = ?, lease_token = NULL, lease_until = NULL
+		SET status = ?, attempts = attempts + 1, next_attempt_at = ?, last_error = ?, finished_at = ?, lease_token = NULL, lease_until = NULL,
+			response_status = ?, response_body = ?
 		WHERE id = ? AND lease_token = ?`,
-		o.Status, next, lastErr, finished, id, token)
+		o.Status, next, lastErr, finished, status, body, id, token)
 	if err != nil {
 		return false, fmt.Errorf("recording delivery: %w", err)
 	}
@@ -339,12 +364,23 @@ type DeliveryView struct {
 
 // ListDeliveries returns the most recent deliveries, newest first.
 func (s *Store) ListDeliveries(limit int) ([]DeliveryView, error) {
+	return s.ListChannelDeliveries("", limit)
+}
+
+// ListChannelDeliveries returns a channel's most recent deliveries, or every
+// channel's when channelID is empty, newest first.
+func (s *Store) ListChannelDeliveries(channelID string, limit int) ([]DeliveryView, error) {
+	where, args := "", []any{}
+	if channelID != "" {
+		where, args = "WHERE d.channel_id = ?", append(args, channelID)
+	}
 	rows, err := s.Query(fmt.Sprintf(`SELECT d.id, d.event_id, d.channel_id, d.status, d.attempts, d.next_attempt_at, d.last_error, d.created_at, d.finished_at,
-			c.name, e.kind, e.payload
+			d.response_status, d.response_body, c.name, e.kind, e.payload
 		FROM notification_deliveries d
 		JOIN notification_channels c ON c.id = d.channel_id
 		JOIN events e ON e.id = d.event_id
-		ORDER BY d.created_at DESC, d.id DESC LIMIT %d`, limit))
+		%s
+		ORDER BY d.created_at DESC, d.id DESC LIMIT %d`, where, limit), args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing deliveries: %w", err)
 	}
@@ -352,17 +388,24 @@ func (s *Store) ListDeliveries(limit int) ([]DeliveryView, error) {
 	list := []DeliveryView{}
 	for rows.Next() {
 		var (
-			v        DeliveryView
-			lastErr  sql.NullString
-			finished sql.NullTime
-			payload  string
+			v          DeliveryView
+			lastErr    sql.NullString
+			finished   sql.NullTime
+			respStatus sql.NullInt64
+			respBody   sql.NullString
+			payload    string
 		)
 		d := &v.Delivery
 		if err := rows.Scan(&d.ID, &d.EventID, &d.ChannelID, &d.Status, &d.Attempts, &d.NextAttemptAt, &lastErr, &d.CreatedAt, &finished,
-			&v.ChannelName, &v.EventKind, &payload); err != nil {
+			&respStatus, &respBody, &v.ChannelName, &v.EventKind, &payload); err != nil {
 			return nil, err
 		}
 		d.LastError = lastErr.String
+		if respStatus.Valid {
+			status := int(respStatus.Int64)
+			d.ResponseStatus = &status
+		}
+		d.ResponseBody = respBody.String
 		if finished.Valid {
 			d.FinishedAt = &finished.Time
 		}

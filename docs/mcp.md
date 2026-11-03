@@ -286,7 +286,7 @@ People, roles and scopes need `users.manage`. Channels need `settings.manage`.
 | `list_scopes` | `users.manage` or `categories.manage` | |
 | `save_scope`, `delete_scope`, `set_category_scopes` | `users.manage` | |
 | `list_live_connections` | `users.manage` | |
-| `list_channel_drivers`, `list_channels`, `get_channel`, `save_channel`, `delete_channel`, `test_channel`, `list_deliveries` | `settings.manage` | Channels ([Notifications](notifications.md)). |
+| `list_channel_drivers`, `list_channels`, `get_channel`, `save_channel`, `delete_channel`, `test_channel`, `list_deliveries`, `retry_delivery` | `settings.manage` | Channels ([Notifications](notifications.md)). |
 
 A channel's secrets, such as a webhook URL, are written and never read back. They show as set or
 not, and a change that leaves one out keeps it.

@@ -133,6 +133,15 @@ func summarize(n Notification, esc func(string) string) summary {
 			out.Title = "Sign-ins held back from " + esc(truncate(p.Throttle.Address, 64))
 			out.Description = "Too many wrong passwords from this address, across accounts. It may sign in again at " + until + "."
 		}
+	case e.Kind == models.EventNotifierDisabled && p.Channel != nil:
+		// About no asset or category: the link is to the channels.
+		out.URL = ""
+		if base != "" {
+			out.URL = base + "/notifications"
+		}
+		out.Color = discordDanger
+		out.Title = "Notification channel turned off: " + esc(truncate(p.Channel.Name, 200))
+		out.Description = esc(p.Note) + " Its recent deliveries say why; turn it on again once it is fixed."
 	case e.Kind == models.EventFlowOverdue:
 		out.Title, out.Color = "Past its date: "+name, discordWarning
 		out.Description = "Left"

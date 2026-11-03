@@ -20,6 +20,8 @@
   let notice = $state('');
   // The channel being edited, "new" for a new one, or null.
   let editing = $state<string | null>(null);
+  // The channel whose deliveries the log shows, or "" for every channel's.
+  let logChannel = $state('');
 
   const driverLabel = (d: string) => drivers.find((x) => x.driver === d)?.label ?? d;
   const eventLabel = (k: string) => events.find((e) => e.kind === k)?.label ?? k;
@@ -30,7 +32,7 @@
       const [d, c, l] = await Promise.all([
         request<{ drivers: NotifierDriver[]; events: EventKind[] }>('GET', '/notifiers/drivers'),
         request<{ channels: Channel[] }>('GET', '/notifiers'),
-        request<{ deliveries: Delivery[] }>('GET', '/notifiers/deliveries?limit=50'),
+        request<{ deliveries: Delivery[] }>('GET', deliveriesPath()),
       ]);
       drivers = d.drivers ?? [];
       events = d.events ?? [];
@@ -43,6 +45,36 @@
     }
   }
   onMount(load);
+
+  function deliveriesPath(): string {
+    return '/notifiers/deliveries?limit=50' + (logChannel ? `&channel_id=${encodeURIComponent(logChannel)}` : '');
+  }
+
+  async function loadLog() {
+    try {
+      deliveries = (await request<{ deliveries: Delivery[] }>('GET', deliveriesPath())).deliveries ?? [];
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function showLog(c: Channel) {
+    logChannel = c.id;
+    await loadLog();
+    document.getElementById('log-heading')?.scrollIntoView?.({ block: 'start' });
+  }
+
+  async function retry(d: Delivery) {
+    error = '';
+    notice = '';
+    try {
+      await request('POST', `/notifiers/deliveries/${encodeURIComponent(d.id)}/retry`);
+      notice = `Sending again to ${d.channel_name}.`;
+      await loadLog();
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
 
   async function saved() {
     editing = null;
@@ -108,8 +140,14 @@
                 {driverLabel(c.driver)}, {c.enabled ? 'enabled' : 'disabled'}.
                 {c.events.length ? c.events.map(eventLabel).join('; ') + '.' : 'Subscribed to nothing.'}
               </p>
+              {#if !c.enabled && c.disabled_reason}
+                <p class="mt-1 text-sm text-amber-900 dark:text-amber-200">{c.disabled_reason} Edit it to turn it on again once it is fixed.</p>
+              {:else if c.enabled && c.failures}
+                <p class="mt-1 text-sm text-amber-900 dark:text-amber-200">Failing: {c.failures === 1 ? '1 attempt' : `${c.failures} attempts`} in a row{c.failing_since ? `, since ${when(c.failing_since)}` : ''}.</p>
+              {/if}
             </div>
             <div class="flex flex-wrap gap-2">
+              <button type="button" class="btn-secondary" onclick={() => showLog(c)} aria-label="Show the deliveries of {c.name}">Deliveries</button>
               <button type="button" class="btn-secondary" onclick={() => test(c)} aria-label="Send a test message to {c.name}">Test</button>
               <button type="button" class="btn-secondary" onclick={() => (editing = c.id)} aria-label="Edit {c.name}">Edit</button>
               <ConfirmButton label="Delete" question="Delete the “{c.name}” channel and its delivery log?" onconfirm={() => remove(c)} />
@@ -124,7 +162,14 @@
 <section aria-labelledby="log-heading">
   <div class="mb-2 flex items-center justify-between gap-2">
     <h2 id="log-heading" class="text-lg font-semibold">Recent deliveries</h2>
-    <button type="button" class="btn-secondary" onclick={load}>Refresh</button>
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="sr-only" for="log-channel">Whose deliveries</label>
+      <select id="log-channel" class="input w-auto" bind:value={logChannel} onchange={loadLog}>
+        <option value="">Every channel</option>
+        {#each channels as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+      </select>
+      <button type="button" class="btn-secondary" onclick={load}>Refresh</button>
+    </div>
   </div>
   {#if deliveries.length === 0}
     <p class="text-sm text-zinc-600 dark:text-zinc-400">Nothing sent yet.</p>
@@ -136,7 +181,8 @@
             <th scope="col" class="py-2 pr-4">When</th>
             <th scope="col" class="py-2 pr-4">Channel</th>
             <th scope="col" class="py-2 pr-4">Event</th>
-            <th scope="col" class="py-2">Outcome</th>
+            <th scope="col" class="py-2 pr-4">Outcome</th>
+            <th scope="col" class="py-2"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -145,9 +191,20 @@
               <td class="py-2 pr-4 whitespace-nowrap">{when(d.created_at)}</td>
               <td class="py-2 pr-4">{d.channel_name}</td>
               <td class="py-2 pr-4">{eventLabel(d.event_kind)}{d.category_name || d.asset_name ? `: ${d.category_name || d.asset_name}` : ''}</td>
-              <td class="py-2">
-                {outcome(d)}
+              <td class="py-2 pr-4">
+                {outcome(d)}{#if d.status === 'pending' && d.attempts > 0}, next at {when(d.next_attempt_at)}{/if}
                 {#if d.last_error}<span class="block text-xs text-zinc-600 dark:text-zinc-400">{d.last_error}</span>{/if}
+                {#if d.response_status}
+                  <details class="text-xs">
+                    <summary>Answered HTTP {d.response_status}</summary>
+                    {#if d.response_body}<pre class="mt-1 max-w-md overflow-x-auto whitespace-pre-wrap break-all">{d.response_body}</pre>{:else}<p>With no body.</p>{/if}
+                  </details>
+                {/if}
+              </td>
+              <td class="py-2 text-right">
+                {#if d.status === 'failed'}
+                  <button type="button" class="btn-secondary" onclick={() => retry(d)} aria-label="Send the delivery to {d.channel_name} again">Send again</button>
+                {/if}
               </td>
             </tr>
           {/each}

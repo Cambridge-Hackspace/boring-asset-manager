@@ -265,11 +265,14 @@ func (w Webhook) Send(ctx context.Context, options map[string]string, n Notifica
 		return fmt.Errorf("%w: posting to %s: %v", ErrTemporary, s.url.Hostname(), err)
 	}
 	defer resp.Body.Close()
-	excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+	answer, _ := io.ReadAll(io.LimitReader(resp.Body, responseLimit))
+	if n.Report != nil {
+		n.Report(resp.StatusCode, string(answer))
+	}
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		return fmt.Errorf("HTTP %d: the URL redirects, which is not followed; give the URL it leads to", resp.StatusCode)
 	}
-	return HTTPError(resp, string(excerpt))
+	return HTTPError(resp, string(answer[:min(len(answer), 300)]))
 }
 
 // resolve finds the URL's addresses, refusing private ones unless the

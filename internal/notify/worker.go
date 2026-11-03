@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -28,6 +30,13 @@ type Worker struct {
 	SendTimeout time.Duration
 	// GiveUpAfter is how long after an event to stop retrying (default 24h).
 	GiveUpAfter time.Duration
+	// Policy says when a channel that keeps failing is turned off (#196);
+	// its zero value never turns one off.
+	Policy store.ChannelPolicy
+	// KeepFor is how long finished deliveries are kept in the log; zero
+	// keeps them.
+	KeepFor   time.Duration
+	lastPrune time.Time
 	// Now and Lookup are replaced by tests.
 	Now    func() time.Time
 	Lookup func(string) (Driver, bool)
@@ -70,6 +79,7 @@ func (w *Worker) Run(ctx context.Context) {
 		if _, err := w.Store.RecordOverdueFilings(w.Now()); err != nil {
 			log.Printf("notifications: %v", err)
 		}
+		w.prune()
 		for {
 			n, err := w.RunOnce(ctx)
 			if err != nil {
@@ -104,9 +114,75 @@ func (w *Worker) RunOnce(ctx context.Context) (int, error) {
 		}
 		if !ok {
 			log.Printf("notifications: lost the lease on delivery %s", c.Delivery.ID)
+			continue
+		}
+		// A delivery of a channel already off was not attempted, so it says
+		// nothing of how the channel is faring.
+		if !c.Channel.Enabled {
+			continue
+		}
+		off, err := w.Store.RecordChannelResult(c.Channel.ID, outcome.Status == models.DeliverySent, w.Now(), w.Policy)
+		if err != nil {
+			return len(claims), err
+		}
+		if off {
+			log.Printf("notifications: turned off %q, which keeps failing", c.Channel.Name)
 		}
 	}
 	return len(claims), nil
+}
+
+// pruneEvery is how often the log is pruned.
+const pruneEvery = time.Hour
+
+// prune removes finished deliveries older than KeepFor, once an hour.
+func (w *Worker) prune() {
+	now := w.Now()
+	if w.KeepFor <= 0 || now.Sub(w.lastPrune) < pruneEvery {
+		return
+	}
+	w.lastPrune = now
+	if _, err := w.Store.PruneDeliveries(now.Add(-w.KeepFor)); err != nil {
+		log.Printf("notifications: %v", err)
+	}
+}
+
+// responseLimit is how much of a receiver's answer the log keeps.
+const responseLimit = 1024
+
+// redact takes a channel's secrets out of what its receiver answered, as
+// receivers sometimes echo what they were sent, and cuts it to
+// responseLimit bytes.
+func redact(body string, options map[string]string, info DriverInfo) string {
+	var secrets []string
+	for _, o := range info.Options {
+		v := options[o.Name]
+		if !o.Secret || strings.TrimSpace(v) == "" {
+			continue
+		}
+		secrets = append(secrets, v)
+		// A secret of several lines, such as extra headers, is secret line
+		// by line, and so is each header's value.
+		for _, line := range strings.Split(v, "\n") {
+			line = strings.TrimSpace(line)
+			secrets = append(secrets, line)
+			if _, value, ok := strings.Cut(line, ":"); ok {
+				secrets = append(secrets, strings.TrimSpace(value))
+			}
+		}
+	}
+	for _, s := range secrets {
+		if len(s) >= 4 {
+			body = strings.ReplaceAll(body, s, "[secret]")
+		}
+	}
+	if len(body) > responseLimit {
+		body = body[:responseLimit]
+		for !utf8.ValidString(body) {
+			body = body[:len(body)-1]
+		}
+	}
+	return body
 }
 
 // attempt sends one delivery and decides what becomes of it.
@@ -118,10 +194,20 @@ func (w *Worker) attempt(ctx context.Context, c store.Claim) store.Outcome {
 	if !ok {
 		return store.Outcome{Status: models.DeliveryFailed, Error: fmt.Sprintf("unknown driver %q", c.Channel.Driver)}
 	}
+	var status int
+	var body string
 	sendCtx, cancel := context.WithTimeout(ctx, w.SendTimeout)
 	err := d.Send(sendCtx, c.Channel.Options, Notification{Event: c.Event, BaseURL: w.BaseURL, DeliveryID: c.Delivery.ID, Mailer: w.Mailer,
-		Recipients: func(roles []string) ([]string, error) { return w.Store.EmailRecipients(roles, c.Event, false) }})
+		Recipients: func(roles []string) ([]string, error) { return w.Store.EmailRecipients(roles, c.Event, false) },
+		Report:     func(s int, b string) { status, body = s, redact(b, c.Channel.Options, d.Info()) }})
 	cancel()
+	o := w.outcome(c, err)
+	o.ResponseStatus, o.ResponseBody = status, body
+	return o
+}
+
+// outcome decides what becomes of a delivery after an attempt.
+func (w *Worker) outcome(c store.Claim, err error) store.Outcome {
 	if err == nil {
 		return store.Outcome{Status: models.DeliverySent}
 	}
