@@ -26,6 +26,19 @@
     }
   }
 
+  let emailError = $state('');
+  let emailStatus = $state('');
+
+  async function setEmail(on: boolean) {
+    emailError = emailStatus = '';
+    try {
+      session.user = (await request<{ user: User }>('PUT', '/auth/email', { notifications: on })).user;
+      emailStatus = on ? 'Email sent to your roles will reach you.' : 'Email sent to your roles will no longer reach you.';
+    } catch (err) {
+      emailError = messageOf(err);
+    }
+  }
+
   let current = $state('');
   let next = $state('');
   let confirm = $state('');
@@ -95,6 +108,23 @@
       {#if nameStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{nameStatus}</p>{/if}
       <button type="submit" class="btn-secondary">Save name</button>
     </form>
+
+    <section class="card space-y-3" aria-labelledby="email-heading">
+      <h2 id="email-heading" class="text-lg font-semibold">Email</h2>
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          class="mt-0.5"
+          checked={session.user?.email_notifications !== false}
+          aria-describedby="email-help"
+          onchange={(event) => setEmail(event.currentTarget.checked)}
+        />
+        <span>Send me email that notification channels send to my roles</span>
+      </label>
+      <p id="email-help" class="text-xs text-zinc-600 dark:text-zinc-400">Sent to {session.user?.email}. A channel that names your address itself still reaches you.</p>
+      <ErrorMessage error={emailError} />
+      {#if emailStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{emailStatus}</p>{/if}
+    </section>
 
     <form class="card space-y-4" onsubmit={change}>
       <h2 class="text-lg font-semibold">Change password</h2>

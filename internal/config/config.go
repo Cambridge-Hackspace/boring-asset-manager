@@ -1,7 +1,11 @@
 package config
 
 import (
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"net"
+	"net/mail"
 	"net/url"
 	"os"
 	"path"
@@ -21,6 +25,7 @@ type Config struct {
 	Storage  StorageConfig  `toml:"storage"`
 	Printers PrintersConfig `toml:"printers"`
 	MCP      MCPConfig      `toml:"mcp"`
+	Email    EmailConfig    `toml:"email"`
 }
 
 // ServerConfig holds HTTP server listening configuration.
@@ -98,6 +103,78 @@ type MCPConfig struct {
 	// Enabled serves /api/v1/mcp. It is on unless turned off, so a config
 	// file written before it existed, which has no [mcp] table, keeps it on.
 	Enabled bool `toml:"enabled"`
+}
+
+// EmailConfig is the SMTP server BAM! sends email through
+// (docs/notifications.md). Email is off while Host is empty.
+type EmailConfig struct {
+	Host string `toml:"host"`
+	// Port is 587 for STARTTLS, 465 for implicit TLS, or 25; when 0, the
+	// usual port for TLS.
+	Port int `toml:"port"`
+	// TLS is EmailSTARTTLS (the default, also when empty), EmailImplicitTLS
+	// or EmailNoTLS, which sends in the clear and is chosen explicitly.
+	TLS      string `toml:"tls"`
+	Username string `toml:"username"`
+	Password string `toml:"password"`
+	// From is the sender, as "BAM! <bam@example.org>" or an address alone.
+	From    string `toml:"from"`
+	ReplyTo string `toml:"reply_to"`
+	// CA is a PEM certificate to trust for a server whose certificate no
+	// public authority signed; empty uses the system's authorities.
+	CA string `toml:"ca"`
+}
+
+// Email TLS modes.
+const (
+	EmailSTARTTLS    = "starttls"
+	EmailImplicitTLS = "implicit"
+	EmailNoTLS       = "none"
+)
+
+// Enabled reports whether email is set up.
+func (e EmailConfig) Enabled() bool { return e.Host != "" }
+
+// Address is the server's host and port, the port defaulting by TLS mode.
+func (e EmailConfig) Address() string {
+	port := e.Port
+	if port == 0 {
+		port = 587
+		if e.TLS == EmailImplicitTLS {
+			port = 465
+		}
+	}
+	return net.JoinHostPort(e.Host, strconv.Itoa(port))
+}
+
+func (e *EmailConfig) validate() error {
+	if !e.Enabled() {
+		return nil
+	}
+	switch e.TLS {
+	case "":
+		e.TLS = EmailSTARTTLS
+	case EmailSTARTTLS, EmailImplicitTLS, EmailNoTLS:
+	default:
+		return fmt.Errorf("email.tls must be %q, %q or %q, not %q", EmailSTARTTLS, EmailImplicitTLS, EmailNoTLS, e.TLS)
+	}
+	if e.Port < 0 || e.Port > 65535 {
+		return fmt.Errorf("invalid email port: %d", e.Port)
+	}
+	if _, err := mail.ParseAddress(e.From); err != nil {
+		return fmt.Errorf("email.from %q is not an email address: %v", e.From, err)
+	}
+	if e.ReplyTo != "" {
+		if _, err := mail.ParseAddress(e.ReplyTo); err != nil {
+			return fmt.Errorf("email.reply_to %q is not an email address: %v", e.ReplyTo, err)
+		}
+	}
+	if e.CA != "" {
+		if block, _ := pem.Decode([]byte(e.CA)); block == nil {
+			return errors.New("email.ca is not a PEM certificate")
+		}
+	}
+	return nil
 }
 
 // DefaultConfig returns safe default settings.
@@ -209,6 +286,27 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.Printers.Devices = strings.Split(devices, ",")
 	}
 
+	for env, field := range map[string]*string{
+		"BAM_EMAIL_HOST":     &cfg.Email.Host,
+		"BAM_EMAIL_TLS":      &cfg.Email.TLS,
+		"BAM_EMAIL_USERNAME": &cfg.Email.Username,
+		"BAM_EMAIL_PASSWORD": &cfg.Email.Password,
+		"BAM_EMAIL_FROM":     &cfg.Email.From,
+		"BAM_EMAIL_REPLY_TO": &cfg.Email.ReplyTo,
+		"BAM_EMAIL_CA":       &cfg.Email.CA,
+	} {
+		if v := os.Getenv(env); v != "" {
+			*field = v
+		}
+	}
+	if v := os.Getenv("BAM_EMAIL_PORT"); v != "" {
+		p, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("BAM_EMAIL_PORT: %q is not a port", v)
+		}
+		cfg.Email.Port = p
+	}
+
 	// Refused rather than ignored when not understood: a mistyped "off"
 	// must not leave the endpoint on.
 	if v := os.Getenv("BAM_MCP_ENABLED"); v != "" {
@@ -244,6 +342,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("database dsn cannot be empty")
 	}
 	if err := c.Storage.validate(); err != nil {
+		return err
+	}
+	if err := c.Email.validate(); err != nil {
 		return err
 	}
 	for _, pattern := range c.Printers.Devices {

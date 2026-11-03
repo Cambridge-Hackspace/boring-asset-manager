@@ -120,6 +120,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `whoami` | Anyone signed in | The caller and its permissions. |
 | `server_info` | Anyone signed in | Version, address, database and health. |
 | `list_generators` | `assets.read` | The code types. |
+| `set_my_email_notifications` | Anyone signed in | Whether email sent to the caller's roles reaches them; for a person only. |
 | `set_my_name` | Anyone signed in | Sets the caller's name; for a person only. |
 
 ### Finding assets

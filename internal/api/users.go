@@ -290,6 +290,31 @@ func (s *Server) handleSetOwnTheme(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// EmailNotificationsRequest turns email sent to one's roles on or off.
+type EmailNotificationsRequest struct {
+	Notifications *bool `json:"notifications"`
+}
+
+// handleSetOwnEmailNotifications sets whether email sent to a role the
+// signed-in person holds reaches them: PUT /api/v1/auth/email with
+// {"notifications": false}. It answers {"user"}.
+func (s *Server) handleSetOwnEmailNotifications(w http.ResponseWriter, r *http.Request) {
+	var req EmailNotificationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Notifications == nil {
+		writeJSONError(w, http.StatusBadRequest, "notifications is required: true or false")
+		return
+	}
+	user, err := s.store.SetUserEmailNotifications(CurrentUser(r.Context()).ID, *req.Notifications)
+	switch {
+	case errors.Is(err, store.ErrUserNotFound):
+		writeJSONError(w, http.StatusNotFound, "User not found")
+	case err != nil:
+		writeStoreError(w, err, "set email notifications")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"user": user})
+	}
+}
+
 // SetPasswordRequest sets someone's password for them.
 type SetPasswordRequest struct {
 	Password string `json:"password"`
