@@ -54,7 +54,8 @@ func prompts() []prompt {
 			Arguments: []*mcp.PromptArgument{arg("what", "what you are looking for", true)}},
 			func(a map[string]string) string {
 				return fmt.Sprintf("Where is %s? Search BAM! by name and code (search_assets), and tell me where each match is, whether it is lent out "+
-					"and to whom, and its condition, with a link to its page. If nothing matches, try other words for it.", a["what"])
+					"and to whom, and its condition, with a link to its page. Among several matches, put first those I have starred (list_favorites). "+
+					"If nothing matches, try other words for it.", a["what"])
 			}},
 		{&mcp.Prompt{Name: "set_up", Title: "Set up BAM!", Description: "Walk through setting BAM! up: people and roles, categories and fields, places, labels and printers."},
 			func(map[string]string) string {

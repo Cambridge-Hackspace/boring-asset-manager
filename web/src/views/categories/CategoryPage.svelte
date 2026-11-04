@@ -15,6 +15,7 @@
   import TabLinks from '../../components/TabLinks.svelte';
   import { currentTab } from '../../lib/tabs';
   import CategoryIconSection from './CategoryIconSection.svelte';
+  import FavoriteStar from '../../components/FavoriteStar.svelte';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -443,9 +444,12 @@
 
 <div class="mb-4 flex flex-wrap items-end justify-between gap-4">
   <div>
-    <h1 class="flex items-center gap-3 text-3xl font-bold">
-      {#if isNew}New category{:else if category}<span aria-hidden="true" class="inline-block h-6 w-6 shrink-0 rounded-full border-2 border-zinc-900 dark:border-zinc-300" style="background-color: {category.color_hex}"></span>{category.name}{:else}Category{/if}
-    </h1>
+    <div class="flex items-center gap-1">
+      <h1 class="flex items-center gap-3 text-3xl font-bold">
+        {#if isNew}New category{:else if category}<span aria-hidden="true" class="inline-block h-6 w-6 shrink-0 rounded-full border-2 border-zinc-900 dark:border-zinc-300" style="background-color: {category.color_hex}"></span>{category.name}{:else}Category{/if}
+      </h1>
+      {#if category && !isNew}<FavoriteStar kind="category" id={category.id} name={category.name} />{/if}
+    </div>
     {#if category && assetCount !== null}
       <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{assetCount === 0 ? 'No assets in it yet.' : `${assetCount} asset${assetCount === 1 ? '' : 's'} here.`}</p>
     {/if}
