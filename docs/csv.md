@@ -115,6 +115,9 @@ Duplicate IDs within the file, unknown IDs, and archived assets are errors.
 The preview reports each problem with its row and column. It also says how many assets would be
 created, updated and left unchanged.
 
+A link naming no asset is a problem too. Its `ref` is the name, code or ID it gave, and `unresolved`
+counts these among `problem_count`, for [several files](#importing-several-files).
+
 ### Importing links
 
 Names in a `links` column are read as they will be once the rows are applied. So a file can create
@@ -152,6 +155,25 @@ The import is refused with `409`, asking for a new preview, when:
 
 Inventory thresholds ([Stock](stock-and-lending.md)) are checked once afterwards, so each category
 records at most one event.
+
+### Importing several files
+
+The web app's import page takes up to 20 files at once, chosen or dropped together. Each keeps the
+limits above, and is its own import: its own mapping, preview and transaction. One file's preview
+does not change another's.
+
+- **Order:** the files are imported in the order listed, which can be changed. A file whose links
+  name assets that an earlier file creates must come after it. Its preview reports those links as
+  problems (`unresolved`). Only those problems are allowed, and only when it is not first. They
+  are checked again when it is imported.
+- **A refused file** stops the ones after it. The page says which were imported, and checks the
+  rest again, since what was imported may resolve their links.
+- **Mappings** are remembered in the browser for each person and set of headers. A later file with
+  the same headers starts from the last mapping used for them, with a way back to the suggested
+  one.
+
+There is no separate route: the page calls the preview and import routes once per file, so
+scripts are unaffected.
 
 ## API
 

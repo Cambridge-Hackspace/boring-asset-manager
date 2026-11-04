@@ -75,7 +75,8 @@ func TestLinksThroughCSV(t *testing.T) {
 	}
 	// A problem leaves nothing listed either.
 	got = postLinkImport(t, srv, cookie, "/api/v1/assets/import/preview", "id,links\n"+screws+",contained_in:Nowhere\n", "")
-	if !strings.Contains(got.String(), `"link_changes":[]`) || !strings.Contains(got.String(), `"problem_count":1`) {
+	if !strings.Contains(got.String(), `"link_changes":[]`) || !strings.Contains(got.String(), `"problem_count":1`) ||
+		!strings.Contains(got.String(), `"unresolved":1`) || !strings.Contains(got.String(), `"ref":"Nowhere"`) {
 		t.Errorf("preview with a problem: %s", got)
 	}
 

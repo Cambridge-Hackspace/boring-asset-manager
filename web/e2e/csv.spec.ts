@@ -94,3 +94,28 @@ test('fill a bin from a spreadsheet, then empty it again', async ({ signedIn: pa
   await page.getByRole('button', { name: 'Import the links' }).click();
   await expect(page.getByText('Imported: 0 new, 0 updated, 1 unchanged; 1 removed.')).toBeVisible();
 });
+
+test('import a bin and what goes in it from two files, in order', async ({ signedIn: page, api }) => {
+  const tag = unique('two');
+  const bin = `Bin ${tag}`;
+  const screws = `Screws ${tag}`;
+  const file = (name: string, rows: string) => ({ name, mimeType: 'text/csv', buffer: Buffer.from(rows) });
+
+  await goTo(page, 'Assets');
+  await page.getByRole('link', { name: 'Import CSV' }).click();
+  // Chosen with the contents first, which names a bin that does not exist yet.
+  await page.getByLabel('CSV file').setInputFiles([file('screws.csv', `name,links\r\n${screws},contained_in:${bin}\r\n`), file('bins.csv', `name\r\n${bin}\r\n`)]);
+  const screwsFile = page.getByRole('region', { name: /screws\.csv/ });
+  await expect(screwsFile.getByText(`Line 2, links: no asset is "${bin}"`)).toBeVisible();
+  await expect(screwsFile.getByText(/put it before this one/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import 2 files in order' })).toBeDisabled();
+
+  await page.getByRole('button', { name: 'Move bins.csv up' }).click();
+  await expect(screwsFile.getByText(/this one can be imported after it/)).toBeVisible();
+  await page.getByRole('button', { name: 'Import 2 files in order' }).click();
+  await expect(page.getByText('Imported all 2 files.')).toBeVisible();
+  await expect(screwsFile.getByText('Imported: 1 new, 0 updated, 0 unchanged; 1 link added.')).toBeVisible();
+
+  const found = await api.call('GET', `/assets?search=${encodeURIComponent(screws)}`);
+  expect(found.assets[0].links.map((l: { asset: { name: string } }) => l.asset.name)).toEqual([bin]);
+});

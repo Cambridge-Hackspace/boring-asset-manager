@@ -338,7 +338,7 @@ func (p *planner) resolveRef(ref string, refs *AssetRefs, c linkCell) (string, b
 				return a.Asset.ID, true
 			}
 		}
-		p.plan.problem(c.line, c.column, "no asset is %q", ref)
+		p.plan.unresolved(c.line, c.column, ref)
 	default:
 		p.plan.problem(c.line, c.column, "%q names %d assets; use its ID or a code", ref, len(ids))
 	}
