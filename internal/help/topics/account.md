@@ -8,7 +8,9 @@ What you can do depends on your roles, listed on the same page with what each pe
 
 Under **Two-factor sign-in**, you can ask for a code from an authenticator app on your phone, such as Aegis, Google Authenticator or 1Password, as well as your password. Choose **Set up an authenticator app**, scan the QR code with the app, and enter the code it shows. From then on, signing in asks for the app's code after your password, so your password alone is not enough. Each code works once.
 
-To turn it off, choose **Turn off** and give your password and a code. If you lose your phone, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again.
+Turning it on shows ten **recovery codes**, once. Download or print them, and keep them somewhere safe, apart from the phone. If you lose the phone, choose **Use a recovery code** when signing in and enter one: each works once. The page shows how many you have left and warns when you are running low; **Make new recovery codes** replaces them all, given a code from the app. Using one is recorded, and emails you when this BAM! sends email.
+
+To turn it off, choose **Turn off** and give your password and a code. If you lose your phone and your recovery codes, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again.
 
 ## Assistants
 

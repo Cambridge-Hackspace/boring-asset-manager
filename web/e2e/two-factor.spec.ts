@@ -77,3 +77,41 @@ test('set up an authenticator app, sign in with a code from it, and turn it off'
   await signIn(page, email, password);
   await context.close();
 });
+
+test('save the recovery codes, and sign in with one in place of the app', async ({ api, browser }) => {
+  const email = `${unique('recovery')}@hackspace.org`;
+  const password = 'Recovery123!';
+  await api.call('POST', '/users', { email, name: unique('Recovery'), password });
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await signIn(page, email, password);
+  await page.goto('/account');
+  const section = page.getByRole('region', { name: 'Two-factor sign-in' });
+  await section.getByRole('button', { name: 'Set up an authenticator app' }).click();
+  const secret = secretOf((await section.locator('code').textContent()) ?? '');
+  await section.getByLabel('Code from the app').fill(code(secret, stepNow()));
+  await section.getByRole('button', { name: 'Turn on' }).click();
+
+  // Shown once, to keep.
+  await expect(section.getByRole('heading', { name: 'Your recovery codes' })).toBeFocused();
+  const codes = await section.getByRole('list', { name: 'Recovery codes' }).getByRole('listitem').allTextContents();
+  expect(codes).toHaveLength(10);
+  await expect(section.getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'bam-recovery-codes.txt');
+  await section.getByRole('button', { name: 'I have saved them' }).click();
+  await expect(section).toContainText('10 left');
+
+  await context.clearCookies();
+  await page.goto('/sign-in');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Use a recovery code' }).click();
+  await page.getByLabel('Recovery code').fill(codes[0]!.toUpperCase());
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).not.toHaveURL(/\/sign-in/);
+
+  await page.goto('/account');
+  await expect(section).toContainText('9 left');
+  await context.close();
+});

@@ -65,8 +65,8 @@ steps:
 - **The password** answers `{"factor_required": true, "factors": ["totp"]}`, with no session. It
   sets a cookie for the second step instead, which is sent only to the sign-in routes, lasts five
   minutes, and grants nothing else.
-- **The code** (`POST /api/v1/auth/login/factor` with `{"code"}`) finishes the sign-in, and starts
-  the session.
+- **The code** (`POST /api/v1/auth/login/factor` with `{"code"}`), from the app or a
+  [recovery code](#recovery-codes), finishes the sign-in, and starts the session.
 
 **Codes:**
 
@@ -78,7 +78,28 @@ steps:
   The right password does not clear the count while a code is still to come, so knowing the
   password does not allow more guesses at the code.
 
-**Turning it off** takes the password and a current code, under **Your account**.
+**Turning it off** takes the password and a current code, under **Your account**. Turning off the
+last one removes the recovery codes too.
+
+#### Recovery codes
+
+A way back in when the phone is lost.
+
+- **Made with the first factor:** turning on the first app makes ten codes. They are shown once,
+  with **Download** (a text file) and **Print**, and never again.
+- **Each works once,** in place of the app's code: **Use a recovery code** on the sign-in page.
+  Case, spaces and dashes do not matter. A wrong one counts as a wrong code.
+- **Stored as hashes,** as sessions are (SHA-256), never in a form that can be read back. They are
+  rows of `user_factors` of kind `recovery`, and are not listed as factors of their own.
+- **New codes** replace all ten, and take a current code from the app: **Make new recovery
+  codes** under **Your account**.
+- **How many are left** shows under **Your account**, with a warning when fewer than three remain.
+- **Using one** records `auth.recovery_code_used` in history, naming whose it was. Notification
+  channels can subscribe to it. When email is set up (see [Notifications](notifications.md)), it
+  also emails the person, whatever they chose for email to their roles, since it is about their
+  own account.
+
+Codes are ten characters of Crockford's base32, such as `4f8kq-29xmd`: 50 random bits each.
 
 **Lost phones:** whoever manages users removes someone's second factors with **Remove second
 factors** on the Users page (`DELETE /api/v1/users/{id}/factors`). That signs them out everywhere,
@@ -410,9 +431,10 @@ turning the user back on brings no assistant back.
 | `PUT /api/v1/auth/name` | Signed in, or a personal token | Change your own name, with `{"name": "..."}`. |
 | `PUT /api/v1/auth/theme` | Signed in, or a personal token | Change your own theme, with `{"theme": "dark"}`. Answers `{"user"}`, as a rename does. |
 | `PUT /api/v1/auth/email` | Signed in, or a personal token | Turn email sent to your roles off or on, with `{"notifications": false}` (see [Notifications](notifications.md#who-receives-it)). Answers `{"user"}`. |
-| `GET /api/v1/auth/me/factors` | Signed in, or a personal token | Your second factors, never their secrets, and whether they `available`: whether the configuration has a secret key. |
+| `GET /api/v1/auth/me/factors` | Signed in, or a personal token | Your second factors, never their secrets, whether they `available`: whether the configuration has a secret key, and `recovery_codes_left`. |
 | `POST /api/v1/auth/me/factors/totp` | Signed in | Start setting up an authenticator app: answers its `secret` as text, its `otpauth://` `uri`, and a QR code of it as `qr_svg`. |
-| `POST /api/v1/auth/me/factors/totp/confirm` | Signed in | Turn the app on, with `{"code"}` from it. |
+| `POST /api/v1/auth/me/factors/totp/confirm` | Signed in | Turn the app on, with `{"code"}` from it. The first factor answers `recovery_codes` too, shown only then. |
+| `POST /api/v1/auth/me/factors/recovery` | Signed in | New recovery codes, replacing all of them, with `{"code"}` from an app. Answers `recovery_codes`. |
 | `DELETE /api/v1/auth/me/factors/{id}` | Signed in | Turn a factor off, with `{"password", "code"}`. |
 | `GET /api/v1/auth/me/favorites`, `PUT` and `DELETE /api/v1/auth/me/favorites/{kind}/{id}` | Signed in, or a personal token | Your favorites, and starring or unstarring one (see [Favorites](favorites.md#api)). |
 | `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`, `two_factor`, and `sign_in_delayed_until` while wrong passwords hold their sign-ins back. |

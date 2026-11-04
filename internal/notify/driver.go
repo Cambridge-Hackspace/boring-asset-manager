@@ -90,6 +90,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventAuthThrottled, Label: "Sign-ins are held back after too many wrong passwords or codes"},
 	{Kind: models.EventNotifierDisabled, Label: "A notification channel is turned off for failing"},
 	{Kind: models.EventAuthFactorsReset, Label: "Second factors are removed for someone"},
+	{Kind: models.EventAuthRecoveryCodeUsed, Label: "Someone signs in with a recovery code"},
 }
 
 // EventKind is an event channels can subscribe to.
