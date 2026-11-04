@@ -119,6 +119,98 @@ after restoring a backup into an instance with another key (see [Backups](backup
 
 API tokens are not affected: a token is a separate credential, and is never asked for a code.
 
+### Signing in with an identity provider
+
+People can sign in through an identity provider the space already runs, such as Google Workspace,
+Microsoft Entra, Authentik, Keycloak or Okta. Each provider is a button on the sign-in page. They
+are set up under **Admin › Sign-in** by someone with `settings.manage`.
+
+Each provider has:
+
+- **A key and a name.** The key is used in its addresses, such as the one the provider sends
+  people back to, `{base_url}/api/v1/auth/providers/{key}/callback`.
+- **A protocol, and that protocol's settings.** OpenID Connect (#185), SAML 2.0 (#186) and plain
+  OAuth2 (#187) each add one. A protocol's secrets, such as a client secret, can be written but are
+  never shown again. They are kept sealed with `[auth] secret_key`, as second factors' secrets
+  are, so a provider with secrets needs the key.
+- **Its button:** a label, by default "Sign in with" its name, and an optional icon.
+- **An enabled switch, and its place among the buttons.**
+
+**From the configuration:** providers can also be set in `config.toml` as `[[auth.providers]]`, or
+in `BAM_AUTH_PROVIDERS` as a JSON list, for instances provisioned by a script (see
+[Configuration](configuration.md#identity-providers)). Admin shows them, read-only. Their rules
+name roles and scopes by name.
+
+#### Who signs in as whom
+
+Signing in matches by provider and the provider's stable ID for the person, its *subject*: OIDC's
+`sub`, or SAML's persistent NameID. It never matches by email alone, so an email changed at the
+provider cannot take over another account. Each match is an *identity*, kept in `user_identities`.
+An account may have identities at several providers, and a password or not.
+
+When someone signs in and no identity matches:
+
+1. **Linking by email,** when it is on for the provider, links them to the account with the same
+   email, but only if the email is verified. A provider's email counts as verified only when the
+   provider says so (OIDC's `email_verified`), or when the admin says its emails can be trusted.
+2. **Otherwise, an account is made,** when that is on for the provider. It gets the email and name
+   the provider gives, no password, and the provider's default roles. With none, the account can
+   see nothing until someone gives it a role. Accounts can be limited to emails at given domains,
+   or to members of given groups. The email must be verified.
+3. **Otherwise, signing in is refused,** and the sign-in page says why.
+
+#### Roles and scopes from claims
+
+A provider's rules give roles from what it says. Each names a claim or attribute (such as
+`groups`), a value it must hold (such as `makerspace-admins`), and a role, optionally narrowed to
+scopes.
+
+- **Re-applied at every sign-in.** Roles a rule gave are added, or taken away, to match the claims.
+- **Roles given by hand are left alone.** Each of a user's roles records who gave it: a rule of a
+  provider, or a person. A role an admin keeps when saving someone's roles stays the rule's. A role
+  given both by hand and by a rule stays given by hand. Deleting a provider leaves the roles its
+  rules gave, as given by hand.
+- **Anti-lockout still holds.** A sign-in whose claims would take `users.manage` from the last
+  person holding it keeps that role, and records `auth.role_kept` in history.
+
+#### Linking accounts
+
+- **By hand:** whoever manages users links an identity under **Identities** on the Users page,
+  naming the provider and the subject.
+- **By oneself:** someone signed in links a provider under **Your account**. They sign in at the
+  provider, and the identity that comes back is linked to their account.
+- **Unlinking** is refused when it would leave the account with no way to sign in: no other
+  identity, and no password, or passwords off.
+
+#### Turning passwords off
+
+An instance setting under **Admin › Sign-in**. It cannot be turned off while no provider is
+enabled.
+
+- **While it is off,** the sign-in page shows only the providers' buttons, a password does not sign
+  in, and setting passwords is hidden.
+- **Break-glass:** those who hold `users.manage` can still sign in with a password, at a separate
+  page, `/signin/local`. Each time records `auth.break_glass`, which notification channels can
+  subscribe to.
+- **On the command line,** `bam admin password` and `bam admin create` still work, so someone locked
+  out, or a provider that is down, never shuts everyone out.
+
+#### Sessions and second factors
+
+A sign-in through a provider starts an ordinary session, so everything after it works as with a
+password, the MCP consent page included. Someone with a second factor is still asked for its code
+after the provider; #192 decides when a provider's own second factor counts instead. Deactivating
+a user still ends their sessions and tokens, whatever the provider says. Signing out of BAM! does
+not sign out at the provider.
+
+The sign-in through a provider is bound to the browser by a cookie, sent only to the providers'
+routes, that lasts ten minutes and is used once. A failed sign-in counts against the client's
+address, as wrong passwords do (see [Too many wrong passwords](#too-many-wrong-passwords)).
+
+**The test protocol:** with `[auth] test_protocol` on (`BAM_AUTH_TEST_PROTOCOL`), a protocol named
+`test` signs in as whoever its provider's settings name. It is for automated tests alone: never turn
+it on for an instance people use.
+
 ### Forgotten passwords
 
 Whoever manages users sets a new password for someone who has forgotten theirs. The sign-in page
@@ -443,6 +535,19 @@ turning the user back on brings no assistant back.
 | `PUT /api/v1/users/{id}/password` | `users.manage` | Set a user's password, with `{"password"}`. Signs them out everywhere, and clears their sign-in delay. |
 | `DELETE /api/v1/users/{id}/sign-in-delay` | `users.manage` | Let a user sign in again at once, forgetting their wrong passwords. |
 | `DELETE /api/v1/users/{id}/factors` | `users.manage` | Remove a user's second factors, and sign them out everywhere. Answers `{"removed"}`. |
+| `GET /api/v1/users/{id}/identities` | `users.manage` | A user's identities at providers, and `role_grants`: which of their roles a provider's rule gave, by role ID. |
+| `POST /api/v1/users/{id}/identities` | `users.manage` | Link an identity by hand, with `{"provider_id"}` or `{"provider_key"}`, and `{"subject"}`. |
+| `DELETE /api/v1/users/{id}/identities/{identity}` | `users.manage` | Unlink one, unless it is their last way to sign in. |
+| `GET /api/v1/auth/me/identities` | Signed in, or a personal token | Your identities, and which of your roles a rule gave. |
+| `DELETE /api/v1/auth/me/identities/{identity}` | Signed in | Unlink one of yours, unless it is your last way to sign in. |
+| `POST /api/v1/auth/login/local` | Anyone | Sign in with a password at the break-glass page: while passwords are off, only for those holding `users.manage`. |
+| `GET /api/v1/auth/providers/public` | Anyone | The sign-in page's buttons (`key`, `label`, `icon`), and whether `local_passwords` are on. |
+| `GET /api/v1/auth/providers/{key}/start` | Anyone | Send the browser to the provider, then back to `next`. With `link=1`, signed in, link the identity that comes back. |
+| `GET` or `POST /api/v1/auth/providers/{key}/callback` | Anyone | The provider's answer. |
+| `GET /api/v1/auth/providers` | `settings.manage` | Every provider, with its rules and which secrets are set; the `protocols` and their fields; `local_passwords`; and the roles and scopes rules can give. |
+| `POST /api/v1/auth/providers`, `PUT /api/v1/auth/providers/{id}` | `settings.manage` | Save a provider, given whole. A secret left blank keeps the one stored. One from the configuration is refused with `409`. |
+| `DELETE /api/v1/auth/providers/{id}` | `settings.manage` | Remove a provider, with the identities at it. |
+| `PUT /api/v1/auth/settings` | `settings.manage` | Turn passwords off or on, with `{"local_passwords": false}`. |
 | `PUT /api/v1/users/{id}/roles` | `users.manage` | Set a user's roles. |
 
 `PUT /api/v1/users/{id}/roles` takes `{"roles": [{"role_id", "scope_ids": [...]}]}`. An empty or

@@ -98,6 +98,40 @@ secret_key = "…"
 
 ```
 
+### Identity providers
+
+Providers can be set here rather than under Admin, for instances provisioned by a script
+(docs/access.md#signing-in-with-an-identity-provider). Admin shows them, read-only, and the server
+makes them match this file as it starts. Their secrets stay in this file. Rules name roles and
+scopes by name.
+
+```toml
+[[auth.providers]]
+key = "hackspace"
+name = "Hackspace"
+protocol = "oidc"
+settings = { issuer = "https://id.hackspace.org" }
+secrets = { client_secret = "…" }
+button_label = "Sign in with Hackspace"   # optional
+icon = ""                                 # optional
+disabled = false
+provision = true                          # make accounts on first sign-in
+default_roles = ["Members"]
+allowed_domains = ["hackspace.org"]
+allowed_groups = []
+link_by_email = false
+trust_email = false
+
+[[auth.providers.rules]]
+claim = "groups"
+value = "makerspace-admins"
+role = "admin"
+scopes = []
+```
+
+`BAM_AUTH_PROVIDERS` gives the same as a JSON list, replacing the file's, such as
+`[{"key": "hackspace", "name": "Hackspace", "protocol": "oidc", "settings": {…}}]`.
+
 ### Environment overrides
 
 Several settings can also be given in the environment:
@@ -121,6 +155,8 @@ Several settings can also be given in the environment:
 | `email.username`, `email.password` | `BAM_EMAIL_USERNAME`, `BAM_EMAIL_PASSWORD` |
 | `email.from`, `email.reply_to`, `email.ca` | `BAM_EMAIL_FROM`, `BAM_EMAIL_REPLY_TO`, `BAM_EMAIL_CA` |
 | `auth.secret_key` | `BAM_AUTH_SECRET_KEY` |
+| `auth.providers` | `BAM_AUTH_PROVIDERS`, a JSON list |
+| `auth.test_protocol` | `BAM_AUTH_TEST_PROTOCOL` (`true` or `false`): for automated tests only |
 
 How to set them for an installed service is in [Installing](installing.md).
 

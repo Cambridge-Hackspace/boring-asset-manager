@@ -80,6 +80,7 @@ type RestoreSummary struct {
 var placeholders = map[string]any{
 	"users.password_hash":           "!",
 	"notification_channels.options": "{}",
+	"auth_providers.secrets":        "{}",
 }
 
 // selfRefs are columns naming a row of their own table, which a row may

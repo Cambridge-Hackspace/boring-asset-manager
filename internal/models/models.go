@@ -199,6 +199,14 @@ const (
 	// EventAuthRecoveryCodeUsed records someone signing in with a recovery
 	// code, with the Account; channels can subscribe to it.
 	EventAuthRecoveryCodeUsed = "auth.recovery_code_used"
+	// EventAuthBreakGlass records someone signing in with a password while
+	// passwords are off, at the break-glass page, with the Account;
+	// channels can subscribe to it.
+	EventAuthBreakGlass = "auth.break_glass"
+	// EventAuthRoleKept records a role an identity provider no longer
+	// gives, kept because it holds the last users.manage, with the Account
+	// and the role in the Note; it is for history.
+	EventAuthRoleKept = "auth.role_kept"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -206,7 +214,7 @@ const (
 func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
-		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged:
+		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventAuthRoleKept:
 		return true
 	}
 	return false

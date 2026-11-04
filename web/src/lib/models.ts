@@ -409,6 +409,73 @@ export interface Factor {
   last_used_at?: string;
 }
 
+/** A rule giving a role, optionally narrowed, to whoever's claim holds a value (docs/access.md). */
+export interface ProviderRule {
+  id?: string;
+  claim: string;
+  value: string;
+  role_id: string;
+  scope_ids: string[];
+}
+
+/** A protocol's setting, shown in a provider's form; a secret one is written but never shown. */
+export interface ProtocolField {
+  name: string;
+  label: string;
+  help?: string;
+  required: boolean;
+  secret: boolean;
+}
+
+export interface Protocol {
+  name: string;
+  label: string;
+  fields: ProtocolField[];
+}
+
+/** An identity provider people sign in through (docs/access.md#signing-in-with-an-identity-provider). */
+export interface Provider {
+  id: string;
+  key: string;
+  name: string;
+  protocol: string;
+  settings: Record<string, string>;
+  secrets_set: Record<string, boolean>;
+  secrets_unreadable?: boolean;
+  callback_url: string;
+  button_label: string;
+  icon: string;
+  enabled: boolean;
+  position: number;
+  provision: boolean;
+  default_role_ids: string[];
+  allowed_domains: string[];
+  allowed_groups: string[];
+  link_by_email: boolean;
+  trust_email: boolean;
+  from_config: boolean;
+  rules: ProviderRule[];
+}
+
+/** The sign-in page's buttons, and whether it shows the password form. */
+export interface PublicProviders {
+  providers: { key: string; label: string; icon?: string }[];
+  local_passwords: boolean;
+}
+
+/** Someone's identity at a provider. */
+export interface Identity {
+  id: string;
+  user_id: string;
+  provider_id: string;
+  provider_key: string;
+  provider_name: string;
+  subject: string;
+  email: string;
+  created_at: string;
+  last_used_at?: string;
+}
+
 export interface ImageInfo {
   id: string;
   filename: string;

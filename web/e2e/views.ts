@@ -160,6 +160,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/users', 'Users'],
     ['/roles', 'Roles'],
     ['/tokens', 'API tokens'],
+    ['/sign-in-settings', 'Sign-in'],
     ['/backups', 'Backups'],
     ['/packages', 'Import & export'],
     ['/loans', 'Loans'],

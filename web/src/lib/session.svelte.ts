@@ -45,11 +45,12 @@ class Session {
   }
 
   /**
-   * Signs in with a password. With a second factor, that is the first step
-   * of two: it answers true, and finishSignIn takes the code.
+   * Signs in with a password, or, local, at the break-glass page. With a
+   * second factor, that is the first step of two: it answers true, and
+   * finishSignIn takes the code.
    */
-  async signIn(email: string, password: string): Promise<boolean> {
-    const res = await request<{ factor_required?: boolean }>('POST', '/auth/login', { email, password });
+  async signIn(email: string, password: string, local = false): Promise<boolean> {
+    const res = await request<{ factor_required?: boolean }>('POST', local ? '/auth/login/local' : '/auth/login', { email, password });
     if (res?.factor_required) return true;
     await this.load();
     return false;

@@ -258,10 +258,50 @@ func (s *Store) SetUserRoleAssignments(userID string, assignments []models.RoleA
 		if err != nil {
 			return err
 		}
-		// Its narrowing goes with each assignment (ON DELETE CASCADE).
-		if _, err := s.TxExec(tx, "DELETE FROM user_roles WHERE user_id = ?", userID); err != nil {
-			return fmt.Errorf("clearing roles: %w", err)
+		// The rows of roles kept stay, narrowed again, so that a role a
+		// provider's rule gave stays the provider's
+		// (docs/access.md#roles-and-scopes-from-claims). Its narrowing goes
+		// with each assignment taken away (ON DELETE CASCADE).
+		held := map[string]bool{}
+		rows, err := s.TxQuery(tx, "SELECT role_id FROM user_roles WHERE user_id = ?", userID)
+		if err != nil {
+			return fmt.Errorf("reading roles: %w", err)
 		}
-		return s.insertAssignmentsTx(tx, userAssignments, userID, merged)
+		for rows.Next() {
+			var role string
+			if err := rows.Scan(&role); err != nil {
+				rows.Close()
+				return err
+			}
+			held[role] = true
+		}
+		rows.Close()
+		wanted := map[string]bool{}
+		for _, a := range merged {
+			wanted[a.RoleID] = true
+		}
+		for role := range held {
+			if !wanted[role] {
+				if _, err := s.TxExec(tx, "DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", userID, role); err != nil {
+					return fmt.Errorf("taking a role away: %w", err)
+				}
+			}
+		}
+		var added []models.RoleAssignment
+		for _, a := range merged {
+			if !held[a.RoleID] {
+				added = append(added, a)
+				continue
+			}
+			if _, err := s.TxExec(tx, "DELETE FROM user_role_scopes WHERE user_id = ? AND role_id = ?", userID, a.RoleID); err != nil {
+				return fmt.Errorf("narrowing a role again: %w", err)
+			}
+			for _, scope := range a.ScopeIDs {
+				if _, err := s.TxExec(tx, "INSERT INTO user_role_scopes (user_id, role_id, scope_id) VALUES (?, ?, ?)", userID, a.RoleID, scope); err != nil {
+					return fmt.Errorf("narrowing role: %w", err)
+				}
+			}
+		}
+		return s.insertAssignmentsTx(tx, userAssignments, userID, added)
 	})
 }

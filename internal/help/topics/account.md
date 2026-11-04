@@ -12,6 +12,10 @@ Turning it on shows ten **recovery codes**, once. Download or print them, and ke
 
 To turn it off, choose **Turn off** and give your password and a code. If you lose your phone and your recovery codes, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again.
 
+## Signing in elsewhere
+
+If BAM! has sign-in buttons for an identity provider your space runs, such as your organization's Google or Microsoft account, **Signing in elsewhere** lists the ones linked to your account. **Link** one to sign in through it from then on: you sign in there, and come back here. **Unlink** stops it, as long as you keep another way to sign in.
+
 ## Assistants
 
 An assistant, such as Claude, can work with BAM! for you over MCP: find things, add them, lend and return them, print labels. Under **Assistants** on Your account, choose **New assistant**, name it, and copy what it needs to connect: the token is shown only once. The assistant acts as you, with whatever you may do at the time, and what it changes is recorded as yours. It cannot change your password or make tokens.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/idp"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
@@ -87,6 +89,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// The configuration was checked as it loaded, so its key reads.
 	key, _ := cfg.Auth.Key()
 	s.sealer, _ = auth.NewSealer(key)
+	// The test protocol only where a test turned it on (docs/access.md).
+	if cfg.Auth.TestProtocol {
+		idp.Register(idp.TestProtocol{})
+	}
+	// A provider in the configuration that cannot be set up is said, and
+	// the rest of BAM! still serves.
+	if err := s.syncConfigProviders(); err != nil {
+		log.Printf("identity providers from the configuration: %v", err)
+	}
 	// The settings were checked as they loaded, so the store opens; one
 	// that does not reach, or cannot be written, is found by CheckStorage.
 	blobs, err := filestore.Open(cfg.Storage)
@@ -111,6 +122,19 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handleFunc("GET /api/v1/info", s.handleInfo)
 	handleFunc("POST /api/v1/auth/login", s.handleLogin)
 	handleFunc("POST /api/v1/auth/login/factor", s.handleLoginFactor)
+	handleFunc("POST /api/v1/auth/login/local", s.handleLoginLocal)
+	// Identity providers (docs/access.md#signing-in-with-an-identity-provider).
+	handleFunc("GET /api/v1/auth/providers/public", s.handlePublicProviders)
+	handleFunc("GET /api/v1/auth/providers/{key}/start", s.handleProviderStart)
+	handleFunc("GET /api/v1/auth/providers/{key}/callback", s.handleProviderCallback)
+	handleFunc("POST /api/v1/auth/providers/{key}/callback", s.handleProviderCallback)
+	handle("GET /api/v1/auth/providers", manageSignIn(http.HandlerFunc(s.handleListProviders)))
+	handle("POST /api/v1/auth/providers", manageSignIn(http.HandlerFunc(s.handleCreateProvider)))
+	handle("PUT /api/v1/auth/providers/{id}", manageSignIn(http.HandlerFunc(s.handleUpdateProvider)))
+	handle("DELETE /api/v1/auth/providers/{id}", manageSignIn(http.HandlerFunc(s.handleDeleteProvider)))
+	handle("PUT /api/v1/auth/settings", manageSignIn(http.HandlerFunc(s.handleSetSignInSettings)))
+	handle("GET /api/v1/auth/me/identities", RequirePerson(http.HandlerFunc(s.handleListOwnIdentities)))
+	handle("DELETE /api/v1/auth/me/identities/{identity}", RequireAuth(http.HandlerFunc(s.handleUnlinkOwnIdentity)))
 
 	// Signed-out visitors hold the public role's permissions on the routes
 	// wrapped in OpenToPublic only: one asset's page, never the catalog.
@@ -148,6 +172,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/users/{id}/password", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserPassword)))
 	handle("DELETE /api/v1/users/{id}/sign-in-delay", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleClearSignInDelay)))
 	handle("DELETE /api/v1/users/{id}/factors", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleResetUserFactors)))
+	handle("GET /api/v1/users/{id}/identities", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListUserIdentities)))
+	handle("POST /api/v1/users/{id}/identities", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleLinkUserIdentity)))
+	handle("DELETE /api/v1/users/{id}/identities/{identity}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUnlinkUserIdentity)))
 	handle("PUT /api/v1/users/{id}/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserRoles)))
 	handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 	handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))

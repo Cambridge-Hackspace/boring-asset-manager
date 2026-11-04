@@ -481,6 +481,23 @@ func TestAThemeIsRestored(t *testing.T) {
 	if stripped == 0 {
 		t.Fatal("the archive has no users rows")
 	}
+	// Nor who gave each role, which came with identity providers (057).
+	for i, m := range ms {
+		if !strings.HasPrefix(m.name, DataDir+"user_roles/") {
+			continue
+		}
+		var out bytes.Buffer
+		for _, line := range strings.Split(strings.TrimSuffix(string(m.data), "\n"), "\n") {
+			var row map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(line), &row); err != nil {
+				t.Fatal(err)
+			}
+			delete(row, "granted_by")
+			data, _ := json.Marshal(row)
+			out.Write(append(data, '\n'))
+		}
+		ms[i].data = out.Bytes()
+	}
 	old := pack(t, reseal(t, ms, func(h *Header, _ *Manifest) { h.SchemaVersion = 47 }))
 	dst = emptyStore(t, envDialect())
 	sum, err := Restore(context.Background(), dst, filestore.NewLocal(t.TempDir()), opener(old), RestoreOptions{})

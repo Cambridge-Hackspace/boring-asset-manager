@@ -426,6 +426,17 @@ func TestDiscordRecoveryCodeEmbed(t *testing.T) {
 	}
 }
 
+func TestDiscordBreakGlassEmbed(t *testing.T) {
+	e := discordPayload(Notification{BaseURL: "https://bam.example", Event: models.Event{
+		Kind:    models.EventAuthBreakGlass,
+		Payload: models.EventPayload{Trigger: models.TriggerManual, Account: &models.EventActor{ID: "u1", Name: "Ada"}},
+	}}).Embeds[0]
+	if e.Title != "Break-glass sign-in: Ada" || e.Color != discordWarning || e.URL != "https://bam.example/users" ||
+		!strings.Contains(e.Description, "while passwords are off") {
+		t.Errorf("break-glass: %+v", e)
+	}
+}
+
 func TestDiscordSaysWhatFiredAHook(t *testing.T) {
 	hook := func(h *models.EventHook, actor *models.EventActor) string {
 		return discordPayload(Notification{Event: models.Event{Kind: models.EventAssetHook, Payload: models.EventPayload{

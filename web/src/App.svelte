@@ -40,13 +40,13 @@
 
   // Other signed-out visitors go to sign-in, and come back afterward.
   $effect(() => {
-    if (session.loaded && !session.user && router.path !== '/sign-in' && !openToPublic) {
+    if (session.loaded && !session.user && router.path !== '/sign-in' && router.path !== '/signin/local' && !openToPublic) {
       navigate(signInPath(router.path + router.search), true);
     }
   });
 
   $effect(() => {
-    const title = router.path === '/sign-in' ? 'Sign in' : match ? match.route.title : 'Not found';
+    const title = router.path === '/sign-in' || router.path === '/signin/local' ? 'Sign in' : match ? match.route.title : 'Not found';
     document.title = `${title} · BAM!`;
   });
 </script>
@@ -58,8 +58,8 @@
   </main>
 {:else if !session.loaded}
   <p class="p-8 text-sm text-zinc-600 dark:text-zinc-400" role="status">Loading…</p>
-{:else if router.path === '/sign-in'}
-  <SignIn />
+{:else if router.path === '/sign-in' || router.path === '/signin/local'}
+  <SignIn local={router.path === '/signin/local'} />
 {:else if session.user || openToPublic}
   <Shell {workspace}>
     {#if !match}
