@@ -14,6 +14,10 @@ Rows with an ID update that asset, and blank cells leave its values alone; rows 
 
 Choose or drop up to 20 files together. Each has its own mapping and check, and is imported on its own, in the order listed; **Up** and **Down** change it. A file that links to assets another one creates goes after it: its check says so, and it is checked again as it is imported. If a file is refused, the ones after it are not imported, and the page says which were. A file with the same columns as one you imported before starts from the mapping you used then.
 
+## Excel workbooks
+
+An Excel workbook (.xlsx) imports a sheet at a time: each sheet is listed as "Workbook › Sheet", with its own mapping and check, and **Remove** leaves one out. The first row with anything in it is the header row. Only values are read: a formula imports the value it shows, numbers as they show, dates as dates such as 2024-03-05, and TRUE and FALSE as true and false. Older .xls workbooks and .ods spreadsheets are not taken: save them as .xlsx or CSV first.
+
 ## Links
 
 The **links** column holds entries such as `contained_in:Bin A3;used_with:Drill`. Assets are named by name, or by ID or code where a name is shared. An import adds and moves links; tick **Also remove links that no row states** to remove the rest, so an edited export comes back exactly.

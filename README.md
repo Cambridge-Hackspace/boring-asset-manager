@@ -65,7 +65,7 @@ How each part works, with its API:
 - [Labels](docs/labels.md), the [template editor](docs/template-editor.md) and [printing](docs/printing.md).
 - [Icons](docs/icons.md).
 - [Stock and lending](docs/stock-and-lending.md), [notifications](docs/notifications.md) and [hooks](docs/hooks.md).
-- [Scanning](docs/scanning.md), [flows](docs/flows.md), [reports](docs/reports.md) and [CSV](docs/csv.md).
+- [Scanning](docs/scanning.md), [flows](docs/flows.md), [reports](docs/reports.md) and [CSV and Excel](docs/csv.md).
 - [Favorites](docs/favorites.md): what each person stars to find again.
 - [Assistants (MCP)](docs/mcp.md).
 

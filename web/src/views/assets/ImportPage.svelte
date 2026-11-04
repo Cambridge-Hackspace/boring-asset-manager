@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { MAX_FILES, targetOptions } from '../../lib/importing';
+  import { IMPORT_ACCEPT, MAX_FILES, fileKind, importForm, targetOptions } from '../../lib/importing';
   import { ImportEntry } from '../../lib/importset.svelte';
   import type { Field, GeneratorInfo } from '../../lib/models';
   import { session } from '../../lib/session.svelte';
@@ -53,15 +53,40 @@
     }
   });
 
+  // A workbook is an import per sheet; other spreadsheets are not taken.
+  async function entriesOf(files: File[]): Promise<{ entries: ImportEntry[]; problems: string[] }> {
+    const out: ImportEntry[] = [];
+    const problems: string[] = [];
+    for (const f of files) {
+      const kind = fileKind(f.name);
+      if (kind === 'other') {
+        problems.push(`${f.name} is not taken: save it as an Excel workbook (.xlsx) or CSV.`);
+      } else if (kind === 'xlsx') {
+        try {
+          const { sheets } = await request<{ sheets: string[] }>('POST', '/assets/import/preview', importForm(f));
+          for (const sheet of sheets ?? []) out.push(new ImportEntry(f, sheet));
+        } catch (err) {
+          problems.push(`${f.name}: ${messageOf(err)}`);
+        }
+      } else {
+        out.push(new ImportEntry(f));
+      }
+    }
+    return { entries: out, problems };
+  }
+
   async function add(files: File[]) {
     error = '';
     outcome = '';
     spooled = '';
     // A finished run's files make way for the next.
     if (entries.length && !pending.length) entries = [];
+    const read = await entriesOf(files);
     const room = MAX_FILES - entries.length;
-    if (files.length > room) error = `At most ${MAX_FILES} files are imported together; ${files.length - room === 1 ? 'one was' : `${files.length - room} were`} left out.`;
-    const added = files.slice(0, Math.max(room, 0)).map((f) => new ImportEntry(f));
+    const left = read.entries.length - room;
+    if (left > 0) read.problems.push(`At most ${MAX_FILES} files or sheets are imported together; ${left === 1 ? 'one was' : `${left} were`} left out.`);
+    error = read.problems.join(' ');
+    const added = read.entries.slice(0, Math.max(room, 0));
     entries = [...entries, ...added];
     // One at a time, in order, so a file can start from the mapping of the one before.
     for (const e of added) await e.start(userId);
@@ -78,7 +103,7 @@
     event.preventDefault();
     dragging = false;
     if (busy) return;
-    await add([...(event.dataTransfer?.files ?? [])].filter((f) => f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv'));
+    await add([...(event.dataTransfer?.files ?? [])].filter((f) => f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv' || fileKind(f.name) !== 'csv'));
   }
 
   function move(entry: ImportEntry, by: number) {
@@ -95,7 +120,7 @@
     entries = entries.filter((e) => e !== entry);
   }
 
-  const names = (list: ImportEntry[]) => list.map((e) => e.file.name).join(', ');
+  const names = (list: ImportEntry[]) => list.map((e) => e.name).join(', ');
 
   async function runImport() {
     if (!ready || busy) return;
@@ -119,7 +144,7 @@
       for (const e of rest) e.skipped = true;
       if (queue.length > 1) {
         outcome = failed
-          ? `${done.length ? `Imported ${names(done)}. ` : 'Nothing was imported. '}${failed.file.name} was refused${rest.length ? `, so ${names(rest)} ${rest.length === 1 ? 'was' : 'were'} not imported` : ''}.`
+          ? `${done.length ? `Imported ${names(done)}. ` : 'Nothing was imported. '}${failed.name} was refused${rest.length ? `, so ${names(rest)} ${rest.length === 1 ? 'was' : 'were'} not imported` : ''}.`
           : `Imported all ${done.length} files.`;
       }
       if (canSpool) {
@@ -141,7 +166,7 @@
 
 <h1 class="mb-2 text-2xl font-bold">Import assets</h1>
 <p class="mb-4 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
-  A CSV file with one asset per row. Rows with an ID update that asset, and blank cells leave its values alone; rows
+  A CSV file, or a sheet of an Excel workbook, with one asset per row. Rows with an ID update that asset, and blank cells leave its values alone; rows
   without one create new assets. Categories are paths such as <span class="font-mono">Tools &gt; Drills</span>,
   separated by semicolons, and must already exist. Exporting from the asset list gives a file in this format. Nothing
   is written until you import, and then either every row of a file is imported or none is.
@@ -163,8 +188,8 @@
   ondrop={drop}
 >
   <label class="label" for="import-file">CSV file</label>
-  <input id="import-file" type="file" accept=".csv,text/csv" multiple class="block min-h-11 py-2 text-sm" onchange={choose} disabled={busy} />
-  <p class="text-xs text-zinc-600 dark:text-zinc-400">Choose or drop up to {MAX_FILES} files.</p>
+  <input id="import-file" type="file" accept={IMPORT_ACCEPT} multiple class="block min-h-11 py-2 text-sm" onchange={choose} disabled={busy} />
+  <p class="text-xs text-zinc-600 dark:text-zinc-400">Choose or drop up to {MAX_FILES} files: CSV, or Excel workbooks (.xlsx), each sheet an import of its own.</p>
 </div>
 
 <ErrorMessage {error} />
