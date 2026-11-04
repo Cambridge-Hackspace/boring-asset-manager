@@ -29,6 +29,8 @@ func (TestProtocol) Fields() []Field {
 		{Name: "name", Label: "Name"},
 		{Name: "groups", Label: "Groups, separated by commas"},
 		{Name: "refuse", Label: "Refuse (yes or no)"},
+		{Name: "amr", Label: "How they signed in (amr), separated by commas"},
+		{Name: "acr", Label: "The level they signed in at (acr)"},
 		{Name: "secret", Label: "A secret, unused", Secret: true},
 	}
 }
@@ -68,5 +70,11 @@ func (TestProtocol) Finish(_ context.Context, c Config, r *http.Request, state m
 	if claims.Email != "" {
 		claims.Values["email"] = []string{claims.Email}
 	}
+	for _, v := range strings.Split(c.Settings["amr"], ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			claims.AMR = append(claims.AMR, v)
+		}
+	}
+	claims.ACR = strings.TrimSpace(c.Settings["acr"])
 	return claims, nil
 }

@@ -23,7 +23,7 @@ var (
 // ListRoles returns every role with its permission keys, ordered by name.
 func (s *Store) ListRoles() ([]models.RoleWithPermissions, error) {
 	rows, err := s.Query(`
-		SELECT r.id, r.name, r.description, p.permission_key
+		SELECT r.id, r.name, r.description, r.requires_two_factor, p.permission_key
 		FROM roles r
 		LEFT JOIN role_permissions rp ON rp.role_id = r.id
 		LEFT JOIN permissions p ON p.id = rp.permission_id
@@ -37,14 +37,15 @@ func (s *Store) ListRoles() ([]models.RoleWithPermissions, error) {
 	var roles []models.RoleWithPermissions
 	for rows.Next() {
 		var (
-			r   models.Role
-			key sql.NullString
+			r         models.Role
+			twoFactor bool
+			key       sql.NullString
 		)
-		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &key); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Description, &twoFactor, &key); err != nil {
 			return nil, fmt.Errorf("scanning role: %w", err)
 		}
 		if n := len(roles); n == 0 || roles[n-1].ID != r.ID {
-			roles = append(roles, models.RoleWithPermissions{Role: r, Permissions: []string{}})
+			roles = append(roles, models.RoleWithPermissions{Role: r, Permissions: []string{}, RequiresTwoFactor: twoFactor})
 		}
 		if key.Valid {
 			last := &roles[len(roles)-1]
@@ -256,6 +257,10 @@ type RoleInput struct {
 	Name        string
 	Description string
 	Permissions []string
+	// RequiresTwoFactor, when given, sets whether holders must sign in
+	// with a second factor; left nil, a new role does not and a changed one
+	// keeps what it had.
+	RequiresTwoFactor *bool
 }
 
 // normalize trims the role and checks its name, description and
@@ -331,13 +336,20 @@ func (s *Store) CreateRole(in RoleInput) (*models.RoleWithPermissions, error) {
 	if _, err := s.TxExec(tx, "INSERT INTO roles (id, name, description) VALUES (?, ?, ?)", id, in.Name, in.Description); err != nil {
 		return nil, fmt.Errorf("inserting role: %w", err)
 	}
+	if in.RequiresTwoFactor != nil && *in.RequiresTwoFactor {
+		if err := s.setRoleTwoFactorTx(tx, id, in.Name, true); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.setRolePermissionsTx(tx, id, in.Permissions); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("committing: %w", err)
 	}
-	return s.GetRole(id)
+	// As saved: new, so held by no one, and neither built-in role.
+	return &models.RoleWithPermissions{Role: models.Role{ID: id, Name: in.Name, Description: in.Description},
+		Permissions: in.Permissions, RequiresTwoFactor: in.RequiresTwoFactor != nil && *in.RequiresTwoFactor}, nil
 }
 
 // UpdateRole renames a role and replaces its permissions, under the
@@ -365,12 +377,78 @@ func (s *Store) UpdateRole(id string, in RoleInput) (*models.RoleWithPermissions
 		if _, err := s.TxExec(tx, "UPDATE roles SET name = ?, description = ? WHERE id = ?", in.Name, in.Description, id); err != nil {
 			return fmt.Errorf("updating role: %w", err)
 		}
+		if in.RequiresTwoFactor != nil {
+			if err := s.setRoleTwoFactorTx(tx, id, in.Name, *in.RequiresTwoFactor); err != nil {
+				return err
+			}
+		}
 		return s.setRolePermissionsTx(tx, id, in.Permissions)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return s.GetRole(id)
+}
+
+// SetRoleTwoFactor sets whether a role's holders must sign in with a second
+// factor. It is the one thing that can be changed about the admin role.
+// Turning it off is recorded in history (EventRoleTwoFactorOff).
+func (s *Store) SetRoleTwoFactor(id string, on bool) (*models.RoleWithPermissions, error) {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	var name string
+	err = s.TxQueryRow(tx, "SELECT name FROM roles WHERE id = ?", id).Scan(&name)
+	if err == sql.ErrNoRows {
+		return nil, ErrRoleNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading role: %w", err)
+	}
+	if err := s.setRoleTwoFactorTx(tx, id, name, on); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing: %w", err)
+	}
+	return s.GetRole(id)
+}
+
+// setRoleTwoFactorTx sets a role's requires_two_factor, recording it when
+// it is turned off. The public role, which everyone holds signed in or
+// not, cannot require it.
+func (s *Store) setRoleTwoFactorTx(tx *sql.Tx, id, name string, on bool) error {
+	if on && name == rbac.PublicRole {
+		return ErrPublicRole
+	}
+	var was bool
+	if err := s.TxQueryRow(tx, "SELECT requires_two_factor FROM roles WHERE id = ?", id).Scan(&was); err != nil {
+		return fmt.Errorf("reading role: %w", err)
+	}
+	if was == on {
+		return nil
+	}
+	if _, err := s.TxExec(tx, "UPDATE roles SET requires_two_factor = ? WHERE id = ?", on, id); err != nil {
+		return fmt.Errorf("updating role: %w", err)
+	}
+	if on {
+		return nil
+	}
+	return s.insertEvent(tx, models.EventRoleTwoFactorOff, nil, nil, models.EventPayload{Trigger: models.TriggerManual, Note: name})
+}
+
+// RequiresTwoFactor reports whether any role a user holds requires
+// two-factor sign-in.
+func (s *Store) RequiresTwoFactor(userID string) (bool, error) {
+	var n int
+	err := s.QueryRow(`SELECT COUNT(*) FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+		WHERE ur.user_id = ? AND r.requires_two_factor = TRUE`, userID).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("reading the user's roles: %w", err)
+	}
+	return n > 0, nil
 }
 
 // DeleteRole deletes a role, taking it from everyone who holds it, under the

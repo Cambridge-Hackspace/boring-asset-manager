@@ -95,6 +95,8 @@ func (*OIDC) Fields() []Field {
 		{Name: "email_claim", Label: "Email claim", Help: "Blank is " + defaultEmailClaim + "."},
 		{Name: "name_claim", Label: "Name claim", Help: "Blank is " + defaultNameClaim + "."},
 		{Name: "groups_claim", Label: "Groups claim", Help: "Blank is " + defaultGroupsClaim + "."},
+		{Name: "acr_values", Label: "Ask for (acr_values)",
+			Help: "acr values to ask the provider to sign people in at, separated by spaces, such as one that requires a second factor. Blank asks for none."},
 	}
 }
 
@@ -183,6 +185,11 @@ func (o *OIDC) Begin(ctx context.Context, c Config) (string, map[string]string, 
 	q.Set("nonce", nonce)
 	q.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challenge[:]))
 	q.Set("code_challenge_method", "S256")
+	// Asking for a level of sign-in, such as one with a second factor
+	// (docs/access.md#requiring-two-factor-sign-in).
+	if acr := strings.Join(strings.Fields(c.Settings["acr_values"]), " "); acr != "" {
+		q.Set("acr_values", acr)
+	}
 	u.RawQuery = q.Encode()
 	return u.String(), map[string]string{"state": c.State, "nonce": nonce, "verifier": verifier}, nil
 }

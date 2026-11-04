@@ -246,3 +246,19 @@ func TestOIDCCheck(t *testing.T) {
 		t.Errorf("http on this machine: %v", err)
 	}
 }
+
+func TestOIDCAsksForALevelOfSignInWhenTold(t *testing.T) {
+	f := newOIDCFixture(t)
+	redirect, _, err := f.oidc.Begin(context.Background(), f.config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := url.Parse(redirect); u.Query().Has("acr_values") {
+		t.Errorf("asked for a level unasked: %s", redirect)
+	}
+	f.config.Settings["acr_values"] = "  urn:gold   urn:silver "
+	redirect, _, _ = f.oidc.Begin(context.Background(), f.config)
+	if u, _ := url.Parse(redirect); u.Query().Get("acr_values") != "urn:gold urn:silver" {
+		t.Errorf("acr_values: %s", redirect)
+	}
+}

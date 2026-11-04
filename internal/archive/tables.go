@@ -67,7 +67,7 @@ var Tables = []Table{
 		Columns: []Column{{"category_id", Text}, {"rendition", Text}, {"param", Text}, {"source", Text}, {"field_id", Text}},
 	},
 	{Name: "roles", Kind: KindPeople, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"name", Text}, {"description", Text}},
+		Columns: []Column{{"id", Text}, {"name", Text}, {"description", Text}, {"requires_two_factor", Bool}},
 	},
 	{Name: "role_permissions", Kind: KindPeople, Key: []string{"role_id", "permission_key"},
 		Columns:         []Column{{"role_id", Text}, {"permission_key", Text}},
@@ -157,14 +157,14 @@ var Tables = []Table{
 	// Identity providers' secrets are sealed with the configuration's key,
 	// as second factors are; those set in the configuration file have none.
 	{Name: "auth_providers", Kind: KindSettings, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"provider_key", Text}, {"name", Text}, {"protocol", Text}, {"settings", JSON}, {"secrets", Text}, {"button_label", Text}, {"icon", Text}, {"enabled", Bool}, {"position", Int}, {"provision", Bool}, {"default_role_ids", JSON}, {"allowed_domains", JSON}, {"allowed_groups", JSON}, {"link_by_email", Bool}, {"trust_email", Bool}, {"from_config", Bool}, {"created_at", Time}, {"updated_at", Time}},
+		Columns: []Column{{"id", Text}, {"provider_key", Text}, {"name", Text}, {"protocol", Text}, {"settings", JSON}, {"secrets", Text}, {"button_label", Text}, {"icon", Text}, {"enabled", Bool}, {"position", Int}, {"provision", Bool}, {"default_role_ids", JSON}, {"allowed_domains", JSON}, {"allowed_groups", JSON}, {"link_by_email", Bool}, {"trust_email", Bool}, {"from_config", Bool}, {"created_at", Time}, {"updated_at", Time}, {"mfa_amr", JSON}, {"mfa_acr", JSON}, {"mfa_fallback", Bool}, {"mfa_always_local", Bool}},
 		Secret:  []string{"secrets"},
 	},
 	{Name: "auth_provider_rules", Kind: KindSettings, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"provider_id", Text}, {"position", Int}, {"claim", Text}, {"claim_value", Text}, {"role_id", Text}, {"scope_ids", JSON}},
 	},
 	{Name: "sessions", Kind: KindAuth, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"user_id", Text}, {"expires_at", Time}, {"created_at", Time}},
+		Columns: []Column{{"id", Text}, {"user_id", Text}, {"expires_at", Time}, {"created_at", Time}, {"factor_setup", Bool}},
 	},
 	// Second factors' secrets are sealed with the configuration's key: an
 	// instance with another key keeps them, but cannot use them.

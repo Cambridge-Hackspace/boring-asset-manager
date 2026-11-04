@@ -270,6 +270,17 @@ func (s *Store) SeedDefaultPermissionsAndRoles() error {
 		if err != nil {
 			return fmt.Errorf("inserting admin role: %w", err)
 		}
+		// It requires two-factor sign-in, unless an admin turns that off;
+		// on a schema from before roles could, migrating turns it on.
+		var version int
+		if err := s.TxQueryRow(tx, "SELECT MAX(version) FROM schema_migrations").Scan(&version); err != nil {
+			return fmt.Errorf("reading the schema's version: %w", err)
+		}
+		if version >= migrations.TwoFactorRolesVersion {
+			if _, err := s.TxExec(tx, "UPDATE roles SET requires_two_factor = TRUE WHERE id = ?", adminRoleID); err != nil {
+				return fmt.Errorf("requiring two-factor sign-in of the admin role: %w", err)
+			}
+		}
 	} else if err != nil {
 		return fmt.Errorf("querying admin role: %w", err)
 	}

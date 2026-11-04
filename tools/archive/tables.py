@@ -45,7 +45,7 @@ JSON = {
     'printers': {'options'}, 'notification_channels': {'options', 'events'}, 'oauth_clients': {'redirect_uris'},
     'flows': {'definition'}, 'icon_settings': {'stroke_widths', 'reserved', 'limits', 'states'},
     'category_icons': {'draft_errors'}, 'icon_library': {'draft_errors'}, 'asset_actions': {'triggers'},
-    'auth_providers': {'settings', 'default_role_ids', 'allowed_domains', 'allowed_groups'}, 'auth_provider_rules': {'scope_ids'},
+    'auth_providers': {'settings', 'default_role_ids', 'allowed_domains', 'allowed_groups', 'mfa_amr', 'mfa_acr'}, 'auth_provider_rules': {'scope_ids'},
 }
 SECRET = {'users': ['password_hash', 'totp_secret'], 'notification_channels': ['options'], 'auth_providers': ['secrets']}
 # Grants are written by permission key, which is the same on every

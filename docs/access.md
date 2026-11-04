@@ -119,6 +119,48 @@ after restoring a backup into an instance with another key (see [Backups](backup
 
 API tokens are not affected: a token is a separate credential, and is never asked for a code.
 
+#### Requiring two-factor sign-in
+
+**By role:** each role has a **Requires two-factor sign-in** switch, under **Admin › Roles**.
+Whoever holds any role with it on must sign in with a second factor.
+
+- **The admin role has it on,** on a new instance and on one upgraded to it, so an admin without a
+  second factor sets one up at their next sign-in. **Stop requiring two-factor sign-in** on the
+  admin role turns it off, after a warning that whoever has an admin's password then has every
+  permission. It is the one setting of the admin role that can change. On the command line,
+  `bam admin mfa require --role admin --off` does the same, and `--off` left out turns it on.
+- **Turning it off,** for any role, records `role.two_factor_off` in history, naming the role and
+  who turned it off. Notification channels can subscribe to it.
+- **Someone required to have a second factor who has none** is asked to set one up at their next
+  sign-in, and can do nothing else until they do. Their session reaches only setting up an
+  authenticator app, who they are, and signing out; anything else answers `403`. Sessions already
+  open when a role starts requiring it go on until they end.
+- **Their last second factor cannot be removed** while a role they hold requires one. Whoever
+  manages users can still remove someone's factors; they then set one up at their next sign-in.
+- **It needs `[auth] secret_key`:** without the key no factor can be set up, so nobody is held to
+  setting one up.
+
+**From identity providers:** someone signing in through a provider has already signed in there,
+perhaps with a second factor of its own. By default, BAM! trusts the provider:
+
+- **Its sign-in counts as two-factor** when its `amr` holds one of the values the provider's
+  settings list (`mfa`, `otp`, `hwk`, `swk` and `fpt` by default), or its `acr`, or SAML's
+  `AuthnContextClassRef`, is one they list (none by default).
+- **When it does not,** someone whose roles require a second factor is asked for BAM!'s own if the
+  provider's **When it does not say so, ask for BAM!'s own second factor** is on, and has to set
+  one up if they have none. With it off, the sign-in is refused, saying the provider must require a
+  second factor.
+- **Someone whose roles do not require one,** but who set one up, is asked for it unless the
+  provider's sign-in counts as two-factor.
+- **Always ask for BAM!'s own second factor** is a per-provider setting for a provider whose word
+  is not trusted: BAM!'s own is asked for whatever the provider says.
+- **Asking the provider for a second factor:** an OpenID Connect provider's **Ask for
+  (acr_values)** setting sends `acr_values` with the sign-in, such as a level the provider defines
+  as requiring a second factor. SAML's `RequestedAuthnContext` comes with SAML (#186).
+
+**Tokens are unaffected:** API tokens never ask for a code, and an assistant's grant is made from a
+session that already passed whatever was required.
+
 ### Signing in with an identity provider
 
 People can sign in through an identity provider the space already runs, such as Google Workspace,
@@ -273,8 +315,8 @@ enabled.
 #### Sessions and second factors
 
 A sign-in through a provider starts an ordinary session, so everything after it works as with a
-password, the MCP consent page included. Someone with a second factor is still asked for its code
-after the provider; #192 decides when a provider's own second factor counts instead. Deactivating
+password, the MCP consent page included. Whether BAM!'s own second factor is asked for after the
+provider is in [Requiring two-factor sign-in](#requiring-two-factor-sign-in). Deactivating
 a user still ends their sessions and tokens, whatever the provider says. Signing out of BAM! does
 not sign out at the provider.
 
@@ -638,9 +680,10 @@ of the scopes each narrowed role holds, by role name.
 
 | Method and route | Permission | Purpose |
 |---|---|---|
-| `GET /api/v1/roles` | `users.manage` | List roles, with `user_count`, `protected` and `public`. |
-| `POST /api/v1/roles` | `users.manage` | Create a role, with `{"name", "description", "permissions"}`. |
-| `PUT /api/v1/roles/{id}` | `users.manage` | Change a role, with the same body. |
+| `GET /api/v1/roles` | `users.manage` | List roles, with `user_count`, `requires_two_factor`, `protected` and `public`. |
+| `POST /api/v1/roles` | `users.manage` | Create a role, with `{"name", "description", "permissions", "requires_two_factor"}`. |
+| `PUT /api/v1/roles/{id}` | `users.manage` | Change a role, with the same body; `requires_two_factor` left out keeps what it was. |
+| `PUT /api/v1/roles/{id}/two-factor` | `users.manage` | Set whether a role requires two-factor sign-in, with `{"required"}`; the admin role's too. |
 | `DELETE /api/v1/roles/{id}` | `users.manage` | Delete a role. |
 | `GET /api/v1/scopes` | `users.manage` or `categories.manage` | List scopes. |
 | `POST /api/v1/scopes` | `users.manage` | Create a scope, with `{"name"}`. |

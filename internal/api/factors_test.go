@@ -376,6 +376,15 @@ func TestTurningAnAppOff(t *testing.T) {
 		t.Fatalf("factors: %+v", list)
 	}
 	id, now := list.Factors[0].ID, auth.TOTPStep(time.Now())
+	// The admin role requires a second factor, so the last stays, and the
+	// code is not taken.
+	if rec := doJSON(t, srv, cookie, "DELETE", "/api/v1/auth/me/factors/"+id, `{"password":"`+password+`","code":"`+auth.TOTPCode(secret, now+1)+`"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("the last one, required: %d %s", rec.Code, rec.Body)
+	}
+	adminRole, _ := srv.store.GetRoleByName(store.AdminRoleName)
+	if _, err := srv.store.SetRoleTwoFactor(adminRole.ID, false); err != nil {
+		t.Fatal(err)
+	}
 	if rec := doJSON(t, srv, cookie, "DELETE", "/api/v1/auth/me/factors/"+id, `{"password":"wrong","code":"`+auth.TOTPCode(secret, now+1)+`"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("a wrong password: %d", rec.Code)
 	}

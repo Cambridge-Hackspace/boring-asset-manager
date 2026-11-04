@@ -5,8 +5,8 @@ import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
 import type { Role, Scope } from '../../lib/models';
 
-const admin: Role = { id: 'admin', name: 'admin', description: 'Everything', permissions: ['assets.read', 'users.manage'], user_count: 1, protected: true, public: false };
-const stores: Role = { id: 'stores', name: 'Stores', description: '', permissions: ['assets.read', 'stock.record'], user_count: 2, protected: false, public: false };
+const admin: Role = { id: 'admin', name: 'admin', description: 'Everything', permissions: ['assets.read', 'users.manage'], user_count: 1, requires_two_factor: true, protected: true, public: false };
+const stores: Role = { id: 'stores', name: 'Stores', description: '', permissions: ['assets.read', 'stock.record'], user_count: 2, requires_two_factor: false, protected: false, public: false };
 const defaultScope: Scope = { id: 'd', name: 'default', created_at: '', reserved: true, category_count: 0, role_count: 0, assignment_count: 0 };
 const tools: Scope = { id: 't', name: 'tools', created_at: '', reserved: false, category_count: 1, role_count: 1, assignment_count: 0 };
 
@@ -39,7 +39,8 @@ describe('RolesPage', () => {
 
     const adminCard = (await screen.findByRole('heading', { name: 'admin' })).closest('li')!;
     expect(adminCard.textContent).toContain('always has every permission');
-    expect(within(adminCard).queryByRole('button')).toBeNull();
+    expect(adminCard.textContent).toContain('Requires two-factor sign-in.');
+    expect(within(adminCard).queryByRole('button', { name: /Edit|Delete/ })).toBeNull();
     const storesCard = screen.getByRole('heading', { name: 'Stores' }).closest('li')!;
     expect(storesCard.textContent).toContain('Held by 2 users.');
     expect(storesCard.textContent).toContain('Read assets, Record stock');
@@ -49,13 +50,18 @@ describe('RolesPage', () => {
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Readers' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Create role' }));
     await screen.findByText('Created Readers.');
-    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ name: 'Readers', description: '', permissions: ['assets.read'] });
+    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ name: 'Readers', description: '', permissions: ['assets.read'], requires_two_factor: false });
 
     await fireEvent.click(within(storesCard).getByRole('button', { name: 'Edit Stores' }));
     await fireEvent.click(screen.getByRole('checkbox', { name: /Print labels/ }));
     await fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
     await screen.findByText('Saved Stores.');
-    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ name: 'Stores', description: '', permissions: ['assets.read', 'stock.record', 'labels.print'] });
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({
+      name: 'Stores',
+      description: '',
+      permissions: ['assets.read', 'stock.record', 'labels.print'],
+      requires_two_factor: false,
+    });
 
     // Deleting warns how many hold it.
     await fireEvent.click(within(storesCard).getByRole('button', { name: 'Delete' }));
@@ -63,6 +69,36 @@ describe('RolesPage', () => {
     await fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
     await screen.findByText('Deleted Stores.');
     await vi.waitFor(() => expect(screen.queryByText('Stores')).toBeNull());
+  });
+
+  it('requires two-factor sign-in of a role, and stops requiring it of admin only when confirmed', async () => {
+    let adminRole = admin;
+    const { sent } = fakeApi({
+      'GET /roles': () => ({ roles: [adminRole, stores] }),
+      'GET /scopes': () => ({ scopes: [defaultScope] }),
+      'PUT /roles/stores': (body) => ({ role: { ...stores, ...(body as object) } }),
+      'PUT /roles/admin/two-factor': (body) => {
+        adminRole = { ...admin, requires_two_factor: (body as { required: boolean }).required };
+        return { role: adminRole };
+      },
+    });
+    render(RolesPage, { params: {} });
+    const storesCard = (await screen.findByRole('heading', { name: 'Stores' })).closest('li')!;
+    await fireEvent.click(within(storesCard).getByRole('button', { name: 'Edit Stores' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Requires two-factor sign-in/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+    await screen.findByText('Saved Stores.');
+    expect((sent.find((r) => r.method === 'PUT')!.body as { requires_two_factor: boolean }).requires_two_factor).toBe(true);
+
+    // Turning it off for admin warns first, and is said once done.
+    const adminCard = screen.getByRole('heading', { name: 'admin' }).closest('li')!;
+    await fireEvent.click(within(adminCard).getByRole('button', { name: 'Stop requiring two-factor sign-in' }));
+    expect(sent.some((r) => r.path === '/roles/admin/two-factor')).toBe(false);
+    const confirm = screen.getByRole('group', { name: /Let admins sign in with a password alone\?.*recorded in history/ });
+    await fireEvent.click(within(confirm).getByRole('button', { name: 'Stop requiring two-factor sign-in' }));
+    await screen.findByText('admin no longer requires two-factor sign-in.');
+    expect(sent.find((r) => r.path === '/roles/admin/two-factor')!.body).toEqual({ required: false });
+    expect(await screen.findByRole('button', { name: 'Require two-factor sign-in' })).toBeTruthy();
   });
 
   it('explains an anti-lockout refusal', async () => {
@@ -79,7 +115,7 @@ describe('RolesPage', () => {
   });
 
   it('gives permissions in some scopes only, and manages scopes', async () => {
-    const keepers: Role = { id: 'keepers', name: 'Keepers', description: '', permissions: ['assets.read', 'tools:assets.write'], user_count: 0, protected: false, public: false };
+    const keepers: Role = { id: 'keepers', name: 'Keepers', description: '', permissions: ['assets.read', 'tools:assets.write'], user_count: 0, requires_two_factor: false, protected: false, public: false };
     let scopes = [defaultScope, tools];
     const { sent } = fakeApi({
       'GET /roles': () => ({ roles: [keepers] }),
@@ -144,7 +180,7 @@ describe('RolesPage', () => {
   });
 
   it('lets the public role only look, under its own name', async () => {
-    const publicRole: Role = { id: 'p', name: 'public', description: 'Everyone, signed in or not', permissions: ['public:assets.read'], user_count: 0, protected: false, public: true };
+    const publicRole: Role = { id: 'p', name: 'public', description: 'Everyone, signed in or not', permissions: ['public:assets.read'], user_count: 0, requires_two_factor: false, protected: false, public: true };
     const publicScope: Scope = { ...tools, id: 'ps', name: 'public', reserved: true, category_count: 2, role_count: 1 };
     fakeApi({
       'GET /roles': () => ({ roles: [publicRole] }),

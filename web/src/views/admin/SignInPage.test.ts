@@ -43,6 +43,10 @@ const provider = (over: Partial<Provider> = {}): Provider => ({
   allowed_groups: [],
   link_by_email: false,
   trust_email: false,
+  mfa_amr: ['mfa', 'otp', 'hwk', 'swk', 'fpt'],
+  mfa_acr: [],
+  mfa_fallback: false,
+  mfa_always_local: false,
   from_config: false,
   rules: [],
   ...over,
@@ -69,6 +73,8 @@ describe('SignInPage', () => {
     await fireEvent.click(within(form).getByRole('button', { name: 'Add a rule' }));
     await fireEvent.input(within(form).getByLabelText('Holds'), { target: { value: 'makerspace-admins' } });
     await fireEvent.change(within(form).getByLabelText('Gives the role'), { target: { value: 'r-admins' } });
+    await fireEvent.input(within(form).getByLabelText(/How they signed in/), { target: { value: 'mfa, hwk' } });
+    await fireEvent.click(within(form).getByLabelText(/When it does not say so/));
     await fireEvent.click(within(form).getByRole('button', { name: 'Add provider' }));
 
     expect(await screen.findByText('Provider saved.')).toBeTruthy();
@@ -81,6 +87,10 @@ describe('SignInPage', () => {
       provision: true,
       default_role_ids: ['r-members'],
       rules: [{ claim: 'groups', value: 'makerspace-admins', role_id: 'r-admins', scope_ids: [] }],
+      mfa_amr: ['mfa', 'hwk'],
+      mfa_acr: [],
+      mfa_fallback: true,
+      mfa_always_local: false,
     });
     expect(await screen.findByRole('heading', { name: 'Hackspace' })).toBeTruthy();
   });

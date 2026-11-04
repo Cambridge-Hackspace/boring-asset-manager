@@ -79,21 +79,52 @@ type Provider struct {
 	AllowedGroups  []string          `json:"allowed_groups"`
 	LinkByEmail    bool              `json:"link_by_email"`
 	TrustEmail     bool              `json:"trust_email"`
-	FromConfig     bool              `json:"from_config"`
-	Rules          []ProviderRule    `json:"rules"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
+	// MFAAMR and MFAACR are the amr, and acr or AuthnContextClassRef,
+	// values that make a sign-in through the provider count as two-factor
+	// (docs/access.md#requiring-two-factor-sign-in).
+	MFAAMR []string `json:"mfa_amr"`
+	MFAACR []string `json:"mfa_acr"`
+	// MFAFallback asks for BAM!'s own second factor when the provider's
+	// sign-in does not count as two-factor, rather than refusing it.
+	MFAFallback bool `json:"mfa_fallback"`
+	// MFAAlwaysLocal asks for BAM!'s own second factor whatever the
+	// provider says.
+	MFAAlwaysLocal bool           `json:"mfa_always_local"`
+	FromConfig     bool           `json:"from_config"`
+	Rules          []ProviderRule `json:"rules"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
 const providerColumns = `id, provider_key, name, protocol, settings, secrets, button_label, icon, enabled, position, provision,
-	default_role_ids, allowed_domains, allowed_groups, link_by_email, trust_email, from_config, created_at, updated_at`
+	default_role_ids, allowed_domains, allowed_groups, link_by_email, trust_email, from_config, created_at, updated_at,
+	mfa_amr, mfa_acr, mfa_fallback, mfa_always_local`
+
+// DefaultMFAAMR are the amr values that count as two-factor unless a
+// provider says otherwise: a second factor, a one-time code, a hardware or
+// software key, or a fingerprint (RFC 8176).
+var DefaultMFAAMR = []string{"mfa", "otp", "hwk", "swk", "fpt"}
 
 func scanProvider(row interface{ Scan(...any) error }) (*Provider, error) {
 	var p Provider
 	var settings, roles, domains, groups string
+	var amr, acr sql.NullString
 	if err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Protocol, &settings, &p.SealedSecrets, &p.ButtonLabel, &p.Icon, &p.Enabled,
-		&p.Position, &p.Provision, &roles, &domains, &groups, &p.LinkByEmail, &p.TrustEmail, &p.FromConfig, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		&p.Position, &p.Provision, &roles, &domains, &groups, &p.LinkByEmail, &p.TrustEmail, &p.FromConfig, &p.CreatedAt, &p.UpdatedAt,
+		&amr, &acr, &p.MFAFallback, &p.MFAAlwaysLocal); err != nil {
 		return nil, err
+	}
+	// A provider saved before #192 trusts the default amr values.
+	p.MFAAMR, p.MFAACR = append([]string{}, DefaultMFAAMR...), []string{}
+	for _, c := range []struct {
+		col  sql.NullString
+		into *[]string
+	}{{amr, &p.MFAAMR}, {acr, &p.MFAACR}} {
+		if c.col.Valid {
+			if err := json.Unmarshal([]byte(c.col.String), c.into); err != nil {
+				return nil, fmt.Errorf("reading provider %s: %w", p.Key, err)
+			}
+		}
 	}
 	p.Settings = map[string]string{}
 	for col, into := range map[string]any{settings: &p.Settings, roles: &p.DefaultRoleIDs, domains: &p.AllowedDomains, groups: &p.AllowedGroups} {
@@ -101,7 +132,7 @@ func scanProvider(row interface{ Scan(...any) error }) (*Provider, error) {
 			return nil, fmt.Errorf("reading provider %s: %w", p.Key, err)
 		}
 	}
-	for _, list := range []*[]string{&p.DefaultRoleIDs, &p.AllowedDomains, &p.AllowedGroups} {
+	for _, list := range []*[]string{&p.DefaultRoleIDs, &p.AllowedDomains, &p.AllowedGroups, &p.MFAAMR, &p.MFAACR} {
 		if *list == nil {
 			*list = []string{}
 		}
@@ -214,6 +245,11 @@ type ProviderInput struct {
 	AllowedGroups  []string
 	LinkByEmail    bool
 	TrustEmail     bool
+	// MFAAMR, left nil, is DefaultMFAAMR.
+	MFAAMR         []string
+	MFAACR         []string
+	MFAFallback    bool
+	MFAAlwaysLocal bool
 	Rules          []ProviderRule
 }
 
@@ -250,6 +286,10 @@ func (in *ProviderInput) normalize() error {
 		return out
 	}
 	in.AllowedDomains, in.AllowedGroups = clean(in.AllowedDomains, true), clean(in.AllowedGroups, false)
+	if in.MFAAMR == nil {
+		in.MFAAMR = DefaultMFAAMR
+	}
+	in.MFAAMR, in.MFAACR = clean(in.MFAAMR, false), clean(in.MFAACR, false)
 	if in.DefaultRoleIDs == nil {
 		in.DefaultRoleIDs = []string{}
 	}
@@ -333,15 +373,17 @@ func (s *Store) saveProvider(id string, in ProviderInput, fromConfig bool) (*Pro
 	}
 	settings, roles, domains, groups := jsonText(in.Settings), jsonText(in.DefaultRoleIDs), jsonText(in.AllowedDomains), jsonText(in.AllowedGroups)
 	if created {
-		_, err = s.TxExec(tx, "INSERT INTO auth_providers ("+providerColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		_, err = s.TxExec(tx, "INSERT INTO auth_providers ("+providerColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			id, in.Key, in.Name, in.Protocol, settings, sealed, in.ButtonLabel, in.Icon, in.Enabled, in.Position, in.Provision,
-			roles, domains, groups, in.LinkByEmail, in.TrustEmail, fromConfig, now, now)
+			roles, domains, groups, in.LinkByEmail, in.TrustEmail, fromConfig, now, now,
+			jsonText(in.MFAAMR), jsonText(in.MFAACR), in.MFAFallback, in.MFAAlwaysLocal)
 	} else {
 		_, err = s.TxExec(tx, `UPDATE auth_providers SET provider_key = ?, name = ?, protocol = ?, settings = ?, button_label = ?, icon = ?,
 			enabled = ?, position = ?, provision = ?, default_role_ids = ?, allowed_domains = ?, allowed_groups = ?, link_by_email = ?,
-			trust_email = ?, updated_at = ? WHERE id = ?`,
+			trust_email = ?, updated_at = ?, mfa_amr = ?, mfa_acr = ?, mfa_fallback = ?, mfa_always_local = ? WHERE id = ?`,
 			in.Key, in.Name, in.Protocol, settings, in.ButtonLabel, in.Icon, in.Enabled, in.Position, in.Provision,
-			roles, domains, groups, in.LinkByEmail, in.TrustEmail, now, id)
+			roles, domains, groups, in.LinkByEmail, in.TrustEmail, now,
+			jsonText(in.MFAAMR), jsonText(in.MFAACR), in.MFAFallback, in.MFAAlwaysLocal, id)
 		if err == nil && in.Seal != nil {
 			_, err = s.TxExec(tx, "UPDATE auth_providers SET secrets = ? WHERE id = ?", sealed, id)
 		}

@@ -79,11 +79,25 @@ func main() {
 
 	case "admin":
 		mfaReset := len(os.Args) >= 4 && os.Args[2] == "mfa" && os.Args[3] == "reset"
-		if !mfaReset && (len(os.Args) < 3 || (os.Args[2] != "create" && os.Args[2] != "password")) {
+		mfaRequire := len(os.Args) >= 4 && os.Args[2] == "mfa" && os.Args[3] == "require"
+		if !mfaReset && !mfaRequire && (len(os.Args) < 3 || (os.Args[2] != "create" && os.Args[2] != "password")) {
 			fmt.Fprintf(os.Stderr, "Usage: bam admin create --email <email> --password <password> [--name <name>] [--config <path>]\n")
 			fmt.Fprintf(os.Stderr, "       bam admin password --email <email> --password <password> [--config <path>]\n")
 			fmt.Fprintf(os.Stderr, "       bam admin mfa reset --email <email> [--config <path>]\n")
+			fmt.Fprintf(os.Stderr, "       bam admin mfa require --role <name> [--off] [--config <path>]\n")
 			os.Exit(1)
+		}
+		if mfaRequire {
+			requireCmd := flag.NewFlagSet("admin mfa require", flag.ExitOnError)
+			role := requireCmd.String("role", "", "Role whose holders must sign in with a second factor, such as admin")
+			off := requireCmd.Bool("off", false, "Stop requiring it instead")
+			configPath := requireCmd.String("config", "config.toml", "Path to configuration file")
+			_ = requireCmd.Parse(os.Args[4:])
+			if err := cli.AdminRequireFactor(*configPath, *role, !*off); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
 		if mfaReset {
 			resetCmd := flag.NewFlagSet("admin mfa reset", flag.ExitOnError)

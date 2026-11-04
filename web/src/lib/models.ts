@@ -63,6 +63,8 @@ export interface Me {
   roles?: string[];
   /** The names of the scopes each role narrowed to some holds, by role name. */
   role_scopes?: Record<string, string[]>;
+  /** A role they hold requires a second factor and they have none: they must set one up first. */
+  factor_setup_required?: boolean;
 }
 
 export const fieldTypes = ['text', 'number', 'date', 'url', 'select'] as const;
@@ -379,6 +381,8 @@ export interface Role {
   permissions: PermissionKey[];
   /** How many users who are not archived hold it. */
   user_count: number;
+  /** Whoever holds it must sign in with a second factor. */
+  requires_two_factor: boolean;
   /** Set for the admin role, which always has every permission. */
   protected: boolean;
   /** Set for the public role, which everyone holds, signed in or not; it may only read. */
@@ -453,9 +457,20 @@ export interface Provider {
   allowed_groups: string[];
   link_by_email: boolean;
   trust_email: boolean;
+  /** The amr values that make its sign-in count as two-factor. */
+  mfa_amr: string[];
+  /** The acr values, or SAML AuthnContextClassRef, that do. */
+  mfa_acr: string[];
+  /** Ask for BAM!'s own second factor when its sign-in does not count, rather than refusing. */
+  mfa_fallback: boolean;
+  /** Always ask for BAM!'s own second factor, whatever it says. */
+  mfa_always_local: boolean;
   from_config: boolean;
   rules: ProviderRule[];
 }
+
+/** The amr values that count as two-factor unless a provider says otherwise. */
+export const DEFAULT_MFA_AMR = ['mfa', 'otp', 'hwk', 'swk', 'fpt'];
 
 /** The sign-in page's buttons, and whether it shows the password form. */
 export interface PublicProviders {

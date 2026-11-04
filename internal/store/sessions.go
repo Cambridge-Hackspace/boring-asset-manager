@@ -49,6 +49,46 @@ func (s *Store) CreateSession(userID string, ttl time.Duration) (*models.Session
 	}, nil
 }
 
+// StartSession starts a session for someone signing in, marked for setting
+// up a second factor when a role they hold requires one and they have
+// none (docs/access.md#requiring-two-factor-sign-in). canSetUp is whether
+// one can be set up here at all, which needs [auth] secret_key; without
+// it, nobody is held to setting one up.
+func (s *Store) StartSession(userID string, ttl time.Duration, canSetUp bool) (*models.Session, error) {
+	setup := false
+	if canSetUp {
+		required, err := s.RequiresTwoFactor(userID)
+		if err != nil {
+			return nil, err
+		}
+		if required {
+			factors, err := s.SealedFactors(userID)
+			if err != nil {
+				return nil, err
+			}
+			setup = len(factors) == 0
+		}
+	}
+	sess, err := s.CreateSession(userID, ttl)
+	if err != nil || !setup {
+		return sess, err
+	}
+	if _, err := s.Exec("UPDATE sessions SET factor_setup = TRUE WHERE id = ?", sessionKey(sess.ID)); err != nil {
+		return nil, fmt.Errorf("marking the session: %w", err)
+	}
+	sess.FactorSetup = true
+	return sess, nil
+}
+
+// clearFactorSetup frees a user's sessions marked for setting up a second
+// factor, once they have one.
+func (s *Store) clearFactorSetup(userID string) error {
+	if _, err := s.Exec("UPDATE sessions SET factor_setup = FALSE WHERE user_id = ? AND factor_setup = TRUE", userID); err != nil {
+		return fmt.Errorf("clearing the sessions' set-up: %w", err)
+	}
+	return nil
+}
+
 // GetSession retrieves an active session by token, validating expiration and active user status.
 func (s *Store) GetSession(token string) (*models.Session, *models.User, error) {
 	if token == "" {
@@ -58,7 +98,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 	now := time.Now().UTC()
 	query := `
 		SELECT 
-			s.id, s.user_id, s.expires_at, s.created_at,
+			s.id, s.user_id, s.expires_at, s.created_at, s.factor_setup,
 			u.id, u.email, u.name, u.password_hash, u.totp_secret, u.is_active, u.created_at, u.updated_at, u.archived_at, u.theme, u.email_notifications
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
@@ -72,7 +112,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 	)
 
 	err := s.QueryRow(query, sessionKey(token), now).Scan(
-		&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt,
+		&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt, &sess.FactorSetup,
 		&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme, &u.EmailNotifications,
 	)
 	u.Theme = themeOf(theme)

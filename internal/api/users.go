@@ -401,10 +401,13 @@ type RoleRequest struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Permissions []string `json:"permissions"`
+	// RequiresTwoFactor, when given, sets whether holders must sign in with
+	// a second factor; left out, a change keeps what the role had.
+	RequiresTwoFactor *bool `json:"requires_two_factor,omitempty"`
 }
 
 func (req RoleRequest) input() store.RoleInput {
-	return store.RoleInput{Name: req.Name, Description: req.Description, Permissions: req.Permissions}
+	return store.RoleInput{Name: req.Name, Description: req.Description, Permissions: req.Permissions, RequiresTwoFactor: req.RequiresTwoFactor}
 }
 
 // handleCreateRole creates a role: POST /api/v1/roles
@@ -430,9 +433,31 @@ func (s *Server) handleUpdateRole(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	role, err := s.store.UpdateRole(r.PathValue("id"), req.input())
+	role, err := s.actingStore(r).UpdateRole(r.PathValue("id"), req.input())
 	if err != nil {
 		writeRoleError(w, err, "update the role")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"role": role})
+}
+
+// RoleTwoFactorRequest sets whether a role requires two-factor sign-in.
+type RoleTwoFactorRequest struct {
+	Required *bool `json:"required"`
+}
+
+// handleSetRoleTwoFactor sets whether a role's holders must sign in with a
+// second factor: PUT /api/v1/roles/{id}/two-factor. It is how the admin
+// role's is turned off, which is recorded in history.
+func (s *Server) handleSetRoleTwoFactor(w http.ResponseWriter, r *http.Request) {
+	var req RoleTwoFactorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Required == nil {
+		writeJSONError(w, http.StatusBadRequest, "Give required, true or false")
+		return
+	}
+	role, err := s.actingStore(r).SetRoleTwoFactor(r.PathValue("id"), *req.Required)
+	if err != nil {
+		writeRoleError(w, err, "change the role")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"role": role})

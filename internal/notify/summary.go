@@ -162,6 +162,18 @@ func summarize(n Notification, esc func(string) string) summary {
 		out.Color = discordWarning
 		out.Title = "Break-glass sign-in: " + esc(truncate(p.Account.Display(), 200))
 		out.Description = "They signed in with a password while passwords are off, as only those who manage users can. If no provider is down, ask them why."
+	case e.Kind == models.EventRoleTwoFactorOff:
+		out.URL = ""
+		if base != "" {
+			out.URL = base + "/roles"
+		}
+		out.Color = discordWarning
+		out.Title = "Two-factor sign-in no longer required: " + esc(truncate(p.Note, 200))
+		by := "on the command line"
+		if p.Actor != nil {
+			by = "by " + esc(truncate(p.Actor.Display(), 200))
+		}
+		out.Description = "Whoever holds the role can now sign in with a password alone. It was turned off " + by + "."
 	case e.Kind == models.EventNotifierDisabled && p.Channel != nil:
 		// About no asset or category: the link is to the channels.
 		out.URL = ""
