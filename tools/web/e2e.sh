@@ -54,6 +54,9 @@ MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
     sed -i "s#data/bam.db#$state/bam.db#; s#./data/uploads#$state/uploads#" c.toml
     "$bin" migrate --config c.toml >/dev/null
     "$bin" admin create --config c.toml --email "$E2E_EMAIL" --password "$E2E_PASSWORD" >/dev/null
+    # The specs sign the admin in with a password alone; two-factor sign-in
+    # by role is tested where its spec turns it on (docs/access.md).
+    "$bin" admin mfa require --config c.toml --role admin --off >/dev/null
     # Notifications must never leave the container: point outgoing HTTPS at
     # a closed port, so deliveries fail as unreachable and are retried. The
     # test sign-in protocol stands in for identity providers, sending the

@@ -15,6 +15,10 @@ import (
 // flows.UpgradeV1 and a corpus read by ReadFieldCorpus.
 const FormQuestionsVersion = 50
 
+// TwoFactorRolesVersion is the migration that let roles require two-factor
+// sign-in (#192), and turned it on for the admin role.
+const TwoFactorRolesVersion = 58
+
 // upgradeFlows converts each version 1 flow with flows.UpgradeV1, against
 // the fields and categories as they are, and drops the runs under way: a
 // run's place and answers are by the steps of the definition it began

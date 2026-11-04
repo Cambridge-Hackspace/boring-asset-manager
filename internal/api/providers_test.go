@@ -234,7 +234,11 @@ func TestLinkingByEmailNeedsItOnAndVerified(t *testing.T) {
 func TestAProviderSignInStillAsksForASecondFactor(t *testing.T) {
 	srv, ts, admin := providerServer(t)
 	secret := setUpApp(t, srv, admin.ID)
-	saveProvider(t, srv, admin, "", testProviderRequest(map[string]string{"subject": "admin-at-idp"}))
+	// The admin role requires a second factor, and the test provider does
+	// not say it used one, so BAM!'s own is asked for.
+	req := testProviderRequest(map[string]string{"subject": "admin-at-idp"})
+	req.MFAFallback = true
+	saveProvider(t, srv, admin, "", req)
 	if _, err := srv.store.LinkIdentity(admin.ID, mustProvider(t, srv, "hackspace").ID, "admin-at-idp", ""); err != nil {
 		t.Fatal(err)
 	}

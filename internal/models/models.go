@@ -41,6 +41,9 @@ type RoleWithPermissions struct {
 	Permissions []string `json:"permissions"`
 	// UserCount is how many users who are not archived hold the role.
 	UserCount int `json:"user_count"`
+	// RequiresTwoFactor makes whoever holds the role sign in with a second
+	// factor (docs/access.md#requiring-two-factor-sign-in).
+	RequiresTwoFactor bool `json:"requires_two_factor"`
 	// Protected is set for the admin role, which cannot be changed.
 	Protected bool `json:"protected"`
 	// Public is set for the public role: everyone holds it, signed in or
@@ -90,6 +93,9 @@ type Session struct {
 	UserID    string    `json:"user_id"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`
+	// FactorSetup marks the session of someone required to have a second
+	// factor who has none: it can do nothing but set one up.
+	FactorSetup bool `json:"factor_setup"`
 }
 
 // Field represents a definition in the global field corpus.
@@ -207,6 +213,10 @@ const (
 	// gives, kept because it holds the last users.manage, with the Account
 	// and the role in the Note; it is for history.
 	EventAuthRoleKept = "auth.role_kept"
+	// EventRoleTwoFactorOff records a role no longer requiring two-factor
+	// sign-in, with the role's name as the Note; channels can subscribe to
+	// it.
+	EventRoleTwoFactorOff = "role.two_factor_off"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an

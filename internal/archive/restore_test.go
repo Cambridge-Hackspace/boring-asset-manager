@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -481,18 +482,27 @@ func TestAThemeIsRestored(t *testing.T) {
 	if stripped == 0 {
 		t.Fatal("the archive has no users rows")
 	}
-	// Nor who gave each role, which came with identity providers (057).
+	// Nor who gave each role, which came with identity providers (057), nor
+	// what came with requiring two-factor sign-in (058).
+	later := map[string][]string{"user_roles": {"granted_by"}, "roles": {"requires_two_factor"}, "sessions": {"factor_setup"}}
 	for i, m := range ms {
-		if !strings.HasPrefix(m.name, DataDir+"user_roles/") {
+		table := strings.TrimSuffix(strings.TrimPrefix(m.name, DataDir), "/"+path.Base(m.name))
+		columns, ok := later[table]
+		if !ok || !strings.HasPrefix(m.name, DataDir+table+"/") {
 			continue
 		}
 		var out bytes.Buffer
 		for _, line := range strings.Split(strings.TrimSuffix(string(m.data), "\n"), "\n") {
+			if line == "" {
+				continue
+			}
 			var row map[string]json.RawMessage
 			if err := json.Unmarshal([]byte(line), &row); err != nil {
 				t.Fatal(err)
 			}
-			delete(row, "granted_by")
+			for _, c := range columns {
+				delete(row, c)
+			}
 			data, _ := json.Marshal(row)
 			out.Write(append(data, '\n'))
 		}

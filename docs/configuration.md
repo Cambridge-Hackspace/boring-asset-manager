@@ -121,6 +121,10 @@ allowed_domains = ["hackspace.org"]
 allowed_groups = []
 link_by_email = false
 trust_email = false
+mfa_amr = ["mfa", "otp", "hwk", "swk", "fpt"]  # optional: amr values that count as two-factor
+mfa_acr = []                              # optional: acr values that do
+mfa_fallback = false                      # ask for BAM!'s own second factor when they do not
+mfa_always_local = false                  # always ask for BAM!'s own
 
 [[auth.providers.rules]]
 claim = "groups"
@@ -261,6 +265,10 @@ with the `bam` command:
 # signing them out everywhere (docs/access.md)
 ./bam admin mfa reset --email "admin@example.com" --config ./config.toml
 
+# Stop requiring admins to sign in with a second factor, such as where none
+# can be set up yet; leave --off out to require it again (docs/access.md)
+./bam admin mfa require --role admin --off --config ./config.toml
+
 # Start the daemon
 ./bam serve --config ./config.toml
 
@@ -302,6 +310,7 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 | `bam admin create` | Provisions the first administrator, bypassing lockout guards. | [Access](access.md) |
 | `bam admin password` | Sets a locked-out user's password, signing them out everywhere. | [Access](access.md) |
 | `bam admin mfa reset` | Removes a user's second factors, admins included, signing them out everywhere. | [Access](access.md#two-factor-sign-in) |
+| `bam admin mfa require` | Sets whether a role, the admin role's included, requires two-factor sign-in; `--off` stops requiring it. | [Access](access.md#requiring-two-factor-sign-in) |
 | `bam serve` | Starts the server. | |
 | `bam backup` | Backs up the instance as an archive, files and all, on any database, safely while running. With a `--to` ending in `.db`, copies a SQLite database instead. | [Backups](backups.md) |
 | `bam restore` | Restores an archive into a new instance, with BAM stopped, or puts back a SQLite `.db` copy. | [Backups](backups.md), [Installing](installing.md) |

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -132,7 +133,7 @@ func (s *Server) passwordSignIn(w http.ResponseWriter, r *http.Request, breakGla
 		return
 	}
 
-	sess, err := s.store.CreateSession(user.ID, DefaultSessionTTL)
+	sess, err := s.startSession(user.ID)
 	if err != nil {
 		writeServerError(w, err, "create session")
 		return
@@ -140,8 +141,16 @@ func (s *Server) passwordSignIn(w http.ResponseWriter, r *http.Request, breakGla
 
 	SetSessionCookie(w, r, sess.ID, DefaultSessionTTL, s.cfg.Server.BaseURL)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user": user,
+		"user":                  user,
+		"factor_setup_required": sess.FactorSetup,
 	})
+}
+
+// startSession starts a session for someone signing in, held to setting up
+// a second factor when their roles require one and they have none; but
+// only where one can be set up, with [auth] secret_key.
+func (s *Server) startSession(userID string) (*models.Session, error) {
+	return s.store.StartSession(userID, DefaultSessionTTL, s.sealer.HasKey())
 }
 
 // handleLogout terminates the active session and clears the session cookie.
@@ -198,11 +207,15 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		}
 		roles = names
 	}
+	sess := CurrentSession(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":        user,
 		"permissions": permsList,
 		"roles":       roles,
 		"role_scopes": roleScopes,
+		// A session that must set up a second factor first
+		// (docs/access.md#requiring-two-factor-sign-in).
+		"factor_setup_required": sess != nil && sess.FactorSetup,
 	})
 }
 

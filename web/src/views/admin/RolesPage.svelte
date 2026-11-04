@@ -18,7 +18,12 @@
 
   // The role being edited: null for none, '' for a new one.
   let editing = $state<string | null>(null);
-  let draft = $state<{ name: string; description: string; permissions: PermissionKey[] }>({ name: '', description: '', permissions: [] });
+  let draft = $state<{ name: string; description: string; permissions: PermissionKey[]; requires_two_factor: boolean }>({
+    name: '',
+    description: '',
+    permissions: [],
+    requires_two_factor: false,
+  });
 
   async function load() {
     try {
@@ -55,8 +60,8 @@
     editingPublic = !!role?.public;
     onlySome = [];
     draft = role
-      ? { name: role.name, description: role.description, permissions: [...role.permissions] }
-      : { name: '', description: '', permissions: ['assets.read'] };
+      ? { name: role.name, description: role.description, permissions: [...role.permissions], requires_two_factor: role.requires_two_factor }
+      : { name: '', description: '', permissions: ['assets.read'], requires_two_factor: false };
   }
 
   async function save(event: SubmitEvent) {
@@ -67,6 +72,19 @@
       else await request('POST', '/roles', draft);
       status = editing ? `Saved ${draft.name.trim()}.` : `Created ${draft.name.trim()}.`;
       editing = null;
+      await load();
+    } catch (err) {
+      error = explain(err);
+    }
+  }
+
+  // Whether a role requires two-factor sign-in: how the admin role's is
+  // changed, and recorded in history when turned off.
+  async function requireTwoFactor(role: Role, required: boolean) {
+    error = status = '';
+    try {
+      await request('PUT', `/roles/${encodeURIComponent(role.id)}/two-factor`, { required });
+      status = required ? `${role.name} requires two-factor sign-in.` : `${role.name} no longer requires two-factor sign-in.`;
       await load();
     } catch (err) {
       error = explain(err);
@@ -166,6 +184,18 @@
         <input id="role-description" class="input" maxlength="255" bind:value={draft.description} />
       </div>
     </div>
+    {#if !editingPublic}
+      <label class="flex items-start gap-2 text-sm">
+        <input type="checkbox" class="mt-1" bind:checked={draft.requires_two_factor} />
+        <span>
+          <span class="font-medium">Requires two-factor sign-in</span>
+          <span class="text-zinc-600 dark:text-zinc-400">
+            — whoever holds it signs in with a second factor; someone without one sets one up at their next sign-in, before
+            anything else.
+          </span>
+        </span>
+      </label>
+    {/if}
     <fieldset class="space-y-2">
       <legend class="label">Permissions</legend>
       {#if editingPublic}
@@ -230,9 +260,21 @@
             <h2 class="font-semibold">{r.name}</h2>
             {#if r.description}<p class="text-sm text-zinc-600 dark:text-zinc-400">{r.description}</p>{/if}
             <p class="text-sm">{r.public ? 'Held by everyone, signed in or not.' : `Held by ${holders(r.user_count)}.`}</p>
+            {#if r.requires_two_factor}<p class="text-sm font-medium">Requires two-factor sign-in.</p>{/if}
           </div>
           {#if r.protected}
-            <p class="text-sm text-zinc-600 dark:text-zinc-400">Built in: always has every permission.</p>
+            <span class="inline-flex flex-col items-end gap-2">
+              <p class="text-sm text-zinc-600 dark:text-zinc-400">Built in: always has every permission.</p>
+              {#if r.requires_two_factor}
+                <ConfirmButton
+                  label="Stop requiring two-factor sign-in"
+                  question="Let admins sign in with a password alone? Whoever has their password then has every permission. This is recorded in history."
+                  onconfirm={() => requireTwoFactor(r, false)}
+                />
+              {:else}
+                <button type="button" class="btn-secondary" onclick={() => requireTwoFactor(r, true)}>Require two-factor sign-in</button>
+              {/if}
+            </span>
           {:else}
             <span class="inline-flex flex-wrap gap-2">
               <button type="button" class="btn-secondary" aria-label="Edit {r.name}" onclick={() => start(r)}>Edit</button>

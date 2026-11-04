@@ -12,6 +12,8 @@ Turning it on shows ten **recovery codes**, once. Download or print them, and ke
 
 To turn it off, choose **Turn off** and give your password and a code. If you lose your phone and your recovery codes, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again.
 
+Some roles require two-factor sign-in, the **admin** role among them. If you hold one and have no second factor, signing in asks you to set one up before anything else opens, and your last one cannot be turned off.
+
 ## Signing in elsewhere
 
 If BAM! has sign-in buttons for an identity provider your space runs, such as your organization's Google or Microsoft account, **Signing in elsewhere** lists the ones linked to your account. **Link** one to sign in through it from then on: you sign in there, and come back here. **Unlink** stops it, as long as you keep another way to sign in.

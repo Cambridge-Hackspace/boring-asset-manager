@@ -181,6 +181,38 @@ func AdminResetFactors(configPath, email string) error {
 	return nil
 }
 
+// AdminRequireFactor sets whether a role's holders must sign in with a
+// second factor (docs/access.md#requiring-two-factor-sign-in), the admin
+// role's included: for an instance where nobody can set one up, or a test.
+// Turning it off is recorded in history, as by nobody.
+func AdminRequireFactor(configPath, roleName string, on bool) error {
+	if roleName == "" {
+		return errors.New("--role is required")
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	st, err := store.Open(&cfg.Database)
+	if err != nil {
+		return fmt.Errorf("opening database (%s): %w", cfg.Database.Type, err)
+	}
+	defer st.Close()
+	role, err := st.GetRoleByName(roleName)
+	if err != nil {
+		return fmt.Errorf("finding the role %s: %w", roleName, err)
+	}
+	if _, err := st.As("").SetRoleTwoFactor(role.ID, on); err != nil {
+		return fmt.Errorf("changing the role: %w", err)
+	}
+	if on {
+		fmt.Printf("Whoever holds %s must now sign in with a second factor.\n", role.Name)
+	} else {
+		fmt.Printf("Whoever holds %s no longer has to sign in with a second factor.\n", role.Name)
+	}
+	return nil
+}
+
 // EmailTest sends a test email to the address given, through the [email]
 // server in the configuration, so a mistake there shows before a
 // notification is missed.

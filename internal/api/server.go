@@ -185,6 +185,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 	handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))
 	handle("PUT /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateRole)))
+	handle("PUT /api/v1/roles/{id}/two-factor", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetRoleTwoFactor)))
 	handle("DELETE /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteRole)))
 
 	// Archives uploaded in parts, resumably (docs/backups.md, #141), for

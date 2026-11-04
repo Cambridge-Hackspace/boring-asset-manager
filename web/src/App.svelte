@@ -7,6 +7,7 @@
   import Footer from './components/Footer.svelte';
   import IconPaletteStyle from './components/IconPaletteStyle.svelte';
   import { iconset } from './lib/iconset.svelte';
+  import FactorSetupPage from './views/FactorSetupPage.svelte';
   import SignIn from './views/SignIn.svelte';
   import NotFound from './views/NotFound.svelte';
   import Forbidden from './views/Forbidden.svelte';
@@ -60,6 +61,8 @@
   <p class="p-8 text-sm text-zinc-600 dark:text-zinc-400" role="status">Loading…</p>
 {:else if router.path === '/sign-in' || router.path === '/signin/local'}
   <SignIn local={router.path === '/signin/local'} />
+{:else if session.user && session.factorSetup}
+  <FactorSetupPage />
 {:else if session.user || openToPublic}
   <Shell {workspace}>
     {#if !match}

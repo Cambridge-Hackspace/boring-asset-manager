@@ -7,7 +7,7 @@
   import { untrack } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Protocol, Provider, ProviderRule } from '../../lib/models';
+  import { DEFAULT_MFA_AMR, type Protocol, type Provider, type ProviderRule } from '../../lib/models';
   import DerivedKey from '../../components/DerivedKey.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
@@ -49,6 +49,10 @@
   let groups = $state((start?.allowed_groups ?? []).join(', '));
   let linkByEmail = $state(start?.link_by_email ?? false);
   let trustEmail = $state(start?.trust_email ?? false);
+  let mfaAMR = $state((start?.mfa_amr ?? DEFAULT_MFA_AMR).join(', '));
+  let mfaACR = $state((start?.mfa_acr ?? []).join(', '));
+  let mfaFallback = $state(start?.mfa_fallback ?? false);
+  let mfaAlwaysLocal = $state(start?.mfa_always_local ?? false);
   let rules = $state<ProviderRule[]>((start?.rules ?? []).map((r) => ({ ...r, scope_ids: [...r.scope_ids] })));
   let busy = $state(false);
   let error = $state('');
@@ -74,6 +78,7 @@
       key, name, protocol, settings, secrets: sentSecrets, button_label: buttonLabel, icon, enabled,
       position: start?.position ?? position, provision, default_role_ids: defaultRoles,
       allowed_domains: list(domains), allowed_groups: list(groups), link_by_email: linkByEmail, trust_email: trustEmail,
+      mfa_amr: list(mfaAMR), mfa_acr: list(mfaACR), mfa_fallback: mfaFallback, mfa_always_local: mfaAlwaysLocal,
       rules: rules.map((r) => ({ claim: r.claim, value: r.value, role_id: r.role_id, scope_ids: r.scope_ids })),
     };
     try {
@@ -189,6 +194,33 @@
     <p id="{prefix}-trust-help" class="text-xs text-zinc-600 dark:text-zinc-400">
       Only for a provider that checks emails itself but does not say so. Otherwise an email counts only when the provider says it is verified.
     </p>
+  </fieldset>
+
+  <fieldset class="space-y-2">
+    <legend class="label">Two-factor sign-in</legend>
+    <p class="text-xs text-zinc-600 dark:text-zinc-400">
+      For those whose roles require two-factor sign-in. A sign-in through the provider counts as two-factor when it says one of
+      these was used.
+    </p>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label class="label" for="{prefix}-amr">How they signed in (amr)</label>
+        <input id="{prefix}-amr" class="input" placeholder="mfa, otp, hwk" bind:value={mfaAMR} />
+      </div>
+      <div>
+        <label class="label" for="{prefix}-acr">Or the level they signed in at (acr, optional)</label>
+        <input id="{prefix}-acr" class="input" bind:value={mfaACR} />
+      </div>
+    </div>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" bind:checked={mfaFallback} disabled={mfaAlwaysLocal} /> When it does not say so, ask for BAM!'s own second factor
+    </label>
+    <p class="text-xs text-zinc-600 dark:text-zinc-400">
+      Otherwise someone whose roles require two-factor sign-in is refused, and told to have the provider require it.
+    </p>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" bind:checked={mfaAlwaysLocal} /> Always ask for BAM!'s own second factor, whatever it says
+    </label>
   </fieldset>
 
   <fieldset class="space-y-2">

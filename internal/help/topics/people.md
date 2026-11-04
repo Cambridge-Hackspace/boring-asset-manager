@@ -14,6 +14,8 @@ Under **Admin › Sign-in**, those who manage settings add the identity provider
 
 A **role** is a set of permissions, and people hold any number of roles. The **admin** role holds everything. The **public** role is everyone's, signed in or not, and can only look.
 
+A role can **require two-factor sign-in**: whoever holds it signs in with a second factor, and someone without one sets one up at their next sign-in before anything else. The admin role requires it, until someone turns that off with **Stop requiring two-factor sign-in**, which is recorded. An identity provider's own second factor counts when it says one was used; each provider says what to do when it does not.
+
 ## Scopes
 
 A **scope** is a label on categories, passed down to their subcategories. A role can hold permissions about assets in some scopes only: a keeper of the workshop edits the workshop's tools and nothing else. Assets in no scope are in *default*, and assets in *public* can be seen by anyone the public role allows.

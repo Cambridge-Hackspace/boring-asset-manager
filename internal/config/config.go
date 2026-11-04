@@ -164,7 +164,13 @@ type ProviderConfig struct {
 	AllowedGroups  []string          `toml:"allowed_groups" json:"allowed_groups"`
 	LinkByEmail    bool              `toml:"link_by_email" json:"link_by_email"`
 	TrustEmail     bool              `toml:"trust_email" json:"trust_email"`
-	Rules          []ProviderRule    `toml:"rules" json:"rules"`
+	// MFAAMR, left out, is the default amr values that count as two-factor
+	// (docs/access.md#requiring-two-factor-sign-in).
+	MFAAMR         []string       `toml:"mfa_amr,omitempty" json:"mfa_amr,omitempty"`
+	MFAACR         []string       `toml:"mfa_acr,omitempty" json:"mfa_acr,omitempty"`
+	MFAFallback    bool           `toml:"mfa_fallback,omitempty" json:"mfa_fallback,omitempty"`
+	MFAAlwaysLocal bool           `toml:"mfa_always_local,omitempty" json:"mfa_always_local,omitempty"`
+	Rules          []ProviderRule `toml:"rules" json:"rules"`
 }
 
 // ProviderRule gives a role, by name, optionally narrowed to scopes, by

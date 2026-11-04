@@ -133,6 +133,32 @@ func TestFullCLILifecycle(t *testing.T) {
 		t.Error("removing the factors of nobody worked")
 	}
 
+	// 4c. The admin role requires two-factor sign-in until turned off from
+	// the command line, which is recorded, as by nobody.
+	adminRole, _ := st.GetRoleByName("admin")
+	if r, err := st.GetRole(adminRole.ID); err != nil || !r.RequiresTwoFactor {
+		t.Fatalf("the admin role, new: %+v, %v", r, err)
+	}
+	if err := AdminRequireFactor(configPath, "admin", false); err != nil {
+		t.Fatalf("AdminRequireFactor: %v", err)
+	}
+	if r, err := st.GetRole(adminRole.ID); err != nil || r.RequiresTwoFactor {
+		t.Errorf("the admin role, turned off: %+v, %v", r, err)
+	}
+	if events, err := st.ListEvents(1); err != nil || len(events) != 1 || events[0].Kind != models.EventRoleTwoFactorOff ||
+		events[0].Payload.Note != "admin" || events[0].Payload.Actor != nil {
+		t.Errorf("turning it off in history: %+v, %v", events, err)
+	}
+	if err := AdminRequireFactor(configPath, "admin", true); err != nil {
+		t.Fatalf("AdminRequireFactor on: %v", err)
+	}
+	if r, _ := st.GetRole(adminRole.ID); !r.RequiresTwoFactor {
+		t.Error("the admin role was not turned back on")
+	}
+	if err := AdminRequireFactor(configPath, "nobody", false); err == nil {
+		t.Error("a role that does not exist was changed")
+	}
+
 	// 5. Test Server Lifecycle
 	srv := api.NewServer(activeCfg, st)
 	serverErr := make(chan error, 1)

@@ -437,6 +437,19 @@ func TestDiscordBreakGlassEmbed(t *testing.T) {
 	}
 }
 
+func TestDiscordTwoFactorOffEmbed(t *testing.T) {
+	for actor, by := range map[*models.EventActor]string{nil: "on the command line", {ID: "u1", Name: "Ada"}: "by Ada"} {
+		e := discordPayload(Notification{BaseURL: "https://bam.example", Event: models.Event{
+			Kind:    models.EventRoleTwoFactorOff,
+			Payload: models.EventPayload{Trigger: models.TriggerManual, Note: "admin", Actor: actor},
+		}}).Embeds[0]
+		if e.Title != "Two-factor sign-in no longer required: admin" || e.Color != discordWarning || e.URL != "https://bam.example/roles" ||
+			!strings.Contains(e.Description, "turned off "+by+".") {
+			t.Errorf("two-factor off, %s: %+v", by, e)
+		}
+	}
+}
+
 func TestDiscordSaysWhatFiredAHook(t *testing.T) {
 	hook := func(h *models.EventHook, actor *models.EventActor) string {
 		return discordPayload(Notification{Event: models.Event{Kind: models.EventAssetHook, Payload: models.EventPayload{

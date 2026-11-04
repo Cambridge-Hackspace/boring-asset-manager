@@ -11,6 +11,10 @@
   import type { Factor } from '../lib/models';
   import ErrorMessage from '../components/ErrorMessage.svelte';
 
+  // ondone, if given, is called once an app is set up and its recovery
+  // codes put away.
+  let { ondone }: { ondone?: () => void } = $props();
+
   let factors = $state<Factor[]>([]);
   let available = $state(true);
   let codesLeft = $state(0);
@@ -88,6 +92,7 @@
       status = 'Two-factor sign-in is on. Signing in now asks for a code from your app.';
       await load();
       if (res.recovery_codes?.length) await show(res.recovery_codes);
+      else ondone?.();
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -192,7 +197,7 @@
         <div class="flex flex-wrap gap-2">
           <a class="btn-secondary" href={'data:text/plain;charset=utf-8,' + encodeURIComponent(codesText)} download="bam-recovery-codes.txt">Download</a>
           <button type="button" class="btn-secondary" onclick={printCodes}>Print</button>
-          <button type="button" class="btn-primary" onclick={() => (shown = null)}>I have saved them</button>
+          <button type="button" class="btn-primary" onclick={() => { shown = null; ondone?.(); }}>I have saved them</button>
         </div>
       </div>
     {:else}

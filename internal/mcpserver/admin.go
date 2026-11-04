@@ -29,6 +29,8 @@ type roleIn struct {
 	Name        *string  `json:"name,omitempty"`
 	Description *string  `json:"description,omitempty"`
 	Permissions []string `json:"permissions,omitempty" jsonschema:"the whole list, replacing what it holds: keys such as assets.read, or scope:key for one scope"`
+	// RequiresTwoFactor, left out, keeps what the role has.
+	RequiresTwoFactor *bool `json:"requires_two_factor,omitempty" jsonschema:"whether whoever holds it must sign in with a second factor"`
 }
 
 type channelIn struct {
@@ -160,13 +162,16 @@ func adminTools() []tool {
 			Annotations: readOnly("List roles")}, "GET /api/v1/roles", users,
 			func(none) (request, error) { return request{path: "/api/v1/roles"}, nil },
 			func(_ none, out map[string]any) string { return fmt.Sprintf("%d roles.", count(out, "roles")) }),
-		define(&mcp.Tool{Name: "save_role", Description: "Make a role, or change one: its name, description, or permissions (the whole list). The admin role cannot change.",
+		define(&mcp.Tool{Name: "save_role", Description: "Make a role, or change one: its name, description, permissions (the whole list), or whether its holders must sign in with a second factor. The admin role cannot change.",
 			Annotations: destroys("Save a role", true)}, []string{"POST /api/v1/roles", "PUT /api/v1/roles/{id}"}, users,
 			func(ctx context.Context, e *env, in roleIn) (reply[map[string]any], error) {
 				out := map[string]any{}
 				c := given(map[string]any{"name": in.Name, "description": in.Description})
 				if in.Permissions != nil {
 					c["permissions"] = in.Permissions
+				}
+				if in.RequiresTwoFactor != nil {
+					c["requires_two_factor"] = *in.RequiresTwoFactor
 				}
 				if in.ID == "" {
 					if err := e.call(ctx, http.MethodPost, "/api/v1/roles", c, &out); err != nil {
