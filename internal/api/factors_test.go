@@ -295,7 +295,11 @@ func TestSigningInWithAnAuthenticatorApp(t *testing.T) {
 		t.Errorf("the code that confirmed the app: %d", rec.Code)
 	}
 	for _, off := range []int64{-2, 2} {
-		if rec := secondStep(t, srv, challenge, auth.TOTPCode(secret, now+off)); rec.Code != http.StatusUnauthorized {
+		// Two steps from the step as the code is checked, not as the test
+		// began: a test slowed past a step's end, as on a slow database,
+		// would otherwise check a code only one step off, which is taken.
+		cur := auth.TOTPStep(time.Now())
+		if rec := secondStep(t, srv, challenge, auth.TOTPCode(secret, cur+off)); rec.Code != http.StatusUnauthorized {
 			t.Errorf("a code %d steps off: %d", off, rec.Code)
 		}
 	}
