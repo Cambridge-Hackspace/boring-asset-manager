@@ -12,6 +12,8 @@ class Session {
   roles = $state<string[]>([]);
   /** The scopes of each role narrowed to some, by role name. */
   roleScopes = $state<Record<string, string[]>>({});
+  /** A role they hold requires a second factor and they have none: nothing opens until they set one up. */
+  factorSetup = $state(false);
   /** False until the first /auth/me answer, so the app does not flash sign-in. */
   loaded = $state(false);
 
@@ -80,6 +82,7 @@ class Session {
     this.permissions = me.permissions ?? [];
     this.roles = me.roles ?? [];
     this.roleScopes = me.role_scopes ?? {};
+    this.factorSetup = !!me.factor_setup_required;
   }
 
   private clear(): void {
@@ -87,6 +90,7 @@ class Session {
     this.permissions = [];
     this.roles = [];
     this.roleScopes = {};
+    this.factorSetup = false;
   }
 }
 

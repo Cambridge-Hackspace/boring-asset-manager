@@ -35,6 +35,10 @@ type providerIn struct {
 	AllowedGroups  []string          `json:"allowed_groups,omitempty" jsonschema:"make accounts only for members of these groups"`
 	LinkByEmail    bool              `json:"link_by_email,omitempty" jsonschema:"link to an account with the same verified email"`
 	TrustEmail     bool              `json:"trust_email,omitempty" jsonschema:"count its emails as verified though it does not say"`
+	MFAAMR         []string          `json:"mfa_amr,omitempty" jsonschema:"amr values that make a sign-in count as two-factor; left out, mfa, otp, hwk, swk and fpt"`
+	MFAACR         []string          `json:"mfa_acr,omitempty" jsonschema:"acr values, or SAML AuthnContextClassRef, that make a sign-in count as two-factor"`
+	MFAFallback    bool              `json:"mfa_fallback,omitempty" jsonschema:"ask for BAM!'s own second factor when the provider's sign-in does not count, rather than refusing someone whose roles require one"`
+	MFAAlwaysLocal bool              `json:"mfa_always_local,omitempty" jsonschema:"always ask for BAM!'s own second factor, whatever the provider says"`
 	Rules          []providerRuleIn  `json:"rules,omitempty" jsonschema:"roles given from claims, re-applied at every sign-in; the whole list"`
 }
 
@@ -60,7 +64,8 @@ func providerTools() []tool {
 				body := map[string]any{"key": in.Key, "name": in.Name, "protocol": in.Protocol, "settings": in.Settings, "secrets": in.Secrets,
 					"button_label": in.ButtonLabel, "icon": in.Icon, "enabled": in.Enabled, "position": in.Position, "provision": in.Provision,
 					"default_role_ids": in.DefaultRoleIDs, "allowed_domains": in.AllowedDomains, "allowed_groups": in.AllowedGroups,
-					"link_by_email": in.LinkByEmail, "trust_email": in.TrustEmail, "rules": rules}
+					"link_by_email": in.LinkByEmail, "trust_email": in.TrustEmail, "rules": rules,
+					"mfa_amr": in.MFAAMR, "mfa_acr": in.MFAACR, "mfa_fallback": in.MFAFallback, "mfa_always_local": in.MFAAlwaysLocal}
 				out := map[string]any{}
 				if in.ID == "" {
 					if err := e.call(ctx, http.MethodPost, "/api/v1/auth/providers", body, &out); err != nil {

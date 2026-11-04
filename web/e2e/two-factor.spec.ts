@@ -115,3 +115,29 @@ test('save the recovery codes, and sign in with one in place of the app', async 
   await expect(section).toContainText('9 left');
   await context.close();
 });
+
+test('a role requiring two-factor sign-in has someone without a factor set one up before anything else', async ({ api, browser }) => {
+  const email = `${unique('held')}@hackspace.org`.toLowerCase();
+  const password = 'HeldBack123!';
+  const { role } = await api.call('POST', '/roles', { name: unique('Lathe'), permissions: ['assets.read'], requires_two_factor: true });
+  const { user } = await api.call('POST', '/users', { email, name: unique('Held'), password });
+  await api.call('PUT', `/users/${user.id}/roles`, { roles: [{ role_id: role.id, scope_ids: [] }] });
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await signIn(page, email, password);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Set up two-factor sign-in');
+  await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
+  // Nothing else opens meanwhile.
+  expect((await page.request.get('/api/v1/assets')).status()).toBe(403);
+
+  const section = page.getByRole('region', { name: 'Two-factor sign-in' });
+  await section.getByRole('button', { name: 'Set up an authenticator app' }).click();
+  const secret = secretOf((await section.locator('code').textContent()) ?? '');
+  await section.getByLabel('Code from the app').fill(code(secret, stepNow()));
+  await section.getByRole('button', { name: 'Turn on' }).click();
+  await section.getByRole('button', { name: 'I have saved them' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  expect((await page.request.get('/api/v1/assets')).status()).toBe(200);
+  await context.close();
+});

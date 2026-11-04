@@ -37,6 +37,9 @@ var (
 	// ErrRecoveryCodeNotFound is returned for a recovery code that is not
 	// one of the user's, or was used already.
 	ErrRecoveryCodeNotFound = errors.New("recovery code not found")
+	// ErrFactorRequired is returned for removing the last second factor of
+	// someone whose roles require one.
+	ErrFactorRequired = errors.New("a role you hold requires two-factor sign-in, so your last second factor cannot be removed; set up another first")
 )
 
 // Factor is a second factor as it is listed: never its secret.
@@ -120,6 +123,10 @@ func (s *Store) ConfirmTOTP(userID, id string, step int64) (*Factor, error) {
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return nil, ErrFactorNotFound
+	}
+	// With a factor, sessions held to setting one up are free.
+	if err := s.clearFactorSetup(userID); err != nil {
+		return nil, err
 	}
 	return &Factor{ID: id, Kind: FactorTOTP, CreatedAt: now, ConfirmedAt: &now, LastUsedAt: &now}, nil
 }
@@ -210,6 +217,15 @@ func (s *Store) DeleteFactor(userID, id string) error {
 		return fmt.Errorf("counting the factors left: %w", err)
 	}
 	if left == 0 {
+		// Someone whose roles require a factor keeps their last.
+		var required int
+		if err := s.TxQueryRow(tx, `SELECT COUNT(*) FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+			WHERE ur.user_id = ? AND r.requires_two_factor = TRUE`, userID).Scan(&required); err != nil {
+			return fmt.Errorf("reading the user's roles: %w", err)
+		}
+		if required > 0 {
+			return ErrFactorRequired
+		}
 		if _, err := s.TxExec(tx, "DELETE FROM user_factors WHERE user_id = ? AND kind = ?", userID, FactorRecovery); err != nil {
 			return fmt.Errorf("removing the recovery codes: %w", err)
 		}

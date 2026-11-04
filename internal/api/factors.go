@@ -159,7 +159,7 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearChallengeCookie(w, r)
-	sess, err := s.store.CreateSession(user.ID, DefaultSessionTTL)
+	sess, err := s.startSession(user.ID)
 	if err != nil {
 		writeServerError(w, err, "create session")
 		return
@@ -167,6 +167,10 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 	SetSessionCookie(w, r, sess.ID, DefaultSessionTTL, s.cfg.Server.BaseURL)
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
+
+// lastFactorRequired answers removing one's last second factor while a
+// role requires one.
+const lastFactorRequired = "A role you hold requires two-factor sign-in, so your last second factor cannot be removed. Set up another first."
 
 // checkAppCode accepts a code from any of the factors' apps, once. It
 // reports how many could not be opened with this server's key.
@@ -470,6 +474,18 @@ func (s *Server) handleDeleteOwnFactor(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusNotFound, "Second factor not found")
 		return
 	}
+	// Said before the code is taken, so that it can be used again.
+	if len(factors) == 1 {
+		required, err := s.store.RequiresTwoFactor(user.ID)
+		if err != nil {
+			writeServerError(w, err, "read the user's roles")
+			return
+		}
+		if required {
+			writeJSONError(w, http.StatusConflict, lastFactorRequired)
+			return
+		}
+	}
 	if !auth.CheckPassword(req.Password, user.PasswordHash) {
 		writeJSONError(w, http.StatusBadRequest, "That password is not right.")
 		return
@@ -493,6 +509,10 @@ func (s *Server) handleDeleteOwnFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteFactor(user.ID, id); err != nil {
+		if errors.Is(err, store.ErrFactorRequired) {
+			writeJSONError(w, http.StatusConflict, lastFactorRequired)
+			return
+		}
 		writeServerError(w, err, "remove the factor")
 		return
 	}

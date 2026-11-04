@@ -284,7 +284,7 @@ People, roles and scopes need `users.manage`. Channels need `settings.manage`.
 | `clear_sign_in_delay` | `users.manage` | Lets someone sign in again at once, when wrong passwords hold them back. |
 | `reset_user_factors` | `users.manage` | Removes someone's second factors, for one who has lost theirs, and signs them out everywhere. Setting up one's own is never over MCP. |
 | `set_user_roles` | `users.manage` | Each role in every scope, or narrowed to some. |
-| `list_roles`, `save_role` (changing only what is given), `delete_role` | `users.manage` | |
+| `list_roles`, `save_role` (changing only what is given), `delete_role` | `users.manage` | `save_role` sets whether a role requires two-factor sign-in, but not the admin role's: turning that off stays with a person. |
 | `list_scopes` | `users.manage` or `categories.manage` | |
 | `save_scope`, `delete_scope`, `set_category_scopes` | `users.manage` | |
 | `list_live_connections` | `users.manage` | |
@@ -351,7 +351,7 @@ The WebSocket itself is for devices, and is not reached over MCP.
 
 Nothing over MCP makes tokens or changes anyone's own password. `internal/mcpserver/coverage.go`
 lists those routes as refused, with why. It also lists signing in with a password, whose
-counterpart over MCP is OAuth.
+counterpart over MCP is OAuth, and turning two-factor sign-in off for the admin role.
 
 ## Signing in with OAuth
 

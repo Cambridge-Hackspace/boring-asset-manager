@@ -92,6 +92,7 @@ Messages look like this:
 | Second factors removed | "Second factors removed: Ada" (amber), when an admin, or someone on the command line, removes their second factors, saying who; a link to the Users page (see [Access](access.md#two-factor-sign-in)) |
 | A recovery code used | "Recovery code used: Ada" (amber), when someone signs in with one of their recovery codes; a link to the Users page (see [Access](access.md#recovery-codes)) |
 | A break-glass sign-in | "Break-glass sign-in: Ada" (amber), when someone signs in with a password while passwords are off; a link to the Users page (see [Access](access.md#turning-passwords-off)) |
+| Two-factor sign-in no longer required | "Two-factor sign-in no longer required: admin" (amber), when a role stops requiring it, saying who turned it off, or that it was the command line; a link to the Roles page (see [Access](access.md#requiring-two-factor-sign-in)) |
 
 ## MQTT
 

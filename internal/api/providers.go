@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -54,6 +55,7 @@ func (s *Server) syncConfigProviders() error {
 			Key: p.Key, Name: p.Name, Protocol: p.Protocol, Settings: p.Settings, ButtonLabel: p.ButtonLabel, Icon: p.Icon,
 			Enabled: !p.Disabled, Provision: p.Provision, AllowedDomains: p.AllowedDomains, AllowedGroups: p.AllowedGroups,
 			LinkByEmail: p.LinkByEmail, TrustEmail: p.TrustEmail,
+			MFAAMR: p.MFAAMR, MFAACR: p.MFAACR, MFAFallback: p.MFAFallback, MFAAlwaysLocal: p.MFAAlwaysLocal,
 		}
 		for _, name := range p.DefaultRoles {
 			id, ok := roleIDs[name]
@@ -190,21 +192,26 @@ func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
 // ProviderRequest is a provider as saved under Admin. A secret left blank
 // keeps the one stored.
 type ProviderRequest struct {
-	Key            string               `json:"key"`
-	Name           string               `json:"name"`
-	Protocol       string               `json:"protocol"`
-	Settings       map[string]string    `json:"settings"`
-	Secrets        map[string]string    `json:"secrets"`
-	ButtonLabel    string               `json:"button_label"`
-	Icon           string               `json:"icon"`
-	Enabled        bool                 `json:"enabled"`
-	Position       int                  `json:"position"`
-	Provision      bool                 `json:"provision"`
-	DefaultRoleIDs []string             `json:"default_role_ids"`
-	AllowedDomains []string             `json:"allowed_domains"`
-	AllowedGroups  []string             `json:"allowed_groups"`
-	LinkByEmail    bool                 `json:"link_by_email"`
-	TrustEmail     bool                 `json:"trust_email"`
+	Key            string            `json:"key"`
+	Name           string            `json:"name"`
+	Protocol       string            `json:"protocol"`
+	Settings       map[string]string `json:"settings"`
+	Secrets        map[string]string `json:"secrets"`
+	ButtonLabel    string            `json:"button_label"`
+	Icon           string            `json:"icon"`
+	Enabled        bool              `json:"enabled"`
+	Position       int               `json:"position"`
+	Provision      bool              `json:"provision"`
+	DefaultRoleIDs []string          `json:"default_role_ids"`
+	AllowedDomains []string          `json:"allowed_domains"`
+	AllowedGroups  []string          `json:"allowed_groups"`
+	LinkByEmail    bool              `json:"link_by_email"`
+	TrustEmail     bool              `json:"trust_email"`
+	// MFAAMR, left out, is store.DefaultMFAAMR.
+	MFAAMR         []string             `json:"mfa_amr"`
+	MFAACR         []string             `json:"mfa_acr"`
+	MFAFallback    bool                 `json:"mfa_fallback"`
+	MFAAlwaysLocal bool                 `json:"mfa_always_local"`
 	Rules          []store.ProviderRule `json:"rules"`
 }
 
@@ -255,6 +262,7 @@ func (s *Server) providerInput(req ProviderRequest, stored *store.Provider) (sto
 		Key: req.Key, Name: req.Name, Protocol: req.Protocol, Settings: settings, ButtonLabel: req.ButtonLabel, Icon: req.Icon,
 		Enabled: req.Enabled, Position: req.Position, Provision: req.Provision, DefaultRoleIDs: req.DefaultRoleIDs,
 		AllowedDomains: req.AllowedDomains, AllowedGroups: req.AllowedGroups, LinkByEmail: req.LinkByEmail, TrustEmail: req.TrustEmail,
+		MFAAMR: req.MFAAMR, MFAACR: req.MFAACR, MFAFallback: req.MFAFallback, MFAAlwaysLocal: req.MFAAlwaysLocal,
 		Rules: req.Rules,
 	}
 	if changed || stored == nil {
@@ -594,14 +602,33 @@ func (s *Server) handleProviderCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// A second factor is still asked for (#192 decides when a provider's
-	// own suffices).
+	// Whether BAM!'s own second factor is asked for after the provider
+	// (docs/access.md#requiring-two-factor-sign-in).
 	factors, err := s.store.SealedFactors(user.ID)
 	if err != nil {
 		writeServerError(w, err, "read the second factors")
 		return
 	}
-	if len(factors) > 0 {
+	required, err := s.store.RequiresTwoFactor(user.ID)
+	if err != nil {
+		writeServerError(w, err, "read the user's roles")
+		return
+	}
+	switch afterProvider(p, claims, required, len(factors) > 0) {
+	case stepRefuse:
+		signInPage(w, r, next, "A role you hold requires two-factor sign-in, and "+p.Name+" did not say you used a second factor. Ask whoever runs "+p.Name+" to require one.")
+		return
+	case stepNone:
+		// The provider's sign-in counts as two-factor, or none is needed.
+		sess, err := s.store.CreateSession(user.ID, DefaultSessionTTL)
+		if err != nil {
+			writeServerError(w, err, "create session")
+			return
+		}
+		SetSessionCookie(w, r, sess.ID, DefaultSessionTTL, s.cfg.Server.BaseURL)
+		http.Redirect(w, r, next, http.StatusSeeOther)
+		return
+	case stepOwn:
 		challenge, err := s.store.CreateSignInChallenge(user.ID)
 		if err != nil {
 			writeServerError(w, err, "start the second step")
@@ -615,13 +642,61 @@ func (s *Server) handleProviderCallback(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/sign-in?"+q.Encode(), http.StatusSeeOther)
 		return
 	}
-	sess, err := s.store.CreateSession(user.ID, DefaultSessionTTL)
+	// stepSetUp: BAM!'s own is wanted and they have none, so the session
+	// is held to setting one up.
+	sess, err := s.startSession(user.ID)
 	if err != nil {
 		writeServerError(w, err, "create session")
 		return
 	}
 	SetSessionCookie(w, r, sess.ID, DefaultSessionTTL, s.cfg.Server.BaseURL)
 	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+// What follows a provider's sign-in.
+const (
+	// stepNone signs them in.
+	stepNone = iota
+	// stepOwn asks for BAM!'s own second factor.
+	stepOwn
+	// stepSetUp signs them in held to setting one up, as their roles
+	// require one and they have none.
+	stepSetUp
+	// stepRefuse refuses the sign-in.
+	stepRefuse
+)
+
+// afterProvider decides what follows a provider's sign-in. By default the
+// provider is trusted: its sign-in counts as two-factor when its amr or acr
+// holds a value the provider's settings list. Otherwise, someone whose
+// roles require a second factor is asked for BAM!'s own when the provider
+// falls back to it, and refused when not; someone else is asked for theirs
+// if they set one up. A provider set to always ask for BAM!'s own does,
+// whatever it says.
+func afterProvider(p *store.Provider, c *idp.Claims, required, hasFactor bool) int {
+	own := func() int {
+		switch {
+		case hasFactor:
+			return stepOwn
+		case required:
+			return stepSetUp
+		}
+		return stepNone
+	}
+	if p.MFAAlwaysLocal {
+		return own()
+	}
+	vouched := slices.ContainsFunc(c.AMR, func(v string) bool { return slices.Contains(p.MFAAMR, v) }) ||
+		(c.ACR != "" && slices.Contains(p.MFAACR, c.ACR))
+	switch {
+	case vouched:
+		return stepNone
+	case required && p.MFAFallback:
+		return own()
+	case required:
+		return stepRefuse
+	}
+	return own()
 }
 
 // The client of the test OpenID Connect provider BAM! serves at /test-oidc

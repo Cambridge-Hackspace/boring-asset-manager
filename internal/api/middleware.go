@@ -123,6 +123,21 @@ func authenticatedAs(ctx, from context.Context) context.Context {
 	return context.WithValue(ctx, authenticatedKey{}, true)
 }
 
+// ErrFactorSetupRequired answers a session held to setting up a second
+// factor, for anything else.
+const ErrFactorSetupRequired = "A role you hold requires two-factor sign-in. Set up a second factor first."
+
+// factorSetupRoutes are those a session held to setting up a second factor
+// may reach: who it is, setting up an authenticator app, and signing out.
+var factorSetupRoutes = map[string]bool{
+	"GET /api/v1/auth/me":                       true,
+	"GET /api/v1/info":                          true,
+	"GET /api/v1/auth/me/factors":               true,
+	"POST /api/v1/auth/me/factors/totp":         true,
+	"POST /api/v1/auth/me/factors/totp/confirm": true,
+	"POST /api/v1/auth/logout":                  true,
+}
+
 // Authenticate is an HTTP middleware that extracts and validates an API token
 // (Authorization: Bearer) or else the session cookie, populating the request
 // context with the token, or the user and session, and their permissions.
@@ -189,6 +204,13 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 			perms, err := st.GetUserPermissions(u.ID)
 			if err != nil {
 				writeServerError(w, err, "read the user's permissions")
+				return
+			}
+
+			// A session held to setting up a second factor reaches only what
+			// that takes (docs/access.md#requiring-two-factor-sign-in).
+			if sess.FactorSetup && strings.HasPrefix(r.URL.Path, "/api/") && !factorSetupRoutes[r.Method+" "+r.URL.Path] {
+				writeJSONError(w, http.StatusForbidden, ErrFactorSetupRequired)
 				return
 			}
 

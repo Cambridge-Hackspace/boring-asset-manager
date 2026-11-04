@@ -93,11 +93,13 @@ func TestThePublicRole(t *testing.T) {
 	// The role keeps its name, stays, and only ever reads.
 	role, _ := st.GetRoleByName(rbac.PublicRole)
 	path := "/api/v1/roles/" + role.ID
-	if body := expect("listing roles", adminCookie, http.MethodGet, "/api/v1/roles", "", http.StatusOK); !strings.Contains(body, `"name":"public","description":"Everyone, signed in or not","permissions":["public:assets.read","public:assets.scan"],"user_count":0,"protected":false,"public":true`) {
+	if body := expect("listing roles", adminCookie, http.MethodGet, "/api/v1/roles", "", http.StatusOK); !strings.Contains(body, `"name":"public","description":"Everyone, signed in or not","permissions":["public:assets.read","public:assets.scan"],"user_count":0,"requires_two_factor":false,"protected":false,"public":true`) {
 		t.Errorf("listing roles: %s", body)
 	}
 	expect("renaming it", adminCookie, http.MethodPut, path, `{"name":"everyone","permissions":["public:assets.read"]}`, http.StatusConflict)
 	expect("letting it write", adminCookie, http.MethodPut, path, `{"name":"public","permissions":["public:assets.write"]}`, http.StatusConflict)
+	// Everyone holds it, signed in or not, so it cannot require a second factor.
+	expect("requiring two-factor sign-in", adminCookie, http.MethodPut, path+"/two-factor", `{"required":true}`, http.StatusConflict)
 	expect("deleting it", adminCookie, http.MethodDelete, path, "", http.StatusConflict)
 	// Reading everything uncategorized, say, is up to the admin.
 	expect("widening it", adminCookie, http.MethodPut, path, `{"name":"public","description":"Everyone","permissions":["public:assets.read","default:assets.read"]}`, http.StatusOK)

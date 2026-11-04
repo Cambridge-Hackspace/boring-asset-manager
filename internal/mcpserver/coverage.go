@@ -36,6 +36,7 @@ var Refused = map[string]string{
 	"GET /api/v1/assets/export.xlsx":               "a workbook, for people to open in a spreadsheet; over MCP, export_assets gives the same as CSV",
 	"GET /api/v1/reports/{id}/sections/{n}/xlsx":   "a workbook, for people to open in a spreadsheet; over MCP, the section's CSV gives the same",
 	"GET /api/v1/reports/{id}/xlsx":                "a workbook, for people to open in a spreadsheet; over MCP, each section's CSV gives the same",
+	"PUT /api/v1/roles/{id}/two-factor":            "how two-factor sign-in is turned off for the admin role, which stays with a person, so a misled assistant cannot weaken admins' sign-in; save_role sets it for other roles",
 	"POST /api/v1/icon-library/import":             "a zip uploaded by people; over MCP, save_icon_library_file saves each source",
 	"GET /api/v1/flows/{slug}/qr.svg":              "the picture on a flow's printed poster; over MCP, a flow is reached at /f/<slug>, and run with run_flow",
 	// Archives move between a person's own computer and the server;

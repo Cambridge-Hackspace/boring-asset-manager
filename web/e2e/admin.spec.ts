@@ -196,7 +196,10 @@ test('roles: create one that only records stock, edit it, and delete it', async 
   // admin cannot be changed.
   const admin = page.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'admin', exact: true }) });
   await expect(admin).toContainText('always has every permission');
-  await expect(admin.getByRole('button')).toHaveCount(0);
+  // Nothing about it changes but whether it requires two-factor sign-in,
+  // which the stack has turned off for these specs.
+  await expect(admin.getByRole('button', { name: /Edit|Delete/ })).toHaveCount(0);
+  await expect(admin.getByRole('button', { name: 'Require two-factor sign-in' })).toBeVisible();
 
   await page.getByRole('button', { name: 'New role' }).click();
   await page.getByLabel('Name', { exact: true }).fill(name);
