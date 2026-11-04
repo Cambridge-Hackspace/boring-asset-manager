@@ -432,6 +432,8 @@ export interface ImportProblem {
   row: number;
   column?: string;
   message: string;
+  /** A link's reference that names no asset, which an earlier file may create. */
+  ref?: string;
 }
 
 /** What an import would do (docs/csv.md). */
@@ -443,6 +445,8 @@ export interface ImportPlan {
   unchanged: number;
   problems: ImportProblem[];
   problem_count: number;
+  /** How many of the problems are links naming no asset. */
+  unresolved: number;
   unknown_categories: string[];
   /** The links it adds, moves and removes, counted, with the first of them listed. */
   links_added: number;

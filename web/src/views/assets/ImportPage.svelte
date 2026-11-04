@@ -1,40 +1,44 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { ApiError, request } from '../../lib/api';
+  import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { IGNORE, describeLinkChange, describeProblem, duplicateTargets, importForm, linkCounts, summarize, targetOptions } from '../../lib/importing';
-  import type { Field, GeneratorInfo, ImportPlan, ImportResult } from '../../lib/models';
+  import { MAX_FILES, targetOptions } from '../../lib/importing';
+  import { ImportEntry } from '../../lib/importset.svelte';
+  import type { Field, GeneratorInfo } from '../../lib/models';
   import { session } from '../../lib/session.svelte';
   import { addedMessage, addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import ImportFile from './ImportFile.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let fields = $state<Field[]>([]);
   let generators = $state<GeneratorInfo[]>([]);
-  let file = $state<File | null>(null);
-  let plan = $state<ImportPlan | null>(null);
-  let mapping = $state<string[]>([]);
-  // The mapping the plan was checked with.
-  let checkedWith = $state('');
-  let busy = $state(false);
+  let entries = $state<ImportEntry[]>([]);
+  let running = $state(false);
   let error = $state('');
-  let result = $state<ImportResult | null>(null);
+  // What the last run did, in a sentence, when there were several files.
+  let outcome = $state('');
+  let dragging = $state(false);
+  const userId = $derived(session.user?.id ?? '');
   // New assets' labels join the print queue (docs/printing.md), as each person last chose.
   const canSpool = session.can('labels.print');
   let queueLabels = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
   let spooled = $state('');
 
   const options = $derived(targetOptions(fields, generators));
-  const groups = $derived(['Asset', 'Stock', 'Codes', 'Fields'].map((g) => ({ name: g, options: options.filter((o) => o.group === g) })));
-  const duplicates = $derived(duplicateTargets(mapping));
-  // Removing links no row states, when the file has a links column.
-  let removeLinks = $state(false);
-  const hasLinks = $derived(mapping.includes('links'));
-  const checkKey = $derived(JSON.stringify([mapping, hasLinks && removeLinks]));
-  const checked = $derived(plan !== null && checkKey === checkedWith);
-  const linkChanges = $derived(plan ? plan.links_added + plan.links_moved + plan.links_removed : 0);
-  const ready = $derived(checked && plan !== null && plan.problem_count === 0 && plan.create + plan.update + linkChanges > 0);
+  // The files still to import, in order.
+  const pending = $derived(entries.filter((e) => !e.result));
+  const busy = $derived(running || entries.some((e) => e.busy));
+  // The first file must be ready; a later one may wait on assets an earlier one creates.
+  const ready = $derived(pending.length > 0 && pending.every((e, i) => e.ready || (i > 0 && e.waiting)));
+  const creates = $derived(pending.reduce((n, e) => n + (e.plan?.create ?? 0), 0));
+  const label = $derived.by(() => {
+    if (pending.length > 1) return `Import ${pending.length} files in order`;
+    const p = pending[0]?.plan;
+    if (!p) return 'Import';
+    return p.create + p.update ? `Import ${p.create + p.update} ${p.create + p.update === 1 ? 'asset' : 'assets'}` : 'Import the links';
+  });
 
   onMount(async () => {
     try {
@@ -49,58 +53,88 @@
     }
   });
 
-  async function preview(withMapping: boolean) {
-    if (!file) return;
-    busy = true;
+  async function add(files: File[]) {
     error = '';
-    try {
-      const next = await request<ImportPlan>('POST', '/assets/import/preview', importForm(file, withMapping ? mapping : undefined, hasLinks && removeLinks));
-      plan = next;
-      mapping = next.columns.map((c) => c.target);
-      checkedWith = checkKey;
-    } catch (err) {
-      plan = null;
-      error = messageOf(err);
-    } finally {
-      busy = false;
-    }
+    outcome = '';
+    spooled = '';
+    // A finished run's files make way for the next.
+    if (entries.length && !pending.length) entries = [];
+    const room = MAX_FILES - entries.length;
+    if (files.length > room) error = `At most ${MAX_FILES} files are imported together; ${files.length - room === 1 ? 'one was' : `${files.length - room} were`} left out.`;
+    const added = files.slice(0, Math.max(room, 0)).map((f) => new ImportEntry(f));
+    entries = [...entries, ...added];
+    // One at a time, in order, so a file can start from the mapping of the one before.
+    for (const e of added) await e.start(userId);
   }
 
   async function choose(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
-    file = input.files?.[0] ?? null;
-    plan = null;
-    result = null;
-    mapping = [];
-    await preview(false);
+    const files = [...(input.files ?? [])];
+    input.value = '';
+    await add(files);
   }
 
+  async function drop(event: DragEvent) {
+    event.preventDefault();
+    dragging = false;
+    if (busy) return;
+    await add([...(event.dataTransfer?.files ?? [])].filter((f) => f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv'));
+  }
+
+  function move(entry: ImportEntry, by: number) {
+    const from = entries.indexOf(entry);
+    const to = from + by;
+    if (to < 0 || to >= entries.length) return;
+    const next = [...entries];
+    next.splice(from, 1);
+    next.splice(to, 0, entry);
+    entries = next;
+  }
+
+  function remove(entry: ImportEntry) {
+    entries = entries.filter((e) => e !== entry);
+  }
+
+  const names = (list: ImportEntry[]) => list.map((e) => e.file.name).join(', ');
+
   async function runImport() {
-    if (!file || !ready) return;
-    busy = true;
+    if (!ready || busy) return;
+    running = true;
     error = '';
+    outcome = '';
+    spooled = '';
+    const queue = [...pending];
+    for (const e of queue) e.skipped = false;
+    const done: ImportEntry[] = [];
+    let failed: ImportEntry | null = null;
     try {
-      result = await request<ImportResult>('POST', '/assets/import', importForm(file, mapping, hasLinks && removeLinks));
-      plan = null;
-      file = null;
-      spooled = '';
+      for (const e of queue) {
+        if (!(await e.run(userId))) {
+          failed = e;
+          break;
+        }
+        done.push(e);
+      }
+      const rest = failed ? queue.slice(queue.indexOf(failed) + 1) : [];
+      for (const e of rest) e.skipped = true;
+      if (queue.length > 1) {
+        outcome = failed
+          ? `${done.length ? `Imported ${names(done)}. ` : 'Nothing was imported. '}${failed.file.name} was refused${rest.length ? `, so ${names(rest)} ${rest.length === 1 ? 'was' : 'were'} not imported` : ''}.`
+          : `Imported all ${done.length} files.`;
+      }
       if (canSpool) {
-        rememberQueueNewLabels(session.user?.id ?? '', queueLabels);
+        rememberQueueNewLabels(userId, queueLabels);
         // The import is done either way; a spool that cannot take the labels
         // says so here, and they can be added from the asset list.
-        if (queueLabels && result.created_ids?.length) {
-          spooled = await addToSpool({ asset_ids: result.created_ids }).then(addedMessage, (err) => `The labels were not added to the print queue: ${messageOf(err)}`);
+        const created = done.flatMap((e) => e.result?.created_ids ?? []);
+        if (queueLabels && created.length) {
+          spooled = await addToSpool({ asset_ids: created }).then(addedMessage, (err) => `The labels were not added to the print queue: ${messageOf(err)}`);
         }
       }
-    } catch (err) {
-      // The server checks again; if something changed, show its findings.
-      if (err instanceof ApiError && err.status === 422) {
-        const details = (err.body as { details?: ImportPlan } | undefined)?.details;
-        if (details) plan = details;
-      }
-      error = messageOf(err);
+      // What was imported may resolve what the files after the refused one name.
+      if (done.length) for (const e of rest) await e.preview(true, userId);
     } finally {
-      busy = false;
+      running = false;
     }
   }
 </script>
@@ -110,119 +144,57 @@
   A CSV file with one asset per row. Rows with an ID update that asset, and blank cells leave its values alone; rows
   without one create new assets. Categories are paths such as <span class="font-mono">Tools &gt; Drills</span>,
   separated by semicolons, and must already exist. Exporting from the asset list gives a file in this format. Nothing
-  is written until you import, and then either every row is imported or none is.
+  is written until you import, and then either every row of a file is imported or none is.
+</p>
+<p class="mb-4 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
+  Several files are imported in the order listed, each on its own. A file that links to assets another creates goes after
+  it. If one is refused, the files after it are not imported.
 </p>
 
-<div class="mb-4">
+<div
+  class="mb-4 rounded border-2 border-dashed p-4 {dragging ? 'border-sky-500 bg-sky-50 dark:bg-sky-950' : 'border-zinc-300 dark:border-zinc-700'}"
+  role="group"
+  aria-label="Files to import"
+  ondragover={(e) => {
+    e.preventDefault();
+    dragging = true;
+  }}
+  ondragleave={() => (dragging = false)}
+  ondrop={drop}
+>
   <label class="label" for="import-file">CSV file</label>
-  <input id="import-file" type="file" accept=".csv,text/csv" class="block min-h-11 py-2 text-sm" onchange={choose} disabled={busy} />
+  <input id="import-file" type="file" accept=".csv,text/csv" multiple class="block min-h-11 py-2 text-sm" onchange={choose} disabled={busy} />
+  <p class="text-xs text-zinc-600 dark:text-zinc-400">Choose or drop up to {MAX_FILES} files.</p>
 </div>
 
 <ErrorMessage {error} />
 
-{#if result}
-  <div class="card mb-4" role="status">
-    <p class="font-medium">
-      Imported: {result.created} new, {result.updated} updated, {result.unchanged} unchanged{linkCounts(result.links_added, result.links_moved, result.links_removed) ? `; ${linkCounts(result.links_added, result.links_moved, result.links_removed)}` : ''}.
-    </p>
-    {#if spooled}<p class="mt-1 text-sm">{spooled} <a class="underline" href="/spool">Open the print queue</a></p>{/if}
-    <p class="mt-1 text-sm"><a class="underline" href="/assets">Back to the assets</a></p>
-  </div>
+{#each entries as entry, i (entry.id)}
+  <ImportFile
+    {entry}
+    position={i + 1}
+    count={entries.length}
+    earlier={entries.slice(0, i).some((e) => !e.result)}
+    {options}
+    {userId}
+    disabled={busy}
+    onmove={(by) => move(entry, by)}
+    onremove={() => remove(entry)}
+  />
+{/each}
+
+{#if outcome}<p class="mb-4 font-medium" role="status">{outcome}</p>{/if}
+
+{#if pending.length && pending.every((e) => e.checked)}
+  {#if canSpool && creates > 0}
+    <label class="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabels} /> Add the new assets’ labels to the print queue</label>
+  {/if}
+  <button type="button" class="btn-primary mb-4" onclick={runImport} disabled={!ready || busy}>
+    {running ? 'Importing…' : label}
+  </button>
 {/if}
 
-{#if plan}
-  <h2 class="mb-2 text-lg font-semibold">Columns</h2>
-  <div class="mb-4 overflow-x-auto">
-    <table class="w-full text-left text-sm">
-      <thead class="border-b border-zinc-300 dark:border-zinc-700">
-        <tr>
-          <th scope="col" class="py-2 pr-4">Column</th>
-          <th scope="col" class="py-2 pr-4">First value</th>
-          <th scope="col" class="py-2">Goes to</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each plan.columns as column, i (i)}
-          <tr class="border-b border-zinc-200 dark:border-zinc-800">
-            <th scope="row" class="py-2 pr-4 font-medium">{column.header || `Column ${i + 1}`}</th>
-            <td class="max-w-48 truncate py-2 pr-4 text-zinc-600 dark:text-zinc-400" title={column.sample}>{column.sample}</td>
-            <td class="py-2">
-              <select
-                class="input"
-                aria-label="Where {column.header || `column ${i + 1}`} goes"
-                aria-invalid={!mapping[i] || duplicates.has(mapping[i]!)}
-                bind:value={mapping[i]}
-              >
-                <option value="">Choose…</option>
-                <option value={IGNORE}>Ignore this column</option>
-                {#each groups as group (group.name)}
-                  {#if group.options.length}
-                    <optgroup label={group.name}>
-                      {#each group.options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
-                    </optgroup>
-                  {/if}
-                {/each}
-              </select>
-              {#if mapping[i] && duplicates.has(mapping[i]!)}
-                <p class="error-text">Another column goes here too.</p>
-              {/if}
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-
-  {#if hasLinks}
-    <div class="mb-4 max-w-prose">
-      <label class="flex items-center gap-2 text-sm">
-        <input type="checkbox" bind:checked={removeLinks} aria-describedby="remove-links-help" /> Also remove links that no row states
-      </label>
-      <p id="remove-links-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-        Without this, an import only adds links and moves things between containers. With it, links of the file's assets that
-        no row mentions are removed, so an exported file you edit imports back exactly.
-      </p>
-    </div>
-  {/if}
-
-  <h2 class="mb-2 text-lg font-semibold">Check</h2>
-  {#if !checked}
-    <p class="mb-2 text-sm">The mapping has changed since the last check.</p>
-    <button type="button" class="btn-secondary mb-4" onclick={() => preview(true)} disabled={busy}>
-      {busy ? 'Checking…' : 'Check again'}
-    </button>
-  {:else}
-    <p class="mb-2 text-sm" role="status">{summarize(plan)}</p>
-    {#if plan.unknown_categories.length}
-      <p class="error-text mb-2">
-        These categories do not exist yet; create them first, or fix the file: {plan.unknown_categories.join(', ')}.
-      </p>
-    {/if}
-    {#if plan.problem_count}
-      <p class="mb-1 text-sm font-medium" id="import-problems">
-        {plan.problem_count === 1 ? '1 problem' : `${plan.problem_count} problems`} to fix before importing:
-      </p>
-      <ul class="mb-4 list-disc space-y-1 pl-5 text-sm" aria-labelledby="import-problems">
-        {#each plan.problems as p, i (i)}<li>{describeProblem(p)}</li>{/each}
-        {#if plan.problem_count > plan.problems.length}
-          <li>and {plan.problem_count - plan.problems.length} more.</li>
-        {/if}
-      </ul>
-    {/if}
-    {#if plan.link_changes.length}
-      <details class="mb-4 text-sm">
-        <summary class="cursor-pointer">Link changes</summary>
-        <ul class="mt-1 list-disc space-y-1 pl-5">
-          {#each plan.link_changes as c, i (i)}<li>{describeLinkChange(c)}</li>{/each}
-          {#if linkChanges > plan.link_changes.length}<li>and {linkChanges - plan.link_changes.length} more.</li>{/if}
-        </ul>
-      </details>
-    {/if}
-    {#if canSpool && plan.create > 0}
-      <label class="mb-3 flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabels} /> Add the new assets’ labels to the print queue</label>
-    {/if}
-    <button type="button" class="btn-primary" onclick={runImport} disabled={!ready || busy}>
-      {busy ? 'Importing…' : plan.create + plan.update ? `Import ${plan.create + plan.update} ${plan.create + plan.update === 1 ? 'asset' : 'assets'}` : 'Import the links'}
-    </button>
-  {/if}
+{#if spooled}<p class="mt-1 text-sm">{spooled} <a class="underline" href="/spool">Open the print queue</a></p>{/if}
+{#if entries.length && !pending.length}
+  <p class="mt-1 text-sm"><a class="underline" href="/assets">Back to the assets</a></p>
 {/if}

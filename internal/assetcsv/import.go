@@ -48,6 +48,9 @@ type Problem struct {
 	Row     int    `json:"row"`
 	Column  string `json:"column,omitempty"`
 	Message string `json:"message"`
+	// Ref is the reference in a links cell that names no asset, which an
+	// earlier file of a set may create (docs/csv.md).
+	Ref string `json:"ref,omitempty"`
 }
 
 // Column is a header with its suggested and chosen targets, and the first
@@ -68,6 +71,7 @@ type Plan struct {
 	Unchanged         int       `json:"unchanged"`
 	Problems          []Problem `json:"problems"`
 	ProblemCount      int       `json:"problem_count"`
+	Unresolved        int       `json:"unresolved"` // links naming no asset, among ProblemCount
 	UnknownCategories []string  `json:"unknown_categories"`
 	// The links the import adds, moves and removes, counted, with the first
 	// of them listed (docs/csv.md). RemoveLinks says whether links no row
@@ -87,6 +91,15 @@ func (p *Plan) problem(row int, column, format string, args ...any) {
 	p.ProblemCount++
 	if len(p.Problems) < maxProblems {
 		p.Problems = append(p.Problems, Problem{Row: row, Column: column, Message: fmt.Sprintf(format, args...)})
+	}
+}
+
+// unresolved reports a link naming no asset.
+func (p *Plan) unresolved(row int, column, ref string) {
+	p.problem(row, column, "no asset is %q", ref)
+	p.Unresolved++
+	if n := len(p.Problems); n > 0 && p.ProblemCount == n {
+		p.Problems[n-1].Ref = ref
 	}
 }
 
