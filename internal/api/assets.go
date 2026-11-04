@@ -330,20 +330,36 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 // handleExportAssets writes the assets the list would show as CSV
 // (docs/csv.md): GET /api/v1/assets/export.csv?category_id=&search=
 func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
+	assets, cats, refs, ok := s.exportedAssets(w, r)
+	if !ok {
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="assets-%s.csv"`, time.Now().UTC().Format("20060102")))
+	if err := assetcsv.Export(w, assets, cats, generators.AllowedGeneratorTypes(), refs); err != nil {
+		// Headers are gone; all that is left is to stop.
+		return
+	}
+}
+
+// exportedAssets are what an export of the asset list holds: the assets
+// its category_id and search filters match that the request may read, the
+// categories, and the refs that links name other assets by.
+func (s *Server) exportedAssets(w http.ResponseWriter, r *http.Request) ([]models.AssetWithDetails, *assetcsv.Categories, *assetcsv.AssetRefs, bool) {
 	assets, err := s.store.ListAssets(r.URL.Query().Get("category_id"), "")
 	if err != nil {
 		writeServerError(w, err, "list assets")
-		return
+		return nil, nil, nil, false
 	}
 	if assets, err = s.readable(r, assets); err != nil {
 		writeServerError(w, err, "read the assets' links")
-		return
+		return nil, nil, nil, false
 	}
 	assets = searched(assets, r.URL.Query().Get("search"))
 	cats, err := s.store.ListAllCategories()
 	if err != nil {
 		writeServerError(w, err, "list categories")
-		return
+		return nil, nil, nil, false
 	}
 	// Links name other assets as an import would find them: among all
 	// active assets the requester can read, not only those exported.
@@ -353,14 +369,9 @@ func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeServerError(w, err, "list assets")
-		return
+		return nil, nil, nil, false
 	}
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="assets-%s.csv"`, time.Now().UTC().Format("20060102")))
-	if err := assetcsv.Export(w, assets, assetcsv.NewCategories(cats), generators.AllowedGeneratorTypes(), assetcsv.NewAssetRefs(active)); err != nil {
-		// Headers are gone; all that is left is to stop.
-		return
-	}
+	return assets, assetcsv.NewCategories(cats), assetcsv.NewAssetRefs(active), true
 }
 
 // handleAdjustQuantity uses up or restocks an asset counted by quantity:

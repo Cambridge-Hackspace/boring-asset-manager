@@ -120,6 +120,26 @@ test('import a bin and what goes in it from two files, in order', async ({ signe
   expect(found.assets[0].links.map((l: { asset: { name: string } }) => l.asset.name)).toEqual([bin]);
 });
 
+test('export to Excel, and the workbook imports again unchanged', async ({ signedIn: page, api }) => {
+  const tag = unique('Lathe');
+  await api.call('POST', '/assets', { name: `Lathe ${tag}` });
+  await goTo(page, 'Assets');
+  await page.getByLabel('Search').fill(tag);
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByRole('link', { name: `Lathe ${tag}` })).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Export Excel' }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^assets-\d{8}\.xlsx$/);
+
+  await page.getByRole('link', { name: 'Import CSV' }).click();
+  await page.getByLabel('CSV file').setInputFiles({
+    name: download.suggestedFilename(),
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: fs.readFileSync((await download.path())!),
+  });
+  const all = page.getByRole('region', { name: /› All/ });
+  await expect(all.getByText('1 row: 0 new, 0 updated, 1 unchanged.')).toBeVisible();
+});
+
 test('import a sheet of an Excel workbook, leaving the other out', async ({ signedIn: page }) => {
   await goTo(page, 'Assets');
   await page.getByRole('link', { name: 'Import CSV' }).click();

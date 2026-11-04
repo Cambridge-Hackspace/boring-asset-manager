@@ -65,57 +65,100 @@ func Undefuse(s string) string {
 // by key, and, when any asset has links and refs is given, a links column,
 // naming other assets as refs does.
 func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs) error {
-	stocked, linked, iconed := false, false, false
+	cols, rows := table(assets, cats, generatorTypes, refs, filledFieldKeys(assets), nil)
+	if _, err := io.WriteString(w, BOM); err != nil {
+		return err
+	}
+	cw := csv.NewWriter(w)
+	cw.UseCRLF = true
+	header := make([]string, len(cols))
+	for i, c := range cols {
+		header[i] = c.name
+	}
+	if err := cw.Write(header); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		for i := range row {
+			row[i] = Defuse(row[i])
+		}
+		if err := cw.Write(row); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+// filledFieldKeys are the keys of the fields any asset has a value for, sorted.
+func filledFieldKeys(assets []models.AssetWithDetails) []string {
 	keys := map[string]bool{}
 	for _, a := range assets {
-		stocked = stocked || a.Asset.Stock != nil
-		iconed = iconed || a.Asset.IconName != nil
-		linked = linked || (refs != nil && len(a.Links) > 0)
 		for k, v := range a.FieldValues {
 			if v != "" {
 				keys[k] = true
 			}
 		}
 	}
-	fieldKeys := make([]string, 0, len(keys))
+	out := make([]string, 0, len(keys))
 	for k := range keys {
-		fieldKeys = append(fieldKeys, k)
+		out = append(out, k)
 	}
-	sort.Strings(fieldKeys)
+	sort.Strings(out)
+	return out
+}
 
-	header := []string{ColumnID, ColumnName, ColumnCategories}
+// What a column's cells hold, for a workbook.
+const (
+	kindText   = "text"
+	kindNumber = "number"
+	kindDate   = "date"
+)
+
+// column is one of the export's columns: its name, and what its cells hold.
+type column struct{ name, kind string }
+
+// table is the export's columns, and a row of each asset's values as they
+// are, before CSV defuses them: Export's columns, with fieldKeys as the
+// field columns, of the kinds fieldKinds gives by key (text when not).
+func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs, fieldKeys []string, fieldKinds map[string]string) ([]column, [][]string) {
+	stocked, linked, iconed := false, false, false
+	for _, a := range assets {
+		stocked = stocked || a.Asset.Stock != nil
+		iconed = iconed || a.Asset.IconName != nil
+		linked = linked || (refs != nil && len(a.Links) > 0)
+	}
+
+	cols := []column{{ColumnID, kindText}, {ColumnName, kindText}, {ColumnCategories, kindText}}
 	for _, t := range generatorTypes {
-		header = append(header, CodePrefix+t)
+		cols = append(cols, column{CodePrefix + t, kindText})
 	}
 	if stocked {
-		header = append(header, ColumnQuantity, ColumnUnit, ColumnThreshold)
+		cols = append(cols, column{ColumnQuantity, kindNumber}, column{ColumnUnit, kindText}, column{ColumnThreshold, kindNumber})
 	}
 	if iconed {
-		header = append(header, ColumnIcon)
+		cols = append(cols, column{ColumnIcon, kindText})
 	}
 	for _, k := range fieldKeys {
-		header = append(header, FieldPrefix+k)
+		kind := fieldKinds[k]
+		if kind == "" {
+			kind = kindText
+		}
+		cols = append(cols, column{FieldPrefix + k, kind})
 	}
 	if linked {
-		header = append(header, ColumnLinks)
+		cols = append(cols, column{ColumnLinks, kindText})
 	}
 
-	if _, err := io.WriteString(w, BOM); err != nil {
-		return err
-	}
-	cw := csv.NewWriter(w)
-	cw.UseCRLF = true
-	if err := cw.Write(header); err != nil {
-		return err
-	}
+	rows := make([][]string, 0, len(assets))
 	for _, a := range assets {
 		codes := map[string]string{}
 		for _, gk := range a.GeneratorKeys {
 			codes[gk.GeneratorType] = gk.AssignedCode
 		}
-		row := []string{a.Asset.ID, Defuse(a.Asset.Name), Defuse(cats.Refs(a.Categories))}
+		row := []string{a.Asset.ID, a.Asset.Name, cats.Refs(a.Categories)}
 		for _, t := range generatorTypes {
-			row = append(row, Defuse(codes[t]))
+			row = append(row, codes[t])
 		}
 		if stocked {
 			row = append(row, stockCells(a.Asset.Stock)...)
@@ -125,20 +168,17 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 			if a.Asset.IconName != nil {
 				icon = *a.Asset.IconName
 			}
-			row = append(row, Defuse(icon))
+			row = append(row, icon)
 		}
 		for _, k := range fieldKeys {
-			row = append(row, Defuse(a.FieldValues[k]))
+			row = append(row, a.FieldValues[k])
 		}
 		if linked {
-			row = append(row, Defuse(linksCell(a.Links, refs)))
+			row = append(row, linksCell(a.Links, refs))
 		}
-		if err := cw.Write(row); err != nil {
-			return err
-		}
+		rows = append(rows, row)
 	}
-	cw.Flush()
-	return cw.Error()
+	return cols, rows
 }
 
 // stockCells are an asset's quantity, unit and threshold cells; blank when
@@ -151,7 +191,7 @@ func stockCells(s *models.AssetStock) []string {
 	if s.LowStockThreshold != nil {
 		threshold = strconv.Itoa(*s.LowStockThreshold)
 	}
-	return []string{strconv.Itoa(s.Quantity), Defuse(s.Unit), threshold}
+	return []string{strconv.Itoa(s.Quantity), s.Unit, threshold}
 }
 
 // linksCell writes an asset's links as verb:asset entries.

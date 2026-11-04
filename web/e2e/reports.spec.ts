@@ -32,6 +32,11 @@ test('build a report, run it, and download a table as CSV', async ({ signedIn: p
   expect(download.suggestedFilename()).toBe(`${name.replace(' ', '-')}.csv`);
   const csv = fs.readFileSync((await download.path())!, 'utf8');
   expect(csv).toBe(`﻿Asset,Count\n${tag} tool post,12\n${tag} chuck key,3\n`);
+
+  // And as an Excel workbook.
+  const [book] = await Promise.all([page.waitForEvent('download'), table.getByRole('link', { name: /Download Excel/ }).click()]);
+  expect(book.suggestedFilename()).toBe(`${name.replace(' ', '-')}.xlsx`);
+  expect(fs.readFileSync((await book.path())!).subarray(0, 2).toString()).toBe('PK');
 });
 
 test('chart what is in stock and what was used', async ({ signedIn: page, api }) => {

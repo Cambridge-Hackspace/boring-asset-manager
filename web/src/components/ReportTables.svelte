@@ -2,9 +2,9 @@
   import type { ReportResult } from '../lib/models';
   import ReportChart from './ReportChart.svelte';
 
-  // A report's sections, as tables. csvHref, if given, links each table to
-  // its CSV download.
-  let { result, csvHref }: { result: ReportResult; csvHref?: (section: number) => string } = $props();
+  // A report's sections, as tables. downloadHref, if given, links each
+  // table to its download as CSV or an Excel workbook.
+  let { result, downloadHref }: { result: ReportResult; downloadHref?: (section: number, format: 'csv' | 'xlsx') => string } = $props();
 </script>
 
 <p class="mb-4 text-sm text-zinc-600 dark:text-zinc-400">{result.assets === 1 ? '1 asset' : `${result.assets} assets`} match.</p>
@@ -13,8 +13,11 @@
   <section class="mb-8 break-inside-avoid" aria-label={section.title || `${section.type === 'chart' ? 'Chart' : 'Table'} ${s + 1}`}>
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
       {#if section.title}<h2 class="text-lg font-semibold">{section.title}</h2>{/if}
-      {#if csvHref}
-        <a class="btn-secondary print:hidden" href={csvHref(s + 1)} download>Download CSV<span class="sr-only"> of {section.title || `table ${s + 1}`}</span></a>
+      {#if downloadHref}
+        <div class="flex flex-wrap gap-2 print:hidden">
+          <a class="btn-secondary" href={downloadHref(s + 1, 'csv')} download>Download CSV<span class="sr-only"> of {section.title || `table ${s + 1}`}</span></a>
+          <a class="btn-secondary" href={downloadHref(s + 1, 'xlsx')} download>Download Excel<span class="sr-only"> of {section.title || `table ${s + 1}`}</span></a>
+        </div>
       {/if}
     </div>
     {#if section.type === 'chart' && section.chart}

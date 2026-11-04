@@ -1,7 +1,8 @@
 # CSV and Excel import and export
 
-BAM! reads and writes assets as CSV files, one row per asset, and reads Excel workbooks a sheet at a
-time (see [Excel workbooks](#excel-workbooks)). Export a filtered list to edit in a
+BAM! reads and writes assets as CSV files, one row per asset. It also writes them as Excel workbooks
+(see [Exporting to Excel](#exporting-to-excel)), and reads workbooks a sheet at a time (see
+[Excel workbooks](#excel-workbooks)). Export a filtered list to edit in a
 spreadsheet or keep as a record; import a file to create many assets at once, or to update existing
 ones. An exported file, edited and imported again, changes exactly what was edited.
 
@@ -75,6 +76,29 @@ Spreadsheet formula injection is defused, and a file reads back exactly as it wa
 
 Export writes every asset matching the asset list's filters (`category_id`, `search`). The file has
 a column for every generator type, and for every field any of the exported assets has a value for.
+
+### Exporting to Excel
+
+**Export Excel** writes the same assets as an Excel workbook (`.xlsx`):
+
+- **An *All* sheet** has every asset, with the CSV's columns.
+- **Then a sheet per category** any of them is in, in order of their paths. Each has only that
+  category's fields as its field columns, those it inherits included. An asset in several
+  categories is on each of their sheets, and one in none is only on *All*.
+- **Cells are typed:** quantities and number fields are numbers, and date fields are dates, where
+  each reads back as written. So `5` is a number, but `007` and `1.50` stay text, and so does a date
+  with a time zone, which a spreadsheet cannot keep. Everything else is text.
+- **Each sheet's header row** is bold and frozen, with filters, and the columns are fitted to what
+  they hold.
+- **Text is always written as text, never as a formula,** so a cell such as `=HYPERLINK(...)` cannot
+  run when the workbook is opened. Unlike CSV, nothing needs defusing.
+- **It imports again unchanged:** import its *All* sheet, or any category's, as an
+  [Excel workbook](#excel-workbooks). So that it can, a workbook has at most 50 sheets. Categories
+  past the first 49 are only on *All*.
+
+BAM! writes workbooks with a small writer of its own (`internal/xlsx`), the reader's counterpart. The
+workbook in `internal/xlsx/testdata/written.xlsx` is what it writes, and a test keeps it so; it was
+checked by opening it in LibreOffice.
 
 ## Importing
 
@@ -209,6 +233,7 @@ types, the styles that say which numbers are dates, and cached values. It takes 
 | Method | Route | Permission | Purpose |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/v1/assets/export.csv` | `assets.read` | Export matching assets. Takes `category_id` and `search`. |
+| `GET` | `/api/v1/assets/export.xlsx` | `assets.read` | Export them as an Excel workbook, with the same filters. |
 | `POST` | `/api/v1/assets/import/preview` | `assets.write` | Preview an import: suggested mapping, problems, counts and link changes. |
 | `POST` | `/api/v1/assets/import` | `assets.write` | Import the file. |
 

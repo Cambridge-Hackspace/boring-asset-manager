@@ -1,7 +1,6 @@
 package reports
 
 import (
-	"encoding/csv"
 	"fmt"
 	"sort"
 	"strconv"
@@ -293,9 +292,9 @@ func lineSeries(sec Section, assets []models.AssetWithDetails, history []models.
 	return series
 }
 
-// writeChartCSV writes a chart's data: a row per group or period, a column
+// chartTable is a chart's data: a row per group or period, a column
 // per series.
-func writeChartCSV(cw *csv.Writer, sec SectionResult) error {
+func chartTable(sec SectionResult) [][]string {
 	first := "Group"
 	if sec.Chart == ChartLine {
 		first = "Period"
@@ -304,20 +303,15 @@ func writeChartCSV(cw *csv.Writer, sec SectionResult) error {
 	for _, s := range sec.Series {
 		head = append(head, s.Label)
 	}
-	if err := cw.Write(safeCells(head)); err != nil {
-		return err
-	}
+	out := [][]string{head}
 	if len(sec.Series) > 0 {
 		for i, p := range sec.Series[0].Points {
 			row := []string{p.Label}
 			for _, s := range sec.Series {
 				row = append(row, strconv.Itoa(s.Points[i].Value))
 			}
-			if err := cw.Write(safeCells(row)); err != nil {
-				return err
-			}
+			out = append(out, row)
 		}
 	}
-	cw.Flush()
-	return cw.Error()
+	return out
 }

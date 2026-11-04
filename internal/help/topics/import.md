@@ -2,6 +2,8 @@
 
 **Export CSV** on the asset list downloads the assets shown, one per row, with their categories, codes, fields, stock and links. Open it in a spreadsheet, change it, and bring it back with **Import CSV**.
 
+**Export Excel** downloads them as an Excel workbook instead: an *All* sheet with every asset, then a sheet per category with that category's fields. Numbers and dates are typed, so they sort and add up in the spreadsheet. Any sheet imports again.
+
 ## Importing
 
 1. Choose the file. BAM! suggests where each column goes; check each one, or choose *Ignore this column*.

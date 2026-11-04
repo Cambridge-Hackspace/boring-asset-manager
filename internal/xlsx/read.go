@@ -2,6 +2,8 @@
 // time, for importing assets (docs/csv.md#excel-workbooks). It reads only
 // what an import needs, shared strings, sheets, cell types and cached
 // values, and nothing else: formatting, comments and macros are ignored.
+// It also writes tables as workbooks, for exports
+// (docs/csv.md#exporting-to-excel), with typed cells and never a formula.
 //
 // A workbook is a ZIP of XML, so a hostile one is refused before it costs
 // much: past MaxUncompressed in all, or a part compressed past MaxRatio to
