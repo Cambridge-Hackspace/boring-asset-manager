@@ -150,6 +150,31 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 		return nil, false
 	}
 	assets = searched(assets, search)
+	// ?favorite=true keeps those the person has starred (docs/favorites.md).
+	switch q.Get("favorite") {
+	case "", "false":
+	case "true":
+		u := CurrentUser(r.Context())
+		if u == nil {
+			writeJSONError(w, http.StatusBadRequest, "favorite=true needs a person: a signed-in session, or their personal token")
+			return nil, false
+		}
+		starred, err := s.store.FavoriteIDs(u.ID, store.FavoriteAsset)
+		if err != nil {
+			writeServerError(w, err, "list favorites")
+			return nil, false
+		}
+		kept := assets[:0]
+		for _, a := range assets {
+			if starred[a.Asset.ID] {
+				kept = append(kept, a)
+			}
+		}
+		assets = kept
+	default:
+		writeJSONError(w, http.StatusBadRequest, "favorite must be true or false")
+		return nil, false
+	}
 	// Those whose scan template (docs/scanning.md) or label template (docs/printing.md) was
 	// chosen by a tie.
 	if conflict := q.Get("conflict"); conflict != "" {

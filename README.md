@@ -66,6 +66,7 @@ How each part works, with its API:
 - [Icons](docs/icons.md).
 - [Stock and lending](docs/stock-and-lending.md), [notifications](docs/notifications.md) and [hooks](docs/hooks.md).
 - [Scanning](docs/scanning.md), [flows](docs/flows.md), [reports](docs/reports.md) and [CSV](docs/csv.md).
+- [Favorites](docs/favorites.md): what each person stars to find again.
 - [Assistants (MCP)](docs/mcp.md).
 
 For working on it:

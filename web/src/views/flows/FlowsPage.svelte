@@ -3,6 +3,7 @@
   // flows, every flow, to make, change, turn off and on, and delete
   // (docs/flows.md).
   import { onMount } from 'svelte';
+  import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { session } from '../../lib/session.svelte';
@@ -83,7 +84,10 @@
           <span class="chip-muted">/f/{f.slug}</span>
           {#if !f.enabled}<span class="chip">Turned off</span>{/if}
         </p>
-        <h2 class="text-xl font-bold">{f.name}</h2>
+        <div class="-my-2 flex items-center justify-between gap-2">
+          <h2 class="text-xl font-bold">{f.name}</h2>
+          <FavoriteStar kind="flow" id={f.id} name={f.name} />
+        </div>
         {#if f.definition.description}<p class="text-sm">{f.definition.description}</p>{/if}
         {#if manages}<p class="text-xs text-zinc-600 dark:text-zinc-400">{f.definition.steps.length} steps</p>{/if}
         {#if manages && overdue[f.id]?.length}

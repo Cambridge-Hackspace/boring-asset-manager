@@ -368,6 +368,7 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 | `PUT /api/v1/categories/{id}/relation-types` | `categories.manage` | Set them, with `{"relation_type_ids": [...]}`. |
 | `DELETE /api/v1/assets/{id}` | `assets.delete` | Archive an asset and release its codes. |
 | `GET /api/v1/assets?archived=true` | `assets.read` | List archived assets. |
+| `GET /api/v1/assets?favorite=true` | `assets.read`, and a person | List the assets they have starred (see [Favorites](favorites.md)). |
 | `POST /api/v1/assets/{id}/restore` | `assets.delete` | Restore an archived asset. Answers `skipped_codes`. |
 | `GET /api/v1/assets/{id}/copy` | `assets.write` | A draft of a new asset like this one, as `copy`. |
 | `POST /api/v1/assets/{id}/photos` | `assets.write` | Add a photo, as the `file` part of a multipart form. |
