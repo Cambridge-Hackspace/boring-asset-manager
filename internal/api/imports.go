@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,45 +12,68 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/xlsx"
 )
 
 // importBodyLimit allows for a full-size file plus the multipart framing
 // and the mapping.
 const importBodyLimit = assetcsv.MaxBytes + 1<<20
 
-// readImport reads a multipart import request: the CSV in "file" and, if
-// given, a JSON array of column targets in "mapping". It writes the error
-// response itself when it fails.
-func readImport(w http.ResponseWriter, r *http.Request) (data []byte, mapping []string, opts assetcsv.Options, ok bool) {
+// readImport reads a multipart import request: the CSV, or an Excel
+// workbook with the sheet named in "sheet", in "file" and, if given, a
+// JSON array of column targets in "mapping". A workbook sent without a
+// sheet answers its sheets, and no data. It writes the error response
+// itself when it fails.
+func readImport(w http.ResponseWriter, r *http.Request) (data []byte, sheets []string, mapping []string, opts assetcsv.Options, ok bool) {
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Files are limited to %d bytes", assetcsv.MaxBytes))
-			return nil, nil, opts, false
+			return nil, nil, nil, opts, false
 		}
 		writeJSONError(w, http.StatusBadRequest, "Send the CSV as multipart/form-data in a field named file")
-		return nil, nil, opts, false
+		return nil, nil, nil, opts, false
 	}
 	defer r.MultipartForm.RemoveAll()
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Send the CSV as multipart/form-data in a field named file")
-		return nil, nil, opts, false
+		return nil, nil, nil, opts, false
 	}
 	defer file.Close()
 	data, err = io.ReadAll(io.LimitReader(file, assetcsv.MaxBytes+1))
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Could not read the file")
-		return nil, nil, opts, false
+		return nil, nil, nil, opts, false
 	}
 	if len(data) > assetcsv.MaxBytes {
 		writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Files are limited to %d bytes", assetcsv.MaxBytes))
-		return nil, nil, opts, false
+		return nil, nil, nil, opts, false
+	}
+	// The old binary format, .xls, is an OLE file.
+	if bytes.HasPrefix(data, []byte("\xd0\xcf\x11\xe0")) {
+		writeJSONError(w, http.StatusBadRequest, "Excel 97-2003 workbooks (.xls) are not taken; save it as an Excel workbook (.xlsx) or CSV")
+		return nil, nil, nil, opts, false
+	}
+	if xlsx.IsWorkbook(data) {
+		book, err := xlsx.Open(data)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return nil, nil, nil, opts, false
+		}
+		sheet := r.FormValue("sheet")
+		if sheet == "" {
+			return nil, book.Sheets, nil, opts, true
+		}
+		if data, err = book.CSV(sheet); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return nil, nil, nil, opts, false
+		}
 	}
 	if raw := r.FormValue("mapping"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &mapping); err != nil || mapping == nil {
 			writeJSONError(w, http.StatusBadRequest, "mapping must be a JSON array with one target per column")
-			return nil, nil, opts, false
+			return nil, nil, nil, opts, false
 		}
 	}
 	switch r.FormValue("remove_links") {
@@ -58,9 +82,9 @@ func readImport(w http.ResponseWriter, r *http.Request) (data []byte, mapping []
 		opts.RemoveLinks = true
 	default:
 		writeJSONError(w, http.StatusBadRequest, "remove_links must be true or false")
-		return nil, nil, opts, false
+		return nil, nil, nil, opts, false
 	}
-	return data, mapping, opts, true
+	return data, nil, mapping, opts, true
 }
 
 // readableSource is the store as an import by this request sees it: assets
@@ -120,8 +144,13 @@ func (s *Server) prepareImport(w http.ResponseWriter, r *http.Request, data []by
 // handleImportPreview checks an import without writing anything:
 // POST /api/v1/assets/import/preview
 func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
-	data, mapping, opts, ok := readImport(w, r)
+	data, sheets, mapping, opts, ok := readImport(w, r)
 	if !ok {
+		return
+	}
+	// A workbook without a sheet named: its sheets, each an import.
+	if sheets != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"sheets": sheets})
 		return
 	}
 	if plan, ok := s.prepareImport(w, r, data, mapping, opts); ok {
@@ -132,8 +161,12 @@ func (s *Server) handleImportPreview(w http.ResponseWriter, r *http.Request) {
 // handleImport checks an import again and applies it in one transaction:
 // POST /api/v1/assets/import
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
-	data, mapping, opts, ok := readImport(w, r)
+	data, sheets, mapping, opts, ok := readImport(w, r)
 	if !ok {
+		return
+	}
+	if sheets != nil {
+		writeJSONError(w, http.StatusBadRequest, "sheet is required: name the workbook's sheet to import")
 		return
 	}
 	if mapping == nil {

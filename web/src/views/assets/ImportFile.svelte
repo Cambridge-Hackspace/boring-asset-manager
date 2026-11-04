@@ -38,14 +38,14 @@
   <div class="mb-2 flex flex-wrap items-center gap-2">
     <h2 id={headingId} class="mr-auto text-lg font-semibold break-all">
       {#if several}<span class="text-zinc-500">{position}.</span>{/if}
-      {entry.file.name}
+      {entry.name}
     </h2>
     {#if several && !entry.result}
-      <button type="button" class="btn-secondary" aria-label="Move {entry.file.name} up" onclick={() => onmove(-1)} disabled={disabled || position === 1}>Up</button>
-      <button type="button" class="btn-secondary" aria-label="Move {entry.file.name} down" onclick={() => onmove(1)} disabled={disabled || position === count}>Down</button>
+      <button type="button" class="btn-secondary" aria-label="Move {entry.name} up" onclick={() => onmove(-1)} disabled={disabled || position === 1}>Up</button>
+      <button type="button" class="btn-secondary" aria-label="Move {entry.name} down" onclick={() => onmove(1)} disabled={disabled || position === count}>Down</button>
     {/if}
     {#if !entry.result}
-      <button type="button" class="btn-secondary" aria-label="Remove {entry.file.name}" onclick={onremove} disabled={disabled}>Remove</button>
+      <button type="button" class="btn-secondary" aria-label="Remove {entry.name}" onclick={onremove} disabled={disabled}>Remove</button>
     {/if}
   </div>
 

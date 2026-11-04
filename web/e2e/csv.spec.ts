@@ -119,3 +119,15 @@ test('import a bin and what goes in it from two files, in order', async ({ signe
   const found = await api.call('GET', `/assets?search=${encodeURIComponent(screws)}`);
   expect(found.assets[0].links.map((l: { asset: { name: string } }) => l.asset.name)).toEqual([bin]);
 });
+
+test('import a sheet of an Excel workbook, leaving the other out', async ({ signedIn: page }) => {
+  await goTo(page, 'Assets');
+  await page.getByRole('link', { name: 'Import CSV' }).click();
+  await page.getByLabel('CSV file').setInputFiles('../internal/xlsx/testdata/excel.xlsx');
+  const bins = page.getByRole('region', { name: /excel › Bins/ });
+  await expect(bins.getByText('1 row: 1 new, 0 updated, 0 unchanged.')).toBeVisible();
+  await expect(page.getByRole('region', { name: /excel › Tools/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Remove excel › Tools' }).click();
+  await page.getByRole('button', { name: 'Import 1 asset' }).click();
+  await expect(bins.getByText('Imported: 1 new, 0 updated, 0 unchanged.')).toBeVisible();
+});

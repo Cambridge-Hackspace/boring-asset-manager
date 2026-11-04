@@ -23,7 +23,7 @@ These pages describe how BAM! works, for people running it and for people workin
 - [Scanning](scanning.md): scan pages, scan templates and quick actions.
 - [Flows](flows.md): guided pages for everyday jobs, and their definitions.
 - [Reports](reports.md): saved views of assets, as tables and charts.
-- [CSV import and export](csv.md).
+- [CSV and Excel import and export](csv.md).
 - [MCP server](mcp.md): connecting AI assistants, their tools and sign-in.
 
 ## Working on BAM!
