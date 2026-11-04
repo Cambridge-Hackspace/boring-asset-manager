@@ -43,7 +43,7 @@ test('a provider that does not know you says so on the sign-in page', async ({ a
   await page.goto('/sign-in');
   await page.getByRole('link', { name: p.button_label }).click();
   await expect(page).toHaveURL(/\/sign-in/);
-  await expect(page.getByRole('alert')).toHaveText('You have no account here. Ask whoever manages users to make one.');
+  await expect(page.getByRole('alert')).toHaveText(`No account here is linked to your ${p.name} sign-in. If you have one, sign in another way and link it under Your account; if not, ask whoever manages users.`);
   await context.close();
 });
 

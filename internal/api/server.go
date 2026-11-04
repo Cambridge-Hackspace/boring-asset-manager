@@ -89,9 +89,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// The configuration was checked as it loaded, so its key reads.
 	key, _ := cfg.Auth.Key()
 	s.sealer, _ = auth.NewSealer(key)
-	// The test protocol only where a test turned it on (docs/access.md).
+	idp.Register(&idp.OIDC{})
+	// The test protocol, and a test OpenID Connect provider beside BAM!,
+	// only where a test turned them on (docs/access.md).
+	var testOIDC http.Handler
 	if cfg.Auth.TestProtocol {
 		idp.Register(idp.TestProtocol{})
+		if base := strings.TrimSuffix(cfg.Server.BaseURL, "/"); base != "" {
+			testOIDC = http.StripPrefix("/test-oidc", idp.NewTestOIDCProvider(base+"/test-oidc", TestOIDCClientID, TestOIDCClientSecret))
+		}
 	}
 	// A provider in the configuration that cannot be set up is said, and
 	// the rest of BAM! still serves.
@@ -459,6 +465,18 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// The configuration was validated when loaded, so the proxies parse.
 	proxies, _ := config.ParseProxies(cfg.Server.TrustedProxies)
 	rootHandler := ClientAddresses(proxies)(LimitRequestBodies(RefuseUnstorableText(Authenticate(st)(s.PokeLive(unknownAPIRoutes(mux))))))
+	if testOIDC != nil {
+		// The test provider stands beside BAM!, not behind its sign-in: the
+		// bearer tokens its userinfo reads are its own, not BAM!'s.
+		app := rootHandler
+		rootHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/test-oidc/") {
+				testOIDC.ServeHTTP(w, r)
+				return
+			}
+			app.ServeHTTP(w, r)
+		})
+	}
 
 	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),

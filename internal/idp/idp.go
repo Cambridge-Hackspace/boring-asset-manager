@@ -48,6 +48,10 @@ type Claims struct {
 	// Values are every claim or attribute, by name, each as its values,
 	// for the provider's rules.
 	Values map[string][]string
+	// AMR and ACR are how the provider says they signed in, such as "mfa"
+	// for a second factor: OIDC's amr and acr, kept for #192.
+	AMR []string
+	ACR string
 }
 
 // Protocol talks to providers of one kind.

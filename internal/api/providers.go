@@ -624,6 +624,20 @@ func (s *Server) handleProviderCallback(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
+// The client of the test OpenID Connect provider BAM! serves at /test-oidc
+// when [auth] test_protocol is on.
+const (
+	TestOIDCClientID     = "bam"
+	TestOIDCClientSecret = "bam-test-secret"
+)
+
+// noAccount is what someone with no account linked to a provider is told,
+// whether or not one has their email: the provider may let anyone choose
+// any email, so saying which would tell them who has an account here.
+func noAccount(p *store.Provider) string {
+	return "No account here is linked to your " + p.Name + " sign-in. If you have one, sign in another way and link it under Your account; if not, ask whoever manages users."
+}
+
 // accountFor finds the account claims name, by provider and subject, or
 // links or makes one as the provider allows. Without one, it says why.
 func (s *Server) accountFor(p *store.Provider, c *idp.Claims) (*models.User, string, error) {
@@ -651,7 +665,7 @@ func (s *Server) accountFor(p *store.Provider, c *idp.Claims) (*models.User, str
 	}
 	if existing != nil {
 		if !p.LinkByEmail || !verified {
-			return nil, "An account with your email exists, but is not linked to " + p.Name + ". Sign in another way and link it under Your account, or ask whoever manages users.", nil
+			return nil, noAccount(p), nil
 		}
 		if _, err := s.store.LinkIdentity(existing.ID, p.ID, c.Subject, c.Email); err != nil {
 			return nil, "", err
@@ -660,7 +674,7 @@ func (s *Server) accountFor(p *store.Provider, c *idp.Claims) (*models.User, str
 	}
 
 	if !p.Provision {
-		return nil, "You have no account here. Ask whoever manages users to make one.", nil
+		return nil, noAccount(p), nil
 	}
 	if len(p.AllowedDomains) > 0 && !contains(p.AllowedDomains, c.EmailDomain()) {
 		return nil, "Accounts are made only for emails at " + strings.Join(p.AllowedDomains, ", ") + ".", nil
@@ -679,7 +693,7 @@ func (s *Server) accountFor(p *store.Provider, c *idp.Claims) (*models.User, str
 	}
 	user, err := s.store.CreateProvisionedUser(c.Email, c.Name, p.DefaultRoleIDs)
 	if errors.Is(err, store.ErrEmailTaken) {
-		return nil, "An account with your email exists. Sign in another way and link it under Your account.", nil
+		return nil, noAccount(p), nil
 	}
 	if errors.Is(err, store.ErrInvalidUser) {
 		return nil, "No account can be made: " + err.Error() + ".", nil
