@@ -167,7 +167,7 @@ func TestAccountsAreMadeOnlyWhereTheProviderAllows(t *testing.T) {
 		change func()
 		want   string
 	}{
-		{"off", func() {}, "no account here"},
+		{"off", func() {}, "No account here is linked to your Hackspace sign-in."},
 		{"another domain", func() { req.Provision, req.AllowedDomains = true, []string{"hackspace.org"} }, "only for emails at hackspace.org"},
 		{"another group", func() { req.AllowedDomains, req.AllowedGroups = nil, []string{"members"} }, "only for members of members"},
 		{"an email not vouched for", func() { req.AllowedGroups, settings["email_verified"] = nil, "no" }, "did not vouch for your email"},
@@ -204,7 +204,8 @@ func TestLinkingByEmailNeedsItOnAndVerified(t *testing.T) {
 		change()
 		saveProvider(t, srv, admin, p.ID, req)
 		b := browser(t)
-		if end := signInThrough(t, ts, b, "hackspace", "/"); !strings.Contains(end.Query().Get("error"), "not linked") {
+		// Told just what someone with no account is, so as not to say who has one.
+		if end := signInThrough(t, ts, b, "hackspace", "/"); end.Query().Get("error") != noAccount(&store.Provider{Name: "Hackspace"}) {
 			t.Errorf("%s: ended at %s", what, end)
 		}
 	}
