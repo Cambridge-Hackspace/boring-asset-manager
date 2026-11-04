@@ -98,6 +98,11 @@ The web app draws charts itself, as bars, a donut or lines. Each chart is descri
 readers and shows its numbers as a table. A chart downloads as CSV like a table: a row per group or
 period, and a column per line.
 
+Each table and chart also downloads as an Excel workbook, and **Download all as Excel** gives the
+whole report, a sheet per table or chart, named by its title. A cell is a number or a date when it
+reads back as itself as one (so `12` is a number but `007` is text), and otherwise text, never a
+formula.
+
 ## API
 
 | Method | Route | Permission | Purpose |
@@ -110,6 +115,8 @@ period, and a column per line.
 | `GET` | `/api/v1/reports/{id}/run` | `assets.read` | Run a report. |
 | `POST` | `/api/v1/reports/preview` | `reports.manage` | Run an unsaved spec, with `{"spec"}`, for the editor. |
 | `GET` | `/api/v1/reports/{id}/sections/{n}/csv` | `assets.read` | Download table `n` (counting from 1) as CSV. |
+| `GET` | `/api/v1/reports/{id}/sections/{n}/xlsx` | `assets.read` | Download table `n` as an Excel workbook. |
+| `GET` | `/api/v1/reports/{id}/xlsx` | `assets.read` | Download every table and chart as an Excel workbook, a sheet each. |
 
 The result of a run gives how many assets matched and, for each section, its headings and its
 groups of rows. Each row has its asset's ID and its cells.

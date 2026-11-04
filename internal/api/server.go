@@ -330,6 +330,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/reports/{id}/default", RequirePermission(rbac.PermReportsManage)(http.HandlerFunc(s.handleSetDefaultScanTemplate)))
 	handle("GET /api/v1/reports/{id}/run", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleRunReport)))
 	handle("GET /api/v1/reports/{id}/sections/{n}/csv", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleReportCSV)))
+	handle("GET /api/v1/reports/{id}/sections/{n}/xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleReportSectionXLSX)))
+	handle("GET /api/v1/reports/{id}/xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleReportXLSX)))
 
 	// Relation types, for links between assets
 	handle("GET /api/v1/relation-types", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListRelationTypes)))
@@ -340,6 +342,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Asset Registry & Dynamic Field Values endpoints
 	handle("GET /api/v1/assets", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListAssets)))
 	handle("GET /api/v1/assets/export.csv", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssets)))
+	handle("GET /api/v1/assets/export.xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssetsXLSX)))
 	handle("POST /api/v1/assets/import/preview", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImportPreview)))
 	handle("POST /api/v1/assets/import", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImport)))
 	handle("POST /api/v1/assets", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleCreateAsset)))
