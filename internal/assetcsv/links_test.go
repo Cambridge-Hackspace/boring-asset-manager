@@ -136,8 +136,13 @@ func TestLinkProblems(t *testing.T) {
 			t.Errorf("%s: %+v", what, plan.Problems)
 		}
 	}
+	// A link naming nothing says what it named, for a set of files.
+	plan, _ := Prepare(w.st, []byte("id,links\n"+drill+",contained_in:Nowhere\n"+shelf+",contains:Bin;used_with:Twin\n"), nil)
+	if plan.ProblemCount != 2 || plan.Unresolved != 1 || plan.Problems[0].Ref != "Nowhere" || plan.Problems[1].Ref != "" {
+		t.Errorf("unresolved: %d of %d, %+v", plan.Unresolved, plan.ProblemCount, plan.Problems)
+	}
 	// Put in two places by two rows.
-	plan, _ := Prepare(w.st, []byte("id,links\n"+drill+",contained_in:Bin\n"+w.hammer.Asset.ID+",contains:Drill\n"), nil)
+	plan, _ = Prepare(w.st, []byte("id,links\n"+drill+",contained_in:Bin\n"+w.hammer.Asset.ID+",contains:Drill\n"), nil)
 	if plan.ProblemCount != 1 || !strings.Contains(plan.Problems[0].Message, "contained in both") {
 		t.Errorf("two places: %+v", plan.Problems)
 	}

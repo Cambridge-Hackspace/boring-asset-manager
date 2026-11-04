@@ -4,6 +4,9 @@ import type { Field, GeneratorInfo, ImportPlan, ImportProblem, LinkChange } from
 
 export const IGNORE = 'ignore';
 
+/** The most files imported as one set. */
+export const MAX_FILES = 20;
+
 export interface TargetOption {
   value: string;
   label: string;
@@ -34,6 +37,28 @@ export function importForm(file: File, mapping?: string[], removeLinks = false):
   if (mapping) form.append('mapping', JSON.stringify(mapping));
   if (removeLinks) form.append('remove_links', 'true');
   return form;
+}
+
+const mappingKey = (userId: string, headers: string[]) => `bam.import.mapping.${userId}.${JSON.stringify(headers)}`;
+
+/** The mapping this person last used for a file with these headers, if any. */
+export function rememberedMapping(userId: string, headers: string[]): string[] | null {
+  try {
+    const raw = localStorage.getItem(mappingKey(userId, headers));
+    const mapping: unknown = raw === null ? null : JSON.parse(raw);
+    return Array.isArray(mapping) && mapping.length === headers.length && mapping.every((t) => typeof t === 'string') ? mapping : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Remembers a mapping for the next file with the same headers. */
+export function rememberMapping(userId: string, headers: string[], mapping: string[]): void {
+  try {
+    localStorage.setItem(mappingKey(userId, headers), JSON.stringify(mapping));
+  } catch {
+    // Not remembered: the next file starts from the suggested mapping.
+  }
 }
 
 /** The export address for the asset list's filters. */
