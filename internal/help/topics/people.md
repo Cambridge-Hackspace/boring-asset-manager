@@ -6,6 +6,10 @@ Those who manage users add people on the **Users** page, with their name and ema
 
 After 5 wrong passwords in 15 minutes, an account waits before its next try, longer after each further wrong one, up to 15 minutes. It is never locked. The **Users** page shows who is waiting, and **Clear sign-in delay** lets them try again at once; setting their password does too. A channel subscribed to *Sign-ins are held back* tells you when it starts, since someone may be guessing.
 
+## Identity providers
+
+Under **Admin › Sign-in**, those who manage settings add the identity providers your space already runs, such as Google Workspace or Microsoft Entra: each is a button on the sign-in page. A provider can make an account for someone the first time they sign in, and its **rules** give roles from what it says about them, such as membership of a group, checked again at every sign-in. Roles you give by hand are never taken away by a rule. On the **Users** page, **Identities** shows whom someone signs in as at each provider, and links or unlinks one by hand. Signing in with a password can be turned off there too; those who manage users can still sign in with one at */signin/local*.
+
 ## Roles
 
 A **role** is a set of permissions, and people hold any number of roles. The **admin** role holds everything. The **public** role is everyone's, signed in or not, and can only look.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -21,6 +22,18 @@ type LoginRequest struct {
 
 // handleLogin authenticates user credentials, creates a session, and sets the session cookie.
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	s.passwordSignIn(w, r, false)
+}
+
+// POST /api/v1/auth/login/local: the break-glass sign-in. While passwords
+// are off, only those who manage users sign in with one, here, and each
+// time is recorded (docs/access.md#turning-passwords-off). While they are
+// on, it is an ordinary sign-in.
+func (s *Server) handleLoginLocal(w http.ResponseWriter, r *http.Request) {
+	s.passwordSignIn(w, r, true)
+}
+
+func (s *Server) passwordSignIn(w http.ResponseWriter, r *http.Request, breakGlass bool) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
@@ -29,6 +42,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	if req.Email == "" || req.Password == "" {
 		writeJSONError(w, http.StatusBadRequest, "Email and password are required")
+		return
+	}
+	passwordsOn, err := s.store.LocalPasswords()
+	if err != nil {
+		writeServerError(w, err, "read the sign-in settings")
+		return
+	}
+	if !passwordsOn && !breakGlass {
+		writeJSONError(w, http.StatusForbidden, "Signing in with a password is turned off here. Use one of the sign-in buttons.")
 		return
 	}
 
@@ -75,6 +97,21 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !user.IsActive {
 		writeJSONError(w, http.StatusUnauthorized, "Account is disabled")
 		return
+	}
+	if !passwordsOn {
+		admin, err := s.store.UserHasPermission(user.ID, rbac.PermUsersManage)
+		if err != nil {
+			writeServerError(w, err, "check the account")
+			return
+		}
+		if !admin {
+			writeJSONError(w, http.StatusForbidden, "Signing in with a password is turned off here, except for those who manage users. Use one of the sign-in buttons.")
+			return
+		}
+		if err := s.store.RecordBreakGlass(user); err != nil {
+			writeServerError(w, err, "record the sign-in")
+			return
+		}
 	}
 
 	// With a second factor, the password is the first step of two

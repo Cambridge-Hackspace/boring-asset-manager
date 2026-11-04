@@ -1,15 +1,23 @@
 <script lang="ts">
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
-  import type { User } from '../lib/models';
+  import type { PublicProviders, User } from '../lib/models';
   import { describeAssignment, describeHeld } from '../lib/permissions';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import AssistantsSection from './AssistantsSection.svelte';
+  import IdentitiesSection from './IdentitiesSection.svelte';
   import TwoFactorSection from './TwoFactorSection.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
+
+  // While passwords are off, none is set here (docs/access.md#turning-passwords-off).
+  let passwordsOn = $state(true);
+  request<PublicProviders>('GET', '/auth/providers/public').then(
+    (p) => (passwordsOn = p.local_passwords),
+    () => {},
+  );
 
   let name = $state(session.user?.name ?? '');
   let nameError = $state('');
@@ -127,6 +135,7 @@
       {#if emailStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{emailStatus}</p>{/if}
     </section>
 
+    {#if passwordsOn}
     <form class="card space-y-4" onsubmit={change}>
       <h2 class="text-lg font-semibold">Change password</h2>
       <div>
@@ -147,7 +156,9 @@
       {#if status}<p class="text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
       <button type="submit" class="btn-primary" disabled={busy}>Change password</button>
     </form>
+    {/if}
 
     <TwoFactorSection />
+    <IdentitiesSection />
   </div>
 </div>

@@ -3,13 +3,14 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Role, RoleAssignment, Scope, UserWithRoles } from '../../lib/models';
+  import type { PublicProviders, Role, RoleAssignment, Scope, UserWithRoles } from '../../lib/models';
   import { describeAssignment } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import RolePicker from '../../components/RolePicker.svelte';
+  import UserIdentities from './UserIdentities.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -31,6 +32,14 @@
   let roleDraft = $state<RoleAssignment[]>([]);
   // Setting someone's password, for one who has forgotten theirs.
   let settingPassword = $state<string | null>(null);
+  // Whose identities at providers are shown.
+  let showingIdentities = $state<string | null>(null);
+  // While passwords are off, none is set here (docs/access.md#turning-passwords-off).
+  let passwordsOn = $state(true);
+  request<PublicProviders>('GET', '/auth/providers/public').then(
+    (p) => (passwordsOn = p.local_passwords),
+    () => {},
+  );
   let passwordDraft = $state('');
 
   // Creating a user.
@@ -216,8 +225,11 @@
                 {#if editingRoles !== u.id}
                   <button type="button" class="btn-secondary" aria-label="Change roles for {u.email}" onclick={() => startRoles(u)}>Change roles</button>
                 {/if}
-                {#if settingPassword !== u.id}
+                {#if settingPassword !== u.id && passwordsOn}
                   <button type="button" class="btn-secondary" aria-label="Set password for {u.email}" onclick={() => { settingPassword = u.id; passwordDraft = ''; }}>Set password</button>
+                {/if}
+                {#if showingIdentities !== u.id}
+                  <button type="button" class="btn-secondary" aria-label="Identities of {u.email}" onclick={() => (showingIdentities = u.id)}>Identities</button>
                 {/if}
                 {#if u.sign_in_delayed_until}
                   <button
@@ -248,6 +260,9 @@
                   onconfirm={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}`), `${u.email} archived.`)}
                 />
               </span>
+              {#if showingIdentities === u.id}
+                <UserIdentities userId={u.id} email={u.email} onclose={() => (showingIdentities = null)} />
+              {/if}
               {#if settingPassword === u.id}
                 <form class="mt-2 flex flex-wrap justify-end gap-2" onsubmit={(event) => savePassword(event, u)}>
                   <label class="sr-only" for="password-{u.id}">New password for {u.email}</label>

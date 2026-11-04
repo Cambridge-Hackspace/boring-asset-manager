@@ -53,12 +53,13 @@ uploaded, a part at a time.
 
 Authentication is:
 
-- password hashes (`users.password_hash`) and second factors (`user_factors`, with the recovery
-  codes' hashes);
+- password hashes (`users.password_hash`), second factors (`user_factors`, with the recovery
+  codes' hashes) and identities at identity providers (`user_identities`);
 - sessions;
 - API tokens;
 - OAuth;
-- notification channels' options, which hold their passwords and webhook addresses.
+- notification channels' options, which hold their passwords and webhook addresses;
+- identity providers' secrets (`auth_providers.secrets`), sealed with the configuration's key.
 
 It is kept apart in the archive, under `auth/`. That holds the tables that are nothing but
 authentication, whole, and the secret columns of the other tables with their key. So it can be
@@ -85,8 +86,8 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites` |
 | Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, `asset_photos` and their files, and their history, `events` |
 | Flows | `flows` | `flows`, `flow_filings` |
-| Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries` |
-| Authentication | `auth` | `sessions`, `user_factors`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, and the secret columns described under [Authentication](#authentication) |
+| Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules` |
+| Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, and the secret columns described under [Authentication](#authentication) |
 
 The tables are listed, and restored, in that order: each after the tables its rows name.
 
@@ -109,6 +110,7 @@ These tables are left out, because they are not information or are made again:
 | `hook_trigger_seen`, `hook_trigger_fired` | Events hooks have looked at, and when each hook last fired on each asset: state for firing each once (see [Hooks](hooks.md#several-servers)). |
 | `hook_schedule_runs` | When each hook's schedule last ran. A restored instance starts its schedules afresh, at their next time. |
 | `sign_in_challenges` | Sign-ins waiting for a second factor, which lapse in five minutes. |
+| `provider_sign_ins` | Sign-ins sent to an identity provider and not back yet, which lapse in ten minutes. |
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys.
 `tools/archive/tables.py` writes it from a migrated database. A test fails, on every dialect, when

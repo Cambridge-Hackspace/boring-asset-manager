@@ -91,6 +91,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventNotifierDisabled, Label: "A notification channel is turned off for failing"},
 	{Kind: models.EventAuthFactorsReset, Label: "Second factors are removed for someone"},
 	{Kind: models.EventAuthRecoveryCodeUsed, Label: "Someone signs in with a recovery code"},
+	{Kind: models.EventAuthBreakGlass, Label: "Someone signs in with a password while passwords are off"},
 }
 
 // EventKind is an event channels can subscribe to.

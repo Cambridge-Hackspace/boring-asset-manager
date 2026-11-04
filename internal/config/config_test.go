@@ -311,3 +311,54 @@ func TestNotificationSettings(t *testing.T) {
 		t.Error("a negative limit was accepted")
 	}
 }
+
+func TestIdentityProviderSettings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	file := `[[auth.providers]]
+key = "corp"
+name = "Corp"
+protocol = "oidc"
+provision = true
+default_roles = ["Members"]
+settings = { issuer = "https://id.example" }
+secrets = { client_secret = "s3cret" }
+[[auth.providers.rules]]
+claim = "groups"
+value = "admins"
+role = "admin"
+scopes = ["woodshop"]
+`
+	if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := cfg.Auth.Providers
+	if len(p) != 1 || p[0].Key != "corp" || !p[0].Provision || p[0].Settings["issuer"] != "https://id.example" || p[0].Secrets["client_secret"] != "s3cret" ||
+		len(p[0].Rules) != 1 || p[0].Rules[0].Role != "admin" || p[0].Rules[0].Scopes[0] != "woodshop" || cfg.Auth.TestProtocol {
+		t.Errorf("from the file: %+v", cfg.Auth)
+	}
+
+	// The environment's list replaces the file's.
+	t.Setenv("BAM_AUTH_PROVIDERS", `[{"key": "env", "name": "Env", "protocol": "oidc", "link_by_email": true}]`)
+	t.Setenv("BAM_AUTH_TEST_PROTOCOL", "on")
+	if cfg, err = Load(path); err != nil || len(cfg.Auth.Providers) != 1 || cfg.Auth.Providers[0].Key != "env" || !cfg.Auth.Providers[0].LinkByEmail || !cfg.Auth.TestProtocol {
+		t.Errorf("from the environment: %v %+v", err, cfg)
+	}
+	t.Setenv("BAM_AUTH_PROVIDERS", `{"key": "env"}`)
+	if _, err = Load(path); err == nil {
+		t.Error("BAM_AUTH_PROVIDERS that is not a list was accepted")
+	}
+
+	// bam init does not write either out.
+	written := filepath.Join(dir, "written.toml")
+	if err := DefaultConfig().SaveTOML(written); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(written); strings.Contains(string(data), "test_protocol") || strings.Contains(string(data), "providers") {
+		t.Errorf("written config:\n%s", data)
+	}
+}

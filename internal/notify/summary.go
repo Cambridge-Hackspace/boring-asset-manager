@@ -154,6 +154,14 @@ func summarize(n Notification, esc func(string) string) summary {
 		out.Color = discordWarning
 		out.Title = "Recovery code used: " + esc(truncate(p.Account.Display(), 200))
 		out.Description = "They signed in with a recovery code in place of their authenticator app. If they did not, their codes may have been seen by someone else."
+	case e.Kind == models.EventAuthBreakGlass && p.Account != nil:
+		out.URL = ""
+		if base != "" {
+			out.URL = base + "/users"
+		}
+		out.Color = discordWarning
+		out.Title = "Break-glass sign-in: " + esc(truncate(p.Account.Display(), 200))
+		out.Description = "They signed in with a password while passwords are off, as only those who manage users can. If no provider is down, ask them why."
 	case e.Kind == models.EventNotifierDisabled && p.Channel != nil:
 		// About no asset or category: the link is to the channels.
 		out.URL = ""
