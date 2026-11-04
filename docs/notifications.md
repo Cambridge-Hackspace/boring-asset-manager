@@ -91,6 +91,7 @@ Messages look like this:
 | Sign-ins held back | "Sign-ins held back: Ada" (red), for an account getting too many wrong passwords or codes, or "Sign-ins held back from 203.0.113.7", for an address; when it may sign in again, and a link to the Users page (see [Access](access.md#too-many-wrong-passwords)) |
 | Second factors removed | "Second factors removed: Ada" (amber), when an admin, or someone on the command line, removes their second factors, saying who; a link to the Users page (see [Access](access.md#two-factor-sign-in)) |
 | A recovery code used | "Recovery code used: Ada" (amber), when someone signs in with one of their recovery codes; a link to the Users page (see [Access](access.md#recovery-codes)) |
+| A break-glass sign-in | "Break-glass sign-in: Ada" (amber), when someone signs in with a password while passwords are off; a link to the Users page (see [Access](access.md#turning-passwords-off)) |
 
 ## MQTT
 

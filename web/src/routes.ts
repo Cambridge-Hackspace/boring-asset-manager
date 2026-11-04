@@ -26,6 +26,7 @@ import ReportView from './views/reports/ReportView.svelte';
 import ReportEditor from './views/reports/ReportEditor.svelte';
 import ScanTemplateEditor from './views/reports/ScanTemplateEditor.svelte';
 import NotificationsPage from './views/admin/NotificationsPage.svelte';
+import SignInPage from './views/admin/SignInPage.svelte';
 import BackupsPage from './views/admin/BackupsPage.svelte';
 import PackagesPage from './views/packages/PackagesPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
@@ -98,6 +99,7 @@ export const routes: Route[] = [
   { pattern: '/roles', component: RolesPage, title: 'Roles', permissions: ['users.manage'], nav: 'Roles', group: 'Admin' },
   { pattern: '/tokens', component: TokensPage, title: 'API tokens', permissions: ['users.manage'], nav: 'API tokens', group: 'Admin' },
   { pattern: '/notifications', component: NotificationsPage, title: 'Notifications', permissions: ['settings.manage'], nav: 'Notifications', group: 'Admin' },
+  { pattern: '/sign-in-settings', component: SignInPage, title: 'Sign-in', permissions: ['settings.manage'], nav: 'Sign-in', group: 'Admin' },
   { pattern: '/backups', component: BackupsPage, title: 'Backups', permissions: ['settings.manage'], nav: 'Backups', group: 'Admin' },
   { pattern: '/packages', component: PackagesPage, title: 'Import & export', permissions: ['settings.manage'], nav: 'Import & export', group: 'Admin' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },

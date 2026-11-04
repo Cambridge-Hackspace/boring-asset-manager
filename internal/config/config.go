@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -136,6 +137,43 @@ type AuthConfig struct {
 	// as base64, which bam init writes. Without it, two-factor sign-in
 	// cannot be set up.
 	SecretKey string `toml:"secret_key"`
+	// Providers are identity providers set here rather than under Admin,
+	// for instances provisioned by a script (docs/access.md): shown in
+	// Admin, read-only. BAM_AUTH_PROVIDERS gives them as a JSON list.
+	Providers []ProviderConfig `toml:"providers,omitempty"`
+	// TestProtocol offers the "test" sign-in protocol, which signs in as
+	// whoever its provider's settings name. It is for tests alone: never
+	// turn it on for an instance people use.
+	TestProtocol bool `toml:"test_protocol,omitempty"`
+}
+
+// ProviderConfig is an identity provider set in the configuration. Its
+// settings and secrets are the protocol's; its rules give roles by name.
+type ProviderConfig struct {
+	Key            string            `toml:"key" json:"key"`
+	Name           string            `toml:"name" json:"name"`
+	Protocol       string            `toml:"protocol" json:"protocol"`
+	Settings       map[string]string `toml:"settings" json:"settings"`
+	Secrets        map[string]string `toml:"secrets" json:"secrets"`
+	ButtonLabel    string            `toml:"button_label" json:"button_label"`
+	Icon           string            `toml:"icon" json:"icon"`
+	Disabled       bool              `toml:"disabled" json:"disabled"`
+	Provision      bool              `toml:"provision" json:"provision"`
+	DefaultRoles   []string          `toml:"default_roles" json:"default_roles"`
+	AllowedDomains []string          `toml:"allowed_domains" json:"allowed_domains"`
+	AllowedGroups  []string          `toml:"allowed_groups" json:"allowed_groups"`
+	LinkByEmail    bool              `toml:"link_by_email" json:"link_by_email"`
+	TrustEmail     bool              `toml:"trust_email" json:"trust_email"`
+	Rules          []ProviderRule    `toml:"rules" json:"rules"`
+}
+
+// ProviderRule gives a role, by name, optionally narrowed to scopes, by
+// name, to whoever's claim holds the value.
+type ProviderRule struct {
+	Claim  string   `toml:"claim" json:"claim"`
+	Value  string   `toml:"value" json:"value"`
+	Role   string   `toml:"role" json:"role"`
+	Scopes []string `toml:"scopes" json:"scopes"`
 }
 
 // Key is the secret key's bytes, or nil when there is none.
@@ -365,6 +403,21 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("BAM_MCP_ENABLED: %w", err)
 		}
 		cfg.MCP.Enabled = on
+	}
+	if v := os.Getenv("BAM_AUTH_TEST_PROTOCOL"); v != "" {
+		on, err := parseSwitch(v)
+		if err != nil {
+			return fmt.Errorf("BAM_AUTH_TEST_PROTOCOL: %w", err)
+		}
+		cfg.Auth.TestProtocol = on
+	}
+	// The providers replace those in the file, whole.
+	if v := os.Getenv("BAM_AUTH_PROVIDERS"); v != "" {
+		var providers []ProviderConfig
+		if err := json.Unmarshal([]byte(v), &providers); err != nil {
+			return fmt.Errorf("BAM_AUTH_PROVIDERS: not a JSON list of providers: %w", err)
+		}
+		cfg.Auth.Providers = providers
 	}
 	return nil
 }

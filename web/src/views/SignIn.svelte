@@ -1,19 +1,38 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte';
-  import { ApiError } from '../lib/api';
+  import { onMount, tick, untrack } from 'svelte';
+  import { ApiError, request } from '../lib/api';
+  import type { PublicProviders } from '../lib/models';
   import { navigate, router } from '../lib/router.svelte';
   import { afterSignIn, session } from '../lib/session.svelte';
 
+  /** The break-glass page, /signin/local, for signing in with a password while passwords are off. */
+  let { local = false }: { local?: boolean } = $props();
+
   let email = $state('');
   let password = $state('');
-  let error = $state('');
+  // A sign-in through a provider that failed comes back here, saying why.
+  let error = $state(router.query.get('error') ?? '');
   let busy = $state(false);
-  /** After a password accepted for someone with a second factor: its code. */
-  let secondStep = $state(false);
+  /** After a password, or a provider, accepted for someone with a second factor: its code. */
+  let secondStep = $state(router.query.get('factor') === 'required');
   let code = $state('');
   let codeInput = $state<HTMLInputElement>();
   /** A recovery code in place of the app's (docs/access.md#recovery-codes). */
   let recovery = $state(false);
+  /** The identity providers' buttons, and whether passwords are on (docs/access.md). */
+  let providers = $state<PublicProviders>({ providers: [], local_passwords: true });
+
+  const next = $derived(router.query.get('next') ?? '');
+  const startHref = (key: string) =>
+    `/api/v1/auth/providers/${encodeURIComponent(key)}/start` + (next ? `?next=${encodeURIComponent(afterSignIn(next))}` : '');
+
+  onMount(() => {
+    request<PublicProviders>('GET', '/auth/providers/public').then(
+      (p) => (providers = p),
+      () => {},
+    );
+    if (secondStep) void tick().then(() => codeInput?.focus());
+  });
 
   // Once signed in (or already, say after the back button), carry on. Only
   // the user is tracked: navigating changes the query, and that must not
@@ -21,7 +40,7 @@
   $effect(() => {
     if (!session.user) return;
     untrack(() => {
-      if (router.path === '/sign-in') navigate(afterSignIn(router.query.get('next')), true);
+      if (router.path === '/sign-in' || router.path === '/signin/local') navigate(afterSignIn(router.query.get('next')), true);
     });
   });
 
@@ -34,7 +53,7 @@
     error = '';
     busy = true;
     try {
-      if (await session.signIn(email, password)) {
+      if (await session.signIn(email, password, local)) {
         secondStep = true;
         password = '';
         await tick();
@@ -114,7 +133,7 @@
             bind:this={codeInput}
             bind:value={code}
           />
-          <p id="code-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">The six digits your app shows for {email} now.</p>
+          <p id="code-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">The six digits your app shows for {email || 'your account'} now.</p>
         {/if}
       </div>
       {#if error}
@@ -130,8 +149,24 @@
       <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Lost your phone and your recovery codes? Ask whoever manages users here to remove your second factor.</p>
     </form>
   {:else}
+    {#if !local && providers.providers.length}
+      <div class="card mb-4 space-y-2" aria-label="Sign in with">
+        {#each providers.providers as p (p.key)}
+          <a class="btn-secondary flex w-full items-center justify-center gap-2" href={startHref(p.key)}>
+            {#if p.icon}<img src={p.icon} alt="" class="h-5 w-5" />{/if}{p.label}
+          </a>
+        {/each}
+        {#if !providers.local_passwords && error}
+          <p id="sign-in-error" class="error-text" role="alert">{error}</p>
+        {/if}
+      </div>
+    {/if}
+    {#if local || providers.local_passwords}
     <form class="card space-y-4" onsubmit={submit} aria-describedby={error ? 'sign-in-error' : undefined}>
-      <h2 class="text-lg font-semibold">Sign in</h2>
+      <h2 class="text-lg font-semibold">{local ? 'Sign in with a password' : 'Sign in'}</h2>
+      {#if local && !providers.local_passwords}
+        <p class="text-sm">Signing in with a password is turned off here. This page is for those who manage users, when the sign-in buttons do not work; each use is recorded.</p>
+      {/if}
       <div>
         <label class="label" for="email">Email</label>
         <input id="email" class="input" type="email" autocomplete="username" required bind:value={email} />
@@ -146,6 +181,7 @@
       <button type="submit" class="btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
       <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Forgot your password? Ask whoever manages users here to set a new one.</p>
     </form>
+    {/if}
   {/if}
   <p class="mt-4 text-center text-sm"><a class="inline-flex min-h-11 min-w-11 items-center justify-center underline" href="/help">Help</a></p>
 </main>

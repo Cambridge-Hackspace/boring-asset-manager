@@ -51,9 +51,13 @@ const maxEmailKey = 254
 func addressKey(address string) string { return models.ThrottleAddress + ":" + address }
 
 // throttleKeys are the rows a sign-in by email from address counts against.
-// An address is left out when it is unknown.
+// An address is left out when it is unknown, and an account when there is
+// no email, as for a sign-in through an identity provider that failed.
 func throttleKeys(email, address string) []string {
-	keys := []string{accountKey(email)}
+	keys := []string{}
+	if auth.NormalizeEmail(email) != "" {
+		keys = append(keys, accountKey(email))
+	}
 	if address != "" {
 		keys = append(keys, addressKey(address))
 	}
