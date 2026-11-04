@@ -2,8 +2,11 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/base32"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,6 +41,14 @@ func factorServer(t *testing.T) (*Server, *models.User, string) {
 // does, and returns its secret.
 func setUpApp(t *testing.T, srv *Server, userID string) []byte {
 	t.Helper()
+	secret, _ := setUpAppWithCodes(t, srv, userID)
+	return secret
+}
+
+// setUpAppWithCodes sets up an app, and returns its secret and the
+// recovery codes shown with the first factor.
+func setUpAppWithCodes(t *testing.T, srv *Server, userID string) ([]byte, []string) {
+	t.Helper()
 	cookie := sessionCookie(t, srv, userID)
 	rec := doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/totp", "")
 	if rec.Code != http.StatusOK {
@@ -60,10 +71,145 @@ func setUpApp(t *testing.T, srv *Server, userID string) []byte {
 	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/totp/confirm", `{"code":"`+wrongCode(secret, now)+`"}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("confirming with a wrong code: %d", rec.Code)
 	}
-	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/totp/confirm", `{"code":"`+auth.TOTPCode(secret, now)+`"}`); rec.Code != http.StatusOK {
+	rec = doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/totp/confirm", `{"code":"`+auth.TOTPCode(secret, now)+`"}`)
+	if rec.Code != http.StatusOK {
 		t.Fatalf("confirming: %d %s", rec.Code, rec.Body)
 	}
-	return secret
+	var confirmed struct {
+		RecoveryCodes []string `json:"recovery_codes"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&confirmed)
+	return secret, confirmed.RecoveryCodes
+}
+
+// recoveryCodesLeft is how many the account page says are left.
+func recoveryCodesLeft(t *testing.T, srv *Server, cookie *http.Cookie) int {
+	t.Helper()
+	var resp struct {
+		Left *int `json:"recovery_codes_left"`
+	}
+	_ = json.NewDecoder(doJSON(t, srv, cookie, "GET", "/api/v1/auth/me/factors", "").Body).Decode(&resp)
+	if resp.Left == nil {
+		t.Fatal("no recovery_codes_left")
+	}
+	return *resp.Left
+}
+
+func TestRecoveryCodesSignInOnceEach(t *testing.T) {
+	srv, admin, password := factorServer(t)
+	secret, codes := setUpAppWithCodes(t, srv, admin.ID)
+	if len(codes) != 10 {
+		t.Fatalf("with the first factor: %v", codes)
+	}
+	cookie := sessionCookie(t, srv, admin.ID)
+	if n := recoveryCodesLeft(t, srv, cookie); n != 10 {
+		t.Errorf("left at first: %d", n)
+	}
+
+	// A code, typed loosely, signs in in place of the app's.
+	challenge := passwordStep(t, srv, admin.Email, password)
+	rec := secondStep(t, srv, challenge, strings.ToUpper(strings.ReplaceAll(codes[0], "-", " ")))
+	if rec.Code != http.StatusOK || cookieNamed(rec, SessionCookieName) == nil {
+		t.Fatalf("a recovery code: %d %s", rec.Code, rec.Body)
+	}
+	events, _ := srv.store.ListEvents(1)
+	if len(events) != 1 || events[0].Kind != models.EventAuthRecoveryCodeUsed || events[0].Payload.Account == nil || events[0].Payload.Account.ID != admin.ID {
+		t.Errorf("history: %+v", events)
+	}
+
+	// Used, it is refused; another still works.
+	again := passwordStep(t, srv, admin.Email, password)
+	if rec := secondStep(t, srv, again, codes[0]); rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "used already") {
+		t.Errorf("a used code: %d %s", rec.Code, rec.Body)
+	}
+	if rec := secondStep(t, srv, again, codes[1]); rec.Code != http.StatusOK {
+		t.Errorf("another code: %d %s", rec.Code, rec.Body)
+	}
+	if n := recoveryCodesLeft(t, srv, cookie); n != 8 {
+		t.Errorf("left after two: %d", n)
+	}
+
+	// New ones take a code from the app, and replace them all.
+	now := auth.TOTPStep(time.Now())
+	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/recovery", `{"code":"`+wrongCode(secret, now)+`"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("new codes with a wrong code: %d", rec.Code)
+	}
+	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/recovery", `{"code":"`+codes[2]+`"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("new codes with a recovery code: %d", rec.Code)
+	}
+	rec = doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/recovery", `{"code":"`+auth.TOTPCode(secret, now+1)+`"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("new codes: %d %s", rec.Code, rec.Body)
+	}
+	var fresh struct {
+		RecoveryCodes []string `json:"recovery_codes"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&fresh)
+	if len(fresh.RecoveryCodes) != 10 || fresh.RecoveryCodes[0] == codes[0] {
+		t.Errorf("new codes: %v", fresh.RecoveryCodes)
+	}
+	if n := recoveryCodesLeft(t, srv, cookie); n != 10 {
+		t.Errorf("left after new ones: %d", n)
+	}
+	third := passwordStep(t, srv, admin.Email, password)
+	if rec := secondStep(t, srv, third, codes[2]); rec.Code != http.StatusUnauthorized {
+		t.Errorf("an old code after new ones: %d", rec.Code)
+	}
+	if rec := secondStep(t, srv, third, fresh.RecoveryCodes[0]); rec.Code != http.StatusOK {
+		t.Errorf("a new code: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestRecoveryCodesNeedAFactor(t *testing.T) {
+	srv, admin, _ := factorServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	if rec := doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/recovery", `{"code":"123456"}`); rec.Code != http.StatusConflict {
+		t.Errorf("without a factor: %d %s", rec.Code, rec.Body)
+	}
+	if n := recoveryCodesLeft(t, srv, cookie); n != 0 {
+		t.Errorf("left without a factor: %d", n)
+	}
+}
+
+func TestARecoveryCodeUsedEmailsItsPerson(t *testing.T) {
+	cfg := config.DefaultConfig()
+	testStorage(t, cfg)
+	cfg.Auth.SecretKey = testSecretKey
+	cfg.Server.BaseURL = "https://bam.example"
+	cfg.Email = config.EmailConfig{Host: "mail.test", TLS: config.EmailSTARTTLS, From: "bam@example.org"}
+	st := setupTestStore(t)
+	password := "AdminSecret123!"
+	admin, err := st.CreateAdminUser("admin@test.org", password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(cfg, st)
+	dialed := make(chan string, 1)
+	srv.mailer.Dial = func(_ context.Context, _, address string) (net.Conn, error) {
+		dialed <- address
+		return nil, errors.New("no route to host")
+	}
+	_, codes := setUpAppWithCodes(t, srv, admin.ID)
+	challenge := passwordStep(t, srv, admin.Email, password)
+	if rec := secondStep(t, srv, challenge, codes[0]); rec.Code != http.StatusOK {
+		t.Fatalf("a recovery code: %d %s", rec.Code, rec.Body)
+	}
+	select {
+	case address := <-dialed:
+		if address != "mail.test:587" {
+			t.Errorf("dialed %q", address)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no email sent")
+	}
+
+	m, err := recoveryCodeUsedMessage(admin, 9, cfg.Server.BaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.To) != 1 || m.To[0] != admin.Email || !strings.Contains(m.Text, "You have 9 left.") || !strings.Contains(m.Text, "https://bam.example/account") {
+		t.Errorf("message: %+v", m)
+	}
 }
 
 // wrongCode is a code that is not the secret's anywhere near step.

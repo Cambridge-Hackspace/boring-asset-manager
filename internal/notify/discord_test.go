@@ -415,6 +415,17 @@ func TestDiscordThrottledEmbeds(t *testing.T) {
 	}
 }
 
+func TestDiscordRecoveryCodeEmbed(t *testing.T) {
+	e := discordPayload(Notification{BaseURL: "https://bam.example", Event: models.Event{
+		Kind:    models.EventAuthRecoveryCodeUsed,
+		Payload: models.EventPayload{Trigger: models.TriggerManual, Account: &models.EventActor{ID: "u1", Name: "Ada_L"}},
+	}}).Embeds[0]
+	if e.Title != `Recovery code used: Ada\_L` || e.Color != discordWarning || e.URL != "https://bam.example/users" ||
+		!strings.Contains(e.Description, "in place of their authenticator app") {
+		t.Errorf("recovery code: %+v", e)
+	}
+}
+
 func TestDiscordSaysWhatFiredAHook(t *testing.T) {
 	hook := func(h *models.EventHook, actor *models.EventActor) string {
 		return discordPayload(Notification{Event: models.Event{Kind: models.EventAssetHook, Payload: models.EventPayload{

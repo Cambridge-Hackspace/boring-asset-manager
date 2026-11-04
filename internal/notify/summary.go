@@ -146,6 +146,14 @@ func summarize(n Notification, esc func(string) string) summary {
 		} else {
 			out.Description += " Removed on the command line."
 		}
+	case e.Kind == models.EventAuthRecoveryCodeUsed && p.Account != nil:
+		out.URL = ""
+		if base != "" {
+			out.URL = base + "/users"
+		}
+		out.Color = discordWarning
+		out.Title = "Recovery code used: " + esc(truncate(p.Account.Display(), 200))
+		out.Description = "They signed in with a recovery code in place of their authenticator app. If they did not, their codes may have been seen by someone else."
 	case e.Kind == models.EventNotifierDisabled && p.Channel != nil:
 		// About no asset or category: the link is to the channels.
 		out.URL = ""

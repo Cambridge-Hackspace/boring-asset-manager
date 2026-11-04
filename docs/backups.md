@@ -53,7 +53,8 @@ uploaded, a part at a time.
 
 Authentication is:
 
-- password hashes (`users.password_hash`) and second factors (`user_factors`);
+- password hashes (`users.password_hash`) and second factors (`user_factors`, with the recovery
+  codes' hashes);
 - sessions;
 - API tokens;
 - OAuth;
