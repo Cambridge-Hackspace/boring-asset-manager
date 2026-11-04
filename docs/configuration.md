@@ -110,7 +110,7 @@ scopes by name.
 key = "hackspace"
 name = "Hackspace"
 protocol = "oidc"
-settings = { issuer = "https://id.hackspace.org" }
+settings = { issuer = "https://id.hackspace.org", client_id = "bam" }
 secrets = { client_secret = "…" }
 button_label = "Sign in with Hackspace"   # optional
 icon = ""                                 # optional

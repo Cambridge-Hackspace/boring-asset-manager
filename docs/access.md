@@ -129,8 +129,8 @@ Each provider has:
 
 - **A key and a name.** The key is used in its addresses, such as the one the provider sends
   people back to, `{base_url}/api/v1/auth/providers/{key}/callback`.
-- **A protocol, and that protocol's settings.** OpenID Connect (#185), SAML 2.0 (#186) and plain
-  OAuth2 (#187) each add one. A protocol's secrets, such as a client secret, can be written but are
+- **A protocol, and that protocol's settings.** [OpenID Connect](#openid-connect), SAML 2.0 (#186)
+  and plain OAuth2 (#187) each add one. A protocol's secrets, such as a client secret, can be written but are
   never shown again. They are kept sealed with `[auth] secret_key`, as second factors' secrets
   are, so a provider with secrets needs the key.
 - **Its button:** a label, by default "Sign in with" its name, and an optional icon.
@@ -140,6 +140,81 @@ Each provider has:
 in `BAM_AUTH_PROVIDERS` as a JSON list, for instances provisioned by a script (see
 [Configuration](configuration.md#identity-providers)). Admin shows them, read-only. Their rules
 name roles and scopes by name.
+
+#### OpenID Connect
+
+OpenID Connect is what most identity providers speak: Google, Microsoft Entra, Authentik, Keycloak,
+Okta, Zitadel and Authelia among them. Its settings:
+
+- **Issuer:** the provider's issuer URL. BAM! reads its discovery document, the issuer followed by
+  `/.well-known/openid-configuration`. It must be `https`, but for a provider on the same machine.
+- **Client ID and client secret,** from registering BAM! with the provider. The secret can be left
+  blank for a public client.
+- **Scopes:** `openid email profile` when blank. Add whichever scope carries groups, such as
+  `groups`, for rules on them.
+- **The email, name and groups claims:** `email`, `name` and `groups` when blank. The groups claim
+  is read as `groups` by rules and by the groups accounts are limited to, whatever it is called.
+
+At the provider, register BAM! as a web application, with the redirect URI Admin shows for the
+provider: `{base_url}/api/v1/auth/providers/{key}/callback`.
+
+**How it signs in:** the authorization code flow, with PKCE (`S256`), `state` and a `nonce`. The ID
+token is checked fully:
+
+- **Its signature,** by one of the provider's published keys. They are kept for a day, and fetched
+  again when a token names a key not among them, at most once a minute.
+- **Only asymmetric algorithms** (RSA, RSA-PSS, ECDSA and Ed25519): never `none`, nor `HS256`
+  keyed with the client secret, which anyone holding the secret could forge.
+- **`iss`, `aud`, `azp`, `exp`, `iat` and `nonce`,** allowing a minute's difference in clocks.
+
+Claims the ID token lacks are read from the provider's userinfo, which must name the same `sub`.
+The token's `amr` and `acr`, which say how the person signed in at the provider, are kept on the
+sign-in for #192.
+
+**When it fails,** the sign-in page says so without naming a secret or the reason, which goes to the
+server's log. Cancelling at the provider says the provider did not sign them in. Someone with no
+account linked is told the same whether or not an account has their email, so that a provider
+letting anyone choose any email cannot be used to find out who has an account here.
+
+##### Google
+
+1. In the Google Cloud console, under **APIs & Services › Credentials**, create an **OAuth client
+   ID** of type **Web application**.
+2. Add the redirect URI under **Authorized redirect URIs**.
+3. Paste the client ID and secret into BAM!, with the issuer `https://accounts.google.com`.
+
+Google gives no groups, so rules on groups do not apply. Limit accounts to your Google Workspace with
+the provider's allowed domains.
+
+##### Microsoft Entra
+
+1. Under **App registrations**, make a **New registration**, with a **Web** redirect URI.
+2. Under **Certificates & secrets**, make a client secret, and paste its **Value**, not its ID.
+3. The issuer is `https://login.microsoftonline.com/{tenant ID}/v2.0`, with the directory (tenant)
+   ID from the registration's overview.
+4. Under **Token configuration**, add the optional `email` claim, and a **groups claim** for rules
+   on groups. Entra gives groups as their object IDs, so rules name those.
+
+Entra does not say whether an email is verified. Trust the provider's emails only when your
+organization manages every email in the tenant.
+
+##### Authentik
+
+1. Under **Applications › Providers**, create an **OAuth2/OpenID Provider** of client type
+   **Confidential**, with the redirect URI, and an application for it.
+2. Choose a **Signing Key**. Without one, Authentik signs with the client secret (`HS256`), which
+   BAM! refuses.
+3. The issuer is `https://{authentik}/application/o/{application slug}/`. Authentik's `profile`
+   scope carries `groups`.
+
+##### Keycloak
+
+1. In the realm, under **Clients**, create an **OpenID Connect** client with **Client
+   authentication** on, and the redirect URI under **Valid redirect URIs**.
+2. Paste the secret from the client's **Credentials** tab. The issuer is
+   `https://{keycloak}/realms/{realm}`.
+3. For groups, add a **Group Membership** mapper to the client's dedicated scope, with the token
+   claim name `groups`, **Full group path** off, and **Add to ID token** on.
 
 #### Who signs in as whom
 
@@ -208,8 +283,10 @@ routes, that lasts ten minutes and is used once. A failed sign-in counts against
 address, as wrong passwords do (see [Too many wrong passwords](#too-many-wrong-passwords)).
 
 **The test protocol:** with `[auth] test_protocol` on (`BAM_AUTH_TEST_PROTOCOL`), a protocol named
-`test` signs in as whoever its provider's settings name. It is for automated tests alone: never turn
-it on for an instance people use.
+`test` signs in as whoever its provider's settings name, and BAM! serves a test OpenID Connect
+provider at `{base_url}/test-oidc`, client `bam` and secret `bam-test-secret`, whose sign-in form
+signs in as whoever is typed into it. They are for automated tests alone: never turn them on for an
+instance people use.
 
 ### Forgotten passwords
 
