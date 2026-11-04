@@ -12,6 +12,8 @@ let nextId = 0;
 export class ImportEntry {
   readonly id = ++nextId;
   readonly file: File;
+  /** The sheet, when the file is an Excel workbook (docs/csv.md#excel-workbooks). */
+  readonly sheet: string;
   plan = $state<ImportPlan | null>(null);
   mapping = $state<string[]>([]);
   /** The mapping the plan was checked with. */
@@ -26,8 +28,14 @@ export class ImportEntry {
   /** Stopped short by an earlier file's failure. */
   skipped = $state(false);
 
-  constructor(file: File) {
+  constructor(file: File, sheet = '') {
     this.file = file;
+    this.sheet = sheet;
+  }
+
+  /** How the page names it: the file, or "Workbook › Sheet". */
+  get name(): string {
+    return this.sheet ? `${this.file.name.replace(/\.xlsx$/i, '')} › ${this.sheet}` : this.file.name;
   }
 
   get hasLinks(): boolean {
@@ -67,7 +75,7 @@ export class ImportEntry {
     this.busy = true;
     this.error = '';
     try {
-      const next = await request<ImportPlan>('POST', '/assets/import/preview', importForm(this.file, withMapping ? this.mapping : undefined, this.hasLinks && this.removeLinks));
+      const next = await request<ImportPlan>('POST', '/assets/import/preview', importForm(this.file, withMapping ? this.mapping : undefined, this.hasLinks && this.removeLinks, this.sheet));
       this.plan = next;
       this.mapping = next.columns.map((c) => c.target);
       this.checkedWith = this.checkKey;
@@ -104,7 +112,7 @@ export class ImportEntry {
     this.busy = true;
     this.error = '';
     try {
-      this.result = await request<ImportResult>('POST', '/assets/import', importForm(this.file, this.mapping, this.hasLinks && this.removeLinks));
+      this.result = await request<ImportResult>('POST', '/assets/import', importForm(this.file, this.mapping, this.hasLinks && this.removeLinks, this.sheet));
       rememberMapping(userId, this.headers, this.mapping);
       return true;
     } catch (err) {

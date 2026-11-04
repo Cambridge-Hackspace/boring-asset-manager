@@ -257,11 +257,41 @@ describe('ImportPage', () => {
     session.user = null;
   });
 
+  it('makes an import of each sheet of a workbook, and refuses other spreadsheets', async () => {
+    const { sent } = fakeApi({
+      ...empty,
+      'POST /assets/import/preview': (body) => {
+        const form = body as FormData;
+        if (!form.get('sheet')) return { sheets: ['Tools', 'Bins'] };
+        return clean({ create: form.get('sheet') === 'Bins' ? 3 : 1 });
+      },
+      'POST /assets/import': (body) => ({ created: (body as FormData).get('sheet') === 'Bins' ? 3 : 1, updated: 0, unchanged: 0 }),
+    });
+    render(ImportPage, { params: {} });
+    const input = screen.getByLabelText('CSV file') as HTMLInputElement;
+    expect(input.accept).toContain('.xlsx');
+    const book = new File(['PK'], 'Stock.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const old = new File(['x'], 'Old.xls');
+    await fireEvent.change(input, { target: { files: [book, old] } });
+
+    // The sheets are listed once the workbook is read.
+    const bins = await screen.findByRole('region', { name: /Stock › Bins/ });
+    expect(await within(bins).findByText('2 rows: 3 new, 0 updated, 0 unchanged.')).toBeTruthy();
+    expect(within(section('Stock › Tools')).getByText('2 rows: 1 new, 0 updated, 0 unchanged.')).toBeTruthy();
+    expect(screen.getByText('Old.xls is not taken: save it as an Excel workbook (.xlsx) or CSV.')).toBeTruthy();
+    // A sheet can be left out.
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Stock › Tools' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Import 3 assets' }));
+    await screen.findByText(/^Imported: 3 new/);
+    const imports = sent.filter((r) => r.path === '/assets/import');
+    expect(imports.map((r) => (r.body as FormData).get('sheet'))).toEqual(['Bins']);
+  });
+
   it('takes at most 20 files at once', async () => {
     fakeApi({ ...empty, 'POST /assets/import/preview': () => clean() });
     render(ImportPage, { params: {} });
     await chooseFiles(...Array.from({ length: 22 }, (_, i) => `f${i + 1}.csv`));
-    expect(await screen.findByText('At most 20 files are imported together; 2 were left out.')).toBeTruthy();
+    expect(await screen.findByText('At most 20 files or sheets are imported together; 2 were left out.')).toBeTruthy();
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(20);
   });
 });

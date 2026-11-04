@@ -1,6 +1,7 @@
-# CSV import and export
+# CSV and Excel import and export
 
-BAM! reads and writes assets as CSV files, one row per asset. Export a filtered list to edit in a
+BAM! reads and writes assets as CSV files, one row per asset, and reads Excel workbooks a sheet at a
+time (see [Excel workbooks](#excel-workbooks)). Export a filtered list to edit in a
 spreadsheet or keep as a record; import a file to create many assets at once, or to update existing
 ones. An exported file, edited and imported again, changes exactly what was edited.
 
@@ -175,6 +176,34 @@ does not change another's.
 There is no separate route: the page calls the preview and import routes once per file, so
 scripts are unaffected.
 
+### Excel workbooks
+
+An Excel workbook (`.xlsx`) is read a sheet at a time, each sheet as if it were a CSV file. On the
+import page, a workbook becomes one import per sheet, named "Workbook › Sheet" in the list, and any
+can be left out. Each sheet counts toward the 20.
+
+- **Only values are read.** A formula imports the value it last showed, as saved in the file. A
+  formula saved without one is an error naming the cell: open the workbook, save it again, and
+  import that. Formatting, comments and macros are ignored.
+- **Numbers** import as they show, to 15 significant digits: `0.10` is `0.1`, and `5.0` is `5`.
+  **Dates** import as ISO dates (`2024-03-05`), with the time when there is one
+  (`2024-03-05T12:00:00`). **True and false** import as `true` and `false`. **Text** imports as
+  text.
+- **The first row with anything in it is the header row.** Empty columns at the sheet's edges are
+  left out. Problems name the sheet's own rows. Merged cells in the header row are an error, since
+  each column needs its own name.
+- **Excel 97-2003 workbooks (`.xls`) and OpenDocument spreadsheets (`.ods`)** are not taken: save
+  them as `.xlsx`, or as CSV.
+
+A workbook is a ZIP of XML, so a hostile one is refused before it costs much:
+
+- more than 50 MB uncompressed in all, or a part compressed past 100 to 1;
+- more than 50 sheets, or more than 5,000 rows in a sheet;
+- a DTD, which is where entity expansion and external entities live. A workbook never needs one.
+
+BAM! reads workbooks with a small reader of its own (`internal/xlsx`): shared strings, sheets, cell
+types, the styles that say which numbers are dates, and cached values. It takes no library.
+
 ## API
 
 | Method | Route | Permission | Purpose |
@@ -183,4 +212,6 @@ scripts are unaffected.
 | `POST` | `/api/v1/assets/import/preview` | `assets.write` | Preview an import: suggested mapping, problems, counts and link changes. |
 | `POST` | `/api/v1/assets/import` | `assets.write` | Import the file. |
 
-Both import routes take the file, the mapping, and optionally `remove_links`.
+Both import routes take the file, the mapping, and optionally `remove_links`. For a workbook,
+`sheet` names the sheet; a preview without it answers the workbook's `{"sheets"}`, and an import
+without it is refused.

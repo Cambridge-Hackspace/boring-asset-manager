@@ -30,14 +30,26 @@ export function targetOptions(fields: Field[], generators: GeneratorInfo[]): Tar
   ];
 }
 
-/** The form an import request sends; removeLinks removes links no row states. */
-export function importForm(file: File, mapping?: string[], removeLinks = false): FormData {
+/** The form an import request sends; removeLinks removes links no row states, and sheet names a workbook's sheet. */
+export function importForm(file: File, mapping?: string[], removeLinks = false, sheet = ''): FormData {
   const form = new FormData();
   form.append('file', file);
+  if (sheet) form.append('sheet', sheet);
   if (mapping) form.append('mapping', JSON.stringify(mapping));
   if (removeLinks) form.append('remove_links', 'true');
   return form;
 }
+
+/** What a file is, by its name: a CSV, an Excel workbook, or one of the spreadsheets not taken. */
+export function fileKind(name: string): 'csv' | 'xlsx' | 'other' {
+  const n = name.toLowerCase();
+  if (n.endsWith('.xlsx')) return 'xlsx';
+  if (n.endsWith('.xls') || n.endsWith('.ods') || n.endsWith('.numbers')) return 'other';
+  return 'csv';
+}
+
+/** The import page's file picker accepts these. */
+export const IMPORT_ACCEPT = '.csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 const mappingKey = (userId: string, headers: string[]) => `bam.import.mapping.${userId}.${JSON.stringify(headers)}`;
 
