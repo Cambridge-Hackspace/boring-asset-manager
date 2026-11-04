@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe('ReportView', () => {
-  it('shows each table in groups, with its CSV and the assets linked', async () => {
+  it('shows each table in groups, with its downloads and the assets linked', async () => {
     fakeApi({ 'GET /reports/low/run': () => ({ report: lowReport, result }) });
     render(ReportView, { params: { id: 'low' } });
     expect(await screen.findByRole('heading', { name: 'Running low', level: 1 })).toBeTruthy();
@@ -50,6 +50,8 @@ describe('ReportView', () => {
     expect(within(table).getByRole('link', { name: 'Blue PLA' }).getAttribute('href')).toBe('/assets/a1');
     expect(within(table).getByRole('cell', { name: '200 g' })).toBeTruthy();
     expect(within(table).getByRole('link', { name: /Download CSV/ }).getAttribute('href')).toBe('/api/v1/reports/low/sections/1/csv');
+    expect(within(table).getByRole('link', { name: /Download Excel/ }).getAttribute('href')).toBe('/api/v1/reports/low/sections/1/xlsx');
+    expect(screen.getByRole('link', { name: 'Download all as Excel' }).getAttribute('href')).toBe('/api/v1/reports/low/xlsx');
     expect(screen.getByRole('link', { name: 'Edit' })).toBeTruthy();
   });
 });

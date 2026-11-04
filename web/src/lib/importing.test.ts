@@ -16,6 +16,7 @@ describe('importing helpers', () => {
   it('builds the export address from the applied filters', () => {
     expect(exportUrl('', '')).toBe('/api/v1/assets/export.csv');
     expect(exportUrl(' drill ', 'c 1')).toBe('/api/v1/assets/export.csv?search=drill&category_id=c+1');
+    expect(exportUrl(' drill ', 'c 1', 'xlsx')).toBe('/api/v1/assets/export.xlsx?search=drill&category_id=c+1');
   });
 
   it('sends the mapping only when there is one', () => {

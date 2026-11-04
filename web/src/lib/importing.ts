@@ -73,13 +73,13 @@ export function rememberMapping(userId: string, headers: string[], mapping: stri
   }
 }
 
-/** The export address for the asset list's filters. */
-export function exportUrl(search: string, categoryId: string): string {
+/** The export address for the asset list's filters, as CSV or an Excel workbook. */
+export function exportUrl(search: string, categoryId: string, format: 'csv' | 'xlsx' = 'csv'): string {
   const q = new URLSearchParams();
   if (search.trim()) q.set('search', search.trim());
   if (categoryId) q.set('category_id', categoryId);
   const query = q.toString();
-  return '/api/v1/assets/export.csv' + (query ? `?${query}` : '');
+  return `/api/v1/assets/export.${format}` + (query ? `?${query}` : '');
 }
 
 /** Columns used more than once, other than ignored ones. */

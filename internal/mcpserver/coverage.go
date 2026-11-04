@@ -33,6 +33,9 @@ var Refused = map[string]string{
 	"POST /api/v1/templates/preview-data":          "the data the editor's live renderer draws a label with in the browser; preview_template draws with the same data on the server",
 	"GET /api/v1/events/live":                      "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
 	"GET /api/v1/icons/export":                     "a zip of the icons, for people to download; over MCP, list_icon_sources reads every source",
+	"GET /api/v1/assets/export.xlsx":               "a workbook, for people to open in a spreadsheet; over MCP, export_assets gives the same as CSV",
+	"GET /api/v1/reports/{id}/sections/{n}/xlsx":   "a workbook, for people to open in a spreadsheet; over MCP, the section's CSV gives the same",
+	"GET /api/v1/reports/{id}/xlsx":                "a workbook, for people to open in a spreadsheet; over MCP, each section's CSV gives the same",
 	"POST /api/v1/icon-library/import":             "a zip uploaded by people; over MCP, save_icon_library_file saves each source",
 	"GET /api/v1/flows/{slug}/qr.svg":              "the picture on a flow's printed poster; over MCP, a flow is reached at /f/<slug>, and run with run_flow",
 	// Archives move between a person's own computer and the server;

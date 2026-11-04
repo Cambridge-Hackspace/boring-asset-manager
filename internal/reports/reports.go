@@ -18,6 +18,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/xlsx"
 )
 
 // ErrInvalidSpec is wrapped by every problem with a report's spec.
@@ -349,30 +350,58 @@ func WriteCSV(w io.Writer, sec SectionResult) error {
 		return err
 	}
 	cw := csv.NewWriter(w)
+	for _, row := range Table(sec) {
+		if err := cw.Write(safeCells(row)); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+// Table is a section as its CSV has it: a heading row, then a row per
+// asset, with its group first when the table is grouped; for a chart, a
+// row per group or period, with a column per series.
+func Table(sec SectionResult) [][]string {
 	if sec.Type == "chart" {
-		return writeChartCSV(cw, sec)
+		return chartTable(sec)
 	}
 	grouped := len(sec.Groups) > 0 && sec.Groups[0].Title != ""
 	head := append([]string{}, sec.Columns...)
 	if grouped {
 		head = append([]string{"Group"}, head...)
 	}
-	if err := cw.Write(safeCells(head)); err != nil {
-		return err
-	}
+	out := [][]string{head}
 	for _, g := range sec.Groups {
 		for _, r := range g.Rows {
 			cells := r.Cells
 			if grouped {
 				cells = append([]string{g.Title}, cells...)
 			}
-			if err := cw.Write(safeCells(cells)); err != nil {
-				return err
-			}
+			out = append(out, cells)
 		}
 	}
-	cw.Flush()
-	return cw.Error()
+	return out
+}
+
+// Sheet is a section as a sheet of a workbook: its table, the heading row
+// as text, and each cell a number or date where it reads back as itself
+// as one, and otherwise text.
+func Sheet(sec SectionResult, name string, taken map[string]bool) xlsx.Sheet {
+	rows := Table(sec)
+	out := xlsx.Sheet{Name: xlsx.SheetName(name, taken)}
+	for i, row := range rows {
+		cells := make([]xlsx.Value, len(row))
+		for j, v := range row {
+			if i == 0 {
+				cells[j] = xlsx.TextCell(v)
+			} else {
+				cells[j] = xlsx.Guess(v)
+			}
+		}
+		out.Rows = append(out.Rows, cells)
+	}
+	return out
 }
 
 func safeCells(cells []string) []string {
