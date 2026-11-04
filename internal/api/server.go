@@ -137,6 +137,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/auth/me/factors/totp", RequireAuth(http.HandlerFunc(s.handleStartTOTP)))
 	handle("POST /api/v1/auth/me/factors/totp/confirm", RequireAuth(http.HandlerFunc(s.handleConfirmTOTP)))
 	handle("DELETE /api/v1/auth/me/factors/{id}", RequireAuth(http.HandlerFunc(s.handleDeleteOwnFactor)))
+	handle("POST /api/v1/auth/me/factors/recovery", RequireAuth(http.HandlerFunc(s.handleRegenerateRecoveryCodes)))
 
 	// User administration endpoints (requires users.manage)
 	handle("GET /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListUsers)))

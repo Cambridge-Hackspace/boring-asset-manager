@@ -17,6 +17,14 @@ import (
 // FactorTOTP is an authenticator app's codes.
 const FactorTOTP = "totp"
 
+// FactorRecovery is one recovery code, its hash as the secret, used once
+// when last_used_at is set. They are not factors of their own: they are
+// listed and offered only beside one.
+const FactorRecovery = "recovery"
+
+// RecoveryCodeCount is how many recovery codes are made at a time.
+const RecoveryCodeCount = 10
+
 // SignInChallengeTTL is how long the second step of a sign-in lasts.
 const SignInChallengeTTL = 5 * time.Minute
 
@@ -26,6 +34,9 @@ var (
 	// ErrCodeUsed is returned for a code whose step was accepted already,
 	// or by another server at the same moment.
 	ErrCodeUsed = errors.New("that code was used already; wait for the next one")
+	// ErrRecoveryCodeNotFound is returned for a recovery code that is not
+	// one of the user's, or was used already.
+	ErrRecoveryCodeNotFound = errors.New("recovery code not found")
 )
 
 // Factor is a second factor as it is listed: never its secret.
@@ -129,7 +140,8 @@ func (s *Store) Factors(userID string) ([]Factor, error) {
 // SealedFactors lists a user's confirmed second factors with their sealed
 // secrets, for checking a code.
 func (s *Store) SealedFactors(userID string) ([]SealedFactor, error) {
-	rows, err := s.Query("SELECT "+factorColumns+" FROM user_factors WHERE user_id = ? AND confirmed_at IS NOT NULL ORDER BY created_at, id", userID)
+	rows, err := s.Query("SELECT "+factorColumns+" FROM user_factors WHERE user_id = ? AND kind <> ? AND confirmed_at IS NOT NULL ORDER BY created_at, id",
+		userID, FactorRecovery)
 	if err != nil {
 		return nil, fmt.Errorf("listing factors: %w", err)
 	}
@@ -147,7 +159,7 @@ func (s *Store) SealedFactors(userID string) ([]SealedFactor, error) {
 
 // HasFactors reports, by user ID, who has a confirmed second factor.
 func (s *Store) HasFactors() (map[string]bool, error) {
-	rows, err := s.Query("SELECT DISTINCT user_id FROM user_factors WHERE confirmed_at IS NOT NULL")
+	rows, err := s.Query("SELECT DISTINCT user_id FROM user_factors WHERE kind <> ? AND confirmed_at IS NOT NULL", FactorRecovery)
 	if err != nil {
 		return nil, fmt.Errorf("listing who has factors: %w", err)
 	}
@@ -178,14 +190,105 @@ func (s *Store) UseTOTPStep(id string, step int64) error {
 	return nil
 }
 
-// DeleteFactor removes one of a user's own factors.
+// DeleteFactor removes one of a user's own factors, and their recovery
+// codes with the last of them.
 func (s *Store) DeleteFactor(userID, id string) error {
-	res, err := s.Exec("DELETE FROM user_factors WHERE id = ? AND user_id = ?", id, userID)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := s.TxExec(tx, "DELETE FROM user_factors WHERE id = ? AND user_id = ? AND kind <> ?", id, userID, FactorRecovery)
 	if err != nil {
 		return fmt.Errorf("removing the factor: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrFactorNotFound
+	}
+	var left int
+	if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM user_factors WHERE user_id = ? AND kind <> ? AND confirmed_at IS NOT NULL", userID, FactorRecovery).Scan(&left); err != nil {
+		return fmt.Errorf("counting the factors left: %w", err)
+	}
+	if left == 0 {
+		if _, err := s.TxExec(tx, "DELETE FROM user_factors WHERE user_id = ? AND kind = ?", userID, FactorRecovery); err != nil {
+			return fmt.Errorf("removing the recovery codes: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing: %w", err)
+	}
+	return nil
+}
+
+// ReplaceRecoveryCodes replaces a user's recovery codes with codes, read
+// as auth.NormalizeRecoveryCode reads them. Only their hashes are kept, as
+// sessions' are.
+func (s *Store) ReplaceRecoveryCodes(userID string, codes []string) error {
+	now := dbTime(time.Now())
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := s.TxExec(tx, "DELETE FROM user_factors WHERE user_id = ? AND kind = ?", userID, FactorRecovery); err != nil {
+		return fmt.Errorf("removing the old recovery codes: %w", err)
+	}
+	for _, code := range codes {
+		n := auth.NormalizeRecoveryCode(code)
+		if n == "" {
+			return fmt.Errorf("%q is not a recovery code", code)
+		}
+		if _, err := s.TxExec(tx, "INSERT INTO user_factors (id, user_id, kind, secret, last_step, created_at, confirmed_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
+			uuid.NewString(), userID, FactorRecovery, sessionKey(n), now, now); err != nil {
+			return fmt.Errorf("adding a recovery code: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing: %w", err)
+	}
+	return nil
+}
+
+// RecoveryCodesLeft counts a user's recovery codes not used yet.
+func (s *Store) RecoveryCodesLeft(userID string) (int, error) {
+	var n int
+	if err := s.QueryRow("SELECT COUNT(*) FROM user_factors WHERE user_id = ? AND kind = ? AND last_used_at IS NULL", userID, FactorRecovery).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting recovery codes: %w", err)
+	}
+	return n, nil
+}
+
+// UseRecoveryCode spends one of a user's recovery codes, as typed, and
+// records auth.recovery_code_used. Only a code not used yet counts, checked
+// as it is written, so two servers given it at once accept it once.
+func (s *Store) UseRecoveryCode(userID, code string) error {
+	n := auth.NormalizeRecoveryCode(code)
+	if n == "" {
+		return ErrRecoveryCodeNotFound
+	}
+	u, err := s.GetUserByID(userID)
+	if err != nil {
+		return err
+	}
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+	res, err := s.TxExec(tx, "UPDATE user_factors SET last_used_at = ? WHERE user_id = ? AND kind = ? AND secret = ? AND last_used_at IS NULL",
+		dbTime(time.Now()), userID, FactorRecovery, sessionKey(n))
+	if err != nil {
+		return fmt.Errorf("using the recovery code: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrRecoveryCodeNotFound
+	}
+	account := &models.EventActor{ID: u.ID, Name: u.Name}
+	if err := s.insertEvent(tx, models.EventAuthRecoveryCodeUsed, nil, nil, models.EventPayload{Trigger: models.TriggerManual, Account: account}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing: %w", err)
 	}
 	return nil
 }

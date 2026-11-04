@@ -17,6 +17,7 @@ var Refused = map[string]string{
 	"POST /api/v1/auth/me/factors/totp":         "a second factor is set up by its person, signed in, so a misled assistant cannot hold one over them (#189)",
 	"POST /api/v1/auth/me/factors/totp/confirm": "a second factor is set up by its person, signed in, so a misled assistant cannot hold one over them (#189)",
 	"DELETE /api/v1/auth/me/factors/{id}":       "turning off a second factor takes its person's password and a code from their app; reset_user_factors removes someone's",
+	"POST /api/v1/auth/me/factors/recovery":     "recovery codes are shown once to their person, signed in, and new ones take a code from their app (#190)",
 	"POST /api/v1/auth/logout":                  "an assistant has no session to end; revoke_token on its own token signs it out",
 	"PUT /api/v1/auth/password":                 "a person's password is theirs to change, signed in, so a misled assistant cannot lock them out (#43)",
 	"PUT /api/v1/auth/theme":                    "whether the web interface is light or dark for a person, chosen in the browser; an assistant sees no interface (#168)",

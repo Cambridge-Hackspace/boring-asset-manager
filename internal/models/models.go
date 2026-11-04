@@ -196,6 +196,9 @@ const (
 	// removed for them, by an admin or on the command line, with the
 	// Account; channels can subscribe to it.
 	EventAuthFactorsReset = "auth.factors_reset"
+	// EventAuthRecoveryCodeUsed records someone signing in with a recovery
+	// code, with the Account; channels can subscribe to it.
+	EventAuthRecoveryCodeUsed = "auth.recovery_code_used"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an

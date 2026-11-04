@@ -12,6 +12,8 @@
   let secondStep = $state(false);
   let code = $state('');
   let codeInput = $state<HTMLInputElement>();
+  /** A recovery code in place of the app's (docs/access.md#recovery-codes). */
+  let recovery = $state(false);
 
   // Once signed in (or already, say after the back button), carry on. Only
   // the user is tracked: navigating changes the query, and that must not
@@ -63,8 +65,17 @@
 
   function startOver(message = '') {
     secondStep = false;
+    recovery = false;
     code = '';
     error = message;
+  }
+
+  async function useRecovery(on: boolean) {
+    recovery = on;
+    code = '';
+    error = '';
+    await tick();
+    codeInput?.focus();
   }
 </script>
 
@@ -74,27 +85,49 @@
     <form class="card space-y-4" onsubmit={submitCode} aria-describedby={error ? 'sign-in-error' : 'code-help'}>
       <h2 class="text-lg font-semibold">Enter your code</h2>
       <div>
-        <label class="label" for="code">Code from your authenticator app</label>
-        <input
-          id="code"
-          class="input font-mono tracking-widest"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          pattern="[0-9 ]*"
-          maxlength="7"
-          required
-          aria-describedby="code-help"
-          bind:this={codeInput}
-          bind:value={code}
-        />
-        <p id="code-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">The six digits your app shows for {email} now.</p>
+        {#if recovery}
+          <label class="label" for="code">Recovery code</label>
+          <input
+            id="code"
+            class="input font-mono tracking-widest"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            maxlength="16"
+            required
+            aria-describedby="code-help"
+            bind:this={codeInput}
+            bind:value={code}
+          />
+          <p id="code-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">One of the codes you saved when you set up two-factor sign-in, such as 4f8kq-29xmd. Each works once.</p>
+        {:else}
+          <label class="label" for="code">Code from your authenticator app</label>
+          <input
+            id="code"
+            class="input font-mono tracking-widest"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            pattern="[0-9 ]*"
+            maxlength="7"
+            required
+            aria-describedby="code-help"
+            bind:this={codeInput}
+            bind:value={code}
+          />
+          <p id="code-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">The six digits your app shows for {email} now.</p>
+        {/if}
       </div>
       {#if error}
         <p id="sign-in-error" class="error-text" role="alert">{error}</p>
       {/if}
       <button type="submit" class="btn-primary w-full" disabled={busy}>{busy ? 'Checking…' : 'Sign in'}</button>
       <button type="button" class="btn-secondary w-full" onclick={() => startOver()}>Back</button>
-      <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Lost your phone? Ask whoever manages users here to remove your second factor.</p>
+      {#if recovery}
+        <button type="button" class="w-full text-sm underline" onclick={() => useRecovery(false)}>Use a code from your app</button>
+      {:else}
+        <button type="button" class="w-full text-sm underline" onclick={() => useRecovery(true)}>Use a recovery code</button>
+      {/if}
+      <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Lost your phone and your recovery codes? Ask whoever manages users here to remove your second factor.</p>
     </form>
   {:else}
     <form class="card space-y-4" onsubmit={submit} aria-describedby={error ? 'sign-in-error' : undefined}>

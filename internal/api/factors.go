@@ -1,15 +1,18 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/auth"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators/qr"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -105,32 +108,27 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the second factors")
 		return
 	}
+	// A recovery code stands in for any factor, once.
+	recovery := auth.NormalizeRecoveryCode(req.Code) != ""
 	matched, unreadable := false, 0
-	for _, f := range factors {
-		if f.Kind != store.FactorTOTP {
-			continue
+	if recovery {
+		switch err := s.store.UseRecoveryCode(user.ID, req.Code); {
+		case err == nil:
+			matched = true
+			s.tellRecoveryCodeUsed(user)
+		case !errors.Is(err, store.ErrRecoveryCodeNotFound):
+			writeServerError(w, err, "use the recovery code")
+			return
 		}
-		secret, err := s.sealer.Open(f.Secret, store.FactorPurpose(f.ID))
+	} else {
+		matched, unreadable, err = s.checkAppCode(factors, req.Code, now)
 		if err != nil {
-			unreadable++
-			continue
-		}
-		step, ok := auth.CheckTOTP(secret, req.Code, now, f.LastStep)
-		if !ok {
-			continue
-		}
-		if err := s.store.UseTOTPStep(f.ID, step); err != nil {
-			if errors.Is(err, store.ErrCodeUsed) {
-				continue
-			}
 			writeServerError(w, err, "record the code")
 			return
 		}
-		matched = true
-		break
 	}
 	if !matched {
-		if unreadable > 0 && unreadable == len(factors) {
+		if !recovery && unreadable > 0 && unreadable == len(factors) {
 			writeJSONError(w, http.StatusConflict, "Your second factor cannot be checked: this server's [auth] secret_key is not the one it was set up with. "+
 				"Ask whoever manages users to remove it, then sign in and set it up again.")
 			return
@@ -142,6 +140,10 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 		}
 		if wait > 0 {
 			writeThrottled(w, wait)
+			return
+		}
+		if recovery {
+			writeJSONError(w, http.StatusUnauthorized, "That recovery code is not right, or was used already.")
 			return
 		}
 		writeJSONError(w, http.StatusUnauthorized, "That code is not right. Enter the code your app shows now.")
@@ -166,14 +168,151 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
-// GET /api/v1/auth/me/factors: the signed-in person's second factors.
+// checkAppCode accepts a code from any of the factors' apps, once. It
+// reports how many could not be opened with this server's key.
+func (s *Server) checkAppCode(factors []store.SealedFactor, code string, now time.Time) (matched bool, unreadable int, err error) {
+	for _, f := range factors {
+		if f.Kind != store.FactorTOTP {
+			continue
+		}
+		secret, err := s.sealer.Open(f.Secret, store.FactorPurpose(f.ID))
+		if err != nil {
+			unreadable++
+			continue
+		}
+		step, ok := auth.CheckTOTP(secret, code, now, f.LastStep)
+		if !ok {
+			continue
+		}
+		if err := s.store.UseTOTPStep(f.ID, step); err != nil {
+			if errors.Is(err, store.ErrCodeUsed) {
+				continue
+			}
+			return false, unreadable, err
+		}
+		return true, unreadable, nil
+	}
+	return false, unreadable, nil
+}
+
+// tellRecoveryCodeUsed emails someone whose recovery code was just used,
+// when email is set up: it is about their own account, so it is sent
+// whatever they chose for email to their roles. It does not hold up
+// signing in; a failure is logged.
+func (s *Server) tellRecoveryCodeUsed(user *models.User) {
+	if s.mailer == nil {
+		return
+	}
+	left, err := s.store.RecoveryCodesLeft(user.ID)
+	if err != nil {
+		log.Printf("counting recovery codes for %s: %v", user.Email, err)
+		return
+	}
+	m, err := recoveryCodeUsedMessage(user, left, s.cfg.Server.BaseURL)
+	if err != nil {
+		log.Printf("writing the recovery code email for %s: %v", user.Email, err)
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := s.mailer.Send(ctx, m); err != nil {
+			log.Printf("emailing %s about a recovery code: %v", user.Email, err)
+		}
+	}()
+}
+
+// recoveryCodeUsedMessage is the email saying a recovery code was used.
+func recoveryCodeUsedMessage(user *models.User, left int, base string) (email.Message, error) {
+	remaining := fmt.Sprintf("You have %d left.", left)
+	paragraphs := []string{
+		"Someone signed in to your BAM! account with one of your recovery codes, in place of a code from your authenticator app. That code cannot be used again. " + remaining,
+		"If it was you, make new codes under Your account if you are running low. If it was not, change your password there now, and tell whoever manages users.",
+	}
+	if base != "" {
+		paragraphs = append(paragraphs, "Your account: "+strings.TrimRight(base, "/")+"/account")
+	}
+	const subject = "A recovery code was used to sign in to BAM!"
+	html, text, err := email.Render(email.Content{Title: subject, Paragraphs: paragraphs, Accent: "#f59e0b", Footer: "Sent to " + user.Email + " about their own account."})
+	if err != nil {
+		return email.Message{}, err
+	}
+	return email.Message{To: []string{user.Email}, Subject: subject, Text: text, HTML: html}, nil
+}
+
+// GET /api/v1/auth/me/factors: the signed-in person's second factors, and
+// how many recovery codes they have left.
 func (s *Server) handleListOwnFactors(w http.ResponseWriter, r *http.Request) {
-	factors, err := s.store.Factors(CurrentUser(r.Context()).ID)
+	userID := CurrentUser(r.Context()).ID
+	factors, err := s.store.Factors(userID)
 	if err != nil {
 		writeServerError(w, err, "list second factors")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"factors": factors, "available": s.sealer.HasKey()})
+	left, err := s.store.RecoveryCodesLeft(userID)
+	if err != nil {
+		writeServerError(w, err, "count recovery codes")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"factors": factors, "available": s.sealer.HasKey(), "recovery_codes_left": left})
+}
+
+// newRecoveryCodes replaces someone's recovery codes, answering the new
+// ones, which are never shown again.
+func (s *Server) newRecoveryCodes(userID string) ([]string, error) {
+	codes, err := auth.NewRecoveryCodes(store.RecoveryCodeCount)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.ReplaceRecoveryCodes(userID, codes); err != nil {
+		return nil, err
+	}
+	return codes, nil
+}
+
+// RecoveryCodesRequest asks for new recovery codes, with a current code
+// from an app.
+type RecoveryCodesRequest struct {
+	Code string `json:"code"`
+}
+
+// POST /api/v1/auth/me/factors/recovery: replaces all of someone's
+// recovery codes, given a current code from their app.
+func (s *Server) handleRegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
+	var req RecoveryCodesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	user := CurrentUser(r.Context())
+	factors, err := s.store.SealedFactors(user.ID)
+	if err != nil {
+		writeServerError(w, err, "read the second factors")
+		return
+	}
+	if len(factors) == 0 {
+		writeJSONError(w, http.StatusConflict, "Recovery codes stand in for a second factor; set one up first.")
+		return
+	}
+	matched, unreadable, err := s.checkAppCode(factors, req.Code, time.Now())
+	if err != nil {
+		writeServerError(w, err, "record the code")
+		return
+	}
+	if !matched {
+		if unreadable == len(factors) {
+			writeJSONError(w, http.StatusConflict, "Your second factor cannot be checked with this server's key. Ask whoever manages users to remove it.")
+			return
+		}
+		writeJSONError(w, http.StatusBadRequest, "That code is not right. Enter the code your app shows now.")
+		return
+	}
+	codes, err := s.newRecoveryCodes(user.ID)
+	if err != nil {
+		writeServerError(w, err, "make recovery codes")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"recovery_codes": codes})
 }
 
 // issuer is the name an app shows a code under: BAM!, and the instance's
@@ -255,6 +394,11 @@ func (s *Server) handleConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := CurrentUser(r.Context())
+	existing, err := s.store.SealedFactors(user.ID)
+	if err != nil {
+		writeServerError(w, err, "read the second factors")
+		return
+	}
 	pending, err := s.store.PendingTOTP(user.ID)
 	if errors.Is(err, store.ErrFactorNotFound) {
 		writeJSONError(w, http.StatusNotFound, "No app is being set up. Start again.")
@@ -283,7 +427,17 @@ func (s *Server) handleConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "confirm the app")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"factor": factor})
+	// The first factor comes with recovery codes, shown this once.
+	resp := map[string]any{"factor": factor}
+	if len(existing) == 0 {
+		codes, err := s.newRecoveryCodes(user.ID)
+		if err != nil {
+			writeServerError(w, err, "make recovery codes")
+			return
+		}
+		resp["recovery_codes"] = codes
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // RemoveFactorRequest proves it is the person removing their own factor.

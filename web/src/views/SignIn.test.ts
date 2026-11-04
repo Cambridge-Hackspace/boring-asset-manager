@@ -69,6 +69,31 @@ describe('SignIn', () => {
     expect(JSON.parse(fetchMock.mock.calls[2]![1].body)).toEqual({ code: '123456' });
   });
 
+  it('takes a recovery code in place of the app', async () => {
+    navigate('/sign-in?next=%2Fassets');
+    const me = { user: { id: 'u1', email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' }, permissions: [] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json(200, { factor_required: true, factors: ['totp'] }))
+      .mockResolvedValueOnce(json(200, { user: me.user }))
+      .mockResolvedValueOnce(json(200, me));
+    vi.stubGlobal('fetch', fetchMock);
+    render(SignIn);
+    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'ada@hackspace.org' } });
+    await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'right' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Use a recovery code' }));
+    const code = screen.getByLabelText('Recovery code');
+    await vi.waitFor(() => expect(document.activeElement).toBe(code));
+    expect(code.getAttribute('pattern')).toBeNull();
+    await fireEvent.input(code, { target: { value: '4f8kq-29xmd' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets'));
+    expect(fetchMock.mock.calls[1]![0]).toBe('/api/v1/auth/login/factor');
+    expect(JSON.parse(fetchMock.mock.calls[1]![1].body)).toEqual({ code: '4f8kq-29xmd' });
+  });
+
   it('starts again from the password when the second step has expired', async () => {
     const fetchMock = vi
       .fn()
