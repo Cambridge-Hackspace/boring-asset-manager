@@ -1,6 +1,10 @@
 # Assets
 
-An asset is anything you keep track of. Open **Assets** to list them; search by name, code, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition or loan. The **Where** column says what each is in.
+An asset is anything you keep track of. Open **Assets** to list them; search by name, code, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition, loan or favorites. The **Where** column says what each is in.
+
+## Favorites
+
+Star an asset you use often, beside its name on its page or in the list, to find it on the home page under **Favorites**, and with **Only favorites** in the list. Categories, reports and flows have a star too. Your favorites are yours alone; one you can no longer see is hidden until you can again.
 
 ## Adding and editing
 

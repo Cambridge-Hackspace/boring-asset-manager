@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { Report } from '../../lib/models';
@@ -79,7 +80,10 @@
   <ul class="space-y-2">
     {#each reports as r (r.id)}
       <li class="card flex flex-wrap items-center justify-between gap-2">
-        <a class="inline-flex min-h-11 items-center font-medium hover:underline" href="/reports/{encodeURIComponent(r.id)}">{r.name}</a>
+        <span class="flex items-center gap-1">
+          <FavoriteStar kind="report" id={r.id} name={r.name} />
+          <a class="inline-flex min-h-11 items-center font-medium hover:underline" href="/reports/{encodeURIComponent(r.id)}">{r.name}</a>
+        </span>
         {#if canManage}
           <span class="inline-flex flex-wrap gap-2">
             <a class="btn-secondary" href="/reports/{encodeURIComponent(r.id)}/edit" aria-label="Edit {r.name}">Edit</a>

@@ -122,12 +122,13 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `list_generators` | `assets.read` | The code types. |
 | `set_my_email_notifications` | Anyone signed in | Whether email sent to the caller's roles reaches them; for a person only. |
 | `set_my_name` | Anyone signed in | Sets the caller's name; for a person only. |
+| `list_favorites`, `add_favorite`, `remove_favorite` | Anyone signed in | The caller's favorites, and starring or unstarring an asset, category, report or flow; for a person only (see [Favorites](favorites.md)). |
 
 ### Finding assets
 
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
-| `search_assets` | `assets.read` | Every filter the asset list takes, and running low; 25 at a time, up to 200, with `offset`. |
+| `search_assets` | `assets.read` | Every filter the asset list takes, favorites among them, and running low; 25 at a time, up to 200, with `offset`. |
 | `get_asset` | `assets.read` | Its fields, codes, place, contents, links, photos, hooks and icon, and where the icon comes from. |
 | `look_up_code` | `assets.scan` | Its scan page ([Scanning](scanning.md)). |
 | `asset_history` | `assets.read` | |

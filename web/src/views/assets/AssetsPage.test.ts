@@ -105,6 +105,24 @@ describe('AssetsPage', () => {
     expect(spooled().map((r) => r.body)).toEqual([{ filter: { condition: 'problem' } }, { asset_ids: ['a2'] }]);
   });
 
+  it('lists only the favorites, kept in the address', async () => {
+    session.user = { id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '' };
+    navigate('/assets', true);
+    const { fetchMock } = fakeApi({
+      'GET /categories': () => ({ categories: [category] }),
+      'GET /assets': () => ({ assets: [asset('a1', 'Drill')] }),
+    });
+    render(AssetsPage, { params: {} });
+    await screen.findByRole('link', { name: 'Drill' });
+    // The star sits in a column of its own: the name's cell is named by the name alone.
+    expect(screen.getByRole('cell', { name: 'Drill' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Favorite Drill' }).closest('td')).not.toBe(screen.getByRole('cell', { name: 'Drill' }));
+    await fireEvent.change(screen.getByLabelText('Favorites'), { target: { value: 'true' } });
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('favorite=true'))).toBe(true));
+    expect(location.search).toContain('favorite=true');
+    session.user = null;
+  });
+
   it('offers the spool only to those who print labels', async () => {
     fakeApi({ 'GET /categories': () => ({ categories: [category] }), 'GET /assets': () => ({ assets: [asset('a1', 'Drill')] }) });
     render(AssetsPage, { params: {} });

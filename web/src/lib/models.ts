@@ -914,3 +914,18 @@ export interface IconCheck {
   warnings: IconDiag[];
   ir?: import('./isolex/ir').IrDocument;
 }
+
+/** What can be starred (docs/favorites.md). */
+export type FavoriteKind = 'asset' | 'category' | 'report' | 'flow';
+
+/** Something the signed-in person has starred, as GET /auth/me/favorites lists it. */
+export interface Favorite {
+  kind: FavoriteKind;
+  id: string;
+  name: string;
+  /** A flow's address, /f/<slug>. */
+  slug?: string;
+  /** Set on an archived asset, which the home page leaves out. */
+  archived?: boolean;
+  created_at: string;
+}

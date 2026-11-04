@@ -414,6 +414,7 @@ turning the user back on brings no assistant back.
 | `POST /api/v1/auth/me/factors/totp` | Signed in | Start setting up an authenticator app: answers its `secret` as text, its `otpauth://` `uri`, and a QR code of it as `qr_svg`. |
 | `POST /api/v1/auth/me/factors/totp/confirm` | Signed in | Turn the app on, with `{"code"}` from it. |
 | `DELETE /api/v1/auth/me/factors/{id}` | Signed in | Turn a factor off, with `{"password", "code"}`. |
+| `GET /api/v1/auth/me/favorites`, `PUT` and `DELETE /api/v1/auth/me/favorites/{kind}/{id}` | Signed in, or a personal token | Your favorites, and starring or unstarring one (see [Favorites](favorites.md#api)). |
 | `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`, `two_factor`, and `sign_in_delayed_until` while wrong passwords hold their sign-ins back. |
 | `POST /api/v1/users` | `users.manage` | Create a user; `name` is required. |
 | `PUT /api/v1/users/{id}/name` | `users.manage` | Change a user's name, with `{"name": "..."}`. |

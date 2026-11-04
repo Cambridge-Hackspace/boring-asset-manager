@@ -121,6 +121,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/auth/name", RequirePerson(http.HandlerFunc(s.handleSetOwnName)))
 	handle("PUT /api/v1/auth/theme", RequirePerson(http.HandlerFunc(s.handleSetOwnTheme)))
 	handle("PUT /api/v1/auth/email", RequirePerson(http.HandlerFunc(s.handleSetOwnEmailNotifications)))
+	// Favorites, each person's own (docs/favorites.md).
+	handle("GET /api/v1/auth/me/favorites", RequirePerson(http.HandlerFunc(s.handleListFavorites)))
+	handle("PUT /api/v1/auth/me/favorites/{kind}/{id}", RequirePerson(http.HandlerFunc(s.handleAddFavorite)))
+	handle("DELETE /api/v1/auth/me/favorites/{kind}/{id}", RequirePerson(http.HandlerFunc(s.handleRemoveFavorite)))
 	// Personal tokens, for assistants (docs/access.md): made, listed and revoked
 	// by their own user, from a signed-in session.
 	// A personal token lists and revokes its user's too (#43), but only a

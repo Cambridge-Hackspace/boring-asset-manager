@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type Category } from '../../lib/models';
@@ -64,6 +65,7 @@
     {#each tree as row (row.category.id)}
       <li class="flex flex-wrap items-center gap-2" style="padding-left: {row.depth * 1.5}rem">
         {#if row.depth > 0}<span aria-hidden="true" class="text-zinc-400">└</span>{/if}
+        <FavoriteStar kind="category" id={row.category.id} name={row.category.name} />
         <CategoryBadge category={row.category} href="/categories/{encodeURIComponent(row.category.id)}" />
         {#if counts[row.category.id]}
           {@const n = counts[row.category.id]!}

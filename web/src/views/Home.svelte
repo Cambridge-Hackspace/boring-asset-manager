@@ -3,7 +3,8 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import { dueDate } from '../lib/assets';
-  import type { AssetWithDetails, Category, Loan } from '../lib/models';
+  import type { AssetWithDetails, Category, Favorite, FavoriteKind, Loan } from '../lib/models';
+  import { favorites } from '../lib/favorites.svelte';
   import { navSections, type NavLink } from '../lib/nav';
   import { navigate } from '../lib/router.svelte';
   import { scanTarget } from '../lib/scan';
@@ -27,6 +28,38 @@
   let error = $state('');
   let code = $state('');
 
+  // The person's favorites (docs/favorites.md), by kind, each by name;
+  // archived assets are left out.
+  const favoriteKinds: { kind: FavoriteKind; label: string }[] = [
+    { kind: 'asset', label: 'Assets' },
+    { kind: 'category', label: 'Categories' },
+    { kind: 'report', label: 'Reports' },
+    { kind: 'flow', label: 'Flows' },
+  ];
+  let favoritesRead = $state(false);
+  const starred = $derived(
+    favoriteKinds
+      .map(({ kind, label }) => ({
+        kind,
+        label,
+        list: favorites.list.filter((f) => f.kind === kind && !f.archived).sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .filter((g) => g.list.length),
+  );
+
+  function favoriteHref(f: Favorite): string {
+    switch (f.kind) {
+      case 'asset':
+        return `/assets/${encodeURIComponent(f.id)}`;
+      case 'category':
+        return `/categories/${encodeURIComponent(f.id)}`;
+      case 'report':
+        return `/reports/${encodeURIComponent(f.id)}`;
+      case 'flow':
+        return `/f/${encodeURIComponent(f.slug ?? '')}`;
+    }
+  }
+
   function lookUp(event: SubmitEvent) {
     event.preventDefault();
     const to = scanTarget(code);
@@ -34,6 +67,10 @@
   }
 
   onMount(async () => {
+    favorites
+      .load(true)
+      .then(() => (favoritesRead = true))
+      .catch((err) => (error = messageOf(err)));
     request<{ loans: Loan[] }>('GET', '/loans?state=open')
       .then((r) => {
         const week = Date.now() + 7 * 24 * 3600 * 1000;
@@ -74,8 +111,29 @@
     </form>
   {/if}
 
-  {#if low || attention.length || due.length}
+  {#if favoritesRead || low || attention.length || due.length}
     <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      {#if favoritesRead}
+        <section class="card" aria-labelledby="favorites-heading">
+          <h2 id="favorites-heading" class="mb-2 text-lg font-bold"><span class="shadow-[inset_0_-0.38em_0_var(--color-highlight)] dark:shadow-none">Favorites</span></h2>
+          {#if starred.length === 0}
+            <p class="text-sm text-zinc-600 dark:text-zinc-400">Star an asset, category, report or flow on its page to find it here.</p>
+          {:else}
+            <div class="space-y-3">
+              {#each starred as group (group.kind)}
+                <div>
+                  <h3 class="text-sm font-semibold text-zinc-600 dark:text-zinc-400">{group.label}</h3>
+                  <ul class="divide-y divide-zinc-300 text-sm dark:divide-zinc-700">
+                    {#each group.list as f (f.id)}
+                      <li><a class="flex min-h-11 items-center underline" href={favoriteHref(f)}>{f.name}</a></li>
+                    {/each}
+                  </ul>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </section>
+      {/if}
       {#if low}
         <section class="card" aria-labelledby="low-heading">
           <h2 id="low-heading" class="mb-2 text-lg font-bold"><span class="shadow-[inset_0_-0.38em_0_var(--color-highlight)] dark:shadow-none">Running low</span></h2>

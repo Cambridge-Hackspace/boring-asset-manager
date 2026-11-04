@@ -21,6 +21,7 @@ type searchIn struct {
 	Icon       string `json:"icon,omitempty" jsonschema:"only assets with this icon as their own, by name, such as one in icons_overview's missing_icons"`
 	RunningLow bool   `json:"running_low,omitempty" jsonschema:"only assets flagged running low, themselves or by a category"`
 	Archived   bool   `json:"archived,omitempty" jsonschema:"list archived assets instead of active ones"`
+	Favorite   bool   `json:"favorite,omitempty" jsonschema:"only assets the person you act for has starred"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"how many to return, 1 to 200 (25 if not given)"`
 	Offset     int    `json:"offset,omitempty" jsonschema:"how many to skip, to page through"`
 }
@@ -40,6 +41,9 @@ func (in searchIn) query() string {
 	}
 	if in.Archived {
 		q.Set("archived", "true")
+	}
+	if in.Favorite {
+		q.Set("favorite", "true")
 	}
 	if len(q) == 0 {
 		return ""

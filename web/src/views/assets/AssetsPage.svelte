@@ -1,5 +1,6 @@
 <script lang="ts">
   import { stack } from '../../lib/stack';
+  import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
@@ -38,6 +39,8 @@
   // An icon's name lists only assets with it as their own (docs/icons.md),
   // as the Icons page's report of names nothing draws links to.
   let icon = $state(router.query.get('icon') ?? '');
+  // Only the assets the person has starred (docs/favorites.md).
+  let favorite = $state(router.query.get('favorite') === 'true');
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
@@ -72,6 +75,7 @@
     if (loan) q.loan = loan;
     if (conflict) q.conflict = conflict;
     if (icon) q.icon = icon;
+    if (favorite) q.favorite = 'true';
     return q;
   }
 
@@ -105,6 +109,7 @@
     if (loan) q.set('loan', loan);
     if (conflict) q.set('conflict', conflict);
     if (icon) q.set('icon', icon);
+    if (favorite) q.set('favorite', 'true');
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
     void load();
@@ -122,7 +127,7 @@
 
   // On a phone, the filters beyond search fold away until wanted.
   let filtersOpen = $state(false);
-  const activeFilters = $derived([categoryId, condition, loan].filter(Boolean).length + (archived ? 1 : 0));
+  const activeFilters = $derived([categoryId, condition, loan].filter(Boolean).length + (archived ? 1 : 0) + (favorite ? 1 : 0));
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -180,6 +185,13 @@
       <option value="overdue">Overdue</option>
     </select>
   </div>
+  <div>
+    <label class="label" for="asset-favorite">Favorites</label>
+    <select id="asset-favorite" class="input" bind:value={favorite} onchange={() => applyFilters()}>
+      <option value={false}>Any</option>
+      <option value={true}>Only favorites</option>
+    </select>
+  </div>
   </div>
   <button type="submit" class="btn-secondary">Search</button>
 </form>
@@ -203,7 +215,10 @@
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading assets…</p>
 {:else if assets.length === 0}
-  <p class="text-sm text-zinc-600 dark:text-zinc-400">{archived ? 'No archived assets match.' : 'No assets match.'}</p>
+  <p class="text-sm text-zinc-600 dark:text-zinc-400">
+    {archived ? 'No archived assets match.' : 'No assets match.'}
+    {#if favorite}Star an asset on its page, or in this list, to make it a favorite.{/if}
+  </p>
 {:else}
   <p class="sr-only" role="status">{assets.length} assets, {selected.length} selected.</p>
   {#if canSpool && !archived}
@@ -218,6 +233,7 @@
               <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select all assets" checked={allSelected} onchange={toggleAll} /></label>
             </th>
           {/if}
+          {#if session.user}<th scope="col" class="w-8 py-2 pr-1"><span class="sr-only">Favorite</span></th>{/if}
           <th scope="col" class="py-2 pr-4">Name</th>
           <th scope="col" class="py-2 pr-4">Where</th>
           <th scope="col" class="py-2 pr-4">Categories</th>
@@ -233,6 +249,8 @@
                 <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} /></label>
               </td>
             {/if}
+            <!-- The star has a column of its own, so the name's cell is named by the name alone. -->
+            {#if session.user}<td class="py-2 pr-1"><span class="-my-2 inline-block align-middle"><FavoriteStar kind="asset" id={a.asset.id} name={a.asset.name} /></span></td>{/if}
             <td class="py-2 pr-4 font-medium">
               <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}

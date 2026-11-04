@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { Report, ReportResult } from '../../lib/models';
@@ -37,7 +38,10 @@
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Running the report…</p>
 {:else if report && result}
   <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-    <h1 class="text-2xl font-bold">{report.name}</h1>
+    <div class="flex items-center gap-1">
+      <h1 class="text-2xl font-bold">{report.name}</h1>
+      <FavoriteStar kind="report" id={report.id} name={report.name} />
+    </div>
     <div class="flex flex-wrap gap-2 print:hidden">
       <button type="button" class="btn-secondary" onclick={run}>Run again</button>
       <button type="button" class="btn-secondary" onclick={() => window.print()}>Print</button>

@@ -24,6 +24,7 @@
   import LocationPicker from '../../components/LocationPicker.svelte';
   import PhotosPanel from '../../components/PhotosPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
+  import FavoriteStar from '../../components/FavoriteStar.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
@@ -218,7 +219,10 @@
 {:else if asset}
   <div class="mb-4 flex flex-wrap items-end justify-between gap-4">
     <div>
-      <h1 class="flex items-center gap-3 text-3xl font-bold"><AssetIcon icon={asset.resolved_icon} height={44} />{asset.asset.name}</h1>
+      <div class="flex items-center gap-1">
+        <h1 class="flex items-center gap-3 text-3xl font-bold"><AssetIcon icon={asset.resolved_icon} height={44} />{asset.asset.name}</h1>
+        <FavoriteStar kind="asset" id={asset.asset.id} name={asset.asset.name} />
+      </div>
       {#if asset.generator_keys.length}
         <p class="mt-2 flex flex-wrap gap-2" aria-label="Its codes">
           {#each asset.generator_keys as k, i (k.generator_type)}<span class={i === 0 ? 'chip-yellow' : 'chip'} title={generatorName(k.generator_type)}>{k.assigned_code}</span>{/each}
