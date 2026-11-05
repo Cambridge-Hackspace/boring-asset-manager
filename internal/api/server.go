@@ -53,9 +53,11 @@ type Server struct {
 	// sendMail sends an email about someone's own account
 	// (docs/access.md#account-emails); nil when email is not set up. Tests
 	// replace it to read what is sent.
-	sendMail   func(email.Message)
-	spool      *spooler
-	presses    *pressLimiter
+	sendMail func(email.Message)
+	spool    *spooler
+	presses  *pressLimiter
+	// incoming keeps each incoming hook to its requests a minute.
+	incoming   *incomingLimiter
 	live       *liveHub
 	sample     sampleCache
 	httpServer *http.Server
@@ -93,6 +95,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		mailer:     email.New(cfg.Email),
 		spool:      newSpooler(),
 		presses:    newPressLimiter(),
+		incoming:   newIncomingLimiter(),
 		live:       newLiveHub(),
 		icons:      isolex.Default(),
 		iconsDirty: make(chan struct{}, 1),
@@ -501,6 +504,16 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/spool/jobs/{id}/cancel", printing(s.handleCancelSpoolJob))
 	handle("POST /api/v1/spool/jobs/{id}/resend", printing(s.handleResendSpoolJob))
 
+	// Incoming hooks (docs/hooks.md#incoming-hooks): settings.manage makes
+	// them; their addresses take requests from outside, authenticated by
+	// each hook's own secret.
+	handle("GET /api/v1/incoming", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleListIncoming)))
+	handle("POST /api/v1/incoming", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSaveIncoming)))
+	handle("GET /api/v1/incoming/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleGetIncoming)))
+	handle("PUT /api/v1/incoming/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSaveIncoming)))
+	handle("DELETE /api/v1/incoming/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeleteIncoming)))
+	handleFunc("POST /api/v1/incoming/{id}", s.handleIncoming)
+
 	// Notification channels (docs/notifications.md)
 	manage := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermSettingsManage)(h) }
 	handle("GET /api/v1/notifiers/drivers", manage(s.handleNotifierDrivers))
@@ -659,6 +672,10 @@ func (s *Server) actingStore(r *http.Request) *store.Store {
 }
 
 func (s *Server) actor(r *http.Request) *store.Store {
+	// An incoming hook acts as itself (docs/hooks.md#incoming-hooks).
+	if in := currentIncoming(r.Context()); in != nil {
+		return s.store.AsIncoming(in.hook.ID).Logging(in.log)
+	}
 	// A personal token acts as its user, so the user comes first.
 	if u := CurrentUser(r.Context()); u != nil {
 		return s.store.As(u.ID)

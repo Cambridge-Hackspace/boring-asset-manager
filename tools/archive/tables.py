@@ -37,6 +37,7 @@ ORDER = [
     ('printer_pool_members', 'KindSettings'), ('notification_channels', 'KindSettings'), ('spool_jobs', 'KindSettings'),
     ('spool_batches', 'KindSettings'), ('spool_job_members', 'KindSettings'), ('spool_entries', 'KindSettings'),
     ('auth_providers', 'KindSettings'), ('auth_provider_rules', 'KindSettings'), ('relays', 'KindSettings'),
+    ('incoming_hooks', 'KindSettings'), ('incoming_hook_roles', 'KindSettings'), ('incoming_hook_role_scopes', 'KindSettings'),
     ('sessions', 'KindAuth'), ('user_factors', 'KindAuth'), ('user_identities', 'KindAuth'), ('oauth_clients', 'KindAuth'), ('oauth_codes', 'KindAuth'), ('api_tokens', 'KindAuth'),
     ('api_token_roles', 'KindAuth'), ('api_token_role_scopes', 'KindAuth'), ('relay_mesh', 'KindAuth'),
 ]
@@ -47,9 +48,11 @@ JSON = {
     'category_icons': {'draft_errors'}, 'icon_library': {'draft_errors'}, 'asset_actions': {'triggers'},
     'auth_providers': {'settings', 'default_role_ids', 'allowed_domains', 'allowed_groups', 'mfa_amr', 'mfa_acr'}, 'auth_provider_rules': {'scope_ids'},
     'relays': {'allowlist'},
+    'incoming_hooks': {'settings'},
 }
 SECRET = {'users': ['password_hash', 'totp_secret'], 'notification_channels': ['options'], 'auth_providers': ['secrets'],
-          'relays': ['code_hash', 'credential_hash']}
+          'relays': ['code_hash', 'credential_hash'],
+          'incoming_hooks': ['secret_hash', 'sealed_secret']}
 # Grants are written by permission key, which is the same on every
 # instance; permission IDs are not.
 BY_KEY = {'role_permissions', 'role_permission_scopes'}
@@ -63,6 +66,8 @@ COMMENT = {
                'restored relay pairs again with a new code.'],
     'relay_mesh': ["The mesh root's and the main node's private keys are sealed with the",
                    "configuration's key, as second factors' secrets are."],
+    'incoming_hooks': ["Incoming hooks' secrets: a bearer secret's hash, or a signing secret sealed",
+                       "with the configuration's key. Restored without them, a hook refuses until given a new one."],
 }
 
 
