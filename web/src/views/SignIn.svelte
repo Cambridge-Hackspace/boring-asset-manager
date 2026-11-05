@@ -82,6 +82,20 @@
     }
   }
 
+  /** A link to remove a lost second factor, emailed after the password. */
+  let recoveryStatus = $state('');
+  async function emailRecovery() {
+    error = recoveryStatus = '';
+    busy = true;
+    try {
+      recoveryStatus = (await request<{ message: string }>('POST', '/auth/login/factor/recover')).message;
+    } catch (err) {
+      error = explain(err);
+    } finally {
+      busy = false;
+    }
+  }
+
   function startOver(message = '') {
     secondStep = false;
     recovery = false;
@@ -146,7 +160,15 @@
       {:else}
         <button type="button" class="w-full text-sm underline" onclick={() => useRecovery(true)}>Use a recovery code</button>
       {/if}
-      <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Lost your phone and your recovery codes? Ask whoever manages users here to remove your second factor.</p>
+      {#if providers.factor_recovery_email}
+        <div class="space-y-1 text-center text-xs">
+          <p class="text-zinc-600 dark:text-zinc-400">Lost your phone and your recovery codes?</p>
+          <button type="button" class="underline" disabled={busy} onclick={emailRecovery}>Email me a link to remove my second factor</button>
+          {#if recoveryStatus}<p role="status">{recoveryStatus}</p>{/if}
+        </div>
+      {:else}
+        <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Lost your phone and your recovery codes? Ask whoever manages users here to remove your second factor.</p>
+      {/if}
     </form>
   {:else}
     {#if !local && providers.providers.length}
@@ -179,7 +201,11 @@
         <p id="sign-in-error" class="error-text" role="alert">{error}</p>
       {/if}
       <button type="submit" class="btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
-      <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Forgot your password? Ask whoever manages users here to set a new one.</p>
+      {#if providers.password_reset && !local}
+        <p class="text-center text-sm"><a class="underline" href="/reset-password">Forgot password</a></p>
+      {:else}
+        <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Forgot your password? Ask whoever manages users here to set a new one.</p>
+      {/if}
     </form>
     {/if}
   {/if}

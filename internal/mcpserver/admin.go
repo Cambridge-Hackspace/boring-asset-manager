@@ -51,21 +51,24 @@ func adminTools() []tool {
 			Annotations: readOnly("List users")}, "GET /api/v1/users", users,
 			func(none) (request, error) { return request{path: "/api/v1/users"}, nil },
 			func(_ none, out map[string]any) string { return fmt.Sprintf("%d users.", count(out, "users")) }),
-		simple(&mcp.Tool{Name: "create_user", Description: "Make an account: email, name and a first password (8 to 72 bytes), active unless said.",
+		simple(&mcp.Tool{Name: "create_user", Description: "Make an account: email, name and a first password (8 to 72 bytes), active unless said; " +
+			"or, with invite and no password, email them an invitation to set one or sign in through a provider.",
 			Annotations: changes("Create a user", false)}, "POST /api/v1/users", users,
 			func(in struct {
 				Email    string `json:"email"`
 				Name     string `json:"name"`
-				Password string `json:"password"`
+				Password string `json:"password,omitempty"`
 				Active   *bool  `json:"is_active,omitempty"`
+				Invite   bool   `json:"invite,omitempty" jsonschema:"email an invitation instead of setting a password"`
 			}) (request, error) {
-				return request{path: "/api/v1/users", body: map[string]any{"email": in.Email, "name": in.Name, "password": in.Password, "is_active": in.Active}}, nil
+				return request{path: "/api/v1/users", body: map[string]any{"email": in.Email, "name": in.Name, "password": in.Password, "is_active": in.Active, "invite": in.Invite}}, nil
 			},
 			func(_ struct {
 				Email    string `json:"email"`
 				Name     string `json:"name"`
-				Password string `json:"password"`
+				Password string `json:"password,omitempty"`
 				Active   *bool  `json:"is_active,omitempty"`
+				Invite   bool   `json:"invite,omitempty" jsonschema:"email an invitation instead of setting a password"`
 			}, out map[string]any) string {
 				return fmt.Sprintf("Made the account for %q.", nameOf(out, "user"))
 			}),
@@ -156,6 +159,13 @@ func adminTools() []tool {
 			func(_ userRolesIn, out map[string]any) string {
 				return fmt.Sprintf("They hold %d roles.", count(out, "roles"))
 			}),
+
+		simple(&mcp.Tool{Name: "invite_user", Description: "Email someone an invitation, again, to set a password or sign in through a provider. The one sent before stops working.",
+			Annotations: changes("Invite a user", false)}, "POST /api/v1/users/{id}/invite", users,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/users/{id}/invite", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string { return fmt.Sprint(out["message"]) + "." }),
 
 		// Roles and scopes.
 		simple(&mcp.Tool{Name: "list_roles", Description: "The roles, with their permissions, how many people hold each, and which are built in.",

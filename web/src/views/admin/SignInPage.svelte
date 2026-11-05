@@ -7,7 +7,7 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Protocol, Provider } from '../../lib/models';
+  import type { AccountEmailSettings, Protocol, Provider } from '../../lib/models';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PageHeader from '../../components/PageHeader.svelte';
@@ -22,6 +22,7 @@
   let scopes = $state<Named[]>([]);
   let passwords = $state(true);
   let secretKey = $state(true);
+  let mails = $state<AccountEmailSettings>({ password_reset: false, factor_recovery_email: false, factor_recovery_email_required: false, can_email_links: false });
   let loading = $state(true);
   let error = $state('');
   let notice = $state('');
@@ -33,7 +34,15 @@
 
   async function load() {
     try {
-      const res = await request<{ providers: Provider[]; protocols: Protocol[]; roles: Named[]; scopes: Named[]; local_passwords: boolean; secret_key: boolean }>(
+      const res = await request<{
+        providers: Provider[];
+        protocols: Protocol[];
+        roles: Named[];
+        scopes: Named[];
+        local_passwords: boolean;
+        secret_key: boolean;
+        account_emails: AccountEmailSettings;
+      }>(
         'GET',
         '/auth/providers',
       );
@@ -43,6 +52,7 @@
       scopes = res.scopes ?? [];
       passwords = res.local_passwords;
       secretKey = res.secret_key;
+      if (res.account_emails) mails = res.account_emails;
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -65,6 +75,19 @@
       notice = on ? 'Signing in with a password is on.' : 'Signing in with a password is off.';
     } catch (err) {
       error = messageOf(err);
+    }
+  }
+
+  // A setting of account emails, saved alone (docs/access.md#account-emails).
+  async function setMail(key: 'password_reset' | 'factor_recovery_email' | 'factor_recovery_email_required', on: boolean, said: string) {
+    error = notice = '';
+    try {
+      const res = await request<{ account_emails: AccountEmailSettings }>('PUT', '/auth/settings', { [key]: on });
+      mails = res.account_emails;
+      notice = said;
+    } catch (err) {
+      error = messageOf(err);
+      await load();
     }
   }
 
@@ -116,6 +139,40 @@
       password at <a class="underline" href="/signin/local">/signin/local</a>, if a provider is down; each time is recorded. On the command
       line, <code>bam admin password</code> always works.
     </p>
+  </section>
+
+  <section class="card mb-6 max-w-2xl space-y-2" aria-labelledby="account-emails-heading">
+    <h2 id="account-emails-heading" class="font-semibold">Account emails</h2>
+    {#if !mails.can_email_links}
+      <p class="text-sm">
+        Links can be emailed once email is set up and the server's <code>base_url</code> is set (see the documentation's Notifications, Email).
+        Until then, invitations cannot be sent, and these stay off.
+      </p>
+    {/if}
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={mails.password_reset} disabled={!mails.can_email_links}
+        onchange={(e) => setMail('password_reset', e.currentTarget.checked, e.currentTarget.checked ? 'Forgot password is offered.' : 'Forgot password is not offered.')} />
+      Offer <em>Forgot password</em> on the sign-in page
+    </label>
+    <p class="text-xs text-zinc-600 dark:text-zinc-400">
+      A link to set a new password is emailed, working once for 30 minutes; using it signs them out everywhere. Never while passwords are off.
+    </p>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={mails.factor_recovery_email} disabled={!mails.can_email_links}
+        onchange={(e) => setMail('factor_recovery_email', e.currentTarget.checked, e.currentTarget.checked ? 'A lost second factor can be removed by email.' : 'A lost second factor cannot be removed by email.')} />
+      Let someone who has lost their second factor remove it by email
+    </label>
+    <p class="text-xs text-amber-900 dark:text-amber-200">
+      After their password, a link is emailed that removes their second factor. This makes their email a way around two-factor sign-in:
+      whoever can read it and knows the password can sign in.
+    </p>
+    {#if mails.factor_recovery_email}
+      <label class="flex items-center gap-2 pl-6 text-sm">
+        <input type="checkbox" checked={mails.factor_recovery_email_required}
+          onchange={(e) => setMail('factor_recovery_email_required', e.currentTarget.checked, 'Saved.')} />
+        Also for those whose roles require two-factor sign-in
+      </label>
+    {/if}
   </section>
 
   {#if editing === 'new'}

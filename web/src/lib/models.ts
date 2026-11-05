@@ -476,6 +476,19 @@ export const DEFAULT_MFA_AMR = ['mfa', 'otp', 'hwk', 'swk', 'fpt'];
 export interface PublicProviders {
   providers: { key: string; label: string; icon?: string }[];
   local_passwords: boolean;
+  /** Forgot password is offered: a link emailed to set a new one. */
+  password_reset?: boolean;
+  /** A lost second factor can be removed by a link emailed after the password. */
+  factor_recovery_email?: boolean;
+}
+
+/** The settings of account emails (docs/access.md#account-emails). */
+export interface AccountEmailSettings {
+  password_reset: boolean;
+  factor_recovery_email: boolean;
+  factor_recovery_email_required: boolean;
+  /** Whether links can be emailed at all: email and the server's base URL set up. */
+  can_email_links: boolean;
 }
 
 /** Someone's identity at a provider. */

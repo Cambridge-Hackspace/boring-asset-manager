@@ -167,4 +167,25 @@ describe('SignIn', () => {
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'The sign-in has expired. Sign in again.');
     expect(screen.getByLabelText('Password')).toBeTruthy();
   });
+
+  it('offers Forgot password, and removing a lost second factor by email, only when they are on', async () => {
+    stubFetch(vi.fn());
+    render(SignIn);
+    expect(await screen.findByText(/Ask whoever manages users here to set a new one/)).toBeTruthy();
+    cleanup();
+
+    navigate('/sign-in?factor=required', true);
+    const fetchMock = vi.fn().mockResolvedValue(json(202, { message: 'A link to remove your second factor is on its way to ada@hackspace.org.' }));
+    stubFetch(fetchMock, { providers: [], local_passwords: true, password_reset: true, factor_recovery_email: true });
+    render(SignIn);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Email me a link to remove my second factor' }));
+    expect((await screen.findByRole('status')).textContent).toContain('is on its way');
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v1/auth/login/factor/recover');
+    cleanup();
+
+    navigate('/sign-in', true);
+    stubFetch(vi.fn(), { providers: [], local_passwords: true, password_reset: true });
+    render(SignIn);
+    expect((await screen.findByRole('link', { name: 'Forgot password' })).getAttribute('href')).toBe('/reset-password');
+  });
 });

@@ -48,7 +48,11 @@ type Server struct {
 	transport printers.Transport
 	// mailer sends email (docs/notifications.md); nil when [email] is not
 	// set up.
-	mailer     *email.Sender
+	mailer *email.Sender
+	// sendMail sends an email about someone's own account
+	// (docs/access.md#account-emails); nil when email is not set up. Tests
+	// replace it to read what is sent.
+	sendMail   func(email.Message)
 	spool      *spooler
 	presses    *pressLimiter
 	live       *liveHub
@@ -85,6 +89,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		live:       newLiveHub(),
 		icons:      isolex.Default(),
 		iconsDirty: make(chan struct{}, 1),
+	}
+	if s.mailer != nil {
+		s.sendMail = s.sendAccountMail
 	}
 	// The configuration was checked as it loaded, so its key reads.
 	key, _ := cfg.Auth.Key()
@@ -129,6 +136,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handleFunc("POST /api/v1/auth/login", s.handleLogin)
 	handleFunc("POST /api/v1/auth/login/factor", s.handleLoginFactor)
 	handleFunc("POST /api/v1/auth/login/local", s.handleLoginLocal)
+	// Account emails (docs/access.md#account-emails): links that work once.
+	handleFunc("POST /api/v1/auth/login/factor/recover", s.handleRequestFactorRecovery)
+	handleFunc("GET /api/v1/auth/factor-recovery", s.handleGetFactorRecovery)
+	handleFunc("POST /api/v1/auth/factor-recovery", s.handleRecoverFactor)
+	handleFunc("POST /api/v1/auth/password-reset", s.handleRequestPasswordReset)
+	handleFunc("GET /api/v1/auth/password-reset", s.handleGetPasswordReset)
+	handleFunc("POST /api/v1/auth/password-reset/confirm", s.handleResetPassword)
+	handleFunc("GET /api/v1/auth/invite", s.handleGetInvitation)
+	handleFunc("POST /api/v1/auth/invite", s.handleAcceptInvitation)
 	// Identity providers (docs/access.md#signing-in-with-an-identity-provider).
 	handleFunc("GET /api/v1/auth/providers/public", s.handlePublicProviders)
 	handleFunc("GET /api/v1/auth/providers/{key}/start", s.handleProviderStart)
@@ -172,6 +188,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// User administration endpoints (requires users.manage)
 	handle("GET /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListUsers)))
 	handle("POST /api/v1/users", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateUser)))
+	handle("POST /api/v1/users/{id}/invite", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleInviteUser)))
 	handle("PATCH /api/v1/users/{id}/status", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateUserStatus)))
 	handle("DELETE /api/v1/users/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleDeleteUser)))
 	handle("PUT /api/v1/users/{id}/name", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserName)))

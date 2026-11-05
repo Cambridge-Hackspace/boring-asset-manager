@@ -2,7 +2,7 @@
 
 On **Your account** you can change the name others see, and your password. Changing your password signs you out everywhere else.
 
-What you can do depends on your roles, listed on the same page with what each permission lets you do. A page you may not open says what it needs. If you forget your password, whoever manages users can set a new one for you. After several wrong passwords, signing in makes you wait a little before trying again, and says how long. Under **Email**, you can stop email that notification channels send to your roles from reaching you.
+What you can do depends on your roles, listed on the same page with what each permission lets you do. A page you may not open says what it needs. If you forget your password, choose **Forgot password** on the sign-in page, where this BAM! offers it, and follow the link emailed to you; otherwise whoever manages users can set a new one for you. After several wrong passwords, signing in makes you wait a little before trying again, and says how long. Under **Email**, you can stop email that notification channels send to your roles from reaching you.
 
 ## Two-factor sign-in
 
@@ -10,7 +10,9 @@ Under **Two-factor sign-in**, you can ask for a code from an authenticator app o
 
 Turning it on shows ten **recovery codes**, once. Download or print them, and keep them somewhere safe, apart from the phone. If you lose the phone, choose **Use a recovery code** when signing in and enter one: each works once. The page shows how many you have left and warns when you are running low; **Make new recovery codes** replaces them all, given a code from the app. Using one is recorded, and emails you when this BAM! sends email.
 
-To turn it off, choose **Turn off** and give your password and a code. If you lose your phone and your recovery codes, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again.
+To turn it off, choose **Turn off** and give your password and a code. If you lose your phone and your recovery codes, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again. Where this BAM! offers it, the second step of signing in can instead email you a link that removes it.
+
+You are emailed when your password changes, and when a second factor is added or removed, so that a change you did not make does not go unseen.
 
 Some roles require two-factor sign-in, the **admin** role among them. If you hold one and have no second factor, signing in asks you to set one up before anything else opens, and your last one cannot be turned off.
 

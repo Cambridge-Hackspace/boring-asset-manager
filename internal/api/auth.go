@@ -245,6 +245,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeServerError(w, err, "change password")
 	default:
+		s.tellAccount(user, noticePasswordChanged)
 		writeJSON(w, http.StatusOK, map[string]string{"message": "Password changed"})
 	}
 }

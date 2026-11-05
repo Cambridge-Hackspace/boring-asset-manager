@@ -182,6 +182,27 @@ describe('UsersPage', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('would remove the last one');
   });
 
+  it('invites someone in place of setting a password, and sends an invitation again', async () => {
+    const { sent } = fakeApi({
+      'GET /users': () => ({ users: [{ id: 'u2', email: 'bo@hackspace.org', name: 'Bo', is_active: true, created_at: '', updated_at: '', role_ids: [], roles: [] }] }),
+      'GET /roles': () => ({ roles: [] }),
+      'POST /users': () => ({ status: 201, body: { user: { id: 'u3' }, invited: true } }),
+      'POST /users/u2/invite': () => ({ message: 'Invitation sent to bo@hackspace.org' }),
+    });
+    render(UsersPage, { params: {} });
+    await fireEvent.click(await screen.findByRole('button', { name: 'New user' }));
+    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'cy@hackspace.org' } });
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Cy' } });
+    await fireEvent.click(screen.getByLabelText(/Email them an invitation/));
+    expect(screen.queryByLabelText('Initial password')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Create user' }));
+    expect(await screen.findByText('User created, and invited by email.')).toBeTruthy();
+    expect(sent.find((r) => r.method === 'POST' && r.path === '/users')!.body).toEqual({ email: 'cy@hackspace.org', name: 'Cy', invite: true });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Send bo@hackspace.org an invitation' }));
+    expect(await screen.findByText('Invitation sent to bo@hackspace.org.')).toBeTruthy();
+  });
+
   it('shows who wrong passwords hold back, and lets them sign in again at once', async () => {
     const { sent } = fakeApi({
       'GET /users': () => ({
