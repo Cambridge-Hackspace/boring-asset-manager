@@ -133,7 +133,7 @@ func (s *Server) passwordSignIn(w http.ResponseWriter, r *http.Request, breakGla
 		return
 	}
 
-	sess, err := s.startSession(user.ID)
+	sess, err := s.startSession(r, user.ID)
 	if err != nil {
 		writeServerError(w, err, "create session")
 		return
@@ -148,9 +148,10 @@ func (s *Server) passwordSignIn(w http.ResponseWriter, r *http.Request, breakGla
 
 // startSession starts a session for someone signing in, held to setting up
 // a second factor when their roles require one and they have none; but
-// only where one can be set up, with [auth] secret_key.
-func (s *Server) startSession(userID string) (*models.Session, error) {
-	return s.store.StartSession(userID, DefaultSessionTTL, s.sealer.HasKey())
+// only where one can be set up: an app, with [auth] secret_key, or a
+// passkey, at base_url's host.
+func (s *Server) startSession(r *http.Request, userID string) (*models.Session, error) {
+	return s.store.StartSession(userID, DefaultSessionTTL, s.sealer.HasKey() || s.passkeysHere(r))
 }
 
 // handleLogout terminates the active session and clears the session cookie.

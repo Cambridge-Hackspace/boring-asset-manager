@@ -135,6 +135,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handleFunc("GET /api/v1/info", s.handleInfo)
 	handleFunc("POST /api/v1/auth/login", s.handleLogin)
 	handleFunc("POST /api/v1/auth/login/factor", s.handleLoginFactor)
+	handleFunc("GET /api/v1/auth/login/factor", s.handleLoginFactorKinds)
+	handleFunc("POST /api/v1/auth/login/factor/passkey", s.handleLoginPasskeyOptions)
 	handleFunc("POST /api/v1/auth/login/local", s.handleLoginLocal)
 	// Account emails (docs/access.md#account-emails): links that work once.
 	handleFunc("POST /api/v1/auth/login/factor/recover", s.handleRequestFactorRecovery)
@@ -182,6 +184,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/auth/me/factors", RequirePerson(http.HandlerFunc(s.handleListOwnFactors)))
 	handle("POST /api/v1/auth/me/factors/totp", RequireAuth(http.HandlerFunc(s.handleStartTOTP)))
 	handle("POST /api/v1/auth/me/factors/totp/confirm", RequireAuth(http.HandlerFunc(s.handleConfirmTOTP)))
+	handle("POST /api/v1/auth/me/factors/passkey", RequireAuth(http.HandlerFunc(s.handleStartPasskey)))
+	handle("POST /api/v1/auth/me/factors/passkey/confirm", RequireAuth(http.HandlerFunc(s.handleConfirmPasskey)))
+	handle("POST /api/v1/auth/me/factors/passkey/challenge", RequireAuth(http.HandlerFunc(s.handlePasskeyConfirmOptions)))
 	handle("DELETE /api/v1/auth/me/factors/{id}", RequireAuth(http.HandlerFunc(s.handleDeleteOwnFactor)))
 	handle("POST /api/v1/auth/me/factors/recovery", RequireAuth(http.HandlerFunc(s.handleRegenerateRecoveryCodes)))
 

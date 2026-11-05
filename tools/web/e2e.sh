@@ -60,8 +60,9 @@ MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
     # Notifications must never leave the container: point outgoing HTTPS at
     # a closed port, so deliveries fail as unreachable and are retried. The
     # test sign-in protocol stands in for identity providers, sending the
-    # browser back to the address the specs use (docs/access.md).
-    HTTPS_PROXY=http://127.0.0.1:9 BAM_AUTH_TEST_PROTOCOL=on BAM_SERVER_BASE_URL=http://127.0.0.1:8080 \
+    # browser back to the address the specs use (docs/access.md). That is
+    # localhost, not 127.0.0.1: browsers take passkeys only at a domain.
+    HTTPS_PROXY=http://127.0.0.1:9 BAM_AUTH_TEST_PROTOCOL=on BAM_SERVER_BASE_URL=http://localhost:8080 \
       "$bin" serve --config c.toml >"$state/server.log" 2>&1 &
     for i in $(seq 1 50); do
       wget -q -O /dev/null http://127.0.0.1:8080/healthz && break

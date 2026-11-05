@@ -128,14 +128,17 @@ func authenticatedAs(ctx, from context.Context) context.Context {
 const ErrFactorSetupRequired = "A role you hold requires two-factor sign-in. Set up a second factor first."
 
 // factorSetupRoutes are those a session held to setting up a second factor
-// may reach: who it is, setting up an authenticator app, and signing out.
+// may reach: who it is, setting up an authenticator app or a passkey, and
+// signing out.
 var factorSetupRoutes = map[string]bool{
-	"GET /api/v1/auth/me":                       true,
-	"GET /api/v1/info":                          true,
-	"GET /api/v1/auth/me/factors":               true,
-	"POST /api/v1/auth/me/factors/totp":         true,
-	"POST /api/v1/auth/me/factors/totp/confirm": true,
-	"POST /api/v1/auth/logout":                  true,
+	"GET /api/v1/auth/me":                          true,
+	"GET /api/v1/info":                             true,
+	"GET /api/v1/auth/me/factors":                  true,
+	"POST /api/v1/auth/me/factors/totp":            true,
+	"POST /api/v1/auth/me/factors/totp/confirm":    true,
+	"POST /api/v1/auth/me/factors/passkey":         true,
+	"POST /api/v1/auth/me/factors/passkey/confirm": true,
+	"POST /api/v1/auth/logout":                     true,
 }
 
 // Authenticate is an HTTP middleware that extracts and validates an API token

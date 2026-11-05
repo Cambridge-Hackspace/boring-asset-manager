@@ -17,6 +17,9 @@ import (
 // FactorTOTP is an authenticator app's codes.
 const FactorTOTP = "totp"
 
+// FactorPasskey is a passkey or security key (WebAuthn).
+const FactorPasskey = "passkey"
+
 // FactorRecovery is one recovery code, its hash as the secret, used once
 // when last_used_at is set. They are not factors of their own: they are
 // listed and offered only beside one.
@@ -44,28 +47,37 @@ var (
 
 // Factor is a second factor as it is listed: never its secret.
 type Factor struct {
-	ID          string     `json:"id"`
-	Kind        string     `json:"kind"`
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	// Name is what a passkey's owner called it.
+	Name string `json:"name,omitempty"`
+	// RPID is the host a passkey was registered for, and can be used at.
+	RPID        string     `json:"rp_id,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
 	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 }
 
 // SealedFactor is a factor with its secret, still sealed, and the last
-// step its codes were accepted at.
+// step its codes were accepted at; for a passkey, its credential ID and
+// public key, base64url, and its signature counter as LastStep.
 type SealedFactor struct {
 	Factor
-	Secret   string
-	LastStep int64
+	Secret       string
+	LastStep     int64
+	CredentialID string
+	PublicKey    string
 }
 
-const factorColumns = "id, kind, created_at, confirmed_at, last_used_at, secret, last_step"
+const factorColumns = "id, kind, created_at, confirmed_at, last_used_at, secret, last_step, name, credential_id, public_key, rp_id"
 
 func scanFactor(row interface{ Scan(...any) error }) (*SealedFactor, error) {
 	var f SealedFactor
-	if err := row.Scan(&f.ID, &f.Kind, &f.CreatedAt, &f.ConfirmedAt, &f.LastUsedAt, &f.Secret, &f.LastStep); err != nil {
+	var name, credentialID, publicKey, rpID sql.NullString
+	if err := row.Scan(&f.ID, &f.Kind, &f.CreatedAt, &f.ConfirmedAt, &f.LastUsedAt, &f.Secret, &f.LastStep, &name, &credentialID, &publicKey, &rpID); err != nil {
 		return nil, err
 	}
+	f.Name, f.CredentialID, f.PublicKey, f.RPID = name.String, credentialID.String, publicKey.String, rpID.String
 	return &f, nil
 }
 

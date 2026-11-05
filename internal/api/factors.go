@@ -52,22 +52,55 @@ func (s *Server) startSecondStep(w http.ResponseWriter, r *http.Request, user *m
 		return
 	}
 	s.setChallengeCookie(w, r, token)
+	writeJSON(w, http.StatusOK, map[string]any{"factor_required": true, "factors": s.factorKinds(factors)})
+}
+
+// factorKinds are the kinds of factor that can finish a sign-in: a
+// passkey only when one is for this host.
+func (s *Server) factorKinds(factors []store.SealedFactor) []string {
+	rp, _ := s.relyingParty()
 	kinds := []string{}
 	for _, f := range factors {
+		if f.Kind == store.FactorPasskey && (rp.ID == "" || f.RPID != rp.ID) {
+			continue
+		}
 		if !contains(kinds, f.Kind) {
 			kinds = append(kinds, f.Kind)
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"factor_required": true, "factors": kinds})
+	return kinds
 }
 
-// FactorLoginRequest is the second step of a sign-in.
+// signInChallengeUser is whom the second step of a sign-in is for, as the
+// challenge cookie says, answering for itself when it has expired.
+func (s *Server) signInChallengeUser(w http.ResponseWriter, r *http.Request) (*models.User, bool) {
+	token := ""
+	if c, err := r.Cookie(ChallengeCookieName); err == nil {
+		token = c.Value
+	}
+	user, err := s.store.SignInChallenge(token)
+	if errors.Is(err, store.ErrChallengeNotFound) || errors.Is(err, store.ErrUserNotFound) {
+		s.clearChallengeCookie(w, r)
+		writeJSONError(w, http.StatusUnauthorized, "The sign-in has expired. Sign in again.")
+		return nil, false
+	}
+	if err != nil {
+		writeServerError(w, err, "read the sign-in")
+		return nil, false
+	}
+	return user, true
+}
+
+// FactorLoginRequest is the second step of a sign-in: a code from an app,
+// or a recovery code, or a passkey's answer.
 type FactorLoginRequest struct {
-	Code string `json:"code"`
+	Code    string            `json:"code"`
+	Passkey *PasskeyAssertion `json:"passkey"`
 }
 
-// POST /api/v1/auth/login/factor: a code from the app finishes a sign-in
-// whose password was accepted, as the challenge cookie says.
+// POST /api/v1/auth/login/factor: a code from the app, or a passkey,
+// finishes a sign-in whose password was accepted, as the challenge cookie
+// says.
 func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 	var req FactorLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -78,14 +111,8 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(ChallengeCookieName); err == nil {
 		token = c.Value
 	}
-	user, err := s.store.SignInChallenge(token)
-	if errors.Is(err, store.ErrChallengeNotFound) || errors.Is(err, store.ErrUserNotFound) {
-		s.clearChallengeCookie(w, r)
-		writeJSONError(w, http.StatusUnauthorized, "The sign-in has expired. Sign in again.")
-		return
-	}
-	if err != nil {
-		writeServerError(w, err, "read the sign-in")
+	user, ok := s.signInChallengeUser(w, r)
+	if !ok {
 		return
 	}
 
@@ -108,9 +135,16 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A recovery code stands in for any factor, once.
-	recovery := auth.NormalizeRecoveryCode(req.Code) != ""
-	matched, unreadable := false, 0
-	if recovery {
+	recovery := req.Passkey == nil && auth.NormalizeRecoveryCode(req.Code) != ""
+	matched, unreadable, refusal := false, 0, ""
+	if req.Passkey != nil {
+		refusal, err = s.checkPasskey(user, factors, store.PasskeySignIn, req.Passkey)
+		if err != nil {
+			writeServerError(w, err, "check the passkey")
+			return
+		}
+		matched = refusal == ""
+	} else if recovery {
 		switch err := s.store.UseRecoveryCode(user.ID, req.Code); {
 		case err == nil:
 			matched = true
@@ -127,7 +161,7 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !matched {
-		if !recovery && unreadable > 0 && unreadable == len(factors) {
+		if req.Passkey == nil && !recovery && unreadable > 0 && unreadable == countKind(factors, store.FactorTOTP) {
 			writeJSONError(w, http.StatusConflict, "Your second factor cannot be checked: this server's [auth] secret_key is not the one it was set up with. "+
 				"Ask whoever manages users to remove it, then sign in and set it up again.")
 			return
@@ -145,6 +179,10 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusUnauthorized, "That recovery code is not right, or was used already.")
 			return
 		}
+		if refusal != "" {
+			writeJSONError(w, http.StatusUnauthorized, refusal)
+			return
+		}
 		writeJSONError(w, http.StatusUnauthorized, "That code is not right. Enter the code your app shows now.")
 		return
 	}
@@ -158,7 +196,7 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.clearChallengeCookie(w, r)
-	sess, err := s.startSession(user.ID)
+	sess, err := s.startSession(r, user.ID)
 	if err != nil {
 		writeServerError(w, err, "create session")
 		return
@@ -170,6 +208,34 @@ func (s *Server) handleLoginFactor(w http.ResponseWriter, r *http.Request) {
 // lastFactorRequired answers removing one's last second factor while a
 // role requires one.
 const lastFactorRequired = "A role you hold requires two-factor sign-in, so your last second factor cannot be removed. Set up another first."
+
+// countKind counts the factors of kind.
+func countKind(factors []store.SealedFactor, kind string) int {
+	n := 0
+	for _, f := range factors {
+		if f.Kind == kind {
+			n++
+		}
+	}
+	return n
+}
+
+// confirmFactor checks that it is the signed-in person, by a current
+// second factor: a code from one of their apps, or one of their passkeys'
+// answers. It answers why not, or "" when it is them.
+func (s *Server) confirmFactor(user *models.User, factors []store.SealedFactor, code string, passkey *PasskeyAssertion) (string, error) {
+	if passkey != nil {
+		return s.checkPasskey(user, factors, store.PasskeyConfirm, passkey)
+	}
+	matched, unreadable, err := s.checkAppCode(factors, code, time.Now())
+	if err != nil || matched {
+		return "", err
+	}
+	if apps := countKind(factors, store.FactorTOTP); apps > 0 && unreadable == apps {
+		return "Your authenticator app cannot be checked with this server's key. Use a passkey, or ask whoever manages users to remove it.", nil
+	}
+	return "That code is not right. Enter the code your app shows now.", nil
+}
 
 // checkAppCode accepts a code from any of the factors' apps, once. It
 // reports how many could not be opened with this server's key.
@@ -251,7 +317,7 @@ func (s *Server) handleListOwnFactors(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "count recovery codes")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"factors": factors, "available": s.sealer.HasKey(), "recovery_codes_left": left})
+	writeJSON(w, http.StatusOK, map[string]any{"factors": factors, "available": s.sealer.HasKey(), "passkeys": s.passkeysHere(r), "recovery_codes_left": left})
 }
 
 // newRecoveryCodes replaces someone's recovery codes, answering the new
@@ -268,13 +334,14 @@ func (s *Server) newRecoveryCodes(userID string) ([]string, error) {
 }
 
 // RecoveryCodesRequest asks for new recovery codes, with a current code
-// from an app.
+// from an app or a passkey's answer.
 type RecoveryCodesRequest struct {
-	Code string `json:"code"`
+	Code    string            `json:"code"`
+	Passkey *PasskeyAssertion `json:"passkey"`
 }
 
 // POST /api/v1/auth/me/factors/recovery: replaces all of someone's
-// recovery codes, given a current code from their app.
+// recovery codes, given a current code from their app or a passkey.
 func (s *Server) handleRegenerateRecoveryCodes(w http.ResponseWriter, r *http.Request) {
 	var req RecoveryCodesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -291,17 +358,13 @@ func (s *Server) handleRegenerateRecoveryCodes(w http.ResponseWriter, r *http.Re
 		writeJSONError(w, http.StatusConflict, "Recovery codes stand in for a second factor; set one up first.")
 		return
 	}
-	matched, unreadable, err := s.checkAppCode(factors, req.Code, time.Now())
+	refusal, err := s.confirmFactor(user, factors, req.Code, req.Passkey)
 	if err != nil {
-		writeServerError(w, err, "record the code")
+		writeServerError(w, err, "check the second factor")
 		return
 	}
-	if !matched {
-		if unreadable == len(factors) {
-			writeJSONError(w, http.StatusConflict, "Your second factor cannot be checked with this server's key. Ask whoever manages users to remove it.")
-			return
-		}
-		writeJSONError(w, http.StatusBadRequest, "That code is not right. Enter the code your app shows now.")
+	if refusal != "" {
+		writeJSONError(w, http.StatusBadRequest, refusal)
 		return
 	}
 	codes, err := s.newRecoveryCodes(user.ID)
@@ -438,14 +501,16 @@ func (s *Server) handleConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// RemoveFactorRequest proves it is the person removing their own factor.
+// RemoveFactorRequest proves it is the person removing their own factor:
+// their password, and a current code from an app or a passkey's answer.
 type RemoveFactorRequest struct {
-	Password string `json:"password"`
-	Code     string `json:"code"`
+	Password string            `json:"password"`
+	Code     string            `json:"code"`
+	Passkey  *PasskeyAssertion `json:"passkey"`
 }
 
-// DELETE /api/v1/auth/me/factors/{id}: turns a factor off, given the
-// password and a current code from it.
+// DELETE /api/v1/auth/me/factors/{id}: removes a factor, given the
+// password and a current second factor.
 func (s *Server) handleDeleteOwnFactor(w http.ResponseWriter, r *http.Request) {
 	var req RemoveFactorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -484,22 +549,13 @@ func (s *Server) handleDeleteOwnFactor(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "That password is not right.")
 		return
 	}
-	secret, err := s.sealer.Open(factor.Secret, store.FactorPurpose(factor.ID))
+	refusal, err := s.confirmFactor(user, factors, req.Code, req.Passkey)
 	if err != nil {
-		writeJSONError(w, http.StatusConflict, "This factor cannot be checked with this server's key. Ask whoever manages users to remove it.")
+		writeServerError(w, err, "check the second factor")
 		return
 	}
-	step, ok := auth.CheckTOTP(secret, req.Code, time.Now(), factor.LastStep)
-	if !ok {
-		writeJSONError(w, http.StatusBadRequest, "That code is not right. Enter the code your app shows now.")
-		return
-	}
-	if err := s.store.UseTOTPStep(factor.ID, step); err != nil {
-		if errors.Is(err, store.ErrCodeUsed) {
-			writeJSONError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeServerError(w, err, "record the code")
+	if refusal != "" {
+		writeJSONError(w, http.StatusBadRequest, refusal)
 		return
 	}
 	if err := s.store.DeleteFactor(user.ID, id); err != nil {

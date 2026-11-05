@@ -60,6 +60,7 @@ func (s *Server) accountMail(user *models.User, subject, accent string, paragrap
 const (
 	noticePasswordChanged = iota
 	noticeFactorAdded
+	noticePasskeyAdded
 	noticeFactorRemoved
 )
 
@@ -75,6 +76,8 @@ func (s *Server) tellAccount(user *models.User, notice int) {
 		subject, what = "Your BAM! password was changed", "The password of your BAM! account was changed."
 	case noticeFactorAdded:
 		subject, what = "A second factor was added to your BAM! account", "A second factor, an authenticator app, was added to your BAM! account. Signing in now asks for a code from it."
+	case noticePasskeyAdded:
+		subject, what = "A passkey was added to your BAM! account", "A second factor, a passkey, was added to your BAM! account. Signing in can now ask for it."
 	case noticeFactorRemoved:
 		subject, what = "A second factor was removed from your BAM! account", "A second factor was removed from your BAM! account."
 	}
@@ -225,7 +228,7 @@ func (s *Server) handleAcceptInvitation(w http.ResponseWriter, r *http.Request) 
 		writeServerError(w, err, "set the password")
 		return
 	}
-	sess, err := s.startSession(user.ID)
+	sess, err := s.startSession(r, user.ID)
 	if err != nil {
 		writeServerError(w, err, "create session")
 		return

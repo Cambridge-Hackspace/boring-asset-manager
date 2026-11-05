@@ -49,24 +49,28 @@ Behind a reverse proxy, every request comes from the proxy's address unless the 
 
 ### Two-factor sign-in
 
-Anyone can ask for a code from an authenticator app as well as their password, so that the password
-alone is not enough. It is set up under **Your account**, and is off until they turn it on.
+Anyone can ask for a second factor as well as their password, so that the password alone is not
+enough: a code from an authenticator app, or a [passkey](#passkeys). They are set up under **Your
+account**, and are off until someone sets one up. One person can have an app and several passkeys;
+any of them finishes a sign-in.
 
-**Setting it up:**
+**Setting up an app:**
 
 1. **Set up an authenticator app** shows a QR code, and the same key as text. Any app that takes
    TOTP codes (RFC 6238) works, such as Aegis, Google Authenticator or 1Password. The app shows the
    codes under BAM! and the instance's host.
 2. The code the app shows turns it on. Until then, nothing changes.
 
-**Signing in:** after the password, the sign-in page asks for the app's code. Signing in is two
-steps:
+**Signing in:** after the password, the sign-in page asks for the app's code, or offers **Use a
+passkey**. Signing in is two steps:
 
-- **The password** answers `{"factor_required": true, "factors": ["totp"]}`, with no session. It
-  sets a cookie for the second step instead, which is sent only to the sign-in routes, lasts five
-  minutes, and grants nothing else.
-- **The code** (`POST /api/v1/auth/login/factor` with `{"code"}`), from the app or a
-  [recovery code](#recovery-codes), finishes the sign-in, and starts the session.
+- **The password** answers `{"factor_required": true, "factors": [...]}`, the kinds that can finish
+  it, `totp` and `passkey`, with no session. It sets a cookie for the second step instead, which is
+  sent only to the sign-in routes, lasts five minutes, and grants nothing else. After an identity
+  provider, `GET /api/v1/auth/login/factor` answers the same `factors`.
+- **The second factor** (`POST /api/v1/auth/login/factor`), finishes the sign-in, and starts the
+  session: `{"code"}` from the app or a [recovery code](#recovery-codes), or `{"passkey"}`, a
+  passkey's answer.
 
 **Codes:**
 
@@ -78,21 +82,52 @@ steps:
   The right password does not clear the count while a code is still to come, so knowing the
   password does not allow more guesses at the code.
 
-**Turning it off** takes the password and a current code, under **Your account**. Turning off the
-last one removes the recovery codes too.
+**Removing a factor** takes the password and a current second factor, a code from the app or a
+passkey, under **Your account**. Removing the last one removes the recovery codes too.
+
+#### Passkeys
+
+Passkeys and security keys (WebAuthn): a YubiKey, or the screen lock of a phone or computer. They
+cannot be phished: a passkey answers only the site it was made for.
+
+- **Adding one:** **Add a passkey** under **Your account**, with a name for it, such as YubiKey or
+  Phone. The browser then asks to touch the key or unlock the device. Each person can add several.
+- **Signing in:** after the password, **Use a passkey**. User verification, such as a PIN or a
+  fingerprint, is preferred but not required: the password is the other factor.
+- **Removing one** takes the password and a current factor, which can be another passkey. It is
+  refused when it would leave someone whose roles require two-factor sign-in with none (see
+  [Requiring two-factor sign-in](#requiring-two-factor-sign-in)).
+- **Bound to `[server] base_url`:** its host is the relying party ID passkeys are made for, and
+  they work only there. Passkeys need `base_url` set to the address people use, and are offered
+  only to a browser at that host: the default, `localhost`, is no use elsewhere. **Changing the
+  host makes every passkey added before unusable.** Their owners sign in with an app or a recovery
+  code and add them again. **Admin › Sign-in** shows the host, and how many passkeys were added at
+  another.
+- **What is kept:** each passkey's credential ID, public key and signature counter, as rows of
+  `user_factors` of kind `passkey`, and nothing secret. No attestation is asked for, so no
+  device's make or model is checked or kept.
+- **Copies:** a passkey whose counter goes backward is refused, as a sign that it was copied.
+  Authenticators that keep no counter, as synced passkeys often do, always send zero, and are
+  taken.
+- **Each answer is to a challenge sent for it,** which lasts five minutes and is taken as it is
+  answered, so an answer cannot be used twice. A challenge sent to sign in cannot confirm removing
+  a factor, nor the other way about.
+- **No secret key needed:** unlike an app's, a passkey's public key is no secret.
+
+Signing in with a passkey alone, in place of the password, is not offered.
 
 #### Recovery codes
 
 A way back in when the phone is lost.
 
-- **Made with the first factor:** turning on the first app makes ten codes. They are shown once,
-  with **Download** (a text file) and **Print**, and never again.
-- **Each works once,** in place of the app's code: **Use a recovery code** on the sign-in page.
+- **Made with the first factor:** setting up the first app or passkey makes ten codes. They are
+  shown once, with **Download** (a text file) and **Print**, and never again.
+- **Each works once,** in place of a second factor: **Use a recovery code** on the sign-in page.
   Case, spaces and dashes do not matter. A wrong one counts as a wrong code.
 - **Stored as hashes,** as sessions are (SHA-256), never in a form that can be read back. They are
   rows of `user_factors` of kind `recovery`, and are not listed as factors of their own.
-- **New codes** replace all ten, and take a current code from the app: **Make new recovery
-  codes** under **Your account**.
+- **New codes** replace all ten, and take a current second factor: **Make new recovery codes**
+  under **Your account**.
 - **How many are left** shows under **Your account**, with a warning when fewer than three remain.
 - **Using one** records `auth.recovery_code_used` in history, naming whose it was. Notification
   channels can subscribe to it. When email is set up (see [Notifications](notifications.md)), it
@@ -698,11 +733,16 @@ turning the user back on brings no assistant back.
 | `PUT /api/v1/auth/name` | Signed in, or a personal token | Change your own name, with `{"name": "..."}`. |
 | `PUT /api/v1/auth/theme` | Signed in, or a personal token | Change your own theme, with `{"theme": "dark"}`. Answers `{"user"}`, as a rename does. |
 | `PUT /api/v1/auth/email` | Signed in, or a personal token | Turn email sent to your roles off or on, with `{"notifications": false}` (see [Notifications](notifications.md#who-receives-it)). Answers `{"user"}`. |
-| `GET /api/v1/auth/me/factors` | Signed in, or a personal token | Your second factors, never their secrets, whether they `available`: whether the configuration has a secret key, and `recovery_codes_left`. |
+| `GET /api/v1/auth/me/factors` | Signed in, or a personal token | Your second factors, never their secrets, a passkey's with its `name` and `rp_id`; whether apps are `available`: whether the configuration has a secret key; whether `passkeys` can be added from this browser's host; and `recovery_codes_left`. |
 | `POST /api/v1/auth/me/factors/totp` | Signed in | Start setting up an authenticator app: answers its `secret` as text, its `otpauth://` `uri`, and a QR code of it as `qr_svg`. |
 | `POST /api/v1/auth/me/factors/totp/confirm` | Signed in | Turn the app on, with `{"code"}` from it. The first factor answers `recovery_codes` too, shown only then. |
-| `POST /api/v1/auth/me/factors/recovery` | Signed in | New recovery codes, replacing all of them, with `{"code"}` from an app. Answers `recovery_codes`. |
-| `DELETE /api/v1/auth/me/factors/{id}` | Signed in | Turn a factor off, with `{"password", "code"}`. |
+| `POST /api/v1/auth/me/factors/passkey` | Signed in | Start adding a passkey: answers `public_key`, the options for `navigator.credentials.create`, binary values base64url. |
+| `POST /api/v1/auth/me/factors/passkey/confirm` | Signed in | Add the passkey, with `{"name", "client_data_json", "attestation_object"}` as the browser answered, base64url. The first factor answers `recovery_codes` too. |
+| `POST /api/v1/auth/me/factors/passkey/challenge` | Signed in | A challenge for one of your passkeys, to confirm it is you: answers `public_key`, the options for `navigator.credentials.get`. |
+| `POST /api/v1/auth/me/factors/recovery` | Signed in | New recovery codes, replacing all of them, with `{"code"}` from an app or `{"passkey"}`. Answers `recovery_codes`. |
+| `DELETE /api/v1/auth/me/factors/{id}` | Signed in | Remove a factor, with `{"password"}` and `{"code"}` or `{"passkey"}`. |
+| `GET /api/v1/auth/login/factor` | At the second step of signing in | The kinds of second factor that can finish it, as `factors`. |
+| `POST /api/v1/auth/login/factor/passkey` | At the second step of signing in | A challenge for your passkeys: answers `public_key`, the options for `navigator.credentials.get`. |
 | `GET /api/v1/auth/me/favorites`, `PUT` and `DELETE /api/v1/auth/me/favorites/{kind}/{id}` | Signed in, or a personal token | Your favorites, and starring or unstarring one (see [Favorites](favorites.md#api)). |
 | `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`, `two_factor`, and `sign_in_delayed_until` while wrong passwords hold their sign-ins back. |
 | `POST /api/v1/users` | `users.manage` | Create a user; `name` is required. With `"invite": true` and no `password`, email them an invitation. |
@@ -728,7 +768,7 @@ turning the user back on brings no assistant back.
 | `GET /api/v1/auth/factor-recovery?token=…` | Anyone | Whose second factor a link removes. |
 | `POST /api/v1/auth/factor-recovery` | Anyone | Remove it with `{"token"}`, signing them out everywhere. |
 | `GET` or `POST /api/v1/auth/providers/{key}/callback` | Anyone | The provider's answer. |
-| `GET /api/v1/auth/providers` | `settings.manage` | Every provider, with its rules and which secrets are set; the `protocols` and their fields; `local_passwords`; and the roles and scopes rules can give. |
+| `GET /api/v1/auth/providers` | `settings.manage` | Every provider, with its rules and which secrets are set; the `protocols` and their fields; `local_passwords`; the roles and scopes rules can give; and `passkey_host`, base_url's host, with `passkeys_elsewhere`, how many passkeys were added at another. |
 | `POST /api/v1/auth/providers`, `PUT /api/v1/auth/providers/{id}` | `settings.manage` | Save a provider, given whole. A secret left blank keeps the one stored. One from the configuration is refused with `409`. |
 | `DELETE /api/v1/auth/providers/{id}` | `settings.manage` | Remove a provider, with the identities at it. |
 | `PUT /api/v1/auth/settings` | `settings.manage` | Turn passwords off or on, with `{"local_passwords": false}`. |

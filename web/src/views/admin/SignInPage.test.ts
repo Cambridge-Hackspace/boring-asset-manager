@@ -53,6 +53,25 @@ const provider = (over: Partial<Provider> = {}): Provider => ({
 });
 
 describe('SignInPage', () => {
+  it('says which host passkeys are bound to, and how many were added at another', async () => {
+    fakeApi({
+      'GET /auth/providers': () => ({
+        providers: [],
+        protocols,
+        roles,
+        scopes: [],
+        local_passwords: true,
+        secret_key: true,
+        passkey_host: 'bam.example.org',
+        passkeys_elsewhere: 2,
+      }),
+    });
+    render(SignInPage);
+    const section = await screen.findByRole('region', { name: 'Passkeys' });
+    expect(await within(section).findByText('bam.example.org')).toBeTruthy();
+    expect(within(section).getByRole('status').textContent).toMatch(/2 passkeys were added at another host/);
+  });
+
   it('adds a provider with its settings, secret and a rule', async () => {
     let list: Provider[] = [];
     const { sent } = fakeApi({

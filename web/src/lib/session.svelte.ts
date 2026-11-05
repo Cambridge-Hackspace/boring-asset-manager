@@ -2,6 +2,7 @@
 
 import { ApiError, request, setUnauthorizedHandler } from './api';
 import type { Me, Permission, PermissionKey, User } from './models';
+import type { PasskeyAssertion } from './passkeys';
 import { navigate, router } from './router.svelte';
 import { appearance } from './theme.svelte';
 
@@ -48,19 +49,22 @@ class Session {
 
   /**
    * Signs in with a password, or, local, at the break-glass page. With a
-   * second factor, that is the first step of two: it answers true, and
-   * finishSignIn takes the code.
+   * second factor, that is the first step of two: it answers the kinds of
+   * factor that can finish it, and finishSignIn takes one; otherwise null.
    */
-  async signIn(email: string, password: string, local = false): Promise<boolean> {
-    const res = await request<{ factor_required?: boolean }>('POST', local ? '/auth/login/local' : '/auth/login', { email, password });
-    if (res?.factor_required) return true;
+  async signIn(email: string, password: string, local = false): Promise<string[] | null> {
+    const res = await request<{ factor_required?: boolean; factors?: string[] }>('POST', local ? '/auth/login/local' : '/auth/login', {
+      email,
+      password,
+    });
+    if (res?.factor_required) return res.factors ?? [];
     await this.load();
-    return false;
+    return null;
   }
 
-  /** The second step of signing in: a code from their authenticator app. */
-  async finishSignIn(code: string): Promise<void> {
-    await request('POST', '/auth/login/factor', { code });
+  /** The second step of signing in: a code from their authenticator app, or a recovery code, or a passkey's answer. */
+  async finishSignIn(proof: string | PasskeyAssertion): Promise<void> {
+    await request('POST', '/auth/login/factor', typeof proof === 'string' ? { code: proof } : { passkey: proof });
     await this.load();
   }
 

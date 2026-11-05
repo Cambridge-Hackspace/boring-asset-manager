@@ -190,8 +190,16 @@ func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the sign-in settings")
 		return
 	}
+	// Passkeys are bound to base_url's host: those registered for another
+	// cannot be used, as after the host changes.
+	rp, _ := s.relyingParty()
+	elsewhere, err := s.store.PasskeysForOtherHosts(rp.ID)
+	if err != nil {
+		writeServerError(w, err, "count passkeys")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"providers": views, "protocols": protocols, "local_passwords": on, "secret_key": s.sealer.HasKey(),
-		"roles": roles, "scopes": scopes, "account_emails": mails})
+		"roles": roles, "scopes": scopes, "account_emails": mails, "passkey_host": rp.ID, "passkeys_elsewhere": elsewhere})
 }
 
 // ProviderRequest is a provider as saved under Admin. A secret left blank
@@ -721,7 +729,7 @@ func (s *Server) handleProviderCallback(w http.ResponseWriter, r *http.Request) 
 	}
 	// stepSetUp: BAM!'s own is wanted and they have none, so the session
 	// is held to setting one up.
-	sess, err := s.startSession(user.ID)
+	sess, err := s.startSession(r, user.ID)
 	if err != nil {
 		writeServerError(w, err, "create session")
 		return

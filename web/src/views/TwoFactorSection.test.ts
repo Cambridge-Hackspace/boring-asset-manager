@@ -6,6 +6,31 @@ import { fakeApi } from '../test/fetch';
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  Object.defineProperty(navigator, 'credentials', { value: undefined, configurable: true });
+});
+
+const bytes = (...b: number[]) => new Uint8Array(b).buffer;
+
+// A browser with passkeys: one made answers with bytes 1 to 4, one asked
+// with bytes 5 to 13.
+function stubPasskeys() {
+  const create = vi.fn().mockResolvedValue({ response: { clientDataJSON: bytes(1, 2), attestationObject: bytes(3, 4) } });
+  const get = vi.fn().mockResolvedValue({
+    rawId: bytes(5, 6, 7),
+    response: { clientDataJSON: bytes(8, 9), authenticatorData: bytes(10, 11), signature: bytes(12, 13) },
+  });
+  vi.stubGlobal('PublicKeyCredential', class {});
+  Object.defineProperty(navigator, 'credentials', { value: { create, get }, configurable: true });
+  return { create, get };
+}
+
+const passkey = (id: string, name: string, rp_id = 'localhost') => ({
+  id,
+  kind: 'passkey',
+  name,
+  rp_id,
+  created_at: '2026-11-01T00:00:00Z',
+  confirmed_at: '2026-11-01T00:00:00Z',
 });
 
 const app = { id: 'f1', kind: 'totp', created_at: '2026-11-01T00:00:00Z', confirmed_at: '2026-11-01T00:00:00Z' };
@@ -63,6 +88,72 @@ describe('TwoFactorSection', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'I have saved them' }));
     expect(screen.getByText(/10 left/)).toBeTruthy();
     expect(screen.queryByText(/Few are left/)).toBeNull();
+  });
+
+  it('adds a passkey, named, with recovery codes as the first factor', async () => {
+    const { create } = stubPasskeys();
+    let on = false;
+    const { sent } = fakeApi({
+      'GET /auth/me/factors': () => ({ factors: on ? [passkey('p1', 'YubiKey')] : [], available: false, passkeys: true, recovery_codes_left: on ? 10 : 0 }),
+      'POST /auth/me/factors/passkey': () => ({
+        public_key: { challenge: 'AQID', user: { id: 'dTE', name: 'ada@hackspace.org', displayName: 'Ada' }, excludeCredentials: [] },
+      }),
+      'POST /auth/me/factors/passkey/confirm': () => {
+        on = true;
+        return { factor: passkey('p1', 'YubiKey'), recovery_codes: codes };
+      },
+    });
+    render(TwoFactorSection);
+    // No secret key, so no app; a passkey still.
+    expect(screen.queryByRole('button', { name: 'Set up an authenticator app' })).toBeNull();
+    await fireEvent.click(await screen.findByRole('button', { name: 'Add a passkey' }));
+    const name = screen.getByLabelText('Name this passkey');
+    await vi.waitFor(() => expect(document.activeElement).toBe(name));
+    await fireEvent.input(name, { target: { value: 'YubiKey' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add the passkey' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your recovery codes' })).toBeTruthy();
+    expect(Array.from(new Uint8Array(create.mock.calls[0]![0].publicKey.user.id))).toEqual([117, 49]); // u1
+    expect(sent.find((r) => r.path === '/auth/me/factors/passkey/confirm')!.body).toEqual({
+      name: 'YubiKey',
+      client_data_json: 'AQI',
+      attestation_object: 'AwQ',
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'I have saved them' }));
+    expect(within(screen.getByRole('list', { name: 'Second factors' })).getByText(/Passkey “YubiKey”/)).toBeTruthy();
+  });
+
+  it('removes a passkey with the password and another passkey', async () => {
+    stubPasskeys();
+    let factors = [passkey('p1', 'YubiKey'), passkey('p2', 'Phone')];
+    const { sent } = fakeApi({
+      'GET /auth/me/factors': () => ({ factors, available: false, passkeys: true, recovery_codes_left: 10 }),
+      'POST /auth/me/factors/passkey/challenge': () => ({ public_key: { challenge: 'AQID', allowCredentials: [] } }),
+      'DELETE /auth/me/factors/p1': () => {
+        factors = factors.slice(1);
+        return { status: 204 };
+      },
+    });
+    render(TwoFactorSection);
+    await fireEvent.click(await screen.findByRole('button', { name: 'Remove passkey YubiKey' }));
+    // With no app, there is no code to type.
+    expect(screen.queryByLabelText('A code from the app')).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove with a passkey' }));
+    expect(await screen.findByText('Enter your password.')).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('Your password'), { target: { value: 'secret' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove with a passkey' }));
+    expect(await screen.findByText('Removed.')).toBeTruthy();
+    expect(sent.find((r) => r.method === 'DELETE')!.body).toEqual({
+      password: 'secret',
+      passkey: { id: 'BQYH', client_data_json: 'CAk', authenticator_data: 'Cgs', signature: 'DA0' },
+    });
+    expect(screen.queryByText(/YubiKey/)).toBeNull();
+  });
+
+  it('says which passkeys were added at another host', async () => {
+    fakeApi({ 'GET /auth/me/factors': () => ({ factors: [passkey('p1', 'YubiKey', 'old.example.org')], available: true, recovery_codes_left: 10 }) });
+    render(TwoFactorSection);
+    expect(await screen.findByText('It was added at old.example.org, so it cannot be used here.')).toBeTruthy();
   });
 
   it('says when none are left', async () => {
