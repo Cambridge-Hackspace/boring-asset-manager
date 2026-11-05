@@ -407,7 +407,11 @@ export interface UserWithRoles extends User {
 /** A second factor of one's own: never its secret. */
 export interface Factor {
   id: string;
-  kind: 'totp';
+  kind: 'totp' | 'passkey';
+  /** What a passkey's owner called it. */
+  name?: string;
+  /** The host a passkey was registered for, and can be used at alone. */
+  rp_id?: string;
   created_at: string;
   confirmed_at?: string;
   last_used_at?: string;

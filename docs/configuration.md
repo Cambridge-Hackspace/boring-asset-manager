@@ -14,6 +14,8 @@ Everything else lives in the database and is managed through the web interface o
 [server]
 host = "0.0.0.0"
 port = 8080
+# The address people use. Links in email lead here, and passkeys are bound
+# to its host: changing the host makes them unusable (access.md#passkeys).
 base_url = "http://localhost:8080"
 # Reverse proxies whose X-Forwarded-For and Forwarded headers say who the
 # client is, as addresses or CIDR ranges. Empty trusts no header.

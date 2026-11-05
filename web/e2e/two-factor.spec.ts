@@ -68,10 +68,10 @@ test('set up an authenticator app, sign in with a code from it, and turn it off'
   // wait for the step signed in with, if it is still to come.
   await expect.poll(stepNow, { timeout: 35_000 }).toBeGreaterThanOrEqual(step);
   await page.goto('/account');
-  await section.getByRole('button', { name: 'Turn off…' }).click();
+  await section.getByRole('button', { name: 'Remove the authenticator app' }).click();
   await section.getByLabel('Your password').fill(password);
   await section.getByLabel('A code from the app').fill(code(secret, Math.max(stepNow(), step + 1)));
-  await section.getByRole('button', { name: 'Turn off', exact: true }).click();
+  await section.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(section.getByRole('status')).toHaveText('Two-factor sign-in is off. Signing in asks for your password alone.');
   await context.clearCookies();
   await signIn(page, email, password);

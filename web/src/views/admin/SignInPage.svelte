@@ -23,6 +23,9 @@
   let passwords = $state(true);
   let secretKey = $state(true);
   let mails = $state<AccountEmailSettings>({ password_reset: false, factor_recovery_email: false, factor_recovery_email_required: false, can_email_links: false });
+  /** The host passkeys are bound to, base_url's, and how many were added at another. */
+  let passkeyHost = $state('');
+  let passkeysElsewhere = $state(0);
   let loading = $state(true);
   let error = $state('');
   let notice = $state('');
@@ -42,6 +45,8 @@
         local_passwords: boolean;
         secret_key: boolean;
         account_emails: AccountEmailSettings;
+        passkey_host?: string;
+        passkeys_elsewhere?: number;
       }>(
         'GET',
         '/auth/providers',
@@ -53,6 +58,8 @@
       passwords = res.local_passwords;
       secretKey = res.secret_key;
       if (res.account_emails) mails = res.account_emails;
+      passkeyHost = res.passkey_host ?? '';
+      passkeysElsewhere = res.passkeys_elsewhere ?? 0;
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -172,6 +179,23 @@
           onchange={(e) => setMail('factor_recovery_email_required', e.currentTarget.checked, 'Saved.')} />
         Also for those whose roles require two-factor sign-in
       </label>
+    {/if}
+  </section>
+
+  <section class="card mb-6 max-w-3xl space-y-2 text-sm" aria-labelledby="passkeys-heading">
+    <h2 id="passkeys-heading" class="text-lg font-semibold">Passkeys</h2>
+    {#if passkeyHost}
+      <p>
+        Passkeys are bound to <strong>{passkeyHost}</strong>, the host of <code>[server] base_url</code>. Changing that host makes
+        every passkey added before unusable: those who use one sign in with their recovery codes, or their app, and add it again.
+      </p>
+    {:else}
+      <p>Passkeys need <code>[server] base_url</code>, with the address people use. Ask whoever runs BAM! to set it.</p>
+    {/if}
+    {#if passkeysElsewhere}
+      <p class="text-amber-900 dark:text-amber-200" role="status">
+        {passkeysElsewhere === 1 ? '1 passkey was' : `${passkeysElsewhere} passkeys were`} added at another host, and cannot be used here.
+      </p>
     {/if}
   </section>
 

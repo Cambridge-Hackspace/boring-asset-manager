@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { ApiError, request } from '../lib/api';
   import type { PublicProviders } from '../lib/models';
+  import { getPasskey, passkeyMessage, passkeysSupported, type RequestOptions } from '../lib/passkeys';
   import { navigate, router } from '../lib/router.svelte';
   import { afterSignIn, session } from '../lib/session.svelte';
 
@@ -19,6 +20,10 @@
   let codeInput = $state<HTMLInputElement>();
   /** A recovery code in place of the app's (docs/access.md#recovery-codes). */
   let recovery = $state(false);
+  /** The kinds of second factor that can finish the sign-in: "totp", "passkey". */
+  let kinds = $state<string[]>(['totp']);
+  const canApp = $derived(kinds.includes('totp'));
+  const canPasskey = $derived(kinds.includes('passkey') && passkeysSupported());
   /** The identity providers' buttons, and whether passwords are on (docs/access.md). */
   let providers = $state<PublicProviders>({ providers: [], local_passwords: true });
 
@@ -31,8 +36,25 @@
       (p) => (providers = p),
       () => {},
     );
-    if (secondStep) void tick().then(() => codeInput?.focus());
+    if (secondStep) void loadKinds();
   });
+
+  /** After a provider, the kinds are asked for: the password's answer had them. */
+  async function loadKinds() {
+    try {
+      showKinds((await request<{ factors: string[] }>('GET', '/auth/login/factor')).factors ?? []);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) startOver(err.message);
+    }
+    await tick();
+    codeInput?.focus();
+  }
+
+  /** With neither an app nor a passkey here, a recovery code is what is left. */
+  function showKinds(k: string[]) {
+    kinds = k;
+    recovery = !k.includes('totp') && !(k.includes('passkey') && passkeysSupported());
+  }
 
   // Once signed in (or already, say after the back button), carry on. Only
   // the user is tracked: navigating changes the query, and that must not
@@ -53,7 +75,9 @@
     error = '';
     busy = true;
     try {
-      if (await session.signIn(email, password, local)) {
+      const factors = await session.signIn(email, password, local);
+      if (factors) {
+        showKinds(factors);
         secondStep = true;
         password = '';
         await tick();
@@ -96,6 +120,20 @@
     }
   }
 
+  async function usePasskey() {
+    error = '';
+    busy = true;
+    try {
+      const { public_key } = await request<{ public_key: RequestOptions }>('POST', '/auth/login/factor/passkey');
+      await session.finishSignIn(await getPasskey(public_key));
+    } catch (err) {
+      error = err instanceof DOMException ? passkeyMessage(err) : explain(err);
+      if (err instanceof ApiError && err.status === 401 && err.message.includes('expired')) startOver(error);
+    } finally {
+      busy = false;
+    }
+  }
+
   function startOver(message = '') {
     secondStep = false;
     recovery = false;
@@ -104,7 +142,7 @@
   }
 
   async function useRecovery(on: boolean) {
-    recovery = on;
+    recovery = on || (!canApp && !canPasskey);
     code = '';
     error = '';
     await tick();
@@ -116,7 +154,12 @@
   <h1 class="mb-6 text-center text-3xl font-black tracking-tight">BAM!</h1>
   {#if secondStep}
     <form class="card space-y-4" onsubmit={submitCode} aria-describedby={error ? 'sign-in-error' : 'code-help'}>
-      <h2 class="text-lg font-semibold">Enter your code</h2>
+      <h2 class="text-lg font-semibold">{canPasskey && !canApp && !recovery ? 'Use your passkey' : 'Enter your code'}</h2>
+      {#if canPasskey && !recovery}
+        <button type="button" class={canApp ? 'btn-secondary w-full' : 'btn-primary w-full'} disabled={busy} onclick={usePasskey}>Use a passkey</button>
+        {#if canApp}<p class="text-center text-xs text-zinc-600 dark:text-zinc-400">or enter a code from your app</p>{/if}
+      {/if}
+      {#if recovery || canApp}
       <div>
         {#if recovery}
           <label class="label" for="code">Recovery code</label>
@@ -150,24 +193,27 @@
           <p id="code-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">The six digits your app shows for {email || 'your account'} now.</p>
         {/if}
       </div>
+      {/if}
       {#if error}
         <p id="sign-in-error" class="error-text" role="alert">{error}</p>
       {/if}
-      <button type="submit" class="btn-primary w-full" disabled={busy}>{busy ? 'Checking…' : 'Sign in'}</button>
+      {#if recovery || canApp}
+        <button type="submit" class="btn-primary w-full" disabled={busy}>{busy ? 'Checking…' : 'Sign in'}</button>
+      {/if}
       <button type="button" class="btn-secondary w-full" onclick={() => startOver()}>Back</button>
-      {#if recovery}
-        <button type="button" class="w-full text-sm underline" onclick={() => useRecovery(false)}>Use a code from your app</button>
-      {:else}
+      {#if recovery && (canApp || canPasskey)}
+        <button type="button" class="w-full text-sm underline" onclick={() => useRecovery(false)}>{canApp ? 'Use a code from your app' : 'Use a passkey'}</button>
+      {:else if !recovery}
         <button type="button" class="w-full text-sm underline" onclick={() => useRecovery(true)}>Use a recovery code</button>
       {/if}
       {#if providers.factor_recovery_email}
         <div class="space-y-1 text-center text-xs">
-          <p class="text-zinc-600 dark:text-zinc-400">Lost your phone and your recovery codes?</p>
+          <p class="text-zinc-600 dark:text-zinc-400">Lost your second factor and your recovery codes?</p>
           <button type="button" class="underline" disabled={busy} onclick={emailRecovery}>Email me a link to remove my second factor</button>
           {#if recoveryStatus}<p role="status">{recoveryStatus}</p>{/if}
         </div>
       {:else}
-        <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Lost your phone and your recovery codes? Ask whoever manages users here to remove your second factor.</p>
+        <p class="text-center text-xs text-zinc-600 dark:text-zinc-400">Lost your second factor and your recovery codes? Ask whoever manages users here to remove it.</p>
       {/if}
     </form>
   {:else}
