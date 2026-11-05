@@ -394,6 +394,113 @@ func adminTools() []tool {
 	}
 }
 
+// incomingIn makes or changes an incoming hook (docs/hooks.md#incoming-hooks).
+type incomingIn struct {
+	ID      string  `json:"id,omitempty" jsonschema:"the incoming hook to change; empty to make one"`
+	Name    *string `json:"name,omitempty"`
+	Enabled *bool   `json:"enabled,omitempty"`
+	Auth    string  `json:"auth,omitempty" jsonschema:"bearer (a secret sent as Authorization: Bearer), the default, or hmac (requests signed as BAM! signs webhooks)"`
+	Action  string  `json:"action,omitempty" jsonschema:"hook (trigger a hook), quantity (record a use or restock), fields (set fields) or flow (run a flow to its end)"`
+	Hook    *string `json:"hook,omitempty" jsonschema:"for hook: the key of the hook to trigger"`
+	FlowID  *string `json:"flow_id,omitempty" jsonschema:"for flow: the flow's ID, from list_flows"`
+	// Fields maps fields' keys to paths into the request's JSON.
+	Fields map[string]string `json:"fields,omitempty" jsonschema:"for fields: each field's key to the path of its value in the request, such as data.grams; none to set the request's own field_values"`
+	Asset  *struct {
+		By      string `json:"by" jsonschema:"fixed, id, code or field"`
+		AssetID string `json:"asset_id,omitempty" jsonschema:"for fixed: the asset"`
+		Path    string `json:"path,omitempty" jsonschema:"for id, code and field: where in the request's JSON the value is, such as data.code"`
+		Field   string `json:"field,omitempty" jsonschema:"for field: the field's key"`
+	} `json:"asset,omitempty" jsonschema:"how the asset is found; a flow may find none"`
+	RateLimit *int `json:"rate_limit,omitempty" jsonschema:"requests a minute, 1 to 600; 60 unless given"`
+	Roles     []struct {
+		RoleID   string   `json:"role_id"`
+		ScopeIDs []string `json:"scope_ids,omitempty" jsonschema:"scopes from list_scopes to narrow the role to; none for every scope"`
+	} `json:"roles,omitempty" jsonschema:"what it acts as: roles, each narrowed to some scopes or none; it may hold no more than you do"`
+	NewSecret bool `json:"new_secret,omitempty" jsonschema:"give it a new secret; the old one stops working at once"`
+}
+
+func incomingTools() []tool {
+	settings := []string{rbac.PermSettingsManage}
+	return []tool{
+		define(&mcp.Tool{Name: "list_incoming_hooks", Description: "The incoming hooks: URLs that let something outside BAM! (a button, Home Assistant, a form, a scale) " +
+			"trigger a hook, record a use or restock, set fields or run a flow, as roles narrowed to scopes. With id, one. Secrets never show.",
+			Annotations: readOnly("List incoming hooks")}, []string{"GET /api/v1/incoming", "GET /api/v1/incoming/{id}"}, settings,
+			func(ctx context.Context, e *env, in struct {
+				ID string `json:"id,omitempty" jsonschema:"one incoming hook; empty for all"`
+			}) (reply[map[string]any], error) {
+				out := map[string]any{}
+				if in.ID != "" {
+					if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/incoming/{id}", in.ID), nil, &out); err != nil {
+						return reply[map[string]any]{}, err
+					}
+					return say(out, "%q.", nameOf(out, "incoming_hook"))
+				}
+				if err := e.call(ctx, http.MethodGet, "/api/v1/incoming", nil, &out); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				return say(out, "%d incoming hooks.", count(out, "incoming_hooks"))
+			}),
+		define(&mcp.Tool{Name: "save_incoming_hook", Description: "Make an incoming hook, or change one: only what is given changes. " +
+			"Its secret is answered when made, or with new_secret, and never again: give it to whoever sets up the sender, and keep it nowhere else.",
+			Annotations: changes("Save an incoming hook", false)}, []string{"POST /api/v1/incoming", "PUT /api/v1/incoming/{id}"}, settings,
+			func(ctx context.Context, e *env, in incomingIn) (reply[map[string]any], error) {
+				body := given(map[string]any{"name": in.Name, "enabled": in.Enabled, "hook": in.Hook, "flow_id": in.FlowID, "rate_limit": in.RateLimit})
+				if in.Auth != "" {
+					body["auth"] = in.Auth
+				}
+				if in.Action != "" {
+					body["action"] = in.Action
+				}
+				if in.Fields != nil {
+					body["fields"] = in.Fields
+				}
+				if in.Asset != nil {
+					body["asset"] = in.Asset
+				}
+				if in.Roles != nil {
+					body["roles"] = in.Roles
+				}
+				out := map[string]any{}
+				if in.ID == "" {
+					if err := e.call(ctx, http.MethodPost, "/api/v1/incoming", body, &out); err != nil {
+						return reply[map[string]any]{}, err
+					}
+					return say(out, "Made the incoming hook %q; its secret is in the answer, shown this once.", nameOf(out, "incoming_hook"))
+				}
+				var got struct {
+					Hook map[string]any `json:"incoming_hook"`
+				}
+				if err := e.call(ctx, http.MethodGet, pathOf("/api/v1/incoming/{id}", in.ID), nil, &got); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				current := map[string]any{}
+				for _, k := range []string{"name", "enabled", "auth", "action", "hook", "flow_id", "fields", "asset", "rate_limit", "roles"} {
+					if v, ok := got.Hook[k]; ok {
+						current[k] = v
+					}
+				}
+				change, err := merged(current, body)
+				if err != nil {
+					return reply[map[string]any]{}, err
+				}
+				change["new_secret"] = in.NewSecret
+				if err := e.call(ctx, http.MethodPut, pathOf("/api/v1/incoming/{id}", in.ID), change, &out); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				if _, ok := out["secret"]; ok {
+					return say(out, "Saved the incoming hook %q, with a new secret, in the answer, shown this once.", nameOf(out, "incoming_hook"))
+				}
+				return say(out, "Saved the incoming hook %q.", nameOf(out, "incoming_hook"))
+			}),
+		simple(&mcp.Tool{Name: "delete_incoming_hook", Description: "Delete an incoming hook; its URL stops working at once.", Annotations: destroys("Delete an incoming hook", true)},
+			"DELETE /api/v1/incoming/{id}", settings,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/incoming/{id}", in.ID)}, need(in.ID, "id")
+			},
+			func(idIn, map[string]any) string { return "Deleted the incoming hook." }),
+	}
+}
+
 // deliveriesIn narrows the delivery log.
 type deliveriesIn struct {
 	ChannelID string `json:"channel_id,omitempty"`

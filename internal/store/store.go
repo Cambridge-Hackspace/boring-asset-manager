@@ -42,6 +42,12 @@ type Store struct {
 	// actorToken is the API token changes are attributed to instead; see
 	// AsToken.
 	actorToken string
+	// actorIncoming is the incoming hook changes are attributed to
+	// instead; see AsIncoming.
+	actorIncoming string
+	// events, when set, collects the IDs of the events recorded; see
+	// Logging.
+	events *EventLog
 	// via is the assistant changes are made through; see Via.
 	via string
 	// texts keeps icons drawn with assets' texts, for every view of the

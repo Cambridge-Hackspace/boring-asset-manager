@@ -21,6 +21,7 @@ import PrintersPage from './views/admin/PrintersPage.svelte';
 import UsersPage from './views/admin/UsersPage.svelte';
 import RolesPage from './views/admin/RolesPage.svelte';
 import TokensPage from './views/admin/TokensPage.svelte';
+import IncomingHooksPage from './views/admin/IncomingHooksPage.svelte';
 import ReportsPage from './views/reports/ReportsPage.svelte';
 import ReportView from './views/reports/ReportView.svelte';
 import ReportEditor from './views/reports/ReportEditor.svelte';
@@ -101,6 +102,7 @@ export const routes: Route[] = [
   { pattern: '/tokens', component: TokensPage, title: 'API tokens', permissions: ['users.manage'], nav: 'API tokens', group: 'Admin' },
   { pattern: '/notifications', component: NotificationsPage, title: 'Notifications', permissions: ['settings.manage'], nav: 'Notifications', group: 'Admin' },
   { pattern: '/relays', component: RelaysPage, title: 'Relays', permissions: ['settings.manage'], nav: 'Relays', group: 'Admin' },
+  { pattern: '/incoming-hooks', component: IncomingHooksPage, title: 'Incoming hooks', permissions: ['settings.manage'], nav: 'Incoming hooks', group: 'Admin' },
   { pattern: '/sign-in-settings', component: SignInPage, title: 'Sign-in', permissions: ['settings.manage'], nav: 'Sign-in', group: 'Admin' },
   { pattern: '/backups', component: BackupsPage, title: 'Backups', permissions: ['settings.manage'], nav: 'Backups', group: 'Admin' },
   { pattern: '/packages', component: PackagesPage, title: 'Import & export', permissions: ['settings.manage'], nav: 'Import & export', group: 'Admin' },

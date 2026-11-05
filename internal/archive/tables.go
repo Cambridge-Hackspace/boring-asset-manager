@@ -172,6 +172,18 @@ var Tables = []Table{
 		Columns: []Column{{"id", Text}, {"name", Text}, {"code_hash", Text}, {"code_expires_at", Time}, {"identity_key", Text}, {"credential_hash", Text}, {"cert_expires_at", Time}, {"paired_at", Time}, {"revoked_at", Time}, {"online", Bool}, {"status_at", Time}, {"version", Text}, {"address", Text}, {"allowlist", JSON}, {"created_at", Time}},
 		Secret:  []string{"code_hash", "credential_hash"},
 	},
+	// Incoming hooks' secrets: a bearer secret's hash, or a signing secret sealed
+	// with the configuration's key. Restored without them, a hook refuses until given a new one.
+	{Name: "incoming_hooks", Kind: KindSettings, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"name", Text}, {"enabled", Bool}, {"auth", Text}, {"secret_hash", Text}, {"sealed_secret", Text}, {"action", Text}, {"settings", JSON}, {"rate_limit", Int}, {"created_by", Text}, {"created_at", Time}, {"updated_at", Time}, {"last_used_at", Time}},
+		Secret:  []string{"secret_hash", "sealed_secret"},
+	},
+	{Name: "incoming_hook_roles", Kind: KindSettings, Key: []string{"hook_id", "role_id"},
+		Columns: []Column{{"hook_id", Text}, {"role_id", Text}},
+	},
+	{Name: "incoming_hook_role_scopes", Kind: KindSettings, Key: []string{"hook_id", "role_id", "scope_id"},
+		Columns: []Column{{"hook_id", Text}, {"role_id", Text}, {"scope_id", Text}},
+	},
 	{Name: "sessions", Kind: KindAuth, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"user_id", Text}, {"expires_at", Time}, {"created_at", Time}, {"factor_setup", Bool}},
 	},

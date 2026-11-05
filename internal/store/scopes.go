@@ -149,6 +149,15 @@ func (s *Store) DeleteScope(id string) error {
 	if err != nil {
 		return err
 	}
+	// Incoming hooks narrowed to it hold it too (docs/hooks.md#incoming-hooks):
+	// taking it away would widen them to every scope.
+	var incoming int
+	if err := s.QueryRow("SELECT COUNT(*) FROM incoming_hook_role_scopes WHERE scope_id = ?", id).Scan(&incoming); err != nil {
+		return fmt.Errorf("counting incoming hooks narrowed to the scope: %w", err)
+	}
+	if incoming > 0 {
+		return fmt.Errorf("%w: %d roles of incoming hooks are narrowed to it", ErrScopeInUse, incoming)
+	}
 	if sc.CategoryCount > 0 || sc.RoleCount > 0 || sc.AssignmentCount > 0 {
 		return fmt.Errorf("%w: it labels %d categories, %d roles hold permissions in it, and %d roles of users and tokens are narrowed to it",
 			ErrScopeInUse, sc.CategoryCount, sc.RoleCount, sc.AssignmentCount)

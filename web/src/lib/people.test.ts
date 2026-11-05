@@ -26,6 +26,11 @@ describe('actorName', () => {
     expect(actorName({ name: 'Front desk', token: true, via: 'Claude Code' })).toBe('API token “Front desk”, via Claude Code');
     expect(actorName({})).toBe('Unnamed user');
   });
+
+  it('names incoming hooks as such, and the flow they ran', () => {
+    expect(actorName({ id: 'h1', name: 'Scale', incoming: true })).toBe('incoming hook “Scale”');
+    expect(actorName({ id: 'h1', name: 'Form', incoming: true, via: 'flow “Leave something”' }, 'h1')).toBe('incoming hook “Form”, via flow “Leave something”');
+  });
 });
 
 describe('choiceNames', () => {

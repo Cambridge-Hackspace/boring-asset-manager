@@ -8,6 +8,9 @@ schedule (see [Triggers](#triggers)). Each firing records an event for them to a
 Devices hear about hooks, and about other events, through live connections: a device dials in over
 a WebSocket and is sent the events meant for it as they happen.
 
+The other way round, [incoming hooks](#incoming-hooks) are URLs that something outside BAM! calls to
+trigger a hook, record a use or restock, set fields, or run a flow.
+
 ## Hooks
 
 ### Defining hooks
@@ -224,6 +227,223 @@ seconds on others.
 Each server lists its open connections in the database, so every server can count a token's. Those
 a stopped server left drop off the list after a minute.
 
+## Incoming hooks
+
+An incoming hook is a URL that lets something outside BAM! act on it without an API client: a
+button on a cabinet, a Home Assistant automation, a form on another site, or a scale reporting a
+weight. Where a [hook](#hooks) tells devices that something is happening, an incoming hook lets a
+device, or anything else that can send an HTTP request, make something happen.
+
+`settings.manage` makes them, on the **Incoming hooks** page or through `/api/v1/incoming`.
+
+### What an incoming hook has
+
+- **A URL**, `{base_url}/api/v1/incoming/{id}`. Its ID is 48 random hexadecimal characters, made by
+  BAM!.
+- **A way to authenticate** (`auth`), one of:
+  - `bearer`: a secret, sent as `Authorization: Bearer <secret>`;
+  - `hmac`: requests signed with a secret, in the same scheme BAM!'s webhooks sign theirs with (see
+    [below](#signed-requests)), for senders that sign.
+- **What it does** (`action`), one of:
+  - `hook`: trigger a hook on the asset, by its key (`hook`), as a person pressing its button does;
+  - `quantity`: record a use or restock of the asset's stock, from the request's `adjust` or `set`,
+    as `POST /api/v1/assets/{id}/quantity` takes them (see [Stock and lending](stock-and-lending.md));
+  - `fields`: set fields on the asset, from the request's JSON (see [Setting fields](#setting-fields));
+  - `flow`: run a flow (`flow_id`) to its end, as a form elsewhere would file something (see
+    [Running a flow](#running-a-flow)).
+- **How the asset is found** (`asset`), with `by` one of:
+  - `fixed`: always the same asset (`asset_id`);
+  - `id`: the asset ID at `path` in the request;
+  - `code`: a code at `path` in the request, of any generator type;
+  - `field`: the asset whose field keyed `field` holds exactly the value at `path` in the request;
+  - nothing, for a flow only: the flow finds or files the asset itself.
+- **Who it acts as** (`roles`): roles, each in every scope or narrowed to some, as an API token's are
+  (see [Access](access.md#narrowing-a-role-to-scopes)). It holds the public role's permissions too.
+- **A rate** (`rate_limit`): how many requests it takes a minute, 1 to 600; 60 unless given.
+- Whether it is on (`enabled`).
+
+A path is a key, or keys and list indexes separated by dots, optionally after `$.`: `code`,
+`data.code`, `$.items.0.id`. A key holding a dot cannot be reached.
+
+The asset is looked for among the active assets the hook may read, or act on as its action needs,
+in their scopes: `assets.hook`, `stock.record`, `assets.write` or `flows.run`. A value no such asset
+has is `404`; one several have is `409`.
+
+### Who it acts as
+
+The hook does what it does by asking the API's own endpoints, in process, as itself: with its roles,
+narrowed to their scopes. So it is held to every rule those endpoints keep, and to its permissions
+there. An asset outside the scopes its roles are narrowed to cannot be found, and a hook whose roles
+do not hold the permission its action needs is refused (`403`).
+
+Every change is recorded in the asset's history as made by the incoming hook: incoming hook
+“Scale”, or, for a flow, incoming hook “Form”, via flow “Leave something”. Its events record no
+person.
+
+An incoming hook can do no more than whoever saves it. Saving one is refused (`403`), naming what is
+missing, when its roles grant a permission the person saving it does not hold wherever the hook
+would hold it.
+
+### Secrets
+
+A hook's secret is made by BAM!, starts `bamin_`, and is shown once: in the answer that makes the
+hook, and in the one that gives it a new secret (`new_secret`). Changing how a hook authenticates
+gives it a new secret too. The old secret stops working at once.
+
+It is kept so that it cannot be read back:
+
+- a bearer secret as its SHA-256 hash;
+- a signing secret, which checking a signature needs, sealed with the configuration's
+  `[auth] secret_key`, as identity providers' secrets are (see [Configuration](configuration.md)).
+  Without a key, saving a hook with `hmac` is refused (`409`). Opened with another key, as after
+  restoring into another instance, its requests are refused (`503`) until it is given a new secret.
+
+A backup without secrets (see [Backups](backups.md#authentication)) holds incoming hooks without
+theirs. Restored, they refuse every request until each is given a new secret.
+
+### Signed requests
+
+A hook with `hmac` takes requests signed as BAM!'s webhooks sign theirs (see
+[Notifications](notifications.md#checking-the-signature)):
+
+| Header | Holds |
+|---|---|
+| `BAM-Timestamp` | When it was sent, in seconds since 1970 (UTC) |
+| `BAM-Delivery` | The sender's ID for this request, up to 255 characters, different for each |
+| `BAM-Signature` | `v1=` and the hex HMAC-SHA256, keyed by the secret, of the timestamp, a `.`, and the body |
+
+A request is refused (`401`) when a header is missing, its timestamp is more than five minutes from
+the server's time, or its signature does not match the body exactly as it arrived. A delivery ID
+the hook has taken already is refused (`409`), on any server sharing the database, so a request
+recorded on its way cannot be sent again. Delivery IDs are kept until their timestamps are too old
+to be taken anyway.
+
+### Limits
+
+- **Bodies** are at most 64 KB (`413`).
+- **Rate:** each hook takes its `rate_limit` of requests in any minute. Beyond that the answer is
+  `429` with `Retry-After`. Only requests that authenticate count, so someone who knows the URL but
+  not the secret cannot use up its sender's share. The count is kept by each server, in memory: so
+  several servers sharing a database each allow as much, and a restart forgets it. A hook that
+  triggers a hook is also held to the limit on [pressing hooks](#pressing-a-hook), on each asset.
+- **Replays:** signed requests more than five minutes old, and reused delivery IDs, are refused, as
+  above.
+
+### The request
+
+A request is a `POST`, with a JSON object for its body, or form fields
+(`application/x-www-form-urlencoded`), which read as an object of text. An empty body is an empty
+object, which is enough for a hook that triggers a hook on a fixed asset.
+
+#### Recording a use or restock
+
+`{"adjust": -1}` uses one, `{"adjust": 10}` restocks ten, and `{"set": 42}` counts 42. Each is a
+whole number, or text holding one. Give one of the two. The asset must be counted by quantity.
+
+#### Setting fields
+
+The hook's `fields` map each field's key to a path into the request: `{"weight": "data.grams"}`
+sets the field `weight` from `data.grams`. Without `fields`, the request's own `field_values`, an
+object of the fields to set by key, are set. Each value is text, a number, or true or false. The
+asset's other fields stay as they are, and each value is checked as editing the asset checks it.
+
+#### Running a flow
+
+The flow runs from its start to its end at once, as a person running it would, answering each step
+that asks something from the request:
+
+| Step | Answered with |
+|---|---|
+| Choose category | `category_id` |
+| Form | `answers`, by its questions' keys; without `answers`, the request's own keys |
+| Find | the asset the hook found |
+| Create, with a place to scan | `place_code` |
+
+A step that cannot be answered, or that fails, stops the flow there. The answer names the step, as
+in `Running the flow: Step "about": What is it? is required`. What the steps before it did stays
+done. The flow must be on, and the hook's roles must hold `flows.run` in the scopes of one of its
+categories. Photo questions are left unanswered.
+
+### Answers
+
+- **`202`**, with the events recorded: `{"event_id", "event_ids": [...], "asset_id"}`. `event_id` is
+  the first, such as the `asset.hook` event, and `event_ids` all of them, such as a use and the
+  `asset.running_low` it caused. `event_id` is `null` when nothing changed.
+- **An error**, `{"error"}`, naming what failed, never the secret.
+
+| Status | When |
+|---|---|
+| `400` | The body is not a JSON object or form fields, or lacks what the action needs, such as the asset's code |
+| `401` | The secret is missing or wrong; a signature is missing, too old or does not match; or the hook has no secret |
+| `403` | The hook is off, or its roles do not allow what it does on the asset |
+| `404` | No hook has the URL, or no asset it can reach was found |
+| `409` | A delivery ID taken already; several assets found; or the endpoint behind the action refused, such as for too little stock |
+| `413` | The body is over 64 KB |
+| `429` | Too many requests, with `Retry-After` |
+| `503` | A signing secret this server's key cannot open |
+
+A refusal by the endpoint behind the action comes with its status, after what was being done:
+`Recording the use or restock: …`.
+
+### Examples
+
+With `curl`, a counter using one of the asset whose code it read, with a bearer secret:
+
+```bash
+curl -X POST https://bam.example.org/api/v1/incoming/7c1f…e9 \
+  -H "Authorization: Bearer bamin_…" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "R-10K", "adjust": -1}'
+```
+
+Signed, with `openssl`:
+
+```bash
+body='{"code": "R-10K", "adjust": -1}'
+ts=$(date +%s)
+sig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
+curl -X POST https://bam.example.org/api/v1/incoming/7c1f…e9 \
+  -H "Content-Type: application/json" \
+  -H "BAM-Timestamp: $ts" \
+  -H "BAM-Delivery: $(uuidgen)" \
+  -H "BAM-Signature: v1=$sig" \
+  -d "$body"
+```
+
+With Home Assistant, a `rest_command` triggering **Identify** on a fixed asset, and another setting a
+field from a sensor:
+
+```yaml
+# configuration.yaml
+rest_command:
+  bam_identify_drawer:
+    url: "https://bam.example.org/api/v1/incoming/7c1f…e9"
+    method: post
+    headers:
+      Authorization: !secret bam_incoming_identify
+  bam_shelf_weight:
+    url: "https://bam.example.org/api/v1/incoming/a04d…31"
+    method: post
+    headers:
+      Authorization: !secret bam_incoming_weight
+    content_type: "application/json"
+    payload: '{"grams": {{ states("sensor.shelf_3_weight") | int }}}'
+```
+
+```yaml
+# secrets.yaml
+bam_incoming_identify: "Bearer bamin_…"
+bam_incoming_weight: "Bearer bamin_…"
+```
+
+The second hook sets fields, with `fields` `{"weight": "grams"}`, on a fixed asset. An automation
+calls `rest_command.bam_shelf_weight` when the sensor changes.
+
+### Several servers
+
+Delivery IDs are claimed in the database, so a signed request is taken once, on whichever server it
+reaches. The rate is kept by each server, as above.
+
 ## Formerly "actions"
 
 Earlier releases called hooks actions, in the interface, the API, events, the permission and flows
@@ -254,6 +474,12 @@ A package written before migration `049` is imported the same way. The tables ke
 | `GET /api/v1/assets/{id}/hooks/replies?event_id=` | `assets.hook` | Device answers to a triggered hook |
 | `GET /api/v1/events/live` | `events.read` (scopable) | Open a live connection |
 | `GET /api/v1/tokens/connections` | `users.manage` | Each token's open connections |
+| `GET /api/v1/incoming` | `settings.manage` | List incoming hooks, each with its `url` |
+| `GET /api/v1/incoming/{id}` | `settings.manage` | Read an incoming hook |
+| `POST /api/v1/incoming` | `settings.manage` | Make an incoming hook, with `name`, `enabled`, `auth`, `action`, `hook`, `flow_id`, `fields`, `asset`, `rate_limit` and `roles`; answers its `secret`, once |
+| `PUT /api/v1/incoming/{id}` | `settings.manage` | Change an incoming hook, given whole; `new_secret` replaces its secret, answered once |
+| `DELETE /api/v1/incoming/{id}` | `settings.manage` | Delete an incoming hook |
+| `POST /api/v1/incoming/{id}` | The hook's secret | Send a request to an incoming hook (see [above](#incoming-hooks)) |
 
 ## Permissions
 
@@ -272,5 +498,6 @@ Live connections also need `assets.track` in a scope to be sent its events. See
 | `026` | Hooks |
 | `027` | Live connections |
 | `049` | Renames actions to hooks in stored data (see [above](#formerly-actions)) |
+| `066` | Incoming hooks (`incoming_hooks`, their roles in `incoming_hook_roles` and `incoming_hook_role_scopes`), and the delivery IDs of signed requests taken (`incoming_deliveries`) |
 
 The hook tables keep their old names: `asset_actions`, `category_actions` and `action_replies`.

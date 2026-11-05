@@ -28,7 +28,7 @@ var (
 // given, for the events they cause. The view shares the connection pool.
 func (s *Store) As(userID string) *Store {
 	c := *s
-	c.actor, c.actorToken = userID, ""
+	c.actor, c.actorToken, c.actorIncoming = userID, "", ""
 	return &c
 }
 
@@ -335,6 +335,14 @@ func (s *Store) insertEventID(tx *sql.Tx, kind string, categoryID, assetID *stri
 			return "", fmt.Errorf("reading token for event: %w", err)
 		}
 		payload.Actor = &actor
+	} else if s.actorIncoming != "" {
+		// Nor is an incoming hook (docs/hooks.md#incoming-hooks).
+		actor := models.EventActor{ID: s.actorIncoming, Incoming: true}
+		err := s.TxQueryRow(tx, "SELECT name FROM incoming_hooks WHERE id = ?", s.actorIncoming).Scan(&actor.Name)
+		if err != nil && err != sql.ErrNoRows {
+			return "", fmt.Errorf("reading incoming hook for event: %w", err)
+		}
+		payload.Actor = &actor
 	}
 
 	if payload.Actor != nil {
@@ -350,6 +358,9 @@ func (s *Store) insertEventID(tx *sql.Tx, kind string, categoryID, assetID *stri
 		id, kind, categoryID, assetID, actorID, string(raw), now)
 	if err != nil {
 		return "", fmt.Errorf("recording event: %w", err)
+	}
+	if s.events != nil {
+		s.events.add(id)
 	}
 	if models.HistoryOnly(kind) {
 		// History only: no channel can subscribe to it.

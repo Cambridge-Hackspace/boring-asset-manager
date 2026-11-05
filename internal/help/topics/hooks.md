@@ -31,3 +31,9 @@ Each time, it says which hook, which asset, and every container it is in, outerm
 A device, such as a cabinet's controller, connects to BAM itself, so it needs no address of its own that BAM can reach. Give it an **API token** on the **API tokens** page, with a role holding **Receive events live** in the scopes its cabinet covers; it then opens a WebSocket to `/api/v1/events/live` with that token and is sent each hook triggered, and any other event it asks for, as it happens. It may answer each one, such as "Lit drawer A3" or "No such drawer", and the person who pressed the button sees the answer under it for a few seconds, or that nothing answered. The **API tokens** page shows which tokens are connected now.
 
 A device that loses its connection should connect again; what happened while it was away is not sent again.
+
+## Incoming hooks
+
+An **incoming hook** works the other way round: a web address that something outside BAM calls to make something happen, such as a button by a cabinet, a Home Assistant automation, a form on another site, or a scale. Whoever manages settings makes them on the **Incoming hooks** page. Each one does one thing on the asset it finds: triggers a hook, records a use or restock, sets fields, or runs a flow to its end. It finds the asset from a code, an ID or a field's value in what it is sent, or is always about the same asset.
+
+Each has a secret, shown once when it is made: the sender sends it with each request, or signs each request with it. **New secret** replaces it, and the old one stops working at once. Each acts as the roles it is given, narrowed to scopes as an API token's can be, so it can only reach the assets those allow. What it changes is kept in the asset's history under its name. It takes so many requests a minute, and no more.

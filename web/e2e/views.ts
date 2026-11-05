@@ -158,6 +158,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/printers', 'Printers'],
     ['/notifications', 'Notifications'],
     ['/relays', 'Relays'],
+    ['/incoming-hooks', 'Incoming hooks'],
     ['/users', 'Users'],
     ['/roles', 'Roles'],
     ['/tokens', 'API tokens'],

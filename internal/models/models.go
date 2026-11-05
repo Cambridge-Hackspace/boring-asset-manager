@@ -394,6 +394,9 @@ type EventActor struct {
 	Name  string `json:"name,omitempty"`
 	// Token is set when an API token acted; ID and Name are then the token's.
 	Token bool `json:"token,omitempty"`
+	// Incoming is set when an incoming hook acted (docs/hooks.md); ID and
+	// Name are then the hook's.
+	Incoming bool `json:"incoming,omitempty"`
 	// Via names the assistant the change was made through, by the name its
 	// MCP client gives, or "MCP" when it gives none (docs/mcp.md).
 	Via string `json:"via,omitempty"`
@@ -406,6 +409,76 @@ func (a *EventActor) Signature() string {
 		return a.Display()
 	}
 	return a.Display() + ", via " + a.Via
+}
+
+// Incoming hooks' ways to authenticate (docs/hooks.md#incoming-hooks).
+const (
+	IncomingBearer = "bearer"
+	IncomingHMAC   = "hmac"
+)
+
+// What incoming hooks do.
+const (
+	IncomingTriggerHook = "hook"
+	IncomingQuantity    = "quantity"
+	IncomingFields      = "fields"
+	IncomingFlow        = "flow"
+)
+
+// How incoming hooks find the asset they act on.
+const (
+	IncomingAssetFixed = "fixed"
+	IncomingAssetID    = "id"
+	IncomingAssetCode  = "code"
+	IncomingAssetField = "field"
+)
+
+// IncomingHook is a URL that lets something outside BAM! act on it
+// (docs/hooks.md#incoming-hooks). Its secret is shown once, when it is
+// made or replaced, and cannot be read back.
+type IncomingHook struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+	// Auth is IncomingBearer or IncomingHMAC.
+	Auth string `json:"auth"`
+	// HasSecret is false for a hook restored without its secret, which
+	// refuses every request until given a new one.
+	HasSecret bool `json:"has_secret"`
+	// Action is what it does, one of the Incoming… actions.
+	Action string `json:"action"`
+	IncomingSettings
+	// RateLimit is how many requests it takes a minute.
+	RateLimit int `json:"rate_limit"`
+	// Roles are what it acts as, each in every scope or narrowed to some.
+	Roles      []RoleAssignment `json:"roles"`
+	CreatedBy  string           `json:"created_by,omitempty"`
+	CreatedAt  time.Time        `json:"created_at"`
+	UpdatedAt  time.Time        `json:"updated_at"`
+	LastUsedAt *time.Time       `json:"last_used_at"`
+}
+
+// IncomingSettings are what an incoming hook's action takes, kept as JSON.
+type IncomingSettings struct {
+	// Hook is the key of the hook to trigger, for IncomingTriggerHook.
+	Hook string `json:"hook,omitempty"`
+	// FlowID is the flow to run, for IncomingFlow.
+	FlowID string `json:"flow_id,omitempty"`
+	// Fields maps fields' keys to where in the request their values are,
+	// for IncomingFields; empty, the request's field_values are set.
+	Fields map[string]string `json:"fields,omitempty"`
+	// Asset is how the asset is found.
+	Asset IncomingAsset `json:"asset"`
+}
+
+// IncomingAsset is how an incoming hook finds the asset it acts on: fixed,
+// or from the request, by an ID, a code or a field's value at a path in its
+// JSON. By is empty only for a flow that finds nothing first.
+type IncomingAsset struct {
+	By      string `json:"by"`
+	AssetID string `json:"asset_id,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Field   string `json:"field,omitempty"`
 }
 
 // APIToken is a token for scripts and dashboards. Its secret is shown once,

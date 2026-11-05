@@ -177,6 +177,9 @@ func (f *flowRunner) startValues() flows.Values {
 	name := "Unnamed user"
 	if u := CurrentUser(f.r.Context()); u != nil && u.Name != "" {
 		name = u.Name
+	} else if in := currentIncoming(f.r.Context()); in != nil {
+		// An incoming hook runs it as itself (docs/hooks.md#incoming-hooks).
+		name = in.hook.Name
 	}
 	fc, _ := f.s.flowCategories()
 	return flows.Start(f.flow.Name, name, time.Now(), &f.flow.Definition, fc.name)
@@ -191,6 +194,61 @@ func (f *flowRunner) firstFind() *flows.Step {
 		return &d.Steps[i]
 	}
 	return nil
+}
+
+// UnattendedAnswers answer a flow run from start to end without a person,
+// for an incoming hook (docs/hooks.md#incoming-hooks): the category to
+// choose, the forms' answers by their questions' keys, the asset a Find
+// finds, and the code of the place a Create puts what it files.
+type UnattendedAnswers struct {
+	CategoryID string
+	Answers    map[string]string
+	AssetID    string
+	PlaceCode  string
+}
+
+// runUnattended runs a flow to its end at once, answering each step that
+// asks something from in, and keeps no run. It acts as the request does,
+// held to its permissions and scopes as a person's run is. A step that
+// cannot be answered, or fails, stops it there, saying which.
+func (f *flowRunner) runUnattended(in UnattendedAnswers) (store.FlowRunState, error) {
+	if may, err := f.s.mayRun(f.r, f.flow); err != nil {
+		return store.FlowRunState{}, err
+	} else if !may || !f.flow.Enabled {
+		return store.FlowRunState{}, &flowError{Status: http.StatusNotFound, Message: "Flow not found, turned off, or not one it may run"}
+	}
+	d := &f.flow.Definition
+	st := store.FlowRunState{Values: f.startValues(), Done: []models.FlowDone{}}
+	st.Step = d.Next(0, st.Values)
+	st, err := f.advance(st)
+	// Each step answered moves the run on, so it ends within as many
+	// answers as it has steps.
+	for n := 0; err == nil && !st.Finished && n <= len(d.Steps); n++ {
+		step := &d.Steps[st.Step]
+		a := FlowAnswer{Step: step.ID}
+		switch step.Kind {
+		case flows.KindChooseCategory:
+			a.CategoryID = in.CategoryID
+		case flows.KindForm:
+			a.Answers = in.Answers
+		case flows.KindFind:
+			a.AssetID = in.AssetID
+		case flows.KindCreate:
+			a.PlaceCode = in.PlaceCode
+		}
+		if err = f.take(&st, step, a); err == nil {
+			st, err = f.advance(st)
+		}
+	}
+	var fe *flowError
+	if errors.As(err, &fe) && st.Step < len(d.Steps) {
+		// Which step stopped it: the one the run is left on.
+		err = &flowError{Status: fe.Status, Message: fmt.Sprintf("Step %q: %s", d.Steps[st.Step].ID, fe.Message)}
+	}
+	if err == nil && !st.Finished {
+		err = refuseStep("The flow did not finish")
+	}
+	return st, err
 }
 
 // FlowAnswer answers the step a run is on. Step names it, so an answer
@@ -528,7 +586,12 @@ func (f *flowRunner) create(st *store.FlowRunState, step *flows.Step, placeCode 
 		return err
 	}
 	setAsset(st.Values, &made.Asset)
-	if err := f.s.store.RecordFiling(f.flow.ID, made.Asset.Asset.ID, CurrentUser(f.r.Context()).ID); err != nil {
+	// Filed by the person running it; by no one when an incoming hook does.
+	by := ""
+	if u := CurrentUser(f.r.Context()); u != nil {
+		by = u.ID
+	}
+	if err := f.s.store.RecordFiling(f.flow.ID, made.Asset.Asset.ID, by); err != nil {
 		return err
 	}
 	// What Set fields gave it is filed; a photo it was given is for the

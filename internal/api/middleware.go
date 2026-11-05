@@ -40,9 +40,10 @@ func CurrentToken(ctx context.Context) *models.APIToken {
 	return nil
 }
 
-// authenticated reports whether a user or an API token made the request.
+// authenticated reports whether a user, an API token or an incoming hook
+// made the request.
 func authenticated(ctx context.Context) bool {
-	return CurrentUser(ctx) != nil || CurrentToken(ctx) != nil
+	return CurrentUser(ctx) != nil || CurrentToken(ctx) != nil || currentIncoming(ctx) != nil
 }
 
 // bearerToken returns the token of an "Authorization: Bearer" header.
@@ -159,6 +160,13 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 				return
 			}
 			signedOut := r.WithContext(context.WithValue(WithPermissions(r.Context(), map[string]bool{}), publicContextKey, public))
+			// An incoming hook's address authenticates by the hook's own
+			// secret (docs/hooks.md#incoming-hooks): its Authorization is
+			// no API token, and a browser's session counts for nothing.
+			if incomingDelivery(r) {
+				next.ServeHTTP(w, signedOut)
+				return
+			}
 			if secret, ok := bearerToken(r); ok {
 				t, perms, err := st.AuthenticateToken(secret)
 				if errors.Is(err, store.ErrTokenNotFound) {
@@ -324,6 +332,8 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 		} else if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/uploads/") {
 			// A part of an upload, which its handler holds to its size.
 			limit = MaxUploadSize
+		} else if incomingDelivery(r) {
+			limit = incomingBodyLimit
 		} else if r.Method == http.MethodPost {
 			switch r.URL.Path {
 			case "/api/v1/images":
