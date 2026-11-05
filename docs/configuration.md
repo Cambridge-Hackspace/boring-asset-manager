@@ -135,8 +135,8 @@ role = "admin"
 scopes = []
 ```
 
-`protocol` is `oidc` or `oauth2`, with that protocol's settings (docs/access.md#plain-oauth2). A
-GitHub sign-in, say:
+`protocol` is `oidc`, `oauth2` or `saml`, with that protocol's settings (docs/access.md#plain-oauth2,
+docs/access.md#saml-20). A GitHub sign-in, say:
 
 ```toml
 [[auth.providers]]
@@ -145,6 +145,18 @@ name = "GitHub"
 protocol = "oauth2"
 settings = { preset = "github", client_id = "Iv1.…" }
 secrets = { client_secret = "…" }
+```
+
+A SAML one, with BAM!'s key in the file, as a PEM RSA private key. Without it, its requests go
+unsigned and it cannot open encrypted assertions:
+
+```toml
+[[auth.providers]]
+key = "corp"
+name = "Corp"
+protocol = "saml"
+settings = { metadata_url = "https://adfs.corp.example/FederationMetadata/2007-06/FederationMetadata.xml" }
+secrets = { sp_key = "-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----" }
 ```
 
 `BAM_AUTH_PROVIDERS` gives the same as a JSON list, replacing the file's, such as

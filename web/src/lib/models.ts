@@ -433,12 +433,16 @@ export interface ProtocolField {
   help?: string;
   required: boolean;
   secret: boolean;
+  /** Long enough to want several lines, such as pasted XML. */
+  multiline?: boolean;
 }
 
 export interface Protocol {
   name: string;
   label: string;
   fields: ProtocolField[];
+  /** It makes keys of its own, which can be made again. */
+  renewable?: boolean;
 }
 
 /** An identity provider people sign in through (docs/access.md#signing-in-with-an-identity-provider). */
@@ -451,6 +455,8 @@ export interface Provider {
   secrets_set: Record<string, boolean>;
   secrets_unreadable?: boolean;
   callback_url: string;
+  /** Where BAM!'s own metadata for it is, for SAML, for the identity provider to read. */
+  sp_metadata_url?: string;
   button_label: string;
   icon: string;
   enabled: boolean;

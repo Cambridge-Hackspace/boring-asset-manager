@@ -131,6 +131,47 @@ describe('SignInPage', () => {
     expect((sent.find((r) => r.method === 'PUT')!.body as { secrets: object }).secrets).toEqual({});
   });
 
+  it("shows a SAML provider's metadata, takes pasted XML on several lines, and makes a new key when asked", async () => {
+    const saml = {
+      name: 'saml',
+      label: 'SAML 2.0',
+      renewable: true,
+      fields: [
+        { name: 'metadata', label: 'Metadata XML', required: false, secret: false, multiline: true },
+        { name: 'sp_key', label: 'Service provider key', required: false, secret: true },
+      ],
+    };
+    const corp = provider({
+      key: 'corp',
+      name: 'Corp',
+      protocol: 'saml',
+      settings: { metadata: '<EntityDescriptor/>' },
+      secrets_set: { sp_key: true },
+      callback_url: 'https://bam.example/api/v1/auth/providers/corp/callback',
+      sp_metadata_url: 'https://bam.example/auth/saml/corp/metadata',
+    });
+    const { sent } = fakeApi({
+      'GET /auth/providers': () => ({ providers: [corp], protocols: [...protocols, saml], roles, scopes: [], local_passwords: true, secret_key: true }),
+      'PUT /auth/providers/p1': () => ({ provider: corp }),
+    });
+    render(SignInPage, { params: {} });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Edit Corp' }));
+    const form = screen.getByRole('form', { name: 'Edit Corp' });
+    expect(within(form).getByText('https://bam.example/auth/saml/corp/metadata')).toBeTruthy();
+    expect(within(form).getByLabelText('Metadata XML (optional)').tagName).toBe('TEXTAREA');
+
+    await fireEvent.click(within(form).getByRole('button', { name: 'Save provider' }));
+    await screen.findByText('Provider saved.');
+    expect((sent.find((r) => r.method === 'PUT')!.body as { renew_keys: boolean }).renew_keys).toBe(false);
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Edit Corp' }));
+    const again = screen.getByRole('form', { name: 'Edit Corp' });
+    await fireEvent.click(within(again).getByRole('checkbox', { name: /Make a new key and certificate/ }));
+    await fireEvent.click(within(again).getByRole('button', { name: 'Save provider' }));
+    await screen.findByText('Provider saved.');
+    expect((sent.filter((r) => r.method === 'PUT').at(-1)!.body as { renew_keys: boolean }).renew_keys).toBe(true);
+  });
+
   it('turns passwords off, and shows a provider from the configuration read-only', async () => {
     const { sent } = fakeApi({
       'GET /auth/providers': () => ({ providers: [provider({ from_config: true })], protocols, roles, scopes: [], local_passwords: true, secret_key: true }),

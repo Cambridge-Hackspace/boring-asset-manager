@@ -40,6 +40,7 @@ type providerIn struct {
 	MFAFallback    bool              `json:"mfa_fallback,omitempty" jsonschema:"ask for BAM!'s own second factor when the provider's sign-in does not count, rather than refusing someone whose roles require one"`
 	MFAAlwaysLocal bool              `json:"mfa_always_local,omitempty" jsonschema:"always ask for BAM!'s own second factor, whatever the provider says"`
 	Rules          []providerRuleIn  `json:"rules,omitempty" jsonschema:"roles given from claims, re-applied at every sign-in; the whole list"`
+	RenewKeys      bool              `json:"renew_keys,omitempty" jsonschema:"make again the keys a protocol makes itself, such as a SAML provider's; its identity provider must then read BAM!'s metadata again"`
 }
 
 func providerTools() []tool {
@@ -65,7 +66,8 @@ func providerTools() []tool {
 					"button_label": in.ButtonLabel, "icon": in.Icon, "enabled": in.Enabled, "position": in.Position, "provision": in.Provision,
 					"default_role_ids": in.DefaultRoleIDs, "allowed_domains": in.AllowedDomains, "allowed_groups": in.AllowedGroups,
 					"link_by_email": in.LinkByEmail, "trust_email": in.TrustEmail, "rules": rules,
-					"mfa_amr": in.MFAAMR, "mfa_acr": in.MFAACR, "mfa_fallback": in.MFAFallback, "mfa_always_local": in.MFAAlwaysLocal}
+					"mfa_amr": in.MFAAMR, "mfa_acr": in.MFAACR, "mfa_fallback": in.MFAFallback, "mfa_always_local": in.MFAAlwaysLocal,
+					"renew_keys": in.RenewKeys}
 				out := map[string]any{}
 				if in.ID == "" {
 					if err := e.call(ctx, http.MethodPost, "/api/v1/auth/providers", body, &out); err != nil {
