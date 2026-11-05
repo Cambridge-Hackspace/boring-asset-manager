@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DriverInfo, LabelStockSize } from './models';
-import { describeChanges, describeStock, driverName, optionLabel, stockFor } from './stock';
+import { describeChanges, describeStock, driverName, optionLabel, optionValueLabel, stockFor } from './stock';
 
 const size = (name: string, width_mm: number, length_mm = 0, gap_mm = 0): LabelStockSize => ({ id: name, name, width_mm, length_mm, gap_mm });
 
@@ -62,5 +62,8 @@ describe('printer words', () => {
     expect(optionLabel('cut')).toBe('Cut after each label');
     expect(optionLabel('density')).toBe('Darkness');
     expect(optionLabel('print_speed')).toBe('Print speed');
+    expect(driverName('zpl')).toBe('Zebra ZPL');
+    expect(optionValueLabel('tear_off')).toBe('Tear it off');
+    expect(optionValueLabel('right_side')).toBe('right side');
   });
 });

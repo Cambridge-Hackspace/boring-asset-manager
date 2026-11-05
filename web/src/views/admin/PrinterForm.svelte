@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, LabelStock, Printer, PrinterChanges, PrinterConnection } from '../../lib/models';
-  import { describeChanges, describeStock, driverName, optionLabel, stockFor } from '../../lib/stock';
+  import { describeChanges, describeStock, driverName, optionLabel, optionValueLabel, stockFor } from '../../lib/stock';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Creates a printer, or edits one when printer is given. The form is
@@ -189,8 +189,19 @@
           {:else}
             <label class="text-xs" for={oid}>{optionLabel(opt.name)}</label>
             {#if opt.values?.length}
-              <select id={oid} class="input" aria-describedby="{oid}-help" value={String(options[opt.name] ?? opt.default ?? '')} onchange={(e) => (options[opt.name] = e.currentTarget.value)}>
-                {#each opt.values as v (v)}<option value={v}>{v}{v === opt.default ? ' (default)' : ''}</option>{/each}
+              <select
+                id={oid}
+                class="input"
+                aria-describedby="{oid}-help"
+                value={String(options[opt.name] ?? opt.default ?? '')}
+                onchange={(e) => {
+                  // Blank, for an option with no default, keeps the printer's own setting.
+                  if (e.currentTarget.value === '') delete options[opt.name];
+                  else options[opt.name] = e.currentTarget.value;
+                }}
+              >
+                {#if opt.default === null || opt.default === undefined}<option value="">Printer default</option>{/if}
+                {#each opt.values as v (v)}<option value={v}>{optionValueLabel(v)}{v === opt.default ? ' (default)' : ''}</option>{/each}
               </select>
             {:else}
               <input

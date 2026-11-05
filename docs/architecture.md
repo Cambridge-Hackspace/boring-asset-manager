@@ -43,8 +43,9 @@ one layout engine, not two (see [Template editor](template-editor.md)).
 
 ### Direct printing
 
-Each printer gets its own command stream (Brother QL, DYMO LabelWriter, TSPL) from a pluggable
-print driver. The stream is sent in one of these ways, with no desktop driver or print dialog:
+Each printer gets its own command stream (Brother QL, DYMO LabelWriter, TSPL, ZPL, EPL2) from a
+pluggable print driver. The stream is sent in one of these ways, with no desktop driver or print
+dialog:
 
 - over raw TCP (port 9100)
 - to a USB device on the server

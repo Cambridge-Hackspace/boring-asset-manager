@@ -18,6 +18,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
 )
 
 func TestValidate(t *testing.T) {
@@ -67,30 +68,66 @@ func TestValidate(t *testing.T) {
 	bad("TSPL media", "P", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1038", "30252", ""))
 	bad("TSPL density", "P", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1038", "4x6", `{"density":16}`))
 	bad("TSPL unknown option", "P", DriverTSPL, "rollo.lan", 9100, brother("Rollo X1038", "4x6", `{"speed":4}`))
+	ok("Zebra", DriverZPL, "zebra.lan", 9100, brother("Zebra GK420d", "4x6", ""))
+	ok("Zebra options", DriverZPL, "zebra.lan", 9100, brother("Zebra ZT411 300 DPI", "4x2",
+		`{"media_type":"transfer","darkness":20,"speed":6,"print_mode":"cutter","calibrate":true,"compress":false}`))
+	bad("ZPL model", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra LP 2844", "4x6", ""))
+	bad("ZPL media", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra GK420d", "30252", ""))
+	bad("4-inch roll on a 2-inch head", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra ZD410", "4x6", ""))
+	bad("ZPL darkness", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra GK420d", "4x6", `{"darkness":31}`))
+	bad("ZPL print mode", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra GK420d", "4x6", `{"print_mode":"rewind"}`))
+	bad("ZPL media type", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra GK420d", "4x6", `{"media_type":"ribbon"}`))
+	bad("ZPL speed", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra GK420d", "4x6", `{"speed":15}`))
+	bad("ZPL unknown option", "P", DriverZPL, "zebra.lan", 9100, brother("Zebra GK420d", "4x6", `{"density":4}`))
+	ok("EPL2", DriverEPL2, "lp.lan", 9100, brother("Zebra LP 2844", "4x6", `{"density":8}`))
+	bad("EPL2 model", "P", DriverEPL2, "lp.lan", 9100, brother("Zebra GK420d", "4x6", ""))
+	bad("EPL2 density", "P", DriverEPL2, "lp.lan", 9100, brother("Zebra LP 2844", "4x6", `{"density":16}`))
+	bad("EPL2 unknown option", "P", DriverEPL2, "lp.lan", 9100, brother("Zebra LP 2844", "4x6", `{"darkness":4}`))
 }
 
 func TestDriversDescribeEveryRoll(t *testing.T) {
 	d := Drivers()
-	if len(d) != 3 || d[0].Driver != DriverBrotherQL || len(d[0].Media) != len(brotherql.MediaIDs()) || len(d[0].Options) != 1 || d[0].CustomStock != nil {
+	by := map[string]DriverInfo{}
+	for _, info := range d {
+		by[info.Driver] = info
+	}
+	if len(d) != 5 || len(by) != 5 {
 		t.Fatalf("Drivers() = %+v", d)
 	}
-	if d[1].Driver != DriverDymoLabelWriter || len(d[1].Media) != len(dymolw.MediaIDs()) || len(d[1].Options) != 2 || len(d[1].Options[0].Values) != 4 {
-		t.Fatalf("Dymo driver info = %+v", d[1])
+	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil {
+		t.Fatalf("Brother driver info = %+v", b)
 	}
-	if d[2].Driver != DriverTSPL || len(d[2].Media) != len(tspl.MediaIDs()) || len(d[2].Options) != 2 {
-		t.Fatalf("TSPL driver info = %+v", d[2])
+	dymo := by[DriverDymoLabelWriter]
+	if len(dymo.Media) != len(dymolw.MediaIDs()) || len(dymo.Options) != 2 || len(dymo.Options[0].Values) != 4 {
+		t.Fatalf("Dymo driver info = %+v", dymo)
+	}
+	if ts := by[DriverTSPL]; len(ts.Media) != len(tspl.MediaIDs()) || len(ts.Options) != 2 {
+		t.Fatalf("TSPL driver info = %+v", ts)
+	}
+	zpl, epl2 := by[DriverZPL], by[DriverEPL2]
+	if len(zpl.Media) != len(zebra.MediaIDs()) || len(zpl.Options) != 6 || len(zpl.Models) != len(zebra.Models(zebra.ZPL)) || zpl.ModelDPI["Zebra GX430t"] != 300 {
+		t.Fatalf("ZPL driver info = %+v", zpl)
+	}
+	if len(epl2.Options) != 1 || len(epl2.Models) != len(zebra.Models(zebra.EPL2)) || epl2.ModelDPI["Zebra LP 2824"] != 203 {
+		t.Fatalf("EPL2 driver info = %+v", epl2)
 	}
 	// The drivers that take custom stock say how wide, for every model.
-	for _, info := range d[1:] {
+	for _, info := range d {
+		if info.Driver == DriverBrotherQL {
+			continue
+		}
 		c := info.CustomStock
 		if c == nil || len(c.MaxWidthMM) != len(info.Models) || c.MinLengthMM <= 0 || c.MaxLengthMM <= c.MinLengthMM {
 			t.Errorf("%s custom stock = %+v", info.Driver, c)
 		}
 	}
-	if w := d[2].CustomStock.MaxWidthMM["Rollo X1038"]; w < 105 || w > 106.5 {
+	if w := by[DriverTSPL].CustomStock.MaxWidthMM["Rollo X1038"]; w < 105 || w > 106.5 {
 		t.Errorf("Rollo takes custom stock up to %g mm", w)
 	}
-	if d[1].CustomStock.Note == "" {
+	if w := zpl.CustomStock.MaxWidthMM["Zebra ZD410"]; w < 57 || w > 58.1 {
+		t.Errorf("the ZD410 takes custom stock up to %g mm", w)
+	}
+	if dymo.CustomStock.Note == "" {
 		t.Error("the DYMO driver says nothing of the 550 series and genuine labels")
 	}
 }
@@ -140,6 +177,10 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 		{"DYMO wide roll on a narrow head", DriverDymoLabelWriter, "LabelWriter 450", stock(80, 30, 0), false},
 		{"DYMO wide roll on the 4XL", DriverDymoLabelWriter, "LabelWriter 4XL", stock(100, 150, 0), true},
 		{"DYMO wider than the 4XL", DriverDymoLabelWriter, "LabelWriter 4XL", stock(120, 150, 0), false},
+		{"ZPL die-cut", DriverZPL, "Zebra ZD421 300 DPI", stock(60, 40, 2.5), true},
+		{"ZPL continuous", DriverZPL, "Zebra ZT411 600 DPI", stock(80, 0, 0), true},
+		{"ZPL wider than the head", DriverZPL, "Zebra ZD410", stock(80, 40, 3), false},
+		{"EPL2 die-cut", DriverEPL2, "Zebra TLP 2844", stock(60, 40, 2.5), true},
 	}
 	for _, c := range cases {
 		d, _ := Lookup(c.driver)
@@ -541,6 +582,49 @@ func TestTSPLPlan(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(job.Setup, "\n"), "DENSITY 11") {
 		t.Errorf("setup %q lacks the density", job.Setup)
+	}
+}
+
+func TestZebraPlans(t *testing.T) {
+	d, err := Lookup(DriverZPL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := Settings{Model: "Zebra GK420d", Media: "4x6", Options: json.RawMessage(`{"darkness":22,"print_mode":"peel_off"}`)}
+	plan, err := planWith(d, settings, LabelSpec{WidthMM: 152.4, HeightMM: 101.6, DPI: 203})
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := image.NewGray(image.Rect(0, 0, 1219, 812)) // landscape 6 × 4 in, all black
+	stream, err := plan.Encode([]*image.Gray{label, label, label})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := zebra.DecodeZPL(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Turned to run along the roll, as three copies of one label, as long
+	// as the 6 in label: 1,218 dots.
+	if len(job.Labels) != 1 || job.Labels[0].Copies != 3 || job.Labels[0].Length != 1218 || job.Labels[0].Width != 812 {
+		t.Errorf("decoded %+v", job.Labels)
+	}
+	if strings.Join(job.Setup, " ") != "~SD22" || !strings.Contains(strings.Join(job.Labels[0].Commands, " "), "^MMP") {
+		t.Errorf("setup %q, commands %q", job.Setup, job.Labels[0].Commands)
+	}
+
+	d, _ = Lookup(DriverEPL2)
+	plan, err = planWith(d, Settings{Model: "Zebra LP 2824", Media: "2x1"}, LabelSpec{WidthMM: 50.8, HeightMM: 25.4, DPI: 203})
+	if err != nil {
+		t.Fatal(err)
+	}
+	small := image.NewGray(image.Rect(0, 0, 406, 203))
+	stream, err = plan.Encode([]*image.Gray{small})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if epl, err := zebra.DecodeEPL2(stream); err != nil || len(epl.Labels) != 1 || epl.Labels[0].Width != 406 {
+		t.Errorf("EPL2 job %+v: %v", epl, err)
 	}
 }
 
