@@ -42,7 +42,22 @@ func TestValidate(t *testing.T) {
 	ok("IPv6", DriverBrotherQL, "fd00::40", 9100, brother("QL-810W", "dk-22210", "null"))
 	bad("blank name", " ", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-11201", ""))
 	bad("driver", "P", "zebra", "10.0.0.1", 9100, brother("QL-810W", "dk-11201", ""))
-	bad("model", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-700", "dk-11201", ""))
+	bad("model", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("TD-2020", "dk-11201", ""))
+	ok("QL-700", DriverBrotherQL, "ql.lan", 9100, brother("QL-700", "dk-11201", ""))
+	ok("QL-500 without a cutter", DriverBrotherQL, "ql.lan", 9100, brother("QL-500", "dk-22205", ""))
+	ok("QL-500 told not to cut", DriverBrotherQL, "ql.lan", 9100, brother("QL-500", "dk-22205", `{"cut":false}`))
+	ok("4-inch roll on the QL-1100", DriverBrotherQL, "ql.lan", 9100, brother("QL-1100", "dk-11241", ""))
+	ok("4-inch roll on the QL-1050", DriverBrotherQL, "ql.lan", 9100, brother("QL-1050", "dk-22243", ""))
+	bad("QL-500 told to cut", "P", DriverBrotherQL, "ql.lan", 9100, brother("QL-500", "dk-22205", `{"cut":true}`))
+	bad("4-inch roll on a 62 mm model", "P", DriverBrotherQL, "ql.lan", 9100, brother("QL-810W", "dk-11241", ""))
+	bad("103 mm roll on the QL-1115NWB", "P", DriverBrotherQL, "ql.lan", 9100, brother("QL-1115NWB", "dk-22246", ""))
+	bad("roll the QL-500 does not list", "P", DriverBrotherQL, "ql.lan", 9100, brother("QL-500", "brother-29x42", ""))
+	ok("TD-2", DriverBrotherTD, "td.lan", 9100, brother("TD-2130N", "rd-51x26", ""))
+	ok("TD-4 with its cutter", DriverBrotherTD, "td.lan", 9100, brother("TD-4420DN", "rd-102x152", `{"cut":true}`))
+	bad("TD model", "P", DriverBrotherTD, "td.lan", 9100, brother("QL-810W", "rd-58", ""))
+	bad("DK roll on a TD", "P", DriverBrotherTD, "td.lan", 9100, brother("TD-4420DN", "dk-22205", ""))
+	bad("4-inch roll on a TD-2", "P", DriverBrotherTD, "td.lan", 9100, brother("TD-2020", "rd-102", ""))
+	bad("TD-2 told to cut", "P", DriverBrotherTD, "td.lan", 9100, brother("TD-2020", "rd-58", `{"cut":true}`))
 	bad("media", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-9999", ""))
 	bad("unknown option", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-11201", `{"cutt":true}`))
 	bad("option type", "P", DriverBrotherQL, "10.0.0.1", 9100, brother("QL-810W", "dk-11201", `{"cut":"yes"}`))
@@ -91,11 +106,36 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	for _, info := range d {
 		by[info.Driver] = info
 	}
-	if len(d) != 5 || len(by) != 5 {
+	if len(d) != 6 || len(by) != 6 {
 		t.Fatalf("Drivers() = %+v", d)
 	}
-	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil {
+	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
+		len(b.Models) != len(brotherql.Models(brotherql.SeriesQL)) || b.ModelDPI["QL-500"] != 300 || b.ModelDPI["QL-1100"] != 300 {
 		t.Fatalf("Brother driver info = %+v", b)
+	}
+	// Each roll says which models take it, when not all do.
+	for _, m := range by[DriverBrotherQL].Media {
+		switch m.ID {
+		case "dk-22205":
+			if m.Models != nil {
+				t.Errorf("62 mm tape is for %v, not every model", m.Models)
+			}
+		case "dk-11241":
+			if strings.Join(m.Models, ",") != "QL-1050,QL-1060N,QL-1100,QL-1110NWB,QL-1115NWB" {
+				t.Errorf("DK-11241 is for %v", m.Models)
+			}
+		}
+	}
+	td := by[DriverBrotherTD]
+	if len(td.Media) != len(brotherql.SeriesMediaIDs(brotherql.SeriesTD)) || len(td.Options) != 1 || td.CustomStock == nil ||
+		td.ModelDPI["TD-2020"] != 203 || td.ModelDPI["TD-4550DNWB"] != 300 || td.CustomStock.Note == "" {
+		t.Fatalf("Brother TD driver info = %+v", td)
+	}
+	if w := td.CustomStock.MaxWidthMM; w["TD-2020"] != 63 || w["TD-4420DN"] != 118 {
+		t.Errorf("TD custom stock widths = %v", w)
+	}
+	if c := td.CustomStock; c.MinLengthMM != 12.1 || c.MaxLengthMM < 2999 || c.MaxLengthMM > 3000 {
+		t.Errorf("TD custom stock lengths %g-%g mm", c.MinLengthMM, c.MaxLengthMM)
 	}
 	dymo := by[DriverDymoLabelWriter]
 	if len(dymo.Media) != len(dymolw.MediaIDs()) || len(dymo.Options) != 2 || len(dymo.Options[0].Values) != 4 {
@@ -169,6 +209,12 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 		ok                 bool
 	}{
 		{"Brother takes only its rolls", DriverBrotherQL, "QL-810W", stock(62, 0, 0), false},
+		{"Brother's 4-inch QL takes only its rolls too", DriverBrotherQL, "QL-1100", stock(102, 0, 0), false},
+		{"TD-2 die-cut", DriverBrotherTD, "TD-2020", stock(50, 30, 3), true},
+		{"TD-2 wider than it takes", DriverBrotherTD, "TD-2130N", stock(76, 0, 0), false},
+		{"TD-4 continuous", DriverBrotherTD, "TD-4410D", stock(100, 0, 0), true},
+		{"TD-4 at its widest", DriverBrotherTD, "TD-4550DNWB", stock(118, 80, 3), true},
+		{"TD-4 wider than it takes", DriverBrotherTD, "TD-4550DNWB", stock(120, 80, 3), false},
 		{"TSPL die-cut", DriverTSPL, "Rollo X1038", stock(60, 40, 2.5), true},
 		{"TSPL continuous", DriverTSPL, "Rollo X1038", stock(80, 0, 0), true},
 		{"TSPL wider than the head", DriverTSPL, "Rollo X1038", stock(120, 40, 3), false},
@@ -247,7 +293,7 @@ func blankLabel(wMM, hMM float64, dpi int) *image.Gray {
 }
 
 type namedDriver struct {
-	brotherQL
+	brotherDriver
 	name string
 }
 
@@ -290,6 +336,84 @@ func TestBrotherPlan(t *testing.T) {
 		}
 		if len(pages) != 2 || len(pages[0].Lines) != 991 || pages[0].AutoCut != cut {
 			t.Errorf("cut=%v: decoded %d pages, %d lines, auto-cut %v", cut, len(pages), len(pages[0].Lines), pages[0].AutoCut)
+		}
+	}
+}
+
+// TestBrotherTDPlan checks that a TD printer prints custom stock at its
+// size: placed on the head by the TD references' offsets, and told the
+// roll's type and size without asking the printer to check them.
+func TestBrotherTDPlan(t *testing.T) {
+	d, err := Lookup(DriverBrotherTD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := Settings{Model: "TD-4420DN", Media: "x", Stock: &Stock{ID: "x", Name: "Bin labels", WidthMM: 60, LengthMM: 40, GapMM: 3}}
+	plan, err := planWith(d, s, LabelSpec{WidthMM: 60, HeightMM: 40, DPI: 203})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := plan.Encode([]*image.Gray{blankLabel(60, 40, 203)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, _ := brotherql.LookupModel("TD-4420DN")
+	pages, err := model.DecodeJob(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 40 mm is 320 lines, less 24 at each end.
+	p := pages[0]
+	if len(pages) != 1 || p.MediaType != 0x0B || p.WidthMM != 60 || p.LengthMM != 40 || p.InfoFlags != 0x80 || len(p.Lines) != 272 || p.AutoCut {
+		t.Errorf("decoded %d pages, the first %+v with %d lines", len(pages), p, len(p.Lines))
+	}
+	if len(p.Lines[0]) != 104 {
+		t.Errorf("%d-byte lines on the 832-pin head", len(p.Lines[0]))
+	}
+
+	// Brother's own RD rolls are built in, for the series that takes them.
+	s = Settings{Model: "TD-2020", Media: "rd-58"}
+	plan, err = planWith(d, s, LabelSpec{WidthMM: 58, HeightMM: 30, DPI: 203})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stream, err = plan.Encode([]*image.Gray{blankLabel(58, 30, 203)}); err != nil {
+		t.Fatal(err)
+	}
+	model, _ = brotherql.LookupModel("TD-2020")
+	if pages, err = model.DecodeJob(stream); err != nil || len(pages[0].Lines[0]) != 56 || pages[0].FeedDots != 24 || pages[0].MediaType != 0x0A {
+		t.Errorf("TD-2020 stream: %v", err)
+	}
+}
+
+// TestQLModelsPlan checks a model of each QL family through the registry.
+func TestQLModelsPlan(t *testing.T) {
+	d, _ := Lookup(DriverBrotherQL)
+	cases := []struct {
+		model, media string
+		w, h         float64
+		bytes        int
+		cut          bool
+	}{
+		{"QL-500", "dk-11201", 29, 90, 90, false},
+		{"QL-700", "dk-11201", 29, 90, 90, true},
+		{"QL-1060N", "dk-11240", 102, 51, 162, true},
+		{"QL-1115NWB", "dk-22243", 102, 60, 162, true},
+	}
+	for _, c := range cases {
+		s := Settings{Model: c.model, Media: c.media}
+		plan, err := planWith(d, s, LabelSpec{WidthMM: c.w, HeightMM: c.h, DPI: 300})
+		if err != nil {
+			t.Fatalf("%s: %v", c.model, err)
+		}
+		stream, err := plan.Encode([]*image.Gray{blankLabel(c.w, c.h, 300)})
+		if err != nil {
+			t.Fatalf("%s: %v", c.model, err)
+		}
+		model, _ := brotherql.LookupModel(c.model)
+		pages, err := model.DecodeJob(stream)
+		if err != nil || len(pages[0].Lines[0]) != c.bytes || pages[0].AutoCut != c.cut {
+			t.Errorf("%s: %v", c.model, err)
 		}
 	}
 }

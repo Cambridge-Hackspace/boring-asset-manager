@@ -1,7 +1,7 @@
 // Custom label stock (docs/printing.md): rolls known by their size alone, which
 // printers whose drivers take any size may have loaded.
 
-import type { DriverInfo, LabelStockSize, PrinterChanges } from './models';
+import type { DriverInfo, DriverMedia, LabelStockSize, PrinterChanges } from './models';
 
 /** A stock's size in words: "60 × 40 mm, 3 mm gap" or "50 mm continuous". */
 export function describeStock(s: LabelStockSize): string {
@@ -20,6 +20,11 @@ export function stockFor<T extends LabelStockSize>(driver: DriverInfo | undefine
   return stock.filter((s) => s.width_mm <= widest);
 }
 
+/** The built-in rolls a model of a driver takes: those that name it, or name no models. */
+export function mediaFor(driver: DriverInfo | undefined, model: string): DriverMedia[] {
+  return (driver?.media ?? []).filter((m) => !m.models || m.models.includes(model));
+}
+
 /** What changing a printer would affect, a sentence each; none when nothing. */
 export function describeChanges(c: PrinterChanges): string[] {
   const out = c.stranded.map((s) => {
@@ -36,6 +41,7 @@ export function describeChanges(c: PrinterChanges): string[] {
 
 const driverNames: Record<string, string> = {
   brother_ql: 'Brother QL',
+  brother_td: 'Brother TD',
   dymo_labelwriter: 'DYMO LabelWriter',
   tspl: 'TSPL',
   zpl: 'Zebra ZPL',

@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, LabelStock, Printer, PrinterChanges, PrinterConnection } from '../../lib/models';
-  import { describeChanges, describeStock, driverName, optionLabel, optionValueLabel, stockFor } from '../../lib/stock';
+  import { describeChanges, describeStock, driverName, mediaFor, optionLabel, optionValueLabel, stockFor } from '../../lib/stock';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Creates a printer, or edits one when printer is given. The form is
@@ -53,6 +53,8 @@
     driver = key.slice(0, at);
     model = key.slice(at + 1);
   }
+  // The built-in rolls this model takes.
+  const builtIn = $derived(mediaFor(info, model));
   // Custom stock this model takes, if its driver takes any.
   const customStock = $derived(stockFor(info, model, stock));
   const customChosen = $derived(customStock.some((s) => s.id === media));
@@ -61,7 +63,7 @@
   $effect(() => {
     if (!info) return;
     if (!info.models.includes(model)) model = info.models[0] ?? '';
-    if (!info.media.some((m) => m.id === media) && !customStock.some((s) => s.id === media)) media = info.media[0]?.id ?? '';
+    if (!builtIn.some((m) => m.id === media) && !customStock.some((s) => s.id === media)) media = builtIn[0]?.id ?? '';
   });
 
   function optionPayload(): Record<string, unknown> | null {
@@ -130,13 +132,13 @@
       <select id="{pid}-media" class="input" aria-describedby="{pid}-media-help" bind:value={media}>
         {#if customStock.length}
           <optgroup label="Built-in rolls">
-            {#each info?.media ?? [] as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+            {#each builtIn as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
           </optgroup>
           <optgroup label="Custom stock">
             {#each customStock as s (s.id)}<option value={s.id}>{s.name} ({describeStock(s)})</option>{/each}
           </optgroup>
         {:else}
-          {#each info?.media ?? [] as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+          {#each builtIn as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
         {/if}
       </select>
       <p id="{pid}-media-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">

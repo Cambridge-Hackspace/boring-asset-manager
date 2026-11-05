@@ -43,7 +43,7 @@ one layout engine, not two (see [Template editor](template-editor.md)).
 
 ### Direct printing
 
-Each printer gets its own command stream (Brother QL, DYMO LabelWriter, TSPL, ZPL, EPL2) from a
+Each printer gets its own command stream (Brother QL and TD, DYMO LabelWriter, TSPL, ZPL, EPL2) from a
 pluggable print driver. The stream is sent in one of these ways, with no desktop driver or print
 dialog:
 

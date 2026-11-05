@@ -330,6 +330,8 @@ export interface DriverMedia {
   die_cut: boolean;
   /** Set for custom stock. */
   custom?: boolean;
+  /** The models that take the roll, when not all of the driver's do. */
+  models?: string[];
 }
 
 /** What changing a printer would leave without a printer, said before it is saved. */
