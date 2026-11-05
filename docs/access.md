@@ -171,8 +171,8 @@ Each provider has:
 
 - **A key and a name.** The key is used in its addresses, such as the one the provider sends
   people back to, `{base_url}/api/v1/auth/providers/{key}/callback`.
-- **A protocol, and that protocol's settings.** [OpenID Connect](#openid-connect), SAML 2.0 (#186)
-  and plain OAuth2 (#187) each add one. A protocol's secrets, such as a client secret, can be written but are
+- **A protocol, and that protocol's settings.** [OpenID Connect](#openid-connect),
+  [plain OAuth2](#plain-oauth2) and SAML 2.0 (#186) each add one. A protocol's secrets, such as a client secret, can be written but are
   never shown again. They are kept sealed with `[auth] secret_key`, as second factors' secrets
   are, so a provider with secrets needs the key.
 - **Its button:** a label, by default "Sign in with" its name, and an optional icon.
@@ -257,6 +257,58 @@ organization manages every email in the tenant.
    `https://{keycloak}/realms/{realm}`.
 3. For groups, add a **Group Membership** mapper to the client's dedicated scope, with the token
    claim name `groups`, **Full group path** off, and **Add to ID token** on.
+
+#### Plain OAuth2
+
+For providers that offer OAuth2 without OpenID Connect, GitHub the best known. With no ID token,
+who signed in is read from the provider's user endpoint, by paths into its JSON. Its settings:
+
+- **Preset:** `github` or `discord` fills in everything below but the client ID and secret. Any
+  setting given is used in place of the preset's, such as GitHub Enterprise's endpoints. Blank is
+  another provider, whose endpoints and ID path are then required.
+- **The authorization, token and user endpoints.** They must be `https`, but for a provider on the
+  same machine.
+- **Client ID and client secret,** from registering BAM! with the provider.
+- **Scopes,** separated by spaces.
+- **The ID, email, email verified, name and groups paths:** where the user endpoint's JSON has
+  each, such as `id`, or `data.user.id` for one nested deeper. Several paths separated by commas
+  are tried in order, such as `name,login`. The email and name paths are `email` and `name` when
+  blank. Groups are read as `groups` by rules, wherever they were.
+- **PKCE:** on unless set to `off`, for a provider that refuses a challenge.
+
+**The ID** is the provider's stable ID for the person, such as GitHub's numeric user ID: never a
+login name, which can change. An account linked to it stays linked whatever their login becomes.
+
+**Emails:** an email counts as verified only where the provider says so, at the email verified path.
+Without one, no email is verified, so none links an account by itself (see
+[Who signs in as whom](#who-signs-in-as-whom)).
+
+**How it signs in:** the authorization code flow, with `state` always and PKCE (`S256`) unless off.
+The code is traded for an access token, with the client secret in the form, and the user endpoint is
+read with it. The provider says nothing of how someone signed in, so a role requiring two-factor
+sign-in asks for BAM!'s own second factor after it (see
+[Requiring two-factor sign-in](#requiring-two-factor-sign-in)).
+
+##### GitHub
+
+1. Under **Settings › Developer settings › OAuth Apps**, make a **New OAuth App**, with the
+   redirect URI Admin shows as its **Authorization callback URL**.
+2. Make a client secret, and paste it and the client ID into BAM!, with the preset `github`.
+
+The preset asks for `read:user user:email read:org`. GitHub's verified emails come from
+`/user/emails`: the primary one if verified, else another verified one. Groups are the
+organizations someone belongs to, as `hackspace`, and their teams, as `hackspace/woodshop`, for
+rules and allowed groups. An organization that restricts OAuth apps shows only once it approves
+BAM!. For GitHub Enterprise, set the three endpoints to your server's, such as
+`https://github.example.org/login/oauth/authorize` and `https://github.example.org/api/v3/user`.
+
+##### Discord
+
+1. In the Developer Portal, make an application, and under **OAuth2** add the redirect URI.
+2. Paste its client ID and secret into BAM!, with the preset `discord`.
+
+The preset asks for `identify email`, reads Discord's `verified` for the email, and the display
+name, else the username. Discord gives no groups.
 
 #### Who signs in as whom
 

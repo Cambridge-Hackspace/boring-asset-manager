@@ -284,6 +284,8 @@ func claimStrings(v any) []string {
 		return []string{strconv.FormatBool(v)}
 	case float64:
 		return []string{strconv.FormatFloat(v, 'f', -1, 64)}
+	case json.Number:
+		return []string{v.String()}
 	case []any:
 		var out []string
 		for _, e := range v {
