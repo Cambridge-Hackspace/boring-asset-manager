@@ -379,4 +379,18 @@ describe('AccountPage', () => {
     await screen.findByText('Email sent to your roles will reach you.');
     expect(changes(sent)[1]!.body).toEqual({ notifications: true });
   });
+
+  it('turns their loan reminders off and on', async () => {
+    const { sent } = fakeApi({
+      ...assistants,
+      'PUT /auth/loan-reminders': (body) => ({ user: { ...session.user, loan_reminders: (body as { reminders: boolean }).reminders } }),
+    });
+    render(AccountPage, { params: {} });
+    const box = screen.getByRole('checkbox', { name: 'Remind me of what I borrow, before it is due and once it is overdue' }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    await fireEvent.click(box);
+    await screen.findByText('You will no longer be reminded of your loans.');
+    expect(changes(sent)[0]!.body).toEqual({ reminders: false });
+    expect(session.user!.loan_reminders).toBe(false);
+  });
 });

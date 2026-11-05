@@ -217,6 +217,28 @@ servers sharing a database still record it once.
 It does the same for things left through a flow past their date to collect by, as
 `asset.flow_overdue` (see [Flows](flows.md)).
 
+### Loan reminders
+
+Borrowers can be emailed about what they borrowed: before it is due, the day it becomes overdue,
+and weekly after. They are off until turned on under **Admin › Notifications**, by those who manage
+settings, and need email set up with the server's `base_url` (see
+[Notifications](notifications.md#email)).
+
+- **Before it is due:** a reminder the set number of days before, one by default. Zero sends none
+  before.
+- **Once overdue:** a reminder the moment it is due, then a week later, and so on, up to the set
+  number, four by default. Zero sends none.
+- **What it says:** what was borrowed, from whom and when, when it was due, and links to return it
+  by its scan page, or to its page when it has no code.
+- **Who gets them:** the borrower, when their account is active, until they turn reminders off
+  under **Your account**. A loan with no due date gets none, and nor does one returned.
+- **Once each:** the notification worker sends them as it polls. Each reminder is claimed in the
+  database before it is sent (`loan_reminders`), so servers sharing it send it once, and given back
+  if sending fails, to be tried again at the next poll. A server stopped for a while sends only the
+  reminder due now, not each it missed.
+- **Backups:** the reminders sent are kept with their loans, so a restored instance does not send
+  them again.
+
 ## Asset history
 
 Creating, editing, archiving and restoring an asset record `asset.created`, `asset.edited`,
@@ -263,6 +285,9 @@ the email and name of whoever made each change, and `more` when older events rem
 | `GET /api/v1/loans` | `assets.track` | List loans |
 | `GET /api/v1/people` | `assets.lend` or `users.manage` | Active users a loan can name |
 | `GET /api/v1/assets/{id}/history` | `assets.read` | An asset's history |
+| `GET /api/v1/settings/loan-reminders` | `settings.manage` | Loan reminders: `on`, `days_before` and `overdue_times`, with `can_email` |
+| `PUT /api/v1/settings/loan-reminders` | `settings.manage` | Set them; turning them on without email set up is a `409` |
+| `PUT /api/v1/auth/loan-reminders` | signed in | Turn one's own reminders on or off: `{"reminders": true}` |
 
 ## Events
 
@@ -282,3 +307,4 @@ the email and name of whoever made each change, and `more` when older events rem
 |---|---|
 | `014` | Lending; grants `assets.borrow` and `assets.lend` to every role that had `assets.write` |
 | `016` | A category's `unit`, for weighing |
+| `064` | Loan reminders sent (`loan_reminders`), and whether each user gets them (`users.loan_reminders`) |
