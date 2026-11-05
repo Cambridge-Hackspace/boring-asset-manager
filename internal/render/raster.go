@@ -17,6 +17,7 @@ import (
 // head: text is thresholded at 50% coverage and images are dithered. Barcode
 // modules are whole dots in both modes, so they are never anti-aliased.
 func (s *Scene) Raster(mono bool) *image.Gray {
+	s = s.outlined()
 	bounds := image.Rect(0, 0, s.Width, s.Height)
 	img := image.NewGray(bounds)
 	for i := range img.Pix {
@@ -60,10 +61,7 @@ func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 		}
 		fill(coverage, paths)
 	}
-	ink := uint8(0)
-	if paint == White {
-		ink = 0xFF
-	}
+	ink := paint.Level()
 	for i, a := range coverage.Pix {
 		switch {
 		case a == 0:
@@ -73,8 +71,11 @@ func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 			}
 		case paint == White:
 			img.Pix[i] += uint8((0xFF - uint32(img.Pix[i])) * uint32(a) / 0xFF)
-		default:
+		case paint == Black:
 			img.Pix[i] = uint8(uint32(img.Pix[i]) * uint32(0xFF-a) / 0xFF)
+		default:
+			// A shade, blended over what is beneath by coverage.
+			img.Pix[i] = uint8((uint32(img.Pix[i])*uint32(0xFF-a) + uint32(ink)*uint32(a)) / 0xFF)
 		}
 	}
 }
@@ -106,10 +107,7 @@ func evenOdd(coverage *image.Alpha, p Path) {
 
 // fillRects fills whole-dot rectangles in paint.
 func fillRects(img *image.Gray, rects []Rect, paint Paint) {
-	v := uint8(0)
-	if paint == White {
-		v = 0xFF
-	}
+	v := paint.Level()
 	for _, r := range rects {
 		rect := image.Rect(r.X, r.Y, r.X+r.W, r.Y+r.H).Intersect(img.Bounds())
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {

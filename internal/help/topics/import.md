@@ -4,6 +4,8 @@
 
 **Export Excel** downloads them as an Excel workbook instead: an *All* sheet with every asset, then a sheet per category with that category's fields. Numbers and dates are typed, so they sort and add up in the spreadsheet. Any sheet imports again.
 
+**PDF…** downloads the assets shown as a printable table instead, of the columns you choose, with each asset's photo and label if you ask.
+
 ## Importing
 
 1. Choose the file. BAM! suggests where each column goes; check each one, or choose *Ignore this column*.

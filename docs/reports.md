@@ -103,6 +103,31 @@ whole report, a sheet per table or chart, named by its title. A cell is a number
 reads back as itself as one (so `12` is a number but `007` is text), and otherwise text, never a
 formula.
 
+## PDF
+
+A report, or the asset list as its filters show it, downloads as a PDF: **PDF…** beside its other
+downloads. It is made on the server, for printing, insurance, audits, board meetings and handovers.
+
+- **A report** has every section: its tables, with their groups, and its charts, drawn as vectors.
+- **The asset list** is a table of the columns chosen, from the CSV export's (see
+  [CSV](csv.md#the-file-format)): name, categories and quantity unless others are.
+- **Page size,** Letter or A4, is the instance's unless another is chosen. **Orientation** is
+  portrait or landscape.
+- **Photos and label previews:** each row can have its asset's photo, and its label as its
+  category's template draws it. Both are off unless asked for, and drawn for at most 500 rows.
+- **Every page is headed** with the instance's name, the document's title, and when it was made and
+  by whom, and numbered at its foot.
+- **Tables break across pages,** repeating their heading row on each. A group's title is kept with
+  its first rows, and repeated, as continued, on a page its rows run onto.
+
+The instance's name and page size are set on **Admin › Import & export** by those who manage
+settings: `BAM!` and Letter until they are.
+
+**How it is drawn:** with the label renderer, in the fonts labels embed, so a PDF looks the same
+wherever it was made, with no second PDF library. Its text is in a font made of those fonts' own
+glyphs, each defined once, so a long document stays small and its text can be searched and copied.
+The same document is the same to the byte, everywhere.
+
 ## API
 
 | Method | Route | Permission | Purpose |
@@ -117,6 +142,10 @@ formula.
 | `GET` | `/api/v1/reports/{id}/sections/{n}/csv` | `assets.read` | Download table `n` (counting from 1) as CSV. |
 | `GET` | `/api/v1/reports/{id}/sections/{n}/xlsx` | `assets.read` | Download table `n` as an Excel workbook. |
 | `GET` | `/api/v1/reports/{id}/xlsx` | `assets.read` | Download every table and chart as an Excel workbook, a sheet each. |
+| `GET` | `/api/v1/reports/{id}/export.pdf` | `assets.read` | Download the report as a PDF. Takes `page_size` (`letter` or `a4`), `orientation` (`portrait` or `landscape`), `photos` and `labels`. |
+| `GET` | `/api/v1/assets/export.pdf` | `assets.read` | Download the asset list as a PDF, with the CSV export's filters, `columns` (the export's, separated by commas), and the same options. |
+| `GET` | `/api/v1/settings/documents` | `assets.read` | The instance's name on PDFs, and their page size: `{"instance_name", "page_size"}`. |
+| `PUT` | `/api/v1/settings/documents` | `settings.manage` | Set them, with the same body. |
 
 The result of a run gives how many assets matched and, for each section, its headings and its
 groups of rows. Each row has its asset's ID and its cells.

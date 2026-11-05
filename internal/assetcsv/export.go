@@ -90,6 +90,18 @@ func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, gen
 	return cw.Error()
 }
 
+// Table is the export's columns and its rows, as Export writes them but
+// not defused, with a column for every field any asset has a value for:
+// for a document of the assets, which chooses among the columns.
+func Table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs) ([]string, [][]string) {
+	cols, rows := table(assets, cats, generatorTypes, refs, filledFieldKeys(assets), nil)
+	names := make([]string, len(cols))
+	for i, c := range cols {
+		names[i] = c.name
+	}
+	return names, rows
+}
+
 // filledFieldKeys are the keys of the fields any asset has a value for, sorted.
 func filledFieldKeys(assets []models.AssetWithDetails) []string {
 	keys := map[string]bool{}
