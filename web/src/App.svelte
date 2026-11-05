@@ -7,6 +7,7 @@
   import Footer from './components/Footer.svelte';
   import IconPaletteStyle from './components/IconPaletteStyle.svelte';
   import { iconset } from './lib/iconset.svelte';
+  import AccountLinkPage, { accountLinkPaths } from './views/AccountLinkPage.svelte';
   import FactorSetupPage from './views/FactorSetupPage.svelte';
   import SignIn from './views/SignIn.svelte';
   import NotFound from './views/NotFound.svelte';
@@ -41,7 +42,7 @@
 
   // Other signed-out visitors go to sign-in, and come back afterward.
   $effect(() => {
-    if (session.loaded && !session.user && router.path !== '/sign-in' && router.path !== '/signin/local' && !openToPublic) {
+    if (session.loaded && !session.user && router.path !== '/sign-in' && router.path !== '/signin/local' && !accountLinkPaths.includes(router.path) && !openToPublic) {
       navigate(signInPath(router.path + router.search), true);
     }
   });
@@ -61,6 +62,8 @@
   <p class="p-8 text-sm text-zinc-600 dark:text-zinc-400" role="status">Loading…</p>
 {:else if router.path === '/sign-in' || router.path === '/signin/local'}
   <SignIn local={router.path === '/signin/local'} />
+{:else if accountLinkPaths.includes(router.path)}
+  <AccountLinkPage />
 {:else if session.user && session.factorSetup}
   <FactorSetupPage />
 {:else if session.user || openToPublic}

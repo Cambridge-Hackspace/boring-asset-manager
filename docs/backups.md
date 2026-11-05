@@ -110,6 +110,7 @@ These tables are left out, because they are not information or are made again:
 | `hook_trigger_seen`, `hook_trigger_fired` | Events hooks have looked at, and when each hook last fired on each asset: state for firing each once (see [Hooks](hooks.md#several-servers)). |
 | `hook_schedule_runs` | When each hook's schedule last ran. A restored instance starts its schedules afresh, at their next time. |
 | `sign_in_challenges` | Sign-ins waiting for a second factor, which lapse in five minutes. |
+| `account_links` | Links emailed to people about their accounts, which lapse within a week and work once. |
 | `provider_sign_ins` | Sign-ins sent to an identity provider and not back yet, which lapse in ten minutes. |
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys.

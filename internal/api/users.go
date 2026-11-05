@@ -19,6 +19,9 @@ type CreateUserRequest struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
 	IsActive *bool  `json:"is_active,omitempty"`
+	// Invite, in place of a password, emails them an invitation to set
+	// one, or to sign in through a provider (docs/access.md#invitations).
+	Invite bool `json:"invite,omitempty"`
 }
 
 // UpdateUserStatusRequest defines the request body for modifying user status.
@@ -71,6 +74,10 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Invite {
+		s.createInvitedUser(w, r, req)
+		return
+	}
 	if req.Email == "" || req.Password == "" {
 		writeJSONError(w, http.StatusBadRequest, "Email and password are required")
 		return
@@ -103,6 +110,40 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"user": user,
 	})
+}
+
+// createInvitedUser makes an account with no password, and emails its
+// person an invitation.
+func (s *Server) createInvitedUser(w http.ResponseWriter, r *http.Request, req CreateUserRequest) {
+	if req.Password != "" {
+		writeJSONError(w, http.StatusBadRequest, "Invite someone, or set their password, not both")
+		return
+	}
+	if req.Email == "" || strings.TrimSpace(req.Name) == "" {
+		writeJSONError(w, http.StatusBadRequest, "An email and a name are required")
+		return
+	}
+	if !s.canEmailLinks() {
+		noEmailForLinks(w)
+		return
+	}
+	user, err := s.store.CreateInvitedUser(req.Email, req.Name)
+	switch {
+	case errors.Is(err, store.ErrInvalidUser):
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	case errors.Is(err, store.ErrEmailTaken):
+		writeJSONError(w, http.StatusConflict, "A user with this email already exists")
+		return
+	case err != nil:
+		writeStoreError(w, err, "create the user")
+		return
+	}
+	if err := s.invite(user, s.personName(r)); err != nil {
+		writeServerError(w, err, "make the invitation")
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"user": user, "invited": true})
 }
 
 // handleUpdateUserStatus toggles an active/disabled user account with Anti-Lockout enforcement.
@@ -369,6 +410,9 @@ func (s *Server) handleSetUserPassword(w http.ResponseWriter, r *http.Request) {
 		if err := s.clearSignInDelay(r.PathValue("id")); err != nil {
 			writeServerError(w, err, "clear the sign-in delay")
 			return
+		}
+		if u, err := s.store.GetUserByID(r.PathValue("id")); err == nil {
+			s.tellAccount(u, noticePasswordChanged)
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"message": "Password set"})
 	}

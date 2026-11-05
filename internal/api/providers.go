@@ -185,8 +185,13 @@ func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
 	for _, sc := range ss {
 		scopes = append(scopes, named{sc.ID, sc.Name})
 	}
+	mails, err := s.accountEmailSettings()
+	if err != nil {
+		writeServerError(w, err, "read the sign-in settings")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"providers": views, "protocols": protocols, "local_passwords": on, "secret_key": s.sealer.HasKey(),
-		"roles": roles, "scopes": scopes})
+		"roles": roles, "scopes": scopes, "account_emails": mails})
 }
 
 // ProviderRequest is a provider as saved under Admin. A secret left blank
@@ -357,6 +362,11 @@ func (s *Server) handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 // SignInSettingsRequest turns passwords off or on.
 type SignInSettingsRequest struct {
 	LocalPasswords *bool `json:"local_passwords"`
+	// Account emails (docs/access.md#account-emails), each left as it is
+	// when not given.
+	PasswordReset          *bool `json:"password_reset"`
+	FactorRecovery         *bool `json:"factor_recovery_email"`
+	FactorRecoveryRequired *bool `json:"factor_recovery_email_required"`
 }
 
 // PUT /api/v1/auth/settings (settings.manage): turns signing in with a
@@ -364,8 +374,16 @@ type SignInSettingsRequest struct {
 // so that the sign-in page is never left with no way in.
 func (s *Server) handleSetSignInSettings(w http.ResponseWriter, r *http.Request) {
 	var req SignInSettingsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocalPasswords == nil {
-		writeJSONError(w, http.StatusBadRequest, `Send {"local_passwords": true} or false`)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil ||
+		(req.LocalPasswords == nil && req.PasswordReset == nil && req.FactorRecovery == nil && req.FactorRecoveryRequired == nil) {
+		writeJSONError(w, http.StatusBadRequest, `Send {"local_passwords": true} or false, or the account emails' settings`)
+		return
+	}
+	if !s.setAccountEmailSettings(w, req) {
+		return
+	}
+	if req.LocalPasswords == nil {
+		s.writeSignInSettings(w)
 		return
 	}
 	if !*req.LocalPasswords {
@@ -391,7 +409,22 @@ func (s *Server) handleSetSignInSettings(w http.ResponseWriter, r *http.Request)
 		writeServerError(w, err, "save the sign-in settings")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"local_passwords": *req.LocalPasswords})
+	s.writeSignInSettings(w)
+}
+
+// writeSignInSettings answers the sign-in settings as they are.
+func (s *Server) writeSignInSettings(w http.ResponseWriter) {
+	on, err := s.store.LocalPasswords()
+	if err != nil {
+		writeServerError(w, err, "read the sign-in settings")
+		return
+	}
+	mails, err := s.accountEmailSettings()
+	if err != nil {
+		writeServerError(w, err, "read the sign-in settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"local_passwords": on, "account_emails": mails})
 }
 
 type publicProvider struct {
@@ -403,10 +436,35 @@ type publicProvider struct {
 // GET /api/v1/auth/providers/public: the sign-in page's buttons, and
 // whether it shows the password form.
 func (s *Server) handlePublicProviders(w http.ResponseWriter, r *http.Request) {
-	providers, err := s.store.Providers()
+	out, err := s.publicProviders()
 	if err != nil {
 		writeServerError(w, err, "list identity providers")
 		return
+	}
+	on, err := s.store.LocalPasswords()
+	if err != nil {
+		writeServerError(w, err, "read the sign-in settings")
+		return
+	}
+	reset, err := s.passwordResetOn()
+	if err != nil {
+		writeServerError(w, err, "read the sign-in settings")
+		return
+	}
+	recovery, err := s.store.On(store.FactorRecoverySetting)
+	if err != nil {
+		writeServerError(w, err, "read the sign-in settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"providers": out, "local_passwords": on, "password_reset": reset,
+		"factor_recovery_email": recovery && s.canEmailLinks()})
+}
+
+// publicProviders are the sign-in page's buttons.
+func (s *Server) publicProviders() ([]publicProvider, error) {
+	providers, err := s.store.Providers()
+	if err != nil {
+		return nil, err
 	}
 	out := []publicProvider{}
 	for _, p := range providers {
@@ -414,13 +472,12 @@ func (s *Server) handlePublicProviders(w http.ResponseWriter, r *http.Request) {
 			out = append(out, publicProvider{Key: p.Key, Label: p.ButtonLabel, Icon: p.Icon})
 		}
 	}
-	on, err := s.store.LocalPasswords()
-	if err != nil {
-		writeServerError(w, err, "read the sign-in settings")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"providers": out, "local_passwords": on})
+	return out, nil
 }
+
+// inviteState keeps, in a sign-in sent to a provider, the invitation it
+// accepts.
+const inviteState = "bam_invite"
 
 // localPath is next if it is a path on this server, or "/".
 func localPath(next string) string {
@@ -502,6 +559,16 @@ func (s *Server) handleProviderStart(w http.ResponseWriter, r *http.Request) {
 		}
 		link, next = user.ID, "/account"
 	}
+	// Accepting an invitation through the provider (docs/access.md#invitations).
+	invite := r.URL.Query().Get("invite")
+	if invite != "" {
+		invited, err := s.store.AccountLink(invite, store.LinkInvite)
+		if err != nil {
+			signInPage(w, r, "", "This invitation has expired, or was used already. Ask whoever manages users for a new one.")
+			return
+		}
+		link, next = invited.ID, "/"
+	}
 	secrets, ok := s.providerSecrets(p)
 	if !ok {
 		signInPage(w, r, next, "This provider cannot be used: its secrets are sealed with another key. Ask whoever manages BAM! to set them again.")
@@ -517,6 +584,9 @@ func (s *Server) handleProviderStart(w http.ResponseWriter, r *http.Request) {
 		log.Printf("starting a sign-in through %s: %v", p.Key, err)
 		signInPage(w, r, next, "Could not reach "+p.Name+". Try again later.")
 		return
+	}
+	if invite != "" {
+		kept[inviteState] = invite
 	}
 	token, err := s.store.CreateProviderSignIn(store.ProviderSignIn{ProviderID: p.ID, State: kept, Next: next, LinkUserID: link})
 	if err != nil {
@@ -580,12 +650,19 @@ func (s *Server) handleProviderCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if pending.LinkUserID != "" {
+	var user *models.User
+	var message string
+	if invite := pending.State[inviteState]; invite != "" {
+		// An invitation, accepted: the identity is linked to the invited
+		// account, which is then signed in as any other.
+		if user, message, err = s.acceptInvitation(p, claims, invite, pending.LinkUserID); err != nil {
+			writeServerError(w, err, "accept the invitation")
+			return
+		}
+	} else if pending.LinkUserID != "" {
 		s.finishLinking(w, r, p, claims, pending.LinkUserID)
 		return
-	}
-	user, message, err := s.accountFor(p, claims)
-	if err != nil {
+	} else if user, message, err = s.accountFor(p, claims); err != nil {
 		writeServerError(w, err, "find the account")
 		return
 	}
@@ -705,6 +782,31 @@ const (
 	TestOIDCClientID     = "bam"
 	TestOIDCClientSecret = "bam-test-secret"
 )
+
+// acceptInvitation links the identity that came back to the invited
+// account, using the invitation. Without one, it says why.
+func (s *Server) acceptInvitation(p *store.Provider, c *idp.Claims, invite, userID string) (*models.User, string, error) {
+	const expired = "This invitation has expired, or was used already. Ask whoever manages users for a new one."
+	if _, err := s.store.IdentityBySubject(p.ID, c.Subject); err == nil {
+		return nil, "Your " + p.Name + " sign-in is linked to another account here already. Sign in with it instead.", nil
+	} else if !errors.Is(err, store.ErrIdentityNotFound) {
+		return nil, "", err
+	}
+	user, err := s.store.TakeAccountLink(invite, store.LinkInvite)
+	if errors.Is(err, store.ErrAccountLinkNotFound) || (err == nil && user.ID != userID) {
+		return nil, expired, nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := s.store.LinkIdentity(user.ID, p.ID, c.Subject, c.Email); err != nil {
+		if errors.Is(err, store.ErrIdentityTaken) {
+			return nil, "Your " + p.Name + " sign-in is linked to another account here already. Sign in with it instead.", nil
+		}
+		return nil, "", err
+	}
+	return user, "", nil
+}
 
 // noAccount is what someone with no account linked to a provider is told,
 // whether or not one has their email: the provider may let anyone choose

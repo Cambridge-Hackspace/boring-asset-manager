@@ -92,7 +92,7 @@ test('users: roles, disabling, and the anti-lockout refusal', async ({ signedIn:
   const email = `${unique('bo')}@hackspace.org`;
   await goTo(page, 'Users');
   await page.getByRole('button', { name: 'New user' }).click();
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Name', { exact: true }).fill('Bo Brown');
   await page.getByLabel('Initial password').fill('BoPass123!');
   await page.getByRole('button', { name: 'Create user' }).click();

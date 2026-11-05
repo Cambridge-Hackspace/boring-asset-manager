@@ -89,15 +89,19 @@
     }
   }
 
+  /** Email an invitation to set a password, or sign in through a provider, instead (docs/access.md#invitations). */
+  let newInvite = $state(false);
+
   async function create(event: SubmitEvent) {
     event.preventDefault();
     await act(async () => {
-      const res = await request<{ user: { id: string } }>('POST', '/users', { email: newEmail, name: newName, password: newPassword });
+      const body = newInvite ? { email: newEmail, name: newName, invite: true } : { email: newEmail, name: newName, password: newPassword };
+      const res = await request<{ user: { id: string } }>('POST', '/users', body);
       if (newRoles.length) await request('PUT', `/users/${encodeURIComponent(res.user.id)}/roles`, { roles: newRoles });
       creating = false;
       newEmail = newName = newPassword = '';
       newRoles = [];
-    }, 'User created.');
+    }, newInvite ? `User created, and invited by email.` : 'User created.');
   }
 
   function startRename(u: UserWithRoles) {
@@ -149,12 +153,21 @@
         <input id="new-name" class="input" required maxlength="255" autocomplete="off" aria-describedby="new-name-help" bind:value={newName} />
         <p id="new-name-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">How asset pages show them; they never show emails. Sign-in uses the email.</p>
       </div>
-      <div>
-        <label class="label" for="new-password">Initial password</label>
-        <input id="new-password" class="input" type="password" required minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="new-password-help" bind:value={newPassword} />
-        <p id="new-password-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">8-72 characters. They can change it after signing in.</p>
-      </div>
+      {#if !newInvite}
+        <div>
+          <label class="label" for="new-password">Initial password</label>
+          <input id="new-password" class="input" type="password" required minlength="8" maxlength="72" autocomplete="new-password" aria-describedby="new-password-help" bind:value={newPassword} />
+          <p id="new-password-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">8-72 characters. They can change it after signing in.</p>
+        </div>
+      {/if}
     </div>
+    <label class="flex items-start gap-2 text-sm">
+      <input type="checkbox" class="mt-1" bind:checked={newInvite} />
+      <span>
+        Email them an invitation instead of setting a password
+        <span class="block text-xs text-zinc-600 dark:text-zinc-400">They set their own, or sign in through a provider. The link works once, for seven days.</span>
+      </span>
+    </label>
     <RolePicker id="new-roles" {roles} {scopes} bind:value={newRoles} />
     <div class="flex gap-2">
       <button type="submit" class="btn-primary">Create user</button>
@@ -230,6 +243,13 @@
                 {/if}
                 {#if showingIdentities !== u.id}
                   <button type="button" class="btn-secondary" aria-label="Identities of {u.email}" onclick={() => (showingIdentities = u.id)}>Identities</button>
+                {/if}
+                {#if u.is_active}
+                  <button
+                    type="button"
+                    class="btn-secondary"
+                    aria-label="Send {u.email} an invitation"
+                    onclick={() => act(() => request('POST', `/users/${encodeURIComponent(u.id)}/invite`), `Invitation sent to ${u.email}.`)}>Send invitation</button>
                 {/if}
                 {#if u.sign_in_delayed_until}
                   <button
