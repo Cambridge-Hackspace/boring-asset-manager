@@ -25,6 +25,7 @@
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import ImportSection from './ImportSection.svelte';
+  import DocumentSettings from './DocumentSettings.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -241,6 +242,8 @@
 <PageHeader title="Import & export" lede="Categories, fields, templates and more as a package: to share with another instance, or to bring one in." />
 
 <ImportSection {tree} onimported={() => void load()} />
+
+<DocumentSettings />
 
 <section class="card mb-6 max-w-3xl space-y-4" aria-labelledby="export-heading">
   <h2 id="export-heading" class="text-lg font-semibold">Export a package</h2>

@@ -37,6 +37,15 @@ test('build a report, run it, and download a table as CSV', async ({ signedIn: p
   const [book] = await Promise.all([page.waitForEvent('download'), table.getByRole('link', { name: /Download Excel/ }).click()]);
   expect(book.suggestedFilename()).toBe(`${name.replace(' ', '-')}.xlsx`);
   expect(fs.readFileSync((await book.path())!).subarray(0, 2).toString()).toBe('PK');
+
+  // And the whole report as a PDF, landscape.
+  await page.getByText('PDF…').click();
+  await page.getByLabel('Orientation').selectOption('landscape');
+  const [pdf] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: 'Download PDF' }).click()]);
+  expect(pdf.suggestedFilename()).toBe(`${name.replace(' ', '-')}.pdf`);
+  const bytes = fs.readFileSync((await pdf.path())!);
+  expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+  expect(bytes.includes('/MediaBox [0 0 792 612]')).toBe(true);
 });
 
 test('chart what is in stock and what was used', async ({ signedIn: page, api }) => {

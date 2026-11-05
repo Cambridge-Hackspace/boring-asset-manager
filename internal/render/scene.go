@@ -32,10 +32,12 @@ type Scene struct {
 	TextSizes map[int]float64
 }
 
-// Item is one thing drawn: exactly one of an image, a path or rectangles of
-// whole dots, such as barcode modules.
+// Item is one thing drawn: exactly one of an image, a path, rectangles of
+// whole dots, such as barcode modules, or, in documents, text.
 type Item struct {
 	Image *PlacedImage
+	// Text is a run of text, in documents (see TextRun).
+	Text *TextRun
 	// Path is outlines, such as glyphs, filled with the nonzero winding
 	// rule.
 	Path Path
@@ -49,16 +51,40 @@ type Item struct {
 	EvenOdd bool
 }
 
-// Paint is black, or white, which paints over what is beneath it.
+// Paint is black, or white, which paints over what is beneath it, or, in
+// documents (docs/reports.md#pdf), a shade of gray. A label is only ever
+// black and white.
 type Paint uint8
 
 const (
 	Black Paint = iota
 	White
+	// Gray90 is the lightest gray, for shading; Gray25 the darkest.
+	Gray90
+	Gray75
+	Gray50
+	Gray25
 )
 
+// Level is how light a paint is, from 0, black, to 255, white.
+func (p Paint) Level() uint8 {
+	switch p {
+	case White:
+		return 0xFF
+	case Gray90:
+		return 230
+	case Gray75:
+		return 191
+	case Gray50:
+		return 128
+	case Gray25:
+		return 64
+	}
+	return 0
+}
+
 // isPath reports whether the item is a filled path.
-func (it *Item) isPath() bool { return it.Image == nil && it.Rects == nil }
+func (it *Item) isPath() bool { return it.Image == nil && it.Rects == nil && it.Text == nil }
 
 // Rect is a rectangle in dots.
 type Rect struct {
@@ -134,6 +160,9 @@ func (s *Scene) Parts() int {
 		n += len(it.Rects) + len(it.Path)
 		if it.Image != nil {
 			n++
+		}
+		if it.Text != nil {
+			n += len(it.Text.Text)
 		}
 	}
 	return n
