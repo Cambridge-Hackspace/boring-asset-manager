@@ -270,7 +270,18 @@ Turbo, 5XL and Wireless have network ports.
 For printers that speak TSPL, the label language of TSC printers that many inexpensive 4-inch
 direct thermal printers also use. The driver follows TSC's *TSPL/TSPL2 Programming Manual*.
 
-**Models:** Rollo X1038 and X1040, Munbyn ITPP941, and generic 203 DPI and 300 DPI TSPL printers.
+**Models:** all at 203 DPI, with each maker's maximum print width.
+
+- **Rollo** X1038 and X1040, and **Munbyn** ITPP941: 104 mm.
+- **iDPRT** SP410 and SP420, **Polono** PL60, **Arkscan** 2054A, **HPRT** SL42, **Xprinter** XP-420B
+  and XP-470B, **Phomemo** PM-241 (in TSPL, not ESC/POS), and **TSC**'s own TE200, TE210, DA210
+  and TTP-244 Pro: 108 mm.
+- **Polono** PL70e: 104 mm. No maker's figure was found, so this takes the narrower width of most
+  4-inch printers.
+- **Generic** TSPL printers at 203 DPI (104 mm) and 300 DPI (106 mm), for any other.
+
+No quirks are known among them yet: each is sent the size and gap of its labels, as the generic
+models are. Others are added as people report them.
 
 **Options:**
 
