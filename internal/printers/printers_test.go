@@ -17,6 +17,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
 )
@@ -52,6 +53,17 @@ func TestValidate(t *testing.T) {
 	bad("4-inch roll on a 62 mm model", "P", DriverBrotherQL, "ql.lan", 9100, brother("QL-810W", "dk-11241", ""))
 	bad("103 mm roll on the QL-1115NWB", "P", DriverBrotherQL, "ql.lan", 9100, brother("QL-1115NWB", "dk-22246", ""))
 	bad("roll the QL-500 does not list", "P", DriverBrotherQL, "ql.lan", 9100, brother("QL-500", "brother-29x42", ""))
+	ok("P-touch", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-12", ""))
+	ok("P-touch options", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P950NW", "tze-36",
+		`{"cut_after":"last_label","half_cut":true,"chain":true,"mirror":true,"margin_mm":5}`))
+	ok("P-touch tube", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P700", "hse-11.7", ""))
+	bad("P-touch model", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("QL-810W", "tze-12", ""))
+	bad("36 mm tape on a 24 mm model", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-36", ""))
+	bad("tube on the PT-P910BT", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P910BT", "hse-11.7", ""))
+	bad("half cut on the PT-P710BT", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P710BT", "tze-12", `{"half_cut":true}`))
+	bad("P-touch margin too small", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-12", `{"margin_mm":1}`))
+	bad("P-touch cut", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-12", `{"cut_after":"never"}`))
+	bad("P-touch unknown option", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-12", `{"cut":true}`))
 	ok("TD-2", DriverBrotherTD, "td.lan", 9100, brother("TD-2130N", "rd-51x26", ""))
 	ok("TD-4 with its cutter", DriverBrotherTD, "td.lan", 9100, brother("TD-4420DN", "rd-102x152", `{"cut":true}`))
 	bad("TD model", "P", DriverBrotherTD, "td.lan", 9100, brother("QL-810W", "rd-58", ""))
@@ -106,7 +118,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	for _, info := range d {
 		by[info.Driver] = info
 	}
-	if len(d) != 6 || len(by) != 6 {
+	if len(d) != 7 || len(by) != 7 {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -124,6 +136,19 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 			if strings.Join(m.Models, ",") != "QL-1050,QL-1060N,QL-1100,QL-1110NWB,QL-1115NWB" {
 				t.Errorf("DK-11241 is for %v", m.Models)
 			}
+		}
+	}
+	pt := by[DriverBrotherPTouch]
+	if len(pt.Media) != len(ptouch.MediaIDs()) || len(pt.Options) != 5 || pt.CustomStock != nil ||
+		pt.ModelDPI["PT-P750W"] != 180 || pt.ModelDPI["PT-P950NW"] != 360 || len(pt.Models) != len(ptouch.Models()) {
+		t.Fatalf("Brother P-touch driver info = %+v", pt)
+	}
+	for _, m := range pt.Media {
+		if m.ID == "tze-36" && strings.Join(m.Models, ",") != "PT-P900,PT-P900W,PT-P910BT,PT-P950NW" {
+			t.Errorf("36 mm tape is for %v", m.Models)
+		}
+		if m.ID == "tze-12" && m.Models != nil {
+			t.Errorf("12 mm tape is for %v, not every model", m.Models)
 		}
 	}
 	td := by[DriverBrotherTD]
@@ -153,7 +178,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	}
 	// The drivers that take custom stock say how wide, for every model.
 	for _, info := range d {
-		if info.Driver == DriverBrotherQL {
+		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch {
 			continue
 		}
 		c := info.CustomStock
@@ -209,6 +234,7 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 		ok                 bool
 	}{
 		{"Brother takes only its rolls", DriverBrotherQL, "QL-810W", stock(62, 0, 0), false},
+		{"P-touch takes only its cassettes", DriverBrotherPTouch, "PT-P750W", stock(12, 0, 0), false},
 		{"Brother's 4-inch QL takes only its rolls too", DriverBrotherQL, "QL-1100", stock(102, 0, 0), false},
 		{"TD-2 die-cut", DriverBrotherTD, "TD-2020", stock(50, 30, 3), true},
 		{"TD-2 wider than it takes", DriverBrotherTD, "TD-2130N", stock(76, 0, 0), false},

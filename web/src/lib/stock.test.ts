@@ -81,6 +81,9 @@ describe('printer words', () => {
     expect(optionLabel('print_speed')).toBe('Print speed');
     expect(driverName('zpl')).toBe('Zebra ZPL');
     expect(optionValueLabel('tear_off')).toBe('Tear it off');
+    expect(driverName('brother_ptouch')).toBe('Brother P-touch');
+    expect(optionLabel('cut_after')).toBe('Cut the tape off');
+    expect(optionValueLabel('last_label')).toBe('After the last label');
     expect(optionValueLabel('right_side')).toBe('right side');
   });
 });

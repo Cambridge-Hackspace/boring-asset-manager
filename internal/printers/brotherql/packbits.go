@@ -60,3 +60,10 @@ func unpackBits(data []byte) ([]byte, error) {
 	}
 	return out, nil
 }
+
+// PackBits compresses one raster line as packBits does, for the other
+// Brother raster languages, such as P-touch's.
+func PackBits(data []byte) []byte { return packBits(data) }
+
+// UnpackBits undoes PackBits.
+func UnpackBits(data []byte) ([]byte, error) { return unpackBits(data) }

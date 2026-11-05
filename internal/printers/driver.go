@@ -111,7 +111,7 @@ var (
 )
 
 func init() {
-	for _, d := range []Driver{brotherQL, brotherDriver{brotherql.SeriesTD}, dymoLabelWriter{}, tsplDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2}} {
+	for _, d := range []Driver{brotherQL, brotherDriver{brotherql.SeriesTD}, ptouchDriver{}, dymoLabelWriter{}, tsplDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2}} {
 		if err := Register(d); err != nil {
 			panic(err)
 		}

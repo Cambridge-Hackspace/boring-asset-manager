@@ -2,10 +2,13 @@ package printers
 
 import (
 	"errors"
+	"image"
 	"math"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
 )
 
 // TestFitLabel runs the cases each driver's own fit check had, before the
@@ -294,5 +297,103 @@ func TestTDCutterLength(t *testing.T) {
 	s.Options = []byte(`{"cut":true}`)
 	if _, _, err := PlanLabel(DriverBrotherTD, s, label); !errors.Is(err, ErrDoesNotFit) || !strings.Contains(err.Error(), "20-") {
 		t.Errorf("cut: %v", err)
+	}
+}
+
+// TestPTouchPrintableArea checks the fit check against each tape width's
+// printable area on a model of each head, from Brother's page sizes and
+// tables of pins (section 2.3 of the P-touch references): a label as wide
+// as the tape prints only on its middle pins, and content beyond them is
+// warned of.
+func TestPTouchPrintableArea(t *testing.T) {
+	cases := []struct {
+		model, media string
+		width        float64
+		dpi, pins    int
+	}{
+		{"PT-P750W", "tze-3.5", 3.5, 180, 24},
+		{"PT-P750W", "tze-6", 6, 180, 32},
+		{"PT-P750W", "tze-9", 9, 180, 50},
+		{"PT-P750W", "tze-12", 12, 180, 70},
+		{"PT-P750W", "tze-18", 18, 180, 112},
+		{"PT-P750W", "tze-24", 24, 180, 128},
+		{"PT-P700", "hse-5.8", 5.8, 180, 28},
+		{"PT-E550W", "hse-21", 21, 180, 120},
+		{"PT-P950NW", "tze-3.5", 3.5, 360, 48},
+		{"PT-P950NW", "tze-6", 6, 360, 64},
+		{"PT-P950NW", "tze-9", 9, 360, 106},
+		{"PT-P950NW", "tze-12", 12, 360, 150},
+		{"PT-P950NW", "tze-18", 18, 360, 234},
+		{"PT-P950NW", "tze-24", 24, 360, 320},
+		{"PT-P910BT", "tze-36", 36, 360, 454},
+		{"PT-P900W", "hse-31", 31, 360, 360},
+	}
+	for _, c := range cases {
+		reach := float64(c.pins) / float64(c.dpi) * 25.4
+		// Landscape, as tape labels are: 60 mm along the tape, turned.
+		label := LabelSpec{WidthMM: 60, HeightMM: c.width, DPI: c.dpi,
+			Content: []RectMM{{X: 5, Y: 0, Width: 10, Height: c.width}, {X: 20, Y: (c.width - reach) / 2, Width: 10, Height: reach}}}
+		_, f, err := PlanLabel(DriverBrotherPTouch, Settings{Model: c.model, Media: c.media}, label)
+		if err != nil {
+			t.Errorf("%s on %s: %v", c.media, c.model, err)
+			continue
+		}
+		if !f.Rotate || math.Abs(f.Printable.Height-reach) > 0.01 || math.Abs(f.Printable.Y-(c.width-reach)/2) > 0.01 {
+			t.Errorf("%s on %s: printable %+v, want %.2f mm across", c.media, c.model, f.Printable, reach)
+		}
+		// The full-width box reaches the unprinted edges, unless the head
+		// spans the tape; the box on the printable pins never does.
+		wantOutside := []int{0}
+		if c.width-reach < 0.05 {
+			wantOutside = nil
+		}
+		if !slices.Equal(f.Outside, wantOutside) {
+			t.Errorf("%s on %s: outside %v", c.media, c.model, f.Outside)
+		}
+	}
+	// Lengths: 4.4 mm to 7,086 lines (just under 1000 mm) at 180 DPI, tube
+	// to 500 mm.
+	for _, c := range []struct {
+		model, media string
+		length       float64
+		fits         bool
+	}{
+		{"PT-P750W", "tze-12", 4.5, true},
+		{"PT-P750W", "tze-12", 4, false},
+		{"PT-P750W", "tze-12", 999, true},
+		{"PT-P750W", "hse-11.7", 600, false},
+		{"PT-P950NW", "tze-12", 4, true},
+		{"PT-P950NW", "hse-11.7", 500, true},
+	} {
+		m, _ := ptouch.LookupMedia(c.media)
+		mo, _ := ptouch.LookupModel(c.model)
+		_, _, err := PlanLabel(DriverBrotherPTouch, Settings{Model: c.model, Media: c.media}, LabelSpec{WidthMM: c.length, HeightMM: m.WidthMM, DPI: mo.DPI})
+		if (err == nil) != c.fits {
+			t.Errorf("%g mm on %s: %v", c.length, c.media, err)
+		}
+	}
+}
+
+// TestPTouchPlan prints through the registry with the driver's options.
+func TestPTouchPlan(t *testing.T) {
+	s := Settings{Model: "PT-P750W", Media: "tze-12", Options: []byte(`{"cut_after":"last_label","half_cut":true,"mirror":true,"margin_mm":4}`)}
+	plan, f, err := PlanLabel(DriverBrotherPTouch, s, LabelSpec{WidthMM: 40, HeightMM: 12, DPI: 180})
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := blankLabel(40, 12, 180)
+	stream, err := plan.Encode([]*image.Gray{label, label})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mo, _ := ptouch.LookupModel("PT-P750W")
+	pages, err := mo.DecodeJob(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Turned, 40 mm along the tape is 283 lines; 4 mm is 28 dots.
+	p := pages[0]
+	if !f.Rotate || len(pages) != 2 || len(p.Lines) != 283 || p.Various != 0x80 || p.Advanced != 0x0C || p.MarginDots != 28 || p.WidthMM != 12 {
+		t.Errorf("%d pages, the first %+v with %d lines", len(pages), p, len(p.Lines))
 	}
 }
