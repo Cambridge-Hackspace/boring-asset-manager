@@ -49,6 +49,15 @@ func setUpApp(t *testing.T, srv *Server, userID string) []byte {
 // recovery codes shown with the first factor.
 func setUpAppWithCodes(t *testing.T, srv *Server, userID string) ([]byte, []string) {
 	t.Helper()
+	secret, codes, _ := setUpAppAtStep(t, srv, userID)
+	return secret, codes
+}
+
+// setUpAppAtStep sets up an app, and returns its secret, the recovery
+// codes, and the step of the code that confirmed it: the step then, which
+// may have ended since.
+func setUpAppAtStep(t *testing.T, srv *Server, userID string) ([]byte, []string, int64) {
+	t.Helper()
 	cookie := sessionCookie(t, srv, userID)
 	rec := doJSON(t, srv, cookie, "POST", "/api/v1/auth/me/factors/totp", "")
 	if rec.Code != http.StatusOK {
@@ -79,7 +88,7 @@ func setUpAppWithCodes(t *testing.T, srv *Server, userID string) ([]byte, []stri
 		RecoveryCodes []string `json:"recovery_codes"`
 	}
 	_ = json.NewDecoder(rec.Body).Decode(&confirmed)
-	return secret, confirmed.RecoveryCodes
+	return secret, confirmed.RecoveryCodes, now
 }
 
 // recoveryCodesLeft is how many the account page says are left.
@@ -277,8 +286,9 @@ func passwordStep(t *testing.T, srv *Server, email, password string) *http.Cooki
 
 func TestSigningInWithAnAuthenticatorApp(t *testing.T) {
 	srv, admin, password := factorServer(t)
-	secret := setUpApp(t, srv, admin.ID)
-	now := auth.TOTPStep(time.Now())
+	// The step the app was confirmed at, not the step now: one may have
+	// ended in between, and then now's code is not the one used.
+	secret, _, now := setUpAppAtStep(t, srv, admin.ID)
 
 	challenge := passwordStep(t, srv, admin.Email, password)
 	if rec := secondStep(t, srv, nil, auth.TOTPCode(secret, now+1)); rec.Code != http.StatusUnauthorized {
