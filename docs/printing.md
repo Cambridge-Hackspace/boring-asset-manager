@@ -22,8 +22,9 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Six drivers ship today: `brother_ql`, `brother_td`, `dymo_labelwriter`, `tspl`, `zpl` and `epl2`. Option
-values are listed by the drivers endpoint, and unknown options are refused.
+Seven drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`, `tspl`,
+`zpl` and `epl2`. Option values are listed by the drivers endpoint, and unknown options are
+refused.
 
 ### Who can do what
 
@@ -143,8 +144,8 @@ Drivers take custom stock only where a size is all the printer needs:
 
 - TSPL printers, Zebras (ZPL and EPL2) and DYMO LabelWriters take it, up to their head's width.
 - Brother TD printers take it, as wide as each model's rolls may be.
-- Brother QL printers take only their built-in rolls. They identify the DK roll loaded and need
-  Brother's figures to place a label on it.
+- Brother QL and P-touch printers take only their built-in rolls and cassettes. They identify the
+  roll or cassette loaded, and need Brother's figures to place a label on it.
 
 Changing stock checks every printer with it loaded. The change is refused, naming the printer, if
 one would no longer take it. Stock loaded in a printer cannot be deleted (`409`).
@@ -336,6 +337,115 @@ printed across whole, where Brother keeps 2 mm off each side.
 - **Print information** gives the roll's type and size but asks the printer to check none of
   them, as Brother's own TD-4 example does. Otherwise a TD would refuse a job whose size did not
   match the paper format it was set up with.
+
+### `brother_ptouch`
+
+For Brother's P-touch tape printers, which print laminated TZe tape and HSe heat-shrink tube:
+
+| Models | Resolution | Head | Connections |
+|---|---|---|---|
+| PT-P700 | 180 DPI | 128 pins (18 mm) | USB |
+| PT-E550W, PT-P750W | 180 DPI | 128 pins | USB, Wi-Fi |
+| PT-P710BT | 180 DPI | 128 pins | USB (Bluetooth needs [#237](https://github.com/Cambridge-Hackspace/boring-asset-manager/issues/237)) |
+| PT-P900 | 360 DPI | 560 pins (39.5 mm) | USB |
+| PT-P900W, PT-P950NW | 360 DPI | 560 pins | USB, Wi-Fi (and Ethernet on the PT-P950NW) |
+| PT-P910BT | 360 DPI | 560 pins | USB (Bluetooth needs #237) |
+
+Reach a networked one with `tcp`, and one on USB with `device`, `ipp` (a raw queue) or `windows`.
+
+The figures come from Brother's raster command references, linked from its [command reference
+list](https://support.brother.com/g/s/es/dev/en/command/reference/index.html):
+
+- *Raster Command Reference PT-H500/P700/E500*, version 1.11;
+- *Raster Command Reference PT-E550W/P750W/P710BT*, version 1.02;
+- *Raster Command Reference PT-P900/P900W/P950NW/P910BT*, version 1.02.
+
+Brother publishes no raster reference for the other models #232 names: the PT-E560BT, PT-D600,
+PT-D610BT and PT-P300BT. They are left out rather than guessed at. The PT-P300BT is
+Bluetooth-only besides.
+
+**Why a driver of its own.** The language is a close relative of the QL's, and the driver shares
+`brother_ql`'s PackBits and page preparation. But what a P-touch prints on, and how it finishes a
+label, differ:
+
+- **Tape cassettes, not rolls.** Every label is continuous: the template sets its length, and the
+  cassette only its width.
+- **Different command details.** The cassettes are named by other media types, and their widths
+  are checked another way. Raster lines are sent with a two-byte length (`G`, or `g` on the
+  PT-P700).
+- **Different cutting.** A P-touch half cuts and chains labels, mirrors them for clear tape, and
+  takes margins of its own. Those are options a QL has no use for, and the QL's `cut` means
+  something else.
+- **Its own status reply,** reporting the cassette loaded (see below).
+
+**Options:**
+
+- **`cut_after`:** `each_label` (default) cuts each label off; `last_label` cuts only after the
+  job's last.
+- **`half_cut`** (default `false`) cuts through the tape between labels but not its backing, so
+  a job comes out as one strip. The PT-P700 and PT-P710BT do not half cut, and it is refused for
+  them.
+- **`chain`** (default `false`) leaves the last label in the printer, unfed and uncut, so the
+  next job wastes no tape before its first label.
+- **`mirror`** (default `false`) prints labels mirrored, to read through clear tape.
+- **`margin_mm`** is the tape fed before and after each label. It runs from 2 mm (1 mm on the
+  PT-P900 series) to 127 mm; unset is the least.
+
+**Media.** The cassettes, with each one's printable pins on each head (section 2.3.5 of the
+references):
+
+| Cassette | 128-pin head | 560-pin head |
+|---|---|---|
+| TZe 3.5 mm | 24 | 48 |
+| TZe 6 mm | 32 | 64 |
+| TZe 9 mm | 50 | 106 |
+| TZe 12 mm | 70 | 150 |
+| TZe 18 mm | 112 | 234 |
+| TZe 24 mm | 128 | 320 |
+| TZe 36 mm | – | 454 |
+| HSe 5.8, 8.8, 11.7, 17.7, 23.6 mm (2:1) | 28, 48, 66, 106, 128 | 56, 96, 132, 212, 256 |
+| HSe 5.2, 9, 11.2, 21 mm (3:1) | 20, 44, 50, 120 | 40, 88, 100, 240 |
+| HSe 31 mm (3:1) | – | 360 |
+
+The PT-P910BT takes no tube. A printer is refused with a cassette its model does not take, and the
+printer form offers each model only those.
+
+**Fit and margins.** Templates use the model's resolution, 180 or 360 DPI. A template's height is
+the tape's width (the template is turned, so its width runs along the tape, as tape labels do).
+Its other side is the label's length:
+
+- 4.4–1,000 mm at 180 DPI, and 4–1,000 mm at 360 DPI;
+- tube to 500 mm.
+
+The margins are fed around it. The printer feeds out at least about 25 mm of tape, whatever the
+label's length. Only the middle of the tape prints, by Brother's printable pins: 70 dots of 12 mm
+tape's 84 at 180 DPI, for example. The fit check warns of anything beyond them.
+
+**The loaded cassette.** Each job names the cassette's width (3.5 mm tape is named 4, as the
+printer reports it) and asks the printer to check it. A printer with another width loaded refuses
+the job rather than printing it on the wrong tape. A tube is checked by its type (2:1 or 3:1)
+instead, since a tube reports the width of a tape. The 3:1 tubes' widths are given nowhere.
+
+The printer's status reply also reports the cassette loaded. Package `ptouch` reads it, checks it
+against the cassette a printer is set up for, and finds the cassette for the fit check
+(`ParseStatus`, `Status.Check`, `Status.LoadedMedia`). Nothing asks for it yet: every connection
+BAM! has today only sends. When a connection that also reads arrives, the fit check can use the
+reported cassette, and printing can be refused before anything is sent.
+
+**Encoding.** Each label is rendered 1-bit and sent as raster lines, TIFF-compressed, mirrored
+across the head, as the references' section 2.1 lays out. The stream is:
+
+1. invalidate (100 bytes at 180 DPI, 200 on the PT-P900 series) and initialize;
+2. then for each label:
+   - raster mode;
+   - print information (the cassette and the label's length);
+   - various mode (auto cut at 40h, mirror at 80h);
+   - "cut each label" where the model takes it;
+   - advanced mode (half cut at 04h, and 08h unless chained);
+   - the margin and compression;
+   - the lines and a print command.
+
+The PT-P900 series also numbers the last page in its print information.
 
 ### `dymo_labelwriter`
 

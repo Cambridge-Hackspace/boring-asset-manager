@@ -41,6 +41,7 @@ export function describeChanges(c: PrinterChanges): string[] {
 
 const driverNames: Record<string, string> = {
   brother_ql: 'Brother QL',
+  brother_ptouch: 'Brother P-touch',
   brother_td: 'Brother TD',
   dymo_labelwriter: 'DYMO LabelWriter',
   tspl: 'TSPL',
@@ -55,10 +56,15 @@ export function driverName(driver: string): string {
 
 const optionLabels: Record<string, string> = {
   calibrate: 'Calibrate before each job',
+  chain: 'Chain labels, saving tape between jobs',
   compress: 'Compress labels',
   cut: 'Cut after each label',
+  cut_after: 'Cut the tape off',
   density: 'Darkness',
+  half_cut: 'Half cut between labels',
+  margin_mm: 'Margin before and after each label (mm)',
   media_type: 'Media type',
+  mirror: 'Mirror labels, for clear tape',
   print_mode: 'After each label',
   roll: 'Roll (twin-roll models)',
   rotate_180: 'Turn labels upside down',
@@ -68,6 +74,8 @@ const optionLabels: Record<string, string> = {
 const optionValueLabels: Record<string, string> = {
   cutter: 'Cut it',
   direct: 'Direct thermal',
+  each_label: 'After each label',
+  last_label: 'After the last label',
   peel_off: 'Peel it off',
   tear_off: 'Tear it off',
   transfer: 'Thermal transfer, with a ribbon',
