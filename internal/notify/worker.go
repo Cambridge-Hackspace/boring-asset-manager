@@ -79,6 +79,9 @@ func (w *Worker) Run(ctx context.Context) {
 		if _, err := w.Store.RecordOverdueFilings(w.Now()); err != nil {
 			log.Printf("notifications: %v", err)
 		}
+		if _, err := w.SendLoanReminders(ctx); err != nil {
+			log.Printf("loan reminders: %v", err)
+		}
 		w.prune()
 		for {
 			n, err := w.RunOnce(ctx)

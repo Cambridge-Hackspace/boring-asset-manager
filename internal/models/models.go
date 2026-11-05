@@ -26,6 +26,10 @@ type User struct {
 	// EmailNotifications is whether email sent to a role they hold reaches
 	// them (docs/notifications.md). It is on until they turn it off.
 	EmailNotifications bool `json:"email_notifications"`
+	// LoanReminders is whether they are emailed about their loans before
+	// they are due and once overdue, when the instance sends reminders. It
+	// is on until they turn it off.
+	LoanReminders bool `json:"loan_reminders"`
 }
 
 // Role represents a defined RBAC role.

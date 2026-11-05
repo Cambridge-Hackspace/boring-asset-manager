@@ -44,6 +44,10 @@ type emailNotificationsIn struct {
 	Notifications bool `json:"notifications" jsonschema:"true to receive email sent to a role they hold, false to stop it"`
 }
 
+type loanRemindersIn struct {
+	Reminders bool `json:"reminders" jsonschema:"true to be emailed about their loans before they are due and once overdue, false to stop it"`
+}
+
 type generatorsOut struct {
 	Generators []generators.Info `json:"generators" jsonschema:"the kinds of code an asset can have, with what each may hold"`
 }
@@ -101,6 +105,29 @@ func basicTools() []tool {
 					return say(emailNotificationsIn{Notifications: true}, "Email sent to their roles reaches them.")
 				}
 				return say(emailNotificationsIn{}, "Email sent to their roles no longer reaches them.")
+			})
+			t.person = true
+			return t
+		}(),
+		func() tool {
+			t := define(&mcp.Tool{
+				Name: "set_my_loan_reminders",
+				Description: "Whether the person you act for is emailed about their loans, before they are due and once overdue, " +
+					"when the instance sends loan reminders.",
+				Annotations: changes("Set my loan reminders", true),
+			}, []string{"PUT /api/v1/auth/loan-reminders"}, nil, func(ctx context.Context, e *env, in loanRemindersIn) (reply[loanRemindersIn], error) {
+				var res struct {
+					User struct {
+						LoanReminders bool `json:"loan_reminders"`
+					} `json:"user"`
+				}
+				if err := e.call(ctx, http.MethodPut, "/api/v1/auth/loan-reminders", in, &res); err != nil {
+					return reply[loanRemindersIn]{}, err
+				}
+				if res.User.LoanReminders {
+					return say(loanRemindersIn{Reminders: true}, "They are reminded of their loans.")
+				}
+				return say(loanRemindersIn{}, "They are no longer reminded of their loans.")
 			})
 			t.person = true
 			return t

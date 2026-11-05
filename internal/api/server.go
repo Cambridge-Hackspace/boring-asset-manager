@@ -177,6 +177,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/auth/name", RequirePerson(http.HandlerFunc(s.handleSetOwnName)))
 	handle("PUT /api/v1/auth/theme", RequirePerson(http.HandlerFunc(s.handleSetOwnTheme)))
 	handle("PUT /api/v1/auth/email", RequirePerson(http.HandlerFunc(s.handleSetOwnEmailNotifications)))
+	handle("PUT /api/v1/auth/loan-reminders", RequirePerson(http.HandlerFunc(s.handleSetOwnLoanReminders)))
 	// Favorites, each person's own (docs/favorites.md).
 	handle("GET /api/v1/auth/me/favorites", RequirePerson(http.HandlerFunc(s.handleListFavorites)))
 	handle("PUT /api/v1/auth/me/favorites/{kind}/{id}", RequirePerson(http.HandlerFunc(s.handleAddFavorite)))
@@ -391,6 +392,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// them, for their defaults.
 	handle("GET /api/v1/settings/documents", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleDocumentSettings)))
 	handle("PUT /api/v1/settings/documents", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetDocumentSettings)))
+	handle("GET /api/v1/settings/loan-reminders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleLoanReminderSettings)))
+	handle("PUT /api/v1/settings/loan-reminders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetLoanReminderSettings)))
 	handle("GET /api/v1/assets/export.xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssetsXLSX)))
 	handle("POST /api/v1/assets/import/preview", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImportPreview)))
 	handle("POST /api/v1/assets/import", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImport)))

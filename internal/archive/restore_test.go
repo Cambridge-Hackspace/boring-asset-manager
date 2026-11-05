@@ -470,9 +470,11 @@ func TestAThemeIsRestored(t *testing.T) {
 			if _, ok := row["theme"]; !ok {
 				t.Fatalf("a users row has no theme: %s", line)
 			}
-			// Nor the email preference, which came later still (052).
+			// Nor the email preference, which came later still (052), nor
+			// loan reminders (064).
 			delete(row, "theme")
 			delete(row, "email_notifications")
+			delete(row, "loan_reminders")
 			stripped++
 			data, _ := json.Marshal(row)
 			out.Write(append(data, '\n'))

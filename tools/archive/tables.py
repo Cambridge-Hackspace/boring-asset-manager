@@ -30,7 +30,7 @@ ORDER = [
     ('roles', 'KindPeople'), ('role_permissions', 'KindPeople'), ('role_permission_scopes', 'KindPeople'), ('users', 'KindPeople'),
     ('user_roles', 'KindPeople'), ('user_role_scopes', 'KindPeople'), ('user_favorites', 'KindPeople'),
     ('assets', 'KindAssets'), ('asset_categories', 'KindAssets'), ('asset_field_values', 'KindAssets'), ('asset_generator_keys', 'KindAssets'),
-    ('asset_links', 'KindAssets'), ('asset_placements', 'KindAssets'), ('asset_loans', 'KindAssets'), ('asset_photos', 'KindAssets'),
+    ('asset_links', 'KindAssets'), ('asset_placements', 'KindAssets'), ('asset_loans', 'KindAssets'), ('loan_reminders', 'KindAssets'), ('asset_photos', 'KindAssets'),
     ('events', 'KindAssets'),
     ('flows', 'KindFlows'), ('flow_filings', 'KindFlows'),
     ('settings', 'KindSettings'), ('label_stock', 'KindSettings'), ('printers', 'KindSettings'), ('printer_pools', 'KindSettings'),

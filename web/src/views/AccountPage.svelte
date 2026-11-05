@@ -48,6 +48,16 @@
     }
   }
 
+  async function setReminders(on: boolean) {
+    emailError = emailStatus = '';
+    try {
+      session.user = (await request<{ user: User }>('PUT', '/auth/loan-reminders', { reminders: on })).user;
+      emailStatus = on ? 'You will be reminded of your loans.' : 'You will no longer be reminded of your loans.';
+    } catch (err) {
+      emailError = messageOf(err);
+    }
+  }
+
   let current = $state('');
   let next = $state('');
   let confirm = $state('');
@@ -131,6 +141,17 @@
         <span>Send me email that notification channels send to my roles</span>
       </label>
       <p id="email-help" class="text-xs text-zinc-600 dark:text-zinc-400">Sent to {session.user?.email}. A channel that names your address itself still reaches you.</p>
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          class="mt-0.5"
+          checked={session.user?.loan_reminders !== false}
+          aria-describedby="reminders-help"
+          onchange={(event) => setReminders(event.currentTarget.checked)}
+        />
+        <span>Remind me of what I borrow, before it is due and once it is overdue</span>
+      </label>
+      <p id="reminders-help" class="text-xs text-zinc-600 dark:text-zinc-400">When the space sends loan reminders.</p>
       <ErrorMessage error={emailError} />
       {#if emailStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{emailStatus}</p>{/if}
     </section>

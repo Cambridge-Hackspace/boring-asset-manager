@@ -8,6 +8,7 @@
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PageHeader from '../../components/PageHeader.svelte';
   import ChannelForm from './ChannelForm.svelte';
+  import LoanReminderSettings from './LoanReminderSettings.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -158,6 +159,8 @@
     {/each}
   </ul>
 {/if}
+
+<LoanReminderSettings />
 
 <section aria-labelledby="log-heading">
   <div class="mb-2 flex items-center justify-between gap-2">
