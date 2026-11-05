@@ -4,9 +4,98 @@ A relay is BAM! itself, run on a machine on a local network, such as a Raspberry
 printer. It lets a BAM! hosted elsewhere reach printers and devices on that network. The relay dials
 out to the main BAM!, so nothing on the local network is opened to the internet.
 
-This page describes the relay bus, how the main node and its relays talk, and how a relay is paired,
-watched and revoked. `bam relay` itself, which runs a relay beside printers, is built on these, and
-is not part of BAM! yet: `bam relay join` pairs a machine and keeps its pairing, ready for it.
+This page describes running a relay and printing through one, the relay bus that links it to the main
+node, and how a relay is paired, watched and revoked.
+
+## Running a relay
+
+A relay is the same binary, run as `bam relay`. It holds no database or file store, only:
+
+- its pairing, kept by `bam relay join` (see [Pairing](#pairing)): the main node's address, its own
+  identity key and certificate, and its credential;
+- what it may reach locally: its **allowlist**.
+
+```
+bam relay join https://bam.example.org ABCD-EFGH-JKMN-PQRS
+bam relay --config relay.toml
+```
+
+- **It dials out** to the main node, over BoneMesh, WebSocket or both, as its pairing offers.
+  `--bonemesh=false` or `--websocket=false` turns one off on the relay. With neither left, it says so
+  and stops.
+- **It renews its certificate** three days before it expires, checking every hour, and keeps the new
+  one with its pairing. A relay that was stopped past its certificate's end renews as it starts.
+  BoneMesh starts again with each new certificate.
+- **It reports its status** each time it links to the main node: its version, the protocol it
+  speaks, and its allowlist. Asked with a `status` naming destinations, it says whether each can be
+  reached now: allowed, and a TCP printer taking a connection, or a device that is there.
+- **The pairing** is kept in `relay.json`, `--state` or `$BAM_RELAY_STATE`, readable by its owner
+  alone.
+
+### The allowlist
+
+**The relay's own allowlist decides what it may reach, not the main node.** A main node that was
+compromised cannot use a relay to reach anything on the local network beyond what the relay's owner
+allowed. A job for anything else is refused by the relay, however it is asked.
+
+```toml
+[relay]
+allow = [
+  "192.168.1.40",              # one printer, on port 9100
+  "192.168.1.0/24:9100",       # a range of addresses, on one port
+  "*.lan:*",                   # printers by name, on any port
+  "ipp://cups.lan/printers/*", # IPP queues; * matches anything, slashes included
+  "windows:Zebra*",            # Windows printers by name
+]
+
+[printers]
+devices = ["/dev/usb/lp*"]    # device paths, as on the main node
+```
+
+- **TCP printers** are `host:port`, or a host alone for port 9100. The host is an address, a CIDR
+  range, a name, or a pattern of names such as `*.lan`; the port is a number or `*`. A range matches
+  only addresses, and a name is matched as a name, whatever it resolves to.
+- **Device paths** are `[printers] devices`, as on the main node.
+- **Empty** reaches nothing: a relay with no allowlist says so as it starts, and refuses every job.
+- **From the environment:** `BAM_RELAY_ALLOW`, comma-separated, and `BAM_PRINTERS_DEVICES`.
+
+### As a service
+
+`packaging/linux/bam-relay.service` runs a relay under systemd, with its pairing in
+`/var/lib/bam-relay/relay.json` and its allowlist in `/etc/bam/relay.toml`
+(`packaging/linux/relay.example.toml`). Pair it as the user it runs as, then start it:
+
+```
+sudo -u bam bam relay join --state /var/lib/bam-relay/relay.json https://bam.example.org <code>
+sudo systemctl enable --now bam-relay
+```
+
+On Windows and macOS, run `bam relay` as `bam serve` is run there (see [Installing](installing.md)):
+under Task Scheduler or a service wrapper such as NSSM on Windows, and under launchd on macOS.
+
+## Printers through a relay
+
+A printer's connection names the relay it is reached through:
+
+```json
+{"type": "tcp", "address": "192.168.1.40", "relay": "front-desk"}
+```
+
+Every connection type works: `tcp`, `device`, `ipp` and `windows`, as the relay's operating system
+allows. The address is on the relay's network, and only the relay's allowlist decides whether it may
+be reached: the main node's `[printers] devices` does not apply. A printer must name a relay that
+exists. Under **Printers**, **Reached through** chooses it.
+
+- **The main node still renders, plans and encodes the job.** Drivers stay in one place, and the
+  relay only delivers bytes, so a relay never needs updating for a new label or driver.
+- **The spooler sends each batch to the relay** as a `job`. The relay writes it to the printer and
+  answers once the printer has taken it, or with the error. A job over 8 MiB goes in pieces, each a
+  `job` with a `piece` (`{of, i, n}`); the relay delivers it whole once the last arrives, and
+  answers that one.
+- **Timeouts and turns** behave as on the main node, measured at the relay: one job at a time per
+  printer, and a printer that stops taking a job for a minute fails it.
+- **A relay that is offline** fails the job with "relay … is offline", and its labels wait in the
+  queue as they do for a printer that cannot be reached, to be printed again once it is back.
 
 ## Transports
 
@@ -222,8 +311,8 @@ and code from `$BAM_RELAY_JOIN`, as `"https://bam.example.org ABCD-EFGH-JKMN-PQR
 ### Renewing
 
 A relay's certificate lasts 7 days. While it is paired, the relay renews it with its credential
-(`POST /api/v1/relays/renew`), and is given a new one for the same key. `bam relay` will renew on a
-schedule; `relay.Pairing.Renew` is what it calls.
+(`POST /api/v1/relays/renew`), and is given a new one for the same key. `bam relay` renews three
+days before it expires (see [Running a relay](#running-a-relay)).
 
 ### Versions
 
@@ -253,6 +342,7 @@ that rotated it and within 10 seconds on others.
   the page;
 - its version, and the address it last paired or renewed from;
 - what its allowlist covers, as the relay reports in its `status`;
+- the printers reached through it, and how each one's last job went;
 - when its certificate expires;
 - waiting to pair, with when its code lapses, or revoked.
 
@@ -263,8 +353,6 @@ server checks every 10 seconds.
 - **Events:** `relay.online` and `relay.offline` are recorded as a relay comes and goes, once
   however many servers see it, and notification channels can subscribe to them
   ([Notifications](notifications.md)).
-- **Printers:** no printer uses a relay yet. Once printers can print through one, the relays page
-  will list them.
 
 ## Trust
 
@@ -313,6 +401,7 @@ pairing and renewing are a relay's own, and rotating the mesh root stays with a 
 |---|---|
 | `061` | `relay_holds` and `relay_mail`, for [several servers](#several-servers) |
 | `063` | `relays`, with their codes, keys and health, and `relay_mesh`, the mesh root |
+| `065` | `printers.relay`, the relay a printer is reached through |
 
 `relay_holds` and `relay_mail` are not kept in backups: both describe the servers running now.
 `relays` is kept with the settings, its codes' and credentials' hashes with authentication, and

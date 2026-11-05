@@ -122,6 +122,11 @@ type RelayConfig struct {
 	// WebSocket takes relays' connections at /api/v1/relay/live, on the
 	// server's own port.
 	WebSocket bool `toml:"websocket"`
+	// Allow, on a relay, is what it may reach locally (docs/relays.md):
+	// TCP printers as host:port, ranges or name patterns, IPP queues' URLs,
+	// and windows: printers' names. Device paths are [printers] devices.
+	// Empty reaches nothing.
+	Allow []string `toml:"allow"`
 }
 
 // DefaultBoneMeshPort is the port the main node takes BoneMesh links on,
@@ -448,6 +453,9 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("BAM_RELAY_BONEMESH_PORT: %q is not a port", v)
 		}
 		cfg.Relay.BoneMeshPort = p
+	}
+	if v := os.Getenv("BAM_RELAY_ALLOW"); v != "" {
+		cfg.Relay.Allow = strings.Split(v, ",")
 	}
 	if v := os.Getenv("BAM_AUTH_TEST_PROTOCOL"); v != "" {
 		on, err := parseSwitch(v)

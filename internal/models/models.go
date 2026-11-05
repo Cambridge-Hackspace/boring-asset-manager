@@ -1164,6 +1164,22 @@ type Relay struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// RelayPrinter is a printer reached through a relay, with the last print
+// job sent to it, if any.
+type RelayPrinter struct {
+	ID      string           `json:"id"`
+	Name    string           `json:"name"`
+	LastJob *RelayPrinterJob `json:"last_job,omitempty"`
+}
+
+// RelayPrinterJob is how a printer's last print job went: its state, why
+// it failed if it did, and when it finished, or was made if it has not.
+type RelayPrinterJob struct {
+	State string    `json:"state"`
+	Error string    `json:"error,omitempty"`
+	At    time.Time `json:"at"`
+}
+
 // LiveConnection is a live event connection a server holds open
 // (docs/hooks.md): for an API token, or for a signed-in user.
 type LiveConnection struct {

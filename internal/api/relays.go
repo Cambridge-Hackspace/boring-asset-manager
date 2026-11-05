@@ -180,10 +180,12 @@ type relayView struct {
 	models.Relay
 	// Transports are those it is linked to this server over now.
 	Transports []string `json:"transports"`
+	// Printers are those reached through it, with their last job.
+	Printers []models.RelayPrinter `json:"printers"`
 }
 
 func (s *Server) relayView(r models.Relay) relayView {
-	v := relayView{Relay: r, Transports: []string{}}
+	v := relayView{Relay: r, Transports: []string{}, Printers: []models.RelayPrinter{}}
 	if s.relays != nil {
 		if t := s.relays.Transports(r.Name); t != nil {
 			v.Transports = t
@@ -200,9 +202,17 @@ func (s *Server) handleListRelays(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list relays")
 		return
 	}
+	using, err := s.store.RelayPrinters()
+	if err != nil {
+		writeServerError(w, err, "list printers through relays")
+		return
+	}
 	views := make([]relayView, len(relays))
 	for i, rl := range relays {
 		views[i] = s.relayView(rl)
+		if p := using[rl.Name]; p != nil {
+			views[i].Printers = p
+		}
 	}
 	var mesh any
 	if m, err := s.store.GetRelayMesh(); err == nil {

@@ -17,6 +17,11 @@ const base: Relay = {
   address: '203.0.113.7',
   allowlist: ['192.168.1.0/24:9100'],
   transports: ['bonemesh', 'websocket'],
+  printers: [
+    { id: 'p1', name: 'Desk Zebra', last_job: { state: 'done', at: '2026-11-05T09:30:00Z' } },
+    { id: 'p2', name: 'Shelf Rollo', last_job: { state: 'failed', error: 'relay front-desk is offline', at: '2026-11-05T08:00:00Z' } },
+    { id: 'p3', name: 'New Dymo' },
+  ],
   created_at: '2026-11-01T00:00:00Z',
 };
 
@@ -46,6 +51,10 @@ describe('RelaysPage', () => {
     expect(row('front-desk').textContent).toContain('over BoneMesh and WebSocket');
     expect(row('front-desk').textContent).toContain('v1.4.0');
     expect(row('front-desk').textContent).toContain('192.168.1.0/24:9100');
+    expect(row('front-desk').textContent).toContain('Desk Zebra: printed');
+    expect(row('front-desk').textContent).toContain('Shelf Rollo: failed');
+    expect(row('front-desk').textContent).toContain('(relay front-desk is offline)');
+    expect(row('front-desk').textContent).toContain('New Dymo: no jobs yet');
     expect(row('workshop').textContent).toContain('Offline since');
     expect(row('cellar').textContent).toContain('Waiting to pair, with a code that works until');
     expect(within(row('cellar')).getByRole('button', { name: 'Remove' })).toBeTruthy();

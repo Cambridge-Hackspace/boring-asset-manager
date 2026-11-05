@@ -49,6 +49,26 @@ afterEach(() => {
 });
 
 describe('PrinterForm', () => {
+  it('reaches a printer through a relay', async () => {
+    const { sent } = fakeApi({ 'POST /printers': () => ({ status: 201, body: {} }) });
+    const onsaved = vi.fn();
+    render(PrinterForm, { drivers, relays: ['front-desk'], onsaved, oncancel: () => {} });
+
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Desk' } });
+    await fireEvent.input(screen.getByLabelText('Address'), { target: { value: '192.168.1.40' } });
+    await fireEvent.change(screen.getByLabelText('Reached through'), { target: { value: 'front-desk' } });
+    expect(screen.getByText(/front-desk’s network/)).toBeTruthy();
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create printer' }));
+
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect((sent[0]!.body as { connection: object }).connection).toEqual({ type: 'tcp', address: '192.168.1.40', relay: 'front-desk' });
+  });
+
+  it('offers no relay where there are none', () => {
+    render(PrinterForm, { drivers, onsaved: () => {}, oncancel: () => {} });
+    expect(screen.queryByLabelText('Reached through')).toBeNull();
+  });
+
   it('builds its fields from the chosen driver and sends only changed options', async () => {
     const { sent } = fakeApi({ 'POST /printers': () => ({ status: 201, body: {} }) });
     const onsaved = vi.fn();

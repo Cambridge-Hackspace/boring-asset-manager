@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/api"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/cli"
@@ -27,6 +28,8 @@ Available Commands:
   admin mfa reset Remove an account's second factors, signing it out everywhere (requires --email)
   admin relay add Add a relay, printing the one-time code it pairs with (requires --name)
   relay join    Pair this machine as a relay: bam relay join <url> <code> (or $BAM_RELAY_JOIN; --state <file>)
+  relay         Run this machine as a relay, beside its printers (--state <file>, --config <file> with [relay] allow;
+                --bonemesh=false or --websocket=false turns a transport off)
   serve         Start the HTTP daemon
   backup        Write an archive of the instance, files included (requires --to; --split <size>, --without-secrets);
                 a --to ending in .db copies a SQLite database instead, and exits 3 for other databases
@@ -301,8 +304,20 @@ func main() {
 
 	case "relay":
 		if len(os.Args) < 3 || os.Args[2] != "join" {
-			fmt.Fprintf(os.Stderr, "Usage: bam relay join [--state <file>] <url> <code>\n")
-			os.Exit(1)
+			runCmd := flag.NewFlagSet("relay", flag.ExitOnError)
+			state := runCmd.String("state", "", "Where the pairing is kept (default: $BAM_RELAY_STATE, or relay.json)")
+			configPath := runCmd.String("config", "", "Configuration file with [relay] allow and [printers] devices (optional)")
+			bonemesh := runCmd.Bool("bonemesh", true, "Link over BoneMesh, where the main node offers it")
+			websocket := runCmd.Bool("websocket", true, "Link over WebSocket, where the main node offers it")
+			_ = runCmd.Parse(os.Args[2:])
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			err := cli.RelayRun(ctx, *configPath, *state, *bonemesh, *websocket, api.Version)
+			stop()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
 		joinCmd := flag.NewFlagSet("relay join", flag.ExitOnError)
 		state := joinCmd.String("state", "", "Where to keep the pairing (default: $BAM_RELAY_STATE, or relay.json)")

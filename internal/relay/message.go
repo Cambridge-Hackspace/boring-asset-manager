@@ -97,6 +97,28 @@ type Job struct {
 	Data []byte `json:"data"`
 	// TimeoutMS bounds the delivery at the relay; 0 leaves it to the relay.
 	TimeoutMS int `json:"timeout_ms,omitempty"`
+	// Piece, on a job too large for one message, says which piece of it
+	// this is. Every piece but the last is only acknowledged; the relay
+	// delivers the whole job once the last arrives, and answers that one.
+	Piece *JobPiece `json:"piece,omitempty"`
+}
+
+// JobPiece is one piece of a job sent in several messages.
+type JobPiece struct {
+	// Of names the whole job; I counts from 0, of N pieces.
+	Of string `json:"of"`
+	I  int    `json:"i"`
+	N  int    `json:"n"`
+}
+
+// JobPieceBytes is the most of a job's bytes one message carries: base64
+// makes it a third larger, well within MaxMessage.
+const JobPieceBytes = 8 << 20
+
+// StatusRequest asks a relay for its status, and whether each of these
+// destinations can be reached.
+type StatusRequest struct {
+	Destinations []Destination `json:"destinations,omitempty"`
 }
 
 // Destination is somewhere local to a relay, named as a printer's

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -188,7 +189,7 @@ func TestRelaySettings(t *testing.T) {
 		"[relay]\nwebsocket = true\n":                                        {WebSocket: true, BoneMeshPort: DefaultBoneMeshPort},
 		"[relay]\nbonemesh = true\nwebsocket = true\nbonemesh_port = 9443\n": {BoneMesh: true, WebSocket: true, BoneMeshPort: 9443},
 	} {
-		if cfg, err := load(toml); err != nil || cfg.Relay != want {
+		if cfg, err := load(toml); err != nil || !reflect.DeepEqual(cfg.Relay, want) {
 			t.Errorf("%q: %v %+v", toml, err, cfg)
 		}
 	}
@@ -199,7 +200,7 @@ func TestRelaySettings(t *testing.T) {
 	t.Setenv("BAM_RELAY_BONEMESH", "on")
 	t.Setenv("BAM_RELAY_WEBSOCKET", "true")
 	t.Setenv("BAM_RELAY_BONEMESH_PORT", "9000")
-	if cfg, err = load(""); err != nil || cfg.Relay != (RelayConfig{BoneMesh: true, WebSocket: true, BoneMeshPort: 9000}) {
+	if cfg, err = load(""); err != nil || !reflect.DeepEqual(cfg.Relay, RelayConfig{BoneMesh: true, WebSocket: true, BoneMeshPort: 9000}) {
 		t.Errorf("from the environment: %v %+v", err, cfg)
 	}
 	t.Setenv("BAM_RELAY_WEBSOCKET", "nope")
@@ -401,5 +402,21 @@ scopes = ["woodshop"]
 	}
 	if data, _ := os.ReadFile(written); strings.Contains(string(data), "test_protocol") || strings.Contains(string(data), "providers") {
 		t.Errorf("written config:\n%s", data)
+	}
+}
+
+func TestRelayAllowlistSetting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "relay.toml")
+	toml := "[relay]\nallow = [\"192.168.1.0/24:9100\", \"windows:Zebra*\"]\n"
+	if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil || !reflect.DeepEqual(cfg.Relay.Allow, []string{"192.168.1.0/24:9100", "windows:Zebra*"}) {
+		t.Fatalf("from the file: %v %+v", err, cfg)
+	}
+	t.Setenv("BAM_RELAY_ALLOW", "printer.lan:9100,ipp://cups.lan/printers/*")
+	if cfg, err = Load(path); err != nil || !reflect.DeepEqual(cfg.Relay.Allow, []string{"printer.lan:9100", "ipp://cups.lan/printers/*"}) {
+		t.Fatalf("from the environment: %v %+v", err, cfg)
 	}
 }

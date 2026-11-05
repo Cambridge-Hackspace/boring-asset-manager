@@ -295,6 +295,8 @@ export interface TemplateSummary {
 export interface PrinterConnection {
   type: 'tcp' | 'device' | 'ipp' | 'windows';
   address: string;
+  /** The relay the printer is reached through, if any (docs/relays.md). */
+  relay?: string;
 }
 
 export interface Printer {
@@ -665,7 +667,16 @@ export interface Relay {
   allowlist: string[];
   /** The transports it is linked to this server over now. */
   transports: string[];
+  /** The printers reached through it, with their last job. */
+  printers: RelayPrinter[];
   created_at: string;
+}
+
+/** A printer reached through a relay, with how its last print job went. */
+export interface RelayPrinter {
+  id: string;
+  name: string;
+  last_job?: { state: string; error?: string; at: string };
 }
 
 /** The relays page's list: the relays, the mesh root, and which transports are on. */

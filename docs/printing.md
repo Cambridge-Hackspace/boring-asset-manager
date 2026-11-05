@@ -529,6 +529,12 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 | `ipp` | `ipp://host[:port]/path`, or `ipps`, `http`, `https` | A queue on CUPS or another IPP server, such as a USB printer shared from another machine. The job is sent as `application/octet-stream`, so the queue must be raw (CUPS: `lpadmin -m raw`; CUPS 2.x still supports raw queues though it marks them deprecated). CUPS can also forward a raw queue to a Windows shared printer through its `smb://` backend. |
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
 
+A connection may also name a relay, as `"relay": "front-desk"`: BAM! run beside the printer on its
+own network, for a BAM! hosted elsewhere. The address is then on the relay's network, and the
+relay's own allowlist, not `[printers] devices`, decides what it may reach. The main node still
+encodes the job; the relay delivers the bytes. A relay that is offline fails the job, and its labels
+wait in the queue (see [Relays](relays.md#printers-through-a-relay)).
+
 Jobs are sent one at a time per destination, so concurrent requests never interleave their
 streams. A job counts as printed once the destination has accepted the whole stream. Reading back
 printer status is a later improvement.
