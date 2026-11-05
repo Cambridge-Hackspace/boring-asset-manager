@@ -118,9 +118,10 @@ The protocol, not the transport, owns delivery, so it behaves the same over eith
 
 - **Acknowledgment:** the node a message is for answers it with an `ack` once it has arrived, before
   it is handled. Answers to it, such as a `job.result`, are messages of their own.
-- **Retries:** a sender sends again every 2 seconds until it has an `ack` or a `nak`, or gives up,
-  after a minute unless it was given a deadline of its own. When a link comes up, sends waiting for
-  one try at once.
+- **Retries:** a sender sends again until it has an `ack` or a `nak`, or gives up, after a minute
+  unless it was given a deadline of its own. It waits 2 seconds, then twice as long each time, up
+  to 16 seconds, so a link too slow to answer in time is not flooded with copies that slow it
+  further. When a link comes up or goes, sends waiting try at once, and wait 2 seconds again.
 - **Refusals:** a `nak` ends a send at once, with its reason: a relay that is not connected, a type
   the node does not handle, or a version it does not speak.
 - **Once:** a node remembers the IDs it delivered for 10 minutes. A message that arrives again, over
