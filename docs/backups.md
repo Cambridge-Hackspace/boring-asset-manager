@@ -114,6 +114,7 @@ These tables are left out, because they are not information or are made again:
 | `passkey_challenges` | Challenges sent for passkeys and not answered, which lapse in five minutes. |
 | `saml_assertions` | SAML assertions used to sign in, kept until they expire so each signs in once. |
 | `provider_sign_ins` | Sign-ins sent to an identity provider and not back yet, which lapse in ten minutes. |
+| `relay_holds`, `relay_mail` | Which server holds each relay now, and the messages servers pass each other for relays, which are dropped within minutes (see [Relays](relays.md#several-servers)). |
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys.
 `tools/archive/tables.py` writes it from a migrated database. A test fails, on every dialect, when

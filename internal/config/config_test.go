@@ -167,6 +167,47 @@ func TestMCPSetting(t *testing.T) {
 	}
 }
 
+func TestRelaySettings(t *testing.T) {
+	dir := t.TempDir()
+	load := func(toml string) (*Config, error) {
+		path := filepath.Join(dir, "config.toml")
+		if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+
+	// Off unless turned on, including for files from before the table.
+	cfg, err := load("[server]\nport = 8080\n")
+	if err != nil || cfg.Relay.BoneMesh || cfg.Relay.WebSocket || cfg.Relay.BoneMeshPort != DefaultBoneMeshPort {
+		t.Fatalf("older file: %v %+v", err, cfg.Relay)
+	}
+	// Either, or both.
+	for toml, want := range map[string]RelayConfig{
+		"[relay]\nbonemesh = true\n":                                         {BoneMesh: true, BoneMeshPort: DefaultBoneMeshPort},
+		"[relay]\nwebsocket = true\n":                                        {WebSocket: true, BoneMeshPort: DefaultBoneMeshPort},
+		"[relay]\nbonemesh = true\nwebsocket = true\nbonemesh_port = 9443\n": {BoneMesh: true, WebSocket: true, BoneMeshPort: 9443},
+	} {
+		if cfg, err := load(toml); err != nil || cfg.Relay != want {
+			t.Errorf("%q: %v %+v", toml, err, cfg)
+		}
+	}
+	if _, err := load("[relay]\nbonemesh_port = 70000\n"); err == nil {
+		t.Error("port 70000 was accepted")
+	}
+
+	t.Setenv("BAM_RELAY_BONEMESH", "on")
+	t.Setenv("BAM_RELAY_WEBSOCKET", "true")
+	t.Setenv("BAM_RELAY_BONEMESH_PORT", "9000")
+	if cfg, err = load(""); err != nil || cfg.Relay != (RelayConfig{BoneMesh: true, WebSocket: true, BoneMeshPort: 9000}) {
+		t.Errorf("from the environment: %v %+v", err, cfg)
+	}
+	t.Setenv("BAM_RELAY_WEBSOCKET", "nope")
+	if _, err = load(""); err == nil {
+		t.Error("BAM_RELAY_WEBSOCKET=nope was accepted")
+	}
+}
+
 func TestStorageSettings(t *testing.T) {
 	dir := t.TempDir()
 	load := func(toml string) (*Config, error) {

@@ -19,6 +19,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/relay"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/webui"
 )
@@ -73,6 +74,9 @@ type Server struct {
 	// sealer seals second factors' secrets with [auth] secret_key; without
 	// a key it refuses, and two-factor sign-in cannot be set up.
 	sealer *auth.Sealer
+	// relays is this server's end of the relay bus (docs/relays.md); nil
+	// when [relay] turns both transports off.
+	relays *relay.Bus
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -93,6 +97,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	if s.mailer != nil {
 		s.sendMail = s.sendAccountMail
 	}
+	s.relays = s.newRelayBus()
 	// The configuration was checked as it loaded, so its key reads.
 	key, _ := cfg.Auth.Key()
 	s.sealer, _ = auth.NewSealer(key)
@@ -333,6 +338,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// The same events, for those who poll, and answers to hooks from them.
 	handle("GET /api/v1/events", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleListEvents)))
 	handle("POST /api/v1/events/{id}/reply", RequirePermission(rbac.PermEventsRead)(http.HandlerFunc(s.handleReplyToEvent)))
+	// Relays (docs/relays.md) connect with their own credential, not a
+	// session or an API token.
+	handleFunc("GET /api/v1/relay/live", s.handleRelayLive)
 
 	// Flows (docs/flows.md): flows.manage makes them; flows.run runs them, in
 	// the scopes of their categories, which each handler checks.

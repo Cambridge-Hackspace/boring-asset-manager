@@ -20,6 +20,7 @@ These pages describe how BAM! works, for people running it and for people workin
 - [Stock and lending](stock-and-lending.md): running low, quantities and weights, asset history, and loans.
 - [Notifications](notifications.md): channels, drivers and deliveries.
 - [Hooks and live connections](hooks.md): buttons on assets that tell devices to act.
+- [Relays](relays.md): the relay bus, over BoneMesh and WebSocket, linking a hosted BAM! to printers and devices on a local network.
 - [Scanning](scanning.md): scan pages, scan templates and quick actions.
 - [Flows](flows.md): guided pages for everyday jobs, and their definitions.
 - [Reports](reports.md): saved views of assets, as tables and charts.

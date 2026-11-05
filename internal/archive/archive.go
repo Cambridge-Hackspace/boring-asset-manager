@@ -111,6 +111,8 @@ var Excluded = map[string]string{
 	"provider_sign_ins":       "sign-ins sent to an identity provider and not back, which lapse in ten minutes",
 	"saml_assertions":         "SAML assertions used to sign in, kept until they expire so each signs in once",
 	"account_links":           "links emailed to people about their accounts, which lapse within a week and work once",
+	"relay_holds":             "which server holds each relay now, gone when the servers stop",
+	"relay_mail":              "messages servers pass each other for relays, dropped within minutes",
 }
 
 // Header is header.json, the first member: what the archive is, before

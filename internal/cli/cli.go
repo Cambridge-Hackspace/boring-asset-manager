@@ -294,6 +294,8 @@ func Serve(configPath string) error {
 	go server.RunSpool(workerCtx)
 	// Send live connections the events they ask for.
 	go server.RunLive(workerCtx)
+	// Take relays' links, as [relay] turns them on (docs/relays.md).
+	go server.RunRelays(workerCtx)
 	go server.RunIcons(workerCtx)
 	// Fire hooks on events and schedules (docs/hooks.md).
 	go server.RunHookTriggers(workerCtx)
