@@ -183,6 +183,20 @@ func summarize(n Notification, esc func(string) string) summary {
 		out.Color = discordDanger
 		out.Title = "Notification channel turned off: " + esc(truncate(p.Channel.Name, 200))
 		out.Description = esc(p.Note) + " Its recent deliveries say why; turn it on again once it is fixed."
+	case (e.Kind == models.EventRelayOnline || e.Kind == models.EventRelayOffline) && p.Relay != nil:
+		// About no asset or category: the link is to the relays.
+		out.URL = ""
+		if base != "" {
+			out.URL = base + "/relays"
+		}
+		relay := esc(truncate(p.Relay.Name, 200))
+		if e.Kind == models.EventRelayOnline {
+			out.Title, out.Color = "Relay online: "+relay, discordNeutral
+			out.Description = "It is linked to BAM! again, and what it serves can be reached."
+		} else {
+			out.Title, out.Color = "Relay offline: "+relay, discordWarning
+			out.Description = "It is not linked to BAM! over any transport. The printers and devices it serves cannot be reached until it is back."
+		}
 	case e.Kind == models.EventFlowOverdue:
 		out.Title, out.Color = "Past its date: "+name, discordWarning
 		out.Description = "Left"

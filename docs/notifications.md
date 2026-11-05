@@ -24,7 +24,8 @@ Secret options can be written but are never returned; reads show only whether th
 `POST /api/v1/notifiers/{id}/test` sends a test message.
 
 Which events a channel can subscribe to is listed with each feature; see
-[Stock and lending](stock-and-lending.md), [Hooks](hooks.md) and [Access](access.md#too-many-wrong-passwords).
+[Stock and lending](stock-and-lending.md), [Hooks](hooks.md), [Access](access.md#too-many-wrong-passwords) and
+[Relays](relays.md#health).
 
 ## Delivery
 

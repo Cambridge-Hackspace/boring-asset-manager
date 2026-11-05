@@ -13,6 +13,11 @@ import (
 // refused with a nak saying which this node speaks.
 const Version = 1
 
+// MinVersion is the oldest version of the protocol the main node takes a
+// relay speaking. An older relay is refused when it pairs or renews, and
+// told to update.
+const MinVersion = 1
+
 // The types of message. Ack and nak are the protocol's own; the rest are
 // what relays are for.
 const (

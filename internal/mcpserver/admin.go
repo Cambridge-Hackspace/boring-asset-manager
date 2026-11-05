@@ -356,6 +356,41 @@ func adminTools() []tool {
 				return request{path: pathOf("/api/v1/notifiers/deliveries/{id}/retry", in.ID)}, need(in.ID, "id")
 			},
 			func(idIn, map[string]any) string { return "Queued to be sent again." }),
+		// Relays (docs/relays.md).
+		simple(&mcp.Tool{Name: "list_relays", Description: "Relays: each one's name, whether it is paired, online or offline and since when, its version and address, " +
+			"its allowlist, when its certificate expires, and whether it waits to pair or was revoked; and which transports are on.",
+			Annotations: readOnly("List relays")}, "GET /api/v1/relays", settings,
+			func(none) (request, error) { return request{path: "/api/v1/relays"}, nil },
+			func(_ none, out map[string]any) string { return fmt.Sprintf("%d relays.", count(out, "relays")) }),
+		simple(&mcp.Tool{Name: "add_relay", Description: "Add a relay by name (lowercase letters, digits and hyphens), and give it a code that pairs it once, " +
+			"within the hour, with the command to run on the relay's machine.",
+			Annotations: changes("Add a relay", false)}, "POST /api/v1/relays", settings,
+			func(in struct {
+				Name string `json:"name"`
+			}) (request, error) {
+				return request{path: "/api/v1/relays", body: map[string]any{"name": in.Name}}, need(in.Name, "name")
+			},
+			func(_ struct {
+				Name string `json:"name"`
+			}, out map[string]any) string {
+				return fmt.Sprintf("Added %q; it pairs with code %v, within the hour.", nameOf(out, "relay"), out["code"])
+			}),
+		simple(&mcp.Tool{Name: "new_relay_code", Description: "Give a relay a new code to pair with, as to pair it again on a new machine or after the mesh root was rotated. " +
+			"What it holds now works until the new code is used.",
+			Annotations: changes("Give a relay a new code", false)}, "POST /api/v1/relays/{id}/code", settings,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/relays/{id}/code", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string {
+				return fmt.Sprintf("%q pairs with code %v, within the hour.", nameOf(out, "relay"), out["code"])
+			}),
+		simple(&mcp.Tool{Name: "revoke_relay", Description: "Revoke a relay: its credential stops working, its connections close, and it can no longer renew its certificate. " +
+			"A relay that never paired is removed.",
+			Annotations: destroys("Revoke a relay", true)}, "DELETE /api/v1/relays/{id}", settings,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/relays/{id}", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string { return fmt.Sprintf("Revoked %q.", nameOf(out, "relay")) }),
 	}
 }
 

@@ -63,6 +63,9 @@ type Options struct {
 	// Poll is how often messages other servers left are read, and BoneMesh
 	// links are looked at; zero is a second.
 	Poll time.Duration
+	// Changed, when set, is told the peer whenever a link to it comes up
+	// or goes, as the main node follows which relays are online.
+	Changed func(peer string)
 }
 
 // Handler handles a message of one type. It runs on its own goroutine,
@@ -222,6 +225,9 @@ func (b *Bus) linkUp(transport, peer string, l link) {
 			log.Printf("relays: claiming %s over %s: %v", peer, transport, err)
 		}
 	}
+	if b.opts.Changed != nil {
+		b.opts.Changed(peer)
+	}
 }
 
 // linkDown removes a link, if it is still the peer's over its transport,
@@ -242,6 +248,9 @@ func (b *Bus) linkDown(transport, peer string, l link) {
 		if err := b.opts.Cluster.ReleaseRelay(peer, transport, b.opts.Server); err != nil {
 			log.Printf("relays: releasing %s over %s: %v", peer, transport, err)
 		}
+	}
+	if current && b.opts.Changed != nil {
+		b.opts.Changed(peer)
 	}
 }
 

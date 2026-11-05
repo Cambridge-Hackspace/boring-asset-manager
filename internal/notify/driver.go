@@ -93,6 +93,8 @@ var EventKinds = []EventKind{
 	{Kind: models.EventAuthRecoveryCodeUsed, Label: "Someone signs in with a recovery code"},
 	{Kind: models.EventAuthBreakGlass, Label: "Someone signs in with a password while passwords are off"},
 	{Kind: models.EventRoleTwoFactorOff, Label: "A role stops requiring two-factor sign-in"},
+	{Kind: models.EventRelayOffline, Label: "A relay goes offline"},
+	{Kind: models.EventRelayOnline, Label: "A relay comes online again"},
 }
 
 // EventKind is an event channels can subscribe to.

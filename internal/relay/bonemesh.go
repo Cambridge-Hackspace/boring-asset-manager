@@ -15,7 +15,15 @@ import (
 	"forge.axonibyte.com/axonibyte/bonemesh/go/v3/cert"
 	"forge.axonibyte.com/axonibyte/bonemesh/go/v3/crypto"
 	"forge.axonibyte.com/axonibyte/bonemesh/go/v3/node"
+	"github.com/cloudflare/circl/sign/mldsa/mldsa65"
 )
+
+// ValidIdentityKey reports whether key is the public half of an ML-DSA-65
+// key, as a node's identity is.
+func ValidIdentityKey(key []byte) bool {
+	var pub mldsa65.PublicKey
+	return len(key) == mldsa65.PublicKeySize && pub.UnmarshalBinary(key) == nil
+}
 
 // BoneMesh links are mutually authenticated and encrypted, but each hop
 // reads what it routes, and a node is told what a message carries, not

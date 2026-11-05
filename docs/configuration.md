@@ -193,6 +193,9 @@ Several settings can also be given in the environment:
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
 | `relay.bonemesh`, `relay.websocket` | `BAM_RELAY_BONEMESH`, `BAM_RELAY_WEBSOCKET` (`true` or `false`) |
 | `relay.bonemesh_port` | `BAM_RELAY_BONEMESH_PORT` |
+
+On a relay, `bam relay join` reads `BAM_RELAY_JOIN` (`"<url> <code>"`) and `BAM_RELAY_STATE`, where
+it keeps its pairing (see [Relays](relays.md#pairing)).
 | `email.host`, `email.port`, `email.tls` | `BAM_EMAIL_HOST`, `BAM_EMAIL_PORT`, `BAM_EMAIL_TLS` |
 | `email.username`, `email.password` | `BAM_EMAIL_USERNAME`, `BAM_EMAIL_PASSWORD` |
 | `email.from`, `email.reply_to`, `email.ca` | `BAM_EMAIL_FROM`, `BAM_EMAIL_REPLY_TO`, `BAM_EMAIL_CA` |
@@ -337,6 +340,13 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 # Send a test email through the [email] server (docs/notifications.md)
 ./bam email test --config ./config.toml --to you@example.org
 
+# Add a relay on the main node, printing the code that pairs it once, within the
+# hour; then pair the relay's machine with it, keeping the pairing in relay.json,
+# --state or $BAM_RELAY_STATE (docs/relays.md#pairing). With no arguments, join
+# reads "<url> <code>" from $BAM_RELAY_JOIN
+./bam admin relay add --name front-desk --config ./config.toml
+./bam relay join https://bam.example.org ABCD-EFGH-JKMN-PQRS
+
 ```
 
 ### Commands at a glance
@@ -358,3 +368,5 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 | `bam storage copy` | Copies every uploaded file to the store another configuration file's `[storage]` names. | [Above](#moving-between-stores) |
 | `bam mcp` | Relays an assistant that starts local programs to a server's MCP endpoint, as the API token in `$BAM_TOKEN`. | [MCP](mcp.md) |
 | `bam email test` | Sends a test email through the `[email]` server, so a mistake shows before a notification is missed. | [Notifications](notifications.md#email) |
+| `bam admin relay add` | Adds a relay, printing the one-time code that pairs it and the command to run on the relay. | [Relays](relays.md#without-the-web-interface) |
+| `bam relay join` | Pairs this machine as a relay of the main node at an address, with its code, or with `$BAM_RELAY_JOIN`, keeping the pairing in `relay.json`, `--state` or `$BAM_RELAY_STATE`. | [Relays](relays.md#pairing) |
