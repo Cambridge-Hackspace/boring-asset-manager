@@ -706,6 +706,32 @@ func TestVersionsAndTypesAreRefused(t *testing.T) {
 	}
 }
 
+// countingHole takes messages, loses them, and counts them.
+type countingHole struct{ sent *atomic.Int32 }
+
+func (c countingHole) send([]byte) error { c.sent.Add(1); return nil }
+func (countingHole) close(string)        {}
+func (countingHole) check() error        { return nil }
+
+func TestRetriesBackOff(t *testing.T) {
+	b := New(Options{Name: Main, Trust: newTestTrust(), Retry: 20 * time.Millisecond})
+	defer b.Close()
+	var sent atomic.Int32
+	b.mu.Lock()
+	b.links["r1"] = map[string]link{WebSocket: countingHole{&sent}}
+	b.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 700*time.Millisecond)
+	defer cancel()
+	if _, err := b.Send(ctx, "r1", TypeStatus, Status{}); !errors.Is(err, ErrUnreachable) {
+		t.Fatalf("a send never acknowledged ended with %v", err)
+	}
+	// Waits of 20, 40, 80 and 160 ms, then 160 ms each: about seven sends
+	// in 700 ms, where waiting 20 ms each time would send 35.
+	if n := sent.Load(); n < 4 || n > 10 {
+		t.Errorf("sent %d times in 700 ms", n)
+	}
+}
+
 func TestNoLinkGivesUp(t *testing.T) {
 	b := New(Options{Name: "r1", Retry: 20 * time.Millisecond})
 	defer b.Close()

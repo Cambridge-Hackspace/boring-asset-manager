@@ -31,6 +31,9 @@ const (
 	maxSeen = 1 << 16
 	// partsInFlight is how many parts of one message are sent at once.
 	partsInFlight = 16
+	// maxBackoff is how many retries' time a send waits at most between
+	// tries: each wait is twice the last, up to this many times the first.
+	maxBackoff = 8
 )
 
 // fromServer is the peer a message arrives from when another server
@@ -51,7 +54,8 @@ type Options struct {
 	// is a server on its own.
 	Cluster Cluster
 	// Retry is how long a send waits for an acknowledgment before sending
-	// again; zero is 2 seconds.
+	// again; zero is 2 seconds. Each wait after is twice the last, up to
+	// eight times Retry, so a slow link is not flooded with copies.
 	Retry time.Duration
 	// Timeout is how long a send with no deadline of its own tries before
 	// giving up; zero is a minute.
@@ -429,8 +433,11 @@ func (b *Bus) send(ctx context.Context, m Message) error {
 }
 
 // sendOne sends one message until it is acknowledged or refused, sending
-// again every retry, and over the next transport each time, so a link
-// that went quiet is passed over.
+// again after each wait, and over the next transport each time, so a link
+// that went quiet is passed over. Each wait is twice the last, up to
+// maxBackoff retries, so a link too slow to answer within one is not
+// flooded with copies that slow it further; a link coming or going starts
+// the waits over.
 func (b *Bus) sendOne(ctx context.Context, m Message) error {
 	data, err := json.Marshal(m)
 	if err != nil {
@@ -445,6 +452,7 @@ func (b *Bus) sendOne(ctx context.Context, m Message) error {
 		delete(b.acks, m.ID)
 		b.mu.Unlock()
 	}()
+	wait := b.opts.Retry
 	for attempt := 0; ; attempt++ {
 		b.mu.Lock()
 		changed := b.changed
@@ -455,14 +463,16 @@ func (b *Bus) sendOne(ctx context.Context, m Message) error {
 				return err
 			}
 		}
-		timer := time.NewTimer(b.opts.Retry)
+		timer := time.NewTimer(wait)
 		select {
 		case err := <-ch:
 			timer.Stop()
 			return err
 		case <-timer.C:
+			wait = min(2*wait, maxBackoff*b.opts.Retry)
 		case <-changed:
 			timer.Stop()
+			wait = b.opts.Retry
 		case <-ctx.Done():
 			timer.Stop()
 			return fmt.Errorf("%w: %s, after %d tries: %v", ErrUnreachable, m.To, attempt+1, ctx.Err())
