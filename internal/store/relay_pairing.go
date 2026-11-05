@@ -106,6 +106,9 @@ func (s *Store) GetRelay(id string) (*models.Relay, error) {
 	return r, err
 }
 
+// RelayByName reads a relay by its name, revoked ones included.
+func (s *Store) RelayByName(name string) (*models.Relay, error) { return s.relayByName(name) }
+
 // relayByName reads a relay by its name.
 func (s *Store) relayByName(name string) (*models.Relay, error) {
 	r, err := scanRelay(s.QueryRow("SELECT "+relayColumns+" FROM relays WHERE name = ?", name))

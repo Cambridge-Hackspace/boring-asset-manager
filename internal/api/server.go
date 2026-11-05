@@ -102,6 +102,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		s.sendMail = s.sendAccountMail
 	}
 	s.relays = s.newRelayBus()
+	// Printers may be reached through a relay (docs/relays.md).
+	s.transport = &printTransport{s: s, local: s.transport}
 	// The configuration was checked as it loaded, so its key reads.
 	key, _ := cfg.Auth.Key()
 	s.sealer, _ = auth.NewSealer(key)

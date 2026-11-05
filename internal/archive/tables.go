@@ -133,7 +133,7 @@ var Tables = []Table{
 		Columns: []Column{{"id", Text}, {"name", Text}, {"width_mm", Float}, {"length_mm", Float}, {"gap_mm", Float}, {"created_at", Time}, {"updated_at", Time}},
 	},
 	{Name: "printers", Kind: KindSettings, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"name", Text}, {"driver", Text}, {"model", Text}, {"connection_type", Text}, {"address", Text}, {"media", Text}, {"options", JSON}, {"created_at", Time}, {"updated_at", Time}},
+		Columns: []Column{{"id", Text}, {"name", Text}, {"driver", Text}, {"model", Text}, {"connection_type", Text}, {"address", Text}, {"media", Text}, {"options", JSON}, {"created_at", Time}, {"updated_at", Time}, {"relay", Text}},
 	},
 	{Name: "printer_pools", Kind: KindSettings, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"name", Text}, {"batch_size", Int}, {"fixed_shares", Bool}, {"created_at", Time}, {"updated_at", Time}},

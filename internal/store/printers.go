@@ -19,10 +19,10 @@ var (
 	ErrPrinterNameExists = errors.New("a printer with this name already exists")
 )
 
-const printerColumns = `id, name, driver, model, connection_type, address, media, options, created_at, updated_at`
+const printerColumns = `id, name, driver, model, connection_type, address, relay, media, options, created_at, updated_at`
 
 // selectPrinters reads printers with the custom stock they name, if any.
-const selectPrinters = `SELECT p.id, p.name, p.driver, p.model, p.connection_type, p.address, p.media, p.options, p.created_at, p.updated_at,
+const selectPrinters = `SELECT p.id, p.name, p.driver, p.model, p.connection_type, p.address, p.relay, p.media, p.options, p.created_at, p.updated_at,
 	s.id, s.name, s.width_mm, s.length_mm, s.gap_mm FROM printers p LEFT JOIN label_stock s ON s.id = p.media`
 
 // preparePrinter normalizes and validates a printer before it is written,
@@ -92,8 +92,8 @@ func (s *Store) CreatePrinter(p models.Printer) (*models.Printer, error) {
 	p.ID = uuid.NewString()
 	now := time.Now().UTC()
 	p.CreatedAt, p.UpdatedAt = now, now
-	_, err = s.Exec(`INSERT INTO printers (`+printerColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Name, p.Driver, p.Model, p.Connection.Type, p.Connection.Address, p.Media, options, p.CreatedAt, p.UpdatedAt)
+	_, err = s.Exec(`INSERT INTO printers (`+printerColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Name, p.Driver, p.Model, p.Connection.Type, p.Connection.Address, p.Connection.Relay, p.Media, options, p.CreatedAt, p.UpdatedAt)
 	if err != nil {
 		return nil, printerWriteError(err)
 	}
@@ -142,8 +142,8 @@ func (s *Store) UpdatePrinter(p models.Printer) (*models.Printer, error) {
 		return nil, err
 	}
 	p.CreatedAt, p.UpdatedAt = existing.CreatedAt, time.Now().UTC()
-	_, err = s.Exec(`UPDATE printers SET name = ?, driver = ?, model = ?, connection_type = ?, address = ?, media = ?, options = ?, updated_at = ? WHERE id = ?`,
-		p.Name, p.Driver, p.Model, p.Connection.Type, p.Connection.Address, p.Media, options, p.UpdatedAt, p.ID)
+	_, err = s.Exec(`UPDATE printers SET name = ?, driver = ?, model = ?, connection_type = ?, address = ?, relay = ?, media = ?, options = ?, updated_at = ? WHERE id = ?`,
+		p.Name, p.Driver, p.Model, p.Connection.Type, p.Connection.Address, p.Connection.Relay, p.Media, options, p.UpdatedAt, p.ID)
 	if err != nil {
 		return nil, printerWriteError(err)
 	}
@@ -177,7 +177,7 @@ func scanPrinter(row rowScanner) (*models.Printer, error) {
 		stockID, stockName sql.NullString
 		width, length, gap sql.NullFloat64
 	)
-	err := row.Scan(&p.ID, &p.Name, &p.Driver, &p.Model, &p.Connection.Type, &p.Connection.Address, &p.Media, &options, &p.CreatedAt, &p.UpdatedAt,
+	err := row.Scan(&p.ID, &p.Name, &p.Driver, &p.Model, &p.Connection.Type, &p.Connection.Address, &p.Connection.Relay, &p.Media, &options, &p.CreatedAt, &p.UpdatedAt,
 		&stockID, &stockName, &width, &length, &gap)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

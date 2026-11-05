@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { Relay, RelayCode, RelayList } from '../../lib/models';
+  import type { Relay, RelayCode, RelayList, RelayPrinter } from '../../lib/models';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PageHeader from '../../components/PageHeader.svelte';
@@ -35,6 +35,15 @@
     }
   }
   onMount(load);
+
+  const jobStates: Record<string, string> = { done: 'printed', failed: 'failed', sending: 'sending', waiting: 'waiting', canceled: 'canceled' };
+
+  /** A printer through a relay, and how its last job went. */
+  function printerLine(p: RelayPrinter): string {
+    if (!p.last_job) return `${p.name}: no jobs yet`;
+    const state = jobStates[p.last_job.state] ?? p.last_job.state;
+    return `${p.name}: ${state} ${moment(p.last_job.at)}${p.last_job.error ? ` (${p.last_job.error})` : ''}`;
+  }
 
   /** Where a relay stands: waiting to pair, online or offline and since when, or revoked. */
   function standing(r: Relay): string {
@@ -186,6 +195,7 @@
           <th scope="col" class="py-2 pr-4">Version</th>
           <th scope="col" class="py-2 pr-4">Address</th>
           <th scope="col" class="py-2 pr-4">May reach</th>
+          <th scope="col" class="py-2 pr-4">Printers</th>
           <th scope="col" class="py-2 pr-4">Certificate</th>
           <th scope="col" class="py-2"><span class="sr-only">Actions</span></th>
         </tr>
@@ -198,6 +208,9 @@
             <td class="py-2 pr-4">{r.version}</td>
             <td class="py-2 pr-4">{r.address}</td>
             <td class="py-2 pr-4">{r.allowlist.join(', ')}</td>
+            <td class="py-2 pr-4">
+              {#each r.printers ?? [] as p (p.id)}<span class="block">{printerLine(p)}</span>{/each}
+            </td>
             <td class="py-2 pr-4 whitespace-nowrap">{r.paired && !r.revoked_at ? `Until ${day(r.cert_expires_at)}` : ''}</td>
             <td class="py-2 text-right whitespace-nowrap">
               {#if !r.revoked_at}

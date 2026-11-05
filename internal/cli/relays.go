@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/relay"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/relayd"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -107,4 +110,37 @@ func RelayJoin(ctx context.Context, mainURL, code, state, version string, out io
 	fmt.Fprintf(out, "Paired as relay %s of %s, over %s. The pairing is kept in %s; its certificate is renewed before %s.\n",
 		p.Name, p.Main, strings.Join(over, " and "), path, p.ExpiresAt.Local().Format("2 January 2006"))
 	return nil
+}
+
+// RelayRun runs this machine as a relay (docs/relays.md), with the pairing
+// kept at state, until ctx ends. The configuration at configPath, if
+// there is one, and the environment give its allowlist ([relay] allow and
+// [printers] devices). It links over the transports its pairing offers,
+// less any turned off here.
+func RelayRun(ctx context.Context, configPath, state string, bonemesh, websocket bool, version string) error {
+	path := RelayStatePath(state)
+	p, err := relay.LoadPairing(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("no pairing is kept at %s: pair this machine first, with bam relay join", path)
+	}
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("loading configuration: %w", err)
+	}
+	allow, err := relayd.ParseAllowlist(cfg.Relay.Allow, cfg.Printers.Devices)
+	if err != nil {
+		return err
+	}
+	if len(allow.Summary()) == 0 {
+		log.Printf("The allowlist is empty, so relay %s may reach nothing: list what it may reach under [relay] allow and [printers] devices", p.Name)
+	}
+	r, err := relayd.New(relayd.Config{Pairing: p, State: path, Version: version, BoneMesh: bonemesh, WebSocket: websocket,
+		Allow: allow, Transport: printers.NewDispatcher(cfg.Printers.Devices)})
+	if err != nil {
+		return err
+	}
+	return r.Run(ctx)
 }
