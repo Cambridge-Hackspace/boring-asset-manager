@@ -137,6 +137,8 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `next_code` | `assets.write` | |
 | `export_assets` | `assets.read` | The CSV ([CSV](csv.md)), as an embedded file. |
 | `assets_pdf` | `assets.read` | The assets a search selects as a PDF table of the columns chosen ([Reports](reports.md#pdf)), as an embedded file. |
+| `asset_sheets_pdf` | `assets.read` | An asset's sheet, or a sheet for each asset a search selects ([Reports](reports.md#asset-sheets)), as an embedded file. |
+| `stocktake_pdf` | `assets.read` | A stocktake checklist of the assets a search selects, grouped by place ([Reports](reports.md#asset-sheets)), as an embedded file. |
 
 ### Changing assets
 
