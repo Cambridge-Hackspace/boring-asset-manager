@@ -646,6 +646,46 @@ export interface Delivery {
   response_body?: string;
 }
 
+/** A relay: BAM! run beside printers on a local network, linked to this one (docs/relays.md). */
+export interface Relay {
+  id: string;
+  name: string;
+  /** Holds a certificate and credential; until then, code_expires_at says when its code lapses. */
+  paired: boolean;
+  code_expires_at?: string | null;
+  paired_at?: string | null;
+  cert_expires_at?: string | null;
+  /** Revoked relays are listed until their certificate expires, holding their name. */
+  revoked_at?: string | null;
+  online: boolean;
+  /** Since when it is online, or offline. */
+  status_at?: string | null;
+  version: string;
+  address: string;
+  allowlist: string[];
+  /** The transports it is linked to this server over now. */
+  transports: string[];
+  created_at: string;
+}
+
+/** The relays page's list: the relays, the mesh root, and which transports are on. */
+export interface RelayList {
+  relays: Relay[];
+  mesh: { name: string; created_at: string } | null;
+  bonemesh: boolean;
+  websocket: boolean;
+  secret_key: boolean;
+  url: string;
+}
+
+/** A relay just added, or given a new code: the code, shown once, and the command that pairs it. */
+export interface RelayCode {
+  relay: Relay;
+  code: string;
+  expires_at: string;
+  command: string;
+}
+
 /** An API token for scripts and dashboards; its secret is shown only once. */
 export interface APIToken {
   id: string;

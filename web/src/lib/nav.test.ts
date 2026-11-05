@@ -20,7 +20,7 @@ describe('navSections', () => {
       ['', ['Assets', 'Scan', 'Loans', 'Print queue', 'Reports']],
       ['Catalog', ['Categories', 'Fields', 'Link types', 'Hooks', 'Icons']],
       ['Labels', ['Templates', 'Images', 'Printers']],
-      ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Sign-in', 'Backups', 'Import & export']],
+      ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Sign-in', 'Backups', 'Import & export']],
     ]);
   });
 

@@ -25,6 +25,8 @@ Available Commands:
   admin create  Provision an initial superuser account (requires --email and --password; --name optional)
   admin password Set an account's password, signing it out everywhere (requires --email and --password)
   admin mfa reset Remove an account's second factors, signing it out everywhere (requires --email)
+  admin relay add Add a relay, printing the one-time code it pairs with (requires --name)
+  relay join    Pair this machine as a relay: bam relay join <url> <code> (or $BAM_RELAY_JOIN; --state <file>)
   serve         Start the HTTP daemon
   backup        Write an archive of the instance, files included (requires --to; --split <size>, --without-secrets);
                 a --to ending in .db copies a SQLite database instead, and exits 3 for other databases
@@ -78,6 +80,17 @@ func main() {
 		}
 
 	case "admin":
+		if len(os.Args) >= 4 && os.Args[2] == "relay" && os.Args[3] == "add" {
+			addCmd := flag.NewFlagSet("admin relay add", flag.ExitOnError)
+			name := addCmd.String("name", "", "The relay's name: lowercase letters, digits and hyphens")
+			configPath := addCmd.String("config", "config.toml", "Path to configuration file")
+			_ = addCmd.Parse(os.Args[4:])
+			if err := cli.AdminRelayAdd(*configPath, *name, os.Stdout); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		mfaReset := len(os.Args) >= 4 && os.Args[2] == "mfa" && os.Args[3] == "reset"
 		mfaRequire := len(os.Args) >= 4 && os.Args[2] == "mfa" && os.Args[3] == "require"
 		if !mfaReset && !mfaRequire && (len(os.Args) < 3 || (os.Args[2] != "create" && os.Args[2] != "password")) {
@@ -85,6 +98,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "       bam admin password --email <email> --password <password> [--config <path>]\n")
 			fmt.Fprintf(os.Stderr, "       bam admin mfa reset --email <email> [--config <path>]\n")
 			fmt.Fprintf(os.Stderr, "       bam admin mfa require --role <name> [--off] [--config <path>]\n")
+			fmt.Fprintf(os.Stderr, "       bam admin relay add --name <name> [--config <path>]\n")
 			os.Exit(1)
 		}
 		if mfaRequire {
@@ -279,6 +293,23 @@ func main() {
 
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		err := cli.MCP(ctx, *url, os.Getenv(*tokenEnv), os.Stdin, os.Stdout)
+		stop()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "relay":
+		if len(os.Args) < 3 || os.Args[2] != "join" {
+			fmt.Fprintf(os.Stderr, "Usage: bam relay join [--state <file>] <url> <code>\n")
+			os.Exit(1)
+		}
+		joinCmd := flag.NewFlagSet("relay join", flag.ExitOnError)
+		state := joinCmd.String("state", "", "Where to keep the pairing (default: $BAM_RELAY_STATE, or relay.json)")
+		_ = joinCmd.Parse(os.Args[3:])
+		mainURL, code := joinCmd.Arg(0), joinCmd.Arg(1)
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		err := cli.RelayJoin(ctx, mainURL, code, *state, api.Version, os.Stdout)
 		stop()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

@@ -166,6 +166,12 @@ var Tables = []Table{
 	{Name: "auth_provider_rules", Kind: KindSettings, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"provider_id", Text}, {"position", Int}, {"claim", Text}, {"claim_value", Text}, {"role_id", Text}, {"scope_ids", JSON}},
 	},
+	// Relays' codes and credentials are kept as hashes, in auth/: without them a
+	// restored relay pairs again with a new code.
+	{Name: "relays", Kind: KindSettings, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"name", Text}, {"code_hash", Text}, {"code_expires_at", Time}, {"identity_key", Text}, {"credential_hash", Text}, {"cert_expires_at", Time}, {"paired_at", Time}, {"revoked_at", Time}, {"online", Bool}, {"status_at", Time}, {"version", Text}, {"address", Text}, {"allowlist", JSON}, {"created_at", Time}},
+		Secret:  []string{"code_hash", "credential_hash"},
+	},
 	{Name: "sessions", Kind: KindAuth, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"user_id", Text}, {"expires_at", Time}, {"created_at", Time}, {"factor_setup", Bool}},
 	},
@@ -191,5 +197,10 @@ var Tables = []Table{
 	},
 	{Name: "api_token_role_scopes", Kind: KindAuth, Key: []string{"token_id", "role_id", "scope_id"},
 		Columns: []Column{{"token_id", Text}, {"role_id", Text}, {"scope_id", Text}},
+	},
+	// The mesh root's and the main node's private keys are sealed with the
+	// configuration's key, as second factors' secrets are.
+	{Name: "relay_mesh", Kind: KindAuth, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"mesh", Text}, {"root_public", Text}, {"root_private", Text}, {"main_public", Text}, {"main_private", Text}, {"created_at", Time}},
 	},
 }

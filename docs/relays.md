@@ -4,9 +4,9 @@ A relay is BAM! itself, run on a machine on a local network, such as a Raspberry
 printer. It lets a BAM! hosted elsewhere reach printers and devices on that network. The relay dials
 out to the main BAM!, so nothing on the local network is opened to the internet.
 
-This page describes the relay bus: how the main node and its relays talk. Pairing relays (giving each
-its credential and certificate) and `bam relay` itself are built on it, and are not part of BAM! yet.
-Until a relay is paired, the main node takes no relay's connection.
+This page describes the relay bus, how the main node and its relays talk, and how a relay is paired,
+watched and revoked. `bam relay` itself, which runs a relay beside printers, is built on these, and
+is not part of BAM! yet: `bam relay join` pairs a machine and keeps its pairing, ready for it.
 
 ## Transports
 
@@ -69,7 +69,7 @@ BAM! uses its Go implementation, `forge.axonibyte.com/axonibyte/bonemesh/go/v3`.
   for that node. A relay therefore cannot speak as another, and relays accept messages from the main
   node alone.
 - **Turned off:** while `bonemesh` is off, nothing listens on the port. While it is on, the main node
-  listens once it has a BoneMesh identity, which pairing makes.
+  listens once there is a mesh root, which pairing the first relay makes (see [Pairing](#pairing)).
 
 BoneMesh carries a message in segments of up to 24,000 bytes, and keeps a retry queue of its own.
 The bus relies on neither: its own parts, signed, usually fit in a segment each, and its own
@@ -186,33 +186,135 @@ seconds was left by a stopped server.
   `main` delivered by both, as each server remembers only what it delivered. Whatever handles
   messages to `main` takes each as possibly repeated.
 
+## Pairing
+
+Relays are added under **Admin › Relays**, by someone with `settings.manage`. Pairing needs
+`[auth] secret_key` in the configuration, which seals the mesh root.
+
+1. **An admin adds a relay,** naming it. Its name is its node name, and printers will name it by it:
+   lowercase letters, digits and hyphens. BAM! gives a one-time code, which works once, for an hour,
+   and the command to run on the relay's machine:
+
+   ```
+   bam relay join https://bam.example.org ABCD-EFGH-JKMN-PQRS
+   ```
+
+2. **The relay makes its own identity key,** an ML-DSA-65 key pair, and sends the public half with
+   the code (`POST /api/v1/relays/join`). The private key never leaves the relay.
+3. **The main node issues** a BoneMesh membership certificate for that key, valid for 7 days, and a
+   WebSocket credential. It keeps the relay's public key and the credential's SHA-256, never the
+   credential itself. It also tells the relay its BoneMesh address, if BoneMesh is on, and whether it
+   takes WebSocket.
+4. **The relay keeps its pairing** in a file only its owner reads: `relay.json`, or `--state`, or
+   `$BAM_RELAY_STATE`. `bam relay join` refuses to replace a pairing already kept.
+
+A code is used up by pairing, and refused after its hour: "This code has expired". A code used
+already, or mistyped, is refused alike: "This code is not valid, or was used already". **New code**
+gives a relay a new one, as to pair it again on a new machine; what it holds works until the new
+code is used.
+
+### Without the web interface
+
+For instances a portal provisions, `bam admin relay add --name <name>` adds a relay on the main node
+and prints its code and command. On the relay, `bam relay join` with no arguments reads the address
+and code from `$BAM_RELAY_JOIN`, as `"https://bam.example.org ABCD-EFGH-JKMN-PQRS"`.
+
+### Renewing
+
+A relay's certificate lasts 7 days. While it is paired, the relay renews it with its credential
+(`POST /api/v1/relays/renew`), and is given a new one for the same key. `bam relay` will renew on a
+schedule; `relay.Pairing.Renew` is what it calls.
+
+### Versions
+
+A relay says which version of the relay protocol it speaks as it pairs and renews. One older than
+the main node takes is refused with `409`, saying which version is needed and which BAM! to update
+the relay to. Once linked, a message of a version a node does not speak is refused with a `nak`
+([above](#versions)).
+
+### The mesh root
+
+The mesh root is the main node's, made the first time a relay pairs, with the main node's own
+BoneMesh identity. Both private keys are kept in the database (`relay_mesh`), sealed with
+`[auth] secret_key`, and kept in backups with authentication (see [Backups](backups.md)). Every
+server sharing the database uses them, and starts its BoneMesh transport once there is a root. The
+main node's own certificate is issued as the server starts BoneMesh, valid for 30 days, and the
+server starts BoneMesh again with a new one a week before it expires.
+
+**Rotate the mesh root** makes a new one. Every relay is unpaired at once, keeping its name, and
+pairs again with a new code. Servers start BoneMesh again under the new root, at once on the server
+that rotated it and within 10 seconds on others.
+
+## Health
+
+**Admin › Relays** lists each relay:
+
+- online or offline, and since when, and over which transports it is linked to the server showing
+  the page;
+- its version, and the address it last paired or renewed from;
+- what its allowlist covers, as the relay reports in its `status`;
+- when its certificate expires;
+- waiting to pair, with when its code lapses, or revoked.
+
+A relay is online once any server holds a link to it. It goes offline when no server has held it for
+the 30 seconds a claim lasts, so a relay that dials again at once is not said to have gone. Each
+server checks every 10 seconds.
+
+- **Events:** `relay.online` and `relay.offline` are recorded as a relay comes and goes, once
+  however many servers see it, and notification channels can subscribe to them
+  ([Notifications](notifications.md)).
+- **Printers:** no printer uses a relay yet. Once printers can print through one, the relays page
+  will list them.
+
 ## Trust
 
 Trust does not depend on the transport. A relay is the same paired identity over either. Its
-WebSocket credential and its BoneMesh certificate are both issued at pairing, and revoking the relay
-ends both:
+WebSocket credential and its BoneMesh certificate are both issued at pairing. The bus asks a `Trust`
+(`internal/relay`) for each relay's credential and identity key, and for the node's own BoneMesh
+identity; on the main node, they come from the relays paired and the mesh root.
 
-- its WebSocket connections close, at once on the server that revoked it and within 10 seconds on
-  others;
-- its BoneMesh messages are refused, since its identity key is no longer trusted. The Go node cannot
-  close a session from outside, so the session itself lasts until the certificate expires; it
-  carries nothing in the meantime.
+### Revoking
 
-The bus asks a `Trust` (`internal/relay`) for each relay's credential and identity key, and for the
-node's own BoneMesh identity. Pairing provides it. Until it does, the main node trusts no relay.
+**Revoke** ends a relay:
+
+- its WebSocket credential stops working, and its connections close, at once on the server that
+  revoked it and within 10 seconds on others;
+- it can no longer renew its certificate;
+- its BoneMesh messages are refused at once, since its identity key is no longer trusted.
+
+BoneMesh checks a certificate by its validity window alone, so a revoked relay's certificate still
+passes BoneMesh's handshake until it expires. The revoked relay stays listed until then, and that is
+the denylist: its key is refused, the main node will not link to it, and its name cannot be given to
+another relay, so a new relay of that name could not be mistaken for it. Once its certificate
+expires, it is forgotten. The Go node cannot close a session from outside, so a session a revoked
+relay already had lasts until then too; it carries nothing.
+
+A relay that never paired is removed at once.
 
 ## API
 
 | Method and route | Permission | Purpose |
 |---|---|---|
 | `GET /api/v1/relay/live` | A relay's credential, as `Authorization: Relay …` | A relay's WebSocket link to the main node |
+| `GET /api/v1/relays` | `settings.manage` | The relays, with their health and the transports each is linked over here; the mesh root's name; whether `bonemesh`, `websocket` and `secret_key` are set |
+| `POST /api/v1/relays` | `settings.manage` | Add a relay, `{name}`: answers its `code`, when it expires, and the `command` that pairs it |
+| `POST /api/v1/relays/{id}/code` | `settings.manage` | Give a relay a new code |
+| `DELETE /api/v1/relays/{id}` | `settings.manage` | Revoke a relay, or remove one that never paired |
+| `POST /api/v1/relays/mesh/rotate` | `settings.manage` | Rotate the mesh root, unpairing every relay |
+| `POST /api/v1/relays/join` | The code | Pair: `{code, identity_key, version, protocol}`, answered with the certificate, credential and what the relay needs to link |
+| `POST /api/v1/relays/renew` | A relay's credential | Renew a relay's certificate: `{version, protocol}` |
 
-The route is not offered over MCP: it is for relays alone.
+Over MCP, `list_relays`, `add_relay`, `new_relay_code` and `revoke_relay` manage relays. Linking,
+pairing and renewing are a relay's own, and rotating the mesh root stays with a person signed in.
 
 ## Storage
 
 | Migration | Adds |
 |---|---|
 | `061` | `relay_holds` and `relay_mail`, for [several servers](#several-servers) |
+| `063` | `relays`, with their codes, keys and health, and `relay_mesh`, the mesh root |
 
-Neither is kept in backups (see [Backups](backups.md)): both describe the servers running now.
+`relay_holds` and `relay_mail` are not kept in backups: both describe the servers running now.
+`relays` is kept with the settings, its codes' and credentials' hashes with authentication, and
+`relay_mesh` with authentication (see [Backups](backups.md)). Restored without authentication, a
+relay pairs again with a new code.

@@ -157,6 +157,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/icons?tab=settings', 'Icons'],
     ['/printers', 'Printers'],
     ['/notifications', 'Notifications'],
+    ['/relays', 'Relays'],
     ['/users', 'Users'],
     ['/roles', 'Roles'],
     ['/tokens', 'API tokens'],
