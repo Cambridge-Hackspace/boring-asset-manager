@@ -96,6 +96,8 @@ describe('AssetPage stock', () => {
     expect(screen.queryByRole('button', { name: 'Use' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Mark restocked' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Edit' })).toBeTruthy();
+    // Its sheet, for anyone who reads it.
+    expect(screen.getByRole('link', { name: 'Sheet PDF' }).getAttribute('href')).toBe('/api/v1/assets/a1/sheet.pdf');
   });
 });
 

@@ -2,7 +2,9 @@
   A PDF of a report or of the asset list (docs/reports.md#pdf): its page
   size, the instance's unless another is chosen, its orientation, and
   whether rows have their asset's photo and label; for the asset list, which
-  columns. What it needs from the server is read when it is first opened.
+  columns, or instead a sheet per asset or a stocktake checklist
+  (docs/reports.md#asset-sheets). What it needs from the server is read
+  when it is first opened.
 -->
 <script lang="ts">
   import { request } from '../lib/api';
@@ -17,9 +19,19 @@
     base: string;
     /** What else its query holds, such as the list's filters. */
     query?: Record<string, string>;
-    /** Whether the columns of the asset list are chosen. */
+    /** Whether the columns of the asset list are chosen, and its sheets and stocktake offered. */
     assetColumns?: boolean;
   } = $props();
+
+  // What the asset list is made into: a table, a sheet per asset, or a
+  // stocktake checklist, each at its own address.
+  const kinds = [
+    { value: 'table', label: 'A table', path: '' },
+    { value: 'sheets', label: 'A sheet per asset', path: '/api/v1/assets/sheets.pdf' },
+    { value: 'stocktake', label: 'A stocktake checklist', path: '/api/v1/assets/stocktake.pdf' },
+  ];
+  let kind = $state('table');
+  const table = $derived(kind === 'table');
 
   const fixedColumns = [
     { value: 'name', label: 'Name', checked: true },
@@ -61,10 +73,11 @@
     const q = new URLSearchParams(Object.entries(query).filter(([, v]) => v));
     q.set('page_size', pageSize);
     if (orientation !== 'portrait') q.set('orientation', orientation);
-    if (photos) q.set('photos', '1');
-    if (labels) q.set('labels', '1');
-    if (assetColumns && chosen.length) q.set('columns', columns.map((c) => c.value).filter((v) => chosen.includes(v)).join(','));
-    return `${base}?${q.toString()}`;
+    if (table && photos) q.set('photos', '1');
+    if (table && labels) q.set('labels', '1');
+    if (table && assetColumns && chosen.length) q.set('columns', columns.map((c) => c.value).filter((v) => chosen.includes(v)).join(','));
+    const path = kinds.find((k) => k.value === kind)?.path || base;
+    return `${path}?${q.toString()}`;
   });
 </script>
 
@@ -87,9 +100,19 @@
         </select>
       </label>
     </div>
-    <label class="flex items-center gap-2"><input type="checkbox" bind:checked={photos} /> Each asset's photo</label>
-    <label class="flex items-center gap-2"><input type="checkbox" bind:checked={labels} /> Each asset's label</label>
     {#if assetColumns}
+      <fieldset class="space-y-1">
+        <legend class="label">Make</legend>
+        {#each kinds as k (k.value)}
+          <label class="flex items-center gap-2"><input type="radio" name="pdf-kind" value={k.value} bind:group={kind} /> {k.label}</label>
+        {/each}
+      </fieldset>
+    {/if}
+    {#if table}
+      <label class="flex items-center gap-2"><input type="checkbox" bind:checked={photos} /> Each asset's photo</label>
+      <label class="flex items-center gap-2"><input type="checkbox" bind:checked={labels} /> Each asset's label</label>
+    {/if}
+    {#if assetColumns && table}
       <fieldset class="space-y-1">
         <legend class="label">Columns</legend>
         <div class="max-h-40 space-y-1 overflow-y-auto">
