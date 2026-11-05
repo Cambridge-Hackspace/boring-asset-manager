@@ -229,11 +229,13 @@ func (d *Document) Paragraph(s string, paint Paint) {
 
 // Table is rows under a heading row, in groups, each with a title when
 // the table is grouped. Pictures are columns of images before the text,
-// headed by PictureColumns.
+// headed by PictureColumns. Checkbox puts an empty box to tick before
+// each row, as on a checklist.
 type Table struct {
 	Columns        []string
 	PictureColumns []string
 	Groups         []TableGroup
+	Checkbox       bool
 }
 
 // TableGroup is rows under a title, or with none.
@@ -265,11 +267,15 @@ func (d *Document) Table(t Table) {
 	if len(t.PictureColumns) > 0 {
 		rowH = math.Max(rowH, pt(docImageRow))
 	}
+	checkW := 0.0
+	if t.Checkbox {
+		checkW = pt(docCheckboxW)
+	}
 
 	header := func() {
 		d.log = append(d.log, "header")
 		d.box(d.left(), d.y, d.right()-d.left(), textRow, Gray90)
-		x := d.left()
+		x := d.left() + checkW
 		base := d.y + pad + d.ascent(docBody)
 		for i, name := range t.PictureColumns {
 			d.text(d.fit(name, pictureW[i]-2*pad, docBody, true), x+pad, base, docBody, true, Black)
@@ -311,6 +317,10 @@ func (d *Document) Table(t Table) {
 				}
 			}
 			x := d.left()
+			if t.Checkbox {
+				d.checkbox(x+pad, d.y+(rowH-pt(docCheckbox))/2)
+				x += checkW
+			}
 			for i := range t.PictureColumns {
 				if i < len(r.Pictures) && r.Pictures[i] != nil {
 					d.picture(r.Pictures[i], x+pad, d.y+pad, pictureW[i]-2*pad, rowH-2*pad)
@@ -344,6 +354,9 @@ func (d *Document) Table(t Table) {
 func (d *Document) columns(t Table) ([]float64, []bool) {
 	pad := pt(docCellPad)
 	avail := d.right() - d.left()
+	if t.Checkbox {
+		avail -= pt(docCheckboxW)
+	}
 	for _, name := range t.PictureColumns {
 		if strings.EqualFold(name, "label") {
 			avail -= pt(docLabelW)

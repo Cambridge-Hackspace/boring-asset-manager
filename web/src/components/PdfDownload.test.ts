@@ -49,6 +49,30 @@ describe('PdfDownload', () => {
     expect(q.get('search')).toBe('drill');
     expect(q.has('category_id')).toBe(false);
   });
+
+  it('makes the asset list into a sheet per asset or a stocktake, with its filters but no columns or pictures', async () => {
+    fakeApi({
+      'GET /settings/documents': () => ({ instance_name: 'Shop', page_size: 'letter' }),
+      'GET /fields': () => ({ fields: [] }),
+    });
+    render(PdfDownload, { base: '/api/v1/assets/export.pdf', query: { search: 'drill' }, assetColumns: true });
+    await openIt();
+    await fireEvent.click(screen.getByLabelText("Each asset's photo"));
+    await fireEvent.click(screen.getByLabelText('A stocktake checklist'));
+    const href = () => screen.getByRole('link', { name: 'Download PDF' }).getAttribute('href')!;
+    expect(href()).toMatch(/^\/api\/v1\/assets\/stocktake\.pdf\?/);
+    expect(screen.queryByLabelText("Each asset's photo")).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Columns' })).toBeNull();
+    expect(linkQuery().get('search')).toBe('drill');
+    expect(linkQuery().has('photos')).toBe(false);
+    expect(linkQuery().has('columns')).toBe(false);
+
+    await fireEvent.click(screen.getByLabelText('A sheet per asset'));
+    expect(href()).toMatch(/^\/api\/v1\/assets\/sheets\.pdf\?/);
+    await fireEvent.click(screen.getByLabelText('A table'));
+    expect(href()).toMatch(/^\/api\/v1\/assets\/export\.pdf\?/);
+    expect(linkQuery().get('photos')).toBe('1');
+  });
 });
 
 describe('DocumentSettings', () => {

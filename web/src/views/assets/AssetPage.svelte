@@ -236,6 +236,7 @@
         {/if}
       {:else}
         {#if asset.holds}<a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/scene">See inside</a>{/if}
+        <a class="btn-secondary" href="/api/v1/assets/{encodeURIComponent(id)}/sheet.pdf" download>Sheet PDF</a>
         {#if session.canOn(asset.scopes, 'assets.write')}
           <a class="btn-secondary" href="/assets/{encodeURIComponent(id)}/edit">Edit</a>
         {/if}

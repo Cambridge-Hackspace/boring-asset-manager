@@ -37,6 +37,27 @@ func (in documentIn) query(q url.Values) string {
 	return "?" + q.Encode()
 }
 
+// pageIn is how a sheet's pages are made.
+type pageIn struct {
+	PageSize    string `json:"page_size,omitempty" jsonschema:"letter or a4; the instance's when not given"`
+	Orientation string `json:"orientation,omitempty" jsonschema:"portrait (the default) or landscape"`
+}
+
+func (in pageIn) query(q url.Values) string {
+	return documentIn{PageSize: in.PageSize, Orientation: in.Orientation}.query(q)
+}
+
+// filters are the asset list's search and category, as a query.
+func filters(search, categoryID string) url.Values {
+	q := url.Values{}
+	for k, v := range map[string]string{"search": search, "category_id": categoryID} {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	return q
+}
+
 // pdfReply is a PDF the API made, for the client to keep.
 func pdfReply(res Response, uri string) (reply[map[string]any], error) {
 	if res.Status != http.StatusOK {
@@ -78,6 +99,34 @@ func documentTools() []tool {
 				}
 				res := e.api(ctx, http.MethodGet, "/api/v1/assets/export.pdf"+in.query(q), nil, "")
 				return pdfReply(res, "bam://export/assets.pdf")
+			}),
+		define(&mcp.Tool{Name: "asset_sheets_pdf", Description: "Assets' sheets as a PDF, one page each, as people download them: " +
+			"photo, codes drawn, label, categories, place, condition, loan, fields, links and recent history, for insurance records, " +
+			"handovers or a machine's binder. Give id for one asset, or a search and category for many.",
+			Annotations: readOnly("Asset sheets")}, []string{"GET /api/v1/assets/{id}/sheet.pdf", "GET /api/v1/assets/sheets.pdf"}, read,
+			func(ctx context.Context, e *env, in struct {
+				ID         string `json:"id,omitempty" jsonschema:"one asset's sheet"`
+				Search     string `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in"`
+				CategoryID string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
+				pageIn
+			}) (reply[map[string]any], error) {
+				if in.ID != "" {
+					res := e.api(ctx, http.MethodGet, pathOf("/api/v1/assets/{id}/sheet.pdf", in.ID)+in.query(url.Values{}), nil, "")
+					return pdfReply(res, "bam://assets/"+in.ID+"/sheet.pdf")
+				}
+				res := e.api(ctx, http.MethodGet, "/api/v1/assets/sheets.pdf"+in.query(filters(in.Search, in.CategoryID)), nil, "")
+				return pdfReply(res, "bam://export/asset-sheets.pdf")
+			}),
+		define(&mcp.Tool{Name: "stocktake_pdf", Description: "A stocktake checklist as a PDF: the assets a search selects, grouped by the place " +
+			"they are in, outermost first, in order to walk the rooms, each with a box to tick, the quantity expected and a blank for the count.",
+			Annotations: readOnly("Stocktake checklist")}, []string{"GET /api/v1/assets/stocktake.pdf"}, read,
+			func(ctx context.Context, e *env, in struct {
+				Search     string `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in"`
+				CategoryID string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
+				pageIn
+			}) (reply[map[string]any], error) {
+				res := e.api(ctx, http.MethodGet, "/api/v1/assets/stocktake.pdf"+in.query(filters(in.Search, in.CategoryID)), nil, "")
+				return pdfReply(res, "bam://export/stocktake.pdf")
 			}),
 		simple(&mcp.Tool{Name: "get_document_settings", Description: "The instance's name, at the top of every page of a PDF, and the page size PDFs are made in unless asked otherwise.",
 			Annotations: readOnly("Document settings")}, "GET /api/v1/settings/documents", read,

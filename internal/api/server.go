@@ -384,6 +384,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/assets", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListAssets)))
 	handle("GET /api/v1/assets/export.csv", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssets)))
 	handle("GET /api/v1/assets/export.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssetsPDF)))
+	handle("GET /api/v1/assets/sheets.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetSheets)))
+	handle("GET /api/v1/assets/stocktake.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleStocktake)))
+	handle("GET /api/v1/assets/{id}/sheet.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetSheet)))
 	// Documents' settings (docs/reports.md#pdf): read by those who make
 	// them, for their defaults.
 	handle("GET /api/v1/settings/documents", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleDocumentSettings)))

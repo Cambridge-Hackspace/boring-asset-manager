@@ -128,6 +128,34 @@ wherever it was made, with no second PDF library. Its text is in a font made of 
 glyphs, each defined once, so a long document stays small and its text can be searched and copied.
 The same document is the same to the byte, everywhere.
 
+## Asset sheets
+
+Two more documents, made the same way. Each is on Letter or A4, upright or turned, as for the
+others.
+
+**An asset's sheet** is a page about one asset, for insurance records, handovers and a machine's
+binder. **Sheet PDF** on its page downloads it, and **PDF…** on the asset list makes a sheet for
+each asset the filters show, one to a page, up to 500 at once. A sheet has:
+
+- **Pictures:** the asset's photo, each of its codes drawn as its QR code or barcode with the code
+  under it, and its label as its category's template draws it, where it has each.
+- **Facts:** its categories, where it is (its places, outermost first), its quantity, its condition
+  and what is wrong, its current loan, its codes, its fields, and its links.
+- **Recent history:** its last 10 events, with when and who, where the reader may see who.
+
+**A stocktake checklist** is the assets the list's filters show, to walk the rooms with and count.
+**PDF…** on the asset list makes one.
+
+- **Grouped by where they are,** places in order of their names, outermost first, so a place comes
+  just before those inside it. Assets in no place come last.
+- **Each asset** has a box to tick, its codes, the quantity expected (its count for an asset
+  counted by quantity, else one), and a blank for the count.
+- **Bringing the count back** is for an import ([CSV](csv.md)) or the phone, not the checklist.
+
+**Who sees what:** like the asset list, sheets and checklists hold only the assets the reader may
+see, in their scopes. An asset outside them has no sheet for them (`404`), and the places and links
+they may not see are left out.
+
 ## API
 
 | Method | Route | Permission | Purpose |
@@ -144,6 +172,9 @@ The same document is the same to the byte, everywhere.
 | `GET` | `/api/v1/reports/{id}/xlsx` | `assets.read` | Download every table and chart as an Excel workbook, a sheet each. |
 | `GET` | `/api/v1/reports/{id}/export.pdf` | `assets.read` | Download the report as a PDF. Takes `page_size` (`letter` or `a4`), `orientation` (`portrait` or `landscape`), `photos` and `labels`. |
 | `GET` | `/api/v1/assets/export.pdf` | `assets.read` | Download the asset list as a PDF, with the CSV export's filters, `columns` (the export's, separated by commas), and the same options. |
+| `GET` | `/api/v1/assets/{id}/sheet.pdf` | `assets.read` | Download an asset's sheet. Takes `page_size` and `orientation`. |
+| `GET` | `/api/v1/assets/sheets.pdf` | `assets.read` | Download a sheet for each asset in the list, with its filters, up to 500 (`400` beyond). |
+| `GET` | `/api/v1/assets/stocktake.pdf` | `assets.read` | Download a stocktake checklist of the list, with its filters. |
 | `GET` | `/api/v1/settings/documents` | `assets.read` | The instance's name on PDFs, and their page size: `{"instance_name", "page_size"}`. |
 | `PUT` | `/api/v1/settings/documents` | `settings.manage` | Set them, with the same body. |
 
