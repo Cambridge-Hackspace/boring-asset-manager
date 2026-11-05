@@ -664,6 +664,12 @@ func TestSeveralServersTakeOver(t *testing.T) {
 	again := startRelay(t, w, "r1", trust, b, transports{ws: true})
 	p := addPrinter(again.bus)
 	waitFor(t, "server a to let the relay go", func() bool { return len(a.bus.Transports("r1")) == 0 })
+	// Until b's hold is seen, and its link up, a rightly says the relay is
+	// not connected; on a busy machine that moment can come after a let go.
+	waitFor(t, "b to hold the relay", func() bool {
+		holder, err := st.RelayHolder("r1", time.Now().Add(-holdStale))
+		return err == nil && holder == "b" && len(b.bus.Transports("r1")) == 1
+	})
 	if res := sendJob(t, a.bus, "r1", []byte("through b")); !res.OK {
 		t.Fatal(res.Reason)
 	}
