@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import type { AssetWithDetails, DriverInfo, LabelStock, Printer, TemplateSummary } from '../../lib/models';
+  import type { AssetWithDetails, DriverInfo, LabelStock, Printer, RelayList, TemplateSummary } from '../../lib/models';
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -18,6 +18,8 @@
   let printers = $state<Printer[]>([]);
   let drivers = $state<DriverInfo[]>([]);
   let stock = $state<LabelStock[]>([]);
+  // Relays a printer may be reached through (docs/relays.md), for those who manage printers.
+  let relays = $state<string[]>([]);
   let loading = $state(true);
   let error = $state('');
   let editing = $state<string | null>(null);
@@ -45,6 +47,13 @@
         request<{ drivers: DriverInfo[] }>('GET', '/printers/drivers').then((r) => r.drivers ?? []),
         request<{ stock: LabelStock[] }>('GET', '/label-stock').then((r) => r.stock ?? []),
       ]);
+      if (canManage) {
+        // Extra: printers show without it.
+        relays = await request<RelayList>('GET', '/relays').then(
+          (r) => r.relays.filter((x) => x.paired && !x.revoked_at).map((x) => x.name),
+          () => [],
+        );
+      }
     } catch (err) {
       error = messageOf(err);
     } finally {
@@ -105,7 +114,7 @@
     }
   }
 
-  const connLabel = (p: Printer) => `${p.connection.type}: ${p.connection.address}`;
+  const connLabel = (p: Printer) => `${p.connection.type}: ${p.connection.address}${p.connection.relay ? `, through relay ${p.connection.relay}` : ''}`;
 </script>
 
 <PageHeader title="Printers" lede="The label printers BAM! sends to, the stock loaded in each, and pools that share labels among several.">
@@ -118,7 +127,7 @@
 <ErrorMessage {error} />
 
 {#if editing === 'new'}
-  <div class="mb-4"><PrinterForm {drivers} {stock} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} /></div>
+  <div class="mb-4"><PrinterForm {drivers} {stock} {relays} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} /></div>
 {/if}
 
 {#if loading}
@@ -130,7 +139,7 @@
     {#each printers as p (p.id)}
       <li>
         {#if editing === p.id}
-          <PrinterForm printer={p} {drivers} {stock} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} />
+          <PrinterForm printer={p} {drivers} {stock} {relays} onsaved={() => { editing = null; void load(); }} oncancel={() => (editing = null)} />
         {:else}
           <article class="card space-y-3" aria-labelledby="printer-{p.id}">
             <div class="flex flex-wrap items-start justify-between gap-2">

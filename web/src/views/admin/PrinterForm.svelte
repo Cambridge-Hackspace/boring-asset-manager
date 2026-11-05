@@ -12,9 +12,10 @@
     printer,
     drivers,
     stock = [],
+    relays = [],
     onsaved,
     oncancel,
-  }: { printer?: Printer; drivers: DriverInfo[]; stock?: LabelStock[]; onsaved: () => void; oncancel: () => void } = $props();
+  }: { printer?: Printer; drivers: DriverInfo[]; stock?: LabelStock[]; relays?: string[]; onsaved: () => void; oncancel: () => void } = $props();
 
   const connectionHelp: Record<PrinterConnection['type'], string> = {
     tcp: 'The printer’s IP address or host name (port 9100 if none is given): a network printer, or a print server such as p910nd.',
@@ -30,6 +31,10 @@
   let media = $state(initial?.media ?? '');
   let connType = $state<PrinterConnection['type']>(initial?.connection.type ?? 'tcp');
   let address = $state(initial?.connection.address ?? '');
+  // The relay the printer is reached through (docs/relays.md); '' is this server.
+  let relay = $state(initial?.connection.relay ?? '');
+  // The relays offered: those paired, and the one the printer names even if it is not.
+  const relayChoices = $derived([...new Set([...relays, ...(initial?.connection.relay ? [initial.connection.relay] : [])])]);
   // Options as entered: '' means unset (the driver's default).
   let options = $state<Record<string, string | boolean>>(
     Object.fromEntries(Object.entries(initial?.options ?? {}).map(([k, v]) => [k, typeof v === 'boolean' ? v : String(v)])),
@@ -41,7 +46,7 @@
   let affects = $state<string[]>([]);
   // Changing the printer again needs asking again.
   $effect(() => {
-    void [name, driver, model, media, connType, address];
+    void [name, driver, model, media, connType, address, relay];
     affects = [];
   });
 
@@ -86,7 +91,7 @@
     event.preventDefault();
     error = '';
     busy = true;
-    const body = { name, driver, model, media, connection: { type: connType, address }, options: optionPayload() };
+    const body = { name, driver, model, media, connection: { type: connType, address, ...(relay ? { relay } : {}) }, options: optionPayload() };
     try {
       if (initial) {
         const path = `/printers/${encodeURIComponent(initial.id)}`;
@@ -168,8 +173,19 @@
     <div>
       <label class="text-xs" for="{pid}-address">Address</label>
       <input id="{pid}-address" class="input font-mono" required aria-describedby="{pid}-address-help" bind:value={address} />
-      <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{connectionHelp[connType]}</p>
+      <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        {relay ? `On ${relay}’s network: the relay’s own allowlist decides whether it may reach it.` : connectionHelp[connType]}
+      </p>
     </div>
+    {#if relayChoices.length}
+      <div class="sm:col-span-2">
+        <label class="text-xs" for="{pid}-relay">Reached through</label>
+        <select id="{pid}-relay" class="input" bind:value={relay}>
+          <option value="">This server</option>
+          {#each relayChoices as r (r)}<option value={r}>Relay {r}</option>{/each}
+        </select>
+      </div>
+    {/if}
   </fieldset>
 
   {#if info?.options?.length}

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -33,10 +34,18 @@ func ConnectionTypes() []string { return []string{ConnTCP, ConnDevice, ConnIPP, 
 type Connection struct {
 	Type    string `json:"type"`
 	Address string `json:"address"`
+	// Relay, when set, names the relay the printer is reached through
+	// (docs/relays.md): the address is on the relay's network, and the
+	// relay's allowlist, not this server's, decides whether it may be
+	// reached.
+	Relay string `json:"relay,omitempty"`
 }
 
 // maxAddress is the longest address stored.
 const maxAddress = 1024
+
+// relayName is a relay's name, as the relay bus has it.
+var relayName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // NormalizeConnection checks a connection's address for its type and returns
 // it in canonical form: TCP addresses always carry a port, device paths are
@@ -47,6 +56,10 @@ func NormalizeConnection(c Connection) (Connection, error) {
 	}
 	c.Type = strings.TrimSpace(c.Type)
 	c.Address = strings.TrimSpace(c.Address)
+	c.Relay = strings.TrimSpace(c.Relay)
+	if c.Relay != "" && (c.Relay == "main" || !relayName.MatchString(c.Relay)) {
+		return bad("relay must name a relay: lowercase letters, digits and hyphens")
+	}
 	if c.Address == "" || len(c.Address) > maxAddress {
 		return bad("address must be 1-%d characters", maxAddress)
 	}

@@ -193,6 +193,7 @@ Several settings can also be given in the environment:
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
 | `relay.bonemesh`, `relay.websocket` | `BAM_RELAY_BONEMESH`, `BAM_RELAY_WEBSOCKET` (`true` or `false`) |
 | `relay.bonemesh_port` | `BAM_RELAY_BONEMESH_PORT` |
+| `relay.allow` | `BAM_RELAY_ALLOW`, comma-separated: on a relay, what it may reach |
 
 On a relay, `bam relay join` reads `BAM_RELAY_JOIN` (`"<url> <code>"`) and `BAM_RELAY_STATE`, where
 it keeps its pairing (see [Relays](relays.md#pairing)).
@@ -370,3 +371,4 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 | `bam email test` | Sends a test email through the `[email]` server, so a mistake shows before a notification is missed. | [Notifications](notifications.md#email) |
 | `bam admin relay add` | Adds a relay, printing the one-time code that pairs it and the command to run on the relay. | [Relays](relays.md#without-the-web-interface) |
 | `bam relay join` | Pairs this machine as a relay of the main node at an address, with its code, or with `$BAM_RELAY_JOIN`, keeping the pairing in `relay.json`, `--state` or `$BAM_RELAY_STATE`. | [Relays](relays.md#pairing) |
+| `bam relay` | Runs this machine as a relay, beside its printers, with the pairing `bam relay join` kept, and the allowlist in `--config`'s `[relay] allow` and `[printers] devices`. `--bonemesh=false` or `--websocket=false` turns a transport off. | [Relays](relays.md#running-a-relay) |

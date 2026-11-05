@@ -1,0 +1,61 @@
+# systemd unit for a BAM! relay (docs/relays.md#running-a-relay): BAM! beside
+# printers on a local network, serving a BAM! hosted elsewhere. Install as
+# /etc/systemd/system/bam-relay.service. Pair it first, as the bam user:
+#   sudo -u bam bam relay join --state /var/lib/bam-relay/relay.json https://bam.example.org <code>
+# Its allowlist lives in /etc/bam/relay.toml; it keeps no database.
+[Unit]
+Description=BAM! relay
+Documentation=https://github.com/Cambridge-Hackspace/boring-asset-manager
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=bam
+Group=bam
+ExecStart=/usr/local/bin/bam relay --state /var/lib/bam-relay/relay.json --config /etc/bam/relay.toml
+# Environment overrides (BAM_RELAY_ALLOW, BAM_PRINTERS_DEVICES), one
+# NAME=value per line; the file is optional.
+EnvironmentFile=-/etc/bam/relay.environment
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# /var/lib/bam-relay holds the pairing, renewed while the relay runs.
+StateDirectory=bam-relay
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/bam-relay
+UMask=0077
+
+# Printers on USB device files usually belong to group lp: uncomment to
+# let the relay write to them, and list them under [printers] devices.
+#SupplementaryGroups=lp
+
+# Sandboxing: the relay needs the network, its state directory and
+# nothing else.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

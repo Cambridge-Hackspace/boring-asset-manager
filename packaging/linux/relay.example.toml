@@ -1,0 +1,16 @@
+# A BAM! relay's configuration (docs/relays.md#running-a-relay). Install as
+# /etc/bam/relay.toml. A relay keeps no database: this says only what it may
+# reach. The main node cannot widen it.
+
+[relay]
+# What the relay may reach: TCP printers as host:port, a host alone for port
+# 9100, a range such as 192.168.1.0/24:9100, or names such as *.lan:*; IPP
+# queues by URL, * matching anything; and Windows printers as windows:<name>.
+# Empty reaches nothing. Environment: BAM_RELAY_ALLOW, comma-separated.
+allow = ["192.168.1.0/24:9100"]
+
+[printers]
+# Device paths the relay may write to, as path.Match patterns, such as
+# "/dev/usb/lp*". Empty, the default, reaches no device.
+# Environment: BAM_PRINTERS_DEVICES, comma-separated.
+devices = []
