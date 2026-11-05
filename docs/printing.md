@@ -22,8 +22,8 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Three drivers ship today: `brother_ql`, `dymo_labelwriter` and `tspl`. Option values are listed
-by the drivers endpoint, and unknown options are refused.
+Five drivers ship today: `brother_ql`, `dymo_labelwriter`, `tspl`, `zpl` and `epl2`. Option
+values are listed by the drivers endpoint, and unknown options are refused.
 
 ### Who can do what
 
@@ -141,7 +141,7 @@ clients need not look either up.
 
 Drivers take custom stock only where a size is all the printer needs:
 
-- TSPL printers and DYMO LabelWriters take it, up to their head's width.
+- TSPL printers, Zebras (ZPL and EPL2) and DYMO LabelWriters take it, up to their head's width.
 - Brother QL printers take only their built-in rolls. They identify the DK roll loaded and need
   Brother's figures to place a label on it.
 
@@ -300,6 +300,77 @@ exports.
 
 **Connections.** The X1038 has only a USB port (see [Delivery](#delivery)); the X1040 is reached
 over the network.
+
+### `zpl`
+
+For printers that speak ZPL II, the most widely spoken label language: Zebra's desktop and
+industrial printers, and the many that emulate it, such as Honeywell, TSC, Godex, Citizen,
+Brother's TD series in ZPL mode, and inexpensive 4-inch printers. The driver follows Zebra's
+*ZPL II Programming Guide*.
+
+**Models:**
+
+- **4-inch, 203 DPI:** Zebra GK420d and GK420t, GX420d, and ZD220.
+- **4-inch, 300 DPI:** GX430t.
+- **2-inch, 203 DPI:** ZD410.
+- **By resolution:** ZD420 and ZD421, ZD620 and ZD621, and ZT230 at 203 or 300 DPI; ZT410 and
+  ZT411 at 203, 300 or 600 DPI.
+- **Generic, for emulators:** ZPL printers at 203, 300 and 600 DPI with a 4-inch head, and at 203
+  DPI with a 2-inch or an 8-inch head.
+
+**Options:** each left unset keeps the printer's own setting.
+
+- `media_type`: `direct` for direct thermal labels, or `transfer` for thermal transfer with a
+  ribbon (`^MT`).
+- `darkness`: 0–30 (`~SD`).
+- `speed`: 1–14 inches per second, as far as the model goes (`^PR`).
+- `print_mode`: `tear_off`, `peel_off` or `cutter` (`^MM`).
+- `calibrate`: default `false`; set it to measure the labels before each job (`~JC`), as after
+  loading a new roll.
+- `compress`: default `true`; turn it off for an emulator that mishandles Zebra's compression.
+
+**Media.** Zebra media is given by its size, so the catalog lists the same common sizes as
+[`tspl`](#tspl), with 4 × 1 in too. Any other size is [custom stock](#custom-label-stock). The fit
+check is at the model's DPI. Continuous labels are 10–1000 mm long. A label wider than the head is
+printed around its middle.
+
+**Encoding.** `~JC` and `~SD` first, when set. Then, for each distinct label, one format:
+
+1. `^XA`;
+2. `^MNY` for die-cut labels, found by their gaps, or `^MNN` for continuous media;
+3. `^MT`, `^MM` and `^PR`, when set;
+4. `^PW` and `^LL`, the label's width and length in dots, and `^LH0,0`;
+5. the label as graphics, `^FO` then `^GFA`, centered across the label. Each graphic is at most
+   99,999 bytes, so a large label is sent in bands, one under the other. They use ZPL's ASCII
+   compression unless `compress` is off;
+6. `^PQ` with the copies, and `^XZ`.
+
+None of the printer's own fonts or barcode commands are used, so output matches the SVG and PDF
+exports.
+
+**Connections.** `tcp` on port 9100 for networked Zebras, and `device`, `ipp` or `windows` for one
+on USB (see [Delivery](#delivery)).
+
+### `epl2`
+
+For the older Zebras that speak EPL2: the LP and TLP 2824 and 2844, which many spaces still have
+from shipping desks. The driver follows Zebra's *EPL2 Programming Guide*.
+
+**Models:** Zebra LP 2824 and TLP 2824 (2-inch head), LP 2844 and TLP 2844 (4-inch head), and a
+generic EPL2 printer at 203 DPI with a 4-inch head.
+
+**Options:** `density`, 0–15; unset keeps the printer's own setting.
+
+**Media.** As for [`zpl`](#zpl).
+
+**Encoding.** For each distinct label:
+
+1. `N`, to clear the image buffer;
+2. `q` and `Q`, the label's width, and its length and gap in dots, with a gap of 0 for continuous
+   media;
+3. `ZT`, to print from the top, and `D` with the density, when set;
+4. one `GW` holding the whole label, centered across it (a 0 bit prints a dot);
+5. `P` with the copies.
 
 ## Delivery
 

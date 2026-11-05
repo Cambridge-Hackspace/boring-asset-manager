@@ -38,6 +38,8 @@ const driverNames: Record<string, string> = {
   brother_ql: 'Brother QL',
   dymo_labelwriter: 'DYMO LabelWriter',
   tspl: 'TSPL',
+  zpl: 'Zebra ZPL',
+  epl2: 'Zebra EPL2',
 };
 
 /** A printer driver as people know it: "Brother QL" rather than brother_ql. */
@@ -46,11 +48,29 @@ export function driverName(driver: string): string {
 }
 
 const optionLabels: Record<string, string> = {
+  calibrate: 'Calibrate before each job',
+  compress: 'Compress labels',
   cut: 'Cut after each label',
   density: 'Darkness',
+  media_type: 'Media type',
+  print_mode: 'After each label',
   roll: 'Roll (twin-roll models)',
   rotate_180: 'Turn labels upside down',
+  speed: 'Speed (inches per second)',
 };
+
+const optionValueLabels: Record<string, string> = {
+  cutter: 'Cut it',
+  direct: 'Direct thermal',
+  peel_off: 'Peel it off',
+  tear_off: 'Tear it off',
+  transfer: 'Thermal transfer, with a ribbon',
+};
+
+/** A driver option's value as a form shows it: "Tear it off" rather than tear_off. */
+export function optionValueLabel(value: string): string {
+  return optionValueLabels[value] ?? value.replace(/_/g, ' ');
+}
 
 /** A driver option as a form labels it: "Cut after each label" rather than cut. */
 export function optionLabel(name: string): string {

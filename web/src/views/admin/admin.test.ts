@@ -26,6 +26,17 @@ const drivers: DriverInfo[] = [
       { name: 'rotate_180', type: 'bool', default: false, description: 'Flip.' },
     ],
   },
+  {
+    driver: 'zpl',
+    models: ['Zebra GK420d'],
+    model_dpi: { 'Zebra GK420d': 203 },
+    media: [{ id: '4x6', name: '4 × 6 in', width_mm: 101.6, length_mm: 152.4, die_cut: true }],
+    custom_stock: { max_width_mm: { 'Zebra GK420d': 105.6 }, min_length_mm: 10, max_length_mm: 1000 },
+    options: [
+      { name: 'print_mode', type: 'string', default: null, values: ['tear_off', 'peel_off', 'cutter'], description: 'After printing.' },
+      { name: 'compress', type: 'bool', default: true, description: 'Compress.' },
+    ],
+  },
 ];
 
 beforeEach(() => {
@@ -66,6 +77,29 @@ describe('PrinterForm', () => {
       connection: { type: 'device', address: '/dev/usb/lp0' },
       options: { density: 10 },
     });
+  });
+});
+
+describe('PrinterForm for a Zebra', () => {
+  it('keeps the printer default for a list option until one is chosen, in words', async () => {
+    const { sent } = fakeApi({ 'POST /printers': () => ({ status: 201, body: {} }) });
+    const onsaved = vi.fn();
+    render(PrinterForm, { drivers, onsaved, oncancel: () => {} });
+
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Shipping' } });
+    await fireEvent.change(screen.getByLabelText('Printer model'), { target: { value: 'zpl|Zebra GK420d' } });
+    expect(screen.getByRole('group', { name: 'Zebra ZPL' })).toBeTruthy();
+    const mode = screen.getByLabelText('After each label') as HTMLSelectElement;
+    expect(mode.value).toBe('');
+    expect(within(mode).getByRole('option', { name: 'Peel it off' })).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('Address'), { target: { value: 'zebra.lan' } });
+    await fireEvent.change(mode, { target: { value: 'peel_off' } });
+    await fireEvent.change(mode, { target: { value: '' } });
+    await fireEvent.change(mode, { target: { value: 'cutter' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create printer' }));
+
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect((sent[0]!.body as { options: object }).options).toEqual({ print_mode: 'cutter' });
   });
 });
 
