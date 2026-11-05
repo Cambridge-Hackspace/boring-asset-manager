@@ -82,6 +82,28 @@ SAML library. The choice weighed:
 The tests sign their answers with goxmldsig too, through a test identity provider
 (`internal/idp/testsaml.go`), and try wrapped signatures, other keys and replays against it.
 
+### Relays
+
+A relay is the same binary, run beside printers and devices on a local network, linked to the main
+node by the relay bus (see [Relays](relays.md)). The bus's design follows from a few choices:
+
+- **One protocol, two transports.** BoneMesh and WebSocket carry bytes between peers. Messages,
+  addressing, acknowledgments, retries, parts and delivering once are the bus's, in
+  `internal/relay`, so delivery behaves the same over either, and over both.
+- **The protocol owns delivery.** BoneMesh has acknowledgments, retries and splitting of its own, but
+  WebSocket has none, and the bus must fail over between them. So the bus acknowledges end to end
+  and splits large messages itself, into parts that fit a BoneMesh segment.
+- **Signed over BoneMesh.** BoneMesh trusts every member, and does not tell a node which peer sent a
+  message. A relay on a desk is a member that may be lost or tampered with, so each message over
+  BoneMesh is signed with its sender's identity key and checked against pairing's record of it.
+  Over WebSocket the credential and TLS already say who is at the other end.
+- **BoneMesh on a port of its own.** Its sessions are not HTTP, and the Go node takes connections
+  only from a listener of its own, so it cannot share the HTTPS port. WebSocket covers networks
+  where only 443 is open.
+- **Several servers through the database.** Servers that share a database need not reach each
+  other. Each claims the relays it holds there, and leaves messages there for the others, as live
+  connections already work from the database.
+
 ## Frontend
 
 The web interface is a Svelte 5 single-page application written in TypeScript, built with Vite

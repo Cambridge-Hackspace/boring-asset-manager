@@ -33,6 +33,8 @@ type Config struct {
 	Notifications NotificationsConfig `toml:"notifications"`
 	Email         EmailConfig         `toml:"email"`
 	Auth          AuthConfig          `toml:"auth"`
+	// Relay turns the relay bus's transports on or off (docs/relays.md).
+	Relay RelayConfig `toml:"relay"`
 }
 
 // ServerConfig holds HTTP server listening configuration.
@@ -108,6 +110,23 @@ type PrintersConfig struct {
 	// manage printers could otherwise make BAM write to any file it can open.
 	Devices []string `toml:"devices"`
 }
+
+// RelayConfig turns the relay bus's transports on or off
+// (docs/relays.md): either, both, or neither, which turns relays off on
+// this node.
+type RelayConfig struct {
+	// BoneMesh links relays over BoneMesh, on a port of its own,
+	// BoneMeshPort.
+	BoneMesh     bool `toml:"bonemesh"`
+	BoneMeshPort int  `toml:"bonemesh_port"`
+	// WebSocket takes relays' connections at /api/v1/relay/live, on the
+	// server's own port.
+	WebSocket bool `toml:"websocket"`
+}
+
+// DefaultBoneMeshPort is the port the main node takes BoneMesh links on,
+// unless set.
+const DefaultBoneMeshPort = 7443
 
 // NotificationsConfig is how long the delivery log is kept, and when a
 // channel that keeps failing is turned off (#196). Zero turns each off.
@@ -283,6 +302,7 @@ func DefaultConfig() *Config {
 		},
 		MCP:           MCPConfig{Enabled: true},
 		Notifications: NotificationsConfig{KeepDays: 30, DisableAfterHours: 24},
+		Relay:         RelayConfig{BoneMeshPort: DefaultBoneMeshPort},
 	}
 }
 
@@ -410,6 +430,25 @@ func applyEnvOverrides(cfg *Config) error {
 		}
 		cfg.MCP.Enabled = on
 	}
+	for env, field := range map[string]*bool{
+		"BAM_RELAY_BONEMESH":  &cfg.Relay.BoneMesh,
+		"BAM_RELAY_WEBSOCKET": &cfg.Relay.WebSocket,
+	} {
+		if v := os.Getenv(env); v != "" {
+			on, err := parseSwitch(v)
+			if err != nil {
+				return fmt.Errorf("%s: %w", env, err)
+			}
+			*field = on
+		}
+	}
+	if v := os.Getenv("BAM_RELAY_BONEMESH_PORT"); v != "" {
+		p, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("BAM_RELAY_BONEMESH_PORT: %q is not a port", v)
+		}
+		cfg.Relay.BoneMeshPort = p
+	}
 	if v := os.Getenv("BAM_AUTH_TEST_PROTOCOL"); v != "" {
 		on, err := parseSwitch(v)
 		if err != nil {
@@ -464,6 +503,9 @@ func (c *Config) Validate() error {
 	}
 	if _, err := c.Auth.Key(); err != nil {
 		return err
+	}
+	if p := c.Relay.BoneMeshPort; p <= 0 || p > 65535 {
+		return fmt.Errorf("invalid relay.bonemesh_port: %d", p)
 	}
 	for _, pattern := range c.Printers.Devices {
 		if !strings.HasPrefix(pattern, "/") {

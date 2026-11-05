@@ -48,6 +48,7 @@ var Refused = map[string]string{
 	"POST /api/v1/templates/preview-data":            "the data the editor's live renderer draws a label with in the browser; preview_template draws with the same data on the server",
 	"GET /api/v1/events/live":                        "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
 	"GET /auth/saml/{key}/metadata":                  "BAM!'s SAML metadata, for an identity provider to read; Admin shows its address, and save_identity_provider sets the provider up",
+	"GET /api/v1/relay/live":                         "a WebSocket, for relays, with a relay's own credential from pairing; never an assistant's",
 	"GET /api/v1/icons/export":                       "a zip of the icons, for people to download; over MCP, list_icon_sources reads every source",
 	"GET /api/v1/assets/export.xlsx":                 "a workbook, for people to open in a spreadsheet; over MCP, export_assets gives the same as CSV",
 	"GET /api/v1/reports/{id}/sections/{n}/xlsx":     "a workbook, for people to open in a spreadsheet; over MCP, the section's CSV gives the same",
