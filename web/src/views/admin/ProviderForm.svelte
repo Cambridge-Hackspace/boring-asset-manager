@@ -54,6 +54,7 @@
   let mfaFallback = $state(start?.mfa_fallback ?? false);
   let mfaAlwaysLocal = $state(start?.mfa_always_local ?? false);
   let rules = $state<ProviderRule[]>((start?.rules ?? []).map((r) => ({ ...r, scope_ids: [...r.scope_ids] })));
+  let renewKeys = $state(false);
   let busy = $state(false);
   let error = $state('');
 
@@ -80,6 +81,7 @@
       allowed_domains: list(domains), allowed_groups: list(groups), link_by_email: linkByEmail, trust_email: trustEmail,
       mfa_amr: list(mfaAMR), mfa_acr: list(mfaACR), mfa_fallback: mfaFallback, mfa_always_local: mfaAlwaysLocal,
       rules: rules.map((r) => ({ claim: r.claim, value: r.value, role_id: r.role_id, scope_ids: r.scope_ids })),
+      renew_keys: renewKeys,
     };
     try {
       if (start) await request('PUT', `/auth/providers/${encodeURIComponent(start.id)}`, body);
@@ -125,6 +127,12 @@
       Give the provider this address to send people back to:
       <code class="font-mono break-all">{start.callback_url}</code>
     </p>
+    {#if start.sp_metadata_url && start.protocol === protocol}
+      <p class="text-sm">
+        Or give it BAM!'s metadata, which has that address and BAM!'s certificate:
+        <code class="font-mono break-all">{start.sp_metadata_url}</code>
+      </p>
+    {/if}
   {/if}
 
   {#each info?.fields ?? [] as f (f.name)}
@@ -141,6 +149,8 @@
           aria-describedby="{prefix}-f-{f.name}-help"
           bind:value={secrets[f.name]}
         />
+      {:else if f.multiline}
+        <textarea id="{prefix}-f-{f.name}" class="input font-mono text-xs" rows="4" spellcheck="false" required={f.required} aria-describedby="{prefix}-f-{f.name}-help" bind:value={settings[f.name]}></textarea>
       {:else}
         <input id="{prefix}-f-{f.name}" class="input" autocomplete="off" required={f.required} aria-describedby="{prefix}-f-{f.name}-help" bind:value={settings[f.name]} />
       {/if}
@@ -149,6 +159,13 @@
       </p>
     </div>
   {/each}
+
+  {#if info?.renewable && start && start.protocol === protocol}
+    <label class="flex items-start gap-2 text-sm">
+      <input type="checkbox" class="mt-1" bind:checked={renewKeys} />
+      <span>Make a new key and certificate for this provider. Its identity provider must then read BAM!'s metadata again.</span>
+    </label>
+  {/if}
 
   <div class="grid gap-4 sm:grid-cols-2">
     <div>

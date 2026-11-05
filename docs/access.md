@@ -191,7 +191,8 @@ perhaps with a second factor of its own. By default, BAM! trusts the provider:
   is not trusted: BAM!'s own is asked for whatever the provider says.
 - **Asking the provider for a second factor:** an OpenID Connect provider's **Ask for
   (acr_values)** setting sends `acr_values` with the sign-in, such as a level the provider defines
-  as requiring a second factor. SAML's `RequestedAuthnContext` comes with SAML (#186).
+  as requiring a second factor. A SAML provider's **Ask for (AuthnContextClassRef)** sends
+  `RequestedAuthnContext` the same way.
 
 **Tokens are unaffected:** API tokens never ask for a code, and an assistant's grant is made from a
 session that already passed whatever was required.
@@ -207,7 +208,7 @@ Each provider has:
 - **A key and a name.** The key is used in its addresses, such as the one the provider sends
   people back to, `{base_url}/api/v1/auth/providers/{key}/callback`.
 - **A protocol, and that protocol's settings.** [OpenID Connect](#openid-connect),
-  [plain OAuth2](#plain-oauth2) and SAML 2.0 (#186) each add one. A protocol's secrets, such as a client secret, can be written but are
+  [plain OAuth2](#plain-oauth2) and [SAML 2.0](#saml-20) each add one. A protocol's secrets, such as a client secret, can be written but are
   never shown again. They are kept sealed with `[auth] secret_key`, as second factors' secrets
   are, so a provider with secrets needs the key.
 - **Its button:** a label, by default "Sign in with" its name, and an optional icon.
@@ -344,6 +345,65 @@ BAM!. For GitHub Enterprise, set the three endpoints to your server's, such as
 
 The preset asks for `identify email`, reads Discord's `verified` for the email, and the display
 name, else the username. Discord gives no groups.
+
+#### SAML 2.0
+
+For organizations whose identity provider speaks only SAML, or prefers it, such as ADFS,
+Shibboleth, and some Okta and Entra set-ups. BAM! is the service provider. Its settings:
+
+- **The identity provider's metadata:** its **Metadata URL**, read again daily, or the
+  **Metadata XML** pasted. When reading it again fails, the copy BAM! has is used. For metadata
+  that lists several identity providers, such as a federation's, **Identity provider entity ID**
+  picks one.
+- **NameID format:** `persistent` by default. Use `email` only when an email at this provider never
+  passes from one person to another, since whoever has the email then signs in as its account. A
+  transient NameID says nothing of who signed in, and is refused.
+- **The email, name and groups attributes:** blank tries the usual names, such as `mail`,
+  `displayName` and `memberOf`, with their OIDs and ADFS and Entra names. Several separated by commas
+  are tried in order. Groups are read as `groups` by rules, whichever attribute has them.
+- **Ask for (AuthnContextClassRef):** classes to ask the identity provider to sign people in at,
+  such as one that requires a second factor. The class it answers with is kept for
+  [Requiring two-factor sign-in](#requiring-two-factor-sign-in), as OpenID Connect's `acr` is.
+- **Sign-ins started at the provider:** off unless set to `on`. With it on, someone can choose BAM!
+  from the identity provider's own page, and is signed in to BAM!'s home page.
+- **Service provider key:** BAM! makes one when the provider is saved. Paste a PEM RSA key to use
+  your own instead.
+
+**What BAM! publishes:** its metadata for each SAML provider, at
+`{base_url}/auth/saml/{key}/metadata`. Give the identity provider that address, or the file it
+serves. It holds:
+
+- BAM!'s entity ID, which is that same address;
+- where answers come back, `{base_url}/api/v1/auth/providers/{key}/callback`, by HTTP-POST;
+- BAM!'s certificate, for the identity provider to check BAM!'s requests and to encrypt assertions
+  to BAM!.
+
+**BAM!'s key:** it signs BAM!'s requests, and opens encrypted assertions. It is kept sealed with
+`[auth] secret_key`, so without the key no certificate is made. A provider from the configuration
+file gets its key from the file's `sp_key`, or goes without. A provider without a key still signs
+people in, but its requests are unsigned and it cannot open encrypted assertions. **Make a new key
+and certificate** under Admin replaces the key. The identity provider must then read BAM!'s
+metadata again, and until it does, it encrypts to the old key, which can no longer open them.
+
+**What is checked:**
+
+- **Signatures:** the response, or the assertion in it, must be signed by a certificate in the
+  identity provider's metadata. Everything is read from the element whose signature was checked,
+  never from the rest of the document, so a signature cannot be wrapped around something else.
+  A response with more than one assertion, or with a DOCTYPE, is refused.
+- **Conditions:** the assertion must be for BAM!'s entity ID, its `NotBefore` and `NotOnOrAfter`
+  must hold, with three minutes allowed either way for the clocks, and it must be from the
+  identity provider. Its bearer confirmation must be for this address, for the sign-in BAM!
+  started, and not expired.
+- **Replays:** an assertion signs in once. Its ID is kept until it expires.
+- **Encrypted assertions** are opened with BAM!'s key: AES-GCM or AES-CBC, with the key sealed by
+  RSA-OAEP. RSA PKCS #1 v1.5 key transport is refused.
+- **The identity provider's certificate** must be valid at the time, as its metadata gives it.
+
+**Coming back by POST:** the identity provider sends the browser back by posting a form from its own
+site, which does not carry BAM!'s sign-in cookie. BAM! answers with a page that posts the same form
+again from BAM!'s own site, so the cookie comes with it. A browser without JavaScript shows a
+**Continue signing in** button instead.
 
 #### Who signs in as whom
 
@@ -819,9 +879,10 @@ turning the user back on brings no assistant back.
 | `POST /api/v1/auth/login/factor/recover` | At the second step of signing in | Email a link that removes a lost second factor. |
 | `GET /api/v1/auth/factor-recovery?token=…` | Anyone | Whose second factor a link removes. |
 | `POST /api/v1/auth/factor-recovery` | Anyone | Remove it with `{"token"}`, signing them out everywhere. |
-| `GET` or `POST /api/v1/auth/providers/{key}/callback` | Anyone | The provider's answer. |
+| `GET` or `POST /api/v1/auth/providers/{key}/callback` | Anyone | The provider's answer. One posted without the sign-in's cookie, as from a SAML identity provider's site, is answered with a page that posts it again from here. |
+| `GET /auth/saml/{key}/metadata` | Anyone | BAM!'s SAML metadata for a SAML provider, enabled or not, as `application/samlmetadata+xml`. |
 | `GET /api/v1/auth/providers` | `settings.manage` | Every provider, with its rules and which secrets are set; the `protocols` and their fields; `local_passwords`; the roles and scopes rules can give; and `passkey_host`, base_url's host, with `passkeys_elsewhere`, how many passkeys were added at another. |
-| `POST /api/v1/auth/providers`, `PUT /api/v1/auth/providers/{id}` | `settings.manage` | Save a provider, given whole. A secret left blank keeps the one stored. One from the configuration is refused with `409`. |
+| `POST /api/v1/auth/providers`, `PUT /api/v1/auth/providers/{id}` | `settings.manage` | Save a provider, given whole. A secret left blank keeps the one stored. With `renew_keys`, a SAML provider's key is made again. One from the configuration is refused with `409`. |
 | `DELETE /api/v1/auth/providers/{id}` | `settings.manage` | Remove a provider, with the identities at it. |
 | `PUT /api/v1/auth/settings` | `settings.manage` | Turn passwords off or on, with `{"local_passwords": false}`. |
 | `PUT /api/v1/users/{id}/roles` | `users.manage` | Set a user's roles. |

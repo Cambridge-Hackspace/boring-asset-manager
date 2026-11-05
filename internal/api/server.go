@@ -98,6 +98,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	s.sealer, _ = auth.NewSealer(key)
 	idp.Register(&idp.OIDC{})
 	idp.Register(&idp.OAuth2{})
+	idp.Register(&idp.SAML{})
 	// The test protocol, and a test OpenID Connect provider beside BAM!,
 	// only where a test turned them on (docs/access.md).
 	var testOIDC http.Handler
@@ -151,6 +152,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Identity providers (docs/access.md#signing-in-with-an-identity-provider).
 	handleFunc("GET /api/v1/auth/providers/public", s.handlePublicProviders)
 	handleFunc("GET /api/v1/auth/providers/{key}/start", s.handleProviderStart)
+	handleFunc("GET /auth/saml/{key}/metadata", s.handleSAMLMetadata)
 	handleFunc("GET /api/v1/auth/providers/{key}/callback", s.handleProviderCallback)
 	handleFunc("POST /api/v1/auth/providers/{key}/callback", s.handleProviderCallback)
 	handle("GET /api/v1/auth/providers", manageSignIn(http.HandlerFunc(s.handleListProviders)))

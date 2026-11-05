@@ -112,6 +112,7 @@ These tables are left out, because they are not information or are made again:
 | `sign_in_challenges` | Sign-ins waiting for a second factor, which lapse in five minutes. |
 | `account_links` | Links emailed to people about their accounts, which lapse within a week and work once. |
 | `passkey_challenges` | Challenges sent for passkeys and not answered, which lapse in five minutes. |
+| `saml_assertions` | SAML assertions used to sign in, kept until they expire so each signs in once. |
 | `provider_sign_ins` | Sign-ins sent to an identity provider and not back yet, which lapse in ten minutes. |
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys.

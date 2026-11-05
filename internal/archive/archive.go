@@ -109,6 +109,7 @@ var Excluded = map[string]string{
 	"sign_in_challenges":      "sign-ins waiting for a second factor, which lapse in five minutes",
 	"passkey_challenges":      "challenges sent for passkeys and not answered, which lapse in five minutes",
 	"provider_sign_ins":       "sign-ins sent to an identity provider and not back, which lapse in ten minutes",
+	"saml_assertions":         "SAML assertions used to sign in, kept until they expire so each signs in once",
 	"account_links":           "links emailed to people about their accounts, which lapse within a week and work once",
 }
 
