@@ -108,6 +108,7 @@ var Excluded = map[string]string{
 	"hook_schedule_runs":      "when each schedule last ran; a restored instance starts its schedules afresh",
 	"sign_in_challenges":      "sign-ins waiting for a second factor, which lapse in five minutes",
 	"provider_sign_ins":       "sign-ins sent to an identity provider and not back, which lapse in ten minutes",
+	"account_links":           "links emailed to people about their accounts, which lapse within a week and work once",
 }
 
 // Header is header.json, the first member: what the archive is, before

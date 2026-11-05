@@ -282,7 +282,8 @@ People, roles and scopes need `users.manage`. Channels need `settings.manage`.
 
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
-| `list_users`, `create_user`, `set_user_active`, `archive_user`, `set_user_name` | `users.manage` | |
+| `list_users`, `create_user`, `set_user_active`, `archive_user`, `set_user_name` | `users.manage` | `create_user` can email an invitation in place of a password. |
+| `invite_user` | `users.manage` | Email someone an invitation again ([Access](access.md#invitations)). |
 | `set_user_password` | `users.manage` | Someone else's. The anti-lockout rule holds, as anywhere. |
 | `clear_sign_in_delay` | `users.manage` | Lets someone sign in again at once, when wrong passwords hold them back. |
 | `reset_user_factors` | `users.manage` | Removes someone's second factors, for one who has lost theirs, and signs them out everywhere. Setting up one's own is never over MCP. |

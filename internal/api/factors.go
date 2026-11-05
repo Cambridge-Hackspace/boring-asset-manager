@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -217,13 +216,7 @@ func (s *Server) tellRecoveryCodeUsed(user *models.User) {
 		log.Printf("writing the recovery code email for %s: %v", user.Email, err)
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := s.mailer.Send(ctx, m); err != nil {
-			log.Printf("emailing %s about a recovery code: %v", user.Email, err)
-		}
-	}()
+	s.sendMail(m)
 }
 
 // recoveryCodeUsedMessage is the email saying a recovery code was used.
@@ -441,6 +434,7 @@ func (s *Server) handleConfirmTOTP(w http.ResponseWriter, r *http.Request) {
 		}
 		resp["recovery_codes"] = codes
 	}
+	s.tellAccount(user, noticeFactorAdded)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -516,6 +510,7 @@ func (s *Server) handleDeleteOwnFactor(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "remove the factor")
 		return
 	}
+	s.tellAccount(user, noticeFactorRemoved)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -530,6 +525,11 @@ func (s *Server) handleResetUserFactors(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		writeServerError(w, err, "remove the second factors")
 		return
+	}
+	if n > 0 {
+		if u, err := s.store.GetUserByID(r.PathValue("id")); err == nil {
+			s.tellAccount(u, noticeFactorRemoved)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"removed": n})
 }

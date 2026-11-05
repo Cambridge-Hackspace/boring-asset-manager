@@ -332,13 +332,69 @@ instance people use.
 
 ### Forgotten passwords
 
-Whoever manages users sets a new password for someone who has forgotten theirs. The sign-in page
-says whom to ask. Setting someone's password signs them out everywhere, except in the session
-making the change when it is their own.
+Whoever manages users sets a new password for someone who has forgotten theirs. Unless **Forgot
+password** is on (see [Account emails](#account-emails)), the sign-in page says whom to ask.
+Setting someone's password signs them out everywhere, except in the session making the change
+when it is their own.
 
 On the command line, `bam admin password --email … --password …` does the same for anyone, such
 as an admin who is locked out. It changes nothing else about the account. (`bam admin create`
 would also make them an admin.)
+
+### Account emails
+
+With email set up (see [Notifications](notifications.md#email)) and `[server] base_url` set, so
+that links lead back here, BAM! emails people links about their own accounts. Each link works once,
+until it expires, and only its hash is stored, as sessions' are. A new link replaces one of the same
+kind not yet used. They are sent whatever someone chose for email to their roles, since they are
+about their own account.
+
+#### Invitations
+
+Whoever manages users can **email someone an invitation** in place of setting their password, when
+making their account: **Email them an invitation instead** on the Users page (`"invite": true`).
+The account has no password until the invitation is accepted.
+
+- **The link** leads to a page that sets a password, while passwords are on, and offers the
+  identity providers' buttons. Signing in through one links that identity to the invited account.
+  Either way, they are then signed in.
+- **It works once, for seven days.** One expired or used is refused, and **Send invitation**
+  sends a new one, which the old one stops working for.
+
+#### Password reset
+
+**Off unless turned on,** under **Admin › Sign-in** by those who manage settings: **Offer Forgot
+password on the sign-in page**.
+
+- **The sign-in page offers Forgot password,** which asks for an email. It always answers the same
+  way, whether or not the email has an account, so it cannot be used to find accounts.
+- **The link** works once, for 30 minutes.
+- **Using it signs them out everywhere,** and emails them that their password changed. They then
+  sign in with it, and their second factor if they have one.
+- **Each request counts as a failed sign-in** against the address and the account it names (see
+  [Too many wrong passwords](#too-many-wrong-passwords)), so it is held back as they are.
+- **Never while passwords are off** (see [Turning passwords off](#turning-passwords-off)).
+
+#### Removing a lost second factor by email
+
+**Off unless turned on,** under **Admin › Sign-in**: **Let someone who has lost their second factor
+remove it by email**.
+
+- **After their password,** the second step of signing in offers **Email me a link to remove my
+  second factor**. The link works once, for 30 minutes, and its page warns what it does.
+- **Using it removes their second factors** and signs them out everywhere, recorded as
+  `auth.factors_reset` by themselves, and emails them that it was removed.
+- **It makes email a way around two-factor sign-in:** whoever can read their email and knows their
+  password can sign in. Admin › Sign-in says so.
+- **Not for those whose roles require two-factor sign-in** (see
+  [Requiring two-factor sign-in](#requiring-two-factor-sign-in)), unless **Also for those whose
+  roles require two-factor sign-in** is on. It is checked again when the link is used.
+
+#### Notices
+
+Someone is emailed when their password changes, whoever changes it, and when a second factor is
+added to their account or removed from it, and when one of their recovery codes is used. A change
+they did not make does not go unseen.
 
 ## Your account
 
@@ -649,7 +705,8 @@ turning the user back on brings no assistant back.
 | `DELETE /api/v1/auth/me/factors/{id}` | Signed in | Turn a factor off, with `{"password", "code"}`. |
 | `GET /api/v1/auth/me/favorites`, `PUT` and `DELETE /api/v1/auth/me/favorites/{kind}/{id}` | Signed in, or a personal token | Your favorites, and starring or unstarring one (see [Favorites](favorites.md#api)). |
 | `GET /api/v1/users` | `users.manage` | List users, each with `role_ids` and `roles`, `two_factor`, and `sign_in_delayed_until` while wrong passwords hold their sign-ins back. |
-| `POST /api/v1/users` | `users.manage` | Create a user; `name` is required. |
+| `POST /api/v1/users` | `users.manage` | Create a user; `name` is required. With `"invite": true` and no `password`, email them an invitation. |
+| `POST /api/v1/users/{id}/invite` | `users.manage` | Email someone an invitation again; the one before stops working. |
 | `PUT /api/v1/users/{id}/name` | `users.manage` | Change a user's name, with `{"name": "..."}`. |
 | `PUT /api/v1/users/{id}/password` | `users.manage` | Set a user's password, with `{"password"}`. Signs them out everywhere, and clears their sign-in delay. |
 | `DELETE /api/v1/users/{id}/sign-in-delay` | `users.manage` | Let a user sign in again at once, forgetting their wrong passwords. |
@@ -660,8 +717,16 @@ turning the user back on brings no assistant back.
 | `GET /api/v1/auth/me/identities` | Signed in, or a personal token | Your identities, and which of your roles a rule gave. |
 | `DELETE /api/v1/auth/me/identities/{identity}` | Signed in | Unlink one of yours, unless it is your last way to sign in. |
 | `POST /api/v1/auth/login/local` | Anyone | Sign in with a password at the break-glass page: while passwords are off, only for those holding `users.manage`. |
-| `GET /api/v1/auth/providers/public` | Anyone | The sign-in page's buttons (`key`, `label`, `icon`), and whether `local_passwords` are on. |
-| `GET /api/v1/auth/providers/{key}/start` | Anyone | Send the browser to the provider, then back to `next`. With `link=1`, signed in, link the identity that comes back. |
+| `GET /api/v1/auth/providers/public` | Anyone | The sign-in page's buttons (`key`, `label`, `icon`), whether `local_passwords` are on, and whether `password_reset` and `factor_recovery_email` are offered. |
+| `GET /api/v1/auth/providers/{key}/start` | Anyone | Send the browser to the provider, then back to `next`. With `link=1`, signed in, link the identity that comes back; with `invite=…`, link it to the invited account and sign in. |
+| `GET /api/v1/auth/invite?token=…` | Anyone | Whom an invitation is for, whether passwords are on, and the providers' buttons. |
+| `POST /api/v1/auth/invite` | Anyone | Accept an invitation with `{"token", "password"}`, signing in. |
+| `POST /api/v1/auth/password-reset` | Anyone | Email a link to set a new password, with `{"email"}`. Answers `202` the same whatever the email. |
+| `GET /api/v1/auth/password-reset?token=…` | Anyone | Whose password a link sets. |
+| `POST /api/v1/auth/password-reset/confirm` | Anyone | Set a new password with `{"token", "password"}`, signing them out everywhere. |
+| `POST /api/v1/auth/login/factor/recover` | At the second step of signing in | Email a link that removes a lost second factor. |
+| `GET /api/v1/auth/factor-recovery?token=…` | Anyone | Whose second factor a link removes. |
+| `POST /api/v1/auth/factor-recovery` | Anyone | Remove it with `{"token"}`, signing them out everywhere. |
 | `GET` or `POST /api/v1/auth/providers/{key}/callback` | Anyone | The provider's answer. |
 | `GET /api/v1/auth/providers` | `settings.manage` | Every provider, with its rules and which secrets are set; the `protocols` and their fields; `local_passwords`; and the roles and scopes rules can give. |
 | `POST /api/v1/auth/providers`, `PUT /api/v1/auth/providers/{id}` | `settings.manage` | Save a provider, given whole. A secret left blank keeps the one stored. One from the configuration is refused with `409`. |

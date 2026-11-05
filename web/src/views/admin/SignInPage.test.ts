@@ -124,6 +124,31 @@ describe('SignInPage', () => {
     expect(await screen.findByText('Signing in with a password is off.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/auth/settings')!.body).toEqual({ local_passwords: false });
   });
+
+  it('turns account emails on, only once links can be emailed', async () => {
+    let mails = { password_reset: false, factor_recovery_email: false, factor_recovery_email_required: false, can_email_links: false };
+    const { sent } = fakeApi({
+      'GET /auth/providers': () => ({ providers: [], protocols, roles, scopes: [], local_passwords: true, secret_key: true, account_emails: mails }),
+      'PUT /auth/settings': (body) => {
+        mails = { ...mails, ...(body as object) };
+        return { local_passwords: true, account_emails: mails };
+      },
+    });
+    render(SignInPage, { params: {} });
+    const reset = (await screen.findByLabelText(/Offer Forgot password/)) as HTMLInputElement;
+    expect(reset.disabled).toBe(true);
+    expect(screen.getByText(/Until then, invitations cannot be sent/)).toBeTruthy();
+    cleanup();
+
+    mails.can_email_links = true;
+    render(SignInPage, { params: {} });
+    await fireEvent.click(await screen.findByLabelText(/Offer Forgot password/));
+    expect(await screen.findByText('Forgot password is offered.')).toBeTruthy();
+    await fireEvent.click(screen.getByLabelText(/remove it by email/));
+    await fireEvent.click(await screen.findByLabelText(/Also for those whose roles require/));
+    const puts = sent.filter((r) => r.path === '/auth/settings').map((r) => r.body);
+    expect(puts).toEqual([{ password_reset: true }, { factor_recovery_email: true }, { factor_recovery_email_required: true }]);
+  });
 });
 
 describe('IdentitiesSection', () => {
