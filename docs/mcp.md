@@ -297,6 +297,7 @@ People, roles and scopes need `users.manage`. Channels need `settings.manage`.
 | `list_identity_providers`, `save_identity_provider` (given whole; secrets left out are kept), `delete_identity_provider`, `set_password_sign_in` | `settings.manage` | Identity providers, and whether a password signs in ([Access](access.md#signing-in-with-an-identity-provider)). |
 | `list_user_identities`, `link_user_identity`, `unlink_user_identity` | `users.manage` | Someone's identities at providers. Signing in through one, and linking one's own, are a person's, in a browser. |
 | `list_channel_drivers`, `list_channels`, `get_channel`, `save_channel`, `delete_channel`, `test_channel`, `list_deliveries`, `retry_delivery` | `settings.manage` | Channels ([Notifications](notifications.md)). |
+| `list_relays`, `add_relay`, `new_relay_code`, `revoke_relay` | `settings.manage` | Relays: adding one gives the code that pairs it ([Relays](relays.md#pairing)). |
 
 A channel's secrets, such as a webhook URL, are written and never read back. They show as set or
 not, and a change that leaves one out keeps it.

@@ -217,6 +217,11 @@ const (
 	// sign-in, with the role's name as the Note; channels can subscribe to
 	// it.
 	EventRoleTwoFactorOff = "role.two_factor_off"
+	// EventRelayOnline and EventRelayOffline record a relay coming online,
+	// linked to the main node over any transport, and going offline, with
+	// the Relay (docs/relays.md); channels can subscribe to them.
+	EventRelayOnline  = "relay.online"
+	EventRelayOffline = "relay.offline"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -301,6 +306,14 @@ type EventPayload struct {
 	// Account is whose sign-in an auth event is about, such as whose
 	// second factors were reset.
 	Account *EventActor `json:"account,omitempty"`
+	// Relay is the relay a relay event is about.
+	Relay *EventRelay `json:"relay,omitempty"`
+}
+
+// EventRelay is a relay, as an event names it.
+type EventRelay struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // Throttle kinds: what a sign-in throttle counts failures against.
@@ -1116,6 +1129,35 @@ type EventThing struct {
 	Name   string            `json:"name"`
 	Codes  map[string]string `json:"codes"`
 	Fields map[string]string `json:"fields"`
+}
+
+// Relay is a relay an admin added (docs/relays.md): waiting to pair with
+// its code, paired, or revoked, with its health.
+type Relay struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Paired says it holds a certificate and credential; CodeExpiresAt,
+	// while it has a code to pair with, when that lapses.
+	Paired        bool       `json:"paired"`
+	CodeExpiresAt *time.Time `json:"code_expires_at,omitempty"`
+	PairedAt      *time.Time `json:"paired_at,omitempty"`
+	// CertExpiresAt is when its BoneMesh certificate expires, unless it
+	// renews it first.
+	CertExpiresAt *time.Time `json:"cert_expires_at,omitempty"`
+	// RevokedAt is when it was revoked; its name stays taken until its
+	// certificate expires.
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	// Online says whether it is linked to the main node now, and StatusAt
+	// since when it is, or is not.
+	Online   bool       `json:"online"`
+	StatusAt *time.Time `json:"status_at,omitempty"`
+	// Version is its BAM! version, and Address where it last paired or
+	// renewed from.
+	Version string `json:"version"`
+	Address string `json:"address"`
+	// Allowlist is what it says it may reach locally.
+	Allowlist []string  `json:"allowlist"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // LiveConnection is a live event connection a server holds open

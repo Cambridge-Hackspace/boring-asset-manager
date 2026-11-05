@@ -77,6 +77,9 @@ type Server struct {
 	// relays is this server's end of the relay bus (docs/relays.md); nil
 	// when [relay] turns both transports off.
 	relays *relay.Bus
+	// relayPoke has RunRelays look at the mesh root and the relays at
+	// once, as after the root is made or rotated.
+	relayPoke chan struct{}
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -93,6 +96,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		live:       newLiveHub(),
 		icons:      isolex.Default(),
 		iconsDirty: make(chan struct{}, 1),
+		relayPoke:  make(chan struct{}, 1),
 	}
 	if s.mailer != nil {
 		s.sendMail = s.sendAccountMail
@@ -341,6 +345,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Relays (docs/relays.md) connect with their own credential, not a
 	// session or an API token.
 	handleFunc("GET /api/v1/relay/live", s.handleRelayLive)
+	// Pairing relays (docs/relays.md#pairing): a relay joins with its
+	// code, and renews with its credential.
+	handleFunc("POST /api/v1/relays/join", s.handleJoinRelay)
+	handleFunc("POST /api/v1/relays/renew", s.handleRenewRelay)
+	handle("GET /api/v1/relays", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleListRelays)))
+	handle("POST /api/v1/relays", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleCreateRelay)))
+	handle("POST /api/v1/relays/{id}/code", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleRelayCode)))
+	handle("DELETE /api/v1/relays/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleRevokeRelay)))
+	handle("POST /api/v1/relays/mesh/rotate", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleRotateRelayMesh)))
 
 	// Flows (docs/flows.md): flows.manage makes them; flows.run runs them, in
 	// the scopes of their categories, which each handler checks.

@@ -59,7 +59,10 @@ Authentication is:
 - API tokens;
 - OAuth;
 - notification channels' options, which hold their passwords and webhook addresses;
-- identity providers' secrets (`auth_providers.secrets`), sealed with the configuration's key.
+- identity providers' secrets (`auth_providers.secrets`), sealed with the configuration's key;
+- relays' codes and credentials, as their hashes (`relays.code_hash` and `relays.credential_hash`),
+  and the mesh root (`relay_mesh`), whose private keys are sealed with the configuration's key (see
+  [Relays](relays.md#the-mesh-root)). Restored without them, each relay pairs again with a new code.
 
 It is kept apart in the archive, under `auth/`. That holds the tables that are nothing but
 authentication, whole, and the secret columns of the other tables with their key. So it can be
@@ -86,8 +89,8 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites` |
 | Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, `asset_photos` and their files, and their history, `events` |
 | Flows | `flows` | `flows`, `flow_filings` |
-| Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules` |
-| Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, and the secret columns described under [Authentication](#authentication) |
+| Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays` |
+| Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, `relay_mesh`, and the secret columns described under [Authentication](#authentication) |
 
 The tables are listed, and restored, in that order: each after the tables its rows name.
 

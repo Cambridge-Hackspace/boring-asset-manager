@@ -36,9 +36,9 @@ ORDER = [
     ('settings', 'KindSettings'), ('label_stock', 'KindSettings'), ('printers', 'KindSettings'), ('printer_pools', 'KindSettings'),
     ('printer_pool_members', 'KindSettings'), ('notification_channels', 'KindSettings'), ('spool_jobs', 'KindSettings'),
     ('spool_batches', 'KindSettings'), ('spool_job_members', 'KindSettings'), ('spool_entries', 'KindSettings'),
-    ('auth_providers', 'KindSettings'), ('auth_provider_rules', 'KindSettings'),
+    ('auth_providers', 'KindSettings'), ('auth_provider_rules', 'KindSettings'), ('relays', 'KindSettings'),
     ('sessions', 'KindAuth'), ('user_factors', 'KindAuth'), ('user_identities', 'KindAuth'), ('oauth_clients', 'KindAuth'), ('oauth_codes', 'KindAuth'), ('api_tokens', 'KindAuth'),
-    ('api_token_roles', 'KindAuth'), ('api_token_role_scopes', 'KindAuth'),
+    ('api_token_roles', 'KindAuth'), ('api_token_role_scopes', 'KindAuth'), ('relay_mesh', 'KindAuth'),
 ]
 JSON = {
     'fields': {'options'}, 'events': {'payload'}, 'reports': {'spec'}, 'templates': {'layout_json'},
@@ -46,8 +46,10 @@ JSON = {
     'flows': {'definition'}, 'icon_settings': {'stroke_widths', 'reserved', 'limits', 'states'},
     'category_icons': {'draft_errors'}, 'icon_library': {'draft_errors'}, 'asset_actions': {'triggers'},
     'auth_providers': {'settings', 'default_role_ids', 'allowed_domains', 'allowed_groups', 'mfa_amr', 'mfa_acr'}, 'auth_provider_rules': {'scope_ids'},
+    'relays': {'allowlist'},
 }
-SECRET = {'users': ['password_hash', 'totp_secret'], 'notification_channels': ['options'], 'auth_providers': ['secrets']}
+SECRET = {'users': ['password_hash', 'totp_secret'], 'notification_channels': ['options'], 'auth_providers': ['secrets'],
+          'relays': ['code_hash', 'credential_hash']}
 # Grants are written by permission key, which is the same on every
 # instance; permission IDs are not.
 BY_KEY = {'role_permissions', 'role_permission_scopes'}
@@ -57,6 +59,10 @@ COMMENT = {
                      'instance with another key keeps them, but cannot use them.'],
     'auth_providers': ["Identity providers' secrets are sealed with the configuration's key,",
                        'as second factors are; those set in the configuration file have none.'],
+    'relays': ["Relays' codes and credentials are kept as hashes, in auth/: without them a",
+               'restored relay pairs again with a new code.'],
+    'relay_mesh': ["The mesh root's and the main node's private keys are sealed with the",
+                   "configuration's key, as second factors' secrets are."],
 }
 
 
