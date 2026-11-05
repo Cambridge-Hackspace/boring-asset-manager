@@ -58,6 +58,13 @@ func filters(search, categoryID string) url.Values {
 	return q
 }
 
+// loanReminderSettingsIn are the instance's loan reminder settings.
+type loanReminderSettingsIn struct {
+	On           bool `json:"on"`
+	DaysBefore   int  `json:"days_before" jsonschema:"days before a loan is due to remind, 0 to 30; 0 sends none before"`
+	OverdueTimes int  `json:"overdue_times" jsonschema:"reminders once overdue, the day it is and weekly after, 0 to 52"`
+}
+
 // pdfReply is a PDF the API made, for the client to keep.
 func pdfReply(res Response, uri string) (reply[map[string]any], error) {
 	if res.Status != http.StatusOK {
@@ -127,6 +134,22 @@ func documentTools() []tool {
 			}) (reply[map[string]any], error) {
 				res := e.api(ctx, http.MethodGet, "/api/v1/assets/stocktake.pdf"+in.query(filters(in.Search, in.CategoryID)), nil, "")
 				return pdfReply(res, "bam://export/stocktake.pdf")
+			}),
+		simple(&mcp.Tool{Name: "get_loan_reminder_settings", Description: "Whether borrowers are emailed about their loans, how many days " +
+			"before a loan is due, and how many times once it is overdue (the day it is, then weekly); and whether email can carry them.",
+			Annotations: readOnly("Loan reminder settings")}, "GET /api/v1/settings/loan-reminders", []string{rbac.PermSettingsManage},
+			func(none) (request, error) { return request{path: "/api/v1/settings/loan-reminders"}, nil },
+			func(_ none, out map[string]any) string {
+				return fmt.Sprintf("Reminders on: %v; %v days before; %v times overdue.", out["on"], out["days_before"], out["overdue_times"])
+			}),
+		simple(&mcp.Tool{Name: "set_loan_reminder_settings", Description: "Turn loan reminders by email on or off, and set how many days " +
+			"before a loan is due the first goes (0 for none), and how many go once it is overdue (0 for none). Email must be set up to turn them on.",
+			Annotations: changes("Set loan reminder settings", true)}, "PUT /api/v1/settings/loan-reminders", []string{rbac.PermSettingsManage},
+			func(in loanReminderSettingsIn) (request, error) {
+				return request{path: "/api/v1/settings/loan-reminders", body: in}, nil
+			},
+			func(_ loanReminderSettingsIn, out map[string]any) string {
+				return fmt.Sprintf("Saved: reminders on: %v; %v days before; %v times overdue.", out["on"], out["days_before"], out["overdue_times"])
 			}),
 		simple(&mcp.Tool{Name: "get_document_settings", Description: "The instance's name, at the top of every page of a PDF, and the page size PDFs are made in unless asked otherwise.",
 			Annotations: readOnly("Document settings")}, "GET /api/v1/settings/documents", read,

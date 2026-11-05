@@ -47,6 +47,7 @@ function api(channels: Channel[], extra: Record<string, (b: unknown) => unknown>
   return fakeApi({
     'GET /notifiers/drivers': () => ({ drivers, events }),
     'GET /notifiers': () => ({ channels }),
+    'GET /settings/loan-reminders': () => ({ on: false, days_before: 1, overdue_times: 4, can_email: true }),
     'GET /notifiers/deliveries': () => ({
       deliveries: [
         delivery({}),
@@ -170,5 +171,33 @@ describe('ChannelForm', () => {
     await fireEvent.submit(within(form).getByRole('button', { name: 'Create channel' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
     expect((sent.find((r) => r.method === 'POST')!.body as { options: Record<string, string> }).options.ca_cert).toBe(pem);
+  });
+});
+
+describe('LoanReminderSettings', () => {
+  it('turns loan reminders on with their timing, and says when email cannot carry them', async () => {
+    const { sent } = api([], {
+      'PUT /settings/loan-reminders': (body) => ({ ...(body as object), can_email: true }),
+    });
+    render(NotificationsPage);
+    const section = await screen.findByRole('region', { name: 'Loan reminders' });
+    const box = within(section).getByLabelText('Send loan reminders') as HTMLInputElement;
+    // Nothing can be changed until the settings are read.
+    await vi.waitFor(() => expect((within(section).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(box.checked).toBe(false);
+    await fireEvent.click(box);
+    await fireEvent.input(within(section).getByLabelText('Days before it is due'), { target: { value: '2' } });
+    await fireEvent.input(within(section).getByLabelText('Reminders once overdue'), { target: { value: '3' } });
+    await fireEvent.click(within(section).getByRole('button', { name: 'Save' }));
+    expect(await within(section).findByText('Saved.')).toBeTruthy();
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ on: true, days_before: 2, overdue_times: 3 });
+  });
+
+  it('cannot be turned on without email', async () => {
+    api([], { 'GET /settings/loan-reminders': () => ({ on: false, days_before: 1, overdue_times: 4, can_email: false }) });
+    render(NotificationsPage);
+    const section = await screen.findByRole('region', { name: 'Loan reminders' });
+    expect(await within(section).findByText(/Email is not set up/)).toBeTruthy();
+    expect((within(section).getByLabelText('Send loan reminders') as HTMLInputElement).disabled).toBe(true);
   });
 });

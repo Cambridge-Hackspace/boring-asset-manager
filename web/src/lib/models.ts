@@ -49,6 +49,8 @@ export interface User {
   theme?: 'system' | 'light' | 'dark';
   /** Whether email notification channels send to a role they hold reaches them (docs/notifications.md). */
   email_notifications?: boolean;
+  /** Whether they are emailed about their loans, when the instance sends loan reminders. */
+  loan_reminders?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;

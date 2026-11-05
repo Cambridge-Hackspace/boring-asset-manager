@@ -121,6 +121,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `server_info` | Anyone signed in | Version, address, database and health. |
 | `list_generators` | `assets.read` | The code types. |
 | `set_my_email_notifications` | Anyone signed in | Whether email sent to the caller's roles reaches them; for a person only. |
+| `set_my_loan_reminders` | Anyone signed in | Whether the caller is emailed about their loans ([Stock and lending](stock-and-lending.md#loan-reminders)); for a person only. |
 | `set_my_name` | Anyone signed in | Sets the caller's name; for a person only. |
 | `list_favorites`, `add_favorite`, `remove_favorite` | Anyone signed in | The caller's favorites, and starring or unstarring an asset, category, report or flow; for a person only (see [Favorites](favorites.md)). |
 
@@ -272,6 +273,7 @@ Reading needs `assets.read`; changing needs `reports.manage`. See [Reports](repo
 | `run_report` | `assets.read` | Each section's rows, groups or chart data. |
 | `report_csv` | `assets.read` | A section as a CSV file. |
 | `report_pdf` | `assets.read` | The report as a PDF ([Reports](reports.md#pdf)), as an embedded file. |
+| `get_loan_reminder_settings`, `set_loan_reminder_settings` | `settings.manage` | Whether borrowers are emailed about their loans, and when ([Stock and lending](stock-and-lending.md#loan-reminders)). |
 | `get_document_settings`, `set_document_settings` | `assets.read`, and `settings.manage` to set | The instance's name on PDFs, and their page size. |
 | `preview_report` | `reports.manage` | A spec unsaved; or a scan template for an asset. |
 | `save_report` | `reports.manage` | Its name or spec; what is not given is kept. |

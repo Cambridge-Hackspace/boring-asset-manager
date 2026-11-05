@@ -322,7 +322,8 @@ settings are not used for webhooks.
 ## Storage
 
 Channels are stored in the `notification_channels` table. Whether email reaching someone through a
-role reaches them is `users.email_notifications` (migration `052`).
+role reaches them is `users.email_notifications` (migration `052`). Loan reminders, set on the
+same page, are described in [Stock and lending](stock-and-lending.md#loan-reminders).
 
 ## Internals
 
