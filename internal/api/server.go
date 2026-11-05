@@ -97,6 +97,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	key, _ := cfg.Auth.Key()
 	s.sealer, _ = auth.NewSealer(key)
 	idp.Register(&idp.OIDC{})
+	idp.Register(&idp.OAuth2{})
 	// The test protocol, and a test OpenID Connect provider beside BAM!,
 	// only where a test turned them on (docs/access.md).
 	var testOIDC http.Handler
