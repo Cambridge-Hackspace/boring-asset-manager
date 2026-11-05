@@ -2,8 +2,8 @@
 
 BAM! reads a small TOML file at startup, and is set up and maintained from the `bam` command line.
 The file holds only what is needed to start: the listening address, the database connection, where
-uploaded files are kept, which printer devices may be used, whether the MCP endpoint is on, and the
-email server, if any.
+uploaded files are kept, which printer devices may be used, whether the MCP endpoint is on, the
+email server, if any, and how relays connect.
 Everything else lives in the database and is managed through the web interface or the API.
 
 ## The configuration file
@@ -64,6 +64,16 @@ devices = []
 # off, including for files written before it existed.
 # Environment: BAM_MCP_ENABLED (true or false).
 enabled = true
+
+[relay]
+# The relay bus's transports (docs/relays.md), each on or off: BoneMesh, on a
+# port of its own, and WebSocket, at /api/v1/relay/live on the server's own
+# port. Both off, the default, turns relays off. Environment:
+# BAM_RELAY_BONEMESH and BAM_RELAY_WEBSOCKET (true or false), and
+# BAM_RELAY_BONEMESH_PORT.
+bonemesh = false
+bonemesh_port = 7443
+websocket = false
 
 [notifications]
 # How many days finished deliveries stay in the delivery log, and when a
@@ -181,6 +191,8 @@ Several settings can also be given in the environment:
 | `server.trusted_proxies` | `BAM_SERVER_TRUSTED_PROXIES`, comma-separated |
 | `printers.devices` | `BAM_PRINTERS_DEVICES`, comma-separated |
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
+| `relay.bonemesh`, `relay.websocket` | `BAM_RELAY_BONEMESH`, `BAM_RELAY_WEBSOCKET` (`true` or `false`) |
+| `relay.bonemesh_port` | `BAM_RELAY_BONEMESH_PORT` |
 | `email.host`, `email.port`, `email.tls` | `BAM_EMAIL_HOST`, `BAM_EMAIL_PORT`, `BAM_EMAIL_TLS` |
 | `email.username`, `email.password` | `BAM_EMAIL_USERNAME`, `BAM_EMAIL_PASSWORD` |
 | `email.from`, `email.reply_to`, `email.ca` | `BAM_EMAIL_FROM`, `BAM_EMAIL_REPLY_TO`, `BAM_EMAIL_CA` |
