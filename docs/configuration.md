@@ -135,6 +135,18 @@ role = "admin"
 scopes = []
 ```
 
+`protocol` is `oidc` or `oauth2`, with that protocol's settings (docs/access.md#plain-oauth2). A
+GitHub sign-in, say:
+
+```toml
+[[auth.providers]]
+key = "github"
+name = "GitHub"
+protocol = "oauth2"
+settings = { preset = "github", client_id = "Iv1.…" }
+secrets = { client_secret = "…" }
+```
+
 `BAM_AUTH_PROVIDERS` gives the same as a JSON list, replacing the file's, such as
 `[{"key": "hackspace", "name": "Hackspace", "protocol": "oidc", "settings": {…}}]`.
 
