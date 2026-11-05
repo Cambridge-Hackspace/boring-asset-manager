@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"image"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,6 +23,34 @@ func TestModelsAndMedia(t *testing.T) {
 	}
 	if wide := (Media{Name: "6 in", WidthMM: 152.4}); rollo.Suits(wide) == nil {
 		t.Error("6 in labels accepted on a 4.1 in head")
+	}
+}
+
+func TestEachListedModelFitsItsHead(t *testing.T) {
+	// The maximum print width each maker gives, in mm, at 203 DPI.
+	stated := map[string]float64{
+		"iDPRT SP410": 108, "iDPRT SP420": 108, "Polono PL60": 108, "Polono PL70e": 104, "Arkscan 2054A": 108,
+		"HPRT SL42": 108, "Xprinter XP-420B": 108, "Xprinter XP-470B": 108, "Phomemo PM-241": 108,
+		"TSC TE200": 108, "TSC TE210": 108, "TSC DA210": 108, "TSC TTP-244 Pro": 108,
+	}
+	shipping, _ := LookupMedia("4x6")
+	for name, mm := range stated {
+		m, ok := LookupModel(name)
+		if !ok {
+			t.Errorf("%s is not listed", name)
+			continue
+		}
+		if m.DPI != 203 || math.Abs(m.HeadMM()-mm) > 0.5 {
+			t.Errorf("%s: %d DPI, a %.1f mm head, want 203 and %g", name, m.DPI, m.HeadMM(), mm)
+		}
+		// The fit check: 4 × 6 in labels suit it, and a label wider than
+		// its head does not.
+		if err := m.Suits(shipping); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		if m.Suits(Media{Name: "too wide", WidthMM: mm + 3}) == nil {
+			t.Errorf("%s takes labels wider than its head", name)
+		}
 	}
 }
 

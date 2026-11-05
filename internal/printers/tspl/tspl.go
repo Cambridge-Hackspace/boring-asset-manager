@@ -26,12 +26,26 @@ type Model struct {
 	HeadDots int
 }
 
-var models = map[string]Model{
-	"Rollo X1038":          {Name: "Rollo X1038", DPI: 203, HeadDots: 832},
-	"Rollo X1040":          {Name: "Rollo X1040", DPI: 203, HeadDots: 832},
-	"Munbyn ITPP941":       {Name: "Munbyn ITPP941", DPI: 203, HeadDots: 832},
-	"Generic TSPL 203 DPI": {Name: "Generic TSPL 203 DPI", DPI: 203, HeadDots: 832},
-	"Generic TSPL 300 DPI": {Name: "Generic TSPL 300 DPI", DPI: 300, HeadDots: 1248},
+var models = map[string]Model{}
+
+func init() {
+	add := func(name string, dpi, dots int) { models[name] = Model{Name: name, DPI: dpi, HeadDots: dots} }
+	add("Rollo X1038", 203, 832)
+	add("Rollo X1040", 203, 832)
+	add("Munbyn ITPP941", 203, 832)
+	// 108 mm heads (864 dots), as their makers give the maximum print
+	// width: TSC's own desktops and the 4-inch printers built like them.
+	for _, name := range []string{
+		"iDPRT SP410", "iDPRT SP420", "Polono PL60", "Arkscan 2054A", "HPRT SL42", "Xprinter XP-420B",
+		"Xprinter XP-470B", "Phomemo PM-241", "TSC TE200", "TSC TE210", "TSC DA210", "TSC TTP-244 Pro",
+	} {
+		add(name, 203, 864)
+	}
+	// No maker's figure was found for the PL70e's head: it is taken as the
+	// 4.09 in of most 4-inch printers, the narrower guess.
+	add("Polono PL70e", 203, 832)
+	add("Generic TSPL 203 DPI", 203, 832)
+	add("Generic TSPL 300 DPI", 300, 1248)
 }
 
 // LookupModel returns a model by name.
