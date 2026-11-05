@@ -11,8 +11,8 @@
 <main id="main" class="mx-auto mt-16 max-w-xl space-y-4 px-4">
   <h1 class="text-2xl font-bold">Set up two-factor sign-in</h1>
   <p class="text-sm">
-    A role you hold requires signing in with a second factor. Set up an authenticator app on your phone to go on; until
-    then, nothing else here opens.
+    A role you hold requires signing in with a second factor. Add a passkey, or set up an authenticator app on your
+    phone, to go on; until then, nothing else here opens.
   </p>
   <TwoFactorSection ondone={() => void session.load()} />
   <p class="text-sm">

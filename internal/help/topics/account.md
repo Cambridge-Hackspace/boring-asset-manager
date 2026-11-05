@@ -6,15 +6,18 @@ What you can do depends on your roles, listed on the same page with what each pe
 
 ## Two-factor sign-in
 
-Under **Two-factor sign-in**, you can ask for a code from an authenticator app on your phone, such as Aegis, Google Authenticator or 1Password, as well as your password. Choose **Set up an authenticator app**, scan the QR code with the app, and enter the code it shows. From then on, signing in asks for the app's code after your password, so your password alone is not enough. Each code works once.
+Under **Two-factor sign-in**, you can ask for a second factor as well as your password, so your password alone is not enough: a passkey, or a code from an authenticator app.
 
-Turning it on shows ten **recovery codes**, once. Download or print them, and keep them somewhere safe, apart from the phone. If you lose the phone, choose **Use a recovery code** when signing in and enter one: each works once. The page shows how many you have left and warns when you are running low; **Make new recovery codes** replaces them all, given a code from the app. Using one is recorded, and emails you when this BAM! sends email.
+- **A passkey** is a security key, such as a YubiKey, or your phone's or computer's screen lock. Choose **Add a passkey**, give it a name, and touch the key or unlock the device when your browser asks. You can add several. Signing in then offers **Use a passkey** after your password. A passkey works only at the address it was added at: if this BAM! moves to another, add yours again.
+- **An app** on your phone, such as Aegis, Google Authenticator or 1Password: choose **Set up an authenticator app**, scan the QR code with the app, and enter the code it shows. Signing in then asks for the app's code after your password. Each code works once.
 
-To turn it off, choose **Turn off** and give your password and a code. If you lose your phone and your recovery codes, ask whoever manages users to remove your second factor: you can then sign in with your password and set it up again. Where this BAM! offers it, the second step of signing in can instead email you a link that removes it.
+Setting up the first shows ten **recovery codes**, once. Download or print them, and keep them somewhere safe, apart from your phone and keys. If you lose your second factor, choose **Use a recovery code** when signing in and enter one: each works once. The page shows how many you have left and warns when you are running low; **Make new recovery codes** replaces them all, given a current second factor. Using one is recorded, and emails you when this BAM! sends email.
+
+To remove a factor, choose **Remove…** beside it and give your password and a current second factor: a code from the app, or a passkey. If you lose your second factors and your recovery codes, ask whoever manages users to remove them: you can then sign in with your password and set one up again. Where this BAM! offers it, the second step of signing in can instead email you a link that removes them.
 
 You are emailed when your password changes, and when a second factor is added or removed, so that a change you did not make does not go unseen.
 
-Some roles require two-factor sign-in, the **admin** role among them. If you hold one and have no second factor, signing in asks you to set one up before anything else opens, and your last one cannot be turned off.
+Some roles require two-factor sign-in, the **admin** role among them. If you hold one and have no second factor, signing in asks you to set one up before anything else opens, and your last one cannot be removed.
 
 ## Signing in elsewhere
 

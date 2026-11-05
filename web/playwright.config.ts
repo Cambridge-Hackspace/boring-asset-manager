@@ -11,7 +11,9 @@ export default defineConfig({
   timeout: 30_000,
   reporter: [['list']],
   use: {
-    baseURL: process.env.BAM_URL ?? 'http://127.0.0.1:8080',
+    // localhost, as the server's base_url: passkeys are bound to its host,
+    // and browsers take them only at a domain, not an IP address.
+    baseURL: process.env.BAM_URL ?? 'http://localhost:8080',
     viewport: { width: 1400, height: 1000 },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

@@ -17,8 +17,21 @@ function stubFetch(mock: (url: string, init?: RequestInit) => Promise<Response>,
   );
 }
 
+// A browser with passkeys, whose one answers with bytes 7 to 18.
+function stubPasskeys() {
+  const bytes = (...b: number[]) => new Uint8Array(b).buffer;
+  const get = vi.fn().mockResolvedValue({
+    rawId: bytes(7, 8, 9),
+    response: { clientDataJSON: bytes(10, 11, 12), authenticatorData: bytes(13, 14, 15), signature: bytes(16, 17, 18) },
+  });
+  vi.stubGlobal('PublicKeyCredential', class {});
+  Object.defineProperty(navigator, 'credentials', { value: { get, create: vi.fn() }, configurable: true });
+  return get;
+}
+
 afterEach(() => {
   cleanup();
+  Object.defineProperty(navigator, 'credentials', { value: undefined, configurable: true });
   // Signed in by one test is not signed in for the next.
   session.user = null;
   // A query one test leaves, such as ?factor=required, is not the next one's.
@@ -141,15 +154,84 @@ describe('SignIn', () => {
   it('asks for the code after a provider, for someone with a second factor', async () => {
     navigate('/sign-in?factor=required&next=%2Fassets');
     const me = { user: { id: 'u1', email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' }, permissions: [] };
-    const fetchMock = vi.fn().mockResolvedValueOnce(json(200, { user: me.user })).mockResolvedValueOnce(json(200, me));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json(200, { factors: ['totp'] }))
+      .mockResolvedValueOnce(json(200, { user: me.user }))
+      .mockResolvedValueOnce(json(200, me));
     stubFetch(fetchMock);
     render(SignIn);
     const code = await screen.findByLabelText('Code from your authenticator app');
     expect(screen.getByText(/for your account now/)).toBeTruthy();
+    // Which factors can finish it is asked for: the provider did not say.
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v1/auth/login/factor');
+    expect(fetchMock.mock.calls[0]![1].method).toBe('GET');
     await fireEvent.input(code, { target: { value: '123456' } });
     await fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
     await vi.waitFor(() => expect(router.path).toBe('/assets'));
-    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v1/auth/login/factor');
+    expect(fetchMock.mock.calls[1]![0]).toBe('/api/v1/auth/login/factor');
+  });
+
+  it('signs in with a passkey, the browser answering the challenge', async () => {
+    navigate('/sign-in?next=%2Fassets');
+    const get = stubPasskeys();
+    const me = { user: { id: 'u1', email: 'ada@hackspace.org', name: '', is_active: true, created_at: '', updated_at: '' }, permissions: [] };
+    const options = { challenge: 'AQID', rpId: 'bam.example.org', allowCredentials: [{ type: 'public-key', id: 'BAUG' }] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json(200, { factor_required: true, factors: ['passkey'] }))
+      .mockResolvedValueOnce(json(200, { public_key: options }))
+      .mockResolvedValueOnce(json(200, { user: me.user }))
+      .mockResolvedValueOnce(json(200, me));
+    stubFetch(fetchMock);
+    render(SignIn);
+    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'ada@hackspace.org' } });
+    await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'right' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+
+    // With a passkey alone, there is no code to type.
+    const use = await screen.findByRole('button', { name: 'Use a passkey' });
+    expect(screen.queryByLabelText('Code from your authenticator app')).toBeNull();
+    await fireEvent.click(use);
+    await vi.waitFor(() => expect(router.path).toBe('/assets'));
+    expect(fetchMock.mock.calls[1]![0]).toBe('/api/v1/auth/login/factor/passkey');
+    const asked = get.mock.calls[0]![0].publicKey;
+    expect(new Uint8Array(asked.challenge)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(new Uint8Array(asked.allowCredentials[0].id)).toEqual(new Uint8Array([4, 5, 6]));
+    expect(JSON.parse(fetchMock.mock.calls[2]![1].body)).toEqual({
+      passkey: { id: 'BwgJ', client_data_json: 'CgsM', authenticator_data: 'DQ4P', signature: 'EBES' },
+    });
+  });
+
+  it('says why a passkey did not answer, and offers a recovery code', async () => {
+    const get = stubPasskeys();
+    get.mockRejectedValueOnce(new DOMException('cancelled', 'NotAllowedError'));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json(200, { factor_required: true, factors: ['passkey'] }))
+      .mockResolvedValueOnce(json(200, { public_key: { challenge: 'AQID' } }));
+    stubFetch(fetchMock);
+    render(SignIn);
+    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'ada@hackspace.org' } });
+    await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'right' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Use a passkey' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/cancelled, or took too long/);
+    await fireEvent.click(screen.getByRole('button', { name: 'Use a recovery code' }));
+    expect(screen.getByLabelText('Recovery code')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Use a passkey' }));
+    expect(screen.queryByLabelText('Recovery code')).toBeNull();
+  });
+
+  it('asks for a recovery code where the browser has no passkeys', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(json(200, { factor_required: true, factors: ['passkey'] }));
+    stubFetch(fetchMock);
+    render(SignIn);
+    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'ada@hackspace.org' } });
+    await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'right' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByLabelText('Recovery code')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Use a passkey' })).toBeNull();
   });
 
   it('starts again from the password when the second step has expired', async () => {
@@ -175,12 +257,16 @@ describe('SignIn', () => {
     cleanup();
 
     navigate('/sign-in?factor=required', true);
-    const fetchMock = vi.fn().mockResolvedValue(json(202, { message: 'A link to remove your second factor is on its way to ada@hackspace.org.' }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json(200, { factors: ['totp'] }))
+      .mockResolvedValueOnce(json(202, { message: 'A link to remove your second factor is on its way to ada@hackspace.org.' }));
     stubFetch(fetchMock, { providers: [], local_passwords: true, password_reset: true, factor_recovery_email: true });
     render(SignIn);
+    await screen.findByLabelText('Code from your authenticator app');
     await fireEvent.click(await screen.findByRole('button', { name: 'Email me a link to remove my second factor' }));
     expect((await screen.findByRole('status')).textContent).toContain('is on its way');
-    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v1/auth/login/factor/recover');
+    expect(fetchMock.mock.calls[1]![0]).toBe('/api/v1/auth/login/factor/recover');
     cleanup();
 
     navigate('/sign-in', true);

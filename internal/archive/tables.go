@@ -169,7 +169,7 @@ var Tables = []Table{
 	// Second factors' secrets are sealed with the configuration's key: an
 	// instance with another key keeps them, but cannot use them.
 	{Name: "user_factors", Kind: KindAuth, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"user_id", Text}, {"kind", Text}, {"secret", Text}, {"last_step", Int}, {"created_at", Time}, {"confirmed_at", Time}, {"last_used_at", Time}},
+		Columns: []Column{{"id", Text}, {"user_id", Text}, {"kind", Text}, {"secret", Text}, {"last_step", Int}, {"created_at", Time}, {"confirmed_at", Time}, {"last_used_at", Time}, {"name", Text}, {"credential_id", Text}, {"public_key", Text}, {"rp_id", Text}},
 	},
 	{Name: "user_identities", Kind: KindAuth, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"user_id", Text}, {"provider_id", Text}, {"subject", Text}, {"email", Text}, {"created_at", Time}, {"last_used_at", Time}},
