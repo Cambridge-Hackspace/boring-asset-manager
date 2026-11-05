@@ -109,7 +109,7 @@ where the image is transparent. In PDF, that transparency is kept as a soft mask
 - `units` is `mm` or `in`.
 - `width` and `height` are positive.
 - `dpi` is 150–600. Brother QL and DYMO LabelWriter printers print at 300, Rollo and most TSPL
-  printers at 203.
+  printers at 203, and Zebras at 203, 300 or 600.
 - Positions and sizes use the template's units, with the origin at the top-left corner.
 - Every element must lie inside the canvas.
 - `font_size` is always in points.

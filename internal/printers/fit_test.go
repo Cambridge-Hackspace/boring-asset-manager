@@ -50,6 +50,15 @@ func TestFitLabel(t *testing.T) {
 		{"TSPL continuous too long", DriverTSPL, "Rollo X1038", "continuous-4", 101.6, 1200, 203, false, false},
 		{"TSPL 300 DPI template on a 203 DPI printer", DriverTSPL, "Rollo X1038", "4x6", 101.6, 152.4, 300, false, false},
 		{"TSPL 300 DPI printer", DriverTSPL, "Generic TSPL 300 DPI", "4x6", 101.6, 152.4, 300, false, true},
+
+		{"ZPL 2-inch head", DriverZPL, "Zebra ZD410", "2x1", 50.8, 25.4, 203, false, true},
+		{"ZPL 4-inch head", DriverZPL, "Zebra GK420d", "4x6", 101.6, 152.4, 203, false, true},
+		{"ZPL 4-inch head, landscape rotates", DriverZPL, "Zebra GK420d", "4x6", 152.4, 101.6, 203, true, true},
+		{"ZPL 300 DPI", DriverZPL, "Zebra ZD621 300 DPI", "4x6", 101.6, 152.4, 300, false, true},
+		{"ZPL 600 DPI", DriverZPL, "Zebra ZT411 600 DPI", "2x1", 50.8, 25.4, 600, false, true},
+		{"ZPL 300 DPI template on a 203 DPI printer", DriverZPL, "Zebra GK420d", "4x6", 101.6, 152.4, 300, false, false},
+		{"ZPL continuous", DriverZPL, "Generic ZPL 8 in 203 DPI", "continuous-4", 101.6, 300, 203, false, true},
+		{"EPL2 2-inch head", DriverEPL2, "Zebra LP 2824", "2x1", 50.8, 25.4, 203, false, true},
 	}
 	for _, c := range cases {
 		_, f, err := PlanLabel(c.driver, Settings{Model: c.model, Media: c.media}, LabelSpec{WidthMM: c.width, HeightMM: c.height, DPI: c.dpi})

@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
 )
 
 // Driver speaks one family of printers' language. Drivers are registered by
@@ -105,7 +107,7 @@ var (
 )
 
 func init() {
-	for _, d := range []Driver{brotherQL{}, dymoLabelWriter{}, tsplDriver{}} {
+	for _, d := range []Driver{brotherQL{}, dymoLabelWriter{}, tsplDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2}} {
 		if err := Register(d); err != nil {
 			panic(err)
 		}
