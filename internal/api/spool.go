@@ -297,6 +297,9 @@ func actorOf(r *http.Request) string {
 	if t := CurrentToken(r.Context()); t != nil {
 		return t.ID
 	}
+	if in := currentIncoming(r.Context()); in != nil {
+		return in.hook.ID
+	}
 	return ""
 }
 

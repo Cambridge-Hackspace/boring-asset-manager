@@ -304,6 +304,13 @@ People, roles and scopes need `users.manage`. Channels need `settings.manage`.
 A channel's secrets, such as a webhook URL, are written and never read back. They show as set or
 not, and a change that leaves one out keeps it.
 
+| Tool | Permission | What it does |
+| :--- | :--- | :--- |
+| `list_incoming_hooks`, `save_incoming_hook` (changing only what is given), `delete_incoming_hook` | `settings.manage` | Incoming hooks ([Hooks](hooks.md#incoming-hooks)). An incoming hook's secret is in the answer that makes or replaces it, and never again. |
+
+An incoming hook's own address, which senders outside BAM! post to, is not a tool: an assistant does
+what it does with the tools themselves.
+
 ### Flows
 
 Managing needs `flows.manage`; running needs `flows.run`, as a person. See [Flows](flows.md).

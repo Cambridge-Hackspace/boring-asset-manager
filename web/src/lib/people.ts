@@ -11,11 +11,18 @@ export function personName(person: { name?: string }): string {
 }
 
 /**
- * Who made a change in an asset's history: a person, "you" when it was me, or
- * an API token; and the assistant it was made through, if any.
+ * Who made a change in an asset's history: a person, "you" when it was me, an
+ * API token, or an incoming hook; and the assistant or flow it was made
+ * through, if any.
  */
-export function actorName(actor: { id?: string; name?: string; token?: boolean; via?: string }, me?: string): string {
-  const who = actor.token ? `API token “${actor.name ?? ''}”` : me && actor.id === me ? 'you' : personName(actor);
+export function actorName(actor: { id?: string; name?: string; token?: boolean; incoming?: boolean; via?: string }, me?: string): string {
+  const who = actor.token
+    ? `API token “${actor.name ?? ''}”`
+    : actor.incoming
+      ? `incoming hook “${actor.name ?? ''}”`
+      : me && actor.id === me
+        ? 'you'
+        : personName(actor);
   return actor.via ? `${who}, via ${actor.via}` : who;
 }
 

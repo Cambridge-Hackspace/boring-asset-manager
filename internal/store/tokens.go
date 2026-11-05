@@ -251,6 +251,6 @@ func (s *Store) Via(assistant string) *Store {
 // API token, as As attributes them to a user.
 func (s *Store) AsToken(tokenID string) *Store {
 	c := *s
-	c.actor, c.actorToken = "", tokenID
+	c.actor, c.actorToken, c.actorIncoming = "", tokenID, ""
 	return &c
 }

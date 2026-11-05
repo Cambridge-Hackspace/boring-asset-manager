@@ -207,7 +207,7 @@ export interface AssetEvent {
   created_at: string;
   payload: {
     /** Who caused it, with their name as it was then. */
-    actor?: { id: string; email: string; name?: string; token?: boolean };
+    actor?: { id: string; email: string; name?: string; token?: boolean; incoming?: boolean };
     trigger: 'manual' | 'threshold' | 'import' | 'schedule';
     quantity?: number;
     change?: number;
@@ -698,6 +698,39 @@ export interface RelayCode {
 }
 
 /** An API token for scripts and dashboards; its secret is shown only once. */
+/** What an incoming hook does (docs/hooks.md#incoming-hooks). */
+export type IncomingAction = 'hook' | 'quantity' | 'fields' | 'flow';
+
+/** How an incoming hook finds its asset: fixed, or from the request; '' for a flow that finds none. */
+export interface IncomingAsset {
+  by: 'fixed' | 'id' | 'code' | 'field' | '';
+  asset_id?: string;
+  path?: string;
+  field?: string;
+}
+
+/** A URL that lets something outside BAM! act on it. Its secret is shown once, when made or replaced. */
+export interface IncomingHook {
+  id: string;
+  name: string;
+  enabled: boolean;
+  auth: 'bearer' | 'hmac';
+  /** False after a restore without secrets: it refuses until given a new one. */
+  has_secret: boolean;
+  action: IncomingAction;
+  hook?: string;
+  flow_id?: string;
+  /** Fields' keys to paths into the request's JSON; none sets the request's field_values. */
+  fields?: Record<string, string>;
+  asset: IncomingAsset;
+  rate_limit: number;
+  roles: RoleAssignment[];
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+  url: string;
+}
+
 export interface APIToken {
   id: string;
   name: string;

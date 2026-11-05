@@ -799,6 +799,8 @@ token is made. As with a session token, only its SHA-256 hash is stored.
 ### History
 
 Changes a token makes are recorded in history under its name (`"actor": {"token": true, ...}`).
+Those an incoming hook makes are recorded under its name, as `"incoming": true` (see
+[Hooks](hooks.md#incoming-hooks)).
 
 A change made through an MCP tool also records the assistant it came through, as `"via"` on the
 actor. The assistant is named as the MCP client names itself (`clientInfo`, its title if it has
@@ -916,6 +918,9 @@ of the scopes each narrowed role holds, by role name.
 - how many roles hold permissions in it (`role_count`);
 - how many roles of users who are not archived, and of tokens not revoked, are narrowed to it
   (`assignment_count`).
+
+A scope that incoming hooks' roles are narrowed to cannot be deleted either (see
+[Hooks](hooks.md#incoming-hooks)).
 
 ### Tokens
 
