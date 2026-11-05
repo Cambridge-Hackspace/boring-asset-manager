@@ -63,15 +63,6 @@ func Validate(name, driver string, conn Connection, settings Settings) error {
 	return nil
 }
 
-func contains(list []string, s string) bool {
-	for _, item := range list {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
 // Transport delivers an encoded job to a printer.
 type Transport interface {
 	// Check reports whether this server may use a normalized connection,

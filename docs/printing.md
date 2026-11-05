@@ -22,7 +22,7 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Five drivers ship today: `brother_ql`, `dymo_labelwriter`, `tspl`, `zpl` and `epl2`. Option
+Six drivers ship today: `brother_ql`, `brother_td`, `dymo_labelwriter`, `tspl`, `zpl` and `epl2`. Option
 values are listed by the drivers endpoint, and unknown options are refused.
 
 ### Who can do what
@@ -142,6 +142,7 @@ clients need not look either up.
 Drivers take custom stock only where a size is all the printer needs:
 
 - TSPL printers, Zebras (ZPL and EPL2) and DYMO LabelWriters take it, up to their head's width.
+- Brother TD printers take it, as wide as each model's rolls may be.
 - Brother QL printers take only their built-in rolls. They identify the DK roll loaded and need
   Brother's figures to place a label on it.
 
@@ -152,55 +153,189 @@ one would no longer take it. Stock loaded in a printer cannot be deleted (`409`)
 
 ### `brother_ql`
 
-For the QL-810W and QL-820NWB.
+For Brother's QL range, which speaks Brother's raster command language and takes DK rolls:
+
+| Line | Models | Head |
+|---|---|---|
+| 62 mm | QL-500, QL-550, QL-560, QL-570, QL-580N, QL-650TD and QL-700 | 720 pins |
+| 62 mm | QL-710W and QL-720NW | 720 pins |
+| 62 mm | QL-800, QL-810W and QL-820NWB | 720 pins |
+| 4-inch | QL-1050 and QL-1060N | 1,296 pins |
+| 4-inch | QL-1100, QL-1110NWB and QL-1115NWB | 1,296 pins |
+
+Every model prints at 300 DPI. The figures come from Brother's raster command references:
+
+- *Brother QL Series Command Reference (QL-500/550/560/570/580N/650TD/700/1050/1060N)*, version 6.0;
+- *Raster Command Reference QL-600/QL-710W/QL-720NW*, version 1.02;
+- *Raster Command Reference QL-800/810W/820NWB*, version 1.01;
+- *Raster Command Reference QL-1100/1110NWB/1115NWB*, version 1.00.
+
+Brother links them from its [command reference
+list](https://support.brother.com/g/s/es/dev/en/command/reference/index.html).
 
 **Options:** `cut` (default `true`) cuts each label off as it finishes; turned off, the tape feeds
-on uncut.
+on uncut. The QL-500 has no cutter: it feeds on, and turning `cut` on for it is refused.
 
-**Media.** The media catalog records, for each supported roll:
+**Media.** The media catalog records, for each DK roll:
 
 - its width;
 - whether it is die-cut, and if so its label length;
 - its printable width in head dots;
-- how many pins sit beside the tape.
+- how many pins sit beside the tape on each head;
+- which models take it.
 
-It covers every roll the QL-800 series takes, with the figures from Brother's *Raster Command
-Reference QL-800/810W/820NWB* (version 1.01, sections 2.3.2 and 2.3.5):
+The rolls:
 
-- continuous tape 12, 29, 38, 50, 54 and 62 mm wide;
+- continuous tape 12, 29, 38, 50, 54 and 62 mm wide, and 102 and 103 mm on the 4-inch models;
 - die-cut labels 17 × 54, 17 × 87, 23 × 23, 29 × 42, 29 × 90, 38 × 90, 39 × 48, 52 × 29,
   54 × 29, 60 × 86, 62 × 29, 62 × 60, 62 × 75 and 62 × 100 mm;
+- die-cut labels 102 × 51, 102 × 152 and 103 × 164 mm on the 4-inch models;
 - round labels 12, 24 and 58 mm across.
 
-Rolls are named by their DK part number where Brother sells them under one. Two-color black/red
-media (DK-22251) is out of scope.
+Each model takes the rolls its own reference lists:
+
+- 29 × 42 and 60 × 86 mm labels are not in the QL-500 to QL-1060N reference.
+- 54 × 29, 62 × 60 and 62 × 75 mm labels are only in the QL-800 series'.
+- The QL-1050 and QL-1060N take the 102 mm rolls but not the 103 mm ones.
+- The QL-1115NWB takes neither 103 mm roll.
+
+A printer is refused with a roll its model does not take. The drivers endpoint lists, on each roll
+that not every model takes, the models that do (`models`). The printer form offers each model only
+those.
+
+Rolls are named by their DK part number where Brother sells them under one; the references name
+none. Two-color black/red media (DK-22251) is out of scope.
 
 **Fit and margins.** Before any asset is laid out, the fit check requires the template to suit the
-loaded media, at 300 DPI. Continuous labels are 25–1000 mm long. The head reaches the middle of the
-tape, and the middle of a die-cut label's length, by Brother's printable pins and lines.
+loaded media, at 300 DPI. Continuous labels can be as long as:
+
+- 1,000 mm on the 62 mm models;
+- 3,000 mm on the 4-inch ones.
+
+The shortest is 25 mm, or 12.7 mm on the QL-570, QL-580N, QL-700, QL-710W and QL-720NW, and 25.4 mm
+on the QL-1100 series. The head reaches the middle of the tape, and the middle of a die-cut label's
+length, by Brother's printable pins and lines.
 
 The printer cannot reach the tape edges, so the rendered label is cropped to the printable area
 around its center:
 
 - 306 of the 343 dots across 29 mm tape (about 1.5 mm lost on each side);
 - 696 across 62 mm tape;
+- 1,164 across 102 mm;
 - on DK-11201, 991 of 1063 dots along the label (about 3 mm at each end).
 
 Keep elements clear of those margins.
 
-**Encoding.** Each label is rendered 1-bit at 300 DPI and encoded as a raster stream, as described
-in Brother's QL-800 series raster command reference. The stream is: invalidate, initialize, then
-per label:
+**Encoding.** Each label is rendered 1-bit at 300 DPI and encoded as a raster stream. The stream
+is: invalidate, initialize, then per label:
 
 1. raster mode;
 2. print information;
 3. auto-cut;
 4. margins and TIFF compression;
-5. PackBits-compressed raster lines (90 bytes for each line of the 720-pin head, mirrored because
-   the first pin sits at the right of the tape);
+5. raster lines (90 bytes for each line of the 720-pin head, 162 for the 1,296-pin one, mirrored
+   because the first pin sits at the right of the tape);
 6. a print command.
 
-With `cut` on, every label is cut off as it finishes.
+Each model is sent only the commands its reference lists for it:
+
+| Models | Raster mode | Cutting | TIFF compression |
+|---|---|---|---|
+| QL-500 | no | none | no |
+| QL-550, QL-560 | no | auto-cut | no |
+| QL-570, QL-700 | no | auto-cut, cut every label, cut at end | no |
+| QL-650TD | yes | auto-cut, cut at end | no (over serial only) |
+| QL-580N, QL-1050, QL-1060N, QL-710W, QL-720NW, QL-810W, QL-820NWB, QL-1100 series | yes | auto-cut, cut every label, cut at end | yes |
+| QL-800 | yes | auto-cut, cut every label, cut at end | no |
+
+Uncompressed raster lines span the whole head. With `cut` on, every label is cut off as it
+finishes. The invalidate is 350 bytes on the QL-1100 series, as its reference asks, and 200 on
+the rest.
+
+**Where the references differ:**
+
+- **The QL-500 to QL-1060N reference** contradicts itself on which models take "cut every
+  label" and the cut at the end: its overview leaves out the QL-560, and its command details
+  include it. The narrower list is followed. Both commands only restate the printer's own
+  defaults.
+- **The QL-800 series reference** asks for a 400-byte invalidate, and allows continuous labels
+  from 12.7 mm. The QL-810W and QL-820NWB have always been sent 200 bytes and held to 25 mm, and
+  the QL-800 is kept with them.
+- **The QL-1100 reference's pin table** gives two figures that do not add up to its 1,296 pins.
+  They are for 62 mm continuous tape and the 62 mm die-cut labels. The QL-1050's figures, which
+  do, are used.
+
+### `brother_td`
+
+For Brother's TD-2 and TD-4 series of direct thermal printers, which speak the same raster command
+language as the QL range but take rolls of any size:
+
+| Series | Models | Resolution | Head |
+|---|---|---|---|
+| TD-2 | TD-2020, TD-2120N, TD-2125N and TD-2125NWB | 203 DPI | 448 pins (56 mm) |
+| TD-2 | TD-2030A, TD-2130N, TD-2135N and TD-2135NWB | 300 DPI | 672 pins (57 mm) |
+| TD-4 | TD-4210D, TD-4215D, TD-4410D, TD-4415D, TD-4420DN, TD-4425DN and TD-4455DNWB | 203 DPI | 832 pins (104 mm) |
+| TD-4 | TD-4510D, TD-4520DN, TD-4525DN, TD-4550DNWB and TD-4555DNWB | 300 DPI | 1,280 pins (108 mm) |
+
+The figures come from Brother's *Raster Command Reference* for the TD-2000 series (version 1.01)
+and the TD-4000 series (version 1.03).
+
+The TD-4T thermal transfer models (TD-4420TN, TD-4520TN, TD-4650TNWB and TD-4750TNWB) do not speak
+this language. Their languages are Brother's FBPL and the emulations of ZPL, EPL and DPL: use
+`zpl` for them. The linerless TD-4 models are left out.
+
+**Why a driver of its own.** The command streams are nearly the QL's: the same commands, with
+heads of other widths. What differs is the media:
+
+- A QL identifies the DK roll loaded. Placing a label on its head takes Brother's table of pins
+  for that roll.
+- A TD prints on any roll from 19 mm wide (up to 63 mm on the TD-2, 118 mm on the TD-4). The
+  printer is set up for the roll on its own, with its size and whether it has gaps or black
+  marks.
+
+So `brother_td` takes custom stock, which `brother_ql` cannot, and the two keep separate media
+lists.
+
+**Options:** `cut` (default `false`) cuts each label off as it finishes, with a TD-4's optional
+cutter fitted. A cut label must be at least 20 mm long. The TD-2 series has no cutter, and
+turning `cut` on for it is refused.
+
+**Media.** The TD references size Brother's RD rolls, which are built in:
+
+- **TD-2:** continuous tape 57 and 58 mm wide, and die-cut labels 30 × 30, 40 × 40, 40 × 50,
+  40 × 60, 50 × 30, 51 × 26 and 60 × 60 mm.
+- **TD-4:** continuous tape 58, 76, 90 and 102 mm wide, and die-cut labels 51 × 26, 76 × 26,
+  102 × 50 and 102 × 152 mm.
+
+Custom stock of any size the model takes works the same way.
+
+**Set the printer up for the roll** with Brother's own tools: the Paper Size Setup in its printer
+driver or Printer Setting Tool, and the media sensor for gaps or black marks. The raster language
+can carry that setup only as an opaque block, which BAM! cannot produce, so it sends only the
+labels. A custom stock's gap is not sent either.
+
+**Fit and margins.** Templates must use the model's resolution. A label is placed centered on the
+head, as every RD roll is in Brother's tables:
+
+- across the roll, everything but 1.5 mm at each side prints, up to the width of the head;
+- along a die-cut label, everything but 3 mm at each end prints;
+- continuous labels are fed a 3 mm margin, and are 12 mm to 1,000 mm (TD-2) or 3,000 mm (TD-4)
+  long.
+
+These offsets reproduce Brother's printable pins and lines for every RD roll to within two dots.
+The exception is 60 mm labels on a 300 DPI TD-2: the head is narrower than the label, and is
+printed across whole, where Brother keeps 2 mm off each side.
+
+**Encoding.** The stream is the QL's, with these differences:
+
+- **Invalidate:** 200 bytes on the TD-2 series. On the TD-4 series, 350 bytes, or 661 on the
+  TD-4215D, TD-4415D, TD-4425DN, TD-4455DNWB, TD-4525DN and TD-4555DNWB.
+- **Commands:** the TD-2 series takes neither "cut every label" nor the cut at the end. Its mode
+  setting has no cutter.
+- **Raster lines** are 56, 84, 104 or 160 bytes, by the head, and TIFF-compressed.
+- **Print information** gives the roll's type and size but asks the printer to check none of
+  them, as Brother's own TD-4 example does. Otherwise a TD would refuse a job whose size did not
+  match the paper format it was set up with.
 
 ### `dymo_labelwriter`
 
@@ -671,7 +806,7 @@ Deleting a printer takes it out of its pools.
 | Method and route | Permission | Purpose |
 |---|---|---|
 | `/api/v1/printers` | `settings.manage`; listing: `labels.print` or `templates.manage` | Configure printers |
-| `GET /api/v1/printers/drivers` | `labels.print`, `settings.manage` or `templates.manage` | Every registered driver, with its models (and each model's DPI), media and options; for drivers that take custom stock, how wide each model's labels may be and how long continuous ones (`custom_stock`) |
+| `GET /api/v1/printers/drivers` | `labels.print`, `settings.manage` or `templates.manage` | Every registered driver, with its models (and each model's DPI), media (each with the models that take it, when not all do) and options; for drivers that take custom stock, how wide each model's labels may be and how long continuous ones (`custom_stock`) |
 | `POST /api/v1/printers/{id}/fit` | template designers | Fit check without printing |
 | `POST /api/v1/printers/{id}/test-print` | `labels.print` and `templates.manage` | Print one label of a possibly unsaved template |
 | `POST /api/v1/printers/{id}/changes` | `settings.manage` | What a change would strand, without saving |

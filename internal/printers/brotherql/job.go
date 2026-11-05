@@ -7,30 +7,24 @@ import (
 	"image"
 )
 
-// Raster command bytes, from Brother's QL-800 series raster command
-// reference.
+// Raster command bytes, common to every model's raster command reference.
 var (
-	cmdInitialize    = []byte{0x1B, '@'}
-	cmdRasterMode    = []byte{0x1B, 'i', 'a', 0x01}
-	cmdPrintInfo     = []byte{0x1B, 'i', 'z'}
-	cmdVariousMode   = []byte{0x1B, 'i', 'M'}
-	cmdCutEvery      = []byte{0x1B, 'i', 'A'}
-	cmdExpandedMode  = []byte{0x1B, 'i', 'K'}
-	cmdMargin        = []byte{0x1B, 'i', 'd'}
-	cmdCompressTIFF  = []byte{'M', 0x02}
-	cmdRasterLine    = byte('g')
-	cmdPrint         = byte(0x0C) // print, more pages follow
-	cmdPrintAndFeed  = byte(0x1A) // print the last page
-	invalidateLength = 200
+	cmdInitialize   = []byte{0x1B, '@'}
+	cmdRasterMode   = []byte{0x1B, 'i', 'a', 0x01}
+	cmdPrintInfo    = []byte{0x1B, 'i', 'z'}
+	cmdVariousMode  = []byte{0x1B, 'i', 'M'}
+	cmdCutEvery     = []byte{0x1B, 'i', 'A'}
+	cmdExpandedMode = []byte{0x1B, 'i', 'K'}
+	cmdMargin       = []byte{0x1B, 'i', 'd'}
+	cmdCompressTIFF = []byte{'M', 0x02}
+	cmdRasterLine   = byte('g')
+	cmdPrint        = byte(0x0C) // print, more pages follow
+	cmdPrintAndFeed = byte(0x1A) // print the last page
 )
 
 const (
 	mediaContinuous = 0x0A
 	mediaDieCut     = 0x0B
-
-	// Print information validity flags: recovery on, media type, width,
-	// length and quality fields valid.
-	printInfoFlags = 0x80 | 0x02 | 0x04 | 0x08 | 0x40
 
 	autoCut  = 0x40 // various mode
 	cutAtEnd = 0x08 // expanded mode
@@ -39,71 +33,103 @@ const (
 // JobOptions are the per-printer choices that change the command stream.
 type JobOptions struct {
 	// Cut cuts each label off as it finishes. Without it the tape feeds
-	// on uncut, to be torn or cut by hand.
+	// on uncut, to be torn or cut by hand. Only models with a cutter cut.
 	Cut bool
 }
 
+// bytesPerLine is the length of one raster line on the model's head.
+func (mo Model) bytesPerLine() int { return mo.Pins / 8 }
+
 // EncodeJob builds the command stream that prints pages, each a label
-// already prepared for m (see Media.Prepare): PrintableDots wide, one row per
-// raster line, and dark wherever a pixel is below 50% gray.
-func EncodeJob(m Media, pages []*image.Gray, opts JobOptions) ([]byte, error) {
+// already prepared for the layout (see Layout.Prepare): PrintableDots wide,
+// one row per raster line, and dark wherever a pixel is below 50% gray.
+//
+// The stream is the one each model's raster command reference describes:
+// invalidate, initialize, then for each page the raster mode switch, print
+// information, the cut settings, the feed margin, TIFF compression, the
+// raster lines and a print command, leaving out what the model does not
+// take. Uncompressed raster lines span the whole head, as the references
+// give their length.
+func EncodeJob(l Layout, pages []*image.Gray, opts JobOptions) ([]byte, error) {
+	mo, m := l.Model, l.Media
 	if len(pages) == 0 {
 		return nil, fmt.Errorf("brotherql: a job needs at least one page")
 	}
+	if opts.Cut && !mo.Cutter {
+		return nil, fmt.Errorf("brotherql: the %s has no cutter", mo.Name)
+	}
 	var buf bytes.Buffer
-	buf.Write(make([]byte, invalidateLength))
+	buf.Write(make([]byte, mo.Invalidate))
 	buf.Write(cmdInitialize)
 
 	mediaType := byte(mediaContinuous)
 	if m.DieCut() {
 		mediaType = mediaDieCut
 	}
-	margin := uint16(m.FeedMarginDots)
+	width := m.infoWidth
+	if width == 0 {
+		width = int(m.WidthMM + 0.5)
+	}
+	length := min(int(m.LengthMM+0.5), 255)
 
 	for i, page := range pages {
 		b := page.Bounds()
-		if b.Dx() != m.PrintableDots {
-			return nil, fmt.Errorf("brotherql: page %d is %d dots wide, %s prints %d", i, b.Dx(), m.Name, m.PrintableDots)
+		if b.Dx() != l.PrintableDots {
+			return nil, fmt.Errorf("brotherql: page %d is %d dots wide, %s prints %d", i, b.Dx(), m.Name, l.PrintableDots)
 		}
-		if m.DieCut() && b.Dy() != m.PrintableLines {
-			return nil, fmt.Errorf("brotherql: page %d has %d lines, %s labels have %d", i, b.Dy(), m.Name, m.PrintableLines)
+		if m.DieCut() && b.Dy() != l.PrintableLines {
+			return nil, fmt.Errorf("brotherql: page %d has %d lines, %s labels have %d", i, b.Dy(), m.Name, l.PrintableLines)
 		}
 
-		buf.Write(cmdRasterMode)
+		if mo.ModeSwitch {
+			buf.Write(cmdRasterMode)
+		}
 
 		buf.Write(cmdPrintInfo)
-		info := [10]byte{printInfoFlags, mediaType, byte(m.WidthMM), byte(m.LengthMM)}
+		info := [10]byte{mo.InfoFlags, mediaType, byte(width), byte(length)}
 		binary.LittleEndian.PutUint32(info[4:8], uint32(b.Dy()))
 		if i > 0 {
 			info[8] = 1 // not the starting page
 		}
 		buf.Write(info[:])
 
-		if opts.Cut {
+		if mo.VariousMode {
 			buf.Write(cmdVariousMode)
-			buf.WriteByte(autoCut)
+			if opts.Cut {
+				buf.WriteByte(autoCut)
+			} else {
+				buf.WriteByte(0)
+			}
+		}
+		if opts.Cut && mo.CutEvery {
 			buf.Write(cmdCutEvery)
 			buf.WriteByte(1)
+		}
+		if mo.Expanded {
 			buf.Write(cmdExpandedMode)
-			buf.WriteByte(cutAtEnd)
-		} else {
-			buf.Write(cmdVariousMode)
-			buf.WriteByte(0)
-			buf.Write(cmdExpandedMode)
-			buf.WriteByte(0)
+			if opts.Cut {
+				buf.WriteByte(cutAtEnd)
+			} else {
+				buf.WriteByte(0)
+			}
 		}
 		buf.Write(cmdMargin)
-		_ = binary.Write(&buf, binary.LittleEndian, margin)
-		buf.Write(cmdCompressTIFF)
+		_ = binary.Write(&buf, binary.LittleEndian, uint16(l.FeedDots))
+		if mo.Compression {
+			buf.Write(cmdCompressTIFF)
+		}
 
-		line := make([]byte, bytesPerLine)
+		line := make([]byte, mo.bytesPerLine())
 		for y := b.Min.Y; y < b.Max.Y; y++ {
-			packLine(line, m, page, y)
-			packed := packBits(line)
+			l.packLine(line, page, y)
+			data := line
+			if mo.Compression {
+				data = packBits(line)
+			}
 			buf.WriteByte(cmdRasterLine)
 			buf.WriteByte(0x00)
-			buf.WriteByte(byte(len(packed)))
-			buf.Write(packed)
+			buf.WriteByte(byte(len(data)))
+			buf.Write(data)
 		}
 
 		if i == len(pages)-1 {
@@ -118,16 +144,16 @@ func EncodeJob(m Media, pages []*image.Gray, opts JobOptions) ([]byte, error) {
 // packLine fills line with one raster row. The head's first pin is on the
 // right of the tape as it leaves the printer, so the row is written right to
 // left after the pins that sit beside the tape.
-func packLine(line []byte, m Media, page *image.Gray, y int) {
+func (l Layout) packLine(line []byte, page *image.Gray, y int) {
 	for i := range line {
 		line[i] = 0
 	}
 	row := page.Pix[(y-page.Rect.Min.Y)*page.Stride:]
-	for x := 0; x < m.PrintableDots; x++ {
+	for x := 0; x < l.PrintableDots; x++ {
 		if row[x] >= 0x80 {
 			continue
 		}
-		pin := m.RightMarginDots + (m.PrintableDots - 1 - x)
+		pin := l.RightMarginDots + (l.PrintableDots - 1 - x)
 		line[pin/8] |= 0x80 >> uint(pin%8)
 	}
 }
@@ -137,21 +163,33 @@ type Page struct {
 	MediaType byte
 	WidthMM   byte
 	LengthMM  byte
+	// InfoFlags is the print information's valid flag.
+	InfoFlags byte
 	// AutoCut reports whether the page switched the cutter on.
 	AutoCut bool
-	// Lines holds each raster line's 90 bytes, uncompressed.
+	// FeedDots is the margin the page asked for.
+	FeedDots int
+	// Lines holds each raster line, uncompressed.
 	Lines [][]byte
 	// Last reports whether the page ended the job.
 	Last bool
 }
 
-// DecodeJob parses a command stream produced by EncodeJob. It exists for
-// tests and diagnostics, such as a fake printer that checks what it received.
-func DecodeJob(stream []byte) ([]Page, error) {
-	if len(stream) < invalidateLength || !bytes.Equal(stream[:invalidateLength], make([]byte, invalidateLength)) {
-		return nil, fmt.Errorf("brotherql: stream does not start with %d invalidate bytes", invalidateLength)
+// ql810W is the model DecodeJob and PageImage assume.
+func ql810W() Model { return models["QL-810W"] }
+
+// DecodeJob parses a command stream produced by EncodeJob for the QL-800
+// series, which the fake printers in tests stand in for. It exists for
+// tests and diagnostics; Model.DecodeJob reads any model's.
+func DecodeJob(stream []byte) ([]Page, error) { return ql810W().DecodeJob(stream) }
+
+// DecodeJob parses a command stream produced by EncodeJob for the model,
+// refusing commands the model does not take.
+func (mo Model) DecodeJob(stream []byte) ([]Page, error) {
+	if len(stream) < mo.Invalidate || !bytes.Equal(stream[:mo.Invalidate], make([]byte, mo.Invalidate)) {
+		return nil, fmt.Errorf("brotherql: stream does not start with %d invalidate bytes", mo.Invalidate)
 	}
-	s := stream[invalidateLength:]
+	s := stream[mo.Invalidate:]
 	if !bytes.HasPrefix(s, cmdInitialize) {
 		return nil, fmt.Errorf("brotherql: missing initialize command")
 	}
@@ -160,6 +198,7 @@ func DecodeJob(stream []byte) ([]Page, error) {
 	var pages []Page
 	var cur *Page
 	var expectLines uint32
+	compressed := false
 	take := func(n int) ([]byte, error) {
 		if len(s) < n {
 			return nil, fmt.Errorf("brotherql: stream truncated")
@@ -168,43 +207,71 @@ func DecodeJob(stream []byte) ([]Page, error) {
 		s = s[n:]
 		return out, nil
 	}
+	unsupported := func(what string) error {
+		return fmt.Errorf("brotherql: the %s does not take %s", mo.Name, what)
+	}
 
 	for len(s) > 0 {
 		switch {
 		case bytes.HasPrefix(s, cmdRasterMode):
+			if !mo.ModeSwitch {
+				return nil, unsupported("raster mode switching")
+			}
 			s = s[len(cmdRasterMode):]
-			pages = append(pages, Page{})
-			cur = &pages[len(pages)-1]
 		case bytes.HasPrefix(s, cmdPrintInfo):
 			s = s[len(cmdPrintInfo):]
 			info, err := take(10)
 			if err != nil {
 				return nil, err
 			}
-			if cur == nil {
-				return nil, fmt.Errorf("brotherql: print information before raster mode")
-			}
-			cur.MediaType, cur.WidthMM, cur.LengthMM = info[1], info[2], info[3]
+			pages = append(pages, Page{InfoFlags: info[0], MediaType: info[1], WidthMM: info[2], LengthMM: info[3]})
+			cur = &pages[len(pages)-1]
 			expectLines = binary.LittleEndian.Uint32(info[4:8])
+			compressed = false
 		case bytes.HasPrefix(s, cmdVariousMode):
+			if !mo.VariousMode {
+				return nil, unsupported("various mode")
+			}
 			cmd, err := take(4)
 			if err != nil {
 				return nil, err
 			}
 			if cur == nil {
-				return nil, fmt.Errorf("brotherql: mode setting before raster mode")
+				return nil, fmt.Errorf("brotherql: mode setting before print information")
 			}
 			cur.AutoCut = cmd[3]&autoCut != 0
-		case bytes.HasPrefix(s, cmdCutEvery), bytes.HasPrefix(s, cmdExpandedMode):
+			if cur.AutoCut && !mo.Cutter {
+				return nil, unsupported("cutting")
+			}
+		case bytes.HasPrefix(s, cmdCutEvery):
+			if !mo.CutEvery {
+				return nil, unsupported(`"cut each * labels"`)
+			}
+			if _, err := take(4); err != nil {
+				return nil, err
+			}
+		case bytes.HasPrefix(s, cmdExpandedMode):
+			if !mo.Expanded {
+				return nil, unsupported("expanded mode")
+			}
 			if _, err := take(4); err != nil {
 				return nil, err
 			}
 		case bytes.HasPrefix(s, cmdMargin):
-			if _, err := take(5); err != nil {
+			cmd, err := take(5)
+			if err != nil {
 				return nil, err
 			}
+			if cur == nil {
+				return nil, fmt.Errorf("brotherql: margin before print information")
+			}
+			cur.FeedDots = int(binary.LittleEndian.Uint16(cmd[3:]))
 		case bytes.HasPrefix(s, cmdCompressTIFF):
+			if !mo.Compression {
+				return nil, unsupported("compression")
+			}
 			s = s[len(cmdCompressTIFF):]
+			compressed = true
 		case s[0] == cmdRasterLine:
 			hdr, err := take(3)
 			if err != nil {
@@ -214,11 +281,13 @@ func DecodeJob(stream []byte) ([]Page, error) {
 			if err != nil {
 				return nil, err
 			}
-			line, err := unpackBits(data)
-			if err != nil {
-				return nil, err
+			line := data
+			if compressed {
+				if line, err = unpackBits(data); err != nil {
+					return nil, err
+				}
 			}
-			if len(line) != bytesPerLine || cur == nil {
+			if len(line) != mo.bytesPerLine() || cur == nil {
 				return nil, fmt.Errorf("brotherql: raster line of %d bytes", len(line))
 			}
 			cur.Lines = append(cur.Lines, line)
@@ -241,13 +310,24 @@ func DecodeJob(stream []byte) ([]Page, error) {
 	return pages, nil
 }
 
-// PageImage turns a decoded page back into a PrintableDots-wide image for m,
-// undoing packLine.
+// PageImage turns a page decoded from a QL-800 series stream back into a
+// PrintableDots-wide image for the DK roll m. Layout.PageImage does so for
+// any model.
 func PageImage(m Media, p Page) *image.Gray {
-	img := image.NewGray(image.Rect(0, 0, m.PrintableDots, len(p.Lines)))
+	l, err := ql810W().Layout(m)
+	if err != nil {
+		panic(err)
+	}
+	return l.PageImage(p)
+}
+
+// PageImage turns a decoded page back into a PrintableDots-wide image,
+// undoing packLine.
+func (l Layout) PageImage(p Page) *image.Gray {
+	img := image.NewGray(image.Rect(0, 0, l.PrintableDots, len(p.Lines)))
 	for y, line := range p.Lines {
-		for x := 0; x < m.PrintableDots; x++ {
-			pin := m.RightMarginDots + (m.PrintableDots - 1 - x)
+		for x := 0; x < l.PrintableDots; x++ {
+			pin := l.RightMarginDots + (l.PrintableDots - 1 - x)
 			if line[pin/8]&(0x80>>uint(pin%8)) == 0 {
 				img.Pix[y*img.Stride+x] = 0xFF
 			}
