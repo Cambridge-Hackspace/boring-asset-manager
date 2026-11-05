@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DriverInfo, LabelStockSize } from './models';
-import { describeChanges, describeStock, driverName, optionLabel, optionValueLabel, stockFor } from './stock';
+import { describeChanges, describeStock, driverName, mediaFor, optionLabel, optionValueLabel, stockFor } from './stock';
 
 const size = (name: string, width_mm: number, length_mm = 0, gap_mm = 0): LabelStockSize => ({ id: name, name, width_mm, length_mm, gap_mm });
 
@@ -31,6 +31,22 @@ describe('stockFor', () => {
   });
 });
 
+describe('mediaFor', () => {
+  const brother: DriverInfo = {
+    driver: 'brother_ql', models: ['QL-810W', 'QL-1100'],
+    media: [
+      { id: 'dk-22205', name: 'DK-22205 62 mm continuous', width_mm: 62, die_cut: false },
+      { id: 'dk-11241', name: 'DK-11241 102 × 152 mm die-cut', width_mm: 102, length_mm: 152, die_cut: true, models: ['QL-1100'] },
+    ],
+  };
+
+  it('offers the rolls that name the model, or name none', () => {
+    expect(mediaFor(brother, 'QL-1100').map((m) => m.id)).toEqual(['dk-22205', 'dk-11241']);
+    expect(mediaFor(brother, 'QL-810W').map((m) => m.id)).toEqual(['dk-22205']);
+    expect(mediaFor(undefined, 'QL-810W')).toEqual([]);
+  });
+});
+
 describe('describeChanges', () => {
   it('says what a change would affect, or nothing', () => {
     expect(describeChanges({ stranded: [], categories: [], pools: [] })).toEqual([]);
@@ -57,6 +73,7 @@ describe('describeChanges', () => {
 describe('printer words', () => {
   it('names drivers and their options as people know them', () => {
     expect(driverName('brother_ql')).toBe('Brother QL');
+    expect(driverName('brother_td')).toBe('Brother TD');
     expect(driverName('tspl')).toBe('TSPL');
     expect(driverName('someday_driver')).toBe('someday_driver');
     expect(optionLabel('cut')).toBe('Cut after each label');

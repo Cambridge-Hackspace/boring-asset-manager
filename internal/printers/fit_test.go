@@ -30,6 +30,25 @@ func TestFitLabel(t *testing.T) {
 		{"Brother wrong dpi", DriverBrotherQL, "QL-810W", "dk-22210", 29, 50, 203, false, false},
 		{"Brother round", DriverBrotherQL, "QL-810W", "dk-11207", 58, 58, 300, false, true},
 		{"Brother narrow tape", DriverBrotherQL, "QL-810W", "dk-22214", 12, 40, 300, false, true},
+		{"Brother 4-inch die-cut", DriverBrotherQL, "QL-1100", "dk-11241", 102, 152, 300, false, true},
+		{"Brother 4-inch die-cut landscape rotates", DriverBrotherQL, "QL-1110NWB", "dk-11241", 152, 102, 300, true, true},
+		{"Brother 4-inch die-cut wrong length", DriverBrotherQL, "QL-1100", "dk-11240", 102, 152, 300, false, false},
+		{"Brother 103 mm die-cut", DriverBrotherQL, "QL-1100", "dk-11247", 103, 164, 300, false, true},
+		{"Brother 4-inch continuous", DriverBrotherQL, "QL-1115NWB", "dk-22243", 102, 400, 300, false, true},
+		{"Brother 4-inch continuous longest", DriverBrotherQL, "QL-1100", "dk-22243", 102, 3000, 300, false, true},
+		{"Brother 4-inch continuous too long", DriverBrotherQL, "QL-1100", "dk-22243", 102, 3010, 300, false, false},
+		{"Brother QL-1100 shortest", DriverBrotherQL, "QL-1100", "dk-22243", 102, 25.5, 300, false, true},
+		{"Brother QL-1100 too short", DriverBrotherQL, "QL-1100", "dk-22243", 102, 24, 300, false, false},
+		{"Brother QL-1050 4-inch", DriverBrotherQL, "QL-1050", "dk-11240", 102, 51, 300, false, true},
+		{"Brother QL-700 shorter tape", DriverBrotherQL, "QL-700", "dk-22210", 29, 13, 300, false, true},
+		{"Brother QL-500 not so short", DriverBrotherQL, "QL-500", "dk-22210", 29, 13, 300, false, false},
+
+		{"TD-2 die-cut", DriverBrotherTD, "TD-2020", "rd-51x26", 51, 26, 203, false, true},
+		{"TD-2 at 300 DPI", DriverBrotherTD, "TD-2135N", "rd-58", 58, 80, 300, false, true},
+		{"TD-2 wrong dpi", DriverBrotherTD, "TD-2020", "rd-51x26", 51, 26, 300, false, false},
+		{"TD-4 4x6", DriverBrotherTD, "TD-4420DN", "rd-102x152", 101.6, 152.4, 203, false, true},
+		{"TD-4 4x6 landscape rotates", DriverBrotherTD, "TD-4550DNWB", "rd-102x152", 152.4, 101.6, 300, true, true},
+		{"TD-4 continuous too short", DriverBrotherTD, "TD-4410D", "rd-102", 102, 10, 203, false, false},
 
 		{"DYMO portrait", DriverDymoLabelWriter, "LabelWriter 450", "30252", 28, 89, 300, false, true},
 		{"DYMO landscape rotates", DriverDymoLabelWriter, "LabelWriter 450", "30252", 89, 28, 300, true, true},
@@ -238,5 +257,42 @@ func TestFeed(t *testing.T) {
 	_, _, err = PlanLabel(DriverBrotherQL, Settings{Model: "QL-810W", Media: "dk-22205"}, LabelSpec{WidthMM: 100, HeightMM: 62, DPI: 300, Feed: "across"})
 	if !errors.Is(err, ErrDoesNotFit) || !strings.Contains(err.Error(), "fed with its width across the roll, but the roll loaded") {
 		t.Errorf("across: %v", err)
+	}
+}
+
+// TestFourInchRolls checks the wide DK rolls on the 1,296-pin heads, and
+// that a 62 mm model refuses them before any label is fitted.
+func TestFourInchRolls(t *testing.T) {
+	_, f, err := PlanLabel(DriverBrotherQL, Settings{Model: "QL-1100", Media: "dk-11241"}, LabelSpec{WidthMM: 102, HeightMM: 152, DPI: 300,
+		Content: []RectMM{{X: 0.5, Y: 10, Width: 5, Height: 5}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1,164 of the head's 1,296 pins print, about 1.7 mm in from each side.
+	if math.Abs(f.Printable.Width-98.552) > 0.01 || len(f.Outside) != 1 {
+		t.Errorf("printable %+v, outside %v", f.Printable, f.Outside)
+	}
+	for _, model := range []string{"QL-810W", "QL-700", "QL-500"} {
+		s := Settings{Model: model, Media: "dk-11241"}
+		if _, _, err := PlanLabel(DriverBrotherQL, s, LabelSpec{WidthMM: 102, HeightMM: 152, DPI: 300}); err == nil || !strings.Contains(err.Error(), "does not take") {
+			t.Errorf("%s planned a 4-inch roll: %v", model, err)
+		}
+		if err := Validate("P", DriverBrotherQL, tcp("ql.lan", 9100), s); !errors.Is(err, ErrInvalidPrinter) {
+			t.Errorf("%s with a 4-inch roll: %v", model, err)
+		}
+	}
+}
+
+// TestTDCutterLength checks that a TD-4 cutting its labels holds them to
+// the cutter's shortest, 20 mm, where it otherwise prints from 12 mm.
+func TestTDCutterLength(t *testing.T) {
+	s := Settings{Model: "TD-4410D", Media: "rd-102"}
+	label := LabelSpec{WidthMM: 101.6, HeightMM: 15, DPI: 203}
+	if _, _, err := PlanLabel(DriverBrotherTD, s, label); err != nil {
+		t.Errorf("uncut: %v", err)
+	}
+	s.Options = []byte(`{"cut":true}`)
+	if _, _, err := PlanLabel(DriverBrotherTD, s, label); !errors.Is(err, ErrDoesNotFit) || !strings.Contains(err.Error(), "20-") {
+		t.Errorf("cut: %v", err)
 	}
 }

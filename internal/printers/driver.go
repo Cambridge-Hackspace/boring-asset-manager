@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
 )
 
@@ -89,6 +90,9 @@ type MediaInfo struct {
 	DieCut   bool    `json:"die_cut"`
 	// Custom is set for custom stock rather than a built-in roll.
 	Custom bool `json:"custom,omitempty"`
+	// Models lists the models that take the roll, when not all of the
+	// driver's do.
+	Models []string `json:"models,omitempty"`
 }
 
 // OptionInfo describes one driver option.
@@ -107,7 +111,7 @@ var (
 )
 
 func init() {
-	for _, d := range []Driver{brotherQL{}, dymoLabelWriter{}, tsplDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2}} {
+	for _, d := range []Driver{brotherQL, brotherDriver{brotherql.SeriesTD}, dymoLabelWriter{}, tsplDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2}} {
 		if err := Register(d); err != nil {
 			panic(err)
 		}
