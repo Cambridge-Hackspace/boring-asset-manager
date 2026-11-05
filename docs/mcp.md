@@ -136,6 +136,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `list_people` | `assets.lend` or `users.manage` | Emails only to tell apart two people of the same name. |
 | `next_code` | `assets.write` | |
 | `export_assets` | `assets.read` | The CSV ([CSV](csv.md)), as an embedded file. |
+| `assets_pdf` | `assets.read` | The assets a search selects as a PDF table of the columns chosen ([Reports](reports.md#pdf)), as an embedded file. |
 
 ### Changing assets
 
@@ -268,6 +269,8 @@ Reading needs `assets.read`; changing needs `reports.manage`. See [Reports](repo
 | `get_report` | `assets.read` | |
 | `run_report` | `assets.read` | Each section's rows, groups or chart data. |
 | `report_csv` | `assets.read` | A section as a CSV file. |
+| `report_pdf` | `assets.read` | The report as a PDF ([Reports](reports.md#pdf)), as an embedded file. |
+| `get_document_settings`, `set_document_settings` | `assets.read`, and `settings.manage` to set | The instance's name on PDFs, and their page size. |
 | `preview_report` | `reports.manage` | A spec unsaved; or a scan template for an asset. |
 | `save_report` | `reports.manage` | Its name or spec; what is not given is kept. |
 | `delete_report` | `reports.manage` | |

@@ -7,6 +7,7 @@
   import { session } from '../../lib/session.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import ReportTables from '../../components/ReportTables.svelte';
+  import PdfDownload from '../../components/PdfDownload.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
@@ -48,6 +49,7 @@
       {#if result.sections.some((s) => s.type === 'table' || s.type === 'chart')}
         <a class="btn-secondary" href="/api/v1{path}/xlsx" download>Download all as Excel</a>
       {/if}
+      <PdfDownload base="/api/v1{path}/export.pdf" />
       {#if session.can('reports.manage')}<a class="btn-secondary" href="{path}/edit">Edit</a>{/if}
     </div>
   </div>

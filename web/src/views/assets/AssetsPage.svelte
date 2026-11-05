@@ -18,6 +18,7 @@
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
   import AddToSpool from '../../components/AddToSpool.svelte';
+  import PdfDownload from '../../components/PdfDownload.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -136,6 +137,7 @@
     {#if !archived}
       <a class="btn-secondary" href={exportUrl(applied.search, applied.categoryId)} download>Export CSV</a>
       <a class="btn-secondary" href={exportUrl(applied.search, applied.categoryId, 'xlsx')} download>Export Excel</a>
+      <PdfDownload base="/api/v1/assets/export.pdf" query={{ search: applied.search.trim(), category_id: applied.categoryId }} assetColumns />
     {/if}
     {#if session.can('assets.write')}
       <a class="btn-secondary" href="/assets/import">Import CSV</a>

@@ -234,6 +234,7 @@ types, the styles that say which numbers are dates, and cached values. It takes 
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/v1/assets/export.csv` | `assets.read` | Export matching assets. Takes `category_id` and `search`. |
 | `GET` | `/api/v1/assets/export.xlsx` | `assets.read` | Export them as an Excel workbook, with the same filters. |
+| `GET` | `/api/v1/assets/export.pdf` | `assets.read` | Export them as a PDF table of the columns chosen (see [Reports](reports.md#pdf)). |
 | `POST` | `/api/v1/assets/import/preview` | `assets.write` | Preview an import: suggested mapping, problems, counts and link changes. |
 | `POST` | `/api/v1/assets/import` | `assets.write` | Import the file. |
 

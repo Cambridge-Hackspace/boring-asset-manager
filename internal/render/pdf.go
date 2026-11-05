@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,9 @@ func WritePDF(w io.Writer, scenes ...*Scene) error {
 		}
 		kids = append(kids, fmt.Sprintf("%d 0 R", pageID))
 	}
+	if err := pw.writeFonts(); err != nil {
+		return err
+	}
 	pw.writeObjectAt(1, "<< /Type /Catalog /Pages 2 0 R >>")
 	pw.writeObjectAt(2, fmt.Sprintf("<< /Type /Pages /Kids [%s] /Count %d >>", strings.Join(kids, " "), len(kids)))
 
@@ -54,6 +58,8 @@ type pdfWriter struct {
 	buf bytes.Buffer
 	// offsets[i] is the byte offset of object i+1.
 	offsets []int
+	// type3 are the fonts text runs use, by font.
+	type3 map[fontKey]*type3Font
 }
 
 func (pw *pdfWriter) reserve() int {
@@ -82,14 +88,18 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 	fmt.Fprintf(&content, "%s 0 0 %s 0 %s cm\n0 g\n", num(scale), num(-scale), num(float64(s.Height)*scale))
 
 	var xobjects []string
+	fonts := map[string]int{}
 	// The page starts painting black; white is set as needed.
 	paint := Black
 	setPaint := func(p Paint) {
 		if p != paint {
-			if p == White {
+			switch p {
+			case White:
 				content.WriteString("1 g\n")
-			} else {
+			case Black:
 				content.WriteString("0 g\n")
+			default:
+				fmt.Fprintf(&content, "%s g\n", fine(float64(p.Level())/0xFF))
 			}
 			paint = p
 		}
@@ -116,6 +126,9 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 			}
 			// The image's unit square has its first row at the top (v = 1).
 			fmt.Fprintf(&content, "%d 0 0 %d %d %d cm /%s Do Q\n", pi.W, -pi.H, pi.X, pi.Y+pi.H, name)
+		case it.Text != nil:
+			setPaint(it.Paint)
+			pw.writeText(&content, it.Text, s.DPI, fonts)
 		case it.Rects != nil:
 			// Rectangles drawn one after another in one paint are filled at once.
 			setPaint(it.Paint)
@@ -139,9 +152,25 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 
 	contentID := pw.writeStream("", deflate(content.Bytes()))
 	pageID := pw.reserve()
-	resources := "<< >>"
+	var res []string
 	if len(xobjects) > 0 {
-		resources = fmt.Sprintf("<< /XObject << %s >> >>", strings.Join(xobjects, " "))
+		res = append(res, fmt.Sprintf("/XObject << %s >>", strings.Join(xobjects, " ")))
+	}
+	if len(fonts) > 0 {
+		names := make([]string, 0, len(fonts))
+		for name := range fonts {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		var refs []string
+		for _, name := range names {
+			refs = append(refs, fmt.Sprintf("/%s %d 0 R", name, fonts[name]))
+		}
+		res = append(res, fmt.Sprintf("/Font << %s >>", strings.Join(refs, " ")))
+	}
+	resources := "<< " + strings.Join(res, " ") + " >>"
+	if len(res) == 0 {
+		resources = "<< >>"
 	}
 	pw.writeObjectAt(pageID, fmt.Sprintf("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %s %s] /Resources %s /Contents %d 0 R >>",
 		num(float64(s.Width)*scale), num(float64(s.Height)*scale), resources, contentID))

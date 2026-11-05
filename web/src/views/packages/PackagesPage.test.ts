@@ -41,6 +41,7 @@ function server() {
     'GET /templates': () => ({ templates: [] }),
     'GET /reports': () => ({ reports: [] }),
     'GET /flows': () => ({ flows: [{ id: 'l', slug: 'lend', name: 'Lend a tool' }] }),
+    'GET /settings/documents': () => ({ instance_name: 'BAM!', page_size: 'letter' }),
     'POST /exports/plan': (body) => planOf((body as { selection: Selection }).selection),
     'POST /exports': (body) => ({ status: 201, body: { id: 'e1', download: '/api/v1/exports/e1', plan: planOf((body as { selection: Selection }).selection) } }),
   });

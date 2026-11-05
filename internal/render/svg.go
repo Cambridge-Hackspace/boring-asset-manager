@@ -13,6 +13,7 @@ import (
 // WriteSVG writes the scene as an SVG document sized to the label's physical
 // dimensions, with a viewBox in dots.
 func WriteSVG(w io.Writer, s *Scene) error {
+	s = s.outlined()
 	bw := bufio.NewWriter(w)
 	pw, ph := s.PhysicalSize()
 	fmt.Fprintf(bw, `<?xml version="1.0" encoding="UTF-8"?>`+"\n")
@@ -63,10 +64,13 @@ func svgImage(bw *bufio.Writer, pi *PlacedImage) error {
 
 // svgColor is a paint's color.
 func svgColor(p Paint) string {
-	if p == White {
+	switch p {
+	case White:
 		return "#fff"
+	case Black:
+		return "#000"
 	}
-	return "#000"
+	return fmt.Sprintf("#%02x%02x%02x", p.Level(), p.Level(), p.Level())
 }
 
 // svgPath writes a filled path.
