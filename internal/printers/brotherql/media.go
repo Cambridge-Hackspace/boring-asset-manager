@@ -263,6 +263,13 @@ func (m Media) Prepare(label *image.Gray, p Placement) *image.Gray {
 	return prepare(label, p, m.PrintableDots, m.PrintableLines)
 }
 
+// PreparePage rotates label if p says so, then crops it to dots across, and
+// to lines along when lines is set, around its center: how every Brother
+// raster language takes a page.
+func PreparePage(label *image.Gray, p Placement, dots, lines int) *image.Gray {
+	return prepare(label, p, dots, lines)
+}
+
 // prepare rotates label if p says so, then crops it to dots across, and to
 // lines along when lines is set, around its center.
 func prepare(label *image.Gray, p Placement, dots, lines int) *image.Gray {
