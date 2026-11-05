@@ -3,6 +3,7 @@ module github.com/Cambridge-Hackspace/boring-asset-manager
 go 1.26.0
 
 require (
+	github.com/beevik/etree v1.8.1
 	github.com/coder/websocket v1.8.15
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/google/jsonschema-go v0.4.3
@@ -10,6 +11,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pelletier/go-toml/v2 v2.4.3
+	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/tetratelabs/wazero v1.12.0
 	golang.org/x/crypto v0.52.0
 	golang.org/x/image v0.41.0
@@ -21,6 +23,7 @@ require (
 	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

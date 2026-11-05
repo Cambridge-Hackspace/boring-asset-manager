@@ -61,6 +61,27 @@ payload and character set (see [Labels](labels.md)).
 Icons are compiled by isolex, run in-process from WebAssembly. How it is pinned, contained and
 drawn is described in [Icons](icons.md).
 
+### SAML
+
+SAML sign-in (docs/access.md#saml-20) checks XML signatures with
+[goxmldsig](https://github.com/russellhaering/goxmldsig), not code of BAM!'s own, and not a whole
+SAML library. The choice weighed:
+
+- **XML signatures are where SAML's serious bugs have been:** canonicalization, namespaces, and
+  signature wrapping, where a signature that checks is moved around something else. goxmldsig is
+  maintained, is fuzzed, is what most Go SAML code uses, and had its own such bugs found and fixed
+  in public. Writing BAM!'s own would start that history again.
+- **The rest of SAML is narrow,** and BAM! writes it itself (`internal/idp/saml.go`): the request,
+  the metadata, the conditions, and opening encrypted assertions. A whole library, such as
+  `crewjam/saml`, brings its own sessions, middleware and routes, which BAM!'s provider framework
+  already has, and more code to keep up with.
+- **goxmldsig answers the element it checked,** and BAM! reads only from that. Other defenses
+  against wrapping come from BAM!'s side: one assertion per response, no DOCTYPE, and the IDs and
+  conditions read from the signed element alone.
+
+The tests sign their answers with goxmldsig too, through a test identity provider
+(`internal/idp/testsaml.go`), and try wrapped signatures, other keys and replays against it.
+
 ## Frontend
 
 The web interface is a Svelte 5 single-page application written in TypeScript, built with Vite

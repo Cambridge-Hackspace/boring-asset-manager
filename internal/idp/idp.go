@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Field is one of a protocol's settings, shown in the provider's form.
@@ -22,6 +23,9 @@ type Field struct {
 	Help     string `json:"help,omitempty"`
 	Required bool   `json:"required"`
 	Secret   bool   `json:"secret"`
+	// Multiline is one long enough to want several lines, such as pasted
+	// XML.
+	Multiline bool `json:"multiline,omitempty"`
 }
 
 // Config is a provider as a protocol sees it: its settings and secrets,
@@ -31,6 +35,13 @@ type Config struct {
 	Settings    map[string]string
 	Secrets     map[string]string
 	CallbackURL string
+	// BaseURL is where BAM! is served, for what a protocol publishes about
+	// itself, such as SAML's metadata.
+	BaseURL string
+	// UseOnce records that an ID the provider gave, such as a SAML
+	// assertion's, was used, until it expires; it answers ErrReplayed for
+	// one used already. Nil accepts any.
+	UseOnce func(id string, until time.Time) error
 	// State is a random value for this sign-in, which the protocol sends to
 	// the provider, and checks comes back, against forged answers.
 	State string
@@ -70,6 +81,31 @@ type Protocol interface {
 	// Finish reads the provider's answer to Begin, given what it kept.
 	Finish(ctx context.Context, c Config, r *http.Request, state map[string]string) (*Claims, error)
 }
+
+// Preparer is a protocol that makes some of a provider's secrets itself,
+// such as a key of its own, when the provider is saved.
+type Preparer interface {
+	// Prepare fills in the secrets it makes that are missing, or makes
+	// them all again when renew is set. It answers whether it changed any.
+	Prepare(c *Config, renew bool) (bool, error)
+}
+
+// Unsolicited is a protocol that can take an answer no sign-in was
+// started for, such as SAML's sign-ins started at the identity provider.
+type Unsolicited interface {
+	// AcceptsUnsolicited reports whether this provider takes them.
+	AcceptsUnsolicited(c Config) bool
+}
+
+// Publisher is a protocol that publishes a document about BAM! for the
+// provider, such as SAML's service provider metadata.
+type Publisher interface {
+	// Publish answers the document and its content type.
+	Publish(c Config) ([]byte, string, error)
+}
+
+// ErrReplayed is UseOnce's answer for an ID used already.
+var ErrReplayed = errors.New("the answer was used already")
 
 // ErrRefused is wrapped by a provider's answer that someone did not sign
 // in, such as a person cancelling, as opposed to the provider failing.

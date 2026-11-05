@@ -1,9 +1,12 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -111,9 +114,19 @@ func (s *Server) providerSecrets(p *store.Provider) (map[string]string, bool) {
 
 // providerConfig is a provider as its protocol sees it.
 func (s *Server) providerConfig(p *store.Provider, secrets map[string]string, state string) idp.Config {
+	base := strings.TrimRight(s.cfg.Server.BaseURL, "/")
 	return idp.Config{
-		Key: p.Key, Settings: p.Settings, Secrets: secrets, State: state,
-		CallbackURL: strings.TrimRight(s.cfg.Server.BaseURL, "/") + "/api/v1/auth/providers/" + url.PathEscape(p.Key) + "/callback",
+		Key: p.Key, Settings: p.Settings, Secrets: secrets, State: state, BaseURL: base,
+		CallbackURL: base + "/api/v1/auth/providers/" + url.PathEscape(p.Key) + "/callback",
+		// An answer the provider signed signs in once, however many
+		// servers it is given to.
+		UseOnce: func(id string, until time.Time) error {
+			err := s.store.UseSAMLAssertion(p.ID, id, until)
+			if errors.Is(err, store.ErrAssertionUsed) {
+				return idp.ErrReplayed
+			}
+			return err
+		},
 	}
 }
 
@@ -124,6 +137,9 @@ type providerView struct {
 	SecretsSet        map[string]bool `json:"secrets_set"`
 	SecretsUnreadable bool            `json:"secrets_unreadable,omitempty"`
 	CallbackURL       string          `json:"callback_url"`
+	// SPMetadataURL is where BAM!'s own metadata for the provider is, for
+	// a protocol that publishes some, such as SAML.
+	SPMetadataURL string `json:"sp_metadata_url,omitempty"`
 }
 
 func (s *Server) viewProvider(p store.Provider) providerView {
@@ -132,13 +148,20 @@ func (s *Server) viewProvider(p store.Provider) providerView {
 	for k, v := range secrets {
 		set[k] = v != ""
 	}
-	return providerView{Provider: p, SecretsSet: set, SecretsUnreadable: !ok, CallbackURL: s.providerConfig(&p, nil, "").CallbackURL}
+	view := providerView{Provider: p, SecretsSet: set, SecretsUnreadable: !ok, CallbackURL: s.providerConfig(&p, nil, "").CallbackURL}
+	if p.Protocol == idp.SAMLName {
+		view.SPMetadataURL = idp.SAMLEntityID(s.providerConfig(&p, nil, ""))
+	}
+	return view
 }
 
 type protocolView struct {
 	Name   string      `json:"name"`
 	Label  string      `json:"label"`
 	Fields []idp.Field `json:"fields"`
+	// Renewable is a protocol that makes keys of its own, which can be made
+	// again.
+	Renewable bool `json:"renewable,omitempty"`
 }
 
 // GET /api/v1/auth/providers: every provider, the protocols, and whether
@@ -155,7 +178,8 @@ func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
 	}
 	protocols := []protocolView{}
 	for _, p := range idp.Protocols() {
-		protocols = append(protocols, protocolView{Name: p.Name(), Label: p.Label(), Fields: p.Fields()})
+		_, renewable := p.(idp.Preparer)
+		protocols = append(protocols, protocolView{Name: p.Name(), Label: p.Label(), Fields: p.Fields(), Renewable: renewable})
 	}
 	on, err := s.store.LocalPasswords()
 	if err != nil {
@@ -226,6 +250,9 @@ type ProviderRequest struct {
 	MFAFallback    bool                 `json:"mfa_fallback"`
 	MFAAlwaysLocal bool                 `json:"mfa_always_local"`
 	Rules          []store.ProviderRule `json:"rules"`
+	// RenewKeys makes again the keys a protocol makes itself, such as a
+	// SAML provider's.
+	RenewKeys bool `json:"renew_keys"`
 }
 
 // providerInput checks a request against its protocol, with the secrets
@@ -267,6 +294,16 @@ func (s *Server) providerInput(req ProviderRequest, stored *store.Provider) (sto
 		if v, ok := req.Settings[f.Name]; ok && !f.Secret {
 			settings[f.Name] = strings.TrimSpace(v)
 		}
+	}
+	// Keys the protocol makes itself, when they can be kept sealed: without
+	// [auth] secret_key, a SAML provider goes without one.
+	if prep, ok := proto.(idp.Preparer); ok && s.sealer.HasKey() {
+		c := idp.Config{Key: req.Key, Settings: settings, Secrets: secrets}
+		made, err := prep.Prepare(&c, req.RenewKeys)
+		if err != nil {
+			return store.ProviderInput{}, http.StatusInternalServerError, fmt.Errorf("making the provider's keys: %w", err)
+		}
+		secrets, changed = c.Secrets, changed || made
 	}
 	if err := proto.Check(idp.Config{Key: req.Key, Settings: settings, Secrets: secrets}); err != nil {
 		return store.ProviderInput{}, http.StatusBadRequest, err
@@ -612,6 +649,13 @@ func (s *Server) handleProviderCallback(w http.ResponseWriter, r *http.Request) 
 	if c, err := r.Cookie(ProviderCookieName); err == nil {
 		token = c.Value
 	}
+	// An answer posted from the provider's site, as SAML's is, comes without
+	// the sign-in's cookie, which is SameSite=Lax. It is posted again from
+	// here, where the cookie goes with it.
+	if r.Method == http.MethodPost && token == "" && r.PostFormValue(repostedField) == "" {
+		repost(w, r)
+		return
+	}
 	s.clearProviderCookie(w, r)
 	// A failure counts against the address, as a wrong password does.
 	fail := func(next, message string) {
@@ -628,6 +672,9 @@ func (s *Server) handleProviderCallback(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	pending, err := s.store.TakeProviderSignIn(token)
+	if errors.Is(err, store.ErrSignInNotFound) {
+		pending, err = s.unsolicited(r.PathValue("key"))
+	}
 	if err != nil {
 		if errors.Is(err, store.ErrSignInNotFound) {
 			fail("", "The sign-in has expired, or was not started here. Sign in again.")
@@ -1042,3 +1089,88 @@ func (s *Server) handleUnlinkOwnIdentity(w http.ResponseWriter, r *http.Request)
 
 // manageSignIn guards the providers' administrative routes.
 var manageSignIn = RequirePermission(rbac.PermSettingsManage)
+
+// unsolicited is an answer no sign-in was started here for, as a SAML
+// identity provider sends for a sign-in started on its own page: taken as
+// a sign-in to the home page, by a provider that takes them, or refused.
+func (s *Server) unsolicited(key string) (*store.ProviderSignIn, error) {
+	p, proto, err := s.enabledProvider(key)
+	if err != nil {
+		return nil, store.ErrSignInNotFound
+	}
+	if u, ok := proto.(idp.Unsolicited); !ok || !u.AcceptsUnsolicited(s.providerConfig(p, nil, "")) {
+		return nil, store.ErrSignInNotFound
+	}
+	return &store.ProviderSignIn{ProviderID: p.ID, State: map[string]string{}, Next: "/"}, nil
+}
+
+// repostedField marks an answer posted again by repost.
+const repostedField = "bam_reposted"
+
+// repostScript submits repost's form; the page's policy allows it alone,
+// by its hash.
+const repostScript = "document.forms[0].submit()"
+
+var repostPolicy = func() string {
+	sum := sha256.Sum256([]byte(repostScript))
+	return "default-src 'none'; script-src 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'; form-action 'self'; frame-ancestors 'none'"
+}()
+
+var repostPage = template.Must(template.New("repost").Parse(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Signing in</title></head>
+<body><form method="post" action="{{.Action}}">{{range .Fields}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}<input type="hidden" name="` + repostedField + `" value="1"><noscript><button type="submit">Continue signing in</button></noscript></form><script>` + repostScript + `</script></body></html>
+`))
+
+// repost answers a page that posts the answer again, as it came, from
+// this site.
+func repost(w http.ResponseWriter, r *http.Request) {
+	type field struct{ Name, Value string }
+	var fields []field
+	for name, values := range r.PostForm {
+		for _, v := range values {
+			fields = append(fields, field{name, v})
+		}
+	}
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Security-Policy", repostPolicy)
+	h.Set("Cache-Control", "no-store")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("X-Content-Type-Options", "nosniff")
+	if err := repostPage.Execute(w, map[string]any{"Action": r.URL.Path, "Fields": fields}); err != nil {
+		log.Printf("posting an answer again: %v", err)
+	}
+}
+
+// GET /auth/saml/{key}/metadata: BAM!'s service provider metadata for a
+// SAML provider, for its identity provider to read. It is public, and
+// published whether or not the provider is on, so the identity provider
+// can be set up first.
+func (s *Server) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
+	p, err := s.store.GetProviderByKey(r.PathValue("key"))
+	if errors.Is(err, store.ErrProviderNotFound) || (err == nil && p.Protocol != idp.SAMLName) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		writeServerError(w, err, "read the identity provider")
+		return
+	}
+	proto, ok := idp.Lookup(p.Protocol)
+	pub, publishes := proto.(idp.Publisher)
+	if !ok || !publishes {
+		http.NotFound(w, r)
+		return
+	}
+	secrets, ok := s.providerSecrets(p)
+	if !ok {
+		writeJSONError(w, http.StatusServiceUnavailable, "This provider's key is sealed with another secret key; ask whoever manages BAM! to make a new one")
+		return
+	}
+	doc, contentType, err := pub.Publish(s.providerConfig(p, secrets, ""))
+	if err != nil {
+		writeServerError(w, err, "publish the metadata")
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	_, _ = w.Write(doc)
+}
