@@ -200,6 +200,11 @@ If the service does not answer, the update is rolled back:
 2. The database is restored from the backup, so the changes the new version made (such as its
    migrations) are undone.
 3. The old binary is started again.
+4. Once it answers, it records `instance.update_failed` with `bam update failed`, naming the
+   version tried, why it failed and whether the database was restored. Notification channels
+   subscribed to it send it (see [Notifications](notifications.md)). It is recorded only now,
+   since the restore takes with it anything recorded before. An old binary from before this
+   command cannot record it, and the updater says so.
 
 ### What it leaves alone
 
@@ -256,6 +261,64 @@ If BAM listens on another port, set `BAM_UPDATE_HEALTH_URL` there.
 | `BAM_UPDATE_BACKUP=off` | Update without a backup. |
 | `BAM_UPDATE_BACKUP_COMMAND` | A command to back up with, in place of `bam backup`. |
 | `BAM_UPDATE_RESTORE_COMMAND` | A command to restore with, in place of `bam restore`. |
+
+## Knowing when BAM! changes
+
+Whoever looks after an instance can hear of each change of version, by whatever route it came:
+`bam-update`, a package manager, a container image or a binary swapped by hand. Notification
+channels subscribe to these events (see [Notifications](notifications.md)).
+
+| Event | When |
+|---|---|
+| `instance.upgraded` | BAM! starts on a release other than the one it last ran |
+| `instance.update_failed` | `bam-update` rolled a release back, as above |
+| `instance.update_available` | The update check, when turned on, finds a newer release |
+
+### Upgrades
+
+As `bam serve` starts, after migrating, it compares its version with the one recorded in the
+database:
+
+- **Another release:** it records the new version and `instance.upgraded` in one transaction. The
+  event names the versions it went from and to, the database's schema versions before and after
+  (the migrations applied), and the release notes.
+- **Several servers at once:** the version is claimed with a conditional update, so servers on one
+  database starting at once record the upgrade once.
+- **An older release:** the event says it is a downgrade.
+- **The same release:** nothing is recorded.
+- **The first start:** a new instance records its version, with no event. So does an instance's
+  first start on the first release that records versions, as it cannot know which ran before.
+- **A build that is not a release** (`dev`, or a `git describe` version such as
+  `v1.2.0-4-gabc1234`) records nothing, so development does not fill channels.
+
+### Knowing when a release is out
+
+The update check asks, once a day, whether a newer release is out, and records
+`instance.update_available` for it. It is for instances that do not update automatically, or to know
+before they do. It is off unless turned on, since it reaches out to GitHub on its own:
+
+```toml
+[updates]
+check = true
+```
+
+or `BAM_UPDATES_CHECK=true` (see [Configuration](configuration.md)).
+
+- **When:** from the worker in `bam serve`, at most once a day. Servers sharing a database take turns:
+  each check is claimed in the database first.
+- **What counts:** only a full release newer than the running version, as `bam-update` decides.
+  Drafts, pre-releases, and versions older than or equal to the running one are passed over. A build
+  that is not a release never checks.
+- **Once per release:** the newest release announced is recorded, so each is announced once. A
+  release passed over by a newer one before a check found it is not announced on its own.
+- **The event:** the running and available versions, and links to the release notes and to these
+  docs, as they are for that release.
+- **Errors:** a failed check, such as no network or GitHub's rate limit, is logged and tried again
+  the next day. It never becomes an event.
+- **Where:** GitHub's releases API for this repository, unless `[updates] url` (or
+  `BAM_UPDATES_URL`) names another, for a fork or a mirror. It may answer with one release, as
+  `…/releases/latest` does, or a list, as `…/releases` does. For an address that is not GitHub's API,
+  the release notes link is the release's `html_url`, and there is no link to the docs.
 
 ## Backups before updating
 
@@ -343,6 +406,7 @@ against fake releases served from files. The updater must:
 - refuse to update a database it cannot back up
 - run backup and restore commands when given them
 - keep only the newest backups
+- record the failed update, once the release it put back is running, on SQLite and on PostgreSQL
 - leave a build that is not a release alone until forced
 
 The check's first release is built from v0.14.0, so the first update backs up as an installation

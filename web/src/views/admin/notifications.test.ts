@@ -81,6 +81,40 @@ describe('NotificationsPage', () => {
     expect(await screen.findByText('Channel saved.')).toBeTruthy();
   });
 
+  it('offers the events about BAM! itself, and logs their deliveries, which name no asset', async () => {
+    const instance = [
+      { kind: 'instance.upgraded', label: 'BAM! is upgraded' },
+      { kind: 'instance.update_failed', label: 'An automatic update failed and was rolled back' },
+      { kind: 'instance.update_available', label: 'A newer release of BAM! is available' },
+    ];
+    const { sent } = fakeApi({
+      'GET /notifiers/drivers': () => ({ drivers, events: [...events, ...instance] }),
+      'GET /notifiers': () => ({ channels: [] }),
+      'GET /settings/loan-reminders': () => ({ on: false, days_before: 1, overdue_times: 4, can_email: true }),
+      'GET /notifiers/deliveries': () => ({
+        deliveries: [delivery({ event_kind: 'instance.upgraded', category_name: undefined })],
+      }),
+      'POST /notifiers': () => ({ status: 201, body: { channel } }),
+    });
+    render(NotificationsPage, { params: {} });
+    await fireEvent.click(await screen.findByRole('button', { name: 'New channel' }));
+    const form = screen.getByRole('form', { name: 'New channel' });
+    for (const e of instance) expect((within(form).getByLabelText(e.label) as HTMLInputElement).checked).toBe(true);
+    await fireEvent.input(within(form).getByLabelText('Name'), { target: { value: 'Admins' } });
+    await fireEvent.input(within(form).getByLabelText('Webhook URL'), { target: { value: 'https://discord.com/api/webhooks/1/x' } });
+    await fireEvent.click(within(form).getByLabelText('A newer release of BAM! is available'));
+    await fireEvent.submit(within(form).getByRole('button', { name: 'Create channel' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
+    expect((sent.find((r) => r.method === 'POST')!.body as { events: string[] }).events).toEqual([
+      'category.running_low', 'category.restocked', 'asset.running_low', 'instance.upgraded', 'instance.update_failed',
+    ]);
+
+    const log = screen.getByRole('region', { name: 'Recent deliveries' });
+    const row = within(log).getAllByRole('row')[1]!;
+    expect(row.textContent).toContain('BAM! is upgraded');
+    expect(row.textContent).not.toContain('BAM! is upgraded:');
+  });
+
   it('keeps a stored secret when it is left blank', async () => {
     const { sent } = api([channel], { 'PUT /notifiers/c1': () => ({ channel }) });
     render(NotificationsPage, { params: {} });

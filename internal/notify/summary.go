@@ -197,6 +197,8 @@ func summarize(n Notification, esc func(string) string) summary {
 			out.Title, out.Color = "Relay offline: "+relay, discordWarning
 			out.Description = "It is not linked to BAM! over any transport. The printers and devices it serves cannot be reached until it is back."
 		}
+	case (e.Kind == models.EventInstanceUpgraded || e.Kind == models.EventInstanceUpdateFailed || e.Kind == models.EventInstanceUpdateAvailable) && p.Instance != nil:
+		out = instanceSummary(e.Kind, p.Instance, base, esc)
 	case e.Kind == models.EventFlowOverdue:
 		out.Title, out.Color = "Past its date: "+name, discordWarning
 		out.Description = "Left"
@@ -224,6 +226,63 @@ func summarize(n Notification, esc func(string) string) summary {
 	default:
 		out.Title = truncate(e.Kind, 200)
 		out.Color = discordNeutral
+	}
+	return out
+}
+
+// instanceSummary describes a change of the release BAM! runs. It is about
+// no asset or category: the link is to the release's notes, or else to
+// the instance, which the message names too.
+func instanceSummary(kind string, in *models.EventInstance, base string, esc func(string) string) summary {
+	var out summary
+	from, to := esc(truncate(in.From, 64)), esc(truncate(in.To, 64))
+	var first string
+	switch kind {
+	case models.EventInstanceUpgraded:
+		if in.Downgrade {
+			out.Title, out.Color = "BAM! downgraded to "+to, discordWarning
+			first = "It ran " + from + " before. An older release may not work with a database a newer one has migrated; " +
+				"if it does not, restore the backup taken before the upgrade."
+		} else {
+			out.Title, out.Color = "BAM! upgraded to "+to, discordNeutral
+			first = "It ran " + from + " before."
+		}
+		switch {
+		case in.SchemaFrom > 0 && in.SchemaTo != in.SchemaFrom:
+			first += fmt.Sprintf(" Its database went from schema %d to %d.", in.SchemaFrom, in.SchemaTo)
+		case in.SchemaFrom > 0:
+			first += " Its database's schema did not change."
+		}
+	case models.EventInstanceUpdateFailed:
+		out.Title, out.Color = "Update to "+to+" rolled back", discordDanger
+		why := "it did not come up"
+		if in.Reason != "" {
+			why = esc(truncate(in.Reason, 500))
+		}
+		first = "bam-update installed " + to + ", but " + why + ", so it put " + from + " back."
+		if in.Restored {
+			first += " The database was restored from the backup taken before the update."
+		} else {
+			first += " The database was not restored from a backup, so any changes " + to + " made to it remain."
+		}
+	default:
+		out.Title, out.Color = "BAM! "+to+" is available", discordTest
+		first = "This instance runs " + from + "."
+	}
+	lines := []string{first}
+	if in.NotesURL != "" {
+		lines = append(lines, "Release notes: "+in.NotesURL)
+	}
+	if in.UpdatingURL != "" {
+		lines = append(lines, "Updating: "+in.UpdatingURL)
+	}
+	if base != "" {
+		lines = append(lines, "The instance: "+base)
+	}
+	out.Description = strings.Join(lines, "\n")
+	out.URL = in.NotesURL
+	if out.URL == "" {
+		out.URL = base
 	}
 	return out
 }

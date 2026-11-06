@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/release"
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -38,6 +39,18 @@ type Config struct {
 	// Attachments bounds the files attached to assets and categories
 	// (docs/data-model.md#attachments).
 	Attachments AttachmentsConfig `toml:"attachments"`
+	// Updates turns the check for a newer release on (docs/installing.md).
+	Updates UpdatesConfig `toml:"updates"`
+}
+
+// UpdatesConfig is whether BAM! asks, once a day, whether a newer release
+// is out, announcing one as instance.update_available, and where it asks.
+// The check is off unless turned on, as it reaches out to the network.
+type UpdatesConfig struct {
+	Check bool `toml:"check"`
+	// URL answers with the latest release, as GitHub's releases API does,
+	// or with a list of releases; release.LatestURL unless given.
+	URL string `toml:"url"`
 }
 
 // AttachmentsConfig bounds attachments, and says which types beyond images
@@ -337,6 +350,7 @@ func DefaultConfig() *Config {
 		Notifications: NotificationsConfig{KeepDays: 30, DisableAfterHours: 24},
 		Relay:         RelayConfig{BoneMeshPort: DefaultBoneMeshPort},
 		Attachments:   AttachmentsConfig{MaxFileMB: 25, MaxPerObject: 50},
+		Updates:       UpdatesConfig{URL: release.LatestURL},
 	}
 }
 
@@ -504,6 +518,16 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("BAM_ATTACHMENTS_ALLOWED_TYPES"); v != "" {
 		cfg.Attachments.AllowedTypes = strings.Split(v, ",")
 	}
+	if v := os.Getenv("BAM_UPDATES_CHECK"); v != "" {
+		on, err := parseSwitch(v)
+		if err != nil {
+			return fmt.Errorf("BAM_UPDATES_CHECK: %w", err)
+		}
+		cfg.Updates.Check = on
+	}
+	if v := os.Getenv("BAM_UPDATES_URL"); v != "" {
+		cfg.Updates.URL = v
+	}
 	if v := os.Getenv("BAM_AUTH_TEST_PROTOCOL"); v != "" {
 		on, err := parseSwitch(v)
 		if err != nil {
@@ -537,6 +561,12 @@ func parseSwitch(v string) (bool, error) {
 func (c *Config) Validate() error {
 	if n := c.Notifications; n.KeepDays < 0 || n.DisableAfterHours < 0 || n.DisableAfterFailures < 0 {
 		return errors.New("notifications.keep_days, disable_after_hours and disable_after_failures cannot be negative")
+	}
+	if c.Updates.URL == "" {
+		c.Updates.URL = release.LatestURL
+	}
+	if u, err := url.Parse(c.Updates.URL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return fmt.Errorf("updates.url %q is not an http:// or https:// address", c.Updates.URL)
 	}
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)

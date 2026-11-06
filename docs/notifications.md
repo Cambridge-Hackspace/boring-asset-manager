@@ -1,7 +1,7 @@
 # Notifications
 
 BAM! sends notifications when something happens that people should hear about: a category or
-asset running low, a loan overdue, an asset out of service, a hook pressed. You set up any number
+asset running low, a loan overdue, an asset out of service, a hook pressed, BAM! itself upgraded. You set up any number
 of channels, each sending through a notifier driver: to Discord, an MQTT broker, email, or any
 URL as a webhook.
 
@@ -24,8 +24,8 @@ Secret options can be written but are never returned; reads show only whether th
 `POST /api/v1/notifiers/{id}/test` sends a test message.
 
 Which events a channel can subscribe to is listed with each feature; see
-[Stock and lending](stock-and-lending.md), [Hooks](hooks.md), [Access](access.md#too-many-wrong-passwords) and
-[Relays](relays.md#health).
+[Stock and lending](stock-and-lending.md), [Hooks](hooks.md), [Access](access.md#too-many-wrong-passwords),
+[Relays](relays.md#health) and [Installing](installing.md#knowing-when-bam-changes).
 
 ## Delivery
 
@@ -94,6 +94,9 @@ Messages look like this:
 | A recovery code used | "Recovery code used: Ada" (amber), when someone signs in with one of their recovery codes; a link to the Users page (see [Access](access.md#recovery-codes)) |
 | A break-glass sign-in | "Break-glass sign-in: Ada" (amber), when someone signs in with a password while passwords are off; a link to the Users page (see [Access](access.md#turning-passwords-off)) |
 | Two-factor sign-in no longer required | "Two-factor sign-in no longer required: admin" (amber), when a role stops requiring it, saying who turned it off, or that it was the command line; a link to the Roles page (see [Access](access.md#requiring-two-factor-sign-in)) |
+| BAM! upgraded | "BAM! upgraded to v1.3.0" (neutral), or "BAM! downgraded to v1.2.0" (amber, warning that an older release may not work with a database a newer one migrated); the version it ran before, the database's schema versions before and after, and links to the release notes and to the instance (see [Installing](installing.md#upgrades)) |
+| An update rolled back | "Update to v1.3.0 rolled back" (red): `bam-update` installed it, why it failed, the version running again, and whether the database was restored from the backup taken first (see [Installing](installing.md#what-an-update-does)) |
+| A newer release | "BAM! v1.4.0 is available" (blue), with the version running, and links to the release notes, the docs on updating and the instance (see [Installing](installing.md#knowing-when-a-release-is-out)) |
 
 ## MQTT
 
@@ -101,7 +104,9 @@ The MQTT driver (`mqtt`) is for those running a broker, such as Home Assistant's
 
 Each event is published as JSON, with people by name only and a link to what it is about. It goes
 to `<topic prefix>/<kind>/<asset or category ID>` (a test message goes to `<prefix>/test`), at QoS 1,
-not retained.
+not retained. An event about no asset or category goes to `<topic prefix>/<kind>`, such as
+`bam/instance.upgraded`; for those about BAM! itself, the link is to the instance, and the payload's
+`instance` holds the versions and the release notes.
 
 ### Options
 
@@ -167,8 +172,8 @@ A channel needs addresses, roles or both.
 - **Roles** reach every active person holding one of them, at the email they sign in with:
   - A role narrowed to scopes (see [Access](access.md#scopes)) reaches its holder only for events
     about something in one of those scopes.
-  - An event about no asset or category, such as sign-ins held back, reaches only those holding the
-    role in every scope.
+  - An event about no asset or category, such as sign-ins held back or BAM! upgraded, reaches only
+    those holding the role in every scope.
   - Anyone can turn off email reaching them through a role, under **Your account**
     (`PUT /api/v1/auth/email` with `{"notifications": false}`). Addresses listed in the channel are
     not affected.
