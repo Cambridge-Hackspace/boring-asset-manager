@@ -160,8 +160,10 @@ type built struct {
 	// is skipped, or not merged, is absent.
 	cats, fields, relTypes, images map[string]string
 	// imagesStored are the label images whose files are stored, by ID in
-	// the archive.
+	// the archive; files are the attachments' files stored, by ID in the
+	// archive, noted as their rows are imported.
 	imagesStored map[string]bool
+	files        map[string]bool
 	// iconRenames are the icon names copies are given, and catIcons the
 	// categories' icons' among them, whose variants follow them.
 	iconRenames map[string]string
@@ -281,7 +283,7 @@ func build(ctx context.Context, st *store.Store, q querier, a *archived, opts Im
 	if importNamespace != nil {
 		ns = *importNamespace
 	}
-	b := &built{ids: newIDs(ns), cats: map[string]string{}, fields: map[string]string{}, relTypes: map[string]string{}, images: map[string]string{},
+	b := &built{ids: newIDs(ns), cats: map[string]string{}, fields: map[string]string{}, relTypes: map[string]string{}, images: map[string]string{}, files: map[string]bool{},
 		imagesStored: map[string]bool{}, iconRenames: map[string]string{}, catIcons: map[string]bool{}, kinds: a.kinds}
 	if opts.Anchor != "" {
 		c := h.cats[opts.Anchor]
@@ -896,6 +898,14 @@ func (m *matcher) rows() {
 			}
 		}
 	}
+	// the categories' attachments, with files of their own
+	var catFiles []map[string]any
+	for _, r := range a.rows["category_attachments"] {
+		if cat, ok := b.cats[str(r, "category_id")]; ok && cat != "" {
+			catFiles = append(catFiles, attachmentRow(r, b.ids, b.files, "category_id", cat))
+		}
+	}
+	add("category_attachments", catFiles)
 	join("category_fields", "field_id", ItemField, b.fields)
 	join("category_actions", "action_id", ItemHook, hookIDs)
 	join("category_relation_types", "relation_type_id", ItemRelationType, b.relTypes)

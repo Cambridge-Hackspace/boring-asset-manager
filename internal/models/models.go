@@ -194,6 +194,10 @@ const (
 	// category's icon (docs/icons.md), so that what shows it can redraw; it
 	// is for history.
 	EventCategoryIconChanged = "category.icon_changed"
+	// EventCategoryEdited records changes to a category listed in the
+	// payload's Changes: for now, attachments added and removed
+	// (docs/data-model.md#attachments). It is for history.
+	EventCategoryEdited = "category.edited"
 	// EventAuthThrottled records sign-ins held back for too many failed
 	// passwords (docs/access.md), with Throttle; it is about no asset or
 	// category, so it reaches notification channels only.
@@ -233,7 +237,7 @@ const (
 func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
-		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventAuthRoleKept:
+		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventCategoryEdited, EventAuthRoleKept:
 		return true
 	}
 	return false
@@ -611,7 +615,8 @@ type AssetWithDetails struct {
 	// Holds is how many active assets are in it, through location links,
 	// directly: what its scene shows.
 	Holds int `json:"holds"`
-	// Photos are its photos, in order.
+	// Photos are its image attachments, in order: the first is the one
+	// lists show.
 	Photos []AssetPhoto `json:"photos"`
 	// Scopes are the scopes it is in: those of its categories and their
 	// ancestors, or the default scope (docs/access.md).
@@ -958,8 +963,52 @@ type Report struct {
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
-// AssetPhoto is a photo of an asset; its bytes, and its thumbnail's, are
-// stored as files.
+// The owners attachments belong to (docs/data-model.md#attachments).
+const (
+	OwnerAsset    = "asset"
+	OwnerCategory = "category"
+)
+
+// The kinds of attachment: an image is a photo, re-encoded and given a
+// thumbnail; a document is a PDF, plain text, Markdown or CSV; other is a
+// type the configuration allows.
+const (
+	AttachmentImage    = "image"
+	AttachmentDocument = "document"
+	AttachmentOther    = "other"
+)
+
+// Attachment is a file attached to an asset or a category; its bytes, and
+// an image's thumbnail's, are stored as files.
+type Attachment struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"content_type"`
+	ByteSize    int64  `json:"byte_size"`
+	// ThumbID is an image's thumbnail's file; WidthPx and HeightPx its
+	// size. The others have none.
+	ThumbID  string `json:"-"`
+	WidthPx  int    `json:"width_px,omitempty"`
+	HeightPx int    `json:"height_px,omitempty"`
+	// AddedBy is the user who added it, if one did; AddedByName their
+	// name, as it is now, for those who may see it.
+	AddedBy     string    `json:"added_by,omitempty"`
+	AddedByName string    `json:"added_by_name,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Photo is an image attachment as an asset's photos list it.
+func (a Attachment) Photo() AssetPhoto {
+	return AssetPhoto{ID: a.ID, ThumbID: a.ThumbID, Filename: a.Filename, ContentType: a.ContentType,
+		WidthPx: a.WidthPx, HeightPx: a.HeightPx, ByteSize: a.ByteSize, CreatedAt: a.CreatedAt}
+}
+
+// AssetPhoto is an asset's image attachment, as its photos were listed
+// before attachments (docs/data-model.md#attachments); its bytes, and its
+// thumbnail's, are stored as files.
 type AssetPhoto struct {
 	ID          string    `json:"id"`
 	ThumbID     string    `json:"-"`

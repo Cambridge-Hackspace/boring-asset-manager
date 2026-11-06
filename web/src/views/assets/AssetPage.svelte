@@ -22,7 +22,7 @@
   import HookButtons from '../../components/HookButtons.svelte';
   import LinksPanel from '../../components/LinksPanel.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
-  import PhotosPanel from '../../components/PhotosPanel.svelte';
+  import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
 
@@ -171,6 +171,15 @@
     await loadHistory();
   }
 
+  // After its attachments change: its photos, and its history, as they are now.
+  async function attachmentsChanged(done: string) {
+    try {
+      assetChanged((await request<{ asset: AssetWithDetails }>('GET', path)).asset, done);
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
   // After a loan or a link changes: show the asset as it is now.
   function assetChanged(a: AssetWithDetails, done: string) {
     asset = a;
@@ -275,7 +284,7 @@
   <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
     <!-- The main column is plain sections; the side column, cards. -->
     <div class="space-y-10">
-      <PhotosPanel {asset} onchange={assetChanged} />
+      <AttachmentsPanel owner="asset" ownerId={asset.asset.id} ownerName={asset.asset.name} canEdit={session.canOn(asset.scopes, 'assets.write') && !asset.asset.archived_at} onchange={attachmentsChanged} />
       <section aria-labelledby="details-heading">
         <h2 id="details-heading" class="section-title mb-3">Details</h2>
         <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">

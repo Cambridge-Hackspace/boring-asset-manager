@@ -43,12 +43,16 @@ type Checked struct {
 	FileBytes int64
 }
 
-// tableByName finds an archived table.
+// tableByName finds an archived table, or one an older schema had
+// (RetiredTables).
 func tableByName(name string) *Table {
 	for i := range Tables {
 		if Tables[i].Name == name {
 			return &Tables[i]
 		}
+	}
+	if r := retiredTable(name); r != nil {
+		return &r.Table
 	}
 	return nil
 }
@@ -181,6 +185,9 @@ func Check(r io.Reader) (*Checked, error) {
 			t := tableByName(table)
 			if !ok || t == nil {
 				return nil, invalid("%s is of no table this bam knows", h.Name)
+			}
+			if r := retiredTable(table); r != nil && c.Header.SchemaVersion >= r.Until {
+				return nil, invalid("%s is of a table its schema, at version %d, no longer has", h.Name, c.Header.SchemaVersion)
 			}
 			if dir+"/" == DataDir && t.Kind == KindAuth || dir+"/" == AuthDir && t.Kind != KindAuth && len(t.Secret) == 0 {
 				return nil, invalid("%s is in the wrong directory", h.Name)
@@ -364,7 +371,7 @@ func (c *Checked) matchManifest(got map[string]Member, authRows map[string]int) 
 	}
 	for _, t := range Tables {
 		want, listed := man.Tables[t.Name]
-		if listed != hasKind(c.Header.Kinds, t.Kind) {
+		if listed != hasKind(c.Header.Kinds, t.Kind) && (listed || c.Header.SchemaVersion >= tablesSince[t.Name]) {
 			return invalid("the manifest's tables are not those of its kinds")
 		}
 		if c.Rows[t.Name] != want {

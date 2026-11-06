@@ -210,7 +210,9 @@ auth/<table>/  authentication: password hashes, sessions, API tokens,
                OAuth, and notification channels' secrets. Only in archives
                the command line writes. Keep such an archive as carefully
                as the database itself.
-files/         uploaded files, as stored: photos/<id> and images/<id>.
+files/         uploaded files, as stored: photos/<id>, the files attached
+               to assets and categories (photos among them) and images'
+               thumbnails, and images/<id>, label images.
 icons/         the icons' sources, as an isolex library folder that
                isolex check and isolex studio open as it is: lexicon.ilx
                (the lexicon block and the palette), library/ and each

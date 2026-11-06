@@ -14,9 +14,9 @@ import (
 var ErrInvalidID = errors.New("filestore: id must be a UUID")
 
 // Images stores files of one kind by UUID, as <kind>/<uuid> in a Blobs:
-// images/<uuid> for label images, photos/<uuid> for asset photos and their
-// thumbnails. In a directory, that is storage.local_path/images/<uuid>, as
-// it always was.
+// images/<uuid> for label images, photos/<uuid> for attachments (assets'
+// photos, as they were, among them) and images' thumbnails. In a
+// directory, that is storage.local_path/images/<uuid>, as it always was.
 type Images struct {
 	blobs  Blobs
 	prefix string
@@ -27,7 +27,8 @@ func NewImages(blobs Blobs) *Images {
 	return &Images{blobs: blobs, prefix: "images/"}
 }
 
-// NewPhotos returns the store of asset photos in blobs.
+// NewPhotos returns the store of attachments' files in blobs: photos/, as
+// attachments grew out of assets' photos.
 func NewPhotos(blobs Blobs) *Images {
 	return &Images{blobs: blobs, prefix: "photos/"}
 }
@@ -61,6 +62,16 @@ func (s *Images) Read(ctx context.Context, id string) ([]byte, error) {
 	}
 	defer rc.Close()
 	return io.ReadAll(rc)
+}
+
+// Open returns a reader of a file's bytes, to be closed; ErrNotFound when
+// there is none.
+func (s *Images) Open(ctx context.Context, id string) (io.ReadCloser, error) {
+	key, err := s.key(id)
+	if err != nil {
+		return nil, err
+	}
+	return s.blobs.Get(ctx, key)
 }
 
 // Remove deletes a file. Removing a missing one is not an error.

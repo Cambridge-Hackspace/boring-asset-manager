@@ -554,8 +554,8 @@ type assetContext struct {
 	list  bool
 	links map[string][]rawLink
 	loans map[string]models.Loan
-	// photos holds every asset's photos, when ctx serves a list.
-	photos map[string][]models.AssetPhoto
+	// photos holds every asset's image attachments, when ctx serves a list.
+	photos map[string][]models.Attachment
 	// defaultScan is the default scan template's ID, once read.
 	defaultScan *string
 	// suggestions maps categories to the relation types they suggest.

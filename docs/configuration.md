@@ -30,7 +30,7 @@ type = "sqlite"
 dsn = "data/bam.db?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 
 [storage]
-# Where uploaded files (asset photos, label images) are kept: "local", a
+# Where uploaded files (attachments, photos among them, and label images) are kept: "local", a
 # directory, or "s3", a bucket of an S3-compatible store (below).
 # Environment: BAM_STORAGE_BACKEND, BAM_STORAGE_LOCAL_PATH.
 backend = "local"
@@ -68,6 +68,20 @@ bluetooth = []
 # off, including for files written before it existed.
 # Environment: BAM_MCP_ENABLED (true or false).
 enabled = true
+
+[attachments]
+# Files attached to assets and categories (docs/data-model.md#attachments): the
+# largest, in megabytes, and how many one asset or category may have. Images
+# are also held to 15 MB, as they are decoded. allowed_types are the types
+# beyond images and documents (PDF, text, Markdown, CSV) that may be attached:
+# media types the content must show, such as "application/zip", or
+# extensions, such as ".stl", for content that shows no type of its own.
+# Empty allows none. Environment: BAM_ATTACHMENTS_MAX_FILE_MB,
+# BAM_ATTACHMENTS_MAX_PER_OBJECT, and BAM_ATTACHMENTS_ALLOWED_TYPES,
+# comma-separated.
+max_file_mb = 25
+max_per_object = 50
+allowed_types = []
 
 [relay]
 # The relay bus's transports (docs/relays.md), each on or off: BoneMesh, on a
@@ -198,6 +212,8 @@ Several settings can also be given in the environment:
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
 | `relay.bonemesh`, `relay.websocket` | `BAM_RELAY_BONEMESH`, `BAM_RELAY_WEBSOCKET` (`true` or `false`) |
 | `relay.bonemesh_port` | `BAM_RELAY_BONEMESH_PORT` |
+| `attachments.max_file_mb`, `attachments.max_per_object` | `BAM_ATTACHMENTS_MAX_FILE_MB`, `BAM_ATTACHMENTS_MAX_PER_OBJECT` |
+| `attachments.allowed_types` | `BAM_ATTACHMENTS_ALLOWED_TYPES`, comma-separated |
 | `relay.allow` | `BAM_RELAY_ALLOW`, comma-separated: on a relay, what it may reach |
 
 On a relay, `bam relay join` reads `BAM_RELAY_JOIN` (`"<url> <code>"`) and `BAM_RELAY_STATE`, where
@@ -227,11 +243,12 @@ cannot claim another address by sending them. Leave the list empty when BAM! is 
 
 ## Where uploaded files are kept
 
-Asset photos, their thumbnails and label images are files. They are kept through one interface,
+Attachments (photos among them), images' thumbnails and label images are files. They are kept through one interface,
 `internal/filestore`, so the rest of bam treats a file in a directory and an object in a bucket
 alike.
 
-Each file is stored by a key, `photos/<id>` or `images/<id>`. Files are always served by bam, which
+Each file is stored by a key, `photos/<id>` (every attachment, of an asset or a category, and each
+image's thumbnail) or `images/<id>`. Files are always served by bam, which
 checks who may see them. There are no links to the store that would work for anyone holding one.
 
 ### Backends
@@ -266,7 +283,7 @@ deleted after it, and a sweep tidies what a failure part way leaves.
 
 The sweep:
 
-- removes each file no row names (an asset photo, its thumbnail, a label image) once it is a day
+- removes each file no row names (an attachment, an image's thumbnail, a label image) once it is a day
   old, so as never to take an upload under way
 - reports the rows whose file is missing
 

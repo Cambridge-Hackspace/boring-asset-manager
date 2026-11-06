@@ -35,7 +35,31 @@ type Config struct {
 	Auth          AuthConfig          `toml:"auth"`
 	// Relay turns the relay bus's transports on or off (docs/relays.md).
 	Relay RelayConfig `toml:"relay"`
+	// Attachments bounds the files attached to assets and categories
+	// (docs/data-model.md#attachments).
+	Attachments AttachmentsConfig `toml:"attachments"`
 }
+
+// AttachmentsConfig bounds attachments, and says which types beyond images
+// and documents may be attached.
+type AttachmentsConfig struct {
+	// MaxFileMB is the largest file, in megabytes (MiB). Images are held to
+	// photos' own limit too, as they are decoded.
+	MaxFileMB int `toml:"max_file_mb"`
+	// MaxPerObject is how many attachments one asset or category may have.
+	MaxPerObject int `toml:"max_per_object"`
+	// AllowedTypes are the other types that may be attached: media types,
+	// such as "application/zip", which a file's content must show it is,
+	// or extensions, such as ".stl", for a file whose content shows no
+	// type of its own. Empty, the default, allows none.
+	AllowedTypes []string `toml:"allowed_types"`
+}
+
+// MaxAttachmentMB is the most attachments.max_file_mb may be.
+const MaxAttachmentMB = 1024
+
+// MaxFileBytes is the largest attachment, in bytes.
+func (a AttachmentsConfig) MaxFileBytes() int64 { return int64(a.MaxFileMB) << 20 }
 
 // ServerConfig holds HTTP server listening configuration.
 type ServerConfig struct {
@@ -312,6 +336,7 @@ func DefaultConfig() *Config {
 		MCP:           MCPConfig{Enabled: true},
 		Notifications: NotificationsConfig{KeepDays: 30, DisableAfterHours: 24},
 		Relay:         RelayConfig{BoneMeshPort: DefaultBoneMeshPort},
+		Attachments:   AttachmentsConfig{MaxFileMB: 25, MaxPerObject: 50},
 	}
 }
 
@@ -464,6 +489,21 @@ func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("BAM_RELAY_ALLOW"); v != "" {
 		cfg.Relay.Allow = strings.Split(v, ",")
 	}
+	for env, field := range map[string]*int{
+		"BAM_ATTACHMENTS_MAX_FILE_MB":    &cfg.Attachments.MaxFileMB,
+		"BAM_ATTACHMENTS_MAX_PER_OBJECT": &cfg.Attachments.MaxPerObject,
+	} {
+		if v := os.Getenv(env); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return fmt.Errorf("%s: %q is not a number", env, v)
+			}
+			*field = n
+		}
+	}
+	if v := os.Getenv("BAM_ATTACHMENTS_ALLOWED_TYPES"); v != "" {
+		cfg.Attachments.AllowedTypes = strings.Split(v, ",")
+	}
 	if v := os.Getenv("BAM_AUTH_TEST_PROTOCOL"); v != "" {
 		on, err := parseSwitch(v)
 		if err != nil {
@@ -519,6 +559,9 @@ func (c *Config) Validate() error {
 	if _, err := c.Auth.Key(); err != nil {
 		return err
 	}
+	if err := c.Attachments.validate(); err != nil {
+		return err
+	}
 	if p := c.Relay.BoneMeshPort; p <= 0 || p > 65535 {
 		return fmt.Errorf("invalid relay.bonemesh_port: %d", p)
 	}
@@ -543,6 +586,32 @@ func (c *Config) Validate() error {
 
 // bluetoothPattern is a pattern of Bluetooth addresses.
 var bluetoothPattern = regexp.MustCompile(`^[0-9A-Fa-f:*?]+$`)
+
+// mediaType is a media type as attachments.allowed_types names one, and
+// extension an extension.
+var (
+	mediaType = regexp.MustCompile(`^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$`)
+	extension = regexp.MustCompile(`^\.[a-z0-9][a-z0-9_+-]*$`)
+)
+
+// validate checks the attachments' limits and types, writing each type in
+// lower case.
+func (a *AttachmentsConfig) validate() error {
+	if a.MaxFileMB < 1 || a.MaxFileMB > MaxAttachmentMB {
+		return fmt.Errorf("attachments.max_file_mb must be from 1 to %d", MaxAttachmentMB)
+	}
+	if a.MaxPerObject < 1 {
+		return errors.New("attachments.max_per_object must be at least 1")
+	}
+	for i, t := range a.AllowedTypes {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if !mediaType.MatchString(t) && !extension.MatchString(t) {
+			return fmt.Errorf("attachments.allowed_types: %q is neither a media type, such as application/zip, nor an extension, such as .stl", a.AllowedTypes[i])
+		}
+		a.AllowedTypes[i] = t
+	}
+	return nil
+}
 
 // prefixSegment is one part of an S3 prefix, as of a file's key.
 var prefixSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$`)

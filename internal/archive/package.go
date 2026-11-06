@@ -42,11 +42,14 @@ type Selection struct {
 	// settings.
 	Icons  bool             `json:"icons,omitempty"`
 	Assets *AssetsSelection `json:"assets,omitempty"`
+	// NoDocuments leaves out the categories' and assets' attachments that
+	// are not images: documents, and other files.
+	NoDocuments bool `json:"no_documents,omitempty"`
 }
 
 // AssetsSelection chooses assets: every one, or those in the categories
-// chosen, with or without their photos, links and history. Archived assets
-// are left out.
+// chosen, with or without their attachments (Photos, as attachments grew out
+// of photos), links and history. Archived assets are left out.
 type AssetsSelection struct {
 	All     bool `json:"all,omitempty"`
 	Photos  bool `json:"photos,omitempty"`
@@ -929,13 +932,17 @@ func (r *resolver) assets(plan *Plan) error {
 			}
 		}
 	}
+	attachmentsOf := "SELECT asset_id FROM asset_attachments"
+	if plan.sel.NoDocuments {
+		attachmentsOf += " WHERE kind = 'image'"
+	}
 	for _, c := range []struct {
 		on    bool
 		query string
 		in    map[string]bool
 		n     *int
 	}{
-		{sel.Photos, "SELECT asset_id FROM asset_photos", r.includedAsset, &counts.Photos},
+		{sel.Photos, attachmentsOf, r.includedAsset, &counts.Photos},
 		{sel.History, "SELECT asset_id FROM events WHERE asset_id IS NOT NULL", r.readEvents, &counts.Events},
 	} {
 		if !c.on {
@@ -1129,8 +1136,18 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 		return asset("asset_id") && p.rows["fields"][get("field_id")], nil
 	case "asset_generator_keys":
 		return asset("asset_id"), nil
-	case "asset_photos":
-		return p.sel.Assets != nil && p.sel.Assets.Photos && asset("asset_id"), nil
+	case "asset_attachments":
+		if p.sel.Assets == nil || !p.sel.Assets.Photos || !asset("asset_id") {
+			return false, nil
+		}
+		setNull("added_by")
+		return true, nil
+	case "category_attachments":
+		if !p.rows["categories"][get("category_id")] {
+			return false, nil
+		}
+		setNull("added_by")
+		return true, nil
 	case "asset_links":
 		if p.sel.Assets == nil || !p.sel.Assets.Links || !asset("from_asset_id") || !asset("to_asset_id") || !p.rows["relation_types"][get("relation_type_id")] {
 			return false, nil

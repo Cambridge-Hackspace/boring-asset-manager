@@ -43,6 +43,7 @@
   let icons = $state(false);
   let assets = $state<'none' | 'chosen' | 'all'>('none');
   let photos = $state(false);
+  let noDocuments = $state(false);
   let links = $state(false);
   let history = $state(false);
 
@@ -65,6 +66,7 @@
     ...Object.fromEntries(groups.map((g) => [g.key, chosen[g.kind] ?? []])),
     icons,
     assets: assets === 'none' ? undefined : { all: assets === 'all', photos, links, history },
+    ...(noDocuments ? { no_documents: true } : {}),
   });
   const needs = $derived(needed(plan));
   const canExport = $derived(anyChosen(selection) && name.trim() !== '' && !exporting && !planning);
@@ -306,10 +308,14 @@
       <label class="flex gap-2 text-sm"><input type="radio" value="chosen" bind:group={assets} /> Those in the categories chosen</label>
       <label class="flex gap-2 text-sm"><input type="radio" value="all" bind:group={assets} /> Every asset, with its categories</label>
       <div class="ml-6 flex flex-wrap gap-x-4">
-        <label class="flex gap-2 text-sm"><input type="checkbox" bind:checked={photos} disabled={assets === 'none'} /> Photos</label>
+        <label class="flex gap-2 text-sm"><input type="checkbox" bind:checked={photos} disabled={assets === 'none'} /> Attachments, photos among them</label>
         <label class="flex gap-2 text-sm"><input type="checkbox" bind:checked={links} disabled={assets === 'none'} /> Links between them</label>
         <label class="flex gap-2 text-sm"><input type="checkbox" bind:checked={history} disabled={assets === 'none'} /> History, without who did what</label>
       </div>
+      <label class="flex gap-2 pt-2 text-sm">
+        <input type="checkbox" bind:checked={noDocuments} />
+        Leave out documents: only images among the categories’ and assets’ attachments
+      </label>
     </fieldset>
 
     {#if plan}

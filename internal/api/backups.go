@@ -93,7 +93,8 @@ func (s *Server) instanceHost() string {
 }
 
 // handleDownloadBackup streams a backup of the instance, without
-// authentication, as it is written: GET /api/v1/backup.
+// authentication, as it is written: GET /api/v1/backup, and with
+// ?without_documents=1, without attachments that are not images.
 func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
 	w, r = transfer(w, r)
 	name := fmt.Sprintf("bam-%s-%s.bam.tar.gz", sanitizeForHeader(s.instanceHost()), time.Now().UTC().Format("20060102-150405"))
@@ -105,7 +106,7 @@ func (s *Server) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
 		started = true
 		return nopWriteCloser{w}, nil
 	}
-	_, err := archive.Write(r.Context(), s.store, s.blobs, open, archive.Options{BamVersion: Version})
+	_, err := archive.Write(r.Context(), s.store, s.blobs, open, archive.Options{BamVersion: Version, NoDocuments: r.URL.Query().Get("without_documents") == "1"})
 	if err != nil {
 		log.Printf("writing a backup: %v", err)
 		if !started {
