@@ -43,7 +43,7 @@ test('create a vendor with contacts, find it, edit it, and reorder from it when 
   await page.getByLabel('Account number (optional)').fill('ACC-43');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Saved.');
-  await expect(page.getByText('ACC-43')).toBeVisible();
+  await expect(page.getByText('ACC-43', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'ada@acme.example' })).toHaveCount(0);
   await page.getByRole('navigation', { name: 'Parts of this vendor' }).getByRole('link', { name: 'History' }).click();
   const latest = page.getByRole('region', { name: 'History' }).getByRole('listitem').first();
@@ -62,7 +62,7 @@ test('create a vendor with contacts, find it, edit it, and reorder from it when 
 
   await page.goto('/');
   const vendors = page.getByRole('list', { name: `Vendors of ${category}` });
-  await expect(vendors.getByRole('link', { name })).toHaveAttribute('href', `/vendors/${id}`);
+  await expect(vendors.getByRole('link', { name, exact: true })).toHaveAttribute('href', `/vendors/${id}`);
   const reorder = vendors.getByRole('link', { name: `Reorder ${category} from ${name}` });
   await expect(reorder).toHaveAttribute('href', 'https://acme.example/order');
   await expect(reorder).toHaveAttribute('rel', 'noopener noreferrer');
