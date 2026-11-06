@@ -47,6 +47,9 @@ type Selection struct {
 	// NoDocuments leaves out the categories' and assets' attachments that
 	// are not images: documents, and other files.
 	NoDocuments bool `json:"no_documents,omitempty"`
+	// Comments brings the categories' comments (docs/comments.md), those
+	// not deleted, without who wrote them.
+	Comments bool `json:"comments,omitempty"`
 }
 
 // AssetsSelection chooses assets: every one, or those in the categories
@@ -1203,6 +1206,13 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 			return false, nil
 		}
 		setNull("added_by")
+		return true, nil
+	case "category_comments":
+		if !p.sel.Comments || !p.rows["categories"][get("category_id")] || vals[colIndex(t, "deleted_at")] != nil {
+			return false, nil
+		}
+		setNull("author_id")
+		setNull("deleted_by")
 		return true, nil
 	case "asset_links":
 		if p.sel.Assets == nil || !p.sel.Assets.Links || !asset("from_asset_id") || !asset("to_asset_id") || !p.rows["relation_types"][get("relation_type_id")] {

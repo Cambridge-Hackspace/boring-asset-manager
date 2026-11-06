@@ -609,6 +609,8 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `reports.manage` | Managing reports (see [Reports](reports.md)). | No |
 | `categories.manage` | Managing categories, including moving them under others, and relation types. | No |
 | `vendors.manage` | Creating and editing vendors, their contacts and attachments (see [Vendors](vendors.md)). | Yes |
+| `comments.write` | Writing comments on what one may read, attaching files to it while writing, and editing and deleting one's own (see [Comments](comments.md)). | Yes |
+| `comments.moderate` | Deleting anyone's comments (see [Comments](comments.md)). | Yes |
 | `icons.manage` | Changing what every icon is drawn with: the icon library, the palette and the icon settings (see [Icons](icons.md)). | No |
 | `settings.manage` | Managing settings. | No |
 | `users.manage` | Managing users, roles, scopes and API tokens. | No |
@@ -644,7 +646,9 @@ A role holds each permission either in every scope (`assets.write`) or in some
 (`tools:assets.write`, `default:assets.write`). Only the asset permissions are scopable:
 `assets.read`, `assets.scan`, `assets.hook`, `events.read`, `assets.track`, `assets.write`,
 `assets.delete`, `assets.report`, `assets.borrow`, `assets.lend`, `stock.record` and `flows.run`,
-and `vendors.manage`, since vendors are in scopes as assets are (see [Vendors](vendors.md)).
+and `vendors.manage`, since vendors are in scopes as assets are (see [Vendors](vendors.md)), and
+`comments.write` and `comments.moderate`, in the scopes of what comments are on (see
+[Comments](comments.md#who-sees-and-writes-them)).
 
 A permission in any one of an asset's scopes is enough. A permission held in every scope covers
 each scope, and a role given it both ways keeps the wider.
@@ -969,6 +973,7 @@ is an RFC 3339 time, or `null` for never.
 | `041` | Roles narrowed to scopes (`user_role_scopes`, `api_token_role_scopes`). |
 | `043` | Grants `flows.manage` to every role that manages categories, and `flows.run` to every role that writes assets, in the same scopes. |
 | `068` | Grants `vendors.manage`, in every scope, to every role that manages categories. |
+| `069` | Grants `comments.write` to every role that writes assets, and `comments.moderate` to every role that archives them, in the same scopes. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

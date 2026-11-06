@@ -209,6 +209,26 @@ func summarize(n Notification, esc func(string) string) summary {
 			out.Description += ", to be collected by " + p.DueAt.UTC().Format("2 January 2006")
 		}
 		out.Description += "."
+	case e.Kind == models.EventCommentAdded && p.Comment != nil:
+		out.Color = discordNeutral
+		on := name
+		switch p.Comment.On {
+		case models.CommentOnLoan:
+			on = "the loan of " + name
+		case models.CommentOnFiling:
+			on = name + ", as filed"
+			if p.Comment.Flow != nil {
+				on += " by " + esc(truncate(p.Comment.Flow.Name, 200))
+			}
+		}
+		out.Title = "Comment on " + on
+		out.Description = esc(truncate(p.Comment.Text, 1000))
+		if by != "" {
+			out.Description += "\nBy " + by + "."
+		}
+		if out.URL != "" {
+			out.URL += "#comment-" + url.PathEscape(p.Comment.ID)
+		}
 	case e.Kind == models.EventAssetHook:
 		label := "Hook"
 		if p.Hook != nil {

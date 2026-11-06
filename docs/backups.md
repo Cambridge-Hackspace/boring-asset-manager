@@ -91,12 +91,12 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Kind | Key | Tables |
 |---|---|---|
 | Reports | `reports` | `reports` |
-| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`, `category_attachments` and their files, `vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments` and their files, and `category_vendors`, the vendors categories are bought from |
+| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`, `category_attachments` and their files, `vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments` and their files, `category_vendors`, the vendors categories are bought from, and `category_comments` |
 | Labels | `labels` | `templates`, `images` and their files, `category_label_templates` |
 | Icons | `icons` | `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings` |
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites` |
-| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, and their history, `events` |
-| Flows | `flows` | `flows`, `flow_filings` |
+| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, `asset_comments` and `loan_comments`, and their history, `events` |
+| Flows | `flows` | `flows`, `flow_filings`, `flow_filing_comments` |
 | Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes` |
 | Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, `relay_mesh`, and the secret columns described under [Authentication](#authentication) |
 
@@ -407,6 +407,9 @@ becomes an image attachment.
 
 An archive written before vendors (schema `067` or earlier) holds none of the vendors' tables, and
 its `events` have no `vendor_id`. It still checks, restores and imports, with no vendors.
+
+An archive written before comments (schema `068` or earlier) holds none of the comments' tables.
+It still checks, restores and imports, with no comments.
 - **`manifest.json`**, last, once everything else is written. It holds:
   - the header again (with `set.parts`);
   - the rows of each table (`tables`);
