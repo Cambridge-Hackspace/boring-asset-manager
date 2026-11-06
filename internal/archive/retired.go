@@ -25,7 +25,7 @@ const VendorsVersion = 68
 // RetiredTables are the tables older schemas had.
 var RetiredTables = []Retired{
 	{
-		Table: Table{Name: "asset_photos", Kind: KindAssets, Key: []string{"id"},
+		Table: Table{Name: "asset_photos", Kind: KindAssets, Since: 18, Key: []string{"id"},
 			Columns: []Column{{"id", Text}, {"asset_id", Text}, {"thumb_id", Text}, {"position", Int}, {"filename", Text}, {"content_type", Text}, {"width_px", Int}, {"height_px", Int}, {"byte_size", Int}, {"created_at", Time}},
 		},
 		Until: AttachmentsVersion,
@@ -43,11 +43,18 @@ var RetiredTables = []Retired{
 	},
 }
 
-// tablesSince are tables older schemas lacked, by the migration that made
-// them: an archive written before it neither holds nor lists them.
-var tablesSince = map[string]int{"asset_attachments": AttachmentsVersion, "category_attachments": AttachmentsVersion,
-	"vendors": VendorsVersion, "vendor_contacts": VendorsVersion, "vendor_scopes": VendorsVersion, "vendor_attachments": VendorsVersion,
-	"category_vendors": VendorsVersion}
+// tablesAt are the tables an archive at schema version v may hold: every
+// table in Tables, and those retired since v. A table whose Since is later
+// than v may be missing from it.
+func tablesAt(v int) []Table {
+	tables := append([]Table(nil), Tables...)
+	for _, r := range RetiredTables {
+		if v < r.Until {
+			tables = append(tables, r.Table)
+		}
+	}
+	return tables
+}
 
 // retiredTable finds a retired table by name, or nil.
 func retiredTable(name string) *Retired {

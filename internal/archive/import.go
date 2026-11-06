@@ -416,7 +416,7 @@ func readArchived(ctx context.Context, st *store.Store, q querier, r io.Reader, 
 		}
 		setOf, set = "", nil
 	}
-	err := eachMember(r, kinds, func(t *Table, row map[string]any) error {
+	err := eachMember(r, kinds, c.Header.SchemaVersion, func(t *Table, row map[string]any) error {
 		if !streamed(t) {
 			a.rows[t.Name] = append(a.rows[t.Name], row)
 			return nil
@@ -566,8 +566,9 @@ func fileWanted(key string, kinds []Kind) bool {
 
 // eachMember reads an archive's members, giving each row of the tables
 // merged, of the kinds given, to row, each file to file, and each icon
-// source in icons/ to icon, if it is not nil.
-func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any) error, file func(key string, r io.Reader, size int64) error, icon func(rest, source string)) error {
+// source in icons/ to icon, if it is not nil. schema is the archive's
+// schema version.
+func eachMember(r io.Reader, kinds []Kind, schema int, row func(t *Table, row map[string]any) error, file func(key string, r io.Reader, size int64) error, icon func(rest, source string)) error {
 	m, err := openMembers(bufio.NewReader(r))
 	if err != nil {
 		return err
@@ -590,7 +591,7 @@ func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any
 				if !hasKind(kinds, as.Kind) {
 					continue
 				}
-				if err := eachRow(&r.Table, m.tr, func(old map[string]any) error { return row(as, r.Convert(old)) }); err != nil {
+				if err := eachRow(&r.Table, m.tr, schema, func(old map[string]any) error { return row(as, r.Convert(old)) }); err != nil {
 					return fmt.Errorf("reading %s: %w", table, err)
 				}
 				continue
@@ -599,7 +600,7 @@ func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any
 			if t == nil || !mergeTables[t.Name] || !hasKind(kinds, t.Kind) {
 				continue
 			}
-			if err := eachRow(t, m.tr, func(r map[string]any) error { return row(t, r) }); err != nil {
+			if err := eachRow(t, m.tr, schema, func(r map[string]any) error { return row(t, r) }); err != nil {
 				return fmt.Errorf("reading %s: %w", table, err)
 			}
 		case FilesDir:
@@ -621,7 +622,7 @@ func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any
 
 // eachRow reads a member's rows, each by column, its values as Write
 // wrote them.
-func eachRow(t *Table, r io.Reader, fn func(row map[string]any) error) error {
+func eachRow(t *Table, r io.Reader, schema int, fn func(row map[string]any) error) error {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), RowChunk+1)
 	var cols []Column
@@ -632,7 +633,7 @@ func eachRow(t *Table, r io.Reader, fn func(row map[string]any) error) error {
 		}
 		if cols == nil {
 			var err error
-			if cols, err = rowColumns(t, raw, false); err != nil {
+			if cols, err = rowColumns(t, raw, false, schema); err != nil {
 				return err
 			}
 		}

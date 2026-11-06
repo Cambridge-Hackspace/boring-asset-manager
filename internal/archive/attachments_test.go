@@ -3,7 +3,6 @@ package archive
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -208,45 +207,7 @@ func TestPackagesCarryAttachments(t *testing.T) {
 // nor categories' attachments, nor vendors, which came after.
 func beforeAttachments(t *testing.T, b []byte) []byte {
 	t.Helper()
-	b = beforeVendors(t, b)
-	var out []member
-	tables := map[string]int{}
-	for _, m := range unpack(t, b) {
-		switch {
-		case strings.HasPrefix(m.name, DataDir+"category_attachments/"):
-			continue
-		case strings.HasPrefix(m.name, DataDir+"asset_attachments/"):
-			var buf bytes.Buffer
-			for _, line := range strings.Split(strings.TrimSpace(string(m.data)), "\n") {
-				var row map[string]any
-				if err := json.Unmarshal([]byte(line), &row); err != nil {
-					t.Fatal(err)
-				}
-				if row["kind"] != "image" {
-					continue
-				}
-				old := map[string]any{}
-				for _, c := range retiredTable("asset_photos").Columns {
-					old[c.Name] = row[c.Name]
-				}
-				data, _ := json.Marshal(old)
-				buf.Write(append(data, '\n'))
-				tables["asset_photos"]++
-			}
-			m.name = DataDir + "asset_photos/" + m.name[strings.LastIndex(m.name, "/")+1:]
-			m.data = buf.Bytes()
-		}
-		out = append(out, m)
-	}
-	return pack(t, reseal(t, out, func(h *Header, man *Manifest) {
-		h.SchemaVersion = AttachmentsVersion - 1
-		delete(man.Tables, "asset_attachments")
-		delete(man.Tables, "category_attachments")
-		if _, ok := man.Tables["assets"]; ok {
-			man.Tables["asset_photos"] = tables["asset_photos"]
-		}
-		man.Header.SchemaVersion = h.SchemaVersion
-	}))
+	return olderArchive(t, b, AttachmentsVersion-1)
 }
 
 // TestArchivesFromBeforeAttachments: a backup or a package written before

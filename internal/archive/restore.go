@@ -294,7 +294,8 @@ func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io
 		return err
 	}
 
-	ins := &inserter{ctx: ctx, st: st, tx: tx, perms: perms, parents: map[string][]parentRef{}, replace: opts.Replace, folder: sum.Header.FormatVersion >= 2}
+	ins := &inserter{ctx: ctx, st: st, tx: tx, perms: perms, parents: map[string][]parentRef{}, replace: opts.Replace, folder: sum.Header.FormatVersion >= 2,
+		schema: sum.Header.SchemaVersion}
 	for {
 		h, err := m.next()
 		if err == io.EOF {
@@ -452,6 +453,8 @@ type inserter struct {
 	// folder is set for an archive keeping icons' sources in icons/: their
 	// rows' sources are null until the folder's files fill them.
 	folder bool
+	// schema is the archive's schema version.
+	schema int
 }
 
 // batchArgs is the most values one INSERT binds: within every dialect's
@@ -487,7 +490,7 @@ func (in *inserter) member(t *Table, r io.Reader, secrets bool) (int, error) {
 		}
 		if cols == nil {
 			var err error
-			if cols, err = rowColumns(t, row, secrets); err != nil {
+			if cols, err = rowColumns(t, row, secrets, in.schema); err != nil {
 				return n, err
 			}
 			if _, ok := iconSourceTables[t.Name]; ok && in.folder && !secrets && colIndexIn(cols, "source") < 0 {
@@ -538,8 +541,8 @@ func (in *inserter) member(t *Table, r io.Reader, secrets bool) (int, error) {
 }
 
 // rowColumns are the columns a member's rows have, in the registry's
-// order: an archive from an older schema has fewer.
-func rowColumns(t *Table, row map[string]json.RawMessage, secrets bool) ([]Column, error) {
+// order: an archive from an older schema, at version schema, has fewer.
+func rowColumns(t *Table, row map[string]json.RawMessage, secrets bool, schema int) ([]Column, error) {
 	var cols []Column
 	for _, c := range t.Columns {
 		if _, ok := row[c.Name]; ok {
@@ -553,8 +556,12 @@ func rowColumns(t *Table, row map[string]json.RawMessage, secrets bool) ([]Colum
 			}
 		}
 	}
+	// One from an older schema may lack a column of the key added since, as
+	// category_icons' rendition (migration 047) is: restored, its rows go
+	// into a database at its schema, keyed as they were then; imported,
+	// they are read as they were (rowRendition).
 	for _, k := range t.Key {
-		if _, ok := row[k]; !ok {
+		if _, ok := row[k]; !ok && schema >= migrations.Latest() {
 			return nil, fmt.Errorf("its rows have no %s", k)
 		}
 	}
