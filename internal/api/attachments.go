@@ -39,13 +39,16 @@ const attachmentBodyCeiling = config.MaxAttachmentMB<<20 + multipartSlack
 
 // isAttachmentUpload reports whether a POST to path uploads an attachment
 // or a photo: to /api/v1/assets/{id}/attachments, /api/v1/assets/{id}/photos,
-// /api/v1/categories/{id}/attachments or /api/v1/vendors/{id}/attachments.
+// /api/v1/categories/{id}/attachments or /api/v1/vendors/{id}/attachments,
+// or with a comment, to /api/v1/{assets,categories}/{id}/comments/attachments.
 func isAttachmentUpload(path string) bool {
 	for _, p := range []struct{ prefix, suffix string }{
 		{"/api/v1/assets/", "/attachments"},
 		{"/api/v1/assets/", "/photos"},
 		{"/api/v1/categories/", "/attachments"},
 		{"/api/v1/vendors/", "/attachments"},
+		{"/api/v1/assets/", "/comments/attachments"},
+		{"/api/v1/categories/", "/comments/attachments"},
 	} {
 		if rest, ok := strings.CutPrefix(path, p.prefix); ok && strings.HasSuffix(rest, p.suffix) && !strings.Contains(strings.TrimSuffix(rest, p.suffix), "/") {
 			return true
@@ -200,49 +203,58 @@ func (s *Server) handleAddAttachment(kind string) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		data, filename, ok := readUpload(w, r, s.cfg.Attachments.MaxFileBytes(), "Attachments")
-		if !ok {
-			return
+		as, added, ok := s.addAttachment(w, r, o)
+		if ok {
+			s.writeAttachments(w, http.StatusCreated, o, as, added)
 		}
-		prepared, err := attachments.Prepare(data, filename, s.cfg.Attachments.AllowedTypes)
-		if errors.Is(err, attachments.ErrImageTooBig) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, err.Error())
-			return
-		}
-		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		a := models.Attachment{Name: strings.TrimSpace(r.FormValue("name")), Description: strings.TrimSpace(r.FormValue("description"))}
-		if a.Name == "" {
-			a.Name = filename
-		}
-		if len([]rune(a.Name)) > store.MaxAttachmentName {
-			writeJSONError(w, http.StatusBadRequest, store.ErrAttachmentName.Error())
-			return
-		}
-		if len([]rune(a.Description)) > store.MaxAttachmentDescription {
-			writeJSONError(w, http.StatusBadRequest, store.ErrAttachmentDescription.Error())
-			return
-		}
-		if err := s.saveAttachment(r.Context(), &a, prepared, filename); err != nil {
-			writeServerError(w, err, "store the attachment")
-			return
-		}
-		as, err := s.actingStore(r).AddAttachments(o.kind, o.id, []models.Attachment{a}, s.cfg.Attachments.MaxPerObject)
-		if err != nil {
-			s.removeAttachmentFiles(r.Context(), a)
-			writeAttachmentError(w, err, "add the attachment")
-			return
-		}
-		for _, added := range as {
-			if added.ID == a.ID {
-				s.writeAttachments(w, http.StatusCreated, o, as, &added)
-				return
-			}
-		}
-		s.writeAttachments(w, http.StatusCreated, o, as, nil)
 	}
+}
+
+// addAttachment adds the file a request uploads to an owner the requester
+// may add to, after its others, answering the request when it cannot. It
+// returns the owner's attachments, and the one added.
+func (s *Server) addAttachment(w http.ResponseWriter, r *http.Request, o *attachmentOwner) ([]models.Attachment, *models.Attachment, bool) {
+	data, filename, ok := readUpload(w, r, s.cfg.Attachments.MaxFileBytes(), "Attachments")
+	if !ok {
+		return nil, nil, false
+	}
+	prepared, err := attachments.Prepare(data, filename, s.cfg.Attachments.AllowedTypes)
+	if errors.Is(err, attachments.ErrImageTooBig) {
+		writeJSONError(w, http.StatusRequestEntityTooLarge, err.Error())
+		return nil, nil, false
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return nil, nil, false
+	}
+	a := models.Attachment{Name: strings.TrimSpace(r.FormValue("name")), Description: strings.TrimSpace(r.FormValue("description"))}
+	if a.Name == "" {
+		a.Name = filename
+	}
+	if len([]rune(a.Name)) > store.MaxAttachmentName {
+		writeJSONError(w, http.StatusBadRequest, store.ErrAttachmentName.Error())
+		return nil, nil, false
+	}
+	if len([]rune(a.Description)) > store.MaxAttachmentDescription {
+		writeJSONError(w, http.StatusBadRequest, store.ErrAttachmentDescription.Error())
+		return nil, nil, false
+	}
+	if err := s.saveAttachment(r.Context(), &a, prepared, filename); err != nil {
+		writeServerError(w, err, "store the attachment")
+		return nil, nil, false
+	}
+	as, err := s.actingStore(r).AddAttachments(o.kind, o.id, []models.Attachment{a}, s.cfg.Attachments.MaxPerObject)
+	if err != nil {
+		s.removeAttachmentFiles(r.Context(), a)
+		writeAttachmentError(w, err, "add the attachment")
+		return nil, nil, false
+	}
+	for i := range as {
+		if as[i].ID == a.ID {
+			return as, &as[i], true
+		}
+	}
+	return as, nil, true
 }
 
 // saveAttachment stores a prepared upload's files, filling in a's file and

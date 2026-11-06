@@ -217,6 +217,12 @@ export function describeEvent(e: AssetEvent): string {
       if (p.hook?.trigger === 'event') return `${label} fired ${hookCauses[p.hook.cause?.kind ?? ''] ?? 'by an event'}`;
       return `${label} triggered`;
     }
+    case 'comment.added':
+      return `${commentOn(p.comment)}: “${clipped(p.comment?.text ?? '')}”`;
+    case 'comment.edited':
+      return `Comment edited${commentWhere(p.comment)}`;
+    case 'comment.deleted':
+      return `Comment deleted${commentWhere(p.comment)}`;
     case 'asset.label_printed': {
       const l = p.label;
       if (!l) return 'Label printed';
@@ -226,6 +232,25 @@ export function describeEvent(e: AssetEvent): string {
     default:
       return e.kind;
   }
+}
+
+/** What a comment event's comment was on, as its history says. */
+function commentOn(c: AssetEvent['payload']['comment']): string {
+  if (c?.on === 'loan') return 'Commented on its loan';
+  if (c?.on === 'filing') return `Commented on its filing${c.flow ? ` by ${c.flow.name}` : ''}`;
+  return 'Commented';
+}
+
+function commentWhere(c: AssetEvent['payload']['comment']): string {
+  if (c?.on === 'loan') return ' on its loan';
+  if (c?.on === 'filing') return ` on its filing${c.flow ? ` by ${c.flow.name}` : ''}`;
+  return '';
+}
+
+/** Text cut to a line's length, for history. */
+function clipped(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > 120 ? `${flat.slice(0, 119)}…` : flat;
 }
 
 /** One line of what a created, edited, archived or restored event changed. */
@@ -251,6 +276,9 @@ export function describeChange(c: AssetChange, kind: string): string {
       return c.to ? `Photo added: ${c.to}` : `Photo removed: ${c.from}`;
     case 'attachment':
       return c.to ? `Attachment added: ${c.to}` : `Attachment removed: ${c.from}`;
+    case 'comment':
+      // Its text before: an edit's earlier version, or what a deleted one said.
+      return c.to ? `Was “${clipped(c.from ?? '')}”, now “${clipped(c.to)}”` : `It said “${clipped(c.from ?? '')}”`;
     case 'icon':
       if (!c.to) return `Own icon ${c.from} dropped: drawn with its categories' again`;
       return fromTo('Own icon', c);

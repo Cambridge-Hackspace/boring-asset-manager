@@ -178,6 +178,7 @@ var mergeTables = map[string]bool{
 	"asset_placements": true, "asset_attachments": true, "events": true, "category_attachments": true,
 	"flows":   true,
 	"vendors": true, "vendor_contacts": true, "vendor_scopes": true, "vendor_attachments": true, "category_vendors": true,
+	"category_comments": true,
 }
 
 // streamed are the tables read as they come, however many rows they have:

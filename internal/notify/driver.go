@@ -98,6 +98,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventInstanceUpgraded, Label: "BAM! is upgraded"},
 	{Kind: models.EventInstanceUpdateFailed, Label: "An automatic update failed and was rolled back"},
 	{Kind: models.EventInstanceUpdateAvailable, Label: "A newer release of BAM! is available"},
+	{Kind: models.EventCommentAdded, Label: "Someone comments on an asset, a category, a loan or a filing"},
 }
 
 // EventKind is an event channels can subscribe to.

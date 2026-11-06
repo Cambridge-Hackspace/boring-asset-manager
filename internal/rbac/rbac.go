@@ -48,6 +48,12 @@ const (
 	// PermVendorsManage creates and edits vendors (docs/vendors.md), in
 	// the scopes they are in.
 	PermVendorsManage = "vendors.manage"
+	// PermCommentsWrite writes comments on what one may read, in its
+	// scopes, and edits and deletes one's own (docs/comments.md).
+	PermCommentsWrite = "comments.write"
+	// PermCommentsModerate deletes anyone's comments, in the scopes of what
+	// they are on.
+	PermCommentsModerate = "comments.moderate"
 )
 
 var (
@@ -79,6 +85,8 @@ func AllPermissions() []string {
 		PermFlowsManage,
 		PermFlowsRun,
 		PermVendorsManage,
+		PermCommentsWrite,
+		PermCommentsModerate,
 	}
 }
 
@@ -141,18 +149,21 @@ const ScopeSeparator = ":"
 const DefaultScope = "default"
 
 // scopable are the permissions a role may hold in some scopes only: those
-// acting on assets, running flows, which act on them, and managing vendors,
-// which are in scopes as assets are.
+// acting on assets, running flows, which act on them, managing vendors,
+// which are in scopes as assets are, and writing and moderating comments,
+// in the scopes of what they are on.
 var scopable = map[string]bool{
 	PermAssetsRead: true, PermAssetsWrite: true, PermAssetsDelete: true,
 	PermAssetsReport: true, PermAssetsBorrow: true, PermAssetsLend: true,
-	PermAssetsTrack:   true,
-	PermAssetsScan:    true,
-	PermAssetsHook:    true,
-	PermEventsRead:    true,
-	PermStockRecord:   true,
-	PermFlowsRun:      true,
-	PermVendorsManage: true,
+	PermAssetsTrack:      true,
+	PermAssetsScan:       true,
+	PermAssetsHook:       true,
+	PermEventsRead:       true,
+	PermStockRecord:      true,
+	PermFlowsRun:         true,
+	PermVendorsManage:    true,
+	PermCommentsWrite:    true,
+	PermCommentsModerate: true,
 }
 
 // Scopable reports whether perm may be held in some scopes only.

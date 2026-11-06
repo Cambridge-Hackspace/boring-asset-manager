@@ -22,6 +22,8 @@ export interface Selection {
   assets?: { all: boolean; photos: boolean; links: boolean; history: boolean };
   /** Leaves out the categories' and assets' attachments that are not images. */
   no_documents?: boolean;
+  /** The categories' comments, without who wrote them (docs/comments.md). */
+  comments?: boolean;
 }
 
 export type ItemKind =

@@ -5,7 +5,7 @@
   import { amount, conditionLabel, contentsOf, describeChange, describeEvent, isWebURL, keptValues, placeLink } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { actorName } from '../../lib/people';
-  import type { AssetEvent, AssetWithDetails, Condition, Field, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
+  import type { AssetEvent, AssetWithDetails, Condition, Field, Filing, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
@@ -25,6 +25,7 @@
   import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
+  import CommentsPanel from '../../components/CommentsPanel.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
@@ -42,6 +43,10 @@
   let relationTypes = $state<RelationType[]>([]);
   // The flows that start from it, such as Collect it (docs/flows.md).
   let offeredFlows = $state<FlowLink[]>([]);
+  // The flows that filed it, whose filings take comments (docs/comments.md).
+  let filings = $state<Filing[]>([]);
+  // Counts files attached while commenting, which the attachments show anew.
+  let attachedByComments = $state(0);
   let moving = $state(false);
   // Every field, to name values kept from former categories by their labels.
   let allFields = $state<Field[]>([]);
@@ -72,6 +77,7 @@
     } catch {
       // Without them, where it is shows, but not what it holds.
     }
+    filings = await request<{ filings: Filing[] }>('GET', `${path}/filings`).then((r) => r.filings ?? [], () => []);
     if (session.can('flows.run')) {
       offeredFlows = await request<{ flows: FlowLink[] }>('GET', `${path}/flows`).then((r) => r.flows ?? [], () => []);
     }
@@ -188,6 +194,13 @@
     void loadHistory();
   }
 
+  // After a comment changes: its history, as it is now.
+  function commented(done: string) {
+    saved = done;
+    error = '';
+    void loadHistory();
+  }
+
   function markWorking() {
     void stockAction(() => request('PUT', `${path}/condition`, { condition: 'ok' }), 'Marked as working.');
   }
@@ -284,7 +297,7 @@
   <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
     <!-- The main column is plain sections; the side column, cards. -->
     <div class="space-y-10">
-      <AttachmentsPanel owner="asset" ownerId={asset.asset.id} ownerName={asset.asset.name} canEdit={session.canOn(asset.scopes, 'assets.write') && !asset.asset.archived_at} onchange={attachmentsChanged} />
+      {#key attachedByComments}<AttachmentsPanel owner="asset" ownerId={asset.asset.id} ownerName={asset.asset.name} canEdit={session.canOn(asset.scopes, 'assets.write') && !asset.asset.archived_at} onchange={attachmentsChanged} />{/key}
       <section aria-labelledby="details-heading">
         <h2 id="details-heading" class="section-title mb-3">Details</h2>
         <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
@@ -372,6 +385,15 @@
           </ul>
         </section>
       {/if}
+      <CommentsPanel
+        id="comments"
+        path="{path}/comments"
+        uploadPath={session.canOn(asset.scopes, 'comments.write') && !archived ? `${path}/comments/attachments` : undefined}
+        canWrite={session.canOn(asset.scopes, 'comments.write') && !archived}
+        own="this asset’s"
+        onchange={commented}
+        onattached={() => attachedByComments++}
+      />
       {#if history.length}
         <section aria-labelledby="history-heading">
           <h2 id="history-heading" class="section-title mb-3">History</h2>
@@ -447,6 +469,32 @@
       {/if}
       {#if (asset.lendable || asset.loan) && !archived}
         <LoanPanel {asset} onchange={assetChanged} />
+      {/if}
+      {#if filings.length}
+        <section class="card" aria-labelledby="filings-heading">
+          <h2 id="filings-heading" class="mb-2 text-lg font-semibold">Filed by flows</h2>
+          <ul class="space-y-3 text-sm">
+            {#each filings as f (f.flow_id)}
+              <li>
+                <p>{f.flow_name}, {when(f.filed_at)}</p>
+                <details>
+                  <summary class="inline-flex min-h-11 cursor-pointer items-center">Comments on this filing ({f.comments})</summary>
+                  <CommentsPanel
+                    id="filing-{f.flow_id}"
+                    path="{path}/filings/{encodeURIComponent(f.flow_id)}/comments"
+                    uploadPath={session.canOn(asset.scopes, 'comments.write') ? `${path}/comments/attachments` : undefined}
+                    canWrite={session.canOn(asset.scopes, 'comments.write')}
+                    own="this filing’s"
+                    heading="Comments on the filing by {f.flow_name}"
+                    compact
+                    onchange={commented}
+                    onattached={() => attachedByComments++}
+                  />
+                </details>
+              </li>
+            {/each}
+          </ul>
+        </section>
       {/if}
       {#if !archived && session.user}<LabelActions assetIds={[id]} spool />{/if}
       {#if !archived && asset.hooks?.length && session.canOn(asset.scopes, 'assets.hook')}

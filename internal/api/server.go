@@ -477,6 +477,29 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/people", RequireAnyPermission(rbac.PermAssetsLend, rbac.PermUsersManage)(http.HandlerFunc(s.handleListPeople)))
 	handle("GET /api/v1/assets/{id}/history", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetHistory))))
 
+	// Comments (docs/comments.md): on assets, categories, loans and flows'
+	// filings, read as what they are on is, and written with
+	// comments.write in its scopes.
+	readComments := RequirePermission(rbac.PermAssetsRead)
+	writeComments := RequirePermission(rbac.PermCommentsWrite)
+	handle("GET /api/v1/assets/{id}/comments", OpenToPublic(readComments(s.handleListComments(models.CommentOnAsset))))
+	handle("POST /api/v1/assets/{id}/comments", writeComments(s.handleAddComment(models.CommentOnAsset)))
+	handle("POST /api/v1/assets/{id}/comments/attachments", writeComments(s.handleCommentAttachment(models.OwnerAsset)))
+	handle("GET /api/v1/categories/{id}/comments", readComments(s.handleListComments(models.CommentOnCategory)))
+	handle("POST /api/v1/categories/{id}/comments", writeComments(s.handleAddComment(models.CommentOnCategory)))
+	handle("POST /api/v1/categories/{id}/comments/attachments", writeComments(s.handleCommentAttachment(models.OwnerCategory)))
+	handle("GET /api/v1/loans/{id}/comments", readComments(s.handleListComments(models.CommentOnLoan)))
+	handle("POST /api/v1/loans/{id}/comments", writeComments(s.handleAddComment(models.CommentOnLoan)))
+	handle("GET /api/v1/assets/{id}/filings", readComments(http.HandlerFunc(s.handleListFilings)))
+	handle("GET /api/v1/assets/{id}/filings/{flow_id}/comments", readComments(s.handleListComments(models.CommentOnFiling)))
+	handle("POST /api/v1/assets/{id}/filings/{flow_id}/comments", writeComments(s.handleAddComment(models.CommentOnFiling)))
+	handle("GET /api/v1/comments", readComments(http.HandlerFunc(s.handleSearchComments)))
+	handle("GET /api/v1/comments/{id}", readComments(http.HandlerFunc(s.handleGetComment)))
+	handle("PUT /api/v1/comments/{id}", writeComments(http.HandlerFunc(s.handleEditComment)))
+	handle("DELETE /api/v1/comments/{id}", RequireAnyPermission(rbac.PermCommentsWrite, rbac.PermCommentsModerate)(http.HandlerFunc(s.handleDeleteComment)))
+	handle("GET /api/v1/comments/{id}/history", readComments(http.HandlerFunc(s.handleCommentHistory)))
+	handle("POST /api/v1/markdown", RequireAuth(http.HandlerFunc(s.handleRenderMarkdown)))
+
 	// Label templates
 	handle("GET /api/v1/templates", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListTemplates)))
 	handle("POST /api/v1/templates", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleCreateTemplate)))

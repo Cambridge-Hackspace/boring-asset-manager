@@ -210,6 +210,25 @@ changing needs `vendors.manage` in the vendor's scopes. Deleting is marked destr
 | `delete_vendor` | `vendors.manage` | |
 | `vendor_history` | `assets.read` | Its history, newest first, a page at a time. |
 
+### Comments
+
+See [Comments](comments.md). Reading needs `assets.read`, and shows only the comments on what the
+caller may read; writing needs `comments.write` in its scopes. A comment is named by `asset` (an ID
+or a code), `category_id`, `loan_id`, or `asset` with `flow_id` for a filing.
+
+| Tool | Permission | What it does |
+| :--- | :--- | :--- |
+| `list_comments` | `assets.read` | The comments on something, with its categories' and their ancestors' unless `own` is set, each with its Markdown and HTML. |
+| `get_comment`, `comment_history` | `assets.read` | One comment, and its history: each version's text. |
+| `search_comments` | `assets.read` | Comments whose text holds some words. |
+| `list_filings` | `assets.read` | The flows that filed an asset, whose filings take comments. |
+| `add_comment` | `comments.write` | Writes one, in Markdown. |
+| `attach_to_comment` | `comments.write` | Attaches a file, base64, to the asset or category a comment is being written on, answering the Markdown that links to it. |
+| `edit_comment` | `comments.write` | The caller's own. |
+| `delete_comment` | `comments.write` or `comments.moderate` | The caller's own, or anyone's with `comments.moderate`. |
+
+The editor's preview, `POST /api/v1/markdown`, is left out: comments come back with their HTML.
+
 ### Icons
 
 These cover [icons](icons.md). Reading needs `assets.read`, changing a category's icon needs

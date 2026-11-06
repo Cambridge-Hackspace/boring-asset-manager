@@ -206,7 +206,7 @@ func FuzzToolArguments(f *testing.F) {
 	perms := map[string]bool{}
 	for _, p := range []string{"assets.read", "assets.write", "assets.delete", "templates.manage", "categories.manage", "icons.manage", "settings.manage",
 		"users.manage", "labels.print", "stock.record", "assets.report", "assets.borrow", "assets.lend", "reports.manage", "assets.track",
-		"assets.scan", "assets.hook", "events.read", "flows.manage", "flows.run", "vendors.manage"} {
+		"assets.scan", "assets.hook", "events.read", "flows.manage", "flows.run", "vendors.manage", "comments.write", "comments.moderate"} {
 		perms[p] = true
 	}
 	f.Fuzz(func(t *testing.T, name, args string) {

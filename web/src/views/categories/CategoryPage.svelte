@@ -16,6 +16,7 @@
   import { currentTab } from '../../lib/tabs';
   import CategoryIconSection from './CategoryIconSection.svelte';
   import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
+  import CommentsPanel from '../../components/CommentsPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { reorderHref, siteName } from '../../lib/vendors';
 
@@ -106,6 +107,8 @@
 
   const category = $derived(categories.find((c) => c.id === id));
   const isSystem = id === UNCATEGORIZED;
+  // Counts files attached while commenting, which the Attachments tab shows anew.
+  let attachedByComments = $state(0);
   const parentChoices = $derived(
     flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED && !(id && subtree(categories, id).has(c.id)))),
   );
@@ -162,6 +165,7 @@
       { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
       { key: 'vendors', label: 'Vendors', on: !isSystem && ((canManage && vendors.length > 0) || vendorList.length > 0) },
       { key: 'attachments', label: 'Attachments', on: !isSystem },
+      { key: 'comments', label: 'Comments', on: !isSystem },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
     ];
     const changed = new Set(unsaved.map((k) => tabOf[k]));
@@ -875,7 +879,19 @@
 
   {#if !isSystem}
     <div class="mt-6 max-w-2xl" id="tab-attachments" hidden={tab !== 'attachments'}>
-      <AttachmentsPanel owner="category" ownerId={id} ownerName={category.name} canEdit={canManage} onchange={(done) => (saved = done)} />
+      {#key attachedByComments}<AttachmentsPanel owner="category" ownerId={id} ownerName={category.name} canEdit={canManage} onchange={(done) => (saved = done)} />{/key}
+    </div>
+    <div class="mt-6 max-w-2xl" id="tab-comments" hidden={tab !== 'comments'}>
+      <!-- Its own, then its ancestors', nearest first (docs/comments.md); writing is checked in its scopes. -->
+      <CommentsPanel
+        id="comments"
+        path="/categories/{encodeURIComponent(id)}/comments"
+        uploadPath={session.can('comments.write') ? `/categories/${encodeURIComponent(id)}/comments/attachments` : undefined}
+        canWrite={session.can('comments.write')}
+        own="this category’s"
+        onchange={(done) => (saved = done)}
+        onattached={() => attachedByComments++}
+      />
     </div>
   {/if}
 

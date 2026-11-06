@@ -108,6 +108,11 @@ describe('stock', () => {
       id: 'e', kind, created_at: '', payload: { trigger: 'manual', ...payload },
     });
     expect(describeEvent(event('asset.quantity_changed', { quantity: 200, unit: 'pcs' }))).toBe('Started counting at 200 pcs');
+    expect(describeEvent(event('comment.added', { comment: { id: 'c', on: 'asset', text: 'Belt   ordered' } }))).toBe('Commented: “Belt ordered”');
+    expect(describeEvent(event('comment.added', { comment: { id: 'c', on: 'loan', loan_id: 'l', text: 'x' } }))).toBe('Commented on its loan: “x”');
+    expect(describeEvent(event('comment.edited', { comment: { id: 'c', on: 'filing', flow: { slug: 'leave', name: 'Leave it' } } }))).toBe('Comment edited on its filing by Leave it');
+    expect(describeChange({ what: 'comment', from: 'old', to: 'new' }, 'comment.edited')).toBe('Was “old”, now “new”');
+    expect(describeChange({ what: 'comment', from: 'gone' }, 'comment.deleted')).toBe('It said “gone”');
     expect(describeEvent(event('asset.quantity_changed', { quantity: 40, change: -60, unit: 'g' }))).toBe('Used 60 g; 40 g left');
     expect(describeEvent(event('asset.quantity_changed', { quantity: 70, change: 30 }))).toBe('Added 30; 70 now');
     expect(describeEvent(event('asset.running_low', { trigger: 'threshold', quantity: 40, threshold: 50, unit: 'g' }))).toBe(

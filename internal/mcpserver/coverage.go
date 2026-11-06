@@ -59,6 +59,7 @@ var Refused = map[string]string{
 	"PUT /api/v1/roles/{id}/two-factor":              "how two-factor sign-in is turned off for the admin role, which stays with a person, so a misled assistant cannot weaken admins' sign-in; save_role sets it for other roles",
 	"POST /api/v1/icon-library/import":               "a zip uploaded by people; over MCP, save_icon_library_file saves each source",
 	"GET /api/v1/flows/{slug}/qr.svg":                "the picture on a flow's printed poster; over MCP, a flow is reached at /f/<slug>, and run with run_flow",
+	"POST /api/v1/markdown":                          "the comment editor's preview, in a browser; the comments list_comments and add_comment answer carry their HTML",
 	"POST /api/v1/incoming/{id}":                     "an incoming hook's address, for a sender outside BAM! holding its secret; an assistant does what it does with the tools themselves",
 	// Archives move between a person's own computer and the server;
 	// replacing an instance stays with a signed-in person, as making tokens

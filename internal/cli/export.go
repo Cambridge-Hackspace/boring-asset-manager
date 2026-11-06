@@ -26,6 +26,8 @@ type ExportOptions struct {
 	// WithoutDocuments leaves out the categories' and assets' attachments
 	// that are not images.
 	WithoutDocuments bool
+	// Comments brings the categories' comments.
+	Comments bool
 	// Info says what the package is; PreviewFile is its preview image.
 	Info        archive.PackageInfo
 	PreviewFile string
@@ -79,7 +81,7 @@ func Export(configPath, dest string, opts ExportOptions) error {
 	if err != nil {
 		return err
 	}
-	sel.NoDocuments = opts.WithoutDocuments
+	sel.NoDocuments, sel.Comments = opts.WithoutDocuments, opts.Comments
 	if sel.Assets != nil {
 		sel.Assets.Photos, sel.Assets.Links, sel.Assets.History = opts.Photos, opts.Links, opts.History
 	} else if opts.Photos || opts.Links || opts.History {

@@ -207,6 +207,14 @@ const (
 	// They are for its history.
 	EventVendorCreated = "vendor.created"
 	EventVendorEdited  = "vendor.edited"
+	// EventCommentAdded records a comment written on an asset, a category,
+	// a loan or a flow's filing (docs/comments.md), with the Comment and
+	// its text; channels can subscribe to it. EventCommentEdited and
+	// EventCommentDeleted keep the text it had before, in Changes, for
+	// history.
+	EventCommentAdded   = "comment.added"
+	EventCommentEdited  = "comment.edited"
+	EventCommentDeleted = "comment.deleted"
 	// EventAuthThrottled records sign-ins held back for too many failed
 	// passwords (docs/access.md), with Throttle; it is about no asset or
 	// category, so it reaches notification channels only.
@@ -257,7 +265,7 @@ func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
 		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventCategoryEdited, EventAuthRoleKept,
-		EventVendorCreated, EventVendorEdited:
+		EventVendorCreated, EventVendorEdited, EventCommentEdited, EventCommentDeleted:
 		return true
 	}
 	return false
@@ -339,6 +347,8 @@ type EventPayload struct {
 	Relay *EventRelay `json:"relay,omitempty"`
 	// Instance is the change of release an instance event is about.
 	Instance *EventInstance `json:"instance,omitempty"`
+	// Comment is the comment a comment event is about.
+	Comment *EventComment `json:"comment,omitempty"`
 }
 
 // EventInstance is a change of the release BAM! runs, as an instance event
@@ -360,6 +370,17 @@ type EventInstance struct {
 	// on updating, where known.
 	NotesURL    string `json:"notes_url,omitempty"`
 	UpdatingURL string `json:"updating_url,omitempty"`
+}
+
+// EventComment is a comment, as an event names it: what it is on, one of
+// the CommentOn… kinds, and its text then. A loan's and a filing's
+// comments are events about their asset, naming the loan or the flow here.
+type EventComment struct {
+	ID     string     `json:"id"`
+	On     string     `json:"on"`
+	LoanID string     `json:"loan_id,omitempty"`
+	Flow   *EventFlow `json:"flow,omitempty"`
+	Text   string     `json:"text,omitempty"`
 }
 
 // EventRelay is a relay, as an event names it.
@@ -1019,6 +1040,73 @@ const (
 	OwnerCategory = "category"
 	OwnerVendor   = "vendor"
 )
+
+// What comments are on (docs/comments.md). A filing is an asset a flow
+// filed, named by the flow and the asset.
+const (
+	CommentOnAsset    = "asset"
+	CommentOnCategory = "category"
+	CommentOnLoan     = "loan"
+	CommentOnFiling   = "filing"
+)
+
+// Comment is a note in Markdown on an asset, a category, a loan or a
+// flow's filing. Body is its Markdown and HTML that, rendered and
+// sanitized on the server; both are empty once it is deleted, as DeletedAt
+// says, and its text stays in history.
+type Comment struct {
+	ID string `json:"id"`
+	// On is one of the CommentOn… kinds, and OnID the ID of what it is
+	// on: the asset, category or loan, or for a filing the asset, with
+	// the flow as FlowID.
+	On     string `json:"on"`
+	OnID   string `json:"on_id"`
+	FlowID string `json:"flow_id,omitempty"`
+	// AssetID is the asset it is about: the asset itself, or the loan's
+	// or the filing's; none for a category's.
+	AssetID string `json:"asset_id,omitempty"`
+	Body    string `json:"body"`
+	HTML    string `json:"html"`
+	// AuthorID is who wrote it, a user or an API token, and AuthorName
+	// their name as it is now. The API shows them only to those who may
+	// see who, as history does; Mine tells the author it is theirs.
+	AuthorID   string     `json:"author_id,omitempty"`
+	AuthorName string     `json:"author_name,omitempty"`
+	Mine       bool       `json:"mine"`
+	CreatedAt  time.Time  `json:"created_at"`
+	EditedAt   *time.Time `json:"edited_at"`
+	DeletedAt  *time.Time `json:"deleted_at"`
+	// DeletedBy is who deleted it, and DeletedByName their name, shown as
+	// the author is.
+	DeletedBy     string `json:"deleted_by,omitempty"`
+	DeletedByName string `json:"deleted_by_name,omitempty"`
+	// Category is the category it is on, when it is listed with another
+	// thing's comments: an asset's or a category's, from its categories
+	// and their ancestors. Place names what it is on in search results.
+	Category *CommentPlace `json:"category,omitempty"`
+	Place    *CommentPlace `json:"place,omitempty"`
+	// CanEdit and CanDelete say what the requester may do with it.
+	CanEdit   bool `json:"can_edit"`
+	CanDelete bool `json:"can_delete"`
+}
+
+// CommentPlace names what a comment is on, as lists and search show it.
+type CommentPlace struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Filing is an asset a flow filed (docs/flows.md), which comments can be
+// on.
+type Filing struct {
+	FlowID   string    `json:"flow_id"`
+	FlowSlug string    `json:"flow_slug"`
+	FlowName string    `json:"flow_name"`
+	AssetID  string    `json:"asset_id"`
+	FiledAt  time.Time `json:"filed_at"`
+	// Comments counts its comments that are not deleted.
+	Comments int `json:"comments"`
+}
 
 // The kinds of attachment: an image is a photo, re-encoded and given a
 // thumbnail; a document is a PDF, plain text, Markdown or CSV; other is a

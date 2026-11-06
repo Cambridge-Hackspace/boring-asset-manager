@@ -25,7 +25,8 @@ Secret options can be written but are never returned; reads show only whether th
 
 Which events a channel can subscribe to is listed with each feature; see
 [Stock and lending](stock-and-lending.md), [Hooks](hooks.md), [Access](access.md#too-many-wrong-passwords),
-[Relays](relays.md#health) and [Installing](installing.md#knowing-when-bam-changes).
+[Relays](relays.md#health), [Installing](installing.md#knowing-when-bam-changes), and
+[Comments](comments.md#events) for `comment.added`.
 
 ## Delivery
 
@@ -93,6 +94,7 @@ Messages look like this:
 | Second factors removed | "Second factors removed: Ada" (amber), when an admin, or someone on the command line, removes their second factors, saying who; a link to the Users page (see [Access](access.md#two-factor-sign-in)) |
 | A recovery code used | "Recovery code used: Ada" (amber), when someone signs in with one of their recovery codes; a link to the Users page (see [Access](access.md#recovery-codes)) |
 | A break-glass sign-in | "Break-glass sign-in: Ada" (amber), when someone signs in with a password while passwords are off; a link to the Users page (see [Access](access.md#turning-passwords-off)) |
+| A comment | "Comment on Drill" (neutral), or "Comment on the loan of Drill" or "Comment on Drill, as filed by Leave it", with its text, up to 1000 characters, and who wrote it; a link to the comment, `{base_url}/assets/{id}#comment-{comment id}`, or the category's (see [Comments](comments.md)) |
 | Two-factor sign-in no longer required | "Two-factor sign-in no longer required: admin" (amber), when a role stops requiring it, saying who turned it off, or that it was the command line; a link to the Roles page (see [Access](access.md#requiring-two-factor-sign-in)) |
 | BAM! upgraded | "BAM! upgraded to v1.3.0" (neutral), or "BAM! downgraded to v1.2.0" (amber, warning that an older release may not work with a database a newer one migrated); the version it ran before, the database's schema versions before and after, and links to the release notes and to the instance (see [Installing](installing.md#upgrades)) |
 | An update rolled back | "Update to v1.3.0 rolled back" (red): `bam-update` installed it, why it failed, the version running again, and whether the database was restored from the backup taken first (see [Installing](installing.md#what-an-update-does)) |

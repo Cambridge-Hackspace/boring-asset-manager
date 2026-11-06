@@ -149,7 +149,15 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 		writeServerError(w, err, "read the assets' links")
 		return nil, false
 	}
-	assets = searched(assets, search)
+	// A search also finds assets by their comments' text, and their
+	// loans' and filings' (docs/comments.md); the assets are already
+	// those the request may read, and so their comments.
+	commented, err := s.store.CommentedAssets(search)
+	if err != nil {
+		writeServerError(w, err, "search the comments")
+		return nil, false
+	}
+	assets = searchedOrCommented(assets, search, commented)
 	// ?favorite=true keeps those the person has starred (docs/favorites.md).
 	switch q.Get("favorite") {
 	case "", "false":
@@ -193,12 +201,18 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 // are, as the request may see them (readable has hidden the places it
 // cannot read). An empty search keeps them all.
 func searched(assets []models.AssetWithDetails, search string) []models.AssetWithDetails {
+	return searchedOrCommented(assets, search, nil)
+}
+
+// searchedOrCommented keeps the assets searched keeps, and those commented
+// names.
+func searchedOrCommented(assets []models.AssetWithDetails, search string, commented map[string]bool) []models.AssetWithDetails {
 	if search == "" {
 		return assets
 	}
 	kept := assets[:0]
 	for i := range assets {
-		if store.MatchesSearch(&assets[i], search) {
+		if store.MatchesSearch(&assets[i], search) || commented[assets[i].Asset.ID] {
 			kept = append(kept, assets[i])
 		}
 	}
