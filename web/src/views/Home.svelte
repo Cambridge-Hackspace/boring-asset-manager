@@ -3,7 +3,7 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import { dueDate } from '../lib/assets';
-  import type { AssetWithDetails, Category, Favorite, FavoriteKind, Loan } from '../lib/models';
+  import type { AssetWithDetails, Category, Favorite, FavoriteKind, Loan, Vendor } from '../lib/models';
   import { favorites } from '../lib/favorites.svelte';
   import { navSections, type NavLink } from '../lib/nav';
   import { navigate } from '../lib/router.svelte';
@@ -11,6 +11,7 @@
   import { displayName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
+  import { reorderHref } from '../lib/vendors';
   import CategoryBadge from '../components/CategoryBadge.svelte';
   import ConditionBadge from '../components/ConditionBadge.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
@@ -22,6 +23,9 @@
 
   let low = $state<Category[] | null>(null);
   let lowAssets = $state<AssetWithDetails[]>([]);
+  // The vendors running-low categories are bought from (docs/vendors.md), by ID.
+  let vendors = $state<Map<string, Vendor>>(new Map());
+  const vendorsOf = (c: Category) => (c.vendor_ids ?? []).map((id) => vendors.get(id)).filter((v): v is Vendor => !!v);
   let attention = $state<AssetWithDetails[]>([]);
   // Out on loan, and due back within the week or overdue.
   let due = $state<Loan[]>([]);
@@ -86,6 +90,13 @@
       lowAssets = assets.filter((a) => a.asset.stock?.is_running_low).sort((a, b) => a.asset.name.localeCompare(b.asset.name));
       attention = assets.filter((a) => a.asset.condition !== 'ok').sort((a, b) => a.asset.name.localeCompare(b.asset.name));
       low = all.filter((c) => c.is_consumable && c.is_running_low).sort((a, b) => a.name.localeCompare(b.name));
+      // Read only when a low category names one; the list stands without them.
+      if (low.some((c) => c.vendor_ids?.length)) {
+        const found = await request<{ vendors: Vendor[] }>('GET', '/vendors')
+          .then((r) => r.vendors ?? [])
+          .catch(() => []);
+        vendors = new Map(found.map((v) => [v.id, v]));
+      }
     } catch (err) {
       error = messageOf(err);
     }
@@ -141,8 +152,27 @@
             <p class="text-sm text-zinc-600 dark:text-zinc-400">Nothing is running low.</p>
           {:else}
             <ul class="divide-y divide-zinc-300 text-sm dark:divide-zinc-700">
+              <!-- The phone's shopping list (#214) does not exist yet; when it does, it shows each category's vendors and reorder links as this does. -->
               {#each low as c (c.id)}
-                <li class="flex min-h-11 items-center"><CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" /></li>
+                {@const from = vendorsOf(c)}
+                <li class="flex min-h-11 flex-wrap items-center gap-x-3">
+                  <CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />
+                  {#if from.length}
+                    <ul class="w-full pb-2 text-zinc-600 dark:text-zinc-400" aria-label="Vendors of {c.name}">
+                      {#each from as v (v.id)}
+                        {@const r = reorderHref(v)}
+                        <li class="flex flex-wrap items-center gap-x-2">
+                          <a class="inline-flex min-h-11 items-center underline" href="/vendors/{encodeURIComponent(v.id)}">{v.name}</a>
+                          {#if r.external}
+                            <a class="inline-flex min-h-11 items-center font-medium underline" href={r.href} rel="noopener noreferrer" target="_blank" aria-label="Reorder {c.name} from {v.name}">Reorder</a>
+                          {:else}
+                            <a class="inline-flex min-h-11 items-center font-medium underline" href={r.href} aria-label="Reorder {c.name} from {v.name}">Reorder</a>
+                          {/if}
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </li>
               {/each}
               {#each lowAssets as a (a.asset.id)}
                 <li><a class="flex min-h-11 items-center underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a></li>

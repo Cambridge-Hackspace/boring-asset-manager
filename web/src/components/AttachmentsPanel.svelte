@@ -2,12 +2,12 @@
   import { onMount } from 'svelte';
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
-  import { attachmentUrl, type Attachment, type AttachmentLimits, type AttachmentOwner } from '../lib/models';
+  import { attachmentBase, attachmentUrl, type Attachment, type AttachmentLimits, type AttachmentOwner } from '../lib/models';
   import { formatBytes } from '../lib/upload';
   import ConfirmButton from './ConfirmButton.svelte';
   import ErrorMessage from './ErrorMessage.svelte';
 
-  // The files attached to an asset or a category (docs/data-model.md#attachments):
+  // The files attached to an asset, a category or a vendor (docs/data-model.md#attachments):
   // shown, added, renamed and described, put in order, and removed. Images
   // show as photos always have; documents and other files download.
   let {
@@ -34,7 +34,7 @@
   let editName = $state('');
   let editDescription = $state('');
 
-  const path = $derived(`/${owner === 'asset' ? 'assets' : 'categories'}/${encodeURIComponent(ownerId)}/attachments`);
+  const path = $derived(`/${attachmentBase[owner]}/${encodeURIComponent(ownerId)}/attachments`);
   const max = $derived(limits?.max_per_object ?? Infinity);
   // Images are numbered among themselves, as photos were: an asset's first is the one lists show.
   const imageNumbers = $derived.by(() => {

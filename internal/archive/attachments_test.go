@@ -205,9 +205,10 @@ func TestPackagesCarryAttachments(t *testing.T) {
 
 // beforeAttachments rewrites an archive as one written before attachments
 // (migration 067): its assets' images as asset_photos, and no documents,
-// nor categories' attachments.
+// nor categories' attachments, nor vendors, which came after.
 func beforeAttachments(t *testing.T, b []byte) []byte {
 	t.Helper()
+	b = beforeVendors(t, b)
 	var out []member
 	tables := map[string]int{}
 	for _, m := range unpack(t, b) {

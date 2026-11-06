@@ -22,7 +22,8 @@ export type Permission =
   | 'assets.hook'
   | 'events.read'
   | 'flows.manage'
-  | 'flows.run';
+  | 'flows.run'
+  | 'vendors.manage';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -38,6 +39,8 @@ export interface Scope {
   role_count: number;
   /** How many roles of users and API tokens are narrowed to it. */
   assignment_count: number;
+  /** How many vendors it is on (docs/vendors.md). */
+  vendor_count?: number;
 }
 
 export interface User {
@@ -114,6 +117,8 @@ export interface Category {
   label_template_id?: string | null;
   /** Its label templates, in order of preference; the first is label_template_id. */
   label_template_ids?: string[];
+  /** The vendors it is bought from, in order of preference: those the requester may see (docs/vendors.md). */
+  vendor_ids?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -896,9 +901,12 @@ export interface ReportResult {
 }
 
 /** What attachments belong to (docs/data-model.md#attachments). */
-export type AttachmentOwner = 'asset' | 'category';
+export type AttachmentOwner = 'asset' | 'category' | 'vendor';
 
-/** A file attached to an asset or a category: an image (an asset's photo), a document, or another file the instance allows. */
+/** Where in the API each owner's attachments are. */
+export const attachmentBase: Record<AttachmentOwner, string> = { asset: 'assets', category: 'categories', vendor: 'vendors' };
+
+/** A file attached to an asset, a category or a vendor: an image (an asset's photo), a document, or another file the instance allows. */
 export interface Attachment {
   id: string;
   kind: 'image' | 'document' | 'other';
@@ -923,10 +931,9 @@ export interface AttachmentLimits {
   allowed_types: string[];
 }
 
-/** Where an attachment of an asset or a category, or an image's thumbnail, is served. */
+/** Where an attachment of an asset, a category or a vendor, or an image's thumbnail, is served. */
 export function attachmentUrl(owner: AttachmentOwner, ownerId: string, attachmentId: string, thumb = false): string {
-  const base = owner === 'asset' ? 'assets' : 'categories';
-  return `/api/v1/${base}/${encodeURIComponent(ownerId)}/attachments/${encodeURIComponent(attachmentId)}${thumb ? '?size=thumb' : ''}`;
+  return `/api/v1/${attachmentBase[owner]}/${encodeURIComponent(ownerId)}/attachments/${encodeURIComponent(attachmentId)}${thumb ? '?size=thumb' : ''}`;
 }
 
 /** An asset's image attachment, as its photos list it. */
@@ -1171,4 +1178,29 @@ export interface Favorite {
   /** Set on an archived asset, which the home page leaves out. */
   archived?: boolean;
   created_at: string;
+}
+
+/** Someone at a vendor: their role is what they are for, such as sales or support. */
+export interface VendorContact {
+  /** Absent on a contact not saved yet; kept when it is sent back. */
+  id?: string;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+}
+
+/** A supplier the space buys from, and how to reach it (docs/vendors.md). Its notes are Markdown. */
+export interface Vendor {
+  id: string;
+  name: string;
+  website: string;
+  account_number: string;
+  address: string;
+  notes: string;
+  contacts: VendorContact[];
+  /** The scopes it is in, which decide who sees it; empty to those who do not see scopes. */
+  scope_ids: string[];
+  created_at: string;
+  updated_at: string;
 }

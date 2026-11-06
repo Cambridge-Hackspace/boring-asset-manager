@@ -50,6 +50,10 @@ func (s *Store) ListScopes() ([]models.Scope, error) {
 	if err != nil {
 		return nil, err
 	}
+	vendors, err := s.countBy("SELECT scope_id, COUNT(*) FROM vendor_scopes GROUP BY scope_id")
+	if err != nil {
+		return nil, err
+	}
 	roles, err := s.countBy("SELECT scope_id, COUNT(DISTINCT role_id) FROM role_permission_scopes GROUP BY scope_id")
 	if err != nil {
 		return nil, err
@@ -74,6 +78,7 @@ func (s *Store) ListScopes() ([]models.Scope, error) {
 	for i := range scopes {
 		id := scopes[i].ID
 		scopes[i].CategoryCount, scopes[i].RoleCount, scopes[i].AssignmentCount = categories[id], roles[id], assignments[id]
+		scopes[i].VendorCount = vendors[id]
 	}
 	return scopes, nil
 }
@@ -117,11 +122,12 @@ func (s *Store) CreateScope(name string) (*models.Scope, error) {
 	if !rbac.ValidScopeName(name) {
 		return nil, ErrInvalidScope
 	}
-	id := uuid.NewString()
-	if _, err := s.Exec("INSERT INTO scopes (id, name, created_at) VALUES (?, ?, ?)", id, name, time.Now().UTC()); err != nil {
+	id, now := uuid.NewString(), dbTime(time.Now())
+	if _, err := s.Exec("INSERT INTO scopes (id, name, created_at) VALUES (?, ?, ?)", id, name, now); err != nil {
 		return nil, fmt.Errorf("inserting scope: %w", err)
 	}
-	return s.GetScope(id)
+	// A new scope is on nothing yet.
+	return &models.Scope{ID: id, Name: name, CreatedAt: now, Reserved: reservedScope(name)}, nil
 }
 
 // RenameScope renames a scope; roles' permissions in it, and roles
@@ -140,7 +146,8 @@ func (s *Store) RenameScope(id, name string) (*models.Scope, error) {
 	return s.GetScope(id)
 }
 
-// DeleteScope deletes a scope no category, role or assignment uses.
+// DeleteScope deletes a scope no category, vendor, role or assignment
+// uses.
 func (s *Store) DeleteScope(id string) error {
 	if err := s.editableScope(id); err != nil {
 		return err
@@ -161,6 +168,10 @@ func (s *Store) DeleteScope(id string) error {
 	if sc.CategoryCount > 0 || sc.RoleCount > 0 || sc.AssignmentCount > 0 {
 		return fmt.Errorf("%w: it labels %d categories, %d roles hold permissions in it, and %d roles of users and tokens are narrowed to it",
 			ErrScopeInUse, sc.CategoryCount, sc.RoleCount, sc.AssignmentCount)
+	}
+	// Taking it off its vendors would show them to everyone.
+	if sc.VendorCount > 0 {
+		return fmt.Errorf("%w: %d vendors are in it", ErrScopeInUse, sc.VendorCount)
 	}
 	if _, err := s.Exec("DELETE FROM scopes WHERE id = ?", id); err != nil {
 		return fmt.Errorf("deleting scope: %w", err)

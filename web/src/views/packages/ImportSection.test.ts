@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import ImportSection from './ImportSection.svelte';
 import { fakeApi } from '../../test/fetch';
-import type { ImportPlan } from '../../lib/packages';
+import type { Choice, ImportPlan } from '../../lib/packages';
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -95,6 +95,16 @@ describe('ImportSection', () => {
     });
     expect(screen.getByTestId('imported').textContent).toMatch(/Imported the package Workshop 1\.0 under Bench/);
     expect(onimported).toHaveBeenCalled();
+  });
+
+  it('names vendors, and offers a choice for one that clashes', async () => {
+    const vendor = { kind: 'vendor' as const, id: 'v1', name: 'Acme', action: 'existing' as const, existing: { kind: 'vendor' as const, id: 'here', name: 'Acme' }, identical: true, choices: ['existing', 'copy', 'skip'] as Choice[] };
+    server(planWith({ items: [{ kind: 'vendor', id: 'v2', name: 'Zed Supplies', action: 'create' }, vendor] }));
+    render(ImportSection, { tree });
+    await choosePackage();
+    expect(screen.getByTestId('import-plan').textContent).toMatch(/Zed Supplies, a vendor: Created\./);
+    const choice = screen.getByRole('combobox', { name: 'What to do with the vendor Acme' }) as HTMLSelectElement;
+    expect(choice.value).toBe('existing');
   });
 
   it('says what stops an import, and does not offer it', async () => {

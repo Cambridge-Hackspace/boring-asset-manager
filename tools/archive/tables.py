@@ -24,6 +24,8 @@ ORDER = [
     ('scopes', 'KindCatalog'), ('relation_types', 'KindCatalog'), ('fields', 'KindCatalog'), ('asset_actions', 'KindCatalog'),
     ('categories', 'KindCatalog'), ('category_fields', 'KindCatalog'), ('category_actions', 'KindCatalog'),
     ('category_relation_types', 'KindCatalog'), ('category_scopes', 'KindCatalog'), ('category_attachments', 'KindCatalog'),
+    ('vendors', 'KindCatalog'), ('vendor_contacts', 'KindCatalog'), ('vendor_scopes', 'KindCatalog'), ('vendor_attachments', 'KindCatalog'),
+    ('category_vendors', 'KindCatalog'),
     ('templates', 'KindLabels'), ('images', 'KindLabels'), ('category_label_templates', 'KindLabels'),
     ('icon_palette', 'KindIcons'), ('icon_settings', 'KindIcons'), ('icon_library', 'KindIcons'), ('category_icons', 'KindIcons'),
     ('icon_revisions', 'KindIcons'), ('icon_param_bindings', 'KindIcons'), ('icon_text_bindings', 'KindIcons'),

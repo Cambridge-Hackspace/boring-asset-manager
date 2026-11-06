@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeAssignment, describeHeld, describeKey, heldIn, narrowedOut, setHeld } from './permissions';
+import { describeAssignment, describeHeld, describeKey, heldIn, narrowedOut, permissions, scopable, setHeld } from './permissions';
 
 describe('scoped permissions', () => {
   it('reads where a role holds a permission', () => {
@@ -19,6 +19,14 @@ describe('scoped permissions', () => {
     expect(describeKey('assets.read')).toBe('Read assets');
     expect(describeKey('tools:assets.write')).toBe('Edit assets in tools');
     expect(describeKey('mystery.key')).toBe('mystery.key');
+  });
+});
+
+describe('permissions', () => {
+  it('lists managing vendors among the catalog’s, in words', () => {
+    const keys = permissions.map((p) => p.key);
+    expect(keys.indexOf('vendors.manage')).toBe(keys.indexOf('categories.manage') + 1);
+    expect(describeKey('workshop:vendors.manage')).toBe('Manage vendors in workshop');
   });
 });
 
@@ -42,6 +50,11 @@ describe('narrowedOut', () => {
     expect(narrowedOut(role, ['tools'])).toEqual(['labels.print', 'users.manage']);
     expect(narrowedOut(role, ['tools', 'workshop'])).toEqual(['labels.print', 'users.manage']);
     expect(narrowedOut(role, ['workshop'])).toEqual(['assets.write', 'labels.print', 'users.manage']);
+  });
+  it('keeps managing vendors in the scopes named, as vendors are in scopes', () => {
+    expect(scopable).toContain('vendors.manage');
+    expect(narrowedOut(['vendors.manage', 'categories.manage'], ['tools'])).toEqual(['categories.manage']);
+    expect(narrowedOut(['kitchen:vendors.manage'], ['tools'])).toEqual(['vendors.manage']);
   });
   it('describes a role as held', () => {
     expect(describeAssignment('Editor', [])).toBe('Editor');

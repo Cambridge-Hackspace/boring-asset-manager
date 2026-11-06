@@ -41,6 +41,7 @@ function server() {
     'GET /templates': () => ({ templates: [] }),
     'GET /reports': () => ({ reports: [] }),
     'GET /flows': () => ({ flows: [{ id: 'l', slug: 'lend', name: 'Lend a tool' }] }),
+    'GET /vendors': () => ({ vendors: [{ id: 'v2', name: 'Zed Supplies' }, { id: 'v1', name: 'Acme' }] }),
     'GET /settings/documents': () => ({ instance_name: 'BAM!', page_size: 'letter' }),
     'POST /exports/plan': (body) => planOf((body as { selection: Selection }).selection),
     'POST /exports': (body) => ({ status: 201, body: { id: 'e1', download: '/api/v1/exports/e1', plan: planOf((body as { selection: Selection }).selection) } }),
@@ -88,6 +89,15 @@ describe('PackagesPage', () => {
     expect((within(fields).getByRole('checkbox', { name: 'Bought' }) as HTMLInputElement).checked).toBe(true);
     await fireEvent.click(within(fields).getByRole('checkbox', { name: 'Bought' }));
     expect(all.indeterminate).toBe(true);
+  });
+
+  it('lists vendors by name, and chooses them', async () => {
+    const { sent } = server();
+    render(PackagesPage, { params: {} });
+    const vendors = await screen.findByTestId('group-vendor');
+    expect(within(vendors).getAllByRole('checkbox').map((c) => c.parentElement!.textContent!.trim())).toEqual(['Vendors', 'Acme', 'Zed Supplies']);
+    await fireEvent.click(within(vendors).getByRole('checkbox', { name: 'Acme' }));
+    await waitFor(() => expect(sent.some((r) => r.path === '/exports/plan' && (r.body as { selection: Selection }).selection.vendors?.[0] === 'v1')).toBe(true));
   });
 
   it('shows no flows or scopes to those who cannot see them', async () => {

@@ -189,7 +189,16 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 		if a := str(r, "asset_id"); a != "" {
 			asset = ids.of(a)
 		}
-		return with(r, "id", ids.of(str(r, "id")), "kind", kind, "asset_id", asset, "category_id", cat, "actor_user_id", nil, "payload", payload), true
+		// a vendor's history goes with it, and stays behind without it
+		var vendor any
+		if v := str(r, "vendor_id"); v != "" {
+			id, ok := b.vendors[v]
+			if !ok || !b.vendorsImported[v] {
+				return nil, false
+			}
+			vendor = id
+		}
+		return with(r, "id", ids.of(str(r, "id")), "kind", kind, "asset_id", asset, "category_id", cat, "vendor_id", vendor, "actor_user_id", nil, "payload", payload), true
 	}
 	return nil, false
 }

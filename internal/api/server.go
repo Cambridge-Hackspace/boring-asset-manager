@@ -260,7 +260,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 
 	// Scopes (docs/access.md): who may see and change assets is users.manage's
 	// to decide; category managers read them to see what labels are there.
-	seeScopes := RequireAnyPermission(rbac.PermUsersManage, rbac.PermCategoriesManage)
+	// Vendor managers read them to put vendors in them (docs/vendors.md).
+	seeScopes := RequireAnyPermission(rbac.PermUsersManage, rbac.PermCategoriesManage, rbac.PermVendorsManage)
 	handle("GET /api/v1/scopes", seeScopes(http.HandlerFunc(s.handleListScopes)))
 	handle("POST /api/v1/scopes", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSaveScope)))
 	handle("PUT /api/v1/scopes/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSaveScope)))
@@ -298,6 +299,23 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerCategory)))
 	handle("PUT /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermCategoriesManage)(s.handleUpdateAttachment(models.OwnerCategory)))
 	handle("DELETE /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermCategoriesManage)(s.handleRemoveAttachment(models.OwnerCategory)))
+	handle("PUT /api/v1/categories/{id}/vendors", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryVendors)))
+	// Vendors (docs/vendors.md): seen by those who read assets in their
+	// scopes, and changed with vendors.manage there, which each handler
+	// checks.
+	manageVendors := RequirePermission(rbac.PermVendorsManage)
+	handle("GET /api/v1/vendors", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListVendors)))
+	handle("POST /api/v1/vendors", manageVendors(http.HandlerFunc(s.handleCreateVendor)))
+	handle("GET /api/v1/vendors/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetVendor)))
+	handle("PUT /api/v1/vendors/{id}", manageVendors(http.HandlerFunc(s.handleUpdateVendor)))
+	handle("DELETE /api/v1/vendors/{id}", manageVendors(http.HandlerFunc(s.handleDeleteVendor)))
+	handle("GET /api/v1/vendors/{id}/history", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleVendorHistory)))
+	handle("GET /api/v1/vendors/{id}/attachments", RequirePermission(rbac.PermAssetsRead)(s.handleListAttachments(models.OwnerVendor)))
+	handle("POST /api/v1/vendors/{id}/attachments", manageVendors(s.handleAddAttachment(models.OwnerVendor)))
+	handle("PUT /api/v1/vendors/{id}/attachments", manageVendors(s.handleReorderAttachments(models.OwnerVendor)))
+	handle("GET /api/v1/vendors/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerVendor)))
+	handle("PUT /api/v1/vendors/{id}/attachments/{attachment_id}", manageVendors(s.handleUpdateAttachment(models.OwnerVendor)))
+	handle("DELETE /api/v1/vendors/{id}/attachments/{attachment_id}", manageVendors(s.handleRemoveAttachment(models.OwnerVendor)))
 	// Icons (docs/icons.md): reading with assets.read; a category's own icon
 	// with categories.manage, and what every icon is drawn with, the
 	// library, palette and settings, with icons.manage.

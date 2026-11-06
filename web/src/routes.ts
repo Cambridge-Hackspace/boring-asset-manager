@@ -13,6 +13,8 @@ import AssetForm from './views/assets/AssetForm.svelte';
 import ImportPage from './views/assets/ImportPage.svelte';
 import CategoriesPage from './views/categories/CategoriesPage.svelte';
 import CategoryPage from './views/categories/CategoryPage.svelte';
+import VendorsPage from './views/vendors/VendorsPage.svelte';
+import VendorPage from './views/vendors/VendorPage.svelte';
 import FieldsPage from './views/fields/FieldsPage.svelte';
 import TemplatesPage from './views/templates/TemplatesPage.svelte';
 import TemplateEditor from './views/templates/TemplateEditor.svelte';
@@ -88,6 +90,9 @@ export const routes: Route[] = [
   { pattern: '/categories', component: CategoriesPage, title: 'Categories', permissions: ['assets.read'], nav: 'Categories', group: 'Catalog' },
   { pattern: '/categories/new', component: CategoryPage, title: 'New category', permissions: ['categories.manage'] },
   { pattern: '/categories/:id', component: CategoryPage, title: 'Category', permissions: ['assets.read'] },
+  { pattern: '/vendors', component: VendorsPage, title: 'Vendors', permissions: ['assets.read'], nav: 'Vendors', group: 'Catalog' },
+  { pattern: '/vendors/new', component: VendorPage, title: 'New vendor', permissions: ['vendors.manage'] },
+  { pattern: '/vendors/:id', component: VendorPage, title: 'Vendor', permissions: ['assets.read'] },
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields', group: 'Catalog' },
   { pattern: '/relations', component: RelationsPage, title: 'Link types', permissions: ['categories.manage'], nav: 'Link types', group: 'Catalog' },
   { pattern: '/hooks', component: HooksPage, title: 'Hooks', permissions: ['categories.manage'], nav: 'Hooks', group: 'Catalog' },

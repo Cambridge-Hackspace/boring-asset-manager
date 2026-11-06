@@ -322,6 +322,50 @@ describe('CategoryPage', () => {
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ label_template_ids: ['wide', 'tag'] });
   });
 
+  it('lists the vendors it is bought from in order of preference, and saves them', async () => {
+    const vendor = (id: string, name: string, website = '') => ({ id, name, website, account_number: '', address: '', notes: '', contacts: [], scope_ids: [], created_at: '', updated_at: '' });
+    const vendors = [vendor('acme', 'Acme', 'https://acme.example'), vendor('corner', 'Corner shop'), vendor('zed', 'Zed Supplies')];
+    const named = { ...categories[1]!, vendor_ids: ['corner'] };
+    const { sent } = loaded({
+      'GET /categories': () => ({ categories: [categories[0], named, ...categories.slice(2)] }),
+      'GET /vendors': () => ({ vendors }),
+      'PUT /categories/power/vendors': (body) => ({ category: { ...named, vendor_ids: (body as { vendor_ids: string[] }).vendor_ids } }),
+    });
+    at('vendors');
+    render(CategoryPage, { params: { id: 'power' } });
+    const form = await screen.findByRole('form', { name: 'Preferred vendors' });
+    const add = within(form).getByLabelText('Add a vendor') as HTMLSelectElement;
+    expect([...add.options].map((o) => o.textContent)).toEqual(['Choose one', 'Acme', 'Zed Supplies']);
+    expect((within(form).getByRole('button', { name: 'Save vendors' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await fireEvent.change(add, { target: { value: 'acme' } });
+    await fireEvent.click(within(form).getByRole('button', { name: 'Add vendor' }));
+    await fireEvent.click(within(form).getByRole('button', { name: 'Move Acme up' }));
+    const list = within(form).getByRole('list');
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent?.split('↑')[0]?.trim())).toEqual(['1. Acme', '2. Corner shop']);
+    expect(await screen.findByText(/Not saved yet: its vendors\./)).toBeTruthy();
+    expect(within(screen.getByRole('navigation', { name: 'Parts of this category' })).getByRole('link', { name: 'Vendors (not saved)' })).toBeTruthy();
+
+    await fireEvent.submit(within(form).getByRole('button', { name: 'Save vendors' }));
+    await screen.findByText('Vendors saved.');
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ vendor_ids: ['acme', 'corner'] });
+  });
+
+  it('shows the vendors it is bought from to those who cannot change them', async () => {
+    session.permissions = ['assets.read'];
+    const named = { ...categories[1]!, vendor_ids: ['acme'] };
+    api({
+      'GET /categories': () => ({ categories: [categories[0], named, ...categories.slice(2)] }),
+      'GET /vendors': () => ({ vendors: [{ id: 'acme', name: 'Acme', website: 'https://www.acme.example/', account_number: '', address: '', notes: '', contacts: [], scope_ids: [], created_at: '', updated_at: '' }] }),
+    });
+    at('vendors');
+    render(CategoryPage, { params: { id: 'power' } });
+    const section = (await screen.findByRole('heading', { name: 'Vendors' })).closest('section')!;
+    expect(within(section).getByRole('link', { name: 'Acme' }).getAttribute('href')).toBe('/vendors/acme');
+    expect(within(section).getByRole('link', { name: 'acme.example' }).getAttribute('href')).toBe('https://www.acme.example/');
+    expect(within(section).queryByRole('button')).toBeNull();
+  });
+
   it('says when its assets take a label template chosen by a tie', async () => {
     loaded({ 'GET /categories/label-conflicts': () => ({ categories: { power: 2 } }) });
     at('labels');

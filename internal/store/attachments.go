@@ -11,8 +11,8 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
-// DefaultMaxAttachments is how many attachments an asset or a category may
-// have, unless the configuration says otherwise.
+// DefaultMaxAttachments is how many attachments an asset, a category or a
+// vendor may have, unless the configuration says otherwise.
 const DefaultMaxAttachments = 50
 
 var (
@@ -42,6 +42,7 @@ type attachmentOwner struct {
 var attachmentOwners = map[string]attachmentOwner{
 	models.OwnerAsset:    {models.OwnerAsset, "asset_attachments", "asset_id", "assets"},
 	models.OwnerCategory: {models.OwnerCategory, "category_attachments", "category_id", "categories"},
+	models.OwnerVendor:   {models.OwnerVendor, "vendor_attachments", "vendor_id", "vendors"},
 }
 
 // AttachmentTables are the tables attachments are kept in, by owner.
@@ -138,8 +139,8 @@ func (s *Store) GetAttachment(owner, ownerID, id string) (*models.Attachment, er
 // attachmentRow is an attachment's ID and kind, in order.
 type attachmentRow struct{ id, kind, name string }
 
-// editableAttachmentsTx locks an owner that may be changed, an active asset
-// or a category, and returns its attachments in order.
+// editableAttachmentsTx locks an owner that may be changed, an active asset,
+// a category or a vendor, and returns its attachments in order.
 func (s *Store) editableAttachmentsTx(tx *sql.Tx, o attachmentOwner, ownerID string) ([]attachmentRow, error) {
 	switch o.kind {
 	case models.OwnerAsset:
@@ -153,16 +154,19 @@ func (s *Store) editableAttachmentsTx(tx *sql.Tx, o attachmentOwner, ownerID str
 		if archived.Valid {
 			return nil, ErrAssetArchived
 		}
-	case models.OwnerCategory:
-		res, err := s.TxExec(tx, "UPDATE categories SET updated_at = updated_at WHERE id = ?", ownerID)
+	case models.OwnerCategory, models.OwnerVendor:
+		res, err := s.TxExec(tx, "UPDATE "+o.parent+" SET updated_at = updated_at WHERE id = ?", ownerID)
 		if err != nil {
-			return nil, fmt.Errorf("locking category: %w", err)
+			return nil, fmt.Errorf("locking %s: %w", o.kind, err)
 		}
 		// MariaDB counts rows changed, not matched, so check it exists.
 		if n, _ := res.RowsAffected(); n == 0 {
 			var exists int
-			if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM categories WHERE id = ?", ownerID).Scan(&exists); err != nil {
-				return nil, fmt.Errorf("reading category: %w", err)
+			if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM "+o.parent+" WHERE id = ?", ownerID).Scan(&exists); err != nil {
+				return nil, fmt.Errorf("reading %s: %w", o.kind, err)
+			}
+			if exists == 0 && o.kind == models.OwnerVendor {
+				return nil, ErrVendorNotFound
 			}
 			if exists == 0 {
 				return nil, ErrCategoryNotFound
@@ -207,8 +211,15 @@ func (s *Store) recordAttachmentsTx(tx *sql.Tx, o attachmentOwner, ownerID strin
 		return nil
 	}
 	payload := models.EventPayload{Trigger: models.TriggerManual, Changes: changes}
-	if o.kind == models.OwnerCategory {
+	switch o.kind {
+	case models.OwnerCategory:
 		return s.recordEvent(tx, models.EventCategoryEdited, ownerID, payload)
+	case models.OwnerVendor:
+		var name string
+		if err := s.TxQueryRow(tx, "SELECT name FROM vendors WHERE id = ?", ownerID).Scan(&name); err != nil {
+			return fmt.Errorf("reading vendor for event: %w", err)
+		}
+		return s.recordVendorEvent(tx, models.EventVendorEdited, ownerID, name, payload)
 	}
 	return s.recordAssetEvent(tx, models.EventAssetEdited, ownerID, payload)
 }

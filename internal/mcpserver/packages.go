@@ -25,6 +25,7 @@ type packageIn struct {
 	Reports        []string `json:"reports,omitempty" jsonschema:"report IDs"`
 	Flows          []string `json:"flows,omitempty" jsonschema:"flow IDs"`
 	Scopes         []string `json:"scopes,omitempty" jsonschema:"scope IDs"`
+	Vendors        []string `json:"vendors,omitempty" jsonschema:"vendor IDs, with their contacts and files"`
 	Icons          bool     `json:"icons,omitempty" jsonschema:"the whole icon library, with the palette and icon settings"`
 	Assets         string   `json:"assets,omitempty" jsonschema:"none (the default), chosen (those in the categories chosen) or all"`
 	Photos         bool     `json:"photos,omitempty" jsonschema:"with the assets' attachments, photos among them"`
@@ -43,7 +44,7 @@ func (in packageIn) selection() (map[string]any, error) {
 	sel := map[string]any{
 		"categories": in.Categories, "subtrees": in.Subtrees, "fields": in.Fields, "hooks": in.Hooks,
 		"relation_types": in.RelationTypes, "label_templates": in.LabelTemplates, "scan_templates": in.ScanTemplates,
-		"reports": in.Reports, "flows": in.Flows, "scopes": in.Scopes, "icons": in.Icons, "no_documents": in.NoDocuments,
+		"reports": in.Reports, "flows": in.Flows, "scopes": in.Scopes, "vendors": in.Vendors, "icons": in.Icons, "no_documents": in.NoDocuments,
 	}
 	switch in.Assets {
 	case "", "none":
@@ -186,7 +187,7 @@ func packageTools() []tool {
 				return say(done, "Imported: %s.", importSaid(done))
 			}),
 		define(&mcp.Tool{Name: "export_package", Description: "Package part of the instance to share, as an archive another instance imports: categories (single, or with those under them), " +
-			"fields, hooks, link types, label and scan templates, reports, flows, scopes, the icon library, and assets, each by ID. What these need comes too " +
+			"fields, hooks, link types, label and scan templates, reports, flows, scopes, vendors, the icon library, and assets, each by ID. What these need comes too " +
 			"(a category brings its fields, hooks, link types, templates, icon and flows; an icon what it extends and inserts; a flow its templates and hooks), " +
 			"listed in the plan as needed_by. Never in a package: people, passwords, sessions, tokens, notification secrets or printers. It holds only what you may read. " +
 			"With plan_only, it says what it would hold; otherwise it answers where to download the package, within the hour, with this connection's credentials.",

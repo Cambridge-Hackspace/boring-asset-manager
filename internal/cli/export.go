@@ -45,6 +45,7 @@ var selectKinds = []struct{ kind, by, table, column, idKind string }{
 	{"report", "name", "reports", "name", archive.ItemReport},
 	{"flow", "address (slug)", "flows", "slug", archive.ItemFlow},
 	{"scope", "name", "scopes", "name", archive.ItemScope},
+	{"vendor", "name", "vendors", "name", archive.ItemVendor},
 }
 
 // SelectKinds describes what --select takes.
@@ -202,6 +203,8 @@ func ParseSelection(st *store.Store, items []string) (archive.Selection, error) 
 				sel.Flows = append(sel.Flows, id)
 			case "scope":
 				sel.Scopes = append(sel.Scopes, id)
+			case "vendor":
+				sel.Vendors = append(sel.Vendors, id)
 			}
 		}
 	}

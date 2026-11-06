@@ -56,6 +56,13 @@ func TestExportWritesAPackage(t *testing.T) {
 	if sel, err := ParseSelection(st, []string{"category:" + tools.ID, "icons", "assets:all"}); err != nil || sel.Categories[0] != tools.ID || !sel.Icons || !sel.Assets.All {
 		t.Errorf("by ID: %+v %v", sel, err)
 	}
+	acme, err := st.CreateVendor(store.VendorInput{Name: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sel, err := ParseSelection(st, []string{"vendor:Acme"}); err != nil || !reflect.DeepEqual(sel.Vendors, []string{acme.ID}) {
+		t.Errorf("a vendor by name: %+v %v", sel, err)
+	}
 	for item, want := range map[string]string{"category:Nowhere": "no category", "category:Twin": "names 2", "colour:red": "choose", "flow:": "choose"} {
 		if _, err := ParseSelection(st, []string{item}); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %v", item, err)

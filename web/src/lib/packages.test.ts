@@ -110,6 +110,7 @@ describe('importing', () => {
   it('names a kind with its article, and says what replacing does', () => {
     expect(aKind('field')).toBe('a field');
     expect(aKind('icon_library_file')).toBe('an icon library file');
+    expect(aKind('vendor')).toBe('a vendor');
     expect(actionSaid({ kind: 'palette_token', id: 'sky', name: 'sky', action: 'replace' })).toBe('Replaces the one here');
   });
 

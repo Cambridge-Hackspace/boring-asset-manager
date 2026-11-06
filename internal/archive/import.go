@@ -176,7 +176,8 @@ var mergeTables = map[string]bool{
 	"icon_palette": true, "icon_settings": true, "icon_library": true, "category_icons": true, "icon_param_bindings": true, "icon_text_bindings": true,
 	"assets": true, "asset_categories": true, "asset_field_values": true, "asset_generator_keys": true, "asset_links": true,
 	"asset_placements": true, "asset_attachments": true, "events": true, "category_attachments": true,
-	"flows": true,
+	"flows":   true,
+	"vendors": true, "vendor_contacts": true, "vendor_scopes": true, "vendor_attachments": true, "category_vendors": true,
 }
 
 // streamed are the tables read as they come, however many rows they have:

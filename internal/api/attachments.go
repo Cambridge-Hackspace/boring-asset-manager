@@ -21,12 +21,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// Attachments (docs/data-model.md#attachments): files on assets and
-// categories, grown out of assets' photos, whose routes are kept as
-// aliases (photos.go). An asset's follow assets.write to change and its
-// read access, scopes and all, to see; a category's follow
+// Attachments (docs/data-model.md#attachments): files on assets,
+// categories and vendors, grown out of assets' photos, whose routes are
+// kept as aliases (photos.go). An asset's follow assets.write to change and
+// its read access, scopes and all, to see; a category's follow
 // categories.manage to change, and assets.read, as the category itself
-// does, to see.
+// does, to see; a vendor's follow vendors.manage in its scopes to change,
+// and seeing the vendor to see.
 
 // multipartSlack is the room a multipart form takes beyond its file.
 const multipartSlack = 64 << 10
@@ -37,13 +38,14 @@ const multipartSlack = 64 << 10
 const attachmentBodyCeiling = config.MaxAttachmentMB<<20 + multipartSlack
 
 // isAttachmentUpload reports whether a POST to path uploads an attachment
-// or a photo: to /api/v1/assets/{id}/attachments, /api/v1/assets/{id}/photos
-// or /api/v1/categories/{id}/attachments.
+// or a photo: to /api/v1/assets/{id}/attachments, /api/v1/assets/{id}/photos,
+// /api/v1/categories/{id}/attachments or /api/v1/vendors/{id}/attachments.
 func isAttachmentUpload(path string) bool {
 	for _, p := range []struct{ prefix, suffix string }{
 		{"/api/v1/assets/", "/attachments"},
 		{"/api/v1/assets/", "/photos"},
 		{"/api/v1/categories/", "/attachments"},
+		{"/api/v1/vendors/", "/attachments"},
 	} {
 		if rest, ok := strings.CutPrefix(path, p.prefix); ok && strings.HasSuffix(rest, p.suffix) && !strings.Contains(strings.TrimSuffix(rest, p.suffix), "/") {
 			return true
@@ -62,8 +64,9 @@ type attachmentOwner struct {
 }
 
 // ownerFor reads the owner a request is about. An asset is checked with
-// assetFor, for write when change is set; a category's permission is the
-// route's. When it fails, it answers the request.
+// assetFor, for write when change is set, and a vendor with vendorFor; a
+// category's permission is the route's. When it fails, it answers the
+// request.
 func (s *Server) ownerFor(w http.ResponseWriter, r *http.Request, kind string, change bool) (*attachmentOwner, bool) {
 	id := r.PathValue("id")
 	switch kind {
@@ -77,6 +80,12 @@ func (s *Server) ownerFor(w http.ResponseWriter, r *http.Request, kind string, c
 			return nil, false
 		}
 		return &attachmentOwner{kind: kind, id: a.Asset.ID, name: a.Asset.Name, who: Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes)}, true
+	case models.OwnerVendor:
+		v, scopes, ok := s.vendorFor(w, r, id, change)
+		if !ok {
+			return nil, false
+		}
+		return &attachmentOwner{kind: kind, id: v.ID, name: v.Name, who: tracksVendor(r.Context(), scopes)}, true
 	default:
 		c, err := s.store.GetCategoryByID(id)
 		if errors.Is(err, store.ErrCategoryNotFound) {
@@ -477,6 +486,8 @@ func writeAttachmentError(w http.ResponseWriter, err error, action string) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 	case errors.Is(err, store.ErrCategoryNotFound):
 		writeJSONError(w, http.StatusNotFound, "Category not found")
+	case errors.Is(err, store.ErrVendorNotFound):
+		writeJSONError(w, http.StatusNotFound, "Vendor not found")
 	case errors.Is(err, store.ErrAttachmentNotFound):
 		writeJSONError(w, http.StatusNotFound, "Attachment not found")
 	case errors.Is(err, store.ErrPhotoNotFound):

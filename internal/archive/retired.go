@@ -18,6 +18,10 @@ type Retired struct {
 // attachments (#220).
 const AttachmentsVersion = 67
 
+// VendorsVersion is the migration that made vendors, and categories'
+// preferred vendors (#217).
+const VendorsVersion = 68
+
 // RetiredTables are the tables older schemas had.
 var RetiredTables = []Retired{
 	{
@@ -41,7 +45,9 @@ var RetiredTables = []Retired{
 
 // tablesSince are tables older schemas lacked, by the migration that made
 // them: an archive written before it neither holds nor lists them.
-var tablesSince = map[string]int{"asset_attachments": AttachmentsVersion, "category_attachments": AttachmentsVersion}
+var tablesSince = map[string]int{"asset_attachments": AttachmentsVersion, "category_attachments": AttachmentsVersion,
+	"vendors": VendorsVersion, "vendor_contacts": VendorsVersion, "vendor_scopes": VendorsVersion, "vendor_attachments": VendorsVersion,
+	"category_vendors": VendorsVersion}
 
 // retiredTable finds a retired table by name, or nil.
 func retiredTable(name string) *Retired {
