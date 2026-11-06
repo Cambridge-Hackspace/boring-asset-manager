@@ -21,6 +21,8 @@ type Worker struct {
 	BaseURL string
 	// Mailer sends email channels' messages; nil when email is not set up.
 	Mailer Mailer
+	// Updates is the check for a newer release; nil when it is off.
+	Updates *UpdateCheck
 	// Poll is how often to look for due deliveries (default 5s).
 	Poll time.Duration
 	// Lease is how long a claimed delivery is reserved (default 2m). It
@@ -81,6 +83,11 @@ func (w *Worker) Run(ctx context.Context) {
 		}
 		if _, err := w.SendLoanReminders(ctx); err != nil {
 			log.Printf("loan reminders: %v", err)
+		}
+		if tag, err := w.CheckForUpdates(ctx); err != nil {
+			log.Printf("update check: %v; it is tried again in a day", err)
+		} else if tag != "" {
+			log.Printf("update check: %s is available", tag)
 		}
 		w.prune()
 		for {

@@ -865,13 +865,21 @@ func (s *Store) SetSetting(key, value string) error {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer tx.Rollback()
+	if err := s.setSettingTx(tx, key, value); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// setSettingTx writes an instance setting within tx.
+func (s *Store) setSettingTx(tx *sql.Tx, key, value string) error {
 	if _, err := s.TxExec(tx, "DELETE FROM settings WHERE setting_key = ?", key); err != nil {
 		return fmt.Errorf("writing setting %s: %w", key, err)
 	}
 	if _, err := s.TxExec(tx, "INSERT INTO settings (setting_key, value, updated_at) VALUES (?, ?, ?)", key, value, dbTime(time.Now())); err != nil {
 		return fmt.Errorf("writing setting %s: %w", key, err)
 	}
-	return tx.Commit()
+	return nil
 }
 
 // LocalPasswords reports whether signing in with a password is on.

@@ -149,6 +149,9 @@ func outbound(n Notification) mqttEvent {
 		out.URL = base + "/assets/" + *e.AssetID
 	case e.CategoryID != nil:
 		out.URL = base + "/categories/" + *e.CategoryID
+	case p.Instance != nil:
+		// About the instance itself; the payload links to the release.
+		out.URL = base
 	}
 	return out
 }
