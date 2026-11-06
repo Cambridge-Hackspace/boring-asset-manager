@@ -25,7 +25,7 @@ test('weigh filament: a category totals its spools in grams, and one lent comes 
 
   // Lent and back with 200 g left: 700 g in all, below the threshold.
   await page.goto(`/assets/${blue}`);
-  const loan = page.getByRole('region', { name: 'Loan' });
+  const loan = page.getByRole('region', { name: 'Loan', exact: true });
   await loan.getByRole('button', { name: 'Borrow' }).click();
   await expect(loan).toContainText('Lent to you since');
   await loan.getByLabel('Left now (g), if weighed').fill('200');

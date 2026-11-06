@@ -12,7 +12,7 @@ test('lend a tool; the borrower checks it in, then borrows it themselves', async
 
   // The admin lends it, due back on a day they pick.
   await page.goto(`/assets/${asset.asset.id}`);
-  const panel = page.getByRole('region', { name: 'Loan' });
+  const panel = page.getByRole('region', { name: 'Loan', exact: true });
   await expect(panel).toContainText('Available to borrow.');
   await panel.getByLabel('Due back (optional)').fill('2099-01-31');
   await panel.getByLabel('Lend to').selectOption({ label: member });
@@ -37,7 +37,7 @@ test('lend a tool; the borrower checks it in, then borrows it themselves', async
 
   // Now they borrow it themselves.
   await page.getByRole('link', { name }).click();
-  await page.getByRole('region', { name: 'Loan' }).getByRole('button', { name: 'Borrow' }).click();
-  await expect(page.getByRole('region', { name: 'Loan' })).toContainText('Lent to you since');
+  await page.getByRole('region', { name: 'Loan', exact: true }).getByRole('button', { name: 'Borrow' }).click();
+  await expect(page.getByRole('region', { name: 'Loan', exact: true })).toContainText('Lent to you since');
   await expect(history.getByRole('listitem').first()).toContainText(`Lent to ${member}`);
 });
