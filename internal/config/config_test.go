@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/release"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -376,6 +378,39 @@ func TestNotificationSettings(t *testing.T) {
 	cfg.Notifications.DisableAfterFailures = -1
 	if err := cfg.Validate(); err == nil {
 		t.Error("a negative limit was accepted")
+	}
+}
+
+func TestUpdateCheckSettings(t *testing.T) {
+	// Off unless turned on, asking GitHub unless told otherwise.
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(configPath, []byte("[server]\nport = 8080\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(configPath)
+	if err != nil || cfg.Updates.Check || cfg.Updates.URL != release.LatestURL {
+		t.Fatalf("defaults: %+v, %v", cfg.Updates, err)
+	}
+	if err := os.WriteFile(configPath, []byte("[updates]\ncheck = true\nurl = \"https://mirror.example/bam/latest\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err = Load(configPath); err != nil || !cfg.Updates.Check || cfg.Updates.URL != "https://mirror.example/bam/latest" {
+		t.Errorf("from the file: %+v, %v", cfg.Updates, err)
+	}
+	t.Setenv("BAM_UPDATES_CHECK", "off")
+	t.Setenv("BAM_UPDATES_URL", "http://127.0.0.1:9000/releases")
+	if cfg, err = Load(configPath); err != nil || cfg.Updates.Check || cfg.Updates.URL != "http://127.0.0.1:9000/releases" {
+		t.Errorf("from the environment: %+v, %v", cfg.Updates, err)
+	}
+	t.Setenv("BAM_UPDATES_CHECK", "perhaps")
+	if _, err = Load(configPath); err == nil {
+		t.Error("BAM_UPDATES_CHECK=perhaps was accepted")
+	}
+	t.Setenv("BAM_UPDATES_CHECK", "")
+	t.Setenv("BAM_UPDATES_URL", "file:///etc/passwd")
+	if _, err = Load(configPath); err == nil {
+		t.Error("a file: URL was accepted")
 	}
 }
 

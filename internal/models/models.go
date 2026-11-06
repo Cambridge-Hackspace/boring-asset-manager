@@ -239,6 +239,16 @@ const (
 	// the Relay (docs/relays.md); channels can subscribe to them.
 	EventRelayOnline  = "relay.online"
 	EventRelayOffline = "relay.offline"
+	// EventInstanceUpgraded records BAM! starting at a release other than
+	// the one it last ran, an upgrade or a downgrade, with the Instance;
+	// EventInstanceUpdateFailed records bam-update putting the previous
+	// release back after a new one failed to come up; and
+	// EventInstanceUpdateAvailable a newer release found by the update
+	// check (docs/installing.md). They are about no asset or category, and
+	// channels can subscribe to them.
+	EventInstanceUpgraded        = "instance.upgraded"
+	EventInstanceUpdateFailed    = "instance.update_failed"
+	EventInstanceUpdateAvailable = "instance.update_available"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -327,6 +337,29 @@ type EventPayload struct {
 	Account *EventActor `json:"account,omitempty"`
 	// Relay is the relay a relay event is about.
 	Relay *EventRelay `json:"relay,omitempty"`
+	// Instance is the change of release an instance event is about.
+	Instance *EventInstance `json:"instance,omitempty"`
+}
+
+// EventInstance is a change of the release BAM! runs, as an instance event
+// describes it. From is the release running before, or still running, and
+// To the one it went to, was tried, or is available. The schema versions
+// are the database's, before and after the upgrade's migrations.
+type EventInstance struct {
+	From       string `json:"from,omitempty"`
+	To         string `json:"to"`
+	SchemaFrom int    `json:"schema_from,omitempty"`
+	SchemaTo   int    `json:"schema_to,omitempty"`
+	// Downgrade marks an upgraded event going to an older release.
+	Downgrade bool `json:"downgrade,omitempty"`
+	// Reason is why a failed update failed, and Restored whether the
+	// database was put back from the backup taken before it.
+	Reason   string `json:"reason,omitempty"`
+	Restored bool   `json:"restored,omitempty"`
+	// NotesURL is the page of To's release notes, and UpdatingURL the docs
+	// on updating, where known.
+	NotesURL    string `json:"notes_url,omitempty"`
+	UpdatingURL string `json:"updating_url,omitempty"`
 }
 
 // EventRelay is a relay, as an event names it.

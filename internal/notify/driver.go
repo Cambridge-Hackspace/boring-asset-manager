@@ -95,6 +95,9 @@ var EventKinds = []EventKind{
 	{Kind: models.EventRoleTwoFactorOff, Label: "A role stops requiring two-factor sign-in"},
 	{Kind: models.EventRelayOffline, Label: "A relay goes offline"},
 	{Kind: models.EventRelayOnline, Label: "A relay comes online again"},
+	{Kind: models.EventInstanceUpgraded, Label: "BAM! is upgraded"},
+	{Kind: models.EventInstanceUpdateFailed, Label: "An automatic update failed and was rolled back"},
+	{Kind: models.EventInstanceUpdateAvailable, Label: "A newer release of BAM! is available"},
 }
 
 // EventKind is an event channels can subscribe to.

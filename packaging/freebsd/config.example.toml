@@ -36,3 +36,9 @@ devices = []
 # patterns of them, such as "7C:2F:80:*". Empty turns ble connections off.
 # Bluetooth LE needs Linux: on FreeBSD, reach them through a relay on Linux.
 bluetooth = []
+
+[updates]
+# Ask once a day whether a newer release of BAM! is out, so notification
+# channels can announce it (docs/installing.md). Off unless turned on, as it
+# reaches out to GitHub.
+check = false

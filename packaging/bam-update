@@ -12,7 +12,8 @@
 # it stops the service, backs up the database, swaps the binary, starts the
 # service and waits for it to answer its health check. If it does not, the
 # database is restored from the backup, the previous binary put back and the
-# service started again. The installed bam backs up the instance with
+# service started again; once it answers, it records the failure with
+# `bam update failed`, for notification channels to send. The installed bam backs up the instance with
 # `bam backup`, as an archive of its rows and uploaded files, whatever its
 # database and wherever its files are, and puts it back with
 # `bam restore --wipe`. One installed before archives copies a SQLite
@@ -192,6 +193,27 @@ restore() {
   esac
 }
 
+# record_failure RESTORED: records instance.update_failed, so that the
+# instance's notification channels hear of it, through the release running
+# again: the restore took with it anything recorded before. RESTORED is yes
+# when the database was put back from the backup. A release from before
+# `bam update failed` cannot record it.
+record_failure() {
+  if ! "$BIN" update failed -h 2>&1 | grep -q -- '-tried'; then
+    say "${current:-the previous build} cannot record the failed update for notifications, having no bam update failed"
+    return 0
+  fi
+  restored_flag=""
+  if [ "$1" = yes ]; then restored_flag=--restored; fi
+  # shellcheck disable=SC2086
+  if "$BIN" update failed --config "$CONFIG" --tried "$latest" \
+    --reason "it did not answer its health check within 30 seconds" $restored_flag >/dev/null 2>"$work/record.err"; then
+    say "recorded the failed update, for notifications"
+  else
+    say "the failed update could not be recorded for notifications: $(cat "$work/record.err")"
+  fi
+}
+
 healthy() {
   n=0
   while [ "$n" -lt 30 ]; do
@@ -265,7 +287,12 @@ if ! restore; then
 fi
 mv -f "$BIN.previous" "$BIN"
 service_do start || true
-if healthy && [ "$restored" = yes ]; then
+up=no
+if healthy; then up=yes; fi
+if [ "$up" = yes ]; then
+  if [ "$restored" = yes ] && [ "$backup_kind" != none ]; then record_failure yes; else record_failure no; fi
+fi
+if [ "$up" = yes ] && [ "$restored" = yes ]; then
   if [ "$backup_kind" = none ]; then
     fail "$latest failed its health check, and ${current:-the previous build} is running again; the database was not backed up, so any changes $latest made to it remain"
   fi

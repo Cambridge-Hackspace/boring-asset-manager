@@ -4,11 +4,13 @@
 # leaves an up-to-date or newer installation alone, refuses a download that
 # does not match its checksum, rolls back a release that does not come up
 # along with the changes it made to the database and the uploaded files,
-# on SQLite and on PostgreSQL, refuses to update a database it cannot back
-# up, runs backup hooks, keeps only the newest backups, and replaces a build
-# that is not a release only when forced. v0.0.1 is built from v0.14.0,
-# from before archives, so the first update backs up as one did then; the
-# rest back up with the installed bam's archive (#143). Needs podman.
+# on SQLite and on PostgreSQL, recording the failure for notifications once
+# the release it put back is running, refuses to update a database it
+# cannot back up, runs backup hooks, keeps only the newest backups, and
+# replaces a build that is not a release only when forced. v0.0.1 is built
+# from v0.14.0, from before archives, so the first update backs up as one
+# did then; the rest back up with the installed bam's archive (#143).
+# Needs podman.
 set -eu
 
 DEBIAN_IMAGE="docker.io/library/debian:bookworm-slim@sha256:a4672c0cb26fbdde88e38fa2dfb6c681942306680e41e4378b28770b6e79ee91"
@@ -32,7 +34,7 @@ build dev .
 
 podman build -q -t bam-systemd-check - >/dev/null <<CONTAINERFILE
 FROM $DEBIAN_IMAGE
-RUN apt-get update && apt-get install -y --no-install-recommends systemd systemd-sysv curl ca-certificates postgresql && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends systemd systemd-sysv curl ca-certificates postgresql sqlite3 && rm -rf /var/lib/apt/lists/*
 CMD ["/lib/systemd/systemd"]
 CONTAINERFILE
 
@@ -156,6 +158,16 @@ rolled_back() {
   expect "$(run "stat -c %U /var/lib/bam/uploads/images/$2")" "bam" "$1: and belongs to bam"
 }
 
+# failure_recorded WHAT VERSION PAYLOADS: the release put back recorded
+# one instance.update_failed, for VERSION, with the database restored.
+failure_recorded() {
+  expect "$(echo "$3" | grep -c .)" "1" "$1: the failed update was recorded once"
+  for want in "$2" v0.0.2 restored "health check"; do
+    if ! echo "$3" | grep -q "$want"; then echo "FAIL: $1: the failed update does not say $want: $3" >&2; exit 1; fi
+  done
+  echo "ok: $1: it names $2, v0.0.2 running again, why, and the restore"
+}
+
 echo "== a release that does not come up"
 run "bam admin create --config /etc/bam/config.toml --email admin@check.test --password 'Admin1234!' >/dev/null && chown -R bam:bam /var/lib/bam"
 expect "$(signin admin@check.test 'Admin1234!')" "200" "the admin signs in"
@@ -163,6 +175,7 @@ img=$(image)
 broken v0.0.4
 if run "bam-update" 2>&1; then echo "FAIL: kept a release that does not start" >&2; exit 1; fi
 rolled_back SQLite "$img"
+failure_recorded SQLite v0.0.4 "$(run "sqlite3 /var/lib/bam/bam.db \"SELECT payload FROM events WHERE kind = 'instance.update_failed'\"")"
 expect "$(run "ls /var/backups/bam | grep -c '[.]bam[.]tar[.]gz$'")" "1" "v0.0.2 backed up with an archive"
 expect "$(run "stat -c %a /var/backups/bam")" "700" "backups are readable by root only"
 expect "$(run "stat -c %U /var/lib/bam/bam.db")" "bam" "the restored database still belongs to bam"
@@ -183,6 +196,7 @@ img=$(image)
 broken v0.0.5
 if run "bam-update" 2>&1; then echo "FAIL: kept a release that does not start" >&2; exit 1; fi
 rolled_back PostgreSQL "$img"
+failure_recorded PostgreSQL v0.0.5 "$(run "PGPASSWORD=bam psql -h 127.0.0.1 -U bam -d bam -tA -c \"SELECT payload FROM events WHERE kind = 'instance.update_failed'\"")"
 run "cp /tmp/sqlite.toml /etc/bam/config.toml && systemctl restart bam"
 healthy
 

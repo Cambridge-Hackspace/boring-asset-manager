@@ -24,6 +24,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/email"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/filestore"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/release"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
@@ -266,6 +267,7 @@ func Serve(configPath string) error {
 	if err := st.SeedDefaultPermissionsAndRoles(); err != nil {
 		return fmt.Errorf("verifying default roles: %w", err)
 	}
+	noteVersion(st, cfg)
 
 	server := api.NewServer(cfg, st)
 	// A store that cannot be reached or written is found now, rather than
@@ -284,7 +286,15 @@ func Serve(configPath string) error {
 	n := cfg.Notifications
 	worker := &notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL,
 		KeepFor: time.Duration(n.KeepDays) * 24 * time.Hour,
-		Policy:  store.ChannelPolicy{FailingFor: time.Duration(n.DisableAfterHours) * time.Hour, Failures: n.DisableAfterFailures}}
+		Policy:  store.ChannelPolicy{FailingFor: time.Duration(n.DisableAfterHours) * time.Hour, Failures: n.DisableAfterFailures},
+		Updates: notify.NewUpdateCheck(cfg.Updates, api.Version)}
+	switch {
+	case worker.Updates == nil:
+	case release.Is(api.Version):
+		log.Printf("Checking daily for a newer release at %s", cfg.Updates.URL)
+	default:
+		log.Printf("The update check is on, but %s is not a release, so it does not check", api.Version)
+	}
 	if mailer := email.New(cfg.Email); mailer != nil {
 		worker.Mailer = mailer
 		log.Printf("Email is sent through %s", cfg.Email.Address())

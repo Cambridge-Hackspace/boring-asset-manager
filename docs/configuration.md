@@ -102,6 +102,15 @@ keep_days = 30
 disable_after_hours = 24
 disable_after_failures = 0
 
+[updates]
+# Whether to ask, once a day, if a newer release of BAM! is out, announcing
+# it as instance.update_available (docs/installing.md). Off unless turned on,
+# as it reaches out to GitHub. url answers with the latest release, as
+# GitHub's releases API does; another serves a fork or a mirror.
+# Environment: BAM_UPDATES_CHECK (true or false) and BAM_UPDATES_URL.
+check = false
+url = "https://api.github.com/repos/Cambridge-Hackspace/boring-asset-manager/releases/latest"
+
 [email]
 # The SMTP server email is sent through (docs/notifications.md). Email is off
 # while host is empty. tls is "starttls" (the default, port 587), "implicit"
@@ -215,6 +224,8 @@ Several settings can also be given in the environment:
 | `attachments.max_file_mb`, `attachments.max_per_object` | `BAM_ATTACHMENTS_MAX_FILE_MB`, `BAM_ATTACHMENTS_MAX_PER_OBJECT` |
 | `attachments.allowed_types` | `BAM_ATTACHMENTS_ALLOWED_TYPES`, comma-separated |
 | `relay.allow` | `BAM_RELAY_ALLOW`, comma-separated: on a relay, what it may reach |
+| `updates.check` | `BAM_UPDATES_CHECK` (`true` or `false`) |
+| `updates.url` | `BAM_UPDATES_URL` |
 
 On a relay, `bam relay join` reads `BAM_RELAY_JOIN` (`"<url> <code>"`) and `BAM_RELAY_STATE`, where
 it keeps its pairing (see [Relays](relays.md#pairing)).
@@ -363,6 +374,10 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 # Send a test email through the [email] server (docs/notifications.md)
 ./bam email test --config ./config.toml --to you@example.org
 
+# Record that an update failed and was rolled back, for notifications, as
+# bam-update does once the release it put back is running (docs/installing.md)
+./bam update failed --config ./config.toml --tried v1.3.0 --reason "it did not answer its health check" --restored
+
 # Add a relay on the main node, printing the code that pairs it once, within the
 # hour; then pair the relay's machine with it, keeping the pairing in relay.json,
 # --state or $BAM_RELAY_STATE (docs/relays.md#pairing). With no arguments, join
@@ -391,6 +406,7 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 | `bam storage copy` | Copies every uploaded file to the store another configuration file's `[storage]` names. | [Above](#moving-between-stores) |
 | `bam mcp` | Relays an assistant that starts local programs to a server's MCP endpoint, as the API token in `$BAM_TOKEN`. | [MCP](mcp.md) |
 | `bam email test` | Sends a test email through the `[email]` server, so a mistake shows before a notification is missed. | [Notifications](notifications.md#email) |
+| `bam update failed` | Records `instance.update_failed`: an update to `--tried` failed, `--reason` why, and was rolled back, with the database restored when `--restored`. `bam-update` runs it. | [Installing](installing.md#what-an-update-does) |
 | `bam admin relay add` | Adds a relay, printing the one-time code that pairs it and the command to run on the relay. | [Relays](relays.md#without-the-web-interface) |
 | `bam relay join` | Pairs this machine as a relay of the main node at an address, with its code, or with `$BAM_RELAY_JOIN`, keeping the pairing in `relay.json`, `--state` or `$BAM_RELAY_STATE`. | [Relays](relays.md#pairing) |
 | `bam relay` | Runs this machine as a relay, beside its printers, with the pairing `bam relay join` kept, and the allowlist in `--config`'s `[relay] allow`, `[printers] devices` and `[printers] bluetooth`. `--bonemesh=false` or `--websocket=false` turns a transport off. | [Relays](relays.md#running-a-relay) |
