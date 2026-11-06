@@ -114,6 +114,22 @@ func richSeed(t *testing.T, st *store.Store, blobs filestore.Blobs) seeded {
 	if _, err := st.Exec("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", s.user.ID, admin); err != nil {
 		t.Fatal(err)
 	}
+	// A vendor, in a scope, with contacts and notes in awkward text, that
+	// a category is bought from.
+	scope, err := st.CreateScope("suppliers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vendor, err := st.As(s.user.ID).CreateVendor(store.VendorInput{Name: awkwardText[3], Website: "https://example.com/tools", Notes: awkwardText[4],
+		Address:  awkwardText[1],
+		Contacts: []models.VendorContact{{Name: awkwardText[5], Role: "sales", Email: "sales@example.com"}, {Name: awkwardText[2], Phone: "+1 555 0100"}},
+		ScopeIDs: []string{scope.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetCategoryVendors(parent.ID, []string{vendor.ID}); err != nil {
+		t.Fatal(err)
+	}
 	return s
 }
 

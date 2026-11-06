@@ -91,7 +91,7 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Kind | Key | Tables |
 |---|---|---|
 | Reports | `reports` | `reports` |
-| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`, `category_attachments` and their files |
+| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`, `category_attachments` and their files, `vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments` and their files, and `category_vendors`, the vendors categories are bought from |
 | Labels | `labels` | `templates`, `images` and their files, `category_label_templates` |
 | Icons | `icons` | `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings` |
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites` |
@@ -377,6 +377,9 @@ An archive written before attachments (schema `066` or earlier) holds `data/asse
 of `asset_attachments`, and no `category_attachments`. It still restores, into a database at its
 schema that is then migrated, which makes the photos image attachments; and imported, each photo
 becomes an image attachment.
+
+An archive written before vendors (schema `067` or earlier) holds none of the vendors' tables, and
+its `events` have no `vendor_id`. It still checks, restores and imports, with no vendors.
 - **`manifest.json`**, last, once everything else is written. It holds:
   - the header again (with `set.parts`);
   - the rows of each table (`tables`);

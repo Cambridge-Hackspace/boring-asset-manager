@@ -148,10 +148,14 @@ type Category struct {
 	// its subcategories that name none, join the spool with, in order of
 	// preference: each label takes the first that suits its printer
 	// (docs/printing.md). LabelTemplateID is the first, or nil for none.
-	LabelTemplateIDs []string  `json:"label_template_ids"`
-	LabelTemplateID  *string   `json:"label_template_id"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	LabelTemplateIDs []string `json:"label_template_ids"`
+	LabelTemplateID  *string  `json:"label_template_id"`
+	// VendorIDs are the vendors it is bought from, in order of preference
+	// (docs/vendors.md): set by the API, with those the requester may see,
+	// and left empty by the store's reads (store.WithCategoryVendors).
+	VendorIDs []string  `json:"vendor_ids"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Event kinds (docs/stock-and-lending.md).
@@ -198,6 +202,11 @@ const (
 	// payload's Changes: for now, attachments added and removed
 	// (docs/data-model.md#attachments). It is for history.
 	EventCategoryEdited = "category.edited"
+	// EventVendorCreated and EventVendorEdited record a vendor made, and
+	// changes to one listed in the payload's Changes (docs/vendors.md).
+	// They are for its history.
+	EventVendorCreated = "vendor.created"
+	EventVendorEdited  = "vendor.edited"
 	// EventAuthThrottled records sign-ins held back for too many failed
 	// passwords (docs/access.md), with Throttle; it is about no asset or
 	// category, so it reaches notification channels only.
@@ -237,7 +246,8 @@ const (
 func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
-		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventCategoryEdited, EventAuthRoleKept:
+		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventCategoryEdited, EventAuthRoleKept,
+		EventVendorCreated, EventVendorEdited:
 		return true
 	}
 	return false
@@ -276,9 +286,10 @@ type Event struct {
 
 // EventPayload describes an event.
 type EventPayload struct {
-	// Category or Asset is what the event is about.
+	// Category, Asset or Vendor is what the event is about.
 	Category *EventCategory `json:"category,omitempty"`
 	Asset    *EventAsset    `json:"asset,omitempty"`
+	Vendor   *EventVendor   `json:"vendor,omitempty"`
 	// Actor is the user whose action caused the event, if any.
 	Actor *EventActor `json:"actor,omitempty"`
 	// Trigger is TriggerManual or TriggerThreshold.
@@ -376,6 +387,12 @@ type EventChange struct {
 	Label string `json:"label,omitempty"`
 	From  string `json:"from,omitempty"`
 	To    string `json:"to,omitempty"`
+}
+
+// EventVendor is the vendor an event is about, as it was then.
+type EventVendor struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // EventAsset is the asset an event is about, as it was then.
@@ -967,6 +984,7 @@ type Report struct {
 const (
 	OwnerAsset    = "asset"
 	OwnerCategory = "category"
+	OwnerVendor   = "vendor"
 )
 
 // The kinds of attachment: an image is a photo, re-encoded and given a
@@ -1033,6 +1051,35 @@ type Scope struct {
 	CategoryCount   int `json:"category_count"`
 	RoleCount       int `json:"role_count"`
 	AssignmentCount int `json:"assignment_count"`
+	// VendorCount counts the vendors it is on (docs/vendors.md).
+	VendorCount int `json:"vendor_count"`
+}
+
+// Vendor is a supplier a space buys from, and how to reach it
+// (docs/vendors.md). Its notes are Markdown.
+type Vendor struct {
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Website       string          `json:"website"`
+	AccountNumber string          `json:"account_number"`
+	Address       string          `json:"address"`
+	Notes         string          `json:"notes"`
+	Contacts      []VendorContact `json:"contacts"`
+	// ScopeIDs are the scopes it is in, which decide who sees it; none, and
+	// everyone who reads assets does.
+	ScopeIDs  []string  `json:"scope_ids"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// VendorContact is someone at a vendor: their role is what they are for,
+// such as sales or support.
+type VendorContact struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Role  string `json:"role"`
+	Email string `json:"email"`
+	Phone string `json:"phone"`
 }
 
 // Spool destinations (docs/printing.md): DestinationDownload, or

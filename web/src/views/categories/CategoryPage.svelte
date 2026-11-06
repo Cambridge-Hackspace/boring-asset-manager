@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetHook, type CategoryHook } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetHook, type CategoryHook, type Vendor } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
@@ -17,6 +17,7 @@
   import CategoryIconSection from './CategoryIconSection.svelte';
   import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
+  import { reorderHref, siteName } from '../../lib/vendors';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -65,6 +66,13 @@
   );
   const templateName = (tid: string) => labelTemplates.find((t) => t.id === tid)?.name ?? 'A deleted template';
   const canSpool = $derived(session.can('labels.print'));
+  // Vendors (docs/vendors.md): those it is bought from, in order of
+  // preference, as the running-low list offers them.
+  let vendors = $state<Vendor[]>([]);
+  let vendorList = $state<string[]>([]);
+  let addingVendor = $state('');
+  const vendorOf = (vid: string) => vendors.find((v) => v.id === vid);
+  const vendorName = (vid: string) => vendorOf(vid)?.name ?? 'A vendor';
   // Hooks (docs/hooks.md): which it offers on its assets, and whether its
   // subcategories' too.
   let hooks = $state<AssetHook[]>([]);
@@ -119,6 +127,7 @@
     suggestions: 'suggested links',
     scan: 'scan template',
     labels: 'label templates',
+    vendors: 'its vendors',
     hooks: 'hooks',
     scopes: 'who can see its assets',
     icon: 'its icon',
@@ -130,6 +139,7 @@
     suggestions: JSON.stringify([...suggested].sort()),
     scan: scanTemplate,
     labels: JSON.stringify(labelList),
+    vendors: JSON.stringify(vendorList),
     hooks: JSON.stringify(offered),
     scopes: JSON.stringify([...scopeIds].sort()),
   });
@@ -141,7 +151,7 @@
   // The page in tabs (#161), each a part of it, kept in the address. All
   // stay on the page, hidden but for one, so changes not saved in one
   // survive looking at another; a tab with any says so.
-  const tabOf: Record<string, string> = { details: 'about', stock: 'stock', suggestions: 'links', scan: 'links', hooks: 'links', labels: 'labels', scopes: 'scopes', icon: 'icon' };
+  const tabOf: Record<string, string> = { details: 'about', stock: 'stock', suggestions: 'links', scan: 'links', hooks: 'links', labels: 'labels', vendors: 'vendors', scopes: 'scopes', icon: 'icon' };
   const tabs = $derived.by(() => {
     const all = [
       { key: 'about', label: 'About', on: true },
@@ -150,6 +160,7 @@
       { key: 'labels', label: 'Labels', on: (canManage && labelTemplates.length > 0) || canSpool || (labelConflicts[id] ?? 0) > 0 },
       { key: 'icon', label: 'Icon', on: !isSystem },
       { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
+      { key: 'vendors', label: 'Vendors', on: !isSystem && ((canManage && vendors.length > 0) || vendorList.length > 0) },
       { key: 'attachments', label: 'Attachments', on: !isSystem },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
     ];
@@ -195,6 +206,12 @@
         activeCount = level.active_count;
         total = level.total ?? null;
         effective = (await request<{ fields: EffectiveField[] }>('GET', `/categories/${encodeURIComponent(id)}/fields`)).fields ?? [];
+        vendorList = [...(c.vendor_ids ?? [])];
+        if (canManage || vendorList.length) {
+          vendors = await request<{ vendors: Vendor[] }>('GET', '/vendors')
+            .then((r) => r.vendors ?? [])
+            .catch(() => []);
+        }
         if (canManage) {
           allFields = (await request<{ fields: Field[] }>('GET', '/fields')).fields ?? [];
           relationTypes = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
@@ -309,6 +326,25 @@
       labelAfterSaving = null;
       labelConflicts = (await request<{ categories: Record<string, number> }>('GET', '/categories/label-conflicts')).categories ?? {};
       saved = 'Label templates saved.';
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  function moveVendor(i: number, by: number) {
+    const next = [...vendorList];
+    [next[i], next[i + by]] = [next[i + by]!, next[i]!];
+    vendorList = next;
+  }
+
+  async function saveVendors(event: SubmitEvent) {
+    event.preventDefault();
+    error = saved = '';
+    try {
+      const res = await request<{ category: Category }>('PUT', `/categories/${encodeURIComponent(id)}/vendors`, { vendor_ids: vendorList });
+      vendorList = [...(res.category.vendor_ids ?? [])];
+      markSaved('vendors');
+      saved = 'Vendors saved.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -788,6 +824,54 @@
       </section>
     {/if}
   </div>
+
+  {#if !isSystem && ((canManage && vendors.length) || vendorList.length)}
+    <section class="mt-6 max-w-2xl" id="tab-vendors" aria-labelledby="vendors-heading" hidden={tab !== 'vendors'}>
+      <h2 id="vendors-heading" class="mb-1 text-lg font-semibold">Vendors</h2>
+      <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">
+        Where it is bought from, in order of preference. When it runs low, the home page offers to reorder from them.
+      </p>
+      {#if canManage}
+        <form class="space-y-2" aria-label="Preferred vendors" onsubmit={saveVendors}>
+          {#if vendorList.length}
+            <ol class="space-y-1 text-sm">
+              {#each vendorList as vid, i (vid)}
+                <li class="flex flex-wrap items-center gap-2">
+                  <span class="min-w-48">{i + 1}. <a class="underline" href="/vendors/{encodeURIComponent(vid)}">{vendorName(vid)}</a></span>
+                  <button type="button" class="btn-secondary" aria-label="Move {vendorName(vid)} up" disabled={i === 0} onclick={() => moveVendor(i, -1)}>↑</button>
+                  <button type="button" class="btn-secondary" aria-label="Move {vendorName(vid)} down" disabled={i === vendorList.length - 1} onclick={() => moveVendor(i, 1)}>↓</button>
+                  <button type="button" class="btn-secondary" aria-label="Remove {vendorName(vid)}" onclick={() => (vendorList = vendorList.filter((x) => x !== vid))}>Remove</button>
+                </li>
+              {/each}
+            </ol>
+          {:else}
+            <p class="text-sm text-zinc-600 dark:text-zinc-400">None yet.</p>
+          {/if}
+          <div class="flex flex-wrap items-end gap-2">
+            <div>
+              <label class="label" for="vendor-add">Add a vendor</label>
+              <select id="vendor-add" class="input" bind:value={addingVendor}>
+                <option value="">Choose one</option>
+                {#each vendors.filter((v) => !vendorList.includes(v.id)) as v (v.id)}<option value={v.id}>{v.name}</option>{/each}
+              </select>
+            </div>
+            <button type="button" class="btn-secondary" disabled={!addingVendor} onclick={() => { vendorList = [...vendorList, addingVendor]; addingVendor = ''; }}>Add vendor</button>
+            <button type="submit" class="btn-secondary" disabled={!unsaved.includes('vendors')}>Save vendors</button>
+          </div>
+        </form>
+      {:else}
+        <ol class="space-y-1 text-sm">
+          {#each vendorList as vid, i (vid)}
+            {@const v = vendorOf(vid)}
+            <li class="flex flex-wrap items-center gap-x-3">
+              <span>{i + 1}. <a class="inline-flex min-h-11 items-center underline" href="/vendors/{encodeURIComponent(vid)}">{vendorName(vid)}</a></span>
+              {#if v?.website}{@const r = reorderHref(v)}<a class="inline-flex min-h-11 items-center underline" href={r.href} rel="noopener noreferrer" target="_blank">{siteName(v.website)}</a>{/if}
+            </li>
+          {/each}
+        </ol>
+      {/if}
+    </section>
+  {/if}
 
   {#if !isSystem}
     <div class="mt-6 max-w-2xl" id="tab-attachments" hidden={tab !== 'attachments'}>

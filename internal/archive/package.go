@@ -38,6 +38,8 @@ type Selection struct {
 	Reports       []string `json:"reports,omitempty"`
 	Flows         []string `json:"flows,omitempty"`
 	Scopes        []string `json:"scopes,omitempty"`
+	// Vendors are vendors, with their contacts and files.
+	Vendors []string `json:"vendors,omitempty"`
 	// Icons is the whole icon library, with the palette and the icon
 	// settings.
 	Icons  bool             `json:"icons,omitempty"`
@@ -60,7 +62,7 @@ type AssetsSelection struct {
 // Empty reports whether nothing is chosen.
 func (s Selection) Empty() bool {
 	return len(s.Categories)+len(s.Subtrees)+len(s.Fields)+len(s.Hooks)+len(s.RelationTypes)+
-		len(s.LabelTemplates)+len(s.ScanTemplates)+len(s.Reports)+len(s.Flows)+len(s.Scopes) == 0 &&
+		len(s.LabelTemplates)+len(s.ScanTemplates)+len(s.Reports)+len(s.Flows)+len(s.Scopes)+len(s.Vendors) == 0 &&
 		!s.Icons && s.Assets == nil
 }
 
@@ -69,7 +71,7 @@ func (s Selection) Empty() bool {
 // zipped isolex library folder (#146).
 func (s Selection) IconsOnly() bool {
 	return s.Icons && len(s.Categories)+len(s.Subtrees)+len(s.Fields)+len(s.Hooks)+len(s.RelationTypes)+
-		len(s.LabelTemplates)+len(s.ScanTemplates)+len(s.Reports)+len(s.Flows)+len(s.Scopes) == 0 && s.Assets == nil
+		len(s.LabelTemplates)+len(s.ScanTemplates)+len(s.Reports)+len(s.Flows)+len(s.Scopes)+len(s.Vendors) == 0 && s.Assets == nil
 }
 
 // PackageInfo is what a package says of itself, in its header and
@@ -95,6 +97,7 @@ const (
 	ItemReport        = "report"
 	ItemFlow          = "flow"
 	ItemScope         = "scope"
+	ItemVendor        = "vendor"
 	ItemIconFile      = "icon_library_file"
 	ItemImage         = "image"
 	ItemPrinter       = "printer"
@@ -241,6 +244,7 @@ type category struct {
 	name, parent, scanTemplate string
 	fields, hooks, relTypes    []string
 	labelTemplates, scopes     []string
+	vendors                    []string
 	required                   map[string]bool
 	// icons are its icons, one for each rendition it has one for, and
 	// iconFields the fields their params are bound to.
@@ -284,12 +288,14 @@ type resolver struct {
 	defined        map[string][]Ref // icon name -> what defines it
 	scopeNames     map[string]string
 	scopesOf       func([]string) []string
-	chosenCats     map[string]bool
-	assetIDs       []string
-	assetCats      map[string][]string
-	assetIcons     map[string][]string
-	includedAsset  map[string]bool
-	readEvents     map[string]bool
+	// vendorScopes are each vendor's scopes, by ID.
+	vendorScopes  map[string][]string
+	chosenCats    map[string]bool
+	assetIDs      []string
+	assetCats     map[string][]string
+	assetIcons    map[string][]string
+	includedAsset map[string]bool
+	readEvents    map[string]bool
 
 	items map[Ref]*Item
 	order []Ref
@@ -332,7 +338,7 @@ func (r *resolver) load() error {
 	r.cats, r.children, r.names = map[string]*category{}, map[string][]string{}, map[Ref]string{}
 	r.fieldKeys, r.hookKeys, r.reportKinds = map[string]string{}, map[string]string{}, map[string]string{}
 	r.templateImgs, r.flows, r.library = map[string][]string{}, map[string]*flowRow{}, map[string]*iconSource{}
-	r.defined, r.scopeNames = map[string][]Ref{}, map[string]string{}
+	r.defined, r.scopeNames, r.vendorScopes = map[string][]Ref{}, map[string]string{}, map[string][]string{}
 	r.templateFields, r.templateIcons = map[string][]string{}, map[string][]string{}
 	r.reportFields, r.reportCats = map[string][]string{}, map[string][]string{}
 	read := func(query string, each func([]string)) error {
@@ -393,6 +399,8 @@ func (r *resolver) load() error {
 			r.scopeNames[c[0]] = c[1]
 			r.names[Ref{Kind: ItemScope, ID: c[0]}] = c[1]
 		}},
+		{"SELECT id, name FROM vendors", func(c []string) { r.names[Ref{Kind: ItemVendor, ID: c[0]}] = c[1] }},
+		{"SELECT vendor_id, scope_id FROM vendor_scopes", func(c []string) { r.vendorScopes[c[0]] = append(r.vendorScopes[c[0]], c[1]) }},
 		{"SELECT id, name FROM printers", func(c []string) { r.names[Ref{Kind: ItemPrinter, ID: c[0]}] = c[1] }},
 		{"SELECT id, name FROM printer_pools", func(c []string) { r.names[Ref{Kind: ItemPool, ID: c[0]}] = c[1] }},
 		{"SELECT id, path, source FROM icon_library", func(c []string) {
@@ -419,6 +427,7 @@ func (r *resolver) load() error {
 		{"SELECT category_id, relation_type_id FROM category_relation_types", func(c *category, v string) { c.relTypes = append(c.relTypes, v) }},
 		{"SELECT category_id, template_id FROM category_label_templates ORDER BY sort_order", func(c *category, v string) { c.labelTemplates = append(c.labelTemplates, v) }},
 		{"SELECT category_id, scope_id FROM category_scopes", func(c *category, v string) { c.scopes = append(c.scopes, v) }},
+		{"SELECT category_id, vendor_id FROM category_vendors ORDER BY sort_order", func(c *category, v string) { c.vendors = append(c.vendors, v) }},
 		{"SELECT category_id, field_id FROM icon_param_bindings", func(c *category, v string) {
 			c.iconFields = append(c.iconFields, v)
 		}},
@@ -535,6 +544,24 @@ func (r *resolver) readable(kind string) (bool, string) {
 	return false, "you cannot read assets"
 }
 
+// readableItem reports whether the requester may read an item: one of a
+// kind they read, and a vendor in its scopes (docs/vendors.md), anywhere
+// for one in none.
+func (r *resolver) readableItem(x Ref) (bool, string) {
+	ok, why := r.readable(x.Kind)
+	if !ok || x.Kind != ItemVendor {
+		return ok, why
+	}
+	var scopes []string
+	for _, s := range r.vendorScopes[x.ID] {
+		scopes = append(scopes, r.scopeNames[s])
+	}
+	if r.may(rbac.PermAssetsRead, scopes) || len(scopes) > 0 && r.may(rbac.PermVendorsManage, scopes) {
+		return true, ""
+	}
+	return false, "you cannot read assets in its scopes"
+}
+
 // choose adds what the selection names, refusing what does not exist or
 // may not be read.
 func (r *resolver) choose(sel Selection) error {
@@ -562,11 +589,12 @@ func (r *resolver) choose(sel Selection) error {
 	add(ItemReport, sel.Reports)
 	add(ItemFlow, sel.Flows)
 	add(ItemScope, sel.Scopes)
+	add(ItemVendor, sel.Vendors)
 	for _, x := range chosen {
 		if !r.exists(x) {
 			return fmt.Errorf("%w: there is no %s %s", ErrSelection, strings.ReplaceAll(x.Kind, "_", " "), x.ID)
 		}
-		if ok, why := r.readable(x.Kind); !ok {
+		if ok, why := r.readableItem(x); !ok {
 			return fmt.Errorf("%w: %s %q: %s", ErrSelection, strings.ReplaceAll(x.Kind, "_", " "), r.name(x), why)
 		}
 		if x.Kind == ItemCategory {
@@ -623,7 +651,7 @@ func (r *resolver) need(x Ref, by Ref) {
 	if x.ID == "" {
 		return
 	}
-	ok, why := r.readable(x.Kind)
+	ok, why := r.readableItem(x)
 	if ok && !r.exists(x) {
 		ok, why = false, "it is no longer here"
 	}
@@ -666,6 +694,10 @@ func (r *resolver) needs(x Ref) {
 			r.need(Ref{Kind: ItemLabelTemplate, ID: id}, x)
 		}
 		r.need(Ref{Kind: ItemScanTemplate, ID: c.scanTemplate}, x)
+		// the vendors it is bought from
+		for _, id := range c.vendors {
+			r.need(Ref{Kind: ItemVendor, ID: id}, x)
+		}
 		for _, id := range c.iconFields {
 			r.need(Ref{Kind: ItemField, ID: id}, x)
 		}
@@ -986,7 +1018,7 @@ func (r *resolver) rowsOf(plan *Plan) {
 	for kind, table := range map[string]string{
 		ItemCategory: "categories", ItemField: "fields", ItemHook: "asset_actions", ItemRelationType: "relation_types",
 		ItemLabelTemplate: "templates", ItemImage: "images", ItemScanTemplate: "reports", ItemReport: "reports",
-		ItemFlow: "flows", ItemScope: "scopes", ItemIconFile: "icon_library",
+		ItemFlow: "flows", ItemScope: "scopes", ItemIconFile: "icon_library", ItemVendor: "vendors",
 	} {
 		for id := range ids[kind] {
 			set(table, id)
@@ -1019,6 +1051,11 @@ func (r *resolver) rowsOf(plan *Plan) {
 				set("category_scopes", id, s)
 			}
 		}
+		for _, v := range c.vendors {
+			if has(ItemVendor, v) {
+				set("category_vendors", id, v)
+			}
+		}
 		if !ids[ItemCategory][c.parent] {
 			// a top category of the package keeps what it inherits
 			fields, labels, scan := r.inherited(id)
@@ -1041,6 +1078,13 @@ func (r *resolver) rowsOf(plan *Plan) {
 			// its bindings, by its category
 			plan.whole["icon_param_bindings:"+id] = true
 			plan.whole["icon_text_bindings:"+id] = true
+		}
+	}
+	for id := range ids[ItemVendor] {
+		for _, s := range r.vendorScopes[id] {
+			if has(ItemScope, s) {
+				set("vendor_scopes", id, s)
+			}
 		}
 	}
 	if plan.sel.Icons {
@@ -1088,8 +1132,14 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 			setNull("scan_template_id")
 		}
 		return true, nil
-	case "fields", "asset_actions", "relation_types", "templates", "images", "reports", "scopes", "assets":
+	case "fields", "asset_actions", "relation_types", "templates", "images", "reports", "scopes", "assets", "vendors":
 		return p.rows[t.Name][get("id")], nil
+	case "vendor_contacts":
+		return p.rows["vendors"][get("vendor_id")], nil
+	case "vendor_scopes":
+		return p.rows[t.Name][keyOf("vendor_id", "scope_id")], nil
+	case "category_vendors":
+		return p.rows[t.Name][keyOf("category_id", "vendor_id")], nil
 	case "flows":
 		if !p.rows[t.Name][get("id")] {
 			return false, nil
@@ -1144,6 +1194,12 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 		return true, nil
 	case "category_attachments":
 		if !p.rows["categories"][get("category_id")] {
+			return false, nil
+		}
+		setNull("added_by")
+		return true, nil
+	case "vendor_attachments":
+		if !p.rows["vendors"][get("vendor_id")] {
 			return false, nil
 		}
 		setNull("added_by")

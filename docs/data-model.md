@@ -183,7 +183,7 @@ queues its label. Then it keeps the form as it was, ready for the next one:
 
 ### Attachments
 
-Assets and categories carry files: **attachments**. Vendors and contracts will too (#216). Each
+Assets, categories and [vendors](vendors.md) carry files: **attachments**. Contracts will too (#216). Each
 has a name, a description, who added it and when, and its place in its owner's order. Each is of
 one kind, decided by its content, not by its file's name alone:
 
@@ -193,8 +193,8 @@ one kind, decided by its content, not by its file's name alone:
 | `document` | A PDF, whose content must begin as one does, or plain text (`.txt`, `.text`, `.log`), Markdown (`.md`, `.markdown`) or CSV (`.csv`), whose content must be UTF-8 text. | As uploaded, and only ever downloaded. |
 | `other` | A type the configuration allows (`[attachments] allowed_types`, see [Configuration](configuration.md)): a media type the content shows, such as `application/zip`, or an extension, such as `.stl`, for content that shows no type of its own. | As uploaded, and only ever downloaded, as bytes. |
 
-Anything else is refused. A file is at most `max_file_mb` (25 MB unless configured), and an asset
-or a category has at most `max_per_object` attachments (50 unless configured); an upload past
+Anything else is refused. A file is at most `max_file_mb` (25 MB unless configured), and an asset,
+a category or a vendor has at most `max_per_object` attachments (50 unless configured); an upload past
 either is refused with `413` or `409`. A PDF has no thumbnail: the page shows an icon for it, as
 drawing a PDF's first page needs more than BAM! carries.
 
@@ -205,10 +205,12 @@ never runs, even opened directly.
 
 An asset's attachments follow `assets.write` to change, and its read access, scopes and all, to
 see. A category's follow `categories.manage` to change, and `assets.read`, as the category itself
-does, to see. Who added each is shown to those who track the asset (`assets.track`), as its
+does, to see. A vendor's follow `vendors.manage` in its scopes to change, and seeing the vendor
+to see. Who added each is shown to those who track the asset (`assets.track`), as its
 history shows people. Adding and removing attachments is recorded in their owner's history: an
 asset's in `asset.edited` events, an image as a `photo` change and anything else as an
-`attachment` change, and a category's in `category.edited` events. An archived asset's
+`attachment` change, a category's in `category.edited` events, and a vendor's in `vendor.edited`
+events. An archived asset's
 attachments cannot be changed. When comments come (#223), a file attached while writing one will
 be attached to what the comment is on.
 
@@ -414,6 +416,7 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 | `PUT /api/v1/assets/{id}/attachments` | `assets.write` | Order them, with `{"attachment_ids": [...]}`, naming each once. |
 | `POST /api/v1/assets/{id}/attachments/copy` | `assets.write` on this asset, `assets.read` on the other | Copy another asset's attachments, with `{"from_asset_id": "..."}`. |
 | `GET`, `POST`, `PUT /api/v1/categories/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/categories/{id}/attachments/{attachment_id}` | `assets.read` to see, `categories.manage` to change | A category's, as an asset's. |
+| `GET`, `POST`, `PUT /api/v1/vendors/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/vendors/{id}/attachments/{attachment_id}` | Seeing the vendor to see, `vendors.manage` in its scopes to change | A vendor's, as an asset's (see [Vendors](vendors.md)). |
 | `POST /api/v1/assets/{id}/photos` | `assets.write` | Add a photo, as the `file` part of a multipart form. |
 | `GET /api/v1/assets/{id}/photos/{photo_id}` | `assets.read` | Serve a photo; `?size=thumb` serves its thumbnail. |
 | `DELETE /api/v1/assets/{id}/photos/{photo_id}` | `assets.write` | Remove a photo. |
@@ -488,3 +491,4 @@ Changes to links serialize on the `asset_links` lock.
 | `015` | Asset links and relation types. |
 | `018` | Asset photos. |
 | `067` | Attachments: `asset_attachments` and `category_attachments`; `asset_photos` become image attachments. |
+| `068` | Vendors (`vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments`), categories' preferred vendors (`category_vendors`), and `events.vendor_id`. See [Vendors](vendors.md). |

@@ -163,9 +163,9 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `list_photos` | `assets.read` | As images; thumbnails unless asked. |
 | `add_photo` | `assets.write` | Base64. |
 | `reorder_photos`, `remove_photo` | `assets.write` | |
-| `list_attachments`, `read_attachment` | `assets.read` | An asset's or a category's attachments (docs/data-model.md#attachments); a file is read as an image, as text, or as a file to keep. |
-| `add_attachment` | `assets.write` for an asset's, `categories.manage` for a category's | Base64, with its file's name; its type is checked by its content. |
-| `update_attachment`, `reorder_attachments`, `remove_attachment` | `assets.write` for an asset's, `categories.manage` for a category's | |
+| `list_attachments`, `read_attachment` | `assets.read` | An asset's, a category's or a vendor's attachments (docs/data-model.md#attachments), named by `asset`, `category_id` or `vendor_id`; a file is read as an image, as text, or as a file to keep. |
+| `add_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's | Base64, with its file's name; its type is checked by its content. |
+| `update_attachment`, `reorder_attachments`, `remove_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's | |
 | `import_assets` | `assets.write` | See below. |
 
 `import_assets` runs a preview first. Then it is called with the same file, mapping and choice of
@@ -195,6 +195,20 @@ Reading needs `assets.read`; changing needs `categories.manage`. Deleting is mar
 | `save_link_type`, `delete_link_type` | `categories.manage` | |
 | `list_hooks` | `assets.read` | |
 | `save_hook`, `delete_hook` | `categories.manage` | `save_hook` takes `triggers`: a button, events or a schedule (see [Hooks](hooks.md#triggers)); left out, they stay as they were. |
+| `set_category_vendors` | `categories.manage` | The vendors a category is bought from, in order of preference. |
+
+### Vendors
+
+See [Vendors](vendors.md). Reading needs `assets.read`, and shows only the vendors the caller sees;
+changing needs `vendors.manage` in the vendor's scopes. Deleting is marked destructive.
+
+| Tool | Permission | What it does |
+| :--- | :--- | :--- |
+| `list_vendors` | `assets.read` | The vendors, with their contacts; `query` keeps those matching every word. |
+| `get_vendor` | `assets.read` | One, with whether the caller may change it. |
+| `save_vendor` | `vendors.manage` | Makes one, or changes only what is given; contacts and scopes, when given, replace the vendor's. |
+| `delete_vendor` | `vendors.manage` | |
+| `vendor_history` | `assets.read` | Its history, newest first, a page at a time. |
 
 ### Icons
 

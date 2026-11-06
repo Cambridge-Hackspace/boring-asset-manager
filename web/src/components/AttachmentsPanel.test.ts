@@ -67,6 +67,13 @@ describe('AttachmentsPanel', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('shows a vendor’s, from the vendor’s own address', async () => {
+    fakeApi({ 'GET /vendors/v1/attachments': () => ({ attachments: [pdf('d1'), image('i1')], limits }) });
+    render(AttachmentsPanel, { owner: 'vendor', ownerId: 'v1', ownerName: 'Acme', canEdit: false, onchange: () => {} });
+    expect((await screen.findByRole('link', { name: 'Download Manual' })).getAttribute('href')).toBe('/api/v1/vendors/v1/attachments/d1');
+    expect(screen.getByRole('img', { name: 'Photo 1 of Acme' }).getAttribute('src')).toBe('/api/v1/vendors/v1/attachments/i1?size=thumb');
+  });
+
   it('says when there are none, and what may be added', async () => {
     fakeApi({ 'GET /categories/c1/attachments': () => ({ attachments: [], limits: { ...limits, allowed_types: ['application/zip'] } }) });
     render(AttachmentsPanel, { owner: 'category', ownerId: 'c1', ownerName: 'Drills', canEdit: true, onchange: () => {} });

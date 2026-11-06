@@ -32,6 +32,7 @@ Each of these can be chosen, by ID:
 - reports;
 - flows;
 - scopes;
+- vendors, with their contacts and attachments (see [Vendors](vendors.md));
 - the icon library, with the palette and icon settings;
 - assets: those in the categories chosen, or every one, with or without their attachments (photos
   among them; `--photos`), the links between them, and their history.
@@ -47,7 +48,8 @@ What is chosen brings what it needs:
 
 | Chosen | Brings |
 |---|---|
-| A category | Its fields, the hooks it offers, the link types it suggests, its label templates and scan template, its icon and the fields its icon draws, and the flows that file into it or take from it |
+| A category | Its fields, the hooks it offers, the link types it suggests, its label templates and scan template, its icon and the fields its icon draws, the flows that file into it or take from it, and the vendors it is bought from |
+| A vendor | Its contacts and attachments, and its scopes when they are chosen too, as a category's are |
 | An icon | What it `extends`, and the library files it `insert`s, `badge`s, takes `axes` from or sets text in, which are read from the sources |
 | A label template | Its images, the fields it binds, and the icons it draws by name |
 | A report or scan template | The fields it shows or groups by, and the categories it looks in |
@@ -92,6 +94,7 @@ A package holds only what the requester may read:
 | Categories and the rest | `assets.read` |
 | Flows | `flows.manage` or `flows.run` |
 | Scopes | `users.manage` or `categories.manage` |
+| Vendors | `assets.read` in their scopes, or anywhere for one in none |
 | Assets | `assets.read` in their scopes |
 | Assets' history | `events.read` in their scopes |
 

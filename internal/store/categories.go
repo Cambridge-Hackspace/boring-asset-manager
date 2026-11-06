@@ -170,7 +170,7 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 	if template.Valid && template.String != "" {
 		c.ScanTemplateID = &template.String
 	}
-	c.LabelTemplateIDs = []string{}
+	c.LabelTemplateIDs, c.VendorIDs = []string{}, []string{}
 	return c, nil
 }
 
@@ -269,11 +269,12 @@ var cloneCategoryLinks = []struct{ table, columns string }{
 	{"category_actions", "action_id, cascades"},
 	{"category_label_templates", "template_id, sort_order"},
 	{"category_scopes", "scope_id"},
+	{"category_vendors", "vendor_id, sort_order"},
 }
 
 // CloneCategory makes a copy of a category beside it, under the same
-// parent: its settings, fields, suggested link types, hooks, scopes and
-// scan and label templates (the same templates, not copies of them), but
+// parent: its settings, fields, suggested link types, hooks, scopes,
+// preferred vendors and scan and label templates (the same templates, not copies of them), but
 // not its subcategories or its assets. An empty name names it "<name>
 // copy". The copy is not flagged running low by hand; with a threshold, it
 // flags itself, as a new category does.

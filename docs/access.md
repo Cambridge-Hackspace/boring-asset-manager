@@ -608,13 +608,15 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `labels.print` | Printing labels (see [Printing](printing.md)). | No |
 | `reports.manage` | Managing reports (see [Reports](reports.md)). | No |
 | `categories.manage` | Managing categories, including moving them under others, and relation types. | No |
+| `vendors.manage` | Creating and editing vendors, their contacts and attachments (see [Vendors](vendors.md)). | Yes |
 | `icons.manage` | Changing what every icon is drawn with: the icon library, the palette and the icon settings (see [Icons](icons.md)). | No |
 | `settings.manage` | Managing settings. | No |
 | `users.manage` | Managing users, roles, scopes and API tokens. | No |
 
 ### Scopes
 
-A scope is a label put on categories and passed down to their subcategories. Its name is 1 to 64
+A scope is a label put on categories and passed down to their subcategories. Vendors are put in
+scopes too, which decide who sees them (see [Vendors](vendors.md#who-sees-a-vendor)). Its name is 1 to 64
 lowercase letters, digits, `-` and `_`.
 
 An asset is in the scopes of its categories and of every ancestor of theirs. When there are none,
@@ -629,7 +631,7 @@ Two scopes are built in:
 
 Neither can be renamed or deleted (`409`). Renaming any other scope carries along the roles'
 permissions in it and the roles narrowed to it. A scope can be deleted only when no category,
-role or role assignment uses it (`409` otherwise). Deleting it also deletes the narrowing of
+vendor, role or role assignment uses it (`409` otherwise). Deleting it also deletes the narrowing of
 archived users' and revoked tokens' roles to it.
 
 Only `users.manage` creates, renames and deletes scopes, and puts them on categories, since scopes
@@ -641,7 +643,8 @@ decide who reaches what. Moving categories under others changes their assets' sc
 A role holds each permission either in every scope (`assets.write`) or in some
 (`tools:assets.write`, `default:assets.write`). Only the asset permissions are scopable:
 `assets.read`, `assets.scan`, `assets.hook`, `events.read`, `assets.track`, `assets.write`,
-`assets.delete`, `assets.report`, `assets.borrow`, `assets.lend`, `stock.record` and `flows.run`.
+`assets.delete`, `assets.report`, `assets.borrow`, `assets.lend`, `stock.record` and `flows.run`,
+and `vendors.manage`, since vendors are in scopes as assets are (see [Vendors](vendors.md)).
 
 A permission in any one of an asset's scopes is enough. A permission held in every scope covers
 each scope, and a role given it both ways keeps the wider.
@@ -965,6 +968,7 @@ is an RFC 3339 time, or `null` for never.
 | `035` | Grants `icons.manage` to every role that manages categories, as icons are part of how categories look. |
 | `041` | Roles narrowed to scopes (`user_role_scopes`, `api_token_role_scopes`). |
 | `043` | Grants `flows.manage` to every role that manages categories, and `flows.run` to every role that writes assets, in the same scopes. |
+| `068` | Grants `vendors.manage`, in every scope, to every role that manages categories. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |
