@@ -3,7 +3,7 @@
 import type { Permission, PermissionKey } from './models';
 
 export const permissions: { key: Permission; label: string; description: string }[] = [
-  { key: 'assets.read', label: 'Read assets', description: 'See assets, categories, fields, history and label templates.' },
+  { key: 'assets.read', label: 'Read assets', description: 'See assets, categories, vendors, fields, history and label templates.' },
   { key: 'assets.scan', label: 'Scan codes', description: 'Look assets up by their codes, and see their scan pages.' },
   { key: 'assets.track', label: 'See who', description: 'See who borrowed assets and who changed them, by name, and the loans list.' },
   { key: 'stock.record', label: 'Record stock', description: 'Use and restock quantities, and mark things running low or restocked.' },
@@ -18,6 +18,7 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'events.read', label: 'Receive events live', description: 'Be sent events as they happen over a live connection, as devices such as a cabinet that lights drawers are.' },
   { key: 'flows.manage', label: 'Manage flows', description: 'Make and change flows, offering no more than they may do themselves.' },
   { key: 'categories.manage', label: 'Manage categories', description: 'Create and edit categories and fields, and draw their icons.' },
+  { key: 'vendors.manage', label: 'Manage vendors', description: 'Create and edit vendors, their contacts and their attachments, in the scopes they are in.' },
   { key: 'icons.manage', label: 'Manage icons', description: 'Change what every icon is drawn with: the shared icon library, the palette and the icon settings.' },
   { key: 'templates.manage', label: 'Manage templates', description: 'Design label templates and upload their images.' },
   { key: 'reports.manage', label: 'Manage reports', description: 'Create, edit and delete saved reports; anyone who reads assets can run them.' },
@@ -30,8 +31,12 @@ export function permissionLabel(key: string): string {
   return permissions.find((p) => p.key === key)?.label ?? key;
 }
 
-/** The permissions a role may hold in some scopes only: those acting on assets. */
-export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hook', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run'];
+/**
+ * The permissions a role may hold in some scopes only: those acting on
+ * assets, running flows, and managing vendors, which are in scopes as
+ * assets are.
+ */
+export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hook', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run', 'vendors.manage'];
 
 /**
  * The permissions of a role that assigning it in these scopes only leaves

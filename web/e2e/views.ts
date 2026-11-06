@@ -124,6 +124,21 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
       ],
     },
   });
+  // A vendor with a contact, notes and a document, that the running-low
+  // category is bought from, for the vendor pages, the category's Vendors
+  // tab and the home page's reorder link.
+  const vendor = await post('/vendors', {
+    name: unique('A11y supplies'),
+    website: 'https://supplies.example',
+    account_number: 'ACC-1001',
+    address: '1 High Street\nCambridge',
+    notes: 'Ask for **trade** prices. [Price list](https://supplies.example/prices)',
+    contacts: [{ name: 'Ada', role: 'sales', email: 'ada@supplies.example', phone: '+44 1223 555010' }],
+  });
+  await request.post(`/api/v1/vendors/${vendor.vendor.id}/attachments`, {
+    multipart: { file: { name: 'prices.txt', mimeType: 'text/plain', buffer: Buffer.from('Screws: 2p each.') } },
+  });
+  await request.put(`/api/v1/categories/${cat.category.id}/vendors`, { data: { vendor_ids: [vendor.vendor.id] } });
   const { entries } = await (await request.get('/api/v1/spool')).json();
   const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
   await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
@@ -150,7 +165,15 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/categories/${cat.category.id}?tab=links`, ''],
     [`/categories/${cat.category.id}?tab=attachments`, ''],
     [`/categories/${cat.category.id}?tab=scopes`, ''],
+    [`/categories/${cat.category.id}?tab=vendors`, ''],
     ['/categories/new', 'New category'],
+    ['/vendors', 'Vendors'],
+    ['/vendors?q=nothing+matches+this', 'Vendors'],
+    ['/vendors/new', 'New vendor'],
+    [`/vendors/${vendor.vendor.id}`, ''],
+    [`/vendors/${vendor.vendor.id}?tab=attachments`, ''],
+    [`/vendors/${vendor.vendor.id}?tab=history`, ''],
+    [`/vendors/${vendor.vendor.id}?tab=scopes`, ''],
     ['/fields', 'Fields'],
     ['/templates', 'Label templates'],
     ['/templates/new', 'New template'],

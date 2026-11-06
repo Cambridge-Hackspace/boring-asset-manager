@@ -1,25 +1,48 @@
-// A small Markdown renderer for the help pages (docs/architecture.md): headings,
-// paragraphs, lists, bold, italics, code and links. The help is ours and
-// bundled with the app, but everything is escaped all the same, and links
-// go only to the app's own pages or to https.
+// A small Markdown renderer for the help pages (docs/architecture.md) and
+// for what people write, such as a vendor's notes: headings, paragraphs,
+// lists, bold, italics, code and links. Everything is escaped, so no HTML
+// gets through, and links go only to the app's own pages, to https, or to
+// an email address.
 
 function escape(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * Whether a link may be followed: a page of the app's own, by a single
+ * leading slash (two, or a slash and a backslash, lead to another site),
+ * an https address, or an email address.
+ */
+export function safeHref(href: string): boolean {
+  return /^\/(?![/\\])/.test(href) || href.startsWith('https://') || href.startsWith('mailto:');
+}
+
+// Stands in for a link while the text around it is formatted. Written
+// text never holds it: it is taken out first.
+const MARK = '\u0000';
+
+/** Bold and italics, in escaped text. */
+function emphasis(html: string): string {
+  return html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\*([^*]+)\*/g, '<em>$1</em>');
 }
 
 /** Inline formatting: `code`, **bold**, *italics* and [links](/path). */
 function inline(text: string): string {
   // Code first, so nothing inside it is formatted.
   return text
+    .replaceAll(MARK, '')
     .split(/(`[^`]+`)/)
     .map((part) => {
       if (part.startsWith('`') && part.endsWith('`') && part.length > 1) return `<code>${escape(part.slice(1, -1))}</code>`;
-      return escape(part)
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label: string, href: string) =>
-          href.startsWith('/') || href.startsWith('https://') ? `<a class="underline" href="${href}">${label}</a>` : label,
-        )
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      // Links next, each set aside whole, so that bold and italics never
+      // reach into an address; a label is formatted on its own.
+      const links: string[] = [];
+      const rest = part.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, label: string, href: string) => {
+        const shown = emphasis(escape(label));
+        links.push(safeHref(href) ? `<a class="underline" href="${escape(href)}">${shown}</a>` : shown);
+        return `${MARK}${links.length - 1}${MARK}`;
+      });
+      return emphasis(escape(rest)).replace(new RegExp(`${MARK}(\\d+)${MARK}`, 'g'), (_m, i: string) => links[Number(i)]!);
     })
     .join('');
 }

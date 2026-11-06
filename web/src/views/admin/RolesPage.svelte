@@ -328,10 +328,10 @@
             <h3 class="font-mono font-semibold">{s.name}</h3>
             <p class="text-sm text-zinc-600 dark:text-zinc-400">
               {s.name === 'public'
-                ? `Built in: what everyone, signed in or not, may see. Put it on categories to make their assets public. On ${count(s.category_count, 'category', 'categories')}.`
+                ? `Built in: what everyone, signed in or not, may see. Put it on categories to make their assets public. On ${count(s.category_count, 'category', 'categories')}${s.vendor_count ? ` and ${count(s.vendor_count, 'vendor', 'vendors')}` : ''}.`
                 : s.reserved
                 ? 'Built in: assets in no other scope.'
-                : `On ${count(s.category_count, 'category', 'categories')}; used by ${count(s.role_count, 'role', 'roles')}${s.assignment_count ? `; given to people and tokens in it ${count(s.assignment_count, 'time', 'times')}` : ''}.`}
+                : `On ${count(s.category_count, 'category', 'categories')}${s.vendor_count ? ` and ${count(s.vendor_count, 'vendor', 'vendors')}` : ''}; used by ${count(s.role_count, 'role', 'roles')}${s.assignment_count ? `; given to people and tokens in it ${count(s.assignment_count, 'time', 'times')}` : ''}.`}
             </p>
           </div>
           {#if !s.reserved}

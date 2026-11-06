@@ -179,6 +179,26 @@ describe('RolesPage', () => {
     await screen.findByText('Deleted the scope kitchen.');
   });
 
+  it('gives managing vendors in some scopes only, and counts the vendors on a scope', async () => {
+    const keepers: Role = { id: 'keepers', name: 'Keepers', description: '', permissions: ['assets.read'], user_count: 0, requires_two_factor: false, protected: false, public: false };
+    const { sent } = fakeApi({
+      'GET /roles': () => ({ roles: [keepers] }),
+      'GET /scopes': () => ({ scopes: [defaultScope, { ...tools, vendor_count: 2 }] }),
+      'PUT /roles/keepers': (body) => ({ role: { ...keepers, ...(body as object) } }),
+    });
+    render(RolesPage, { params: {} });
+    const card = (await screen.findByRole('heading', { name: 'Keepers' })).closest('li')!;
+    expect(screen.getByRole('heading', { name: 'tools' }).closest('li')!.textContent).toContain('On 1 category and 2 vendors; used by 1 role.');
+
+    await fireEvent.click(within(card).getByRole('button', { name: 'Edit Keepers' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: /^Manage vendors — / }));
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Where: Manage vendors' }), { target: { value: 'some' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Manage vendors in tools' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+    await screen.findByText('Saved Keepers.');
+    expect((sent.find((r) => r.method === 'PUT')!.body as Role).permissions).toEqual(['assets.read', 'tools:vendors.manage']);
+  });
+
   it('lets the public role only look, under its own name', async () => {
     const publicRole: Role = { id: 'p', name: 'public', description: 'Everyone, signed in or not', permissions: ['public:assets.read'], user_count: 0, requires_two_factor: false, protected: false, public: true };
     const publicScope: Scope = { ...tools, id: 'ps', name: 'public', reserved: true, category_count: 2, role_count: 1 };

@@ -15,6 +15,8 @@ export interface Selection {
   reports?: string[];
   flows?: string[];
   scopes?: string[];
+  /** Vendors, with their contacts and attachments (docs/vendors.md). */
+  vendors?: string[];
   icons?: boolean;
   /** Assets, with their attachments (photos, as attachments grew out of them), links and history. */
   assets?: { all: boolean; photos: boolean; links: boolean; history: boolean };
@@ -32,6 +34,7 @@ export type ItemKind =
   | 'report'
   | 'flow'
   | 'scope'
+  | 'vendor'
   | 'icon_library_file'
   | 'image'
   | 'printer'
@@ -68,6 +71,7 @@ export const groups: { kind: ItemKind; key: keyof Selection; label: string }[] =
   { kind: 'scan_template', key: 'scan_templates', label: 'Scan templates' },
   { kind: 'report', key: 'reports', label: 'Reports' },
   { kind: 'flow', key: 'flows', label: 'Flows' },
+  { kind: 'vendor', key: 'vendors', label: 'Vendors' },
   { kind: 'scope', key: 'scopes', label: 'Scopes' },
 ];
 
@@ -82,6 +86,7 @@ export const kindNames: Record<ItemKind, string> = {
   report: 'report',
   flow: 'flow',
   scope: 'scope',
+  vendor: 'vendor',
   icon_library_file: 'icon library file',
   image: 'image',
   printer: 'printer',

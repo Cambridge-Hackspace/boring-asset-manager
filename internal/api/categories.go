@@ -51,6 +51,17 @@ type AssignCategoryFieldRequest struct {
 	IsRequired bool   `json:"is_required"`
 }
 
+// showCategory leaves out of a category the vendors the requester does not
+// see.
+func (s *Server) showCategory(r *http.Request, cat *models.Category) error {
+	shown, err := s.shownCategories(r.Context(), []models.Category{*cat})
+	if err != nil {
+		return err
+	}
+	*cat = shown[0]
+	return nil
+}
+
 func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := s.store.ListCategories()
 	if err != nil {
@@ -59,6 +70,11 @@ func (s *Server) handleListCategories(w http.ResponseWriter, r *http.Request) {
 	}
 	if categories == nil {
 		categories = []models.Category{}
+	}
+	categories, err = s.shownCategories(r.Context(), categories)
+	if err != nil {
+		writeServerError(w, err, "list categories")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -79,6 +95,10 @@ func (s *Server) handleGetCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
+		writeServerError(w, err, "query category")
+		return
+	}
+	if err := s.showCategory(r, cat); err != nil {
 		writeServerError(w, err, "query category")
 		return
 	}
@@ -149,6 +169,10 @@ func (s *Server) handleCloneCategory(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err, "copy the category")
 		return
 	}
+	if err := s.showCategory(r, cat); err != nil {
+		writeServerError(w, err, "copy the category")
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"category": cat})
 }
 
@@ -172,6 +196,10 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeStoreError(w, err, "update the category")
+		return
+	}
+	if err := s.showCategory(r, cat); err != nil {
+		writeServerError(w, err, "update the category")
 		return
 	}
 

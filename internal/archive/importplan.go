@@ -36,6 +36,7 @@ type here struct {
 	palette   map[string][2]string
 	lastToken int64
 	cats      map[string]*hereCat
+	vendors   map[string][]string // by name: id, website, account number, address, notes
 }
 
 type hereField struct{ id, label, kind, options string }
@@ -78,7 +79,8 @@ func queryRows(ctx context.Context, st *store.Store, q querier, query string) ([
 func loadHere(ctx context.Context, st *store.Store, q querier) (*here, error) {
 	h := &here{fields: map[string]hereField{}, hooks: map[string][]string{}, relTypes: map[string][]string{}, scopes: map[string]string{},
 		templates: map[string][]string{}, reports: map[string][]string{}, flows: map[string][]string{}, images: map[string]string{},
-		library: map[string][]string{}, defined: map[string]bool{}, iconNames: map[string]bool{}, palette: map[string][2]string{}, cats: map[string]*hereCat{}}
+		library: map[string][]string{}, defined: map[string]bool{}, iconNames: map[string]bool{}, palette: map[string][2]string{}, cats: map[string]*hereCat{},
+		vendors: map[string][]string{}}
 	scopeNames := map[string]string{}
 	steps := []struct {
 		query string
@@ -128,6 +130,11 @@ func loadHere(ctx context.Context, st *store.Store, q querier) (*here, error) {
 				c.scopes = append(c.scopes, scopeNames[r[1]])
 			}
 		}},
+		{"SELECT name, id, website, account_number, address, notes FROM vendors ORDER BY id", func(r []string) {
+			if _, ok := h.vendors[r[0]]; !ok {
+				h.vendors[r[0]] = r[1:]
+			}
+		}},
 	}
 	for _, s := range steps {
 		rows, err := queryRows(ctx, st, q, s.query)
@@ -158,7 +165,10 @@ type built struct {
 	rows []tableRows
 	// archive ID to ID here, of what is imported or used as it is; what
 	// is skipped, or not merged, is absent.
-	cats, fields, relTypes, images map[string]string
+	cats, fields, relTypes, images, vendors map[string]string
+	// vendorsImported are the vendors created or copied, by ID in the
+	// archive, whose history comes with them.
+	vendorsImported map[string]bool
 	// imagesStored are the label images whose files are stored, by ID in
 	// the archive; files are the attachments' files stored, by ID in the
 	// archive, noted as their rows are imported.
@@ -284,6 +294,7 @@ func build(ctx context.Context, st *store.Store, q querier, a *archived, opts Im
 		ns = *importNamespace
 	}
 	b := &built{ids: newIDs(ns), cats: map[string]string{}, fields: map[string]string{}, relTypes: map[string]string{}, images: map[string]string{}, files: map[string]bool{},
+		vendors: map[string]string{}, vendorsImported: map[string]bool{},
 		imagesStored: map[string]bool{}, iconRenames: map[string]string{}, catIcons: map[string]bool{}, kinds: a.kinds}
 	if opts.Anchor != "" {
 		c := h.cats[opts.Anchor]
@@ -425,6 +436,16 @@ func (m *matcher) match() {
 	}
 	for _, r := range rows["categories"] {
 		m.item(ItemCategory, str(r, "id"), str(r, "name"), nil, false, nil)
+	}
+	// vendors are the same by name, with the same details
+	for _, r := range rows["vendors"] {
+		var ex *Ref
+		same := false
+		if e, ok := h.vendors[str(r, "name")]; ok {
+			ex = &Ref{Kind: ItemVendor, ID: e[0], Name: str(r, "name")}
+			same = e[1] == str(r, "website") && e[2] == str(r, "account_number") && e[3] == str(r, "address") && e[4] == str(r, "notes")
+		}
+		m.item(ItemVendor, str(r, "id"), str(r, "name"), ex, same, allChoices)
 	}
 	if len(rows["icon_settings"]) > 0 {
 		m.plan.Warnings = append(m.plan.Warnings, "This instance's icon settings are kept; the archive's are not imported.")
@@ -606,6 +627,12 @@ func (m *matcher) name() {
 		}
 	}
 	named(ItemRelationType, keysOf(h.relTypes), " (%d)", 255, nil, m.b.relTypes)
+	named(ItemVendor, keysOf(h.vendors), " (%d)", 255, nil, m.b.vendors)
+	for _, it := range byKind(ItemVendor) {
+		if imported(it) {
+			m.b.vendorsImported[it.ID] = true
+		}
+	}
 	reportNames := map[string]bool{}
 	for k := range h.reports {
 		_, n, _ := strings.Cut(k, "\x00")
@@ -910,6 +937,36 @@ func (m *matcher) rows() {
 	join("category_actions", "action_id", ItemHook, hookIDs)
 	join("category_relation_types", "relation_type_id", ItemRelationType, b.relTypes)
 	join("category_scopes", "scope_id", ItemScope, scopeIDs)
+
+	// vendors, with their contacts, scopes and files, and the categories
+	// naming them
+	var vendors, contacts, vendorScopes, vendorFiles []map[string]any
+	for _, r := range a.rows["vendors"] {
+		if it, ok := copied(ItemVendor, str(r, "id")); ok {
+			vendors = append(vendors, with(r, "id", b.ids.of(it.ID), "name", as(it)))
+		}
+	}
+	for _, r := range a.rows["vendor_contacts"] {
+		if v := str(r, "vendor_id"); b.vendorsImported[v] {
+			contacts = append(contacts, with(r, "id", b.ids.of(str(r, "id")), "vendor_id", b.vendors[v]))
+		}
+	}
+	for _, r := range a.rows["vendor_scopes"] {
+		v := str(r, "vendor_id")
+		if sc, ok := scopeIDs[str(r, "scope_id")]; ok && sc != "" && b.vendorsImported[v] {
+			vendorScopes = append(vendorScopes, with(r, "vendor_id", b.vendors[v], "scope_id", sc))
+		}
+	}
+	for _, r := range a.rows["vendor_attachments"] {
+		if v := str(r, "vendor_id"); b.vendorsImported[v] {
+			vendorFiles = append(vendorFiles, attachmentRow(r, b.ids, b.files, "vendor_id", b.vendors[v]))
+		}
+	}
+	add("vendors", vendors)
+	add("vendor_contacts", contacts)
+	add("vendor_scopes", vendorScopes)
+	add("vendor_attachments", vendorFiles)
+	join("category_vendors", "vendor_id", ItemVendor, b.vendors)
 
 	var images, templates []map[string]any
 	for _, r := range a.rows["images"] {
@@ -1272,6 +1329,8 @@ func (m *matcher) permissions() {
 		switch it.Kind {
 		case ItemCategory, ItemField, ItemHook, ItemRelationType, ItemScope:
 			need[rbac.PermCategoriesManage] = true
+		case ItemVendor:
+			need[rbac.PermVendorsManage] = true
 		case ItemLabelTemplate, ItemImage:
 			need[rbac.PermTemplatesManage] = true
 		case ItemReport, ItemScanTemplate:

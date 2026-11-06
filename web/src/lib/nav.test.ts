@@ -18,7 +18,7 @@ describe('navSections', () => {
     ];
     expect(labels(all)).toEqual([
       ['', ['Assets', 'Scan', 'Loans', 'Print queue', 'Reports']],
-      ['Catalog', ['Categories', 'Fields', 'Link types', 'Hooks', 'Icons']],
+      ['Catalog', ['Categories', 'Vendors', 'Fields', 'Link types', 'Hooks', 'Icons']],
       ['Labels', ['Templates', 'Images', 'Printers']],
       ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Incoming hooks', 'Sign-in', 'Backups', 'Import & export']],
     ]);
@@ -27,7 +27,7 @@ describe('navSections', () => {
   it('shows only the pages someone can open, and drops empty groups', () => {
     expect(labels(['assets.read'])).toEqual([
       ['', ['Assets', 'Reports']],
-      ['Catalog', ['Categories']],
+      ['Catalog', ['Categories', 'Vendors']],
     ]);
     expect(labels(['labels.print'])).toEqual([
       ['', ['Print queue']],
