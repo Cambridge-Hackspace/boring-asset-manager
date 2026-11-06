@@ -369,9 +369,12 @@ func (c *Checked) matchManifest(got map[string]Member, authRows map[string]int) 
 		}
 		return nil
 	}
-	for _, t := range Tables {
+	for _, t := range tablesAt(c.Header.SchemaVersion) {
 		want, listed := man.Tables[t.Name]
-		if listed != hasKind(c.Header.Kinds, t.Kind) && (listed || c.Header.SchemaVersion >= tablesSince[t.Name]) {
+		// Every table of its kinds that its schema had is listed, if only
+		// with no rows; a table made after its schema need not be.
+		held := hasKind(c.Header.Kinds, t.Kind)
+		if listed && !held || !listed && held && c.Header.SchemaVersion >= t.Since {
 			return invalid("the manifest's tables are not those of its kinds")
 		}
 		if c.Rows[t.Name] != want {

@@ -8,16 +8,42 @@ BY_KEY and COMMENT. A table a migration adds must be put in ORDER, or in the
 archive's Excluded list with why; TestTheRegistryMatchesTheSchema fails until
 it is, and until this has been run again.
 
+Each table's Since, the migration from which every schema has had it, is
+found by running the migrations' SQL into an empty SQLite database one at a
+time: an archive written before it may lack the table.
+TestEveryTableSaysSince checks it against the migrations as bam runs them.
+
     go run ./cmd/bam migrate --config <a config whose database is x.db>
     python3 tools/archive/tables.py x.db internal/archive/tables.go
 """
 import os
+import re
 import sqlite3
 import sys
 
 db = sys.argv[1]
 out = sys.argv[2]
 c = sqlite3.connect(db)
+
+
+def since():
+    """Each table's Since: the first migration after which it is in the
+    schema, and stays in it through the last. A table dropped and made
+    again within one migration keeps its first; one gone for a while counts
+    from its return. Migrations written in Go make no tables."""
+    folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'internal', 'store', 'migrations')
+    files = sorted((int(m.group(1)), f) for f in os.listdir(folder) if (m := re.match(r'(\d+)_.*\.sql$', f)))
+    mem = sqlite3.connect(':memory:')
+    found = {}
+    for version, f in files:
+        with open(os.path.join(folder, f), encoding='utf-8') as sql:
+            mem.executescript(sql.read())
+        now = {r[0] for r in mem.execute("select name from sqlite_master where type='table' and name not like 'sqlite_%'")}
+        found = {t: found.get(t, version) for t in now}
+    return found
+
+
+SINCE = since()
 
 ORDER = [
     ('reports', 'KindReports'),
@@ -104,7 +130,7 @@ for name, kind in ORDER:
             cname = 'permission_key'
             key = ['permission_key' if k == 'permission_id' else k for k in key]
         parts.append(f'{{"{cname}", {ctype}}}')
-    lines.append(f'\t{{Name: "{name}", Kind: {kind}, Key: []string{{{", ".join(chr(34)+k+chr(34) for k in key)}}},')
+    lines.append(f'\t{{Name: "{name}", Kind: {kind}, Since: {SINCE[name]}, Key: []string{{{", ".join(chr(34)+k+chr(34) for k in key)}}},')
     fields = [('Columns', f'[]Column{{{", ".join(parts)}}}')]
     if name in SECRET:
         fields.append(('Secret', f'[]string{{{", ".join(chr(34)+k+chr(34) for k in SECRET[name])}}}'))

@@ -128,9 +128,15 @@ These tables are left out, because they are not information or are made again:
 | `provider_sign_ins` | Sign-ins sent to an identity provider and not back yet, which lapse in ten minutes. |
 | `relay_holds`, `relay_mail` | Which server holds each relay now, and the messages servers pass each other for relays, which are dropped within minutes (see [Relays](relays.md#several-servers)). |
 
-`internal/archive/tables.go` lists the tables, their kinds, columns and keys.
-`tools/archive/tables.py` writes it from a migrated database. A test fails, on every dialect, when
-a migration changes the schema without updating it.
+`internal/archive/tables.go` lists the tables, their kinds, columns and keys, and, as `Since`, the
+migration from which every schema has had each table. `tools/archive/tables.py` writes it from a
+migrated database, and finds each `Since` by running the migrations one at a time into an empty
+database. A table dropped and made again within one migration keeps its first. A test fails, on
+every dialect, when a migration changes the schema without updating it. Another fails when a
+`Since` differs from what bam's migrations make, run one at a time, so a migration that adds a
+table cannot leave older archives refused. Tables an older schema had and a later one retired, such
+as `asset_photos`, are listed by hand in `internal/archive/retired.go`, with the migrations that
+made and retired them.
 
 ## Restoring into a new instance
 
@@ -189,6 +195,27 @@ password. Set one with `bam admin password`.
 An archive from an older bam is restored into an empty database. The database is migrated first
 to the archive's schema, then to this bam's. An archive from a newer bam, or in a newer format, is
 refused.
+
+Every archive bam has written checks, restores and imports here: the first were written at schema
+`045`. An archive holds the tables its schema had, so one written before a migration that added a
+table has none of it, and restores and imports with no such rows:
+
+| Written before schema | It has none of |
+|---|---|
+| `054` | `user_factors` |
+| `056` | `user_favorites` |
+| `057` | `auth_providers`, `auth_provider_rules`, `user_identities` |
+| `063` | `relays`, `relay_mesh` |
+| `064` | `loan_reminders` |
+| `066` | `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes` |
+| `067` | `asset_attachments` and `category_attachments` (it has `asset_photos`; see [The archive format](#the-archive-format)) |
+| `068` | `vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments`, `category_vendors` |
+
+Its rows also lack the columns added since. A restore leaves those to the migrations, as they left
+them in the database it was written from. An import leaves them to the columns' defaults.
+
+The check stays strict: an archive missing a table its schema had, of a kind it holds, is refused,
+even a table with no rows.
 
 ### Sets in parts
 

@@ -78,7 +78,7 @@ func (ap *applier) apply(r io.Reader) error {
 	}
 	ap.dropped = map[string]bool{}
 	ids := ap.b.ids
-	err := eachMember(r, ap.b.kinds, func(t *Table, row map[string]any) error {
+	err := eachMember(r, ap.b.kinds, ap.a.header.SchemaVersion, func(t *Table, row map[string]any) error {
 		if !streamed(t) {
 			return nil
 		}
