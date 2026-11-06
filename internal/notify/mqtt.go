@@ -153,6 +153,10 @@ func outbound(n Notification) mqttEvent {
 		// About the instance itself; the payload links to the release.
 		out.URL = base
 	}
+	// A comment's link goes to the comment itself.
+	if out.URL != "" && p.Comment != nil {
+		out.URL += "#comment-" + p.Comment.ID
+	}
 	return out
 }
 

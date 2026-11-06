@@ -5,26 +5,31 @@ go 1.26.0
 require (
 	forge.axonibyte.com/axonibyte/bonemesh/go/v3 v3.3.2
 	github.com/beevik/etree v1.8.1
+	github.com/cloudflare/circl v1.6.5
 	github.com/coder/websocket v1.8.15
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/godbus/dbus/v5 v5.2.4
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
+	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/tetratelabs/wazero v1.12.0
+	github.com/yuin/goldmark v1.8.7
 	golang.org/x/crypto v0.56.0
 	golang.org/x/image v0.41.0
+	golang.org/x/net v0.57.0
 	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.34.0
 )
 
 require (
 	filippo.io/edwards25519 v1.1.1 // indirect
-	github.com/cloudflare/circl v1.6.5 // indirect
+	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/gorilla/css v1.0.1 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

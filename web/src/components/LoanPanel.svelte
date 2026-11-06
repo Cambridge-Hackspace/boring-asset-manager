@@ -5,6 +5,7 @@
   import type { AssetWithDetails, Person } from '../lib/models';
   import { choiceNames, personName } from '../lib/people';
   import { session } from '../lib/session.svelte';
+  import CommentsPanel from './CommentsPanel.svelte';
   import ErrorMessage from './ErrorMessage.svelte';
 
   // Who has a lendable asset, and checking it out and back in.
@@ -89,6 +90,22 @@
           </div>
         {/if}
         <button type="button" class="btn-secondary" disabled={busy} onclick={checkIn}>Return</button>
+      </div>
+    {/if}
+    {#if session.user}
+      <!-- Notes on this loan, such as what was lent with it (docs/comments.md); files go on the asset. -->
+      <div class="mt-4">
+        {#key loan.id}
+          <CommentsPanel
+            id="loan-comments"
+            path="/loans/{encodeURIComponent(loan.id)}/comments"
+            uploadPath={session.canOn(asset.scopes, 'comments.write') ? `${path}/comments/attachments` : undefined}
+            canWrite={session.canOn(asset.scopes, 'comments.write')}
+            own="this loan’s"
+            heading="Comments on this loan"
+            compact
+          />
+        {/key}
       </div>
     {/if}
   {:else if blocked}

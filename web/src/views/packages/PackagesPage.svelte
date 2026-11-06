@@ -44,6 +44,8 @@
   let assets = $state<'none' | 'chosen' | 'all'>('none');
   let photos = $state(false);
   let noDocuments = $state(false);
+  // The categories' comments (docs/comments.md), without who wrote them.
+  let comments = $state(false);
   let links = $state(false);
   let history = $state(false);
 
@@ -67,6 +69,7 @@
     icons,
     assets: assets === 'none' ? undefined : { all: assets === 'all', photos, links, history },
     ...(noDocuments ? { no_documents: true } : {}),
+    ...(comments ? { comments: true } : {}),
   });
   const needs = $derived(needed(plan));
   const canExport = $derived(anyChosen(selection) && name.trim() !== '' && !exporting && !planning);
@@ -317,6 +320,10 @@
       <label class="flex gap-2 pt-2 text-sm">
         <input type="checkbox" bind:checked={noDocuments} />
         Leave out documents: only images among the categories’ and assets’ attachments
+      </label>
+      <label class="flex gap-2 text-sm">
+        <input type="checkbox" bind:checked={comments} />
+        With the categories’ comments, without who wrote them
       </label>
     </fieldset>
 

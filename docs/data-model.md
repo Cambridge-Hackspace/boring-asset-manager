@@ -492,3 +492,4 @@ Changes to links serialize on the `asset_links` lock.
 | `018` | Asset photos. |
 | `067` | Attachments: `asset_attachments` and `category_attachments`; `asset_photos` become image attachments. |
 | `068` | Vendors (`vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments`), categories' preferred vendors (`category_vendors`), and `events.vendor_id`. See [Vendors](vendors.md). |
+| `069` | Comments: `asset_comments`, `category_comments`, `loan_comments` and `flow_filing_comments`, a table for each kind of thing they are on. See [Comments](comments.md). |

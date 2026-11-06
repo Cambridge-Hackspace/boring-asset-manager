@@ -139,6 +139,10 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     multipart: { file: { name: 'prices.txt', mimeType: 'text/plain', buffer: Buffer.from('Screws: 2p each.') } },
   });
   await request.put(`/api/v1/categories/${cat.category.id}/vendors`, { data: { vendor_ids: [vendor.vendor.id] } });
+  // Comments in Markdown on the category and the asset, with a heading, a
+  // task list and a table, for the asset page and the Comments tab.
+  await post(`/categories/${cat.category.id}/comments`, { body: '## Care\n\n- [x] Oiled\n- [ ] Sharpened\n\n| Part | Size |\n|---|---|\n| Belt | 10 mm |' });
+  await post(`/assets/${asset.asset.asset.id}/comments`, { body: 'The left motor makes a **noise** above 50%.' });
   const { entries } = await (await request.get('/api/v1/spool')).json();
   const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
   await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
@@ -166,6 +170,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/categories/${cat.category.id}?tab=attachments`, ''],
     [`/categories/${cat.category.id}?tab=scopes`, ''],
     [`/categories/${cat.category.id}?tab=vendors`, ''],
+    [`/categories/${cat.category.id}?tab=comments`, ''],
     ['/categories/new', 'New category'],
     ['/vendors', 'Vendors'],
     ['/vendors?q=nothing+matches+this', 'Vendors'],

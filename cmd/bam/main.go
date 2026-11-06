@@ -218,6 +218,7 @@ func main() {
 		cmd.BoolVar(&opts.WithoutDocuments, "without-documents", false, "Leave out attachments that are not images: documents and other files")
 		cmd.BoolVar(&opts.Links, "links", false, "Bring the links between the assets packaged")
 		cmd.BoolVar(&opts.History, "history", false, "Bring the assets' history, without who did what")
+		cmd.BoolVar(&opts.Comments, "comments", false, "Bring the categories' comments, without who wrote them")
 		cmd.StringVar(&opts.Info.Name, "name", "", "The package's name")
 		cmd.StringVar(&opts.Info.Description, "description", "", "What the package is for")
 		cmd.StringVar(&opts.Info.Author, "author", "", "Who made it")

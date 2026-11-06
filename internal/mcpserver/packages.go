@@ -30,6 +30,7 @@ type packageIn struct {
 	Assets         string   `json:"assets,omitempty" jsonschema:"none (the default), chosen (those in the categories chosen) or all"`
 	Photos         bool     `json:"photos,omitempty" jsonschema:"with the assets' attachments, photos among them"`
 	NoDocuments    bool     `json:"no_documents,omitempty" jsonschema:"leave out attachments that are not images: documents and other files"`
+	Comments       bool     `json:"comments,omitempty" jsonschema:"with the categories' comments, without who wrote them"`
 	Links          bool     `json:"links,omitempty" jsonschema:"with the links between the assets packaged"`
 	History        bool     `json:"history,omitempty" jsonschema:"with the assets' history, without who did what"`
 	Name           string   `json:"name,omitempty" jsonschema:"the package's name; needed unless plan_only"`
@@ -44,7 +45,7 @@ func (in packageIn) selection() (map[string]any, error) {
 	sel := map[string]any{
 		"categories": in.Categories, "subtrees": in.Subtrees, "fields": in.Fields, "hooks": in.Hooks,
 		"relation_types": in.RelationTypes, "label_templates": in.LabelTemplates, "scan_templates": in.ScanTemplates,
-		"reports": in.Reports, "flows": in.Flows, "scopes": in.Scopes, "vendors": in.Vendors, "icons": in.Icons, "no_documents": in.NoDocuments,
+		"reports": in.Reports, "flows": in.Flows, "scopes": in.Scopes, "vendors": in.Vendors, "icons": in.Icons, "no_documents": in.NoDocuments, "comments": in.Comments,
 	}
 	switch in.Assets {
 	case "", "none":

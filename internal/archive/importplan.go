@@ -933,6 +933,14 @@ func (m *matcher) rows() {
 		}
 	}
 	add("category_attachments", catFiles)
+	// the categories' comments, as no one's
+	var catComments []map[string]any
+	for _, r := range a.rows["category_comments"] {
+		if cat, ok := b.cats[str(r, "category_id")]; ok && cat != "" {
+			catComments = append(catComments, with(r, "id", b.ids.of(str(r, "id")), "category_id", cat, "author_id", nil, "deleted_by", nil))
+		}
+	}
+	add("category_comments", catComments)
 	join("category_fields", "field_id", ItemField, b.fields)
 	join("category_actions", "action_id", ItemHook, hookIDs)
 	join("category_relation_types", "relation_type_id", ItemRelationType, b.relTypes)

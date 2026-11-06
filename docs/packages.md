@@ -40,6 +40,10 @@ Each of these can be chosen, by ID:
 The categories' attachments come with them. `--without-documents`, or **Leave out documents**,
 leaves out the attachments that are not images. Who added each is left out, as people are.
 
+The categories' [comments](comments.md) come with them when asked, with `--comments`, **With the
+categories' comments**, or MCP's `comments`: those not deleted, without who wrote them. Imported,
+they are no one's. Assets' comments are not packaged.
+
 Archived assets are left out.
 
 ### What comes with a choice

@@ -21,9 +21,10 @@ has [attachments](data-model.md#attachments), such as price lists and terms, and
 
 ### Notes
 
-Notes are Markdown, rendered by the web app's own small renderer (`web/src/lib/markdown.ts`),
-which comments (#223) will use too. It knows headings, paragraphs, lists, bold, italics, code and
-links, and nothing else:
+Notes are Markdown, rendered by the web app's own small renderer (`web/src/lib/markdown.ts`).
+[Comments](comments.md#rendering) are rendered on the server instead, with tables, images and task
+lists. The web renderer knows headings, paragraphs, lists, bold, italics, code and links, and
+nothing else:
 
 - All text is escaped, so HTML in notes shows as typed and never renders.
 - A link goes only to a page of the app (a path starting with one `/`), to an `https://` address,

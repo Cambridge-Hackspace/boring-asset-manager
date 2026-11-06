@@ -56,6 +56,11 @@ describe('narrowedOut', () => {
     expect(narrowedOut(['vendors.manage', 'categories.manage'], ['tools'])).toEqual(['categories.manage']);
     expect(narrowedOut(['kitchen:vendors.manage'], ['tools'])).toEqual(['vendors.manage']);
   });
+  it('keeps writing and moderating comments in the scopes named, as comments are on things in scopes', () => {
+    expect(scopable).toEqual(expect.arrayContaining(['comments.write', 'comments.moderate']));
+    expect(narrowedOut(['comments.write', 'comments.moderate'], ['tools'])).toEqual([]);
+    expect(describeKey('workshop:comments.moderate')).toBe('Moderate comments in workshop');
+  });
   it('describes a role as held', () => {
     expect(describeAssignment('Editor', [])).toBe('Editor');
     expect(describeAssignment('Editor', ['tools', 'kitchen'])).toBe('Editor in tools, kitchen');

@@ -23,7 +23,9 @@ export type Permission =
   | 'events.read'
   | 'flows.manage'
   | 'flows.run'
-  | 'vendors.manage';
+  | 'vendors.manage'
+  | 'comments.write'
+  | 'comments.moderate';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -229,12 +231,14 @@ export interface AssetEvent {
     label?: { template: string; printer?: string; download?: boolean; copies: number };
     /** What a hook event triggered, and the asset and the containers it is in. */
     hook?: { key: string; label: string; trigger?: 'button' | 'event' | 'schedule'; cause?: { id: string; kind: string } };
+    /** The comment a comment event is about: what it is on, and what it said when written (docs/comments.md). */
+    comment?: { id: string; on: CommentOn; loan_id?: string; flow?: { slug: string; name: string }; text?: string };
   };
 }
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo' | 'attachment' | 'place';
+  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo' | 'attachment' | 'place' | 'comment';
   key?: string;
   label?: string;
   from?: string;
@@ -1203,4 +1207,54 @@ export interface Vendor {
   scope_ids: string[];
   created_at: string;
   updated_at: string;
+}
+
+/** What comments are on (docs/comments.md). */
+export type CommentOn = 'asset' | 'category' | 'loan' | 'filing';
+
+/** A thing a comment is on, by name. */
+export interface CommentPlace {
+  id: string;
+  name: string;
+}
+
+/**
+ * A comment in Markdown, with its HTML rendered and sanitized on the
+ * server. A deleted one has neither, and says who deleted it.
+ */
+export interface Comment {
+  id: string;
+  on: CommentOn;
+  /** The asset, category or loan it is on; for a filing, the asset, with the flow as flow_id. */
+  on_id: string;
+  flow_id?: string;
+  /** The asset it is about, for an asset's, a loan's or a filing's. */
+  asset_id?: string;
+  body: string;
+  html: string;
+  /** Who wrote and deleted it, to those who may see who. */
+  author_id?: string;
+  author_name?: string;
+  mine: boolean;
+  created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  deleted_by?: string;
+  deleted_by_name?: string;
+  /** The category it is on, when listed with another thing's comments. */
+  category?: CommentPlace;
+  /** What it is on, in search results. */
+  place?: CommentPlace;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
+/** An asset a flow filed, which comments can be on. */
+export interface Filing {
+  flow_id: string;
+  flow_slug: string;
+  flow_name: string;
+  asset_id: string;
+  filed_at: string;
+  comments: number;
 }
