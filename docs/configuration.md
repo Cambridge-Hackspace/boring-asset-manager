@@ -2,7 +2,7 @@
 
 BAM! reads a small TOML file at startup, and is set up and maintained from the `bam` command line.
 The file holds only what is needed to start: the listening address, the database connection, where
-uploaded files are kept, which printer devices may be used, whether the MCP endpoint is on, the
+uploaded files are kept, which printer devices and Bluetooth printers may be used, whether the MCP endpoint is on, the
 email server, if any, and how relays connect.
 Everything else lives in the database and is managed through the web interface or the API.
 
@@ -58,6 +58,10 @@ local_path = "./data/uploads"
 # path.Match patterns. Empty (the default) turns device connections off.
 # Environment: BAM_PRINTERS_DEVICES, comma-separated.
 devices = []
+# Bluetooth LE printers' addresses ble connections may reach (docs/printing.md#bluetooth),
+# or path.Match patterns of them, such as "7C:2F:80:*". Empty (the default) turns ble
+# connections off. Environment: BAM_PRINTERS_BLUETOOTH, comma-separated.
+bluetooth = []
 
 [mcp]
 # The MCP endpoint, /api/v1/mcp, for assistants (docs/mcp.md). On unless turned
@@ -190,6 +194,7 @@ Several settings can also be given in the environment:
 | `storage.s3.secret_access_key` | `BAM_STORAGE_S3_SECRET_ACCESS_KEY` |
 | `server.trusted_proxies` | `BAM_SERVER_TRUSTED_PROXIES`, comma-separated |
 | `printers.devices` | `BAM_PRINTERS_DEVICES`, comma-separated |
+| `printers.bluetooth` | `BAM_PRINTERS_BLUETOOTH`, comma-separated |
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
 | `relay.bonemesh`, `relay.websocket` | `BAM_RELAY_BONEMESH`, `BAM_RELAY_WEBSOCKET` (`true` or `false`) |
 | `relay.bonemesh_port` | `BAM_RELAY_BONEMESH_PORT` |
@@ -371,4 +376,4 @@ BAM_TOKEN=bam_… ./bam mcp --url https://bam.example.org
 | `bam email test` | Sends a test email through the `[email]` server, so a mistake shows before a notification is missed. | [Notifications](notifications.md#email) |
 | `bam admin relay add` | Adds a relay, printing the one-time code that pairs it and the command to run on the relay. | [Relays](relays.md#without-the-web-interface) |
 | `bam relay join` | Pairs this machine as a relay of the main node at an address, with its code, or with `$BAM_RELAY_JOIN`, keeping the pairing in `relay.json`, `--state` or `$BAM_RELAY_STATE`. | [Relays](relays.md#pairing) |
-| `bam relay` | Runs this machine as a relay, beside its printers, with the pairing `bam relay join` kept, and the allowlist in `--config`'s `[relay] allow` and `[printers] devices`. `--bonemesh=false` or `--websocket=false` turns a transport off. | [Relays](relays.md#running-a-relay) |
+| `bam relay` | Runs this machine as a relay, beside its printers, with the pairing `bam relay join` kept, and the allowlist in `--config`'s `[relay] allow`, `[printers] devices` and `[printers] bluetooth`. `--bonemesh=false` or `--websocket=false` turns a transport off. | [Relays](relays.md#running-a-relay) |

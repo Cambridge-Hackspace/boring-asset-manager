@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -27,13 +28,15 @@ import (
 //   - windows: and a printer's name, in which * matches anything, for the
 //     Windows spooler.
 //
-// Device paths are [printers] devices, as on the main node.
+// Device paths are [printers] devices, and Bluetooth printers [printers]
+// bluetooth, as on the main node.
 type Allowlist struct {
-	entries []string
-	tcp     []tcpRule
-	urls    []string
-	windows []string
-	devices []string
+	entries   []string
+	tcp       []tcpRule
+	urls      []string
+	windows   []string
+	devices   []string
+	bluetooth []string
 }
 
 // tcpRule is one TCP entry: a range, an address, or a name pattern, and a
@@ -44,10 +47,11 @@ type tcpRule struct {
 	port   int
 }
 
-// ParseAllowlist reads a relay's allowlist entries, and the device path
-// patterns it may write to.
-func ParseAllowlist(entries, devices []string) (*Allowlist, error) {
-	a := &Allowlist{devices: devices}
+// ParseAllowlist reads a relay's allowlist entries, the device path
+// patterns it may write to, and the Bluetooth address patterns it may
+// reach.
+func ParseAllowlist(entries, devices, bluetooth []string) (*Allowlist, error) {
+	a := &Allowlist{devices: devices, bluetooth: bluetooth}
 	for _, raw := range entries {
 		e := strings.TrimSpace(raw)
 		if e == "" {
@@ -72,6 +76,8 @@ func ParseAllowlist(entries, devices []string) (*Allowlist, error) {
 			a.urls = append(a.urls, e)
 		case strings.HasPrefix(e, "/"):
 			return nil, fmt.Errorf("allowlist entry %q is a device: list device paths under [printers] devices", e)
+		case bluetoothAddress.MatchString(e):
+			return nil, fmt.Errorf("allowlist entry %q is a Bluetooth address: list Bluetooth printers under [printers] bluetooth", e)
 		default:
 			r, err := parseTCP(e)
 			if err != nil {
@@ -85,8 +91,17 @@ func ParseAllowlist(entries, devices []string) (*Allowlist, error) {
 			return nil, fmt.Errorf("device pattern %q must be an absolute path pattern", d)
 		}
 	}
+	for _, b := range bluetooth {
+		if err := printers.CheckBluetoothPattern(b); err != nil {
+			return nil, err
+		}
+	}
 	return a, nil
 }
+
+// bluetoothAddress is a Bluetooth address, or a pattern of them, as six
+// parts: never a TCP printer, though it would read as an IPv6 one.
+var bluetoothAddress = regexp.MustCompile(`^([0-9A-Fa-f*?]{1,2}:){5}[0-9A-Fa-f*?]{1,2}$`)
 
 // parseTCP reads a TCP entry.
 func parseTCP(e string) (tcpRule, error) {
@@ -188,16 +203,27 @@ func (a *Allowlist) Allows(c printers.Connection) error {
 				return nil
 			}
 		}
+	case printers.ConnBLE:
+		addr, err := printers.ParseBLEAddress(c.Address)
+		if err == nil && printers.MatchBluetooth(a.bluetooth, addr.MAC) {
+			return nil
+		}
+		if err == nil {
+			return fmt.Errorf("%s is outside this relay's allowlist", addr.MAC)
+		}
 	}
 	return refuse()
 }
 
-// Summary is the allowlist as the relay reports it: its entries, and its
-// device patterns.
+// Summary is the allowlist as the relay reports it: its entries, its
+// device patterns, and its Bluetooth ones.
 func (a *Allowlist) Summary() []string {
 	out := append([]string{}, a.entries...)
 	for _, d := range a.devices {
 		out = append(out, "device "+d)
+	}
+	for _, b := range a.bluetooth {
+		out = append(out, "bluetooth "+b)
 	}
 	return out
 }

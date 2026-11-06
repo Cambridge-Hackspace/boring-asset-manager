@@ -14,7 +14,7 @@ func TestAllowlist(t *testing.T) {
 		"[fd00::40]:515", // an IPv6 printer
 		"ipp://cups.lan/printers/*",
 		"windows:Zebra*",
-	}, []string{"/dev/usb/lp*"})
+	}, []string{"/dev/usb/lp*"}, []string{"7C:2F:80:*"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,27 +38,38 @@ func TestAllowlist(t *testing.T) {
 		{printers.Connection{Type: printers.ConnWindows, Address: "DYMO"}, false},
 		{printers.Connection{Type: printers.ConnDevice, Address: "/dev/usb/lp0"}, true},
 		{printers.Connection{Type: printers.ConnDevice, Address: "/etc/passwd"}, false},
+		{printers.Connection{Type: printers.ConnBLE, Address: "7C:2F:80:A1:B2:C3"}, true},
+		{printers.Connection{Type: printers.ConnBLE, Address: "7C:2F:80:A1:B2:C3?service=0000fff0-0000-1000-8000-00805f9b34fb"}, true},
+		{printers.Connection{Type: printers.ConnBLE, Address: "00:11:22:33:44:55"}, false},
 	} {
 		if err := a.Allows(c.conn); (err == nil) != c.ok {
 			t.Errorf("%+v: %v, want allowed %v", c.conn, err, c.ok)
 		}
 	}
-	if s := a.Summary(); len(s) != 7 || s[6] != "device /dev/usb/lp*" {
+	if s := a.Summary(); len(s) != 8 || s[6] != "device /dev/usb/lp*" || s[7] != "bluetooth 7C:2F:80:*" {
 		t.Fatalf("summary: %q", s)
 	}
 
 	// Empty reaches nothing.
-	none, _ := ParseAllowlist(nil, nil)
+	none, _ := ParseAllowlist(nil, nil, nil)
 	if err := none.Allows(printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.40:9100"}); err == nil {
 		t.Fatal("an empty allowlist allowed a printer")
 	}
-	for _, bad := range []string{"ftp://x/y", "/dev/usb/lp0", "printer.lan:http", "10.0.0.0/24:70000", "windows:", "["} {
-		if _, err := ParseAllowlist([]string{bad}, nil); err == nil {
+	if err := none.Allows(printers.Connection{Type: printers.ConnBLE, Address: "7C:2F:80:A1:B2:C3"}); err == nil {
+		t.Fatal("an empty allowlist allowed a Bluetooth printer")
+	}
+	// A Bluetooth address belongs under [printers] bluetooth, not [relay]
+	// allow, where it would read as an IPv6 host.
+	for _, bad := range []string{"ftp://x/y", "/dev/usb/lp0", "printer.lan:http", "10.0.0.0/24:70000", "windows:", "[", "7C:2F:80:A1:B2:C3", "7C:2F:80:*:*:*"} {
+		if _, err := ParseAllowlist([]string{bad}, nil, nil); err == nil {
 			t.Errorf("%q was taken", bad)
 		}
 	}
-	if _, err := ParseAllowlist(nil, []string{"dev/lp0"}); err == nil {
+	if _, err := ParseAllowlist(nil, []string{"dev/lp0"}, nil); err == nil {
 		t.Error("a relative device pattern was taken")
+	}
+	if _, err := ParseAllowlist(nil, nil, []string{"printer.lan"}); err == nil {
+		t.Error("a host name was taken as a Bluetooth pattern")
 	}
 }
 

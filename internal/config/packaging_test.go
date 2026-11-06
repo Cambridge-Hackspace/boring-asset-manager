@@ -52,7 +52,7 @@ func TestPackagedConfigsMatchTheirServices(t *testing.T) {
 // systemd unit looks for it, and that the unit keeps the pairing in the
 // state directory it is given.
 func TestPackagedRelayMatchesItsService(t *testing.T) {
-	for _, name := range []string{"BAM_RELAY_ALLOW", "BAM_PRINTERS_DEVICES"} {
+	for _, name := range []string{"BAM_RELAY_ALLOW", "BAM_PRINTERS_DEVICES", "BAM_PRINTERS_BLUETOOTH"} {
 		t.Setenv(name, "")
 	}
 	root := filepath.Join("..", "..", "packaging", "linux")
@@ -60,7 +60,7 @@ func TestPackagedRelayMatchesItsService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := relayd.ParseAllowlist(cfg.Relay.Allow, cfg.Printers.Devices); err != nil || len(cfg.Relay.Allow) == 0 {
+	if _, err := relayd.ParseAllowlist(cfg.Relay.Allow, cfg.Printers.Devices, cfg.Printers.Bluetooth); err != nil || len(cfg.Relay.Allow) == 0 {
 		t.Fatalf("the example allowlist %q: %v", cfg.Relay.Allow, err)
 	}
 	service, err := os.ReadFile(filepath.Join(root, "bam-relay.service"))

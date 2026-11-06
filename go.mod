@@ -7,6 +7,7 @@ require (
 	github.com/beevik/etree v1.8.1
 	github.com/coder/websocket v1.8.15
 	github.com/go-sql-driver/mysql v1.8.1
+	github.com/godbus/dbus/v5 v5.2.4
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9

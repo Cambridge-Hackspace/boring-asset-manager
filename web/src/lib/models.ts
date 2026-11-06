@@ -293,7 +293,8 @@ export interface TemplateSummary {
 }
 
 export interface PrinterConnection {
-  type: 'tcp' | 'device' | 'ipp' | 'windows';
+  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble';
+  /** For ble, the Bluetooth address and any service and characteristics as a query (lib/bluetooth.ts). */
   address: string;
   /** The relay the printer is reached through, if any (docs/relays.md). */
   relay?: string;
@@ -378,6 +379,17 @@ export interface DriverInfo {
   /** Set when the driver takes custom stock too. */
   custom_stock?: CustomStockInfo;
   options?: DriverOption[];
+  /** Set when the driver's printers connect over Bluetooth LE: the default service and characteristics. */
+  ble?: BLEProfile;
+}
+
+/** How a family of printers takes jobs over Bluetooth LE (docs/printing.md#bluetooth). */
+export interface BLEProfile {
+  service: string;
+  write: string;
+  notify?: string;
+  /** Each write waits for the printer to acknowledge it. */
+  ack?: boolean;
 }
 
 export interface Role {

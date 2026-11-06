@@ -152,6 +152,16 @@ func (s *Server) checkConnection(c printers.Connection) error {
 	return s.transport.Check(c)
 }
 
+// sendToPrinter delivers a job to a printer, a Bluetooth LE one's
+// connection taking its driver's profile where it sets none.
+func (s *Server) sendToPrinter(ctx context.Context, p *models.Printer, job []byte) error {
+	conn, err := printers.ConnectionFor(p.Driver, p.Connection)
+	if err != nil {
+		return fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
+	}
+	return s.transport.Send(ctx, conn, job)
+}
+
 func writePrinterError(w http.ResponseWriter, err error) bool {
 	switch {
 	case err == nil:
@@ -278,7 +288,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	// prints some labels and loses the rest.
 	turn := s.printerTurn(p.ID)
 	turn.Lock()
-	err = s.transport.Send(context.WithoutCancel(r.Context()), p.Connection, job)
+	err = s.sendToPrinter(context.WithoutCancel(r.Context()), p, job)
 	turn.Unlock()
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
@@ -427,7 +437,7 @@ func (s *Server) handleTestPrint(w http.ResponseWriter, r *http.Request) {
 	takeLonger(w)
 	turn := s.printerTurn(p.ID)
 	turn.Lock()
-	err = s.transport.Send(context.WithoutCancel(r.Context()), p.Connection, job)
+	err = s.sendToPrinter(context.WithoutCancel(r.Context()), p, job)
 	turn.Unlock()
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))

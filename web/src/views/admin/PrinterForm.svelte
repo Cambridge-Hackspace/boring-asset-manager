@@ -4,6 +4,7 @@
   import { messageOf } from '../../lib/errors';
   import type { DriverInfo, LabelStock, Printer, PrinterChanges, PrinterConnection } from '../../lib/models';
   import { describeChanges, describeStock, driverName, mediaFor, optionLabel, optionValueLabel, stockFor } from '../../lib/stock';
+  import { bleAddress, parseBLEAddress } from '../../lib/bluetooth';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   // Creates a printer, or edits one when printer is given. The form is
@@ -22,6 +23,7 @@
     device: 'A device path on the BAM server, such as /dev/usb/lp0. It must be allowed in the server’s [printers] devices setting.',
     ipp: 'An IPP queue URI, such as ipp://cups.lan/printers/labels. The queue must be raw.',
     windows: 'A Windows printer name or \\\\host\\share. Only when BAM runs on Windows.',
+    ble: 'The printer’s Bluetooth address, such as 7C:2F:80:A1:B2:C3. It must be allowed in the server’s [printers] bluetooth setting, and the server needs Bluetooth (BlueZ, on Linux).',
   };
 
   const initial = untrack(() => $state.snapshot(printer));
@@ -30,7 +32,12 @@
   let model = $state(initial?.model ?? '');
   let media = $state(initial?.media ?? '');
   let connType = $state<PrinterConnection['type']>(initial?.connection.type ?? 'tcp');
-  let address = $state(initial?.connection.address ?? '');
+  // A Bluetooth LE printer's address is entered in parts: its Bluetooth
+  // address, and the service and characteristics where they differ from
+  // the driver's.
+  const initialBLE = parseBLEAddress(initial?.connection.type === 'ble' ? initial.connection.address : '');
+  let address = $state(initial?.connection.type === 'ble' ? initialBLE.mac : (initial?.connection.address ?? ''));
+  let ble = $state({ service: initialBLE.service, write: initialBLE.write, notify: initialBLE.notify });
   // The relay the printer is reached through (docs/relays.md); '' is this server.
   let relay = $state(initial?.connection.relay ?? '');
   // The relays offered: those paired, and the one the printer names even if it is not.
@@ -46,7 +53,7 @@
   let affects = $state<string[]>([]);
   // Changing the printer again needs asking again.
   $effect(() => {
-    void [name, driver, model, media, connType, address, relay];
+    void [name, driver, model, media, connType, address, relay, ble.service, ble.write, ble.notify];
     affects = [];
   });
 
@@ -91,7 +98,8 @@
     event.preventDefault();
     error = '';
     busy = true;
-    const body = { name, driver, model, media, connection: { type: connType, address, ...(relay ? { relay } : {}) }, options: optionPayload() };
+    const sentAddress = connType === 'ble' ? bleAddress({ ...initialBLE, ...ble, mac: address }) : address;
+    const body = { name, driver, model, media, connection: { type: connType, address: sentAddress, ...(relay ? { relay } : {}) }, options: optionPayload() };
     try {
       if (initial) {
         const path = `/printers/${encodeURIComponent(initial.id)}`;
@@ -168,6 +176,7 @@
         <option value="device">Device on the BAM server</option>
         <option value="ipp">IPP / CUPS queue</option>
         <option value="windows">Windows printer</option>
+        <option value="ble">Bluetooth LE</option>
       </select>
     </div>
     <div>
@@ -177,6 +186,29 @@
         {relay ? `On ${relay}’s network: the relay’s own allowlist decides whether it may reach it.` : connectionHelp[connType]}
       </p>
     </div>
+    {#if connType === 'ble'}
+      <div class="grid gap-4 sm:col-span-2 sm:grid-cols-3">
+        <div>
+          <label class="text-xs" for="{pid}-ble-service">Service</label>
+          <input id="{pid}-ble-service" class="input font-mono" aria-describedby="{pid}-ble-help" placeholder={info?.ble?.service ?? 'Required'} bind:value={ble.service} />
+        </div>
+        <div>
+          <label class="text-xs" for="{pid}-ble-write">Write characteristic</label>
+          <input id="{pid}-ble-write" class="input font-mono" aria-describedby="{pid}-ble-help" placeholder={info?.ble?.write ?? 'Required'} bind:value={ble.write} />
+        </div>
+        <div>
+          <label class="text-xs" for="{pid}-ble-notify">Notify characteristic</label>
+          <input id="{pid}-ble-notify" class="input font-mono" aria-describedby="{pid}-ble-help" placeholder={info?.ble ? (info.ble.notify ?? 'None') : 'Optional'} bind:value={ble.notify} />
+        </div>
+        <p id="{pid}-ble-help" class="text-xs text-zinc-600 sm:col-span-3 dark:text-zinc-400">
+          {#if info?.ble}
+            UUIDs, such as fff0 or 0000fff0-0000-1000-8000-00805f9b34fb. Leave them blank for the driver’s own.
+          {:else}
+            UUIDs, such as fff0 or 0000fff0-0000-1000-8000-00805f9b34fb, from the printer’s documentation: this driver has none of its own.
+          {/if}
+        </p>
+      </div>
+    {/if}
     {#if relayChoices.length}
       <div class="sm:col-span-2">
         <label class="text-xs" for="{pid}-relay">Reached through</label>

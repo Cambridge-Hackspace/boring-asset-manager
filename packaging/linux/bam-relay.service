@@ -14,7 +14,8 @@ Type=simple
 User=bam
 Group=bam
 ExecStart=/usr/local/bin/bam relay --state /var/lib/bam-relay/relay.json --config /etc/bam/relay.toml
-# Environment overrides (BAM_RELAY_ALLOW, BAM_PRINTERS_DEVICES), one
+# Environment overrides (BAM_RELAY_ALLOW, BAM_PRINTERS_DEVICES,
+# BAM_PRINTERS_BLUETOOTH), one
 # NAME=value per line; the file is optional.
 EnvironmentFile=-/etc/bam/relay.environment
 Restart=on-failure
@@ -29,6 +30,9 @@ UMask=0077
 
 # Printers on USB device files usually belong to group lp: uncomment to
 # let the relay write to them, and list them under [printers] devices.
+# Bluetooth serial printers (/dev/rfcomm*) belong to group dialout, and
+# Bluetooth LE printers need group bluetooth to use BlueZ, listed under
+# [printers] bluetooth (docs/printing.md#bluetooth).
 #SupplementaryGroups=lp
 
 # Sandboxing: the relay needs the network, its state directory and

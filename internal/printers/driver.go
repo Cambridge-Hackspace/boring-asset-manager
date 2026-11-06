@@ -79,6 +79,9 @@ type DriverInfo struct {
 	// CustomStock is set when the driver takes custom stock as well.
 	CustomStock *CustomStockInfo `json:"custom_stock,omitempty"`
 	Options     []OptionInfo     `json:"options,omitempty"`
+	// BLE is the driver's Bluetooth LE profile, the default for a ble
+	// connection, when its printers connect over Bluetooth LE.
+	BLE *BLEProfile `json:"ble,omitempty"`
 }
 
 // MediaInfo describes a roll for clients choosing what is loaded.
@@ -155,7 +158,12 @@ func Drivers() []DriverInfo {
 	defer registryMu.RUnlock()
 	infos := make([]DriverInfo, 0, len(registry))
 	for _, d := range registry {
-		infos = append(infos, d.Info())
+		info := d.Info()
+		if b, ok := d.(BLEDriver); ok {
+			p := b.BLE()
+			info.BLE = &p
+		}
+		infos = append(infos, info)
 	}
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Driver < infos[j].Driver })
 	return infos

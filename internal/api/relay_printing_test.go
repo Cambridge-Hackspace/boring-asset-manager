@@ -20,7 +20,7 @@ import (
 // until stop is called or the test ends.
 func runRelay(t *testing.T, e *pairingEnv, p *relay.Pairing, allow ...string) (stop func()) {
 	t.Helper()
-	a, err := relayd.ParseAllowlist(allow, nil)
+	a, err := relayd.ParseAllowlist(allow, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

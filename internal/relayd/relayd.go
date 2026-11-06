@@ -55,7 +55,7 @@ type Config struct {
 	// Allow is what the relay may reach.
 	Allow *Allowlist
 	// Transport delivers jobs locally: a printers.Dispatcher allowing the
-	// allowlist's device paths.
+	// allowlist's device paths and Bluetooth printers.
 	Transport printers.Transport
 	// Client renews the certificate; nil is a default client.
 	Client *http.Client
