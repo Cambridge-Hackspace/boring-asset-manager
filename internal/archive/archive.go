@@ -13,6 +13,11 @@ package archive
 // version 1 archives are read as they are.
 const FormatVersion = 2
 
+// FirstSchemaVersion is the schema version the first archives were written
+// at (#139): no archive is older. A table made before it is in every
+// archive of its kind.
+const FirstSchemaVersion = 45
+
 // Format names the format in every header and manifest.
 const Format = "bam-archive"
 
@@ -68,6 +73,10 @@ type Column struct {
 type Table struct {
 	Name string
 	Kind Kind
+	// Since is the migration from which every schema has had it: an
+	// archive written before it need not hold or list it. A table older
+	// than FirstSchemaVersion is in every archive of its kind.
+	Since int
 	// Key is its primary key, which rows are written in the order of.
 	Key     []string
 	Columns []Column

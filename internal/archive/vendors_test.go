@@ -3,7 +3,6 @@ package archive
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -263,54 +262,7 @@ func TestAScopedReaderPackagesTheVendorsItSees(t *testing.T) {
 // vendor_id.
 func beforeVendors(t *testing.T, b []byte) []byte {
 	t.Helper()
-	gone := map[string]bool{}
-	for table, since := range tablesSince {
-		if since == VendorsVersion {
-			gone[table] = true
-		}
-	}
-	var out []member
-	for _, m := range unpack(t, b) {
-		if strings.HasPrefix(m.name, DataDir) {
-			table := strings.TrimPrefix(m.name, DataDir)
-			table = table[:strings.Index(table, "/")]
-			if gone[table] {
-				continue
-			}
-			if table == "events" {
-				var buf bytes.Buffer
-				for _, line := range strings.Split(strings.TrimSpace(string(m.data)), "\n") {
-					var row map[string]any
-					if err := json.Unmarshal([]byte(line), &row); err != nil {
-						t.Fatal(err)
-					}
-					if row["vendor_id"] != nil {
-						continue
-					}
-					delete(row, "vendor_id")
-					data, _ := json.Marshal(row)
-					buf.Write(append(data, '\n'))
-				}
-				m.data = buf.Bytes()
-			}
-		}
-		out = append(out, m)
-	}
-	return pack(t, reseal(t, out, func(h *Header, man *Manifest) {
-		h.SchemaVersion = VendorsVersion - 1
-		for table := range gone {
-			delete(man.Tables, table)
-		}
-		if _, ok := man.Tables["events"]; ok {
-			man.Tables["events"] = 0
-			for _, m := range out {
-				if strings.HasPrefix(m.name, DataDir+"events/") {
-					man.Tables["events"] += strings.Count(string(m.data), "\n")
-				}
-			}
-		}
-		man.Header.SchemaVersion = h.SchemaVersion
-	}))
+	return olderArchive(t, b, VendorsVersion-1)
 }
 
 // TestArchivesFromBeforeVendors: a backup or a package written before

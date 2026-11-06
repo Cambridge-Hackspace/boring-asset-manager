@@ -602,7 +602,7 @@ func TestAPackageFromBeforeHooksImportsWithThem(t *testing.T) {
 			t.Fatalf("the package does not hold %s", now)
 		}
 	}
-	before := pack(t, reseal(t, ms, func(h *Header, _ *Manifest) { h.SchemaVersion = migrations.HooksVersion - 1 }))
+	before := olderArchive(t, pack(t, reseal(t, ms, nil)), migrations.HooksVersion-1)
 
 	dst := setupStore(t)
 	plan, err := Import(context.Background(), dst, filestore.NewLocal(t.TempDir()), opener(before), ImportOptions{})
