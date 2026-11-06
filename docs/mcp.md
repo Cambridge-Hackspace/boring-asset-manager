@@ -146,7 +146,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
 | `create_asset` | `assets.write` | Up to 50, with field values by key, codes or the next free code, the place it is in, stock, and an icon of its own. A field its categories do not give it is refused before anything is added. |
-| `copy_asset` | `assets.write` | One like another, as `GET /api/v1/assets/{id}/copy` drafts it, with a name, field values, codes and quantity that differ, and its photos if asked. |
+| `copy_asset` | `assets.write` | One like another, as `GET /api/v1/assets/{id}/copy` drafts it, with a name, field values, codes and quantity that differ, and its photos, or all its attachments, if asked. |
 | `update_asset` | `assets.write` | Only what is given changes: categories and codes are added or removed, fields set or cleared, an icon of its own given or dropped; the rest is kept. |
 | `move_asset` | `assets.write` | |
 | `link_assets` | `assets.write` | By the link type's name, read from either end. |
@@ -163,6 +163,9 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `list_photos` | `assets.read` | As images; thumbnails unless asked. |
 | `add_photo` | `assets.write` | Base64. |
 | `reorder_photos`, `remove_photo` | `assets.write` | |
+| `list_attachments`, `read_attachment` | `assets.read` | An asset's or a category's attachments (docs/data-model.md#attachments); a file is read as an image, as text, or as a file to keep. |
+| `add_attachment` | `assets.write` for an asset's, `categories.manage` for a category's | Base64, with its file's name; its type is checked by its content. |
+| `update_attachment`, `reorder_attachments`, `remove_attachment` | `assets.write` for an asset's, `categories.manage` for a category's | |
 | `import_assets` | `assets.write` | See below. |
 
 `import_assets` runs a preview first. Then it is called with the same file, mapping and choice of

@@ -22,9 +22,9 @@ You can also start a new asset from where it goes: **Add something inside…** u
 
 Anyone allowed can **Report a problem**: that it needs maintenance, or is out of service, with a note saying what is wrong. Someone who edits assets marks it working again when it is fixed. Assets out of service cannot be lent.
 
-## Photos and links
+## Attachments and links
 
-Add photos on the asset's page; the first is shown in lists. **Links** join assets to each other: a bin *contains* screws, a drill is *used with* its bits. Where something is follows its links: a bin on a shelf, screws in the bin. Its page shows **Where** it is, with **Move** to put it somewhere else, and an asset that holds others lists them under **Contents**.
+Attach files under **Attachments** on the asset's page: photos (JPEG or PNG), documents (PDFs, plain text, Markdown and CSV files), and any other types your instance allows. Rename or describe each with **Edit**, and put them in order with the arrows; the first photo is shown in lists. Photos show on the page; documents download when you open them, so nothing uploaded can run in your browser. Duplicating an asset copies its attachments too, unless you untick them. **Links** join assets to each other: a bin *contains* screws, a drill is *used with* its bits. Where something is follows its links: a bin on a shelf, screws in the bin. Its page shows **Where** it is, with **Move** to put it somewhere else, and an asset that holds others lists them under **Contents**.
 
 ## Archiving
 

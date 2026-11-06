@@ -108,9 +108,10 @@ describe('PackagesPage', () => {
     render(PackagesPage, { params: {} });
     await fireEvent.click(within(await screen.findByTestId('category-tree')).getByRole('checkbox', { name: 'Tools' }));
     await fireEvent.click(screen.getByRole('radio', { name: 'Those in the categories chosen' }));
-    await fireEvent.click(screen.getByRole('checkbox', { name: 'Photos' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Attachments, photos among them' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Leave out documents/ }));
     const button = screen.getByTestId('export') as HTMLButtonElement;
-    await waitFor(() => expect(screen.getByTestId('plan').querySelector('p')?.textContent).toBe('The package holds 4 things and 2 assets with 1 photo. 1 asset you cannot see is left out.'));
+    await waitFor(() => expect(screen.getByTestId('plan').querySelector('p')?.textContent).toBe('The package holds 4 things and 2 assets with 1 attachment. 1 asset you cannot see is left out.'));
     expect(button.disabled).toBe(true);
     await fireEvent.input(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Workshop' } });
     await fireEvent.input(screen.getByRole('textbox', { name: 'License' }), { target: { value: 'CC0-1.0' } });
@@ -122,6 +123,7 @@ describe('PackagesPage', () => {
     expect(posted.license).toBe('CC0-1.0');
     expect([...(posted.selection.categories ?? [])].sort()).toEqual(['d', 't']);
     expect(posted.selection.assets).toEqual({ all: false, photos: true, links: false, history: false });
+    expect(posted.selection.no_documents).toBe(true);
     expect(screen.getByText('Your browser is saving Workshop.')).toBeTruthy();
     click.mockRestore();
   });

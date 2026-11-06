@@ -683,7 +683,7 @@ func TestASplitSetIsRestoredPartByPart(t *testing.T) {
 	if _, err := Write(ctx, src, blobs, other.open, Options{Split: 700 << 10}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := dst.Exec("DELETE FROM asset_photos"); err != nil {
+	if _, err := dst.Exec("DELETE FROM asset_attachments"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Restore(ctx, dst, dstBlobs, opener(other.parts[2].Bytes()), RestoreOptions{}); err == nil {

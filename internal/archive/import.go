@@ -175,7 +175,7 @@ var mergeTables = map[string]bool{
 	"templates": true, "images": true, "category_label_templates": true,
 	"icon_palette": true, "icon_settings": true, "icon_library": true, "category_icons": true, "icon_param_bindings": true, "icon_text_bindings": true,
 	"assets": true, "asset_categories": true, "asset_field_values": true, "asset_generator_keys": true, "asset_links": true,
-	"asset_placements": true, "asset_photos": true, "events": true,
+	"asset_placements": true, "asset_attachments": true, "events": true, "category_attachments": true,
 	"flows": true,
 }
 
@@ -440,7 +440,7 @@ func readArchived(ctx context.Context, st *store.Store, q querier, r io.Reader, 
 		case "asset_links":
 			a.counts.Links++
 			a.links[str(row, "relation_type_id")]++
-		case "asset_photos":
+		case "asset_attachments":
 			a.counts.Photos++
 		case "events":
 			a.counts.Events++
@@ -547,12 +547,17 @@ func hookRows(rows map[string][]map[string]any) {
 	}
 }
 
-// fileWanted reports whether an import stores a file: photos with assets,
-// label images with labels.
+// fileWanted reports whether an import may store a file: attachments'
+// with assets or categories, label images with labels.
 func fileWanted(key string, kinds []Kind) bool {
-	for prefix, k := range fileKinds {
+	for prefix, ks := range fileKinds {
 		if strings.HasPrefix(key, prefix) {
-			return hasKind(kinds, k)
+			for _, k := range ks {
+				if hasKind(kinds, k) {
+					return true
+				}
+			}
+			return false
 		}
 	}
 	return false
@@ -578,6 +583,17 @@ func eachMember(r io.Reader, kinds []Kind, row func(t *Table, row map[string]any
 		switch dir + "/" {
 		case DataDir:
 			table, _, _ := strings.Cut(rest, "/")
+			if r := retiredTable(table); r != nil {
+				// read as what it became
+				as := tableByName(r.As)
+				if !hasKind(kinds, as.Kind) {
+					continue
+				}
+				if err := eachRow(&r.Table, m.tr, func(old map[string]any) error { return row(as, r.Convert(old)) }); err != nil {
+					return fmt.Errorf("reading %s: %w", table, err)
+				}
+				continue
+			}
 			t := tableByName(table)
 			if t == nil || !mergeTables[t.Name] || !hasKind(kinds, t.Kind) {
 				continue

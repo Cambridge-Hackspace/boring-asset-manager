@@ -21,6 +21,8 @@
   // (docs/backups.md): both need users.manage and settings.manage.
   const allowed = $derived(session.can('users.manage') && session.can('settings.manage'));
 
+  // A download without documents keeps only images among the attachments.
+  let withoutDocuments = $state(false);
   let uploaded = $state<UploadState | null>(null);
   let checking = $state(false);
   let checked = $state<CheckResult | null>(null);
@@ -80,13 +82,17 @@
     <h2 id="download-heading" class="text-lg font-semibold">Download a backup</h2>
     <p class="text-sm">
       A backup holds everything in this instance (assets, the catalog, labels, people’s names and emails, settings, and every
-      photo and image) as one file, however large: your browser saves it as it is made. Keep it as carefully as the database.
+      attachment and image) as one file, however large: your browser saves it as it is made. Keep it as carefully as the database.
     </p>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" bind:checked={withoutDocuments} />
+      Leave out documents: keep only images among the attachments
+    </label>
     <p class="text-sm text-zinc-600 dark:text-zinc-400">
       It never holds passwords, sessions or tokens, or notification channels’ passwords. <code>bam backup</code>, on the server,
       makes one that does.
     </p>
-    <a class="btn-primary inline-block" href="/api/v1/backup" download data-testid="download-backup">Download a backup</a>
+    <a class="btn-primary inline-block" href={withoutDocuments ? '/api/v1/backup?without_documents=1' : '/api/v1/backup'} download data-testid="download-backup">Download a backup</a>
   </section>
 
   <section class="card mb-6 max-w-2xl space-y-4" aria-labelledby="replace-heading">

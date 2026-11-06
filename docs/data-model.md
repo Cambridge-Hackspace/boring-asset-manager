@@ -142,8 +142,8 @@ from the asset, so you change only what differs. The draft takes:
 - its links, each with its type, label, other asset, direction, and whether it is a location.
 
 In the form, where the asset is goes under **Where is it?**. The other links are listed, and each
-is made when the asset is created unless you untick it. The photos are listed the same way, and
-copied unless unticked.
+is made when the asset is created unless you untick it. Its attachments, its photos among them,
+are listed the same way, and copied unless unticked.
 
 A link is left out of the draft when:
 
@@ -152,8 +152,8 @@ A link is left out of the draft when:
 - the other asset is archived.
 - the person duplicating may not change the other asset.
 
-Condition, loans and history are not copied: the new asset starts its own. Photos are not part of
-the draft itself; they are copied when the new asset is created.
+Condition, loans and history are not copied: the new asset starts its own. Attachments are not
+part of the draft itself; they are copied when the new asset is created.
 
 ### Adding assets from elsewhere
 
@@ -181,22 +181,57 @@ queues its label. Then it keeps the form as it was, ready for the next one:
 - the name is selected, so you can type over it;
 - the assets made so far are listed, linked.
 
+### Attachments
+
+Assets and categories carry files: **attachments**. Vendors and contracts will too (#216). Each
+has a name, a description, who added it and when, and its place in its owner's order. Each is of
+one kind, decided by its content, not by its file's name alone:
+
+| Kind | What | How it is kept and served |
+|---|---|---|
+| `image` | A JPEG or PNG: a photo. | As under [Photos](#photos), below, and shown in the page. |
+| `document` | A PDF, whose content must begin as one does, or plain text (`.txt`, `.text`, `.log`), Markdown (`.md`, `.markdown`) or CSV (`.csv`), whose content must be UTF-8 text. | As uploaded, and only ever downloaded. |
+| `other` | A type the configuration allows (`[attachments] allowed_types`, see [Configuration](configuration.md)): a media type the content shows, such as `application/zip`, or an extension, such as `.stl`, for content that shows no type of its own. | As uploaded, and only ever downloaded, as bytes. |
+
+Anything else is refused. A file is at most `max_file_mb` (25 MB unless configured), and an asset
+or a category has at most `max_per_object` attachments (50 unless configured); an upload past
+either is refused with `413` or `409`. A PDF has no thumbnail: the page shows an icon for it, as
+drawing a PDF's first page needs more than BAM! carries.
+
+Documents and other files are served with `Content-Disposition: attachment`,
+`X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and other files as
+`application/octet-stream`, so that an uploaded HTML page or SVG is downloaded, never shown, and
+never runs, even opened directly.
+
+An asset's attachments follow `assets.write` to change, and its read access, scopes and all, to
+see. A category's follow `categories.manage` to change, and `assets.read`, as the category itself
+does, to see. Who added each is shown to those who track the asset (`assets.track`), as its
+history shows people. Adding and removing attachments is recorded in their owner's history: an
+asset's in `asset.edited` events, an image as a `photo` change and anything else as an
+`attachment` change, and a category's in `category.edited` events. An archived asset's
+attachments cannot be changed. When comments come (#223), a file attached while writing one will
+be attached to what the comment is on.
+
+You can also copy another asset's attachments onto this one, as duplicating an asset does. The
+copies go after this asset's own, in their order, as files of their own, so removing one leaves
+the other. Either all of them are copied or none are: if that would take it past its limit, the
+request fails with `409`.
+
 ### Photos
 
-An asset can have up to 10 photos, in order. The first is shown beside the asset in lists.
+An asset's photos are its image attachments, in their order among its attachments. The first is
+shown beside the asset in lists. Before attachments (migration `067`), assets had photos alone;
+they became image attachments, in the same order, named by their files, and their routes are kept
+as they were.
 
-You can upload a JPEG or PNG of up to 15 MB, at most 12,000 pixels on a side and 50 megapixels.
-BAM! decodes every photo and encodes it again, so it keeps none of its file's metadata, such as
-where it was taken. A JPEG is first turned upright, as its EXIF orientation says. Photos are
-scaled down to 2048 pixels on their longer side, with a 320-pixel thumbnail.
+You can upload a JPEG or PNG of up to 15 MB (or `max_file_mb`, if less), at most 12,000 pixels on
+a side and 50 megapixels. BAM! decodes every photo and encodes it again, so it keeps none of its
+file's metadata, such as where it was taken. A JPEG is first turned upright, as its EXIF
+orientation says. Photos are scaled down to 2048 pixels on their longer side, with a 320-pixel
+thumbnail.
 
-You can also copy another asset's photos onto this one. The copies go after this asset's own
-photos, in their order, as files of their own, so removing one leaves the other. Either all of
-them are copied or none are: if that would make more than 10 photos, the request fails with
-`409`.
-
-Adding and removing photos is recorded in the asset's history. An archived asset's photos cannot
-be changed.
+The photo routes see images alone: ordering photos moves them among the places images have,
+leaving the other attachments where they are, and copying photos copies images alone.
 
 ### Condition
 
@@ -371,10 +406,18 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 | `GET /api/v1/assets?favorite=true` | `assets.read`, and a person | List the assets they have starred (see [Favorites](favorites.md)). |
 | `POST /api/v1/assets/{id}/restore` | `assets.delete` | Restore an archived asset. Answers `skipped_codes`. |
 | `GET /api/v1/assets/{id}/copy` | `assets.write` | A draft of a new asset like this one, as `copy`. |
+| `GET /api/v1/assets/{id}/attachments` | `assets.read` | List its attachments in order, as `attachments`, with the instance's `limits`. |
+| `POST /api/v1/assets/{id}/attachments` | `assets.write` | Attach a file, as the `file` part of a multipart form, with optional `name` and `description` parts. Answers `201` with `attachment` and `attachments`. |
+| `GET /api/v1/assets/{id}/attachments/{attachment_id}` | `assets.read` | Serve one: an image shown, `?size=thumb` its thumbnail; anything else as a download. |
+| `PUT /api/v1/assets/{id}/attachments/{attachment_id}` | `assets.write` | Rename or describe it, with `{"name", "description"}`, each optional. |
+| `DELETE /api/v1/assets/{id}/attachments/{attachment_id}` | `assets.write` | Remove it, and its files. |
+| `PUT /api/v1/assets/{id}/attachments` | `assets.write` | Order them, with `{"attachment_ids": [...]}`, naming each once. |
+| `POST /api/v1/assets/{id}/attachments/copy` | `assets.write` on this asset, `assets.read` on the other | Copy another asset's attachments, with `{"from_asset_id": "..."}`. |
+| `GET`, `POST`, `PUT /api/v1/categories/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/categories/{id}/attachments/{attachment_id}` | `assets.read` to see, `categories.manage` to change | A category's, as an asset's. |
 | `POST /api/v1/assets/{id}/photos` | `assets.write` | Add a photo, as the `file` part of a multipart form. |
 | `GET /api/v1/assets/{id}/photos/{photo_id}` | `assets.read` | Serve a photo; `?size=thumb` serves its thumbnail. |
 | `DELETE /api/v1/assets/{id}/photos/{photo_id}` | `assets.write` | Remove a photo. |
-| `PUT /api/v1/assets/{id}/photos` | `assets.write` | Order the photos, with `{"photo_ids": [...]}`, naming each once. |
+| `PUT /api/v1/assets/{id}/photos` | `assets.write` | Order the photos among the places images have, with `{"photo_ids": [...]}`, naming each once. |
 | `POST /api/v1/assets/{id}/photos/copy` | `assets.write` on this asset, `assets.read` on the other | Copy another asset's photos, with `{"from_asset_id": "..."}`. |
 | `PUT /api/v1/assets/{id}/condition` | `assets.report` or `assets.write` to report a problem; `assets.write` to mark `ok` | Change the condition, with `{"condition", "note"}`. |
 | `GET /api/v1/generators/{type}/next-code` | `assets.write` | Suggest the next code, as `code`. |
@@ -429,7 +472,10 @@ For the `select` validation type, `options` holds the choices and an optional de
 `asset_generator_keys` maps compact, deterministic or custom constrained strings to an asset. The
 compound key `(generator_type, assigned_code)` is unique across all active assets.
 
-Photo files live under `storage.local_path/photos/` (see [Configuration](configuration.md)).
+Attachments' files, photos among them, live under `storage.local_path/photos/` (see
+[Configuration](configuration.md)): `photos/<id>`, and an image's thumbnail `photos/<thumb_id>`.
+They are kept in `asset_attachments` and `category_attachments`, a table for each owner, so that
+each goes with its owner's kind of information in backups; a vendor's will be another.
 
 Changes to links serialize on the `asset_links` lock.
 
@@ -441,3 +487,4 @@ Changes to links serialize on the `asset_links` lock.
 | `013` | Asset condition. |
 | `015` | Asset links and relation types. |
 | `018` | Asset photos. |
+| `067` | Attachments: `asset_attachments` and `category_attachments`; `asset_photos` become image attachments. |

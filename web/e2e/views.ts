@@ -30,6 +30,12 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
       },
     },
   });
+  // And a document, which downloads, as does one on its category.
+  for (const owner of [`assets/${asset.asset.asset.id}`, `categories/${cat.category.id}`]) {
+    await request.post(`/api/v1/${owner}/attachments`, {
+      multipart: { file: { name: 'manual.txt', mimeType: 'text/plain', buffer: Buffer.from('How to climb a ladder.') } },
+    });
+  }
   // In a box, so its page shows a location and links.
   const box = await post('/assets', { name: unique('Box') });
   const { relation_types } = await (await request.get('/api/v1/relation-types')).json();
@@ -142,6 +148,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/categories/${cat.category.id}?tab=labels`, ''],
     [`/categories/${cat.category.id}?tab=icon`, ''],
     [`/categories/${cat.category.id}?tab=links`, ''],
+    [`/categories/${cat.category.id}?tab=attachments`, ''],
     [`/categories/${cat.category.id}?tab=scopes`, ''],
     ['/categories/new', 'New category'],
     ['/fields', 'Fields'],

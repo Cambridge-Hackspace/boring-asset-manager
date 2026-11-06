@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/photos"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
-	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
 
 func testJPEG(t *testing.T, w, h int) []byte {
@@ -32,6 +32,8 @@ func testJPEG(t *testing.T, w, h int) []byte {
 
 func TestAssetPhotosAPI(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
+	// The photo routes are held to attachments' limit (attachments.go).
+	srv.cfg.Attachments.MaxPerObject = 6
 	cookie := sessionCookie(t, srv, admin.ID)
 	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
 	rec := doJSON(t, srv, cookie, http.MethodPost, "/api/v1/assets", `{"name":"Drill"}`)
@@ -106,18 +108,18 @@ func TestAssetPhotosAPI(t *testing.T) {
 		t.Errorf("%d files after removing one of two photos", n)
 	}
 
-	// No more than MaxPhotos.
-	for i := 1; i < store.MaxPhotos; i++ {
+	// No more than attachments.max_per_object.
+	for i := 1; i < srv.cfg.Attachments.MaxPerObject; i++ {
 		upload(cookie, testJPEG(t, 8, 8))
 	}
 	if got := upload(cookie, testJPEG(t, 8, 8)); !strings.HasPrefix(got.String(), "409") {
 		t.Errorf("one too many: %s", got)
 	}
-	if n := files(); n != 2*store.MaxPhotos {
+	if n := files(); n != 2*srv.cfg.Attachments.MaxPerObject {
 		t.Errorf("a refused upload left files: %d", n)
 	}
 	// Too large is refused before it is read.
-	big := bytes.Repeat([]byte("x"), photoUploadLimit+1)
+	big := bytes.Repeat([]byte("x"), photos.MaxBytes+multipartSlack+1)
 	if rec := do(t, srv, cookie, http.MethodPost, path, "multipart/form-data; boundary=x", bytes.NewReader(big)); rec.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("too large: %d", rec.Code)
 	}
@@ -125,6 +127,7 @@ func TestAssetPhotosAPI(t *testing.T) {
 
 func TestCopyingPhotos(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
+	srv.cfg.Attachments.MaxPerObject = 10
 	cookie := sessionCookie(t, srv, admin.ID)
 	reader := userWithPermissions(t, srv, "reader@hackspace.org", rbac.PermAssetsRead)
 	made := func(name string) string {
@@ -207,7 +210,7 @@ func TestCopyingPhotos(t *testing.T) {
 
 	// All or none: too many leaves no files behind.
 	full := made("Full")
-	for i := 0; i < store.MaxPhotos-1; i++ {
+	for i := 0; i < srv.cfg.Attachments.MaxPerObject-1; i++ {
 		upload(full, testJPEG(t, 8, 8))
 	}
 	before := files()

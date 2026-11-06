@@ -16,7 +16,10 @@ export interface Selection {
   flows?: string[];
   scopes?: string[];
   icons?: boolean;
+  /** Assets, with their attachments (photos, as attachments grew out of them), links and history. */
   assets?: { all: boolean; photos: boolean; links: boolean; history: boolean };
+  /** Leaves out the categories' and assets' attachments that are not images. */
+  no_documents?: boolean;
 }
 
 export type ItemKind =
@@ -161,13 +164,13 @@ function count(n: number, one: string): string {
   return `${n.toLocaleString()} ${one}${n === 1 ? '' : 's'}`;
 }
 
-/** Says what a plan holds: "The package holds 4 things and 2 assets with 1 photo." */
+/** Says what a plan holds: "The package holds 4 things and 2 assets with 1 attachment." */
 export function planSummary(plan: Plan, withPhotos: boolean): string {
   const things = plan.items.filter((i) => i.kind !== 'assets' && i.kind !== 'icons').length;
   let s = `The package holds ${count(things, 'thing')}`;
   if (plan.assets) {
     s += ` and ${count(plan.assets.assets, 'asset')}`;
-    if (withPhotos) s += ` with ${count(plan.assets.photos, 'photo')}`;
+    if (withPhotos) s += ` with ${count(plan.assets.photos, 'attachment')}`;
   }
   s += '.';
   const unseen = plan.assets?.unreadable ?? 0;
@@ -330,7 +333,7 @@ export function importSummary(plan: ImportPlan): string {
   if (n('skip') > 0) parts.push(`skips ${n('skip').toLocaleString()}`);
   let s = `It ${parts.join(', ')}`;
   if (plan.assets) {
-    s += `, and brings ${count(plan.assets.assets, 'asset')} with ${count(plan.assets.photos, 'photo')} and ${count(plan.assets.links, 'link')}`;
+    s += `, and brings ${count(plan.assets.assets, 'asset')} with ${count(plan.assets.photos, 'attachment')} and ${count(plan.assets.links, 'link')}`;
   }
   return s + '.';
 }

@@ -55,6 +55,9 @@ type Options struct {
 	May     Reader
 	Info    *PackageInfo
 	Preview []byte
+	// NoDocuments leaves out attachments that are not images: documents,
+	// and other files, with their rows.
+	NoDocuments bool
 	// setID, in tests, is the set's ID, so an archive can be written again
 	// the same.
 	setID string
@@ -80,8 +83,23 @@ var writeFormat = FormatVersion
 // filesNamed are the columns whose values name a stored file, with the
 // prefix of its key (filestore.Images).
 var filesNamed = map[string][]struct{ column, prefix string }{
-	"asset_photos": {{"id", "photos/"}, {"thumb_id", "photos/"}},
-	"images":       {{"id", "images/"}},
+	"asset_attachments":    {{"id", "photos/"}, {"thumb_id", "photos/"}},
+	"category_attachments": {{"id", "photos/"}, {"thumb_id", "photos/"}},
+	"images":               {{"id", "images/"}},
+}
+
+// attachmentTables are the tables of attachments, whose documents and
+// other files Options.NoDocuments and Selection.NoDocuments leave out.
+var attachmentTables = map[string]bool{"asset_attachments": true, "category_attachments": true}
+
+// leftOut reports whether a row is an attachment that is not an image,
+// which an archive without documents leaves out.
+func leftOut(t *Table, vals []any, noDocuments bool) bool {
+	if !noDocuments || !attachmentTables[t.Name] {
+		return false
+	}
+	kind, _ := text(vals[colIndex(t, "kind")])
+	return kind != "image"
 }
 
 // Write writes an archive of st and the files in blobs that its rows name,
@@ -177,7 +195,7 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 		if !hasKind(hdr.Kinds, t.Kind) {
 			continue
 		}
-		n, err := writeTable(ctx, st, tx, p, t, hdr.Secrets, named, plan, folder)
+		n, err := writeTable(ctx, st, tx, p, t, hdr.Secrets, named, plan, folder, opts.NoDocuments || opts.Select != nil && opts.Select.NoDocuments)
 		if err != nil {
 			return sum, fmt.Errorf("writing %s: %w", t.Name, err)
 		}
@@ -281,7 +299,7 @@ func selectRows(t *Table) string {
 // writeTable writes a table's rows, in data/, and in auth/ its secret
 // columns, with its key, or the whole of it when it is authentication.
 // It notes the files its rows name in named.
-func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Table, secrets bool, named map[string]bool, plan *Plan, folder *iconFolder) (int, error) {
+func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Table, secrets bool, named map[string]bool, plan *Plan, folder *iconFolder, noDocuments bool) (int, error) {
 	rows, err := tx.QueryContext(ctx, st.Rebind(selectRows(t)))
 	if err != nil {
 		return 0, err
@@ -302,6 +320,9 @@ func writeTable(ctx context.Context, st *store.Store, tx *sql.Tx, p *part, t *Ta
 	for rows.Next() {
 		if err := rows.Scan(ptrs...); err != nil {
 			return n, err
+		}
+		if leftOut(t, vals, noDocuments) {
+			continue
 		}
 		if plan != nil {
 			keep, err := plan.packaged(t, vals)

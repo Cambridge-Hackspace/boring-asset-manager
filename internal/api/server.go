@@ -17,6 +17,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/idp"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/relay"
@@ -291,6 +292,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/categories/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCategory)))
 	handle("PUT /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleUpdateCategory)))
 	handle("DELETE /api/v1/categories/{id}", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleDeleteCategory)))
+	handle("GET /api/v1/categories/{id}/attachments", RequirePermission(rbac.PermAssetsRead)(s.handleListAttachments(models.OwnerCategory)))
+	handle("POST /api/v1/categories/{id}/attachments", RequirePermission(rbac.PermCategoriesManage)(s.handleAddAttachment(models.OwnerCategory)))
+	handle("PUT /api/v1/categories/{id}/attachments", RequirePermission(rbac.PermCategoriesManage)(s.handleReorderAttachments(models.OwnerCategory)))
+	handle("GET /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerCategory)))
+	handle("PUT /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermCategoriesManage)(s.handleUpdateAttachment(models.OwnerCategory)))
+	handle("DELETE /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermCategoriesManage)(s.handleRemoveAttachment(models.OwnerCategory)))
 	// Icons (docs/icons.md): reading with assets.read; a category's own icon
 	// with categories.manage, and what every icon is drawn with, the
 	// library, palette and settings, with icons.manage.
@@ -429,6 +436,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/assets/{id}/quantity", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleAdjustQuantity)))
 	handle("PUT /api/v1/assets/{id}/running-low", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleSetAssetRunningLow)))
 	handle("PUT /api/v1/assets/{id}/condition", RequireAnyPermission(rbac.PermAssetsReport, rbac.PermAssetsWrite)(http.HandlerFunc(s.handleSetAssetCondition)))
+	// Attachments (docs/data-model.md#attachments); the photo routes are
+	// kept as they were, for an asset's image attachments.
+	handle("GET /api/v1/assets/{id}/attachments", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(s.handleListAttachments(models.OwnerAsset))))
+	handle("POST /api/v1/assets/{id}/attachments", RequirePermission(rbac.PermAssetsWrite)(s.handleAddAttachment(models.OwnerAsset)))
+	handle("PUT /api/v1/assets/{id}/attachments", RequirePermission(rbac.PermAssetsWrite)(s.handleReorderAttachments(models.OwnerAsset)))
+	handle("POST /api/v1/assets/{id}/attachments/copy", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleCopyAttachments)))
+	handle("GET /api/v1/assets/{id}/attachments/{attachment_id}", OpenToPublic(RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerAsset))))
+	handle("PUT /api/v1/assets/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsWrite)(s.handleUpdateAttachment(models.OwnerAsset)))
+	handle("DELETE /api/v1/assets/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsWrite)(s.handleRemoveAttachment(models.OwnerAsset)))
 	handle("POST /api/v1/assets/{id}/photos", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleUploadPhoto)))
 	handle("POST /api/v1/assets/{id}/photos/copy", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleCopyPhotos)))
 	handle("PUT /api/v1/assets/{id}/photos", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleReorderPhotos)))

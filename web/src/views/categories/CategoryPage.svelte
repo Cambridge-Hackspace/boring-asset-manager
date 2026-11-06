@@ -15,6 +15,7 @@
   import TabLinks from '../../components/TabLinks.svelte';
   import { currentTab } from '../../lib/tabs';
   import CategoryIconSection from './CategoryIconSection.svelte';
+  import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
 
   // /categories/new and /categories/:id
@@ -149,6 +150,7 @@
       { key: 'labels', label: 'Labels', on: (canManage && labelTemplates.length > 0) || canSpool || (labelConflicts[id] ?? 0) > 0 },
       { key: 'icon', label: 'Icon', on: !isSystem },
       { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
+      { key: 'attachments', label: 'Attachments', on: !isSystem },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
     ];
     const changed = new Set(unsaved.map((k) => tabOf[k]));
@@ -786,6 +788,12 @@
       </section>
     {/if}
   </div>
+
+  {#if !isSystem}
+    <div class="mt-6 max-w-2xl" id="tab-attachments" hidden={tab !== 'attachments'}>
+      <AttachmentsPanel owner="category" ownerId={id} ownerName={category.name} canEdit={canManage} onchange={(done) => (saved = done)} />
+    </div>
+  {/if}
 
   {#if canSeeScopes && scopes.length}
     <section class="mt-6 max-w-2xl" id="tab-scopes" aria-labelledby="scopes-heading" hidden={tab !== 'scopes'}>

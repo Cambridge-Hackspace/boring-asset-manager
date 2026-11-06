@@ -11,8 +11,10 @@ Archives are also the form a package takes, for sharing part of an instance with
 ## Making a backup
 
 `bam backup --to <file>` writes an archive of the whole instance. It includes the uploaded files
-that rows name (asset photos and their thumbnails, label images), wherever they are kept (see
-[Configuration](configuration.md)).
+that rows name (assets' and categories' attachments, photos and their thumbnails among them, and
+label images), wherever they are kept (see [Configuration](configuration.md)).
+`--without-documents` leaves out the attachments that are not images, documents and other files,
+with their rows; so does ticking **Leave out documents** on the Backups page.
 
 It is safe to run while BAM! runs:
 
@@ -27,6 +29,8 @@ It is safe to run while BAM! runs:
 ./bam backup --config ./config.toml --to ./bam-2026-10-29.bam.tar.gz
 # Leaving authentication out
 ./bam backup --config ./config.toml --to ./bam.bam.tar.gz --without-secrets
+# Leaving documents out: of the attachments, only images
+./bam backup --config ./config.toml --to ./bam.bam.tar.gz --without-documents
 # In parts of at most 4 GiB: bam.part1.bam.tar.gz, bam.part2.bam.tar.gz, ...
 ./bam backup --config ./config.toml --to ./bam.bam.tar.gz --split 4GiB
 ```
@@ -87,11 +91,11 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Kind | Key | Tables |
 |---|---|---|
 | Reports | `reports` | `reports` |
-| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes` |
+| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`, `category_attachments` and their files |
 | Labels | `labels` | `templates`, `images` and their files, `category_label_templates` |
 | Icons | `icons` | `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings` |
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites` |
-| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_photos` and their files, and their history, `events` |
+| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, and their history, `events` |
 | Flows | `flows` | `flows`, `flow_filings` |
 | Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes` |
 | Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, `relay_mesh`, and the secret columns described under [Authentication](#authentication) |
@@ -366,7 +370,13 @@ read. Its members, in order:
   members.
 - **`auth/<table>/…`**: authentication, in the same form (see [Authentication](#authentication)).
 - **`icons/` and `icons.json`**, when the archive holds icons (see [Icons in archives](#icons-in-archives)).
-- **`files/photos/<id>` and `files/images/<id>`**: the uploaded files, as stored.
+- **`files/photos/<id>` and `files/images/<id>`**: the uploaded files, as stored: under `photos/`,
+  every attachment's file, and each image's thumbnail; under `images/`, label images.
+
+An archive written before attachments (schema `066` or earlier) holds `data/asset_photos/` instead
+of `asset_attachments`, and no `category_attachments`. It still restores, into a database at its
+schema that is then migrated, which makes the photos image attachments; and imported, each photo
+becomes an image attachment.
 - **`manifest.json`**, last, once everything else is written. It holds:
   - the header again (with `set.parts`);
   - the rows of each table (`tables`);

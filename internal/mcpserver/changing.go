@@ -58,6 +58,8 @@ type copyIn struct {
 	Codes    []codeIn          `json:"codes,omitempty" jsonschema:"codes to give it instead of the next in the series of the original's; an empty code gives it none of that type"`
 	Quantity *int              `json:"quantity,omitempty" jsonschema:"for stock counted by quantity, how many the new one has; otherwise the original's"`
 	Photos   bool              `json:"photos,omitempty" jsonschema:"true to give it copies of the original's photos"`
+	// Attachments copies every attachment, photos among them.
+	Attachments bool `json:"attachments,omitempty" jsonschema:"true to give it copies of all the original's attachments: its photos, documents and other files"`
 }
 
 type copyOut struct {
@@ -66,6 +68,8 @@ type copyOut struct {
 	NotLinked []string     `json:"not_linked,omitempty" jsonschema:"links it could not be given, and why"`
 	Photos    int          `json:"photos,omitempty" jsonschema:"how many photos it was given"`
 	NoPhotos  string       `json:"no_photos,omitempty" jsonschema:"why the photos could not be copied"`
+	// Attachments is how many attachments it was given, with attachments.
+	Attachments int `json:"attachments,omitempty" jsonschema:"how many attachments it was given, photos among them"`
 }
 
 type updateIn struct {
@@ -243,9 +247,9 @@ func changingTools() []tool {
 			Description: "Add an asset like another, such as one more spool like this one: the same categories, field values, stock, icon and place, " +
 				"the next codes in the series of its own (after SP-014, SP-015), and its links, but not links that would take the other asset " +
 				"from it (what a box contains), nor its condition, loans or history. Change what differs with name, fields, codes and quantity; " +
-				"photos copies its photos too.",
+				"photos copies its photos too, and attachments all its attachments: photos, documents and other files.",
 			Annotations: changes("Copy an asset", false),
-		}, []string{"GET /api/v1/assets/{id}/copy", "POST /api/v1/assets", "POST /api/v1/assets/{id}/links", "POST /api/v1/assets/{id}/photos/copy"}, []string{rbac.PermAssetsWrite},
+		}, []string{"GET /api/v1/assets/{id}/copy", "POST /api/v1/assets", "POST /api/v1/assets/{id}/links", "POST /api/v1/assets/{id}/photos/copy", "POST /api/v1/assets/{id}/attachments/copy"}, []string{rbac.PermAssetsWrite},
 			func(ctx context.Context, e *env, in copyIn) (reply[copyOut], error) {
 				id, err := e.assetID(ctx, in.Asset)
 				if err != nil {
@@ -315,7 +319,18 @@ func changingTools() []tool {
 					}
 					out.Linked = append(out.Linked, what)
 				}
-				if in.Photos {
+				if in.Attachments {
+					var copied struct {
+						Attachments []struct {
+							Kind string `json:"kind"`
+						} `json:"attachments"`
+					}
+					if err := e.call(ctx, http.MethodPost, assetPath(made, "/attachments/copy"), map[string]any{"from_asset_id": id}, &copied); err != nil {
+						out.NoPhotos = err.Error()
+					} else {
+						out.Attachments = len(copied.Attachments)
+					}
+				} else if in.Photos {
 					var copied apiAsset
 					if err := e.call(ctx, http.MethodPost, assetPath(made, "/photos/copy"), map[string]any{"from_asset_id": id}, &copied); err != nil {
 						out.NoPhotos = err.Error()
@@ -340,8 +355,14 @@ func changingTools() []tool {
 					text += " It has a copy of the original's photo."
 				case out.Photos > 1:
 					text += fmt.Sprintf(" It has copies of the original's %d photos.", out.Photos)
+				case out.Attachments == 1:
+					text += " It has a copy of the original's attachment."
+				case out.Attachments > 1:
+					text += fmt.Sprintf(" It has copies of the original's %d attachments.", out.Attachments)
 				}
-				if out.NoPhotos != "" {
+				if out.NoPhotos != "" && in.Attachments {
+					text += " Could not copy its attachments: " + out.NoPhotos + "."
+				} else if out.NoPhotos != "" {
 					text += " Could not copy its photos: " + out.NoPhotos + "."
 				}
 				return say(out, "%s", text)

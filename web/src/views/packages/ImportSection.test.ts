@@ -69,7 +69,7 @@ describe('ImportSection', () => {
     render(ImportSection, { tree, onimported });
     await choosePackage();
     expect(screen.getByTestId('import-plan').textContent).toMatch(/the package Workshop 1\.0, by Hackspace/);
-    expect(screen.getByTestId('import-plan').textContent).toMatch(/creates 2 things \(1 of them copies\), and brings 2 assets with 1 photo/);
+    expect(screen.getByTestId('import-plan').textContent).toMatch(/creates 2 things \(1 of them copies\), and brings 2 assets with 1 attachment/);
 
     // what clashes is chosen for, the default chosen
     const choice = screen.getByRole('combobox', { name: 'What to do with the field Serial (serial)' }) as HTMLSelectElement;

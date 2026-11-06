@@ -27,7 +27,8 @@ type packageIn struct {
 	Scopes         []string `json:"scopes,omitempty" jsonschema:"scope IDs"`
 	Icons          bool     `json:"icons,omitempty" jsonschema:"the whole icon library, with the palette and icon settings"`
 	Assets         string   `json:"assets,omitempty" jsonschema:"none (the default), chosen (those in the categories chosen) or all"`
-	Photos         bool     `json:"photos,omitempty" jsonschema:"with the assets' photos"`
+	Photos         bool     `json:"photos,omitempty" jsonschema:"with the assets' attachments, photos among them"`
+	NoDocuments    bool     `json:"no_documents,omitempty" jsonschema:"leave out attachments that are not images: documents and other files"`
 	Links          bool     `json:"links,omitempty" jsonschema:"with the links between the assets packaged"`
 	History        bool     `json:"history,omitempty" jsonschema:"with the assets' history, without who did what"`
 	Name           string   `json:"name,omitempty" jsonschema:"the package's name; needed unless plan_only"`
@@ -42,7 +43,7 @@ func (in packageIn) selection() (map[string]any, error) {
 	sel := map[string]any{
 		"categories": in.Categories, "subtrees": in.Subtrees, "fields": in.Fields, "hooks": in.Hooks,
 		"relation_types": in.RelationTypes, "label_templates": in.LabelTemplates, "scan_templates": in.ScanTemplates,
-		"reports": in.Reports, "flows": in.Flows, "scopes": in.Scopes, "icons": in.Icons,
+		"reports": in.Reports, "flows": in.Flows, "scopes": in.Scopes, "icons": in.Icons, "no_documents": in.NoDocuments,
 	}
 	switch in.Assets {
 	case "", "none":

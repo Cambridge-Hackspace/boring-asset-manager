@@ -317,8 +317,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// MaxRequestBytes caps request bodies on every endpoint except image uploads
-// and asset imports, which set their own, larger limits.
+// MaxRequestBytes caps request bodies on every endpoint except uploads of
+// images and attachments, and asset imports, which set their own, larger
+// limits.
 const MaxRequestBytes = 1 << 20
 
 // LimitRequestBodies rejects bodies over the limit with 413 before a handler
@@ -345,8 +346,9 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 			case "/api/v1/icon-library/import":
 				limit = archiveBodyLimit
 			default:
-				if strings.HasPrefix(r.URL.Path, "/api/v1/assets/") && strings.HasSuffix(r.URL.Path, "/photos") {
-					limit = photoUploadLimit
+				// Held to the configured limit by its handler.
+				if isAttachmentUpload(r.URL.Path) {
+					limit = attachmentBodyCeiling
 				}
 			}
 		}

@@ -33,8 +33,11 @@ Each of these can be chosen, by ID:
 - flows;
 - scopes;
 - the icon library, with the palette and icon settings;
-- assets: those in the categories chosen, or every one, with or without their photos, the links
-  between them, and their history.
+- assets: those in the categories chosen, or every one, with or without their attachments (photos
+  among them; `--photos`), the links between them, and their history.
+
+The categories' attachments come with them. `--without-documents`, or **Leave out documents**,
+leaves out the attachments that are not images. Who added each is left out, as people are.
 
 Archived assets are left out.
 
@@ -133,7 +136,7 @@ The plan lists each thing the archive holds and what importing does with it:
 - import it as a **copy** under a new name;
 - **skip** it.
 
-It counts the assets, photos, links and history that come. It lists **problems** that stop the
+It counts the assets, attachments, links and history that come. It lists **problems** that stop the
 import, such as something needed that is skipped, or an icon that would not compile with this
 instance's lexicon.
 

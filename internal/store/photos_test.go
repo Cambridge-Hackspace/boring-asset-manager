@@ -73,8 +73,8 @@ func TestAssetPhotos(t *testing.T) {
 		t.Errorf("removing twice: %v", err)
 	}
 
-	// At most MaxPhotos, and none for archived or missing assets.
-	for i := len(a.Photos); i < MaxPhotos; i++ {
+	// At most DefaultMaxAttachments, and none for archived or missing assets.
+	for i := len(a.Photos); i < DefaultMaxAttachments; i++ {
 		if _, err := st.AddPhoto(id, photo(fmt.Sprintf("%d.jpg", i))); err != nil {
 			t.Fatal(err)
 		}
@@ -110,7 +110,7 @@ func TestAddingPhotosTogether(t *testing.T) {
 
 	// All or none: too many for what room is left adds none of them.
 	more := []models.AssetPhoto{}
-	for i := len(a.Photos); i <= MaxPhotos; i++ {
+	for i := len(a.Photos); i <= DefaultMaxAttachments; i++ {
 		more = append(more, photo(fmt.Sprintf("%d.jpg", i)))
 	}
 	if _, err := st.AddPhotos(id, more); !errors.Is(err, ErrTooManyPhotos) {

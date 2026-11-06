@@ -167,8 +167,8 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 			return nil, false
 		}
 		return with(r, "link_id", ids.of(str(r, "link_id"))), true
-	case "asset_photos":
-		return with(r, "id", ids.of(str(r, "id")), "thumb_id", ids.of(str(r, "thumb_id")), "asset_id", ids.of(str(r, "asset_id"))), true
+	case "asset_attachments":
+		return attachmentRow(r, ids, ap.b.files, "asset_id", ids.of(str(r, "asset_id"))), true
 	case "events":
 		var cat any
 		if c, ok := b.cats[str(r, "category_id")]; ok {
@@ -194,13 +194,26 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 	return nil, false
 }
 
+// attachmentRow is an attachment as imported: with IDs of its own, its owner
+// as owned here, no one as having added it, and its files noted in files
+// as the ones to store.
+func attachmentRow(r map[string]any, ids newIDs, files map[string]bool, owner string, ownerID any) map[string]any {
+	var thumb any
+	if t := str(r, "thumb_id"); t != "" {
+		files[t] = true
+		thumb = ids.of(t)
+	}
+	files[str(r, "id")] = true
+	return with(r, "id", ids.of(str(r, "id")), "thumb_id", thumb, owner, ownerID, "added_by", nil)
+}
+
 // fileKey is where a file of the archive is stored, or false when it is
 // not imported.
 func (ap *applier) fileKey(key string) (string, bool) {
 	if !fileWanted(key, ap.b.kinds) {
 		return "", false
 	}
-	if id, ok := strings.CutPrefix(key, "photos/"); ok {
+	if id, ok := strings.CutPrefix(key, "photos/"); ok && ap.b.files[id] {
 		return "photos/" + ap.b.ids.of(id), true
 	}
 	if id, ok := strings.CutPrefix(key, "images/"); ok && ap.b.imagesStored[id] {

@@ -185,7 +185,7 @@ func printImportPlan(w io.Writer, plan *archive.ImportPlan) {
 		fmt.Fprintln(w, line)
 	}
 	if a := plan.Assets; a != nil {
-		fmt.Fprintf(w, "  %d assets, %d photos, %d links and %d events of their history\n", a.Assets, a.Photos, a.Links, a.Events)
+		fmt.Fprintf(w, "  %d assets, %d attachments, %d links and %d events of their history\n", a.Assets, a.Photos, a.Links, a.Events)
 		if a.ValuesDropped > 0 || a.LinksDropped > 0 {
 			fmt.Fprintf(w, "  without %d values of fields skipped and %d links of link types skipped\n", a.ValuesDropped, a.LinksDropped)
 		}

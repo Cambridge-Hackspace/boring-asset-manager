@@ -12,7 +12,7 @@ These pages describe how BAM! works, for people running it and for people workin
 
 ## How it works
 
-- [Data model](data-model.md): fields, categories, assets, codes, photos, links and places, stored text and databases.
+- [Data model](data-model.md): fields, categories, assets, codes, attachments and photos, links and places, stored text and databases.
 - [Labels](labels.md): label templates, content bindings, codes and output formats.
 - [Template editor](template-editor.md): the label editor, its tools and shortcuts.
 - [Printing](printing.md): printers, label stock, printer drivers and connections, and the print queue.
