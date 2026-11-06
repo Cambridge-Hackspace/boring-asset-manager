@@ -129,8 +129,8 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
-| `search_assets` | `assets.read` | Every filter the asset list takes, favorites among them, and running low; 25 at a time, up to 200, with `offset`. |
-| `get_asset` | `assets.read` | Its fields, codes, place, contents, links, photos, hooks and icon, and where the icon comes from. |
+| `search_assets` | `assets.read` | Every filter the asset list takes, favorites and the vendor bought from among them, and running low; 25 at a time, up to 200, with `offset`. |
+| `get_asset` | `assets.read` | Its fields, codes, place, contents, links, photos, hooks and icon, and where the icon comes from; and where it came from, its `purchase`, its price, order number and invoice only with `purchases.read`. |
 | `look_up_code` | `assets.scan` | Its scan page ([Scanning](scanning.md)). |
 | `asset_history` | `assets.read` | |
 | `list_loans` | `assets.track` | |
@@ -147,7 +147,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | :--- | :--- | :--- |
 | `create_asset` | `assets.write` | Up to 50, with field values by key, codes or the next free code, the place it is in, stock, and an icon of its own. A field its categories do not give it is refused before anything is added. |
 | `copy_asset` | `assets.write` | One like another, as `GET /api/v1/assets/{id}/copy` drafts it, with a name, field values, codes and quantity that differ, and its photos, or all its attachments, if asked. |
-| `update_asset` | `assets.write` | Only what is given changes: categories and codes are added or removed, fields set or cleared, an icon of its own given or dropped; the rest is kept. |
+| `update_asset` | `assets.write` | Only what is given changes: categories and codes are added or removed, fields set or cleared, an icon of its own given or dropped, purchase details set or cleared one at a time; the rest is kept. Without `purchases.read`, its price, order number and invoice stay as they are. |
 | `move_asset` | `assets.write` | |
 | `link_assets` | `assets.write` | By the link type's name, read from either end. |
 | `unlink_assets` | `assets.write` | |

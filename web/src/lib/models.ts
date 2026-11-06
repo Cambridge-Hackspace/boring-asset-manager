@@ -25,7 +25,8 @@ export type Permission =
   | 'flows.run'
   | 'vendors.manage'
   | 'comments.write'
-  | 'comments.moderate';
+  | 'comments.moderate'
+  | 'purchases.read';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -238,7 +239,29 @@ export interface AssetEvent {
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo' | 'attachment' | 'place' | 'comment';
+  what:
+    | 'name'
+    | 'icon'
+    | 'category'
+    | 'field'
+    | 'code'
+    | 'stock'
+    | 'unit'
+    | 'threshold'
+    | 'condition'
+    | 'link'
+    | 'photo'
+    | 'attachment'
+    | 'place'
+    | 'comment'
+    // Purchase details (docs/data-model.md#purchases).
+    | 'vendor'
+    | 'order_date'
+    | 'received_date'
+    | 'price'
+    | 'order_number'
+    | 'warranty_end'
+    | 'invoice';
   key?: string;
   label?: string;
   from?: string;
@@ -282,6 +305,42 @@ export interface AssetWithDetails {
   resolved_icon?: ResolvedIcon | null;
   /** The icon it is drawn with for each rendition it has one for, resolved_icon among them. */
   resolved_icons?: Partial<Record<Rendition, ResolvedIcon>>;
+  /** Where it came from (docs/data-model.md#purchases); empty when nothing is recorded. */
+  purchase?: Purchase;
+}
+
+/**
+ * Where an asset came from. Dates are YYYY-MM-DD, empty when not known.
+ * The price, currency, order number and invoice are left out for someone
+ * without purchases.read for the asset, and prices_hidden says so; the
+ * vendor is left out when they may not see it.
+ */
+export interface Purchase {
+  vendor_id: string;
+  vendor_name: string;
+  order_date: string;
+  received_date: string;
+  warranty_end: string;
+  /** A decimal with as many places as its currency has, such as 12.50. */
+  price?: string;
+  /** Its ISO 4217 code, such as GBP. */
+  currency?: string;
+  order_number?: string;
+  invoice_attachment_id?: string;
+  invoice_name?: string;
+  prices_hidden?: boolean;
+}
+
+/** Purchase details as the asset form sends them: every one, so an absent one is emptied. */
+export interface PurchaseRequest {
+  vendor_id: string;
+  order_date: string;
+  received_date: string;
+  warranty_end: string;
+  price: string;
+  currency: string;
+  order_number: string;
+  invoice_attachment_id: string;
 }
 
 export interface GeneratorInfo {
@@ -850,6 +909,12 @@ export interface ReportFilter {
   running_low?: boolean;
   loan?: '' | 'open' | 'overdue';
   condition?: '' | 'problem' | Condition;
+  /** Assets bought from this vendor, by ID. */
+  vendor?: string;
+  /** Assets ordered (or, with no order date, received) within these dates, YYYY-MM-DD, either open. */
+  purchased_between?: { from?: string; to?: string };
+  /** Assets whose warranty ends before this date, YYYY-MM-DD. */
+  warranty_ends_before?: string;
 }
 
 export interface ReportSection {

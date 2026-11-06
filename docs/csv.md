@@ -20,6 +20,7 @@ Each row is one asset, with these columns:
 | `code.<type>` | The assigned code for a generator type: `code.qr`, `code.micro_qr`, `code.code128`. |
 | `quantity`, `unit`, `low_stock_threshold` | Stock counted by quantity ([Stock](stock-and-lending.md)). See [Stock](#stock). |
 | `icon` | The asset's own icon ([Icons](icons.md)). See [Icons](#icons). |
+| `vendor`, `order_date`, `received_date`, `price`, `currency`, `order_number`, `warranty_end` | Where it came from ([Purchases](data-model.md#purchases)). See [Purchases](#purchases). |
 | `field.<key>` | A field value, by corpus key. |
 | `links` | The asset's links ([Links](data-model.md)), each `verb:asset`, separated by `;`. See [Links](#links). |
 
@@ -49,6 +50,24 @@ assets drawn with their categories' icon.
 
 On import, a blank cell gives the asset its categories' icon again. A name must be one the build
 draws, unless it is the one the asset already has.
+
+### Purchases
+
+Export writes `vendor`, `order_date`, `received_date` and `warranty_end` only when some asset has
+purchase details, and `price`, `currency` and `order_number` only when some asset shows any. The
+vendor is written by name, dates as `YYYY-MM-DD`, and the price as a decimal in its currency, such
+as `12.50`. In a workbook, dates are dates and prices numbers, where each reads back as written.
+The price, currency and order number of assets whose prices the exporter may not see are blank
+(see [Seeing prices](access.md#seeing-prices)). The invoice is an attachment, and stays out.
+
+On import:
+
+- A blank cell keeps what the asset has, so an export of hidden prices imports back unchanged.
+- A vendor is named by its name, ignoring case, or its ID, among those the importer sees. Two
+  vendors of the same name need the ID.
+- A price needs a currency, in the row or the asset's own, and no more places than it has.
+- Giving the price, currency or order number of an asset whose prices the importer may not see is
+  a problem.
 
 ### Links
 

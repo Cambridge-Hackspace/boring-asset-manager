@@ -573,6 +573,13 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
     '{{loan.borrower}}',
     '{{loan.due}}',
     '{{asset.icon}}',
+    '{{asset.purchase.vendor}}',
+    '{{asset.purchase.order_date}}',
+    '{{asset.purchase.received_date}}',
+    '{{asset.purchase.price}}',
+    '{{asset.purchase.currency}}',
+    '{{asset.purchase.order_number}}',
+    '{{asset.purchase.warranty_end}}',
     ...generatorTypes.map((t) => `{{asset.code.${t}}}`),
     ...fieldKeys.map((k) => `{{field.${k}}}`),
   ];

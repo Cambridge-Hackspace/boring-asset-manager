@@ -52,6 +52,27 @@ type Filter struct {
 	// Loan is "open" or "overdue"; Condition a condition or "problem".
 	Loan      string `json:"loan,omitempty"`
 	Condition string `json:"condition,omitempty"`
+	// Vendor keeps assets bought from this vendor, by ID.
+	Vendor string `json:"vendor,omitempty"`
+	// PurchasedBetween keeps assets ordered within it, those with no order
+	// date by when they were received.
+	PurchasedBetween *DateRange `json:"purchased_between,omitempty"`
+	// WarrantyEndsBefore keeps assets whose warranty ends before this date,
+	// YYYY-MM-DD.
+	WarrantyEndsBefore string `json:"warranty_ends_before,omitempty"`
+}
+
+// DateRange is from one date to another, both included, each YYYY-MM-DD,
+// and either empty for no limit.
+type DateRange struct {
+	From string `json:"from,omitempty"`
+	To   string `json:"to,omitempty"`
+}
+
+// validDate reports whether s is a date written YYYY-MM-DD.
+func validDate(s string) bool {
+	_, err := time.Parse("2006-01-02", s)
+	return err == nil
 }
 
 // Section is one part of a report: Type is "table", or "chart" (see
@@ -114,6 +135,20 @@ func (s *Spec) check(fieldKnown func(string) bool) error {
 	}
 	if err := textcheck.Check("filter.search", s.Filter.Search, textcheck.MaxName); err != nil {
 		return fail("%v", err)
+	}
+	if err := textcheck.Check("filter.vendor", s.Filter.Vendor, textcheck.MaxName); err != nil {
+		return fail("%v", err)
+	}
+	if b := s.Filter.PurchasedBetween; b != nil {
+		if b.From != "" && !validDate(b.From) || b.To != "" && !validDate(b.To) {
+			return fail("filter.purchased_between takes dates written YYYY-MM-DD")
+		}
+		if b.From != "" && b.To != "" && b.From > b.To {
+			return fail("filter.purchased_between must run from a date to one no earlier")
+		}
+	}
+	if e := s.Filter.WarrantyEndsBefore; e != "" && !validDate(e) {
+		return fail("filter.warranty_ends_before is a date written YYYY-MM-DD")
 	}
 	if len(s.Sections) == 0 {
 		return fail("a report needs at least one section")
@@ -220,9 +255,14 @@ type Row struct {
 	Cells   []string `json:"cells"`
 }
 
-// Matches applies the parts of a filter the store does not: categories and
-// running low. categories is every category, for their parents and flags.
+// Matches applies the parts of a filter the store does not: categories,
+// running low, and where it came from. categories is every category, for
+// their parents and flags. The asset is as the request may see it, so a
+// vendor hidden from it matches no vendor.
 func (f Filter) Matches(a *models.AssetWithDetails, categories []models.Category) bool {
+	if !f.matchesPurchase(a.Purchase) {
+		return false
+	}
 	if len(f.CategoryIDs) == 0 && !f.RunningLow {
 		return true
 	}
@@ -410,4 +450,25 @@ func safeCells(cells []string) []string {
 		out[i] = assetcsv.Defuse(c)
 	}
 	return out
+}
+
+// matchesPurchase applies the filter's vendor, purchase dates and warranty
+// end.
+func (f Filter) matchesPurchase(p models.Purchase) bool {
+	if f.Vendor != "" && p.VendorID != f.Vendor {
+		return false
+	}
+	if b := f.PurchasedBetween; b != nil && (b.From != "" || b.To != "") {
+		on := p.OrderDate
+		if on == "" {
+			on = p.ReceivedDate
+		}
+		if on == "" || b.From != "" && on < b.From || b.To != "" && on > b.To {
+			return false
+		}
+	}
+	if f.WarrantyEndsBefore != "" && (p.WarrantyEnd == "" || p.WarrantyEnd >= f.WarrantyEndsBefore) {
+		return false
+	}
+	return true
 }

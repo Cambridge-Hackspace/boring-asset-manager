@@ -285,9 +285,10 @@ func Serve(configPath string) error {
 	defer stopWorker()
 	n := cfg.Notifications
 	worker := &notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL,
-		KeepFor: time.Duration(n.KeepDays) * 24 * time.Hour,
-		Policy:  store.ChannelPolicy{FailingFor: time.Duration(n.DisableAfterHours) * time.Hour, Failures: n.DisableAfterFailures},
-		Updates: notify.NewUpdateCheck(cfg.Updates, api.Version)}
+		WarrantyDays: cfg.Purchases.WarrantyNoticeDays,
+		KeepFor:      time.Duration(n.KeepDays) * 24 * time.Hour,
+		Policy:       store.ChannelPolicy{FailingFor: time.Duration(n.DisableAfterHours) * time.Hour, Failures: n.DisableAfterFailures},
+		Updates:      notify.NewUpdateCheck(cfg.Updates, api.Version)}
 	switch {
 	case worker.Updates == nil:
 	case release.Is(api.Version):

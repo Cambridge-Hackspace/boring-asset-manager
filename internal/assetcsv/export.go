@@ -22,8 +22,17 @@ const (
 	ColumnThreshold  = "low_stock_threshold"
 	ColumnLinks      = "links"
 	ColumnIcon       = "icon"
-	CodePrefix       = "code."
-	FieldPrefix      = "field."
+	// Where an asset came from (docs/data-model.md#purchases): its vendor,
+	// by name, its dates, YYYY-MM-DD, and its price in its currency.
+	ColumnVendor       = "vendor"
+	ColumnOrderDate    = "order_date"
+	ColumnReceivedDate = "received_date"
+	ColumnPrice        = "price"
+	ColumnCurrency     = "currency"
+	ColumnOrderNumber  = "order_number"
+	ColumnWarrantyEnd  = "warranty_end"
+	CodePrefix         = "code."
+	FieldPrefix        = "field."
 )
 
 // A links cell lists links as verb:asset, separated by LinkSeparator.
@@ -60,9 +69,10 @@ func Undefuse(s string) string {
 // Export writes assets as CSV: id, name, categories, a code column for each
 // generator type, the stock columns when any asset's stock is counted
 // by quantity, an icon column when any asset has an icon of its own (blank
-// for those drawn with their categories'), a field column for every field
-// any asset has a value for,
-// by key, and, when any asset has links and refs is given, a links column,
+// for those drawn with their categories'), the purchase columns when any
+// asset has purchase details (the price, currency and order number only
+// when one shows any), a field column for every field any asset has a
+// value for, by key, and, when any asset has links and refs is given, a links column,
 // naming other assets as refs does.
 func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs) error {
 	cols, rows := table(assets, cats, generatorTypes, refs, filledFieldKeys(assets), nil)
@@ -134,9 +144,12 @@ type column struct{ name, kind string }
 // are, before CSV defuses them: Export's columns, with fieldKeys as the
 // field columns, of the kinds fieldKinds gives by key (text when not).
 func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs, fieldKeys []string, fieldKinds map[string]string) ([]column, [][]string) {
-	stocked, linked, iconed := false, false, false
+	stocked, linked, iconed, bought, priced := false, false, false, false, false
 	for _, a := range assets {
 		stocked = stocked || a.Asset.Stock != nil
+		p := a.Purchase
+		bought = bought || p.VendorName != "" || p.OrderDate != "" || p.ReceivedDate != "" || p.WarrantyEnd != ""
+		priced = priced || p.Price != "" || p.Currency != "" || p.OrderNumber != ""
 		iconed = iconed || a.Asset.IconName != nil
 		linked = linked || (refs != nil && len(a.Links) > 0)
 	}
@@ -150,6 +163,15 @@ func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []
 	}
 	if iconed {
 		cols = append(cols, column{ColumnIcon, kindText})
+	}
+	if bought {
+		cols = append(cols, column{ColumnVendor, kindText}, column{ColumnOrderDate, kindDate}, column{ColumnReceivedDate, kindDate})
+	}
+	if priced {
+		cols = append(cols, column{ColumnPrice, kindNumber}, column{ColumnCurrency, kindText}, column{ColumnOrderNumber, kindText})
+	}
+	if bought {
+		cols = append(cols, column{ColumnWarrantyEnd, kindDate})
 	}
 	for _, k := range fieldKeys {
 		kind := fieldKinds[k]
@@ -181,6 +203,16 @@ func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []
 				icon = *a.Asset.IconName
 			}
 			row = append(row, icon)
+		}
+		p := a.Purchase
+		if bought {
+			row = append(row, p.VendorName, p.OrderDate, p.ReceivedDate)
+		}
+		if priced {
+			row = append(row, p.Price, p.Currency, p.OrderNumber)
+		}
+		if bought {
+			row = append(row, p.WarrantyEnd)
 		}
 		for _, k := range fieldKeys {
 			row = append(row, a.FieldValues[k])

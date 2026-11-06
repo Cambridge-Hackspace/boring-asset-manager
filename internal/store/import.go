@@ -32,6 +32,9 @@ type ImportRow struct {
 	// Icon sets the asset's own icon, "" for its categories'; nil leaves
 	// it as it is.
 	Icon *string
+	// Purchase sets each of the asset's purchase details it gives, keeping
+	// those it leaves empty; nil leaves them all as they are.
+	Purchase *PurchaseInput
 }
 
 // ImportAssets applies validated rows in one transaction under the
@@ -107,9 +110,9 @@ func (s *Store) ImportAssets(rows []ImportRow, links []ImportLink) ([]string, er
 	return created, nil
 }
 
-// importRow writes one row's name, categories, icon, stock and field
-// values. It returns the function that records a change of the asset's
-// quantity, if there was one, as setStockTx does.
+// importRow writes one row's name, categories, icon, stock, field values
+// and purchase details. It returns the function that records a change of
+// the asset's quantity, if there was one, as setStockTx does.
 func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) (recordQuantity func() error, err error) {
 	if row.ID == "" {
 		if _, err := s.TxExec(tx, "INSERT INTO assets (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)", id, row.Name, now, now); err != nil {
@@ -170,6 +173,15 @@ func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) (
 			if _, err := s.TxExec(tx, "INSERT INTO asset_field_values (asset_id, field_id, value, updated_at) VALUES (?, ?, ?, ?)", id, fieldID, v, now); err != nil {
 				return nil, fmt.Errorf("setting field: %w", err)
 			}
+		}
+	}
+	if row.Purchase != nil {
+		had, err := s.purchaseTx(tx, id)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.setPurchaseTx(tx, id, overlayPurchase(PurchaseInputOf(had), *row.Purchase)); err != nil {
+			return nil, err
 		}
 	}
 	return recordQuantity, nil

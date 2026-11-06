@@ -30,6 +30,8 @@ type assetSnapshot struct {
 	stock      *models.AssetStock
 	// icon is its own icon's name, "" for its categories'.
 	icon string
+	// purchase is its purchase details.
+	purchase models.Purchase
 }
 
 type fieldSnapshot struct {
@@ -79,7 +81,14 @@ func (s *Store) snapshotAssetTx(tx *sql.Tx, id string) (*assetSnapshot, error) {
 		}
 		snap.fields[fieldID] = f
 	}
-	return snap, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	if snap.purchase, err = s.purchaseTx(tx, id); err != nil {
+		return nil, err
+	}
+	return snap, nil
 }
 
 // scanPairs runs a query for one asset that returns two text columns.
@@ -102,7 +111,7 @@ func (s *Store) scanPairs(tx *sql.Tx, query, id string, add func(k, v string)) e
 // diffAssets lists what changed from before to after; a nil before is an
 // asset that did not exist. Changes come in a fixed order: the name, its
 // icon, then categories, fields and codes, each sorted as a person would
-// read them, then the stock.
+// read them, then the stock, then its purchase details.
 func diffAssets(before, after *assetSnapshot) []models.EventChange {
 	if before == nil {
 		before = &assetSnapshot{}
@@ -161,7 +170,7 @@ func diffAssets(before, after *assetSnapshot) []models.EventChange {
 			changes = append(changes, models.EventChange{What: "threshold", From: from, To: to})
 		}
 	}
-	return changes
+	return append(changes, diffPurchases(before.purchase, after.purchase)...)
 }
 
 // diffCodes lists the codes that changed, by generator type.

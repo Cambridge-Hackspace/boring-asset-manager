@@ -152,7 +152,8 @@ A link is left out of the draft when:
 - the other asset is archived.
 - the person duplicating may not change the other asset.
 
-Condition, loans and history are not copied: the new asset starts its own. Attachments are not
+Condition, loans, history and [purchase details](#purchases) are not copied: the new asset
+starts its own, bought on its own. Attachments are not
 part of the draft itself; they are copied when the new asset is created.
 
 ### Adding assets from elsewhere
@@ -255,6 +256,67 @@ Setting the same condition and note again records nothing.
 
 The asset list filters on condition with `?condition=`: one of the three conditions, or `problem`
 for any asset that is not ok. The home page lists the assets that need attention.
+
+### Purchases
+
+Every asset can record where it came from, in its **Purchase** section. Each detail is optional:
+
+| Detail | What | In the API |
+|---|---|---|
+| Vendor | The [vendor](vendors.md) it was bought from. | `vendor_id`, and `vendor_name` in answers |
+| Ordered, received | The dates it was ordered and arrived. | `order_date`, `received_date` |
+| Price | What it cost, in its currency. | `price` and `currency` |
+| Order number | The order or invoice number, up to 255 characters. | `order_number` |
+| Warranty | The date its warranty ends. | `warranty_end` |
+| Invoice | One of its own [attachments](#attachments), such as a PDF. | `invoice_attachment_id`, and `invoice_name` in answers |
+
+These are built in, rather than fields a category defines, so that reports, the vendor's page and
+warranties can rely on them.
+
+- **Dates** are written `YYYY-MM-DD`, and are days, not moments.
+- **Prices** are kept exactly, as a whole number of the currency's minor units (pence or cents),
+  never as a float. They are written as a decimal with the currency's places: `12.50` in `GBP`,
+  `1300` in `JPY`, which has no minor unit. A price needs its currency, its three-letter ISO 4217
+  code. It takes no more places than the currency has, and no sign, grouping or symbol. The
+  largest is fifteen digits, which a spreadsheet keeps exactly.
+- **The invoice** must be one of the asset's own attachments, so it can be named only once the
+  asset has some. Removing that attachment forgets it as the invoice, and the asset's history
+  says so.
+- **A vendor deleted** is forgotten as the vendor of every asset bought from it. The rest of
+  their purchase details stay.
+
+**Who sees them.** Anyone who reads an asset sees its vendor, when they may see the vendor (see
+[Vendors](vendors.md)), and its dates. Its price, currency, order number and invoice also need
+`purchases.read` for the asset (see [Access](access.md#seeing-prices)). Without it, they are left
+out of its page, the asset list, its history, exports, reports, labels, packages and MCP, and
+answers mark it `"prices_hidden": true`.
+
+**Changing them** follows `assets.write`, in the asset form or with `purchase` in
+`POST /api/v1/assets` and `PUT /api/v1/assets/{id}`. An object replaces every detail, so one left
+out is emptied; leaving `purchase` out keeps them. Two things are kept as they are, whatever the
+request says:
+
+- without `purchases.read`, the price, currency, order number and invoice, which the requester
+  cannot see;
+- a vendor the requester cannot see, unless they name another.
+
+Naming a vendor the requester cannot see is refused (`400`).
+
+**History.** Changes are recorded in `asset.edited` events, as `vendor`, `order_date`,
+`received_date`, `price` (with its currency), `order_number`, `warranty_end` and `invoice`
+changes. Those who cannot see prices see neither the `price`, `order_number` and `invoice`
+changes, nor an edit that changed nothing else.
+
+**Warranties.** A number of days before an asset's warranty ends, 30 unless configured
+(`[purchases] warranty_notice_days`, see [Configuration](configuration.md)), BAM! records a
+`warranty.expiring` event, which notification channels can subscribe to (see
+[Notifications](notifications.md)). Each asset's warranty is announced once for each end it has:
+a new end is announced again. A warranty that had already ended when first seen is not, nor is
+an archived asset's. Several servers sharing a database announce it once.
+
+The asset list keeps the assets bought from a vendor with `?vendor_id=`, which answers `404` for a
+vendor the requester cannot see. A vendor's page lists them. [Reports](reports.md) filter and
+show purchase details, and the CSV and Excel files carry them (see [CSV](csv.md)).
 
 ### Codes
 
@@ -423,6 +485,7 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 | `PUT /api/v1/assets/{id}/photos` | `assets.write` | Order the photos among the places images have, with `{"photo_ids": [...]}`, naming each once. |
 | `POST /api/v1/assets/{id}/photos/copy` | `assets.write` on this asset, `assets.read` on the other | Copy another asset's photos, with `{"from_asset_id": "..."}`. |
 | `PUT /api/v1/assets/{id}/condition` | `assets.report` or `assets.write` to report a problem; `assets.write` to mark `ok` | Change the condition, with `{"condition", "note"}`. |
+| `GET /api/v1/assets?vendor_id={id}` | `assets.read` | The assets bought from a vendor the requester can see (see [Purchases](#purchases)). |
 | `GET /api/v1/generators/{type}/next-code` | `assets.write` | Suggest the next code, as `code`. |
 | `GET /api/v1/relation-types` | `assets.read` | List relation types. |
 | `POST /api/v1/relation-types` | `categories.manage` | Create a relation type. |
@@ -437,6 +500,7 @@ The asset list (`GET /api/v1/assets`) also takes the category and search filters
 `GET /api/v1/assets/{id}` returns, among the rest:
 
 - `condition` and `condition_note`;
+- `purchase`, its [purchase details](#purchases), as the requester may see them;
 - `links`, each with the `label` read from this asset, the other asset, and whether it is
   `outgoing`;
 - `location`, the chain of containers, outermost first;
@@ -458,6 +522,8 @@ location.
 | `asset_generator_keys` | Asset codes | `asset_id` (UUID), `generator_type` (string: `"qr"`, `"micro_qr"` or `"code128"`), `assigned_code` (string, unique per `generator_type`) |
 | `relation_types` | Relation types | `name`, `inverse_name`, `is_symmetric`, `is_single`, `is_location` |
 | `asset_links` | Links between assets | |
+| `asset_purchases` | Where each asset came from, a row for an asset with any | `asset_id`, `vendor_id` (nullable; `NULL` once the vendor is deleted), `order_date`, `received_date`, `warranty_end` (`YYYY-MM-DD`, nullable), `price_minor` (minor units, nullable), `currency` (ISO 4217, or empty), `order_number`, `invoice_attachment_id` (one of the asset's attachments, nullable; `NULL` once removed) |
+| `warranty_notices` | The warranties announced, each claimed by inserting it | `asset_id`, `warranty_end`, `sent_at` |
 
 For the `select` validation type, `options` holds the choices and an optional default:
 
@@ -493,3 +559,4 @@ Changes to links serialize on the `asset_links` lock.
 | `067` | Attachments: `asset_attachments` and `category_attachments`; `asset_photos` become image attachments. |
 | `068` | Vendors (`vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments`), categories' preferred vendors (`category_vendors`), and `events.vendor_id`. See [Vendors](vendors.md). |
 | `069` | Comments: `asset_comments`, `category_comments`, `loan_comments` and `flow_filing_comments`, a table for each kind of thing they are on. See [Comments](comments.md). |
+| `070` | Purchase details (`asset_purchases`), warranties announced (`warranty_notices`), and `purchases.read`, granted to every role that reads assets where it reads them. See [Purchases](#purchases). |
