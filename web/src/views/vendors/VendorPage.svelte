@@ -368,7 +368,7 @@
       {@const site = websiteHref(vendor.website)}
       <dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[max-content_1fr]">
         <dt class="font-semibold">Website</dt>
-        <dd>{#if site}<a class="underline" href={site} rel="noopener noreferrer" target="_blank">{vendor.website}</a>{:else}<span class="text-zinc-600 dark:text-zinc-400">None</span>{/if}</dd>
+        <dd>{#if site}<a class="inline-flex min-h-11 items-center underline" href={site} rel="noopener noreferrer" target="_blank">{vendor.website}</a>{:else}<span class="text-zinc-600 dark:text-zinc-400">None</span>{/if}</dd>
         <dt class="font-semibold">Account number</dt>
         <dd>{#if vendor.account_number}<span class="font-mono">{vendor.account_number}</span>{:else}<span class="text-zinc-600 dark:text-zinc-400">None</span>{/if}</dd>
         <dt class="font-semibold">Address</dt>
