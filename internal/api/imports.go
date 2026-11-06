@@ -116,7 +116,7 @@ func (rs readableSource) GetAssetByID(id string) (*models.AssetWithDetails, erro
 
 // prepareImport plans an import, writing the error response if the file
 // cannot be planned at all. The importer may change only assets in scopes
-// they can write in.
+// they can write in, and give prices only where they may see them.
 func (s *Server) prepareImport(w http.ResponseWriter, r *http.Request, data []byte, mapping []string, opts assetcsv.Options) (*assetcsv.Plan, bool) {
 	scopesOf, err := s.store.ScopeResolver()
 	if err != nil {
@@ -129,6 +129,17 @@ func (s *Server) prepareImport(w http.ResponseWriter, r *http.Request, data []by
 		writeServerError(w, err, "read the icon build")
 		return nil, false
 	}
+	// Vendors are named among those the importer sees, and prices given
+	// only where they see them.
+	seen, _, err := s.visibleVendors(r.Context())
+	if err != nil {
+		writeServerError(w, err, "read the vendors")
+		return nil, false
+	}
+	for _, v := range seen {
+		opts.Vendors = append(opts.Vendors, v)
+	}
+	opts.SeesPrices = func(scopes []string) bool { return Allows(r.Context(), rbac.PermPurchasesRead, scopes) }
 	plan, err := assetcsv.PrepareWith(readableSource{s.store, s, r}, data, mapping, opts)
 	if errors.Is(err, assetcsv.ErrUnreadable) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
@@ -190,6 +201,10 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, store.ErrGeneratorCodeExists) || errors.Is(err, store.ErrAssetNotFound) || errors.Is(err, store.ErrImportOutdated) {
 		// Something changed since the check; nothing was imported.
 		writeJSONError(w, http.StatusConflict, "Assets changed while importing, and nothing was imported: "+err.Error())
+		return
+	}
+	if errors.Is(err, store.ErrInvalidPurchase) || errors.Is(err, store.ErrVendorNotFound) {
+		writeJSONError(w, http.StatusBadRequest, "Nothing was imported: "+err.Error())
 		return
 	}
 	if err != nil {

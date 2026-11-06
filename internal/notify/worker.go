@@ -23,6 +23,9 @@ type Worker struct {
 	Mailer Mailer
 	// Updates is the check for a newer release; nil when it is off.
 	Updates *UpdateCheck
+	// WarrantyDays is how many days before an asset's warranty ends its
+	// warranty.expiring event is recorded: 0 on the day it ends.
+	WarrantyDays int
 	// Poll is how often to look for due deliveries (default 5s).
 	Poll time.Duration
 	// Lease is how long a claimed delivery is reserved (default 2m). It
@@ -73,12 +76,15 @@ func (w *Worker) Run(ctx context.Context) {
 	ticker := time.NewTicker(w.Poll)
 	defer ticker.Stop()
 	for {
-		// Loans past due, and things left past their date, become events
-		// first, so their notices go out now.
+		// Loans past due, things left past their date, and warranties about
+		// to end become events first, so their notices go out now.
 		if _, err := w.Store.RecordOverdueLoans(w.Now()); err != nil {
 			log.Printf("notifications: %v", err)
 		}
 		if _, err := w.Store.RecordOverdueFilings(w.Now()); err != nil {
+			log.Printf("notifications: %v", err)
+		}
+		if _, err := w.Store.RecordExpiringWarranties(w.Now(), w.WarrantyDays); err != nil {
 			log.Printf("notifications: %v", err)
 		}
 		if _, err := w.SendLoanReminders(ctx); err != nil {

@@ -68,7 +68,7 @@ describe('VendorPage', () => {
     render(VendorPage, { params: { id: 'v1' } });
     const tabs = await screen.findByRole('navigation', { name: 'Parts of this vendor' });
     // Those who do not manage vendors, categories or users see no scopes.
-    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Attachments', 'History']);
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Assets', 'Attachments', 'History']);
 
     const site = screen.getByRole('link', { name: 'https://acme.example' });
     expect([site.getAttribute('href'), site.getAttribute('rel'), site.getAttribute('target')]).toEqual(['https://acme.example', 'noopener noreferrer', '_blank']);
@@ -201,5 +201,35 @@ describe('VendorPage', () => {
     fakeApi({ 'GET /vendors/v1': () => ({ status: 404, body: { error: 'Vendor not found' } }) });
     render(VendorPage, { params: { id: 'v1' } });
     expect((await screen.findByRole('alert')).textContent).toContain('Vendor not found');
+  });
+});
+
+describe('VendorPage assets', () => {
+  it('lists the assets bought from it that the viewer may read, with their prices where shown', async () => {
+    const asset = (id: string, name: string, purchase: object) => ({ asset: { id, name }, purchase });
+    const { sent } = api(false, {
+      'GET /assets': () => ({
+        assets: [
+          asset('a2', 'Saw', { vendor_id: 'v1', vendor_name: 'Acme', order_date: '', received_date: '2026-02-01', warranty_end: '', prices_hidden: true }),
+          asset('a1', 'Drill', { vendor_id: 'v1', vendor_name: 'Acme', order_date: '2026-01-05', received_date: '', warranty_end: '2028-01-09', price: '129.99', currency: 'GBP' }),
+        ],
+      }),
+    });
+    at('assets');
+    render(VendorPage, { params: { id: 'v1' } });
+    const section = (await screen.findByRole('heading', { name: 'Bought from it' })).closest('section')!;
+    await vi.waitFor(() => expect(within(section).getAllByRole('row')).toHaveLength(3));
+    const rows = within(section).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').map((c) => c.textContent?.trim()).join('|'));
+    expect(rows[0]).toBe('Drill|2026-01-05|129.99 GBP|2028-01-09');
+    expect(rows[1]).toBe('Saw|2026-02-01||');
+    expect(within(section).getByRole('link', { name: 'Drill' }).getAttribute('href')).toBe('/assets/a1');
+    expect(sent.some((r) => r.method === 'GET' && r.path === '/assets')).toBe(true);
+  });
+
+  it('says when none was bought from it', async () => {
+    api(false, { 'GET /assets': () => ({ assets: [] }) });
+    at('assets');
+    render(VendorPage, { params: { id: 'v1' } });
+    expect(await screen.findByText(/No asset you can see was bought from it/)).toBeTruthy();
   });
 });

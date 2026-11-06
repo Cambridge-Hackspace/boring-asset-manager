@@ -257,6 +257,10 @@ const (
 	EventInstanceUpgraded        = "instance.upgraded"
 	EventInstanceUpdateFailed    = "instance.update_failed"
 	EventInstanceUpdateAvailable = "instance.update_available"
+	// EventWarrantyExpiring records once that an asset's warranty ends
+	// soon (docs/data-model.md#purchases), with the end as DueAt, and again
+	// for a new end. Channels can subscribe to it.
+	EventWarrantyExpiring = "warranty.expiring"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -705,6 +709,50 @@ type AssetWithDetails struct {
 	// ResolvedIcons is the icon it is drawn with for each rendition it has
 	// one for, ResolvedIcon among them.
 	ResolvedIcons map[string]*ResolvedIcon `json:"resolved_icons"`
+	// Purchase is where it came from: empty when nothing is recorded.
+	Purchase Purchase `json:"purchase"`
+}
+
+// Purchase is where an asset came from (docs/data-model.md#purchases). Every
+// detail is optional. Dates are YYYY-MM-DD, empty when not known.
+type Purchase struct {
+	// VendorID is the vendor it was bought from, and VendorName its name;
+	// both empty when none is recorded, or the requester may not see it.
+	VendorID     string `json:"vendor_id"`
+	VendorName   string `json:"vendor_name"`
+	OrderDate    string `json:"order_date"`
+	ReceivedDate string `json:"received_date"`
+	WarrantyEnd  string `json:"warranty_end"`
+	// Price is a decimal with as many places as its Currency has, such as
+	// 12.50, kept exactly as minor units (internal/money); Currency is its
+	// ISO 4217 code. OrderNumber is the order or invoice number, and
+	// InvoiceID the invoice: one of the asset's attachments, whose name is
+	// InvoiceName. They are left out for a requester without purchases.read
+	// for the asset, and PricesHidden says so.
+	Price        string `json:"price,omitempty"`
+	Currency     string `json:"currency,omitempty"`
+	OrderNumber  string `json:"order_number,omitempty"`
+	InvoiceID    string `json:"invoice_attachment_id,omitempty"`
+	InvoiceName  string `json:"invoice_name,omitempty"`
+	PricesHidden bool   `json:"prices_hidden,omitempty"`
+}
+
+// IsZero reports whether nothing is recorded.
+func (p Purchase) IsZero() bool {
+	return p.VendorID == "" && p.OrderDate == "" && p.ReceivedDate == "" && p.WarrantyEnd == "" &&
+		p.Price == "" && p.Currency == "" && p.OrderNumber == "" && p.InvoiceID == ""
+}
+
+// HidePrices leaves out what only purchases.read sees: the price, currency,
+// order number and invoice.
+func (p *Purchase) HidePrices() {
+	p.Price, p.Currency, p.OrderNumber, p.InvoiceID, p.InvoiceName = "", "", "", "", ""
+	p.PricesHidden = true
+}
+
+// HideVendor leaves out the vendor, for a requester who may not see it.
+func (p *Purchase) HideVendor() {
+	p.VendorID, p.VendorName = "", ""
 }
 
 // Renditions are the forms an icon takes for where it is drawn

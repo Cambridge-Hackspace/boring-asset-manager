@@ -3,7 +3,8 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { renderMarkdown } from '../../lib/markdown';
-  import type { Category, Scope, Vendor, VendorContact } from '../../lib/models';
+  import type { AssetWithDetails, Category, Scope, Vendor, VendorContact } from '../../lib/models';
+  import { priceText } from '../../lib/purchases';
   import { actorName } from '../../lib/people';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate, router } from '../../lib/router.svelte';
@@ -28,6 +29,8 @@
   let canManage = $state(false);
   // The categories that name it among the vendors they are bought from.
   let usedBy = $state<Category[]>([]);
+  // The assets bought from it that the requester may read (#218).
+  let bought = $state<AssetWithDetails[]>([]);
   // Scopes (docs/access.md): those who manage users, categories or vendors
   // see them; changing them takes vendors.manage in the scopes it ends up in.
   const canSeeScopes = $derived(session.canAny('users.manage', 'categories.manage', 'vendors.manage'));
@@ -74,12 +77,13 @@
 
   // The page in tabs (#161), kept in the address. All stay on the page,
   // hidden but for one, so changes not saved in one survive looking at
-  // another. The assets bought from it (#218), its catalog (#219) and its
-  // contracts (#221) are to join these as tabs of their own.
+  // another. Its catalog (#219) and its contracts (#221) are to join these
+  // as tabs of their own.
   const tabOf: Record<string, string> = { details: 'details', scopes: 'scopes' };
   const tabs = $derived.by(() => {
     const all = [
       { key: 'details', label: 'Details', on: true },
+      { key: 'assets', label: 'Assets', on: !isNew },
       { key: 'attachments', label: 'Attachments', on: true },
       { key: 'history', label: 'History', on: true },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
@@ -124,6 +128,9 @@
       fill(r.vendor);
       usedBy = await request<{ categories: Category[] }>('GET', '/categories')
         .then((c) => (c.categories ?? []).filter((x) => x.vendor_ids?.includes(id)).sort((a, b) => a.name.localeCompare(b.name)))
+        .catch(() => []);
+      bought = await request<{ assets: AssetWithDetails[] }>('GET', `/assets?vendor_id=${encodeURIComponent(id)}`)
+        .then((a) => (a.assets ?? []).sort((x, y) => x.asset.name.localeCompare(y.asset.name)))
         .catch(() => []);
       await loadHistory();
     } catch (err) {
@@ -422,6 +429,34 @@
       {/if}
     </section>
   </div>
+
+  <section class="mt-6 max-w-3xl" id="tab-assets" aria-labelledby="bought-heading" hidden={tab !== 'assets'}>
+    <h2 id="bought-heading" class="section-title mb-3">Bought from it</h2>
+    {#if bought.length === 0}
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">No asset you can see was bought from it. An asset's Purchase, in its form, names its vendor.</p>
+    {:else}
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-zinc-300 dark:border-zinc-700">
+            <th scope="col" class="py-2 pr-4 font-semibold">Asset</th>
+            <th scope="col" class="py-2 pr-4 font-semibold">Ordered</th>
+            <th scope="col" class="py-2 pr-4 font-semibold">Price</th>
+            <th scope="col" class="py-2 font-semibold">Warranty ends</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each bought as a (a.asset.id)}
+            <tr class="border-b border-zinc-200 dark:border-zinc-800">
+              <td class="pr-4"><a class="inline-flex min-h-11 items-center underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a></td>
+              <td class="pr-4">{a.purchase?.order_date || a.purchase?.received_date || ''}</td>
+              <td class="pr-4">{priceText(a.purchase)}</td>
+              <td>{a.purchase?.warranty_end ?? ''}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
+  </section>
 
   <div class="mt-6 max-w-2xl" id="tab-attachments" hidden={tab !== 'attachments'}>
     <AttachmentsPanel owner="vendor" ownerId={id} ownerName={vendor.name} canEdit={canManage} onchange={attachmentsChanged} />

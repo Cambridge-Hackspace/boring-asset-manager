@@ -58,7 +58,7 @@ What is chosen brings what it needs:
 | A label template | Its images, the fields it binds, and the icons it draws by name |
 | A report or scan template | The fields it shows or groups by, and the categories it looks in |
 | A flow | Its categories, label templates, hooks, the fields it asks or sets, and the flow whose filings it finds |
-| Assets | Their categories, the icons they draw as their own, and the link types of their links |
+| Assets | Their categories, the icons they draw as their own, the link types of their links, their purchase details, and the vendors they were bought from |
 
 A category whose parent is not in the package keeps what it inherits as its own: its parent's
 fields, and its parent's label templates and scan template when it names none.
@@ -82,6 +82,7 @@ A package never holds:
 - notification channels and their secrets;
 - printers;
 - loans;
+- the warranties announced;
 - what flows filed;
 - icon revisions;
 - this instance's settings.
@@ -101,6 +102,7 @@ A package holds only what the requester may read:
 | Vendors | `assets.read` in their scopes, or anywhere for one in none |
 | Assets | `assets.read` in their scopes |
 | Assets' history | `events.read` in their scopes |
+| Assets' prices, order numbers and invoices | `purchases.read` in their scopes |
 
 - Choosing what cannot be read is refused.
 - What something needs that cannot be read stays behind, and is listed.
@@ -188,6 +190,8 @@ something else.
 ### What comes in and what does not
 
 What comes in is the catalog, labels, reports, icons, flows and assets.
+An asset's purchase details name its vendor as imported, or matched with one here, and its
+invoice among its attachments; a package without its attachments names no invoice.
 
 People, roles, settings, printers, notification channels and authentication are never merged:
 they are an instance's own. An archive holding authentication is imported without it, with a

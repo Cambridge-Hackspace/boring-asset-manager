@@ -297,3 +297,39 @@ describe('AssetPage kept values', () => {
     expect(screen.getByText('gone').classList.contains('font-mono')).toBe(true);
   });
 });
+
+describe('AssetPage purchase', () => {
+  const page = (purchase: AssetWithDetails['purchase']) => {
+    fakeApi({
+      'GET /assets/a1': () => ({ asset: { ...withStock(5, false), purchase } }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+  };
+
+  it('shows where it came from, linking its vendor and invoice', async () => {
+    page({
+      vendor_id: 'v1', vendor_name: 'Acme', order_date: '2026-01-05', received_date: '2026-01-09', warranty_end: '2099-01-09',
+      price: '129.99', currency: 'GBP', order_number: 'PO-17', invoice_attachment_id: 'inv', invoice_name: 'invoice.pdf',
+    });
+    const section = (await screen.findByRole('heading', { name: 'Purchase' })).closest('section')!;
+    expect(section.textContent).toContain('129.99 GBP');
+    expect(section.textContent).toContain('PO-17');
+    expect(section.textContent).toContain('Ends 2099-01-09');
+    expect(screen.getByRole('link', { name: 'Acme' }).getAttribute('href')).toBe('/vendors/v1');
+    expect(screen.getByRole('link', { name: 'invoice.pdf' }).getAttribute('href')).toBe('/api/v1/assets/a1/attachments/inv');
+  });
+
+  it('says when its price is hidden', async () => {
+    page({ vendor_id: '', vendor_name: '', order_date: '2026-01-05', received_date: '', warranty_end: '', prices_hidden: true });
+    expect(await screen.findByText(/price, order number and invoice are hidden/)).toBeTruthy();
+    expect(screen.queryByText('Price')).toBeNull();
+  });
+
+  it('has no section when nothing is recorded and it cannot be edited', async () => {
+    page({ vendor_id: '', vendor_name: '', order_date: '', received_date: '', warranty_end: '' });
+    await screen.findByText(/5 pcs left/);
+    expect(screen.queryByRole('heading', { name: 'Purchase' })).toBeNull();
+  });
+});

@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type Field, type GeneratorInfo, type Report, type ReportResult, type ReportSection, type ReportSpec } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type Field, type GeneratorInfo, type Report, type ReportResult, type ReportSection, type ReportSpec, type Vendor } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { placeholders } from '../../lib/template';
   import CategoryPicker from '../../components/CategoryPicker.svelte';
@@ -19,6 +19,10 @@
   let categories = $state<Category[]>([]);
   let fields = $state<Field[]>([]);
   let generators = $state<GeneratorInfo[]>([]);
+  let vendors = $state<Vendor[]>([]);
+  // Bought between, apart from the filter so either end may be empty.
+  let boughtFrom = $state('');
+  let boughtTo = $state('');
   let preview = $state<ReportResult | null>(null);
   let loading = $state(true);
   let busy = $state(false);
@@ -38,10 +42,13 @@
         request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? []),
         request<{ generators: GeneratorInfo[] }>('GET', '/generators').then((r) => r.generators ?? []),
       ]);
+      vendors = await request<{ vendors: Vendor[] }>('GET', '/vendors').then((r) => r.vendors ?? [], () => []);
       if (id) {
         const r = (await request<{ report: Report }>('GET', `/reports/${encodeURIComponent(id)}`)).report;
         name = r.name;
         categoryIds = [...(r.spec.filter.category_ids ?? [])];
+        boughtFrom = r.spec.filter.purchased_between?.from ?? '';
+        boughtTo = r.spec.filter.purchased_between?.to ?? '';
         spec = {
           filter: { ...r.spec.filter },
           sections: r.spec.sections.map((s) =>
@@ -66,6 +73,9 @@
     if (f.running_low) filter.running_low = true;
     if (f.loan) filter.loan = f.loan;
     if (f.condition) filter.condition = f.condition;
+    if (f.vendor) filter.vendor = f.vendor;
+    if (boughtFrom || boughtTo) filter.purchased_between = { ...(boughtFrom ? { from: boughtFrom } : {}), ...(boughtTo ? { to: boughtTo } : {}) };
+    if (f.warranty_ends_before) filter.warranty_ends_before = f.warranty_ends_before;
     const sections = spec.sections.map((s) => {
       if (s.type === 'chart') {
         const chart: ReportSection = { type: 'chart', columns: [], chart: s.chart, measure: s.measure };
@@ -185,6 +195,27 @@
             <option value="out_of_service">Out of service</option>
             <option value="ok">Working</option>
           </select>
+        </div>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-4">
+        <div>
+          <label class="label" for="report-vendor">Bought from</label>
+          <select id="report-vendor" class="input" bind:value={spec.filter.vendor}>
+            <option value="">Any vendor</option>
+            {#each vendors as v (v.id)}<option value={v.id}>{v.name}</option>{/each}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="report-bought-from">Bought on or after</label>
+          <input id="report-bought-from" class="input" type="date" bind:value={boughtFrom} />
+        </div>
+        <div>
+          <label class="label" for="report-bought-to">Bought on or before</label>
+          <input id="report-bought-to" class="input" type="date" bind:value={boughtTo} />
+        </div>
+        <div>
+          <label class="label" for="report-warranty">Warranty ends before</label>
+          <input id="report-warranty" class="input" type="date" bind:value={spec.filter.warranty_ends_before} />
         </div>
       </div>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={spec.filter.running_low} /> Only what is running low, or in a category running low</label>

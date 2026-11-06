@@ -295,7 +295,7 @@ func (c *liveConn) deliver(e models.Event, categories map[string]bool, scopes []
 	if e.CreatedAt.Before(c.opened) || !filter.matches(e, categories) || !Allows(req.Context(), rbac.PermEventsRead, scopes) {
 		return
 	}
-	shown := redactEvent(e, Allows(req.Context(), rbac.PermAssetsTrack, scopes))
+	shown := redactPriceChanges(redactEvent(e, Allows(req.Context(), rbac.PermAssetsTrack, scopes)), Allows(req.Context(), rbac.PermPurchasesRead, scopes))
 	data, err := json.Marshal(map[string]any{"type": "event", "event": shown})
 	if err != nil {
 		return

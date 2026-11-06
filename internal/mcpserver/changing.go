@@ -85,6 +85,40 @@ type updateIn struct {
 	Icon              string            `json:"icon,omitempty" jsonschema:"give it an icon of its own, by name (icons_overview lists them)"`
 	CategoryIcon      bool              `json:"category_icon,omitempty" jsonschema:"draw it with its categories' icon again, dropping one of its own"`
 	IconRendition     string            `json:"icon_rendition,omitempty" jsonschema:"which of its own icons icon or category_icon sets: screen (the default), or label, drawn on its labels; with its own screen icon and no label one, its labels draw its screen icon"`
+	Purchase          *purchaseIn       `json:"purchase,omitempty" jsonschema:"where it came from: each detail given is set, an empty one cleared, and those not given kept"`
+}
+
+// purchaseIn changes an asset's purchase details: each one given.
+type purchaseIn struct {
+	VendorID     *string `json:"vendor_id,omitempty" jsonschema:"the vendor it was bought from, by ID (list_vendors)"`
+	OrderDate    *string `json:"order_date,omitempty" jsonschema:"when it was ordered, YYYY-MM-DD"`
+	ReceivedDate *string `json:"received_date,omitempty" jsonschema:"when it arrived, YYYY-MM-DD"`
+	WarrantyEnd  *string `json:"warranty_end,omitempty" jsonschema:"when its warranty ends, YYYY-MM-DD"`
+	Price        *string `json:"price,omitempty" jsonschema:"what it cost, as a decimal such as 12.50, in currency"`
+	Currency     *string `json:"currency,omitempty" jsonschema:"the price's ISO 4217 currency, such as GBP, EUR or USD"`
+	OrderNumber  *string `json:"order_number,omitempty" jsonschema:"the order or invoice number"`
+	InvoiceID    *string `json:"invoice_attachment_id,omitempty" jsonschema:"the invoice: one of its attachments, by ID (list_attachments)"`
+}
+
+// body is the asset's purchase details with these changes, as the API
+// takes them.
+func (in purchaseIn) body(had models.Purchase) map[string]any {
+	out := map[string]any{}
+	for _, f := range []struct {
+		key string
+		had string
+		set *string
+	}{
+		{"vendor_id", had.VendorID, in.VendorID}, {"order_date", had.OrderDate, in.OrderDate}, {"received_date", had.ReceivedDate, in.ReceivedDate},
+		{"warranty_end", had.WarrantyEnd, in.WarrantyEnd}, {"price", had.Price, in.Price}, {"currency", had.Currency, in.Currency},
+		{"order_number", had.OrderNumber, in.OrderNumber}, {"invoice_attachment_id", had.InvoiceID, in.InvoiceID},
+	} {
+		out[f.key] = f.had
+		if f.set != nil {
+			out[f.key] = *f.set
+		}
+	}
+	return out
 }
 
 type moveIn struct {
@@ -369,8 +403,8 @@ func changingTools() []tool {
 			}),
 		define(&mcp.Tool{
 			Name: "update_asset",
-			Description: "Change an asset: its name, categories, field values, codes, stock or icon. Only what is given changes; " +
-				"categories, fields and codes not named are kept.",
+			Description: "Change an asset: its name, categories, field values, codes, stock, icon or where it came from (purchase). Only what is given changes; " +
+				"categories, fields, codes and purchase details not named are kept. Without purchases.read, its price, order number and invoice stay as they are.",
 			Annotations: changes("Change an asset", true),
 		}, []string{"PUT /api/v1/assets/{id}"}, []string{rbac.PermAssetsWrite}, func(ctx context.Context, e *env, in updateIn) (reply[assetOut], error) {
 			a, err := e.asset(ctx, in.Asset)
@@ -428,6 +462,9 @@ func changingTools() []tool {
 			case in.Icon != "":
 				body["icon_name"] = in.Icon
 			}
+			if in.Purchase != nil {
+				body["purchase"] = in.Purchase.body(a.Purchase)
+			}
 			if in.IconRendition != "" {
 				if _, ok := body["icon_name"]; !ok {
 					return reply[assetOut]{}, fmt.Errorf("icon_rendition says which icon icon or category_icon sets; give one of them")
@@ -435,7 +472,7 @@ func changingTools() []tool {
 				body["icon_rendition"] = in.IconRendition
 			}
 			if len(body) == 0 {
-				return reply[assetOut]{}, fmt.Errorf("nothing to change: give a name, categories, fields, codes, stock or icon")
+				return reply[assetOut]{}, fmt.Errorf("nothing to change: give a name, categories, fields, codes, stock, icon or purchase")
 			}
 			var res apiAsset
 			if err := e.call(ctx, http.MethodPut, assetPath(a.Asset.ID), body, &res); err != nil {

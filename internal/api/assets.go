@@ -26,6 +26,9 @@ type CreateAssetRequest struct {
 	// IconName is its own icon (docs/icons.md), one the build draws; absent or
 	// empty, it is drawn with its categories'.
 	IconName string `json:"icon_name,omitempty"`
+	// Purchase is where it came from (docs/data-model.md#purchases); its
+	// invoice cannot be named until it has attachments.
+	Purchase *PurchaseRequest `json:"purchase,omitempty"`
 }
 
 // UpdateAssetRequest defines the payload for modifying an asset. Omitted parts
@@ -36,6 +39,8 @@ type CreateAssetRequest struct {
 // An absent icon_name keeps the asset's own icon; null or "" draws it with
 // its categories', and a name gives it that one. It is the icon for
 // icon_rendition, the screen's when absent.
+// An absent purchase keeps the asset's purchase details, and an object
+// replaces them.
 type UpdateAssetRequest struct {
 	Name          string                     `json:"name,omitempty"`
 	CategoryIDs   []string                   `json:"category_ids,omitempty"`
@@ -44,6 +49,7 @@ type UpdateAssetRequest struct {
 	Stock         json.RawMessage            `json:"stock,omitempty"`
 	IconName      json.RawMessage            `json:"icon_name,omitempty"`
 	IconRendition string                     `json:"icon_rendition,omitempty"`
+	Purchase      *PurchaseRequest           `json:"purchase,omitempty"`
 }
 
 // StockRequest is an asset's stock (docs/stock-and-lending.md). An absent quantity keeps
@@ -117,7 +123,19 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	// The search is matched once the assets are as the request may see
 	// them, so where they are counts only as far as it may read.
 	search := q.Get("search")
-	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan"), Icon: q.Get("icon")}
+	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan"), Icon: q.Get("icon"), VendorID: q.Get("vendor_id")}
+	// Only a vendor the request may see can be asked about.
+	if f.VendorID != "" {
+		seen, _, err := s.visibleVendors(r.Context())
+		if err != nil {
+			writeServerError(w, err, "read the vendors")
+			return nil, false
+		}
+		if _, ok := seen[f.VendorID]; !ok {
+			writeJSONError(w, http.StatusNotFound, "Vendor not found")
+			return nil, false
+		}
+	}
 	switch q.Get("conflict") {
 	case "", "scan_template", "label_template":
 	default:
@@ -246,7 +264,19 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 	if !s.mayPlace(w, r, rbac.PermAssetsWrite, req.CategoryIDs) {
 		return
 	}
-	asset, err := s.actingStore(r).CreateAssetWithIcon(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input(), req.IconName)
+	var purchase *store.PurchaseInput
+	if req.Purchase != nil {
+		scopes, err := s.store.ScopesForCategories(req.CategoryIDs)
+		if err != nil {
+			writeServerError(w, err, "read the categories' scopes")
+			return
+		}
+		var ok bool
+		if purchase, ok = s.purchaseInput(w, r, req.Purchase, nil, scopes); !ok {
+			return
+		}
+	}
+	asset, err := s.actingStore(r).CreateAssetWithPurchase(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input(), req.IconName, purchase)
 	if errors.Is(err, store.ErrGeneratorCodeExists) {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return
@@ -285,14 +315,19 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := s.assetFor(w, r, id, rbac.PermAssetsWrite); !ok {
+	had, ok := s.assetFor(w, r, id, rbac.PermAssetsWrite)
+	if !ok {
 		return
 	}
 	// Moving it to other categories needs the permission in their scopes too.
 	if req.CategoryIDs != nil && !s.mayPlace(w, r, rbac.PermAssetsWrite, req.CategoryIDs) {
 		return
 	}
-	asset, err := s.actingStore(r).UpdateAssetWithIcon(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, stock, icon)
+	purchase, ok := s.purchaseInput(w, r, req.Purchase, &had.Purchase, had.Scopes)
+	if !ok {
+		return
+	}
+	asset, err := s.actingStore(r).UpdateAssetWithPurchase(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, stock, icon, purchase)
 	if errors.Is(err, store.ErrAssetNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 		return
@@ -440,7 +475,8 @@ func (s *Server) handleSetAssetRunningLow(w http.ResponseWriter, r *http.Request
 
 // handleAssetHistory lists an asset's events a page at a time, newest first:
 // GET /api/v1/assets/{id}/history[?before=<event id>]. People show by name,
-// and only with assets.track.
+// and only with assets.track; changes to its price, order number and
+// invoice only with purchases.read.
 func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	a, ok := s.assetFor(w, r, id)
@@ -457,9 +493,18 @@ func (s *Server) handleAssetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	track := Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes)
-	for i := range events {
-		events[i] = redactEvent(events[i], track)
+	prices := Allows(r.Context(), rbac.PermPurchasesRead, a.Scopes)
+	shown := events[:0]
+	for _, e := range events {
+		changed := len(e.Payload.Changes) > 0
+		e = redactPriceChanges(redactEvent(e, track), prices)
+		// An edit of nothing but what the request may not see is left out.
+		if changed && len(e.Payload.Changes) == 0 {
+			continue
+		}
+		shown = append(shown, e)
 	}
+	events = shown
 	writeJSON(w, http.StatusOK, map[string]any{"events": events, "more": more})
 }
 

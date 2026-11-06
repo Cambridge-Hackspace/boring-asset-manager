@@ -60,6 +60,7 @@ ORDER = [
     ('assets', 'KindAssets'), ('asset_categories', 'KindAssets'), ('asset_field_values', 'KindAssets'), ('asset_generator_keys', 'KindAssets'),
     ('asset_links', 'KindAssets'), ('asset_placements', 'KindAssets'), ('asset_loans', 'KindAssets'), ('loan_reminders', 'KindAssets'), ('loan_comments', 'KindAssets'), ('asset_attachments', 'KindAssets'),
     ('asset_comments', 'KindAssets'),
+    ('asset_purchases', 'KindAssets'), ('warranty_notices', 'KindAssets'),
     ('events', 'KindAssets'),
     ('flows', 'KindFlows'), ('flow_filings', 'KindFlows'), ('flow_filing_comments', 'KindFlows'),
     ('settings', 'KindSettings'), ('label_stock', 'KindSettings'), ('printers', 'KindSettings'), ('printer_pools', 'KindSettings'),

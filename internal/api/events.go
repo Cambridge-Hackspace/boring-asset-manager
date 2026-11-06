@@ -91,7 +91,8 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 			more = true
 			break
 		}
-		out = append(out, redactEvent(e, Allows(r.Context(), rbac.PermAssetsTrack, scopes[place])))
+		shown := redactEvent(e, Allows(r.Context(), rbac.PermAssetsTrack, scopes[place]))
+		out = append(out, redactPriceChanges(shown, Allows(r.Context(), rbac.PermPurchasesRead, scopes[place])))
 	}
 	// A full read may have stopped short of the newest.
 	if len(events) == 1000 {

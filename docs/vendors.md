@@ -82,8 +82,19 @@ Duplicating a category copies its vendors. Deleting a vendor takes it off every 
 
 The **Vendors** page, in **Catalog**, lists the vendors one can see, with a search box. A
 vendor's page shows its details, contacts and notes, its attachments, its history, its scopes for
-those who see them, and the categories bought from it. It is laid out so that the assets bought
-from it (#218), its contracts (#221) and its catalog (#219) can be added as parts of their own.
+those who see them, and the categories bought from it. It is laid out so that its contracts (#221)
+and its catalog (#219) can be added as parts of their own.
+
+## Assets bought from it
+
+An asset's [purchase details](data-model.md#purchases) name the vendor it was bought from. The
+vendor's **Assets** part lists them, by name, with when each was ordered (or received), its price
+and when its warranty ends. It lists only the assets the viewer may read, and their prices only
+where they hold `purchases.read` (see [Access](access.md#seeing-prices)).
+
+Deleting a vendor forgets it as the vendor of every asset bought from it; the rest of their
+purchase details stay. An asset's vendor is shown only to those who see the vendor: to others, it
+has none, and their edits leave it as it is.
 
 ## History
 
@@ -114,6 +125,7 @@ in one of the vendor's scopes, or anywhere for one in none.
 | `GET /api/v1/vendors/{id}/history` | `assets.read` | Its history, newest first, 50 at a time, as an asset's: `?before=` an event's ID for the next page; answers `events` and `more`. |
 | `GET`, `POST`, `PUT /api/v1/vendors/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/vendors/{id}/attachments/{attachment_id}` | Seeing it to read, `vendors.manage` in its scopes to change | Its attachments, as a category's (see [Attachments](data-model.md#attachments)). |
 | `PUT /api/v1/categories/{id}/vendors` | `categories.manage` | Name the vendors a category is bought from, with `{"vendor_ids": [...]}` in order of preference. Answers `category`. |
+| `GET /api/v1/assets?vendor_id={id}` | `assets.read`, and seeing the vendor | The assets bought from it that the requester may read, as the asset list (`404` for a vendor they cannot see). |
 
 ## Everywhere else
 
@@ -122,7 +134,11 @@ in one of the vendor's scopes, or anywhere for one in none.
 - **Backups:** vendors are part of the catalog (see [Backups](backups.md#kinds-of-information)).
 - **Packages:** vendors can be chosen, and a category brings the vendors it is bought from (see
   [Packages](packages.md)).
-- **CSV:** categories have no CSV import or export of their own, so neither do vendors.
+- **CSV:** categories have no CSV import or export of their own, so neither do vendors. Assets'
+  `vendor` column names theirs, by name (see [CSV](csv.md)).
+- **Reports:** `vendor` filters by it, and `{{asset.purchase.vendor}}` shows it (see
+  [Reports](reports.md)).
+- **Packages:** an asset brings the vendor it was bought from.
 
 ## Storage
 

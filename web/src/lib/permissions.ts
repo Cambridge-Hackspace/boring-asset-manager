@@ -6,6 +6,7 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'assets.read', label: 'Read assets', description: 'See assets, categories, vendors, fields, history and label templates.' },
   { key: 'assets.scan', label: 'Scan codes', description: 'Look assets up by their codes, and see their scan pages.' },
   { key: 'assets.track', label: 'See who', description: 'See who borrowed assets and who changed them, by name, and the loans list.' },
+  { key: 'purchases.read', label: 'See prices', description: 'See what assets cost: their price, order number and invoice.' },
   { key: 'stock.record', label: 'Record stock', description: 'Use and restock quantities, and mark things running low or restocked.' },
   { key: 'assets.report', label: 'Report problems', description: 'Report an asset as needing maintenance or out of service.' },
   { key: 'assets.hook', label: 'Trigger hooks', description: 'Trigger the hooks categories offer on assets, such as Identify.' },
@@ -35,11 +36,11 @@ export function permissionLabel(key: string): string {
 
 /**
  * The permissions a role may hold in some scopes only: those acting on
- * assets, running flows, managing vendors, which are in scopes as assets
- * are, and writing and moderating comments, in the scopes of what they are
- * on.
+ * assets, seeing what they cost, running flows, managing vendors, which
+ * are in scopes as assets are, and writing and moderating comments, in
+ * the scopes of what they are on.
  */
-export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hook', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run', 'vendors.manage', 'comments.write', 'comments.moderate'];
+export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hook', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run', 'vendors.manage', 'comments.write', 'comments.moderate', 'purchases.read'];
 
 /**
  * The permissions of a role that assigning it in these scopes only leaves
@@ -102,4 +103,4 @@ export function describeHeld(keys: readonly string[]): { label: string; descript
 }
 
 /** What the public role, which everyone holds, may hold: looking, never changing. */
-export const publicAllowed: Permission[] = ['assets.read', 'assets.scan'];
+export const publicAllowed: Permission[] = ['assets.read', 'assets.scan', 'purchases.read'];
