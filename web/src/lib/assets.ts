@@ -249,6 +249,8 @@ export function describeChange(c: AssetChange, kind: string): string {
       return fromTo('Low-stock threshold', c);
     case 'photo':
       return c.to ? `Photo added: ${c.to}` : `Photo removed: ${c.from}`;
+    case 'attachment':
+      return c.to ? `Attachment added: ${c.to}` : `Attachment removed: ${c.from}`;
     case 'icon':
       if (!c.to) return `Own icon ${c.from} dropped: drawn with its categories' again`;
       return fromTo('Own icon', c);

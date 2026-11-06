@@ -1,51 +1,30 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"log"
 	"net/http"
-	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/attachments"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/photos"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
-	"github.com/google/uuid"
 )
 
-// photoUploadLimit leaves headroom over photos.MaxBytes for multipart
-// framing.
-const photoUploadLimit = photos.MaxBytes + 64<<10
+// The photo routes, from before attachments (docs/data-model.md#attachments),
+// kept as they were: an asset's photos are its image attachments, and each
+// route answers with the asset, as it always did.
 
-// handleUploadPhoto adds a photo to an asset, from a multipart form with the
-// photo in its "file" part: POST /api/v1/assets/{id}/photos
+// handleUploadPhoto adds a photo to an asset, as an image attachment, from
+// a multipart form with the photo in its "file" part:
+// POST /api/v1/assets/{id}/photos
 func (s *Server) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
 		return
 	}
-	tooBig := fmt.Sprintf("Photos are limited to %d MB", photos.MaxBytes>>20)
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		var mbe *http.MaxBytesError
-		if errors.As(err, &mbe) {
-			writeJSONError(w, http.StatusRequestEntityTooLarge, tooBig)
-			return
-		}
-		writeJSONError(w, http.StatusBadRequest, `Expected a multipart form with the photo in a "file" field`)
-		return
-	}
-	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, photos.MaxBytes+1))
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "Failed to read the uploaded file")
-		return
-	}
-	if len(data) > photos.MaxBytes {
-		writeJSONError(w, http.StatusRequestEntityTooLarge, tooBig)
+	data, filename, ok := readUpload(w, r, min(int64(photos.MaxBytes), s.cfg.Attachments.MaxFileBytes()), "Photos")
+	if !ok {
 		return
 	}
 	prepared, err := photos.Prepare(data)
@@ -53,32 +32,28 @@ func (s *Server) handleUploadPhoto(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	p := models.AssetPhoto{
-		ID:          uuid.NewString(),
-		ThumbID:     uuid.NewString(),
-		Filename:    cleanFilename(header.Filename),
-		ContentType: prepared.ContentType,
-		WidthPx:     prepared.Width,
-		HeightPx:    prepared.Height,
-		ByteSize:    int64(len(prepared.Full)),
-		CreatedAt:   time.Now().UTC(),
-	}
-	if err := s.photos.Save(r.Context(), p.ID, prepared.Full); err != nil {
+	a := models.Attachment{Name: filename}
+	p := &attachments.Prepared{Kind: models.AttachmentImage, ContentType: prepared.ContentType, Full: prepared.Full, Thumb: prepared.Thumb, Width: prepared.Width, Height: prepared.Height}
+	if err := s.saveAttachment(r.Context(), &a, p, filename); err != nil {
 		writeServerError(w, err, "store the photo")
 		return
 	}
-	if err := s.photos.Save(r.Context(), p.ThumbID, prepared.Thumb); err != nil {
-		s.removePhotoFiles(r.Context(), p)
-		writeServerError(w, err, "store the photo")
+	if _, err := s.actingStore(r).AddAttachments(models.OwnerAsset, r.PathValue("id"), []models.Attachment{a}, s.cfg.Attachments.MaxPerObject); err != nil {
+		s.removeAttachmentFiles(r.Context(), a)
+		writeAttachmentError(w, err, "add the photo")
 		return
 	}
-	asset, err := s.actingStore(r).AddPhoto(r.PathValue("id"), p)
+	s.writeAsset(w, r, http.StatusCreated)
+}
+
+// writeAsset answers with the asset a photo route changed, as it is now.
+func (s *Server) writeAsset(w http.ResponseWriter, r *http.Request, status int) {
+	asset, err := s.store.GetAssetByID(r.PathValue("id"))
 	if err != nil {
-		s.removePhotoFiles(r.Context(), p)
-		writePhotoError(w, err, "add the photo")
+		writeAttachmentError(w, err, "read the asset")
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"asset": s.shown(r, asset)})
+	writeJSON(w, status, map[string]any{"asset": s.shown(r, asset)})
 }
 
 // handleGetPhoto serves a photo, or with ?size=thumb its thumbnail:
@@ -87,24 +62,15 @@ func (s *Server) handleGetPhoto(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.assetFor(w, r, r.PathValue("id")); !ok {
 		return
 	}
-	p, err := s.store.GetPhoto(r.PathValue("id"), r.PathValue("photo_id"))
+	a, err := s.store.GetAttachment(models.OwnerAsset, r.PathValue("id"), r.PathValue("photo_id"))
+	if errors.Is(err, store.ErrAttachmentNotFound) || err == nil && a.Kind != models.AttachmentImage {
+		err = store.ErrPhotoNotFound
+	}
 	if err != nil {
-		writePhotoError(w, err, "read the photo")
+		writeAttachmentError(w, err, "read the photo")
 		return
 	}
-	file := p.ID
-	if r.URL.Query().Get("size") == "thumb" {
-		file = p.ThumbID
-	}
-	data, err := s.photos.Read(r.Context(), file)
-	if err != nil {
-		writeServerError(w, err, "read the photo file")
-		return
-	}
-	w.Header().Set("Content-Type", p.ContentType)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "private, max-age=86400, immutable")
-	_, _ = w.Write(data)
+	s.serveAttachment(w, r, *a)
 }
 
 // handleRemovePhoto removes a photo: DELETE /api/v1/assets/{id}/photos/{photo_id}
@@ -114,15 +80,16 @@ func (s *Server) handleRemovePhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	asset, removed, err := s.actingStore(r).RemovePhoto(r.PathValue("id"), r.PathValue("photo_id"))
 	if err != nil {
-		writePhotoError(w, err, "remove the photo")
+		writeAttachmentError(w, err, "remove the photo")
 		return
 	}
-	s.removePhotoFiles(r.Context(), *removed)
+	s.removeAttachmentFiles(r.Context(), models.Attachment{ID: removed.ID, ThumbID: removed.ThumbID})
 	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
 // handleReorderPhotos puts an asset's photos in order, the first being the
-// one lists show: PUT /api/v1/assets/{id}/photos with {"photo_ids": [...]}
+// one lists show, among its other attachments, which stay where they are:
+// PUT /api/v1/assets/{id}/photos with {"photo_ids": [...]}
 func (s *Server) handleReorderPhotos(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
 		return
@@ -136,15 +103,16 @@ func (s *Server) handleReorderPhotos(w http.ResponseWriter, r *http.Request) {
 	}
 	asset, err := s.store.ReorderPhotos(r.PathValue("id"), req.PhotoIDs)
 	if err != nil {
-		writePhotoError(w, err, "order the photos")
+		writeAttachmentError(w, err, "order the photos")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
 }
 
-// handleCopyPhotos gives an asset copies of another's photos, after its own,
-// each with files of its own, so that removing one leaves the other:
-// POST /api/v1/assets/{id}/photos/copy with {"from_asset_id": "..."}
+// handleCopyPhotos gives an asset copies of another's photos, after its
+// attachments, each with files of its own, so that removing one leaves the
+// other: POST /api/v1/assets/{id}/photos/copy with {"from_asset_id": "..."}.
+// POST /api/v1/assets/{id}/attachments/copy copies every attachment.
 func (s *Server) handleCopyPhotos(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
 		return
@@ -160,59 +128,27 @@ func (s *Server) handleCopyPhotos(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	copies := make([]models.AssetPhoto, 0, len(from.Photos))
-	undo := func() {
-		for _, p := range copies {
-			s.removePhotoFiles(r.Context(), p)
-		}
-	}
-	for _, p := range from.Photos {
-		c := p
-		c.ID, c.ThumbID, c.CreatedAt = uuid.NewString(), uuid.NewString(), time.Now().UTC()
-		for to, of := range map[string]string{c.ID: p.ID, c.ThumbID: p.ThumbID} {
-			data, err := s.photos.Read(r.Context(), of)
-			if err == nil {
-				err = s.photos.Save(r.Context(), to, data)
-			}
-			if err != nil {
-				s.removePhotoFiles(r.Context(), c)
-				undo()
-				writeServerError(w, err, "copy the photo files")
-				return
-			}
-		}
-		copies = append(copies, c)
-	}
-	asset, err := s.actingStore(r).AddPhotos(r.PathValue("id"), copies)
+	theirs, err := s.store.ListAttachments(models.OwnerAsset, from.Asset.ID)
 	if err != nil {
-		undo()
-		writePhotoError(w, err, "copy the photos")
+		writeServerError(w, err, "list the photos")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"asset": s.shown(r, asset)})
-}
-
-// removePhotoFiles removes a photo's files. A file left behind wastes space
-// but harms nothing, so a failure is logged rather than reported.
-func (s *Server) removePhotoFiles(ctx context.Context, p models.AssetPhoto) {
-	for _, id := range []string{p.ID, p.ThumbID} {
-		if err := s.photos.Remove(ctx, id); err != nil {
-			log.Printf("removing photo file %s: %v", id, err)
+	var images []models.Attachment
+	for _, a := range theirs {
+		if a.Kind == models.AttachmentImage {
+			images = append(images, a)
 		}
 	}
-}
-
-func writePhotoError(w http.ResponseWriter, err error, action string) {
-	switch {
-	case errors.Is(err, store.ErrAssetNotFound):
-		writeJSONError(w, http.StatusNotFound, "Asset not found")
-	case errors.Is(err, store.ErrPhotoNotFound):
-		writeJSONError(w, http.StatusNotFound, "Photo not found")
-	case errors.Is(err, store.ErrTooManyPhotos), errors.Is(err, store.ErrAssetArchived):
-		writeJSONError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, store.ErrPhotoOrder):
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeStoreError(w, err, action)
+	copies, ok := s.copyAttachmentFiles(w, r, images)
+	if !ok {
+		return
 	}
+	if _, err := s.actingStore(r).AddAttachments(models.OwnerAsset, r.PathValue("id"), copies, s.cfg.Attachments.MaxPerObject); err != nil {
+		for _, c := range copies {
+			s.removeAttachmentFiles(r.Context(), c)
+		}
+		writeAttachmentError(w, err, "copy the photos")
+		return
+	}
+	s.writeAsset(w, r, http.StatusOK)
 }

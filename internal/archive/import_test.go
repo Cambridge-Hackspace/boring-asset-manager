@@ -42,7 +42,7 @@ func workshopPackage(t *testing.T) (packaged, []byte) {
 	src := setupStore(t)
 	blobs := filestore.NewLocal(t.TempDir())
 	p := seedPackaged(t, src, blobs)
-	rows, err := src.Query("SELECT id, thumb_id FROM asset_photos WHERE asset_id = ?", p.drill)
+	rows, err := src.Query("SELECT id, thumb_id FROM asset_attachments WHERE asset_id = ?", p.drill)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestAPackageImportedTwiceUnderTwoAnchors(t *testing.T) {
 		}
 	}
 	for table, want := range map[string]int{
-		"categories": 6, "fields": 2, "assets": 4, "asset_photos": 2, "asset_links": 2, "flows": 2, "category_icons": 2, "icon_library": 2,
+		"categories": 6, "fields": 2, "assets": 4, "asset_attachments": 2, "asset_links": 2, "flows": 2, "category_icons": 2, "icon_library": 2,
 		"templates": 2, "images": 1, "reports": count(t, dst, "reports"), "users": 0,
 	} {
 		if got := count(t, dst, table); got != want {
@@ -176,7 +176,7 @@ func TestAPackageImportedTwiceUnderTwoAnchors(t *testing.T) {
 	}
 	// its photo's files are stored under its new IDs
 	var photo, thumb string
-	if err := dst.QueryRow("SELECT id, thumb_id FROM asset_photos WHERE asset_id = ?", drill).Scan(&photo, &thumb); err != nil {
+	if err := dst.QueryRow("SELECT id, thumb_id FROM asset_attachments WHERE asset_id = ?", drill).Scan(&photo, &thumb); err != nil {
 		t.Fatal(err)
 	}
 	for _, k := range []string{photo, thumb} {

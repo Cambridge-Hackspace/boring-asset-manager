@@ -592,7 +592,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | Permission | Allows | Scopable |
 |---|---|---|
 | `assets.read` | Reading assets. | Yes |
-| `assets.write` | Creating and editing assets, their codes, photos and links, and marking an asset `ok` again. | Yes |
+| `assets.write` | Creating and editing assets, their codes, attachments (photos among them) and links, and marking an asset `ok` again. | Yes |
 | `assets.delete` | Archiving and restoring assets. | Yes |
 | `assets.report` | Reporting an asset as needing maintenance or out of service. | Yes |
 | `assets.borrow` | Borrowing assets (see [Stock and lending](stock-and-lending.md)). | Yes |
@@ -720,7 +720,7 @@ no categories until someone puts some in it, so nothing is public until then.
 Signed in, the public role's permissions add to the user's own wherever they apply. Signed out,
 they apply only to an asset's own page:
 
-- `GET /api/v1/assets/{id}`, the asset's photos, and its history, without people (see
+- `GET /api/v1/assets/{id}`, the asset's photos and attachments, and its history, without people (see
   [Stock and lending](stock-and-lending.md));
 - `GET /api/v1/generators`.
 

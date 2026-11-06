@@ -3,7 +3,7 @@
   import { ApiError, request } from '../../lib/api';
   import { assetPayload, type AssetCopy, type CopiedLink, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { photoUrl, UNCATEGORIZED, type AssetPhoto, type AssetWithDetails, type Category, type EffectiveField, type Field, type GeneratorInfo, type RelationType } from '../../lib/models';
+  import { attachmentUrl, UNCATEGORIZED, type Attachment, type AssetWithDetails, type Category, type EffectiveField, type Field, type GeneratorInfo, type RelationType } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
@@ -66,9 +66,11 @@
   // its original has them, or the one it was started from.
   let startLinks = $state<(CopiedLink & { keep: boolean })[]>([]);
   let likeName = $state('');
-  // A copy's photos, copied once it is created unless unticked.
-  let likePhotos = $state<AssetPhoto[]>([]);
-  let copyPhotos = $state(true);
+  // A copy's attachments, its photos among them, copied once it is created unless unticked.
+  let likeFiles = $state<Attachment[]>([]);
+  let copyFiles = $state(true);
+  const likeImages = $derived(likeFiles.filter((a) => a.kind === 'image'));
+  const allImages = $derived(likeImages.length === likeFiles.length);
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
   // New assets' labels join the print queue (docs/printing.md), as each person last chose.
@@ -130,13 +132,14 @@
         // Without them, kept values are named by their keys.
         if (Object.keys(a.field_values).length) void request<{ fields: Field[] }>('GET', '/fields').then((r) => (allFields = r.fields ?? []), () => {});
       } else if (like) {
-        const [c, of] = await Promise.all([
+        const [c, of, files] = await Promise.all([
           request<{ copy: AssetCopy }>('GET', `/assets/${encodeURIComponent(like)}/copy`),
           request<{ asset: AssetWithDetails }>('GET', `/assets/${encodeURIComponent(like)}`),
+          request<{ attachments: Attachment[] }>('GET', `/assets/${encodeURIComponent(like)}/attachments`).catch(() => ({ attachments: [] })),
         ]);
         const copy = c.copy;
         likeName = of.asset.asset.name;
-        likePhotos = of.asset.photos ?? [];
+        likeFiles = files.attachments ?? [];
         name = copy.name;
         categoryIds = copy.category_ids;
         codes = Object.fromEntries(copy.generator_keys.map((k) => [k.generator_type, k.assigned_code]));
@@ -261,9 +264,9 @@
         for (const l of startLinks.filter((l) => l.keep)) {
           await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/links`, { type_id: l.type_id, asset_id: l.asset.id, outgoing: l.outgoing }).catch(() => undefined);
         }
-        // Photos can be added from its page if these cannot be copied.
-        if (like && copyPhotos && likePhotos.length) {
-          await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/photos/copy`, { from_asset_id: like }).catch(() => undefined);
+        // Attachments can be added from its page if these cannot be copied.
+        if (like && copyFiles && likeFiles.length) {
+          await request('POST', `/assets/${encodeURIComponent(res.asset.asset.id)}/attachments/copy`, { from_asset_id: like }).catch(() => undefined);
         }
         if (canSpool) {
           rememberQueueNewLabels(session.user?.id ?? '', queueLabel);
@@ -430,16 +433,23 @@
           </ul>
         </fieldset>
       {/if}
-      {#if likePhotos.length}
+      {#if likeFiles.length}
         <fieldset>
-          <legend class="label">Photos</legend>
+          <legend class="label">{allImages ? 'Photos' : 'Attachments'}</legend>
           <label class="flex items-center gap-2 text-sm">
-            <input type="checkbox" bind:checked={copyPhotos} />
-            {likePhotos.length === 1 ? 'Copy its photo' : `Copy its ${likePhotos.length} photos`}
+            <input type="checkbox" bind:checked={copyFiles} />
+            {#if allImages}
+              {likeFiles.length === 1 ? 'Copy its photo' : `Copy its ${likeFiles.length} photos`}
+            {:else}
+              {likeFiles.length === 1 ? 'Copy its attachment' : `Copy its ${likeFiles.length} attachments`}
+            {/if}
           </label>
-          <ul class="mt-2 flex flex-wrap gap-2" class:opacity-40={!copyPhotos} aria-hidden="true">
-            {#each likePhotos as p (p.id)}
-              <li><img src={photoUrl(like, p.id, true)} alt="" class="h-14 w-14 rounded object-cover" loading="lazy" /></li>
+          <ul class="mt-2 flex flex-wrap gap-2" class:opacity-40={!copyFiles} aria-hidden="true">
+            {#each likeImages as p (p.id)}
+              <li><img src={attachmentUrl('asset', like, p.id, true)} alt="" class="h-14 w-14 rounded object-cover" loading="lazy" /></li>
+            {/each}
+            {#each likeFiles.filter((a) => a.kind !== 'image') as a (a.id)}
+              <li class="flex h-14 max-w-32 items-center rounded border border-zinc-300 px-2 text-xs dark:border-zinc-700"><span class="truncate">{a.name}</span></li>
             {/each}
           </ul>
         </fieldset>

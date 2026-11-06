@@ -18,6 +18,7 @@ A category's page is in tabs, and each part of it saves with its own button. A t
 - **Labels**: the templates its assets' labels are printed with, and a button that adds them all to the print queue.
 - **Icon**: a small drawing of what its assets are, which its subcategories inherit. See [Icons](/help/icons).
 - **Links and hooks**: the kinds of link offered first for its assets, what scanning them shows (see [Scanning](/help/scanning)), and the [hooks](/help/hooks) offered on them: buttons such as Identify.
+- **Attachments**: files about all its assets, such as a manual or a data sheet: photos, PDFs, text, Markdown and CSV files. Those who manage categories add, rename, order and remove them; documents download when opened.
 - **Who can see it**: its scopes, which decide who can see and change its assets; **public** lets anyone see them, even signed out. See [People and permissions](/help/people).
 
 ## Duplicating one

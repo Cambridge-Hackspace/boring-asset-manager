@@ -392,7 +392,7 @@ func TestEachKindOfSelection(t *testing.T) {
 	if got := ids(t, r, "assets", "id"); !reflect.DeepEqual(got, sorted(p.drill, p.drawer, p.kettle, assetNamed(t, st, "Drill"))) {
 		t.Errorf("every asset: %v", got)
 	}
-	if photos := r.rows(t, DataDir+"asset_photos/"); len(photos) != 0 {
+	if photos := r.rows(t, DataDir+"asset_attachments/"); len(photos) != 0 {
 		t.Errorf("photos without asking: %v", photos)
 	}
 	if links := r.rows(t, DataDir+"asset_links/"); len(links) != 0 {

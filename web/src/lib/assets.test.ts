@@ -227,6 +227,11 @@ describe('photos in history', () => {
     expect(describeChange({ what: 'photo', key: 'p1', to: 'front.jpg' }, 'asset.edited')).toBe('Photo added: front.jpg');
     expect(describeChange({ what: 'photo', key: 'p1', from: 'front.jpg' }, 'asset.edited')).toBe('Photo removed: front.jpg');
   });
+
+  it('names the other attachments added or removed', () => {
+    expect(describeChange({ what: 'attachment', key: 'a1', to: 'Manual' }, 'asset.edited')).toBe('Attachment added: Manual');
+    expect(describeChange({ what: 'attachment', key: 'a1', from: 'Manual' }, 'asset.edited')).toBe('Attachment removed: Manual');
+  });
 });
 
 describe('where things are', () => {

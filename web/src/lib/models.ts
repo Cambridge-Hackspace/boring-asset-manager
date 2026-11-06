@@ -229,7 +229,7 @@ export interface AssetEvent {
 
 /** One change to an asset, as it read then; an absent from or to means none. */
 export interface AssetChange {
-  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo' | 'place';
+  what: 'name' | 'icon' | 'category' | 'field' | 'code' | 'stock' | 'unit' | 'threshold' | 'condition' | 'link' | 'photo' | 'attachment' | 'place';
   key?: string;
   label?: string;
   from?: string;
@@ -895,7 +895,41 @@ export interface ReportResult {
   }[];
 }
 
-/** A photo of an asset. */
+/** What attachments belong to (docs/data-model.md#attachments). */
+export type AttachmentOwner = 'asset' | 'category';
+
+/** A file attached to an asset or a category: an image (an asset's photo), a document, or another file the instance allows. */
+export interface Attachment {
+  id: string;
+  kind: 'image' | 'document' | 'other';
+  name: string;
+  description: string;
+  filename: string;
+  content_type: string;
+  byte_size: number;
+  width_px?: number;
+  height_px?: number;
+  /** Who added it, to those who may see it. */
+  added_by?: string;
+  added_by_name?: string;
+  created_at: string;
+}
+
+/** The instance's limits on attachments. */
+export interface AttachmentLimits {
+  max_file_bytes: number;
+  max_image_bytes: number;
+  max_per_object: number;
+  allowed_types: string[];
+}
+
+/** Where an attachment of an asset or a category, or an image's thumbnail, is served. */
+export function attachmentUrl(owner: AttachmentOwner, ownerId: string, attachmentId: string, thumb = false): string {
+  const base = owner === 'asset' ? 'assets' : 'categories';
+  return `/api/v1/${base}/${encodeURIComponent(ownerId)}/attachments/${encodeURIComponent(attachmentId)}${thumb ? '?size=thumb' : ''}`;
+}
+
+/** An asset's image attachment, as its photos list it. */
 export interface AssetPhoto {
   id: string;
   filename: string;

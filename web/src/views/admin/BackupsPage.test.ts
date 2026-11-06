@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import BackupsPage from './BackupsPage.svelte';
 import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
@@ -64,10 +64,12 @@ async function chooseBackup() {
 }
 
 describe('BackupsPage', () => {
-  it('offers a backup to download', () => {
+  it('offers a backup to download, with or without documents', async () => {
     server();
     render(BackupsPage, { params: {} });
     expect(screen.getByTestId('download-backup').getAttribute('href')).toBe('/api/v1/backup');
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Leave out documents/ }));
+    expect(screen.getByTestId('download-backup').getAttribute('href')).toBe('/api/v1/backup?without_documents=1');
   });
 
   it('checks an uploaded backup, and replaces only the kinds ticked once confirmed', async () => {
@@ -76,7 +78,7 @@ describe('BackupsPage', () => {
     await chooseBackup();
     expect(screen.getByText(/never imported through the web/)).toBeTruthy();
     // Authentication is never offered.
-    const boxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+    const boxes = within(screen.getByRole('region', { name: 'Replace from a backup' })).getAllByRole('checkbox') as HTMLInputElement[];
     expect(boxes.map((b) => b.value)).toEqual(['assets', 'catalog', 'people']);
     expect(boxes.every((b) => b.checked)).toBe(true);
     await fireEvent.click(boxes[1]!);

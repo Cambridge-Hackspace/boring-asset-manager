@@ -85,7 +85,7 @@ describe('what is needed', () => {
   it('says what the package holds, in words', () => {
     expect(planSummary(plan, false)).toBe('The package holds 4 things.');
     const withAssets = { ...plan, assets: { assets: 1, photos: 3, links: 0, events: 0, unreadable: 2 } };
-    expect(planSummary(withAssets, true)).toBe('The package holds 4 things and 1 asset with 3 photos. 2 assets you cannot see are left out.');
+    expect(planSummary(withAssets, true)).toBe('The package holds 4 things and 1 asset with 3 attachments. 2 assets you cannot see are left out.');
   });
 
   it('knows when nothing is chosen', () => {
@@ -120,7 +120,7 @@ describe('importing', () => {
 
   it('says what it does with each thing, and with all of them', () => {
     expect(items.map(actionSaid)).toEqual(['Created', 'Imported as a copy, serial_2', 'Uses Open (open), here already', 'Skipped']);
-    expect(importSummary(plan)).toBe('It creates 2 things (1 of them copies), uses 1 here already, skips 1, and brings 1 asset with 0 photos and 2 links.');
+    expect(importSummary(plan)).toBe('It creates 2 things (1 of them copies), uses 1 here already, skips 1, and brings 1 asset with 0 attachments and 2 links.');
   });
 
   it('waits for a check, and gives its plan even when refused', async () => {

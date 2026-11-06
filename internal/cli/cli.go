@@ -452,9 +452,10 @@ func Backup(configPath, dest string, opts BackupOptions) error {
 		return os.OpenFile(name+".partial", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	}
 	sum, err := archive.Write(context.Background(), st, blobs, open, archive.Options{
-		BamVersion: api.Version,
-		Secrets:    !opts.WithoutSecrets,
-		Split:      opts.Split,
+		BamVersion:  api.Version,
+		Secrets:     !opts.WithoutSecrets,
+		Split:       opts.Split,
+		NoDocuments: opts.WithoutDocuments,
 	})
 	if err != nil {
 		for _, name := range names {
@@ -490,6 +491,8 @@ func Backup(configPath, dest string, opts BackupOptions) error {
 type BackupOptions struct {
 	// WithoutSecrets leaves authentication out.
 	WithoutSecrets bool
+	// WithoutDocuments leaves out attachments that are not images.
+	WithoutDocuments bool
 	// Split is the most bytes a part may hold; 0 writes one archive.
 	Split int64
 }

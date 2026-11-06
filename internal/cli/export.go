@@ -20,8 +20,12 @@ import (
 type ExportOptions struct {
 	// Select are what to package, each kind:name, as SelectKinds lists.
 	Select []string
-	// Photos, Links and History come with the assets chosen.
+	// Photos (their attachments, photos among them), Links and History
+	// come with the assets chosen.
 	Photos, Links, History bool
+	// WithoutDocuments leaves out the categories' and assets' attachments
+	// that are not images.
+	WithoutDocuments bool
 	// Info says what the package is; PreviewFile is its preview image.
 	Info        archive.PackageInfo
 	PreviewFile string
@@ -74,6 +78,7 @@ func Export(configPath, dest string, opts ExportOptions) error {
 	if err != nil {
 		return err
 	}
+	sel.NoDocuments = opts.WithoutDocuments
 	if sel.Assets != nil {
 		sel.Assets.Photos, sel.Assets.Links, sel.Assets.History = opts.Photos, opts.Links, opts.History
 	} else if opts.Photos || opts.Links || opts.History {
@@ -258,7 +263,7 @@ func printPlan(w io.Writer, plan *archive.Plan) {
 		fmt.Fprintln(w, line)
 	}
 	if a := plan.Assets; a != nil {
-		fmt.Fprintf(w, "  %d assets, %d photos, %d links and %d events of their history\n", a.Assets, a.Photos, a.Links, a.Events)
+		fmt.Fprintf(w, "  %d assets, %d attachments, %d links and %d events of their history\n", a.Assets, a.Photos, a.Links, a.Events)
 	}
 	for _, l := range plan.LeftOut {
 		var by []string

@@ -87,8 +87,9 @@ var placeholders = map[string]any{
 // name before it is inserted: set once every row of it is.
 var selfRefs = map[string]string{"categories": "parent_id"}
 
-// fileKinds are the kinds whose files are kept under each prefix.
-var fileKinds = map[string]Kind{"photos/": KindAssets, "images/": KindLabels}
+// fileKinds are the kinds whose files are kept under each prefix:
+// attachments' are assets' and categories'.
+var fileKinds = map[string][]Kind{"photos/": {KindAssets, KindCatalog}, "images/": {KindLabels}}
 
 // Restore restores an archive into st and blobs, reading it twice from
 // open: once to check it (Check), and nothing is changed if it does not
@@ -330,7 +331,7 @@ func applyRows(ctx context.Context, st *store.Store, blobs filestore.Blobs, r io
 				return fmt.Errorf("restoring %s: %w", h.Name, err)
 			}
 		case FilesDir:
-			if k := fileKinds[rest[:strings.Index(rest, "/")+1]]; !hasKind(sum.Kinds, k) {
+			if !fileWanted(rest, sum.Kinds) {
 				continue
 			}
 			if err := blobs.Put(ctx, rest, m.tr, h.Size, "application/octet-stream"); err != nil {

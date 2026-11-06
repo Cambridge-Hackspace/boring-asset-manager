@@ -230,7 +230,7 @@ test('duplicate an asset: the form filled in from it, the next code in its serie
   await expect(where).toContainText(shelf.name);
   await expect(page.getByText(`${series}015`).first()).toBeVisible();
   await expect(page.getByRole('link', { name: printer.name })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Photos' }).getByRole('img')).toHaveCount(1);
+  await expect(page.getByRole('region', { name: 'Attachments' }).getByRole('img')).toHaveCount(1);
   // The original keeps its place, what it holds, and its photo.
   const original = (await api.call('GET', `/assets/${spool.id}`)).asset;
   expect(original.location.map((l: { id: string }) => l.id)).toEqual([shelf.id]);

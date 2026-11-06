@@ -10,12 +10,12 @@ export type Kind = 'assets' | 'catalog' | 'labels' | 'reports' | 'icons' | 'flow
 export const kinds: Record<Kind, { label: string; holds: string; replacing: string }> = {
   assets: {
     label: 'Assets',
-    holds: 'assets, their codes, field values, links, loans, photos, placements and history',
+    holds: 'assets, their codes, field values, links, loans, attachments (photos among them), placements and history',
     replacing: 'Assets become the backup’s: those added since are removed, and those removed are back.',
   },
   catalog: {
     label: 'The catalog',
-    holds: 'categories, fields, hooks, link types and scopes',
+    holds: 'categories and their attachments, fields, hooks, link types and scopes',
     replacing: 'Categories, fields and hooks become the backup’s; assets in a category it lacks lose that category.',
   },
   labels: {
