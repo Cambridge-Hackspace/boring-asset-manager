@@ -14,7 +14,8 @@ Archives are also the form a package takes, for sharing part of an instance with
 that rows name (assets' and categories' attachments, photos and their thumbnails among them, and
 label images), wherever they are kept (see [Configuration](configuration.md)).
 `--without-documents` leaves out the attachments that are not images, documents and other files,
-with their rows; so does ticking **Leave out documents** on the Backups page.
+with their rows, and an asset whose invoice is one of them names no invoice; so does ticking
+**Leave out documents** on the Backups page.
 
 It is safe to run while BAM! runs:
 
@@ -95,7 +96,7 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Labels | `labels` | `templates`, `images` and their files, `category_label_templates` |
 | Icons | `icons` | `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings` |
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites` |
-| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, `asset_comments` and `loan_comments`, and their history, `events` |
+| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, `asset_purchases`, where they came from, the `warranty_notices` recorded for them, `asset_comments` and `loan_comments`, and their history, `events` |
 | Flows | `flows` | `flows`, `flow_filings`, `flow_filing_comments` |
 | Settings | `settings` | `settings`, `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes` |
 | Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, `relay_mesh`, and the secret columns described under [Authentication](#authentication) |
@@ -210,6 +211,7 @@ table has none of it, and restores and imports with no such rows:
 | `066` | `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes` |
 | `067` | `asset_attachments` and `category_attachments` (it has `asset_photos`; see [The archive format](#the-archive-format)) |
 | `068` | `vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments`, `category_vendors` |
+| `070` | `asset_purchases`, `warranty_notices` |
 
 Its rows also lack the columns added since. A restore leaves those to the migrations, as they left
 them in the database it was written from. An import leaves them to the columns' defaults.

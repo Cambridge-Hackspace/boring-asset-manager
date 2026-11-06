@@ -54,6 +54,9 @@ const (
 	// PermCommentsModerate deletes anyone's comments, in the scopes of what
 	// they are on.
 	PermCommentsModerate = "comments.moderate"
+	// PermPurchasesRead sees what an asset cost: its price, currency, order
+	// number and invoice (docs/data-model.md#purchases), in the scopes held.
+	PermPurchasesRead = "purchases.read"
 )
 
 var (
@@ -87,6 +90,7 @@ func AllPermissions() []string {
 		PermVendorsManage,
 		PermCommentsWrite,
 		PermCommentsModerate,
+		PermPurchasesRead,
 	}
 }
 
@@ -149,9 +153,9 @@ const ScopeSeparator = ":"
 const DefaultScope = "default"
 
 // scopable are the permissions a role may hold in some scopes only: those
-// acting on assets, running flows, which act on them, managing vendors,
-// which are in scopes as assets are, and writing and moderating comments,
-// in the scopes of what they are on.
+// acting on assets, seeing what they cost, running flows, which act on
+// them, managing vendors, which are in scopes as assets are, and writing
+// and moderating comments, in the scopes of what they are on.
 var scopable = map[string]bool{
 	PermAssetsRead: true, PermAssetsWrite: true, PermAssetsDelete: true,
 	PermAssetsReport: true, PermAssetsBorrow: true, PermAssetsLend: true,
@@ -164,6 +168,7 @@ var scopable = map[string]bool{
 	PermVendorsManage:    true,
 	PermCommentsWrite:    true,
 	PermCommentsModerate: true,
+	PermPurchasesRead:    true,
 }
 
 // Scopable reports whether perm may be held in some scopes only.
@@ -305,5 +310,5 @@ const (
 // PublicAllowed reports whether the public role may hold perm: signed-out
 // visitors may look, never change anything.
 func PublicAllowed(perm string) bool {
-	return perm == PermAssetsRead || perm == PermAssetsScan
+	return perm == PermAssetsRead || perm == PermAssetsScan || perm == PermPurchasesRead
 }

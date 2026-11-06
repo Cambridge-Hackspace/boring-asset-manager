@@ -14,36 +14,50 @@ import (
 type RefKind int
 
 const (
-	RefAssetID         RefKind = iota // {{asset.id}}
-	RefAssetName                      // {{asset.name}}
-	RefAssetCode                      // {{asset.code.<generator_type>}}
-	RefField                          // {{field.<key>}}
-	RefBaseURL                        // {{base_url}}
-	RefAssetCategories                // {{asset.categories}}
-	RefAssetLocation                  // {{asset.location}}
-	RefAssetCondition                 // {{asset.condition}}
-	RefStockQuantity                  // {{stock.quantity}}
-	RefStockUnit                      // {{stock.unit}}
-	RefLoanBorrower                   // {{loan.borrower}}
-	RefLoanDue                        // {{loan.due}}
-	RefScanURL                        // {{scan_url}}
-	RefAssetIcon                      // {{asset.icon}}
+	RefAssetID              RefKind = iota // {{asset.id}}
+	RefAssetName                           // {{asset.name}}
+	RefAssetCode                           // {{asset.code.<generator_type>}}
+	RefField                               // {{field.<key>}}
+	RefBaseURL                             // {{base_url}}
+	RefAssetCategories                     // {{asset.categories}}
+	RefAssetLocation                       // {{asset.location}}
+	RefAssetCondition                      // {{asset.condition}}
+	RefStockQuantity                       // {{stock.quantity}}
+	RefStockUnit                           // {{stock.unit}}
+	RefLoanBorrower                        // {{loan.borrower}}
+	RefLoanDue                             // {{loan.due}}
+	RefScanURL                             // {{scan_url}}
+	RefAssetIcon                           // {{asset.icon}}
+	RefPurchaseVendor                      // {{asset.purchase.vendor}}
+	RefPurchaseOrderDate                   // {{asset.purchase.order_date}}
+	RefPurchaseReceivedDate                // {{asset.purchase.received_date}}
+	RefPurchasePrice                       // {{asset.purchase.price}}
+	RefPurchaseCurrency                    // {{asset.purchase.currency}}
+	RefPurchaseOrderNumber                 // {{asset.purchase.order_number}}
+	RefPurchaseWarrantyEnd                 // {{asset.purchase.warranty_end}}
 )
 
 // simpleRefs are the placeholders that take no argument.
 var simpleRefs = map[string]RefKind{
-	"asset.id":         RefAssetID,
-	"asset.name":       RefAssetName,
-	"base_url":         RefBaseURL,
-	"asset.categories": RefAssetCategories,
-	"asset.location":   RefAssetLocation,
-	"asset.condition":  RefAssetCondition,
-	"stock.quantity":   RefStockQuantity,
-	"stock.unit":       RefStockUnit,
-	"loan.borrower":    RefLoanBorrower,
-	"loan.due":         RefLoanDue,
-	"scan_url":         RefScanURL,
-	"asset.icon":       RefAssetIcon,
+	"asset.id":                     RefAssetID,
+	"asset.name":                   RefAssetName,
+	"base_url":                     RefBaseURL,
+	"asset.categories":             RefAssetCategories,
+	"asset.location":               RefAssetLocation,
+	"asset.condition":              RefAssetCondition,
+	"stock.quantity":               RefStockQuantity,
+	"stock.unit":                   RefStockUnit,
+	"loan.borrower":                RefLoanBorrower,
+	"loan.due":                     RefLoanDue,
+	"scan_url":                     RefScanURL,
+	"asset.icon":                   RefAssetIcon,
+	"asset.purchase.vendor":        RefPurchaseVendor,
+	"asset.purchase.order_date":    RefPurchaseOrderDate,
+	"asset.purchase.received_date": RefPurchaseReceivedDate,
+	"asset.purchase.price":         RefPurchasePrice,
+	"asset.purchase.currency":      RefPurchaseCurrency,
+	"asset.purchase.order_number":  RefPurchaseOrderNumber,
+	"asset.purchase.warranty_end":  RefPurchaseWarrantyEnd,
 }
 
 // Ref is one placeholder. Arg holds the generator type or field key.
@@ -172,6 +186,21 @@ type Data struct {
 	// name, a code), by the name it is drawn under, as isolex's IR has
 	// it; an icon it lacks is drawn as the build draws it.
 	DrawnIcons map[string]json.RawMessage `json:"drawn_icons,omitempty"`
+	// Purchase is where the asset came from, as text: its price, currency
+	// and order number empty for a requester who may not see them.
+	Purchase PurchaseData `json:"purchase"`
+}
+
+// PurchaseData is an asset's purchase details, as bindings show them:
+// dates YYYY-MM-DD, and the price a decimal in its currency.
+type PurchaseData struct {
+	Vendor       string `json:"vendor"`
+	OrderDate    string `json:"order_date"`
+	ReceivedDate string `json:"received_date"`
+	Price        string `json:"price"`
+	Currency     string `json:"currency"`
+	OrderNumber  string `json:"order_number"`
+	WarrantyEnd  string `json:"warranty_end"`
 }
 
 // IconData is the icon an asset is drawn with, as Data has its screen
@@ -230,6 +259,20 @@ func (b Binding) Resolve(d Data) string {
 			sb.WriteString(d.Due)
 		case RefAssetIcon:
 			sb.WriteString(d.Icon)
+		case RefPurchaseVendor:
+			sb.WriteString(d.Purchase.Vendor)
+		case RefPurchaseOrderDate:
+			sb.WriteString(d.Purchase.OrderDate)
+		case RefPurchaseReceivedDate:
+			sb.WriteString(d.Purchase.ReceivedDate)
+		case RefPurchasePrice:
+			sb.WriteString(d.Purchase.Price)
+		case RefPurchaseCurrency:
+			sb.WriteString(d.Purchase.Currency)
+		case RefPurchaseOrderNumber:
+			sb.WriteString(d.Purchase.OrderNumber)
+		case RefPurchaseWarrantyEnd:
+			sb.WriteString(d.Purchase.WarrantyEnd)
 		case RefScanURL:
 			// The asset's scan page (docs/scanning.md), by ID, which never changes.
 			sb.WriteString(strings.TrimRight(d.BaseURL, "/") + "/scan/" + d.AssetID)

@@ -599,6 +599,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `assets.lend` | Lending assets (see [Stock and lending](stock-and-lending.md)). | Yes |
 | `assets.scan` | Scanning (see [Scanning](scanning.md)). | Yes |
 | `assets.track` | Seeing the people around assets: who borrowed them, who changed them, and the loans list. | Yes |
+| `purchases.read` | Seeing what assets cost: their price, currency, order number and invoice (see [Seeing prices](#seeing-prices)). | Yes |
 | `assets.hook` | Triggering hooks (see [Hooks](hooks.md)). | Yes |
 | `events.read` | Receiving events live (see [Hooks](hooks.md)). | Yes |
 | `stock.record` | Using, restocking and flagging stock, without being able to edit assets. | Yes |
@@ -645,10 +646,10 @@ decide who reaches what. Moving categories under others changes their assets' sc
 A role holds each permission either in every scope (`assets.write`) or in some
 (`tools:assets.write`, `default:assets.write`). Only the asset permissions are scopable:
 `assets.read`, `assets.scan`, `assets.hook`, `events.read`, `assets.track`, `assets.write`,
-`assets.delete`, `assets.report`, `assets.borrow`, `assets.lend`, `stock.record` and `flows.run`,
-and `vendors.manage`, since vendors are in scopes as assets are (see [Vendors](vendors.md)), and
-`comments.write` and `comments.moderate`, in the scopes of what comments are on (see
-[Comments](comments.md#who-sees-and-writes-them)).
+`assets.delete`, `assets.report`, `assets.borrow`, `assets.lend`, `stock.record`, `purchases.read`
+and `flows.run`, and `vendors.manage`, since vendors are in scopes as assets are (see
+[Vendors](vendors.md)), and `comments.write` and `comments.moderate`, in the scopes of what
+comments are on (see [Comments](comments.md#who-sees-and-writes-them)).
 
 A permission in any one of an asset's scopes is enough. A permission held in every scope covers
 each scope, and a role given it both ways keeps the wider.
@@ -712,12 +713,30 @@ Without `assets.track` for an asset:
 
 With it, people show by name. Emails never show on asset pages, lists, history or the loans list.
 
+### Seeing prices
+
+Without `purchases.read` for an asset, in one of its scopes, its price, currency, order number and
+invoice are left out of:
+
+- its page and the asset list, which mark it `"prices_hidden": true`;
+- its history, with any edit that changed nothing else;
+- the CSV and Excel exports, and reports, labels and sheets, whose `{{asset.purchase.price}}`,
+  `{{asset.purchase.currency}}` and `{{asset.purchase.order_number}}` are blank;
+- packages, and MCP, which reads through the API.
+
+Its vendor and dates still show to whoever reads it, as the vendor's page lists the assets bought
+from it. Editing it, with `assets.write`, leaves what they cannot see as it is, and an import
+giving those details for such an asset is refused (see [Purchases](data-model.md#purchases)).
+
+Migration `070` grants `purchases.read` to every role that reads assets, where it reads them, the
+public role among them, so that no one sees less than before. Take it from a role to hide prices.
+
 ### The public role
 
 Everyone holds the `public` role, signed in or not, and API tokens hold it too. It is not given to
 users, who all have it already, and `GET /api/v1/roles` marks it `public`.
 
-- It may only look: `assets.read` and `assets.scan`, in any scopes.
+- It may only look: `assets.read`, `assets.scan` and `purchases.read`, in any scopes.
 - It keeps its name and cannot be deleted (`409`).
 - It cannot be narrowed to scopes (`400`).
 
@@ -974,6 +993,7 @@ is an RFC 3339 time, or `null` for never.
 | `043` | Grants `flows.manage` to every role that manages categories, and `flows.run` to every role that writes assets, in the same scopes. |
 | `068` | Grants `vendors.manage`, in every scope, to every role that manages categories. |
 | `069` | Grants `comments.write` to every role that writes assets, and `comments.moderate` to every role that archives them, in the same scopes. |
+| `070` | Grants `purchases.read` to every role that reads assets, in the scopes it reads them in, since reading showed prices until then. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

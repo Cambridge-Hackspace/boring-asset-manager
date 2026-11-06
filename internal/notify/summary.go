@@ -229,6 +229,12 @@ func summarize(n Notification, esc func(string) string) summary {
 		if out.URL != "" {
 			out.URL += "#comment-" + url.PathEscape(p.Comment.ID)
 		}
+	case e.Kind == models.EventWarrantyExpiring:
+		out.Title, out.Color = "Warranty ending: "+name, discordWarning
+		out.Description = "Its warranty is ending soon."
+		if p.DueAt != nil {
+			out.Description = "Its warranty ends on " + p.DueAt.UTC().Format("2 January 2006") + "."
+		}
 	case e.Kind == models.EventAssetHook:
 		label := "Hook"
 		if p.Hook != nil {

@@ -18,6 +18,12 @@ You can also start a new asset from where it goes: **Add something inside…** u
 
 **Edit** changes any of this; every change is kept in the asset's **History**, with who made it.
 
+## Purchase
+
+An asset's **Purchase** section says where it came from: the **vendor** it was bought from, when it was **ordered** and **received**, its **price** and currency, the **order or invoice number**, when its **warranty ends**, and its **invoice**, one of its attachments. Fill them in under **Purchase** when you add or edit it; every one is optional, and the invoice can be chosen once the file is attached. Duplicating an asset leaves them out: the new one was bought on its own.
+
+Seeing the price, order number and invoice takes **See prices**, which roles that read assets have unless it is taken away; without it, they are hidden, and editing the asset leaves them as they are. Before a warranty ends, a notification channel can tell you (see [Notifications](/help/notifications)).
+
 ## Condition
 
 Anyone allowed can **Report a problem**: that it needs maintenance, or is out of service, with a note saying what is wrong. Someone who edits assets marks it working again when it is fixed. Assets out of service cannot be lent.

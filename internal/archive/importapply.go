@@ -169,6 +169,16 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 		return with(r, "link_id", ids.of(str(r, "link_id"))), true
 	case "asset_attachments":
 		return attachmentRow(r, ids, ap.b.files, "asset_id", ids.of(str(r, "asset_id"))), true
+	case "asset_purchases":
+		// the vendor as it is here, by name, when there is one
+		var vendor, invoice any
+		if v, ok := b.vendors[str(r, "vendor_id")]; ok {
+			vendor = v
+		}
+		if i := str(r, "invoice_attachment_id"); i != "" {
+			invoice = ids.of(i)
+		}
+		return with(r, "asset_id", ids.of(str(r, "asset_id")), "vendor_id", vendor, "invoice_attachment_id", invoice), true
 	case "events":
 		var cat any
 		if c, ok := b.cats[str(r, "category_id")]; ok {

@@ -203,6 +203,10 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 			d.Due = l.DueAt.UTC().Format("2006-01-02")
 		}
 	}
+	// As the request may see them: shown has left out what it may not.
+	p := a.Purchase
+	d.Purchase = labels.PurchaseData{Vendor: p.VendorName, OrderDate: p.OrderDate, ReceivedDate: p.ReceivedDate, Price: p.Price,
+		Currency: p.Currency, OrderNumber: p.OrderNumber, WarrantyEnd: p.WarrantyEnd}
 	return d
 }
 

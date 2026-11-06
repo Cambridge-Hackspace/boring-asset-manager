@@ -223,6 +223,9 @@ export function describeEvent(e: AssetEvent): string {
       return `Comment edited${commentWhere(p.comment)}`;
     case 'comment.deleted':
       return `Comment deleted${commentWhere(p.comment)}`;
+    case 'warranty.expiring':
+      // The day it ends, as written: a date, not a moment.
+      return p.due_at ? `Warranty ending on ${p.due_at.slice(0, 10)}` : 'Warranty ending';
     case 'asset.label_printed': {
       const l = p.label;
       if (!l) return 'Label printed';
@@ -289,6 +292,20 @@ export function describeChange(c: AssetChange, kind: string): string {
       const label = c.label ?? 'linked to';
       return c.to ? `${capitalized(label)} ${c.to}` : `No longer ${label} ${c.from}`;
     }
+    case 'vendor':
+      return fromTo('Vendor', c);
+    case 'order_date':
+      return fromTo('Ordered', c);
+    case 'received_date':
+      return fromTo('Received', c);
+    case 'price':
+      return fromTo('Price', c);
+    case 'order_number':
+      return fromTo('Order number', c);
+    case 'warranty_end':
+      return fromTo('Warranty ends', c);
+    case 'invoice':
+      return c.to ? `Invoice: ${c.to}` : `No longer the invoice: ${c.from}`;
     case 'condition':
       return `Was ${conditionLabel((c.from ?? 'ok') as Condition).toLowerCase()}`;
     default:

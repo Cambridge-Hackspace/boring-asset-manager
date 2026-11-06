@@ -12,6 +12,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/flows"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/reports"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -159,6 +160,9 @@ type Plan struct {
 	cats  map[string]bool
 	// events are the assets whose history the requester may read.
 	events map[string]bool
+	// prices are the assets whose prices the requester may see
+	// (purchases.read).
+	prices map[string]bool
 	// extra are rows written besides the database's: what a top category
 	// inherits, as its own. scan are top categories' inherited scan
 	// templates.
@@ -299,6 +303,10 @@ type resolver struct {
 	assetIcons    map[string][]string
 	includedAsset map[string]bool
 	readEvents    map[string]bool
+	// assetVendors are the vendors assets were bought from, and
+	// readPrices the assets whose prices the requester may see.
+	assetVendors map[string]string
+	readPrices   map[string]bool
 
 	items map[Ref]*Item
 	order []Ref
@@ -921,6 +929,14 @@ func (r *resolver) assets(plan *Plan) error {
 			r.assetCats[id] = append(r.assetCats[id], row[3])
 		}
 	}
+	bought, err := r.strings("SELECT asset_id, vendor_id FROM asset_purchases WHERE vendor_id IS NOT NULL")
+	if err != nil {
+		return fmt.Errorf("reading where assets came from: %w", err)
+	}
+	r.assetVendors, r.readPrices = map[string]string{}, map[string]bool{}
+	for _, row := range bought {
+		r.assetVendors[row[0]] = row[1]
+	}
 	counts := &AssetCounts{}
 	plan.Assets = counts
 	r.includedAsset, r.readEvents = map[string]bool{}, map[string]bool{}
@@ -946,6 +962,13 @@ func (r *resolver) assets(plan *Plan) error {
 		r.assetIDs = append(r.assetIDs, id)
 		if sel.History && r.may(rbac.PermEventsRead, scopes) {
 			r.readEvents[id] = true
+		}
+		if r.may(rbac.PermPurchasesRead, scopes) {
+			r.readPrices[id] = true
+		}
+		// the vendor it was bought from
+		if v := r.assetVendors[id]; v != "" {
+			r.need(Ref{Kind: ItemVendor, ID: v}, whole)
 		}
 		for _, c := range cats {
 			r.need(Ref{Kind: ItemCategory, ID: c}, whole)
@@ -1095,6 +1118,7 @@ func (r *resolver) rowsOf(plan *Plan) {
 		plan.whole["icon_settings"] = true
 	}
 	plan.events = r.readEvents
+	plan.prices = r.readPrices
 	for _, id := range r.assetIDs {
 		set("assets", id)
 	}
@@ -1194,6 +1218,28 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 			return false, nil
 		}
 		setNull("added_by")
+		if p.rows[t.Name] == nil {
+			p.rows[t.Name] = map[string]bool{}
+		}
+		p.rows[t.Name][get("id")] = true
+		return true, nil
+	case "asset_purchases":
+		if !asset("asset_id") {
+			return false, nil
+		}
+		// a vendor, or an invoice, the package does not hold is not named,
+		// and the price only to those who may see it
+		if !p.rows["vendors"][get("vendor_id")] {
+			setNull("vendor_id")
+		}
+		if !p.rows["asset_attachments"][get("invoice_attachment_id")] {
+			setNull("invoice_attachment_id")
+		}
+		if !p.prices[get("asset_id")] {
+			setNull("price_minor")
+			setNull("invoice_attachment_id")
+			vals[colIndex(t, "currency")], vals[colIndex(t, "order_number")] = "", ""
+		}
 		return true, nil
 	case "category_attachments":
 		if !p.rows["categories"][get("category_id")] {
@@ -1237,6 +1283,12 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 		if err != nil {
 			return false, err
 		}
+		// and its changes to prices only to those who may see them
+		if !p.prices[get("asset_id")] {
+			if payload, err = withoutPrices(payload); err != nil {
+				return false, err
+			}
+		}
 		vals[colIndex(t, "payload")] = payload
 		return true, nil
 	}
@@ -1257,6 +1309,36 @@ func withoutPeople(v any) (any, error) {
 	}
 	delete(m, "actor")
 	delete(m, "borrower")
+	b, err := json.Marshal(m)
+	return string(b), err
+}
+
+// withoutPrices is an event's payload without its changes to what only
+// purchases.read sees.
+func withoutPrices(v any) (any, error) {
+	s, ok := text(v)
+	if !ok || s == "" {
+		return v, nil
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		return nil, fmt.Errorf("reading an event's payload: %w", err)
+	}
+	var changes []models.EventChange
+	if raw, ok := m["changes"]; !ok || json.Unmarshal(raw, &changes) != nil {
+		return v, nil
+	}
+	kept := changes[:0]
+	for _, c := range changes {
+		if !store.PriceChanges[c.What] {
+			kept = append(kept, c)
+		}
+	}
+	raw, err := json.Marshal(kept)
+	if err != nil {
+		return nil, err
+	}
+	m["changes"] = raw
 	b, err := json.Marshal(m)
 	return string(b), err
 }

@@ -169,7 +169,7 @@ func Suggest(header []string, corpus []models.Field) []string {
 		byName[t] = CodePrefix + t
 		byName[CodePrefix+t] = CodePrefix + t
 	}
-	for _, c := range []string{ColumnID, ColumnName, ColumnCategories, ColumnQuantity, ColumnUnit, ColumnThreshold, ColumnLinks, ColumnIcon} {
+	for _, c := range append([]string{ColumnID, ColumnName, ColumnCategories, ColumnQuantity, ColumnUnit, ColumnThreshold, ColumnLinks, ColumnIcon}, purchaseColumns...) {
 		byName[c] = c
 	}
 	out := make([]string, len(header))
@@ -204,6 +204,13 @@ type Options struct {
 	// Icons are the names the icon build draws (docs/icons.md): an icon cell
 	// gives an asset one of these, or the one it has already.
 	Icons map[string]bool
+	// Vendors are those a vendor cell may name, by name or ID: the vendors
+	// the importer may see.
+	Vendors []models.Vendor
+	// SeesPrices, when set, says whether the importer may see assets' prices
+	// in these scopes (purchases.read). Rows giving the price, currency or
+	// order number of assets they may not are problems.
+	SeesPrices func(scopes []string) bool
 }
 
 // PrepareWith plans an import as Prepare does, with options.
@@ -299,6 +306,7 @@ func checkMapping(plan *Plan, fieldsByKey map[string]models.Field) bool {
 		case t == ColumnName:
 			hasName = true
 		case t == ColumnCategories, t == ColumnQuantity, t == ColumnUnit, t == ColumnThreshold, t == ColumnLinks, t == ColumnIcon:
+		case isPurchaseColumn(t):
 		case strings.HasPrefix(t, CodePrefix) && generators.IsValidGeneratorType(strings.TrimPrefix(t, CodePrefix)):
 		case strings.HasPrefix(t, FieldPrefix):
 			if _, ok := fieldsByKey[strings.TrimPrefix(t, FieldPrefix)]; !ok {
@@ -521,6 +529,9 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 		change.Icon = &v
 	}
 
+	// Where it came from: a blank cell keeps what the asset has.
+	change.Purchase = p.purchase(line, existing, cell)
+
 	// Field values, merged over the asset's own.
 	values := map[string]string{}
 	if existing != nil {
@@ -606,6 +617,9 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 	}
 	if bad := p.forbidden(id); bad != "" {
 		plan.problem(line, "", "you cannot change assets in %s", bad)
+	}
+	if bad := p.unpriced(id, change.Purchase); bad != "" {
+		plan.problem(line, "", "you cannot see the prices of assets in %s", bad)
 	}
 	return nil
 }
@@ -765,6 +779,9 @@ func unchanged(a *models.AssetWithDetails, c store.ImportRow, corpus map[string]
 		if a.FieldValues[keyOf[id]] != v {
 			return false
 		}
+	}
+	if c.Purchase != nil && !samePurchase(a.Purchase, *c.Purchase) {
+		return false
 	}
 	return true
 }

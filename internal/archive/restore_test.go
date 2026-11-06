@@ -130,6 +130,18 @@ func richSeed(t *testing.T, st *store.Store, blobs filestore.Blobs) seeded {
 	if _, err := st.SetCategoryVendors(parent.ID, []string{vendor.ID}); err != nil {
 		t.Fatal(err)
 	}
+	// The drill was bought from it, and its warranty announced.
+	var drill string
+	if err := st.QueryRow("SELECT id FROM assets WHERE name = 'Drill'").Scan(&drill); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.UpdateAssetWithPurchase(drill, "", nil, nil, nil, nil, nil, &store.PurchaseInput{VendorID: vendor.ID, OrderDate: "2026-01-05",
+		Price: "129.99", Currency: "GBP", OrderNumber: "PO-17", WarrantyEnd: "2026-02-01"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.RecordExpiringWarranties(time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC), 30); err != nil {
+		t.Fatal(err)
+	}
 	return s
 }
 

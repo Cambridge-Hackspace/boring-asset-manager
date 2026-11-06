@@ -480,3 +480,77 @@ describe('AssetForm icons', () => {
     expect((await screen.findByText(/On its labels:/)).textContent).toMatch(/its own icon, as above\./);
   });
 });
+
+describe('AssetForm purchase', () => {
+  const bought = (prices_hidden = false): AssetWithDetails => ({
+    asset: { id: 'a1', name: 'Drill', created_at: '', updated_at: '', condition: 'ok', condition_note: '', stock: null },
+    categories: [],
+    generator_keys: [],
+    field_values: {},
+    effective_fields: [],
+    lendable: false,
+    weighed: false,
+    loan: null,
+    links: [],
+    location: [],
+    suggested_relation_type_ids: [],
+    scopes: ['default'],
+    scan_template: { template_id: 'default' },
+    label_template: { template_id: '' },
+    hooks: [],
+    photos: [],
+    purchase: prices_hidden
+      ? { vendor_id: 'acme', vendor_name: 'Acme', order_date: '2026-01-05', received_date: '', warranty_end: '', prices_hidden: true }
+      : { vendor_id: 'acme', vendor_name: 'Acme', order_date: '2026-01-05', received_date: '', warranty_end: '', price: '129.99', currency: 'GBP', order_number: 'PO-17' },
+  });
+  const serveEdit = (a: AssetWithDetails) =>
+    fakeApi({
+      'GET /categories': () => ({ categories: [] }),
+      'GET /generators': () => ({ generators }),
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'GET /vendors': () => ({ vendors: [{ id: 'acme', name: 'Acme' }, { id: 'bolts', name: 'Bolts R Us' }] }),
+      'GET /assets/a1': () => ({ asset: a }),
+      'GET /assets/a1/attachments': () => ({ attachments: [{ id: 'inv', kind: 'document', name: 'invoice.pdf' }] }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'PUT /assets/a1': () => ({ asset: a }),
+    });
+
+  it('changes where it came from, its invoice one of its attachments', async () => {
+    const { sent } = serveEdit(bought());
+    render(AssetForm, { params: { id: 'a1' } });
+    const vendor = (await screen.findByLabelText('Vendor')) as HTMLSelectElement;
+    expect(vendor.value).toBe('acme');
+    expect((screen.getByLabelText('Price') as HTMLInputElement).value).toBe('129.99');
+    await fireEvent.change(vendor, { target: { value: 'bolts' } });
+    await fireEvent.input(screen.getByLabelText('Warranty ends'), { target: { value: '2028-01-09' } });
+    await fireEvent.change(screen.getByLabelText('Invoice'), { target: { value: 'inv' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    expect((sent.find((r) => r.method === 'PUT')!.body as { purchase: unknown }).purchase).toEqual({
+      vendor_id: 'bolts',
+      order_date: '2026-01-05',
+      received_date: '',
+      warranty_end: '2028-01-09',
+      price: '129.99',
+      currency: 'GBP',
+      order_number: 'PO-17',
+      invoice_attachment_id: 'inv',
+    });
+  });
+
+  it('refuses a price it cannot read, beside the price', async () => {
+    const { sent } = serveEdit(bought());
+    render(AssetForm, { params: { id: 'a1' } });
+    await fireEvent.input(await screen.findByLabelText('Price'), { target: { value: '£12' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/without a currency symbol/);
+    expect(sent.some((r) => r.method === 'PUT')).toBe(false);
+  });
+
+  it('leaves a price hidden from the viewer alone', async () => {
+    serveEdit(bought(true));
+    render(AssetForm, { params: { id: 'a1' } });
+    expect(((await screen.findByLabelText('Price')) as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/hidden from you, and stay as they are/)).toBeTruthy();
+  });
+});

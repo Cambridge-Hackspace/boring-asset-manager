@@ -41,6 +41,9 @@ type Config struct {
 	Attachments AttachmentsConfig `toml:"attachments"`
 	// Updates turns the check for a newer release on (docs/installing.md).
 	Updates UpdatesConfig `toml:"updates"`
+	// Purchases says when warranties are announced
+	// (docs/data-model.md#purchases).
+	Purchases PurchasesConfig `toml:"purchases"`
 }
 
 // UpdatesConfig is whether BAM! asks, once a day, whether a newer release
@@ -52,6 +55,15 @@ type UpdatesConfig struct {
 	// or with a list of releases; release.LatestURL unless given.
 	URL string `toml:"url"`
 }
+
+// PurchasesConfig says how many days before an asset's warranty ends its
+// warranty.expiring event is recorded: 0 on the day it ends.
+type PurchasesConfig struct {
+	WarrantyNoticeDays int `toml:"warranty_notice_days"`
+}
+
+// MaxWarrantyNoticeDays is the most purchases.warranty_notice_days may be.
+const MaxWarrantyNoticeDays = 365
 
 // AttachmentsConfig bounds attachments, and says which types beyond images
 // and documents may be attached.
@@ -351,6 +363,7 @@ func DefaultConfig() *Config {
 		Relay:         RelayConfig{BoneMeshPort: DefaultBoneMeshPort},
 		Attachments:   AttachmentsConfig{MaxFileMB: 25, MaxPerObject: 50},
 		Updates:       UpdatesConfig{URL: release.LatestURL},
+		Purchases:     PurchasesConfig{WarrantyNoticeDays: 30},
 	}
 }
 
@@ -504,8 +517,9 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.Relay.Allow = strings.Split(v, ",")
 	}
 	for env, field := range map[string]*int{
-		"BAM_ATTACHMENTS_MAX_FILE_MB":    &cfg.Attachments.MaxFileMB,
-		"BAM_ATTACHMENTS_MAX_PER_OBJECT": &cfg.Attachments.MaxPerObject,
+		"BAM_ATTACHMENTS_MAX_FILE_MB":        &cfg.Attachments.MaxFileMB,
+		"BAM_ATTACHMENTS_MAX_PER_OBJECT":     &cfg.Attachments.MaxPerObject,
+		"BAM_PURCHASES_WARRANTY_NOTICE_DAYS": &cfg.Purchases.WarrantyNoticeDays,
 	} {
 		if v := os.Getenv(env); v != "" {
 			n, err := strconv.Atoi(v)
@@ -591,6 +605,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.Attachments.validate(); err != nil {
 		return err
+	}
+	if d := c.Purchases.WarrantyNoticeDays; d < 0 || d > MaxWarrantyNoticeDays {
+		return fmt.Errorf("purchases.warranty_notice_days must be from 0 to %d", MaxWarrantyNoticeDays)
 	}
 	if p := c.Relay.BoneMeshPort; p <= 0 || p > 65535 {
 		return fmt.Errorf("invalid relay.bonemesh_port: %d", p)

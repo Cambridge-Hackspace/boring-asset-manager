@@ -137,6 +137,16 @@ func (s *Server) drawSheet(r *http.Request, d *render.Document, a *models.AssetW
 	for _, f := range a.EffectiveFields {
 		add(f.Field.Label, a.FieldValues[f.Field.Key])
 	}
+	// Where it came from, as far as the request may see.
+	p := a.Purchase
+	add("Vendor", p.VendorName)
+	add("Ordered", p.OrderDate)
+	add("Received", p.ReceivedDate)
+	if p.Price != "" {
+		add("Price", p.Price+" "+p.Currency)
+	}
+	add("Order number", p.OrderNumber)
+	add("Warranty ends", p.WarrantyEnd)
 	for _, l := range a.Links {
 		add(capitalize(l.Label), l.Asset.Name)
 	}
@@ -149,10 +159,11 @@ func (s *Server) drawSheet(r *http.Request, d *render.Document, a *models.AssetW
 	}
 	if len(events) > 0 {
 		track := Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes)
+		prices := Allows(r.Context(), rbac.PermPurchasesRead, a.Scopes)
 		table := render.Table{Columns: []string{"When", "Who", "What"}}
 		group := render.TableGroup{}
 		for _, e := range events {
-			e = redactEvent(e, track)
+			e = redactPriceChanges(redactEvent(e, track), prices)
 			group.Rows = append(group.Rows, render.TableRow{Cells: []string{
 				e.CreatedAt.UTC().Format("2006-01-02 15:04"), eventActor(e), eventText(e),
 			}})
@@ -307,6 +318,8 @@ func eventText(e models.Event) string {
 		return "Hook fired"
 	case models.EventFlowOverdue:
 		return "A flow passed its date"
+	case models.EventWarrantyExpiring:
+		return "Warranty ending"
 	}
 	return e.Kind
 }

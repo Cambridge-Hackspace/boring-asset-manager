@@ -3,7 +3,7 @@
   import { ApiError, request } from '../../lib/api';
   import { assetPayload, type AssetCopy, type CopiedLink, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { attachmentUrl, UNCATEGORIZED, type Attachment, type AssetWithDetails, type Category, type EffectiveField, type Field, type GeneratorInfo, type RelationType } from '../../lib/models';
+  import { attachmentUrl, UNCATEGORIZED, type Attachment, type AssetWithDetails, type Category, type EffectiveField, type Field, type GeneratorInfo, type PurchaseRequest, type RelationType, type Vendor } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { addToSpool, queueNewLabels, rememberQueueNewLabels } from '../../lib/spool';
@@ -14,6 +14,7 @@
   import IsoIcon from '../../components/IsoIcon.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
+  import { currencies, priceProblem, purchaseRequest } from '../../lib/purchases';
 
   // /assets/new and /assets/:id/edit
   let { params }: { params: Record<string, string> } = $props();
@@ -71,6 +72,14 @@
   let copyFiles = $state(true);
   const likeImages = $derived(likeFiles.filter((a) => a.kind === 'image'));
   const allImages = $derived(likeImages.length === likeFiles.length);
+  // Where it came from (docs/data-model.md#purchases), which a copy does not
+  // take: the vendors to choose from, and its attachments, one of which is
+  // its invoice.
+  let purchase = $state<PurchaseRequest>(purchaseRequest(undefined));
+  let pricesHidden = $state(false);
+  let vendors = $state<Vendor[]>([]);
+  let ownFiles = $state<Attachment[]>([]);
+  const hasPurchaseDraft = $derived(Object.values(purchase).some((v) => v.trim() !== ''));
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
   // New assets' labels join the print queue (docs/printing.md), as each person last chose.
@@ -118,6 +127,7 @@
       categories = cats.categories ?? [];
       generators = gens.generators ?? [];
       relationTypes = types.relation_types ?? [];
+      vendors = await request<{ vendors: Vendor[] }>('GET', '/vendors').then((r) => r.vendors ?? [], () => []);
       if (!isNew) {
         const a = (await request<{ asset: AssetWithDetails }>('GET', `/assets/${encodeURIComponent(id)}`)).asset;
         original = a;
@@ -129,6 +139,9 @@
         ownIcon = a.asset.icon_name ?? '';
         ownLabelIcon = a.asset.label_icon_name ?? '';
         place = placeOf(a);
+        purchase = purchaseRequest(a.purchase);
+        pricesHidden = !!a.purchase?.prices_hidden;
+        ownFiles = await request<{ attachments: Attachment[] }>('GET', `/assets/${encodeURIComponent(id)}/attachments`).then((r) => r.attachments ?? [], () => []);
         // Without them, kept values are named by their keys.
         if (Object.keys(a.field_values).length) void request<{ fields: Field[] }>('GET', '/fields').then((r) => (allFields = r.fields ?? []), () => {});
       } else if (like) {
@@ -254,6 +267,16 @@
     // an edit sends its icon only when it changed, so one no longer drawn stays
     const icon = isNew ? ownIcon || undefined : ownIcon !== (original?.asset.icon_name ?? '') ? ownIcon : undefined;
     const body = assetPayload({ name, categoryIds, codes, values, stock, icon }, effective, original?.asset.stock);
+    const problem = priceProblem(purchase);
+    if (problem) {
+      error = problem;
+      errorFor = 'purchase-price';
+      busy = false;
+      document.getElementById('purchase-price')?.focus();
+      return;
+    }
+    // Every detail, so one emptied is forgotten; a new asset sends them only if it has any.
+    if (!isNew || hasPurchaseDraft) body.purchase = Object.fromEntries(Object.entries(purchase).map(([k, v]) => [k, v.trim()]));
     try {
       if (isNew) {
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
@@ -534,6 +557,69 @@
       {#if effective.some((e) => e.is_required)}<p class="text-xs text-zinc-600 dark:text-zinc-400"><span aria-hidden="true">*</span> Required</p>{/if}
     </fieldset>
     {/if}
+
+    <details class="card space-y-4" open={hasPurchaseDraft || errorFor === 'purchase-price'} data-purchase>
+      <summary class="cursor-pointer text-lg font-semibold">Purchase{hasPurchaseDraft ? '' : ' (none yet)'}</summary>
+      <p class="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Where it came from. Every detail is optional{like ? ', and a copy starts with none' : ''}.</p>
+      <div class="mt-3 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label" for="purchase-vendor">Vendor</label>
+          <select id="purchase-vendor" class="input" bind:value={purchase.vendor_id}>
+            <option value="">None</option>
+            {#each vendors as v (v.id)}<option value={v.id}>{v.name}</option>{/each}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="purchase-order-number">Order or invoice number</label>
+          <input id="purchase-order-number" class="input" maxlength="255" disabled={pricesHidden} bind:value={purchase.order_number} />
+        </div>
+        <div>
+          <label class="label" for="purchase-ordered">Ordered</label>
+          <input id="purchase-ordered" class="input" type="date" bind:value={purchase.order_date} />
+        </div>
+        <div>
+          <label class="label" for="purchase-received">Received</label>
+          <input id="purchase-received" class="input" type="date" bind:value={purchase.received_date} />
+        </div>
+        <div>
+          <label class="label" for="purchase-price">Price</label>
+          <input
+            id="purchase-price"
+            class="input"
+            inputmode="decimal"
+            placeholder="12.50"
+            disabled={pricesHidden}
+            aria-invalid={errorFor === 'purchase-price'}
+            aria-describedby={describedBy('purchase-price')}
+            bind:value={purchase.price}
+          />
+          {#if errorFor === 'purchase-price'}<p id="purchase-price-error" class="error-text mt-1" role="alert">{error}</p>{/if}
+        </div>
+        <div>
+          <label class="label" for="purchase-currency">Currency</label>
+          <input id="purchase-currency" class="input uppercase" list="purchase-currencies" maxlength="3" placeholder="GBP" disabled={pricesHidden} bind:value={purchase.currency} />
+          <datalist id="purchase-currencies">{#each currencies as c (c)}<option value={c}></option>{/each}</datalist>
+        </div>
+        <div>
+          <label class="label" for="purchase-warranty">Warranty ends</label>
+          <input id="purchase-warranty" class="input" type="date" aria-describedby="purchase-warranty-help" bind:value={purchase.warranty_end} />
+          <p id="purchase-warranty-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Notification channels can be told before it ends.</p>
+        </div>
+        {#if !isNew}
+          <div>
+            <label class="label" for="purchase-invoice">Invoice</label>
+            <select id="purchase-invoice" class="input" disabled={pricesHidden} aria-describedby="purchase-invoice-help" bind:value={purchase.invoice_attachment_id}>
+              <option value="">None</option>
+              {#each ownFiles as f (f.id)}<option value={f.id}>{f.name}</option>{/each}
+            </select>
+            <p id="purchase-invoice-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">One of its attachments, added on its page.</p>
+          </div>
+        {/if}
+      </div>
+      {#if pricesHidden}
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">Its price, order number and invoice are hidden from you, and stay as they are.</p>
+      {/if}
+    </details>
 
     <details class="card space-y-4" open={hasCodes || Boolean(errorFor?.startsWith('code:'))}>
       <summary class="cursor-pointer text-lg font-semibold">Codes{hasCodes ? '' : ' (none yet)'}</summary>

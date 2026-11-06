@@ -362,6 +362,15 @@ func (s *Store) RemoveAttachment(owner, ownerID, id string) (*models.Attachment,
 	if err != nil {
 		return nil, fmt.Errorf("reading attachment: %w", err)
 	}
+	changes := []models.EventChange{attachmentChange(a.Kind, a.ID, a.Name, false)}
+	if o.kind == models.OwnerAsset {
+		// An invoice removed is no longer the asset's invoice.
+		cleared, err := s.clearInvoiceTx(tx, ownerID, a)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, cleared...)
+	}
 	if _, err := s.TxExec(tx, "DELETE FROM "+o.table+" WHERE id = ?", id); err != nil {
 		return nil, fmt.Errorf("removing attachment: %w", err)
 	}
@@ -374,7 +383,7 @@ func (s *Store) RemoveAttachment(owner, ownerID, id string) (*models.Attachment,
 	if err := s.positionAttachmentsTx(tx, o, rest); err != nil {
 		return nil, err
 	}
-	if err := s.recordAttachmentsTx(tx, o, ownerID, []models.EventChange{attachmentChange(a.Kind, a.ID, a.Name, false)}); err != nil {
+	if err := s.recordAttachmentsTx(tx, o, ownerID, changes); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

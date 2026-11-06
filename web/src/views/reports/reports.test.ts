@@ -149,3 +149,28 @@ describe('ReportEditor, charts', () => {
     });
   });
 });
+
+describe('ReportEditor, purchases', () => {
+  it('filters by vendor, when bought and when the warranty ends', async () => {
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories }),
+      'GET /fields': () => ({ fields: [] }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /vendors': () => ({ vendors: [{ id: 'acme', name: 'Acme' }] }),
+      'POST /reports': () => ({ status: 201, body: { report: { ...lowReport, id: 'new' } } }),
+    });
+    render(ReportEditor, { params: {} });
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Warranties' } });
+    await vi.waitFor(() => expect(screen.getByRole('option', { name: 'Acme' })).toBeTruthy());
+    await fireEvent.change(screen.getByLabelText('Bought from'), { target: { value: 'acme' } });
+    await fireEvent.input(screen.getByLabelText('Bought on or after'), { target: { value: '2026-01-01' } });
+    await fireEvent.input(screen.getByLabelText('Warranty ends before'), { target: { value: '2027-01-01' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save report' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
+    expect((sent.find((r) => r.method === 'POST')!.body as { spec: { filter: unknown } }).spec.filter).toEqual({
+      vendor: 'acme',
+      purchased_between: { from: '2026-01-01' },
+      warranty_ends_before: '2027-01-01',
+    });
+  });
+});

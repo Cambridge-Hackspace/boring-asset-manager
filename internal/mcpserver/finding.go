@@ -19,6 +19,7 @@ type searchIn struct {
 	Condition  string `json:"condition,omitempty" jsonschema:"ok, needs_maintenance, out_of_service, or problem for either of the last two"`
 	Loan       string `json:"loan,omitempty" jsonschema:"open for assets lent out, overdue for those past due"`
 	Icon       string `json:"icon,omitempty" jsonschema:"only assets with this icon as their own, by name, such as one in icons_overview's missing_icons"`
+	VendorID   string `json:"vendor_id,omitempty" jsonschema:"only assets bought from this vendor (list_vendors gives their IDs)"`
 	RunningLow bool   `json:"running_low,omitempty" jsonschema:"only assets flagged running low, themselves or by a category"`
 	Archived   bool   `json:"archived,omitempty" jsonschema:"list archived assets instead of active ones"`
 	Favorite   bool   `json:"favorite,omitempty" jsonschema:"only assets the person you act for has starred"`
@@ -34,7 +35,7 @@ type searchOut struct {
 
 func (in searchIn) query() string {
 	q := url.Values{}
-	for k, v := range map[string]string{"search": in.Search, "category_id": in.CategoryID, "condition": in.Condition, "loan": in.Loan, "icon": in.Icon} {
+	for k, v := range map[string]string{"search": in.Search, "category_id": in.CategoryID, "condition": in.Condition, "loan": in.Loan, "icon": in.Icon, "vendor_id": in.VendorID} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -150,7 +151,8 @@ func findingTools() []tool {
 		define(&mcp.Tool{
 			Name: "get_asset",
 			Description: "Everything about one asset, by its ID or any of its codes: its fields, codes, categories, where it is and what is in it, " +
-				"its links, condition, stock, loan, photos, the hooks it offers, and the icon it is drawn with.",
+				"its links, condition, stock, loan, photos, the hooks it offers, the icon it is drawn with, and where it came from: " +
+				"its vendor, dates, warranty end, and, with purchases.read, its price, order number and invoice.",
 			Annotations: readOnly("Get an asset"),
 		}, []string{"GET /api/v1/assets/{id}", "GET /api/v1/scan/{code}"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in assetIn) (reply[assetDetail], error) {
 			a, err := e.asset(ctx, in.Asset)

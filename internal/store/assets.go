@@ -117,6 +117,18 @@ func (s *Store) CreateAssetWithStock(name string, categoryIDs []string, generato
 // CreateAssetWithIcon creates an asset as CreateAssetWithStock does, with
 // its own icon when icon is not empty: one the build draws.
 func (s *Store) CreateAssetWithIcon(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockInput, icon string) (*models.AssetWithDetails, error) {
+	return s.CreateAssetWithPurchase(name, categoryIDs, generatorKeys, fieldValues, stock, icon, nil)
+}
+
+// CreateAssetWithPurchase creates an asset as CreateAssetWithIcon does, with
+// its purchase details when purchase is not nil. Its invoice cannot be
+// named yet, since it has no attachments.
+func (s *Store) CreateAssetWithPurchase(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockInput, icon string, purchase *PurchaseInput) (*models.AssetWithDetails, error) {
+	if purchase != nil {
+		if _, err := purchase.check(); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.checkAssetIcon(icon, nil); err != nil {
 		return nil, err
 	}
@@ -181,6 +193,11 @@ func (s *Store) CreateAssetWithIcon(name string, categoryIDs []string, generator
 	err = s.withInventory(func(ic *inventoryChange) error {
 		if err := s.insertAsset(ic.tx, assetID, name, now, cats, generatorKeys, resolvedValues); err != nil {
 			return err
+		}
+		if purchase != nil {
+			if err := s.setPurchaseTx(ic.tx, assetID, *purchase); err != nil {
+				return err
+			}
 		}
 		if icon != "" {
 			if err := s.setAssetIconTx(ic.tx, assetID, models.RenditionScreen, icon); err != nil {
@@ -373,6 +390,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	if err := s.photoDetails(details, ctx); err != nil {
 		return nil, err
 	}
+	if err := s.purchaseDetails(details, ctx); err != nil {
+		return nil, err
+	}
 	traits, err := s.contextTraits(ctx)
 	if err != nil {
 		return nil, err
@@ -432,6 +452,8 @@ type AssetFilter struct {
 	// Within is an asset's ID: the assets in it, through location links,
 	// directly.
 	Within string
+	// VendorID is a vendor's ID: the assets bought from it.
+	VendorID string
 }
 
 // FilterAssets lists the assets a filter matches: active ones newest first,
@@ -463,6 +485,10 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 	if categoryID != "" {
 		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_categories WHERE category_id = ?)")
 		args = append(args, categoryID)
+	}
+	if f.VendorID != "" {
+		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_purchases WHERE vendor_id = ?)")
+		args = append(args, f.VendorID)
 	}
 
 	switch {
@@ -597,6 +623,17 @@ func (s *Store) UpdateAssetWithStock(id, name string, categoryIDs []string, gene
 // sets its own icon when icon is not nil. A new icon must be one the build
 // draws; one it has already is kept even if the build no longer does.
 func (s *Store) UpdateAssetWithIcon(id, name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockUpdate, icon *IconUpdate) (*models.AssetWithDetails, error) {
+	return s.UpdateAssetWithPurchase(id, name, categoryIDs, generatorKeys, fieldValues, stock, icon, nil)
+}
+
+// UpdateAssetWithPurchase updates an asset as UpdateAssetWithIcon does, and
+// replaces its purchase details when purchase is not nil.
+func (s *Store) UpdateAssetWithPurchase(id, name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockUpdate, icon *IconUpdate, purchase *PurchaseInput) (*models.AssetWithDetails, error) {
+	if purchase != nil {
+		if _, err := purchase.check(); err != nil {
+			return nil, err
+		}
+	}
 	if stock != nil && stock.Stock != nil {
 		if err := stock.Stock.normalize(); err != nil {
 			return nil, err
@@ -687,6 +724,11 @@ func (s *Store) UpdateAssetWithIcon(id, name string, categoryIDs []string, gener
 		}
 		if err := s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues); err != nil {
 			return err
+		}
+		if purchase != nil {
+			if err := s.setPurchaseTx(ic.tx, id, *purchase); err != nil {
+				return err
+			}
 		}
 		if icon != nil {
 			if err := s.setAssetIconTx(ic.tx, id, icon.Rendition, icon.Name); err != nil {

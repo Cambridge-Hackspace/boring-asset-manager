@@ -81,11 +81,13 @@ func (s *Server) readable(r *http.Request, assets []models.AssetWithDetails) ([]
 	for i := range kept {
 		redactPeople(r, &kept[i])
 	}
+	s.redactPurchases(r.Context(), kept)
 	return kept, s.hideLinks(r, kept)
 }
 
 // shown is an asset as the request may see it: without links to assets it
-// cannot read, and its borrower only for those who track it. A failure to
+// cannot read, its borrower only for those who track it, and its purchase
+// details as redactPurchases leaves them. A failure to
 // read the linked assets' scopes hides every link.
 func (s *Server) shown(r *http.Request, a *models.AssetWithDetails) *models.AssetWithDetails {
 	if a == nil {
@@ -93,6 +95,7 @@ func (s *Server) shown(r *http.Request, a *models.AssetWithDetails) *models.Asse
 	}
 	one := []models.AssetWithDetails{*a}
 	redactPeople(r, &one[0])
+	s.redactPurchases(r.Context(), one)
 	if err := s.hideLinks(r, one); err != nil {
 		one[0].Links, one[0].Location = []models.AssetLink{}, []models.LinkedAsset{}
 	}

@@ -52,6 +52,9 @@ Every filter is optional.
 | `running_low` | Assets flagged running low themselves, or in a flagged category, or below one. |
 | `loan` | `open` or `overdue`, as on the asset list ([Lending](stock-and-lending.md)). |
 | `condition` | A condition, or `problem`, as on the asset list ([Data model](data-model.md)). |
+| `vendor` | Assets bought from this vendor, by ID, as the reader may see it ([Purchases](data-model.md#purchases)). |
+| `purchased_between` | Assets ordered within `{"from": "2026-01-01", "to": "2026-03-31"}`, both days included, either left out for no limit. An asset with no order date counts by the day it was received; one with neither is left out. |
+| `warranty_ends_before` | Assets whose warranty ends before this day, `YYYY-MM-DD`. |
 
 ### Sections
 
@@ -63,6 +66,13 @@ A table has 1 to 30 columns, each a `heading` and a `binding`.
 
 - `sort_by` names a column, counting from 0. Numbers sort as numbers, and text sorts ignoring case.
   `descending` reverses the order.
+- A binding is any label template binding (see [Labels](labels.md)), and also, for where the asset
+  came from: `{{asset.purchase.vendor}}`, `{{asset.purchase.order_date}}`,
+  `{{asset.purchase.received_date}}`, `{{asset.purchase.price}}`, `{{asset.purchase.currency}}`,
+  `{{asset.purchase.order_number}}` and `{{asset.purchase.warranty_end}}`. Dates are
+  `YYYY-MM-DD`, and a price a decimal, which sorts as a number. The price, currency and order
+  number are blank for assets whose prices the reader may not see (see
+  [Seeing prices](access.md#seeing-prices)).
 - `group_by: "category"` lists each row under every category its asset is in. Groups are ordered
   by name, and those running low are marked.
 
@@ -140,7 +150,8 @@ each asset the filters show, one to a page, up to 500 at once. A sheet has:
 - **Pictures:** the asset's photo, each of its codes drawn as its QR code or barcode with the code
   under it, and its label as its category's template draws it, where it has each.
 - **Facts:** its categories, where it is (its places, outermost first), its quantity, its condition
-  and what is wrong, its current loan, its codes, its fields, and its links.
+  and what is wrong, its current loan, its codes, its fields, where it came from as the reader may see it, and its
+  links.
 - **Recent history:** its last 10 events, with when and who, where the reader may see who.
 
 **A stocktake checklist** is the assets the list's filters show, to walk the rooms with and count.

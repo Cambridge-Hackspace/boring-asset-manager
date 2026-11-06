@@ -86,6 +86,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventAssetConditionChanged, Label: "An asset needs maintenance, is out of service, or is working again"},
 	{Kind: models.EventAssetOverdue, Label: "A loan is overdue"},
 	{Kind: models.EventFlowOverdue, Label: "Something left through a flow is past its date"},
+	{Kind: models.EventWarrantyExpiring, Label: "A warranty is about to end"},
 	{Kind: models.EventAssetHook, Label: "A hook, such as Identify, is triggered on an asset"},
 	{Kind: models.EventAuthThrottled, Label: "Sign-ins are held back after too many wrong passwords or codes"},
 	{Kind: models.EventNotifierDisabled, Label: "A notification channel is turned off for failing"},
