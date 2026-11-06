@@ -64,6 +64,58 @@ describe('PrinterForm', () => {
     expect((sent[0]!.body as { connection: object }).connection).toEqual({ type: 'tcp', address: '192.168.1.40', relay: 'front-desk' });
   });
 
+  it('reaches a Bluetooth LE printer, with the service and characteristics it gives', async () => {
+    const { sent } = fakeApi({ 'POST /printers': () => ({ status: 201, body: {} }) });
+    const onsaved = vi.fn();
+    render(PrinterForm, { drivers, onsaved, oncancel: () => {} });
+
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Pocket' } });
+    expect(screen.queryByLabelText('Service')).toBeNull();
+    await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'ble' } });
+    expect(screen.getByText(/\[printers\] bluetooth setting/)).toBeTruthy();
+    // This driver has no profile of its own, so the fields say they are needed.
+    expect((screen.getByLabelText('Service') as HTMLInputElement).placeholder).toBe('Required');
+    expect(screen.getByText(/this driver has none of its own/)).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('Address'), { target: { value: '7C:2F:80:A1:B2:C3' } });
+    await fireEvent.input(screen.getByLabelText('Service'), { target: { value: 'fff0' } });
+    await fireEvent.input(screen.getByLabelText('Write characteristic'), { target: { value: 'fff2' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create printer' }));
+
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect((sent[0]!.body as { connection: object }).connection).toEqual({ type: 'ble', address: '7C:2F:80:A1:B2:C3?service=fff0&write=fff2' });
+  });
+
+  it('shows a Bluetooth LE driver’s defaults, and keeps what the printer overrides', async () => {
+    const { sent } = fakeApi({
+      'POST /printers/p1/changes': () => ({ changes: { stranded: [], categories: [], pools: [] } }),
+      'PUT /printers/p1': () => ({}),
+    });
+    const onsaved = vi.fn();
+    const withBLE: DriverInfo[] = [
+      { ...drivers[1]!, ble: { service: '0000fff0-0000-1000-8000-00805f9b34fb', write: '0000fff2-0000-1000-8000-00805f9b34fb', ack: true } },
+    ];
+    const printer = {
+      id: 'p1', name: 'Pocket', driver: 'tspl', model: 'Rollo X1038', media: '4x6',
+      connection: { type: 'ble' as const, address: '7C:2F:80:A1:B2:C3?write=0000ae01-0000-1000-8000-00805f9b34fb&ack=false' },
+      created_at: '', updated_at: '',
+    };
+    render(PrinterForm, { printer, drivers: withBLE, onsaved, oncancel: () => {} });
+
+    expect((screen.getByLabelText('Address') as HTMLInputElement).value).toBe('7C:2F:80:A1:B2:C3');
+    expect((screen.getByLabelText('Service') as HTMLInputElement).placeholder).toBe('0000fff0-0000-1000-8000-00805f9b34fb');
+    expect((screen.getByLabelText('Write characteristic') as HTMLInputElement).value).toBe('0000ae01-0000-1000-8000-00805f9b34fb');
+    expect((screen.getByLabelText('Notify characteristic') as HTMLInputElement).placeholder).toBe('None');
+    expect(screen.getByText(/blank for the driver’s own/)).toBeTruthy();
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    // What the form does not show, such as ack, is kept as it was.
+    expect((sent.find((r) => r.method === 'PUT')!.body as { connection: object }).connection).toEqual({
+      type: 'ble',
+      address: '7C:2F:80:A1:B2:C3?write=0000ae01-0000-1000-8000-00805f9b34fb&ack=false',
+    });
+  });
+
   it('offers no relay where there are none', () => {
     render(PrinterForm, { drivers, onsaved: () => {}, oncancel: () => {} });
     expect(screen.queryByLabelText('Reached through')).toBeNull();

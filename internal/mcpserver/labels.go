@@ -686,7 +686,7 @@ func labelTools() []tool {
 				Name       *string        `json:"name,omitempty"`
 				Driver     *string        `json:"driver,omitempty" jsonschema:"from list_printer_drivers"`
 				Model      *string        `json:"model,omitempty"`
-				Connection map[string]any `json:"connection,omitempty" jsonschema:"how it is reached, such as {\"type\": \"tcp\", \"address\": \"10.0.0.5:9100\"}"`
+				Connection map[string]any `json:"connection,omitempty" jsonschema:"how it is reached, such as {\"type\": \"tcp\", \"address\": \"10.0.0.5:9100\"}; the type is tcp, device, ipp, windows or ble (a Bluetooth LE printer's address, such as 7C:2F:80:A1:B2:C3)"`
 				Media      *string        `json:"media,omitempty" jsonschema:"the roll loaded: one of the driver's, or label stock by ID"`
 				Options    map[string]any `json:"options,omitempty"`
 				Confirm    bool           `json:"confirm,omitempty" jsonschema:"save a change even though it affects labels waiting"`

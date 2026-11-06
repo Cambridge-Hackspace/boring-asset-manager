@@ -14,3 +14,7 @@ allow = ["192.168.1.0/24:9100"]
 # "/dev/usb/lp*". Empty, the default, reaches no device.
 # Environment: BAM_PRINTERS_DEVICES, comma-separated.
 devices = []
+# Bluetooth LE printers the relay may reach, by address or path.Match pattern,
+# such as "7C:2F:80:*". Empty, the default, reaches none.
+# Environment: BAM_PRINTERS_BLUETOOTH, comma-separated.
+bluetooth = []

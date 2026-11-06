@@ -28,6 +28,9 @@ UMask=0027
 
 # Printers on USB device files (docs/printing.md) usually belong to group lp:
 # uncomment to let BAM write to them, and list them under [printers].
+# Bluetooth serial printers (/dev/rfcomm*) belong to group dialout, and
+# Bluetooth LE printers need group bluetooth to use BlueZ
+# (docs/printing.md#bluetooth).
 #SupplementaryGroups=lp
 
 # Sandboxing: BAM needs the network, its data directory and nothing else.

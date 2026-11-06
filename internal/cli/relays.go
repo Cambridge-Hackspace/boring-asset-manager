@@ -130,15 +130,17 @@ func RelayRun(ctx context.Context, configPath, state string, bonemesh, websocket
 	if err != nil {
 		return fmt.Errorf("loading configuration: %w", err)
 	}
-	allow, err := relayd.ParseAllowlist(cfg.Relay.Allow, cfg.Printers.Devices)
+	allow, err := relayd.ParseAllowlist(cfg.Relay.Allow, cfg.Printers.Devices, cfg.Printers.Bluetooth)
 	if err != nil {
 		return err
 	}
 	if len(allow.Summary()) == 0 {
-		log.Printf("The allowlist is empty, so relay %s may reach nothing: list what it may reach under [relay] allow and [printers] devices", p.Name)
+		log.Printf("The allowlist is empty, so relay %s may reach nothing: list what it may reach under [relay] allow, [printers] devices and [printers] bluetooth", p.Name)
 	}
+	transport := printers.NewDispatcher(cfg.Printers.Devices)
+	transport.AllowedBluetooth = cfg.Printers.Bluetooth
 	r, err := relayd.New(relayd.Config{Pairing: p, State: path, Version: version, BoneMesh: bonemesh, WebSocket: websocket,
-		Allow: allow, Transport: printers.NewDispatcher(cfg.Printers.Devices)})
+		Allow: allow, Transport: transport})
 	if err != nil {
 		return err
 	}
