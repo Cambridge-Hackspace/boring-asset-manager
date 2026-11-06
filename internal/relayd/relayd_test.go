@@ -85,6 +85,13 @@ type setup struct {
 
 func start(t *testing.T, allow []string, expires time.Time) *setup {
 	t.Helper()
+	return startWith(t, allow, nil, printers.NewDispatcher(nil), expires)
+}
+
+// startWith starts a relay allowed to reach allow and the Bluetooth
+// printers bluetooth names, delivering through transport.
+func startWith(t *testing.T, allow, bluetooth []string, transport printers.Transport, expires time.Time) *setup {
+	t.Helper()
 	rootPublic, rootPrivate := relay.NewMeshRoot()
 	public, private := relay.NewIdentity()
 	issue := func(until time.Time) json.RawMessage {
@@ -122,12 +129,12 @@ func start(t *testing.T, allow []string, expires time.Time) *setup {
 	if err := p.Save(s.state); err != nil {
 		t.Fatal(err)
 	}
-	a, err := ParseAllowlist(allow, nil)
+	a, err := ParseAllowlist(allow, nil, bluetooth)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.relay, err = New(Config{Pairing: p, State: s.state, Version: "v-test", WebSocket: true, BoneMesh: true, Allow: a,
-		Transport: printers.NewDispatcher(nil), Client: ts.Client(), Retry: 100 * time.Millisecond})
+		Transport: transport, Client: ts.Client(), Retry: 100 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,6 +205,67 @@ func TestARelayPrintsWithinItsAllowlist(t *testing.T) {
 	res = s.job(t, relay.Job{Destination: relay.Destination{Type: "device", Address: "/dev/usb/lp0"}, Data: []byte("x")})
 	if res.OK {
 		t.Fatal("a device was written to with none allowed")
+	}
+}
+
+// bluetoothPrinter is a simulated Bluetooth LE printer, keeping what is
+// written to it.
+type bluetoothPrinter struct {
+	mu      sync.Mutex
+	written []byte
+	dialed  []string
+}
+
+func (b *bluetoothPrinter) dial(_ context.Context, mac string, _ printers.BLEProfile) (printers.BLEPeripheral, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.dialed = append(b.dialed, mac)
+	return b, nil
+}
+func (b *bluetoothPrinter) MTU() int                     { return 23 }
+func (b *bluetoothPrinter) Notifications() <-chan []byte { return nil }
+func (b *bluetoothPrinter) Close() error                 { return nil }
+func (b *bluetoothPrinter) Write(_ context.Context, p []byte) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.written = append(b.written, p...)
+	return nil
+}
+
+func TestARelayReachesBluetoothPrintersItsOwnerAllows(t *testing.T) {
+	ble := &bluetoothPrinter{}
+	transport := printers.NewDispatcher(nil)
+	transport.AllowedBluetooth = []string{"7C:2F:80:*"}
+	transport.DialBLE = ble.dial
+	s := startWith(t, []string{"192.168.1.40"}, []string{"7C:2F:80:*"}, transport, time.Now().Add(7*24*time.Hour))
+
+	allowed := "7C:2F:80:A1:B2:C3?service=0000fff0-0000-1000-8000-00805f9b34fb&write=0000fff2-0000-1000-8000-00805f9b34fb"
+	if res := s.job(t, relay.Job{Destination: relay.Destination{Type: "ble", Address: allowed}, Data: []byte("raster")}); !res.OK {
+		t.Fatalf("the job failed: %s", res.Reason)
+	}
+	ble.mu.Lock()
+	if string(ble.written) != "raster" || len(ble.dialed) != 1 || ble.dialed[0] != "7C:2F:80:A1:B2:C3" {
+		t.Errorf("the printer took %q, dialed as %q", ble.written, ble.dialed)
+	}
+	ble.mu.Unlock()
+
+	// Nor does the main node asking widen it to another printer.
+	res := s.job(t, relay.Job{Destination: relay.Destination{Type: "ble", Address: "00:11:22:33:44:55?service=fff0&write=fff2"}, Data: []byte("x")})
+	if res.OK || !strings.Contains(res.Reason, "outside this relay's allowlist") {
+		t.Fatalf("a Bluetooth printer outside the allowlist: %+v", res)
+	}
+	ble.mu.Lock()
+	defer ble.mu.Unlock()
+	if len(ble.dialed) != 1 {
+		t.Fatal("a Bluetooth printer outside the allowlist was reached")
+	}
+}
+
+func TestARelayRefusesBluetoothWithNoneAllowed(t *testing.T) {
+	s := start(t, []string{"192.168.1.40"}, time.Now().Add(7*24*time.Hour))
+	res := s.job(t, relay.Job{Destination: relay.Destination{Type: "ble", Address: "7C:2F:80:A1:B2:C3?service=fff0&write=fff2"}, Data: []byte("x")})
+	if res.OK || !strings.Contains(res.Reason, "outside this relay's allowlist") {
+		t.Fatalf("a Bluetooth printer with none allowed: %+v", res)
 	}
 }
 

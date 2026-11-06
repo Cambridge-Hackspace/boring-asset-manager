@@ -89,7 +89,6 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	s := &Server{
 		cfg:        cfg,
 		store:      st,
-		transport:  printers.NewDispatcher(cfg.Printers.Devices),
 		mailer:     email.New(cfg.Email),
 		spool:      newSpooler(),
 		presses:    newPressLimiter(),
@@ -103,7 +102,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	}
 	s.relays = s.newRelayBus()
 	// Printers may be reached through a relay (docs/relays.md).
-	s.transport = &printTransport{s: s, local: s.transport}
+	local := printers.NewDispatcher(cfg.Printers.Devices)
+	local.AllowedBluetooth = cfg.Printers.Bluetooth
+	s.transport = &printTransport{s: s, local: local}
 	// The configuration was checked as it loaded, so its key reads.
 	key, _ := cfg.Auth.Key()
 	s.sealer, _ = auth.NewSealer(key)

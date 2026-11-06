@@ -48,9 +48,10 @@ pluggable print driver. The stream is sent in one of these ways, with no desktop
 dialog:
 
 - over raw TCP (port 9100)
-- to a USB device on the server
+- to a USB device, or a Bluetooth serial one, on the server
 - to a raw IPP/CUPS queue
 - through the Windows spooler
+- to a Bluetooth LE printer, through BlueZ on Linux
 
 ### Barcode and matrix engine
 

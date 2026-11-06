@@ -57,6 +57,11 @@ func Validate(name, driver string, conn Connection, settings Settings) error {
 	if err != nil {
 		return err
 	}
+	if conn.Type == ConnBLE {
+		if _, err := connectionFor(d, conn); err != nil {
+			return err
+		}
+	}
 	if err := d.Validate(settings); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidPrinter, err)
 	}
@@ -87,6 +92,16 @@ type Dispatcher struct {
 	// AllowedDevices are the path patterns (path.Match syntax) a device
 	// connection may name. None means device connections are refused.
 	AllowedDevices []string
+	// AllowedBluetooth are the Bluetooth address patterns (path.Match
+	// syntax) a ble connection may name. None means ble connections are
+	// refused.
+	AllowedBluetooth []string
+	// BLEDialTimeout is how long finding and connecting to a Bluetooth LE
+	// printer may take.
+	BLEDialTimeout time.Duration
+	// DialBLE connects to Bluetooth LE printers; nil is the system's:
+	// BlueZ on Linux, and none elsewhere.
+	DialBLE BLEDialer
 
 	mu    sync.Mutex
 	slots map[Connection]chan struct{}
@@ -97,10 +112,11 @@ type Dispatcher struct {
 }
 
 // NewDispatcher returns a dispatcher with conservative timeouts that may
-// write to devices matching allowedDevices.
+// write to devices matching allowedDevices. It reaches no Bluetooth
+// printer until AllowedBluetooth is set.
 func NewDispatcher(allowedDevices []string) *Dispatcher {
 	return &Dispatcher{
-		DialTimeout: 5 * time.Second, WriteTimeout: 60 * time.Second,
+		DialTimeout: 5 * time.Second, WriteTimeout: 60 * time.Second, BLEDialTimeout: defaultBLEDialTimeout,
 		AllowedDevices: allowedDevices,
 		slots:          map[Connection]chan struct{}{},
 		// No overall timeout: sendIPP gives up when the printer stalls.
@@ -125,11 +141,16 @@ func (d *Dispatcher) Check(c Connection) error {
 		if !spoolerAvailable {
 			return fmt.Errorf("%w: windows connections need BAM to run on Windows", ErrInvalidPrinter)
 		}
+	case ConnBLE:
+		return d.checkBLE(c)
 	}
 	return nil
 }
 
 func (d *Dispatcher) slot(c Connection) chan struct{} {
+	if c.Type == ConnBLE {
+		c = bleSlotKey(c)
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s, ok := d.slots[c]
@@ -165,6 +186,8 @@ func (d *Dispatcher) Send(ctx context.Context, c Connection, job []byte) error {
 		err = d.sendIPP(ctx, c.Address, job)
 	case ConnWindows:
 		err = spool(c.Address, job)
+	case ConnBLE:
+		err = d.sendBLE(ctx, c.Address, job)
 	default:
 		err = fmt.Errorf("unknown connection type %q", c.Type)
 	}

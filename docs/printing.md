@@ -346,12 +346,14 @@ For Brother's P-touch tape printers, which print laminated TZe tape and HSe heat
 |---|---|---|---|
 | PT-P700 | 180 DPI | 128 pins (18 mm) | USB |
 | PT-E550W, PT-P750W | 180 DPI | 128 pins | USB, Wi-Fi |
-| PT-P710BT | 180 DPI | 128 pins | USB (Bluetooth needs [#237](https://github.com/Cambridge-Hackspace/boring-asset-manager/issues/237)) |
+| PT-P710BT | 180 DPI | 128 pins | USB, Bluetooth (as a serial port: see [Bluetooth](#bluetooth)) |
 | PT-P900 | 360 DPI | 560 pins (39.5 mm) | USB |
 | PT-P900W, PT-P950NW | 360 DPI | 560 pins | USB, Wi-Fi (and Ethernet on the PT-P950NW) |
-| PT-P910BT | 360 DPI | 560 pins | USB (Bluetooth needs #237) |
+| PT-P910BT | 360 DPI | 560 pins | USB, Bluetooth (as a serial port: see [Bluetooth](#bluetooth)) |
 
-Reach a networked one with `tcp`, and one on USB with `device`, `ipp` (a raw queue) or `windows`.
+Reach a networked one with `tcp`, and one on USB with `device`, `ipp` (a raw queue) or `windows`. A
+Bluetooth one, paired, is a serial port: `device` on Linux and `windows` on Windows. That has not
+yet been checked on these printers.
 
 The figures come from Brother's raster command references, linked from its [command reference
 list](https://support.brother.com/g/s/es/dev/en/command/reference/index.html):
@@ -638,10 +640,11 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 | `device` | A device path on the BAM server, such as `/dev/usb/lp0` (Linux) or `/dev/ulpt0` (FreeBSD) | A USB printer plugged into the BAM server. The path must match a pattern in the server's `[printers] devices` setting, which is empty by default: otherwise anyone who can manage printers could make BAM write to any file it can open. BAM never creates the file, and needs permission to write the device (on Linux, usually membership of the `lp` group). |
 | `ipp` | `ipp://host[:port]/path`, or `ipps`, `http`, `https` | A queue on CUPS or another IPP server, such as a USB printer shared from another machine. The job is sent as `application/octet-stream`, so the queue must be raw (CUPS: `lpadmin -m raw`; CUPS 2.x still supports raw queues though it marks them deprecated). CUPS can also forward a raw queue to a Windows shared printer through its `smb://` backend. |
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
+| `ble` | The printer's Bluetooth address, such as `7C:2F:80:A1:B2:C3`, then optionally `?service=…&write=…&notify=…&ack=…` | A Bluetooth LE printer in range of the BAM server, on Linux. The address must match a pattern in the server's `[printers] bluetooth` setting, which is empty by default. See [Bluetooth](#bluetooth). |
 
 A connection may also name a relay, as `"relay": "front-desk"`: BAM! run beside the printer on its
 own network, for a BAM! hosted elsewhere. The address is then on the relay's network, and the
-relay's own allowlist, not `[printers] devices`, decides what it may reach. The main node still
+relay's own allowlist, not `[printers] devices` or `bluetooth`, decides what it may reach. The main node still
 encodes the job; the relay delivers the bytes. A relay that is offline fails the job, and its labels
 wait in the queue (see [Relays](relays.md#printers-through-a-relay)).
 
@@ -649,15 +652,73 @@ Jobs are sent one at a time per destination, so concurrent requests never interl
 streams. A job counts as printed once the destination has accepted the whole stream. Reading back
 printer status is a later improvement.
 
+### Bluetooth
+
+Label makers that connect by Bluetooth use one of two kinds of it, and BAM! reaches each its own
+way. Neither has yet been checked on real hardware.
+
+**Bluetooth Classic** is a serial port (RFCOMM), as Brother's P-touch printers and many older ones
+use. It needs no connection type of its own: once paired, the system presents the printer as a
+serial port, which `device` or `windows` reaches.
+
+- **On Linux,** pair and trust the printer (`bluetoothctl`, then `pair` and `trust` with its
+  address), and bind a serial device to it: `rfcomm bind 0 7C:2F:80:A1:B2:C3 1`, where 1 is the
+  printer's serial port channel (`sdptool browse` with its address lists it; most use 1). The
+  printer is then `/dev/rfcomm0`, a `device` connection, with `/dev/rfcomm*` in `[printers]
+  devices`. The device belongs to group `dialout` on most distributions, so the service needs
+  `SupplementaryGroups=dialout`. A binding does not outlast a restart, so run `rfcomm bind` from a
+  unit started before BAM!'s. Some distributions ship `rfcomm` and `sdptool` apart from BlueZ, as
+  `bluez-deprecated` on Fedora.
+- **On Windows,** pairing gives the printer a COM port (**Bluetooth settings › More Bluetooth
+  options › COM Ports**, the outgoing one), or the maker's driver adds it as a printer. A printer
+  Windows lists is a `windows` connection. For a bare COM port, add a printer on it first (**Add a
+  printer › Add a local printer › Use an existing port**, with the **Generic / Text Only**
+  driver), and use its name: BAM! prints `RAW`, so the driver never changes the job.
+
+**Bluetooth LE** (GATT) is the `ble` connection, for printers such as Niimbot's and many of
+Phomemo's. Its address is the printer's Bluetooth address, then the GATT service and
+characteristics the job goes to:
+
+```json
+{"type": "ble", "address": "7C:2F:80:A1:B2:C3?service=fff0&write=fff2&notify=fff1"}
+```
+
+- **The profile.** A driver for Bluetooth LE printers gives its own service, write
+  characteristic, notify characteristic, and whether the printer acknowledges writes, listed as
+  `ble` by the drivers endpoint. The connection's `service`, `write`, `notify` and `ack` (`true` or
+  `false`) override them. UUIDs are written in full, or as 16 or 32 bits of the Bluetooth base
+  UUID (`fff0`). None of the drivers shipped today has a profile of its own, so a `ble` printer
+  gives at least its service and write characteristic, from the printer's documentation.
+- **Writing.** The job is written to the write characteristic in chunks the link allows: the ATT
+  MTU agreed with the printer, less 3 bytes, so 20 bytes on a link that agreed none, and never more
+  than 512. A characteristic that takes writes without response is written that way, and others
+  with responses. When the printer acknowledges writes, each waits for it to notify once on the
+  notify characteristic before the next is written.
+- **Timeouts.** A printer that cannot be found and connected to in 20 seconds fails the job, as
+  does one that takes 60 seconds to take a write, or to acknowledge it.
+- **The server** reaches Bluetooth LE through BlueZ, over the system D-Bus, so on Linux only, with
+  `bluetoothd` running and the adapter powered. The user BAM! runs as must be allowed to use
+  BlueZ: on Debian and Ubuntu, members of group `bluetooth` are, so the service needs
+  `SupplementaryGroups=bluetooth`. A printer BlueZ does not know yet is searched for; most need no
+  pairing. BAM! disconnects from the printer after each job, if it connected it.
+- **Elsewhere,** on Windows, macOS and FreeBSD, a `ble` connection is refused: "Bluetooth LE isn't
+  supported on this system". A [relay](relays.md) on Linux beside the printer, such as a Raspberry
+  Pi, reaches it instead.
+- **Allowing it.** `[printers] bluetooth` lists the addresses BAM! may reach, or patterns of them
+  such as `7C:2F:80:*` (`path.Match` syntax, in either case), or `*` for any. It is empty by
+  default, refusing every `ble` connection, as `[printers] devices` refuses every device. On a
+  relay, the relay's own `[printers] bluetooth` decides.
+
 ### Timeouts and errors
 
-- A printer that cannot be reached in 5 seconds fails the job.
+- A printer that cannot be reached in 5 seconds (a Bluetooth LE one, 20 seconds) fails the job.
 - A printer that stops taking a job for 60 seconds (over TCP, a device or IPP), or that takes 60
   seconds to answer once it has the job, fails it.
 - A printer takes a job only as fast as it prints it, so there is no limit on a long job that
   keeps moving.
-- A connection the server may not use (a device outside the allowed patterns, or `windows` on
-  another OS) is refused with `400` when the printer is saved, and with `502` at print time.
+- A connection the server may not use (a device or Bluetooth printer outside the allowed
+  patterns, `windows` on another OS, or `ble` off Linux) is refused with `400` when the printer is
+  saved, and with `502` at print time.
 - An unreachable printer also returns `502`.
 
 ## Printing labels
@@ -922,7 +983,7 @@ Deleting a printer takes it out of its pools.
 | Method and route | Permission | Purpose |
 |---|---|---|
 | `/api/v1/printers` | `settings.manage`; listing: `labels.print` or `templates.manage` | Configure printers |
-| `GET /api/v1/printers/drivers` | `labels.print`, `settings.manage` or `templates.manage` | Every registered driver, with its models (and each model's DPI), media (each with the models that take it, when not all do) and options; for drivers that take custom stock, how wide each model's labels may be and how long continuous ones (`custom_stock`) |
+| `GET /api/v1/printers/drivers` | `labels.print`, `settings.manage` or `templates.manage` | Every registered driver, with its models (and each model's DPI), media (each with the models that take it, when not all do) and options; for drivers that take custom stock, how wide each model's labels may be and how long continuous ones (`custom_stock`); for drivers of Bluetooth LE printers, their service and characteristics (`ble`) |
 | `POST /api/v1/printers/{id}/fit` | template designers | Fit check without printing |
 | `POST /api/v1/printers/{id}/test-print` | `labels.print` and `templates.manage` | Print one label of a possibly unsaved template |
 | `POST /api/v1/printers/{id}/changes` | `settings.manage` | What a change would strand, without saving |

@@ -235,7 +235,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 	turn := s.printerTurn(p.ID)
 	turn.Lock()
 	defer turn.Unlock()
-	if err := s.transport.Send(ctx, p.Connection, job); err != nil {
+	if err := s.sendToPrinter(ctx, p, job); err != nil {
 		if ctx.Err() != nil {
 			return store.SpoolOutcome{Failure: fmt.Sprintf("The server stopped while sending these to %s; they may have printed. Check before printing them again", p.Name), Problems: out.Problems}
 		}

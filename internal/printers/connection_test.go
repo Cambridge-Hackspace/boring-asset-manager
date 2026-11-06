@@ -38,6 +38,9 @@ func TestNormalizeConnection(t *testing.T) {
 		{Connection{Type: ConnIPP, Address: "/printers/dymo"}, ""},
 		{Connection{Type: ConnWindows, Address: `\\desk-pc\DYMO LabelWriter 450`}, `\\desk-pc\DYMO LabelWriter 450`},
 		{Connection{Type: ConnWindows, Address: ""}, ""},
+		{Connection{Type: ConnDevice, Address: "/dev/rfcomm0"}, "/dev/rfcomm0"},
+		{Connection{Type: ConnBLE, Address: "7c:2f:80:a1:b2:c3"}, "7C:2F:80:A1:B2:C3"},
+		{Connection{Type: ConnBLE, Address: "printer.lan"}, ""},
 		{Connection{Type: "usb", Address: "/dev/usb/lp0"}, ""},
 		// Through a relay, the address is on the relay's network.
 		{Connection{Type: ConnTCP, Address: "192.168.1.40", Relay: "front-desk"}, "192.168.1.40:9100"},
@@ -87,6 +90,36 @@ func TestDeviceConnections(t *testing.T) {
 	}
 	if _, err := os.Stat(missing.Address); !os.IsNotExist(err) {
 		t.Error("sending created the missing device as a file")
+	}
+}
+
+// TestRFCOMMDeviceConnections checks the device connection reaches a
+// Bluetooth Classic printer as Linux presents it once bound, /dev/rfcomm0,
+// when [printers] devices allows it (docs/printing.md#bluetooth).
+func TestRFCOMMDeviceConnections(t *testing.T) {
+	conn, err := NormalizeConnection(Connection{Type: ConnDevice, Address: "/dev/rfcomm0"})
+	if err != nil || conn.Address != "/dev/rfcomm0" {
+		t.Fatalf("normalized to %+v, %v", conn, err)
+	}
+	if err := NewDispatcher([]string{"/dev/rfcomm*"}).Check(conn); err != nil {
+		t.Errorf("an allowed rfcomm device refused: %v", err)
+	}
+	if err := NewDispatcher([]string{"/dev/usb/lp*"}).Check(conn); !errors.Is(err, ErrInvalidPrinter) {
+		t.Errorf("an rfcomm device allowed by the USB pattern alone: %v", err)
+	}
+
+	// Written to as any device, standing in for the serial port a bound
+	// rfcomm device is.
+	dir := filepath.ToSlash(t.TempDir())
+	rfcomm := Connection{Type: ConnDevice, Address: dir + "/rfcomm1"}
+	if err := os.WriteFile(rfcomm.Address, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewDispatcher([]string{dir + "/rfcomm*"}).Send(context.Background(), rfcomm, []byte("ESC/POS job")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(rfcomm.Address); string(got) != "ESC/POS job" {
+		t.Errorf("rfcomm device received %q", got)
 	}
 }
 

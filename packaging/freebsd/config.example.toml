@@ -32,3 +32,7 @@ local_path = "/var/db/bam/uploads"
 # path.Match patterns, such as "/dev/ulpt*". Empty turns device connections
 # off. The bam user must be able to write to them.
 devices = []
+# Bluetooth LE printers' addresses ble connections may reach, or path.Match
+# patterns of them, such as "7C:2F:80:*". Empty turns ble connections off.
+# Bluetooth LE needs Linux: on FreeBSD, reach them through a relay on Linux.
+bluetooth = []

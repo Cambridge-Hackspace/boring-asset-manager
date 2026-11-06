@@ -28,7 +28,8 @@ bam relay --config relay.toml
   BoneMesh starts again with each new certificate.
 - **It reports its status** each time it links to the main node: its version, the protocol it
   speaks, and its allowlist. Asked with a `status` naming destinations, it says whether each can be
-  reached now: allowed, and a TCP printer taking a connection, or a device that is there.
+  reached now: allowed, and a TCP printer taking a connection, or a device that is there. A
+  Bluetooth LE printer is not contacted: allowed, on Linux, is reachable.
 - **The pairing** is kept in `relay.json`, `--state` or `$BAM_RELAY_STATE`, readable by its owner
   alone.
 
@@ -50,14 +51,20 @@ allow = [
 
 [printers]
 devices = ["/dev/usb/lp*"]    # device paths, as on the main node
+bluetooth = ["7C:2F:80:*"]    # Bluetooth LE printers, as on the main node
 ```
 
 - **TCP printers** are `host:port`, or a host alone for port 9100. The host is an address, a CIDR
   range, a name, or a pattern of names such as `*.lan`; the port is a number or `*`. A range matches
   only addresses, and a name is matched as a name, whatever it resolves to.
 - **Device paths** are `[printers] devices`, as on the main node.
+- **Bluetooth LE printers** are `[printers] bluetooth`, as on the main node: addresses, or patterns
+  of them such as `7C:2F:80:*`. A Bluetooth address under `[relay] allow` is refused, where it would
+  otherwise read as an IPv6 host. A Bluetooth Classic printer is a device, such as `/dev/rfcomm0`
+  ([Bluetooth](printing.md#bluetooth)).
 - **Empty** reaches nothing: a relay with no allowlist says so as it starts, and refuses every job.
-- **From the environment:** `BAM_RELAY_ALLOW`, comma-separated, and `BAM_PRINTERS_DEVICES`.
+- **From the environment:** `BAM_RELAY_ALLOW`, comma-separated, `BAM_PRINTERS_DEVICES` and
+  `BAM_PRINTERS_BLUETOOTH`.
 
 ### As a service
 
@@ -81,9 +88,11 @@ A printer's connection names the relay it is reached through:
 {"type": "tcp", "address": "192.168.1.40", "relay": "front-desk"}
 ```
 
-Every connection type works: `tcp`, `device`, `ipp` and `windows`, as the relay's operating system
-allows. The address is on the relay's network, and only the relay's allowlist decides whether it may
-be reached: the main node's `[printers] devices` does not apply. A printer must name a relay that
+Every connection type works: `tcp`, `device`, `ipp`, `windows` and `ble`, as the relay's operating
+system allows. The address is on the relay's network, and only the relay's allowlist decides whether
+it may be reached: the main node's `[printers] devices` and `bluetooth` do not apply. A Bluetooth LE
+printer's job arrives with its driver's service and characteristics filled in, so the relay needs no
+drivers; the relay must run on Linux to reach one. A printer must name a relay that
 exists. Under **Printers**, **Reached through** chooses it.
 
 - **The main node still renders, plans and encodes the job.** Drivers stay in one place, and the
@@ -189,7 +198,7 @@ Every message is a JSON object:
 |---|---|---|
 | `ack` | none | The node a message was for, once it arrived. |
 | `nak` | none; `reason` says why | The node a message was for, or the main node when it cannot route it. |
-| `job` | `{"destination": {"type", "address"}, "data", "timeout_ms"}`. `data` is the bytes to deliver, as base64. A destination is named as a printer's connection names it (`tcp`, `device`, `ipp` or `windows`). | The main node. |
+| `job` | `{"destination": {"type", "address"}, "data", "timeout_ms"}`. `data` is the bytes to deliver, as base64. A destination is named as a printer's connection names it (`tcp`, `device`, `ipp`, `windows` or `ble`). | The main node. |
 | `job.result` | `{"ok", "reason"}`: accepted, or failed with a reason. Its `re` is the job. | The relay. |
 | `status` | `{"version", "protocol", "allowlist", "destinations"}`: the relay's BAM! version, the protocol it speaks, its allowlist's patterns, and each local destination's reachability, as `{"destination", "reachable", "reason"}`. | A relay, unasked, or answering a `status` sent to it. |
 | `event` | An event. | Either, once events are carried. |

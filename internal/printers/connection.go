@@ -25,10 +25,15 @@ const (
 	// ConnWindows prints RAW through the Windows spooler to a local printer
 	// or a \\host\share; only when BAM itself runs on Windows.
 	ConnWindows = "windows"
+	// ConnBLE writes the job to a Bluetooth LE printer's GATT
+	// characteristic: its Bluetooth address, with the service and
+	// characteristics if the driver's are not the ones (ble.go). Addresses
+	// must match the server's printers.bluetooth setting.
+	ConnBLE = "ble"
 )
 
 // ConnectionTypes lists the connection types.
-func ConnectionTypes() []string { return []string{ConnTCP, ConnDevice, ConnIPP, ConnWindows} }
+func ConnectionTypes() []string { return []string{ConnTCP, ConnDevice, ConnIPP, ConnWindows, ConnBLE} }
 
 // Connection says how BAM reaches a printer.
 type Connection struct {
@@ -49,7 +54,7 @@ var relayName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // NormalizeConnection checks a connection's address for its type and returns
 // it in canonical form: TCP addresses always carry a port, device paths are
-// cleaned. Errors wrap ErrInvalidPrinter.
+// cleaned, Bluetooth addresses are upper case. Errors wrap ErrInvalidPrinter.
 func NormalizeConnection(c Connection) (Connection, error) {
 	bad := func(format string, args ...any) (Connection, error) {
 		return c, fmt.Errorf("%w: connection: %s", ErrInvalidPrinter, fmt.Sprintf(format, args...))
@@ -100,6 +105,12 @@ func NormalizeConnection(c Connection) (Connection, error) {
 		if len(c.Address) > 255 {
 			return bad("windows printer name must be at most 255 characters")
 		}
+	case ConnBLE:
+		a, err := ParseBLEAddress(c.Address)
+		if err != nil {
+			return bad("%v", err)
+		}
+		c.Address = a.String()
 	default:
 		return bad("type must be one of %s", strings.Join(ConnectionTypes(), ", "))
 	}

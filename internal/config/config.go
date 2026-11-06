@@ -109,6 +109,10 @@ type PrintersConfig struct {
 	// printers may be connected to directly. Empty means none: anyone who can
 	// manage printers could otherwise make BAM write to any file it can open.
 	Devices []string `toml:"devices"`
+	// Bluetooth lists the Bluetooth addresses, or patterns of them such as
+	// "7C:2F:80:*", of the printers ble connections may reach. Empty means
+	// none: Bluetooth LE printers are reached only where they are allowed.
+	Bluetooth []string `toml:"bluetooth"`
 }
 
 // RelayConfig turns the relay bus's transports on or off
@@ -124,8 +128,8 @@ type RelayConfig struct {
 	WebSocket bool `toml:"websocket"`
 	// Allow, on a relay, is what it may reach locally (docs/relays.md):
 	// TCP printers as host:port, ranges or name patterns, IPP queues' URLs,
-	// and windows: printers' names. Device paths are [printers] devices.
-	// Empty reaches nothing.
+	// and windows: printers' names. Device paths are [printers] devices,
+	// and Bluetooth printers [printers] bluetooth. Empty reaches nothing.
 	Allow []string `toml:"allow"`
 }
 
@@ -403,6 +407,9 @@ func applyEnvOverrides(cfg *Config) error {
 	if devices := os.Getenv("BAM_PRINTERS_DEVICES"); devices != "" {
 		cfg.Printers.Devices = strings.Split(devices, ",")
 	}
+	if bluetooth := os.Getenv("BAM_PRINTERS_BLUETOOTH"); bluetooth != "" {
+		cfg.Printers.Bluetooth = strings.Split(bluetooth, ",")
+	}
 
 	for env, field := range map[string]*string{
 		"BAM_EMAIL_HOST":      &cfg.Email.Host,
@@ -523,8 +530,19 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("printers.devices pattern %q: %v", pattern, err)
 		}
 	}
+	for _, pattern := range c.Printers.Bluetooth {
+		if !bluetoothPattern.MatchString(pattern) {
+			return fmt.Errorf("printers.bluetooth pattern %q must be a Bluetooth address such as 7C:2F:80:A1:B2:C3, with * or ? for any part", pattern)
+		}
+		if _, err := path.Match(pattern, ""); err != nil {
+			return fmt.Errorf("printers.bluetooth pattern %q: %v", pattern, err)
+		}
+	}
 	return nil
 }
+
+// bluetoothPattern is a pattern of Bluetooth addresses.
+var bluetoothPattern = regexp.MustCompile(`^[0-9A-Fa-f:*?]+$`)
 
 // prefixSegment is one part of an S3 prefix, as of a file's key.
 var prefixSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$`)
