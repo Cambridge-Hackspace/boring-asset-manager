@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type Field, type GeneratorInfo, type Report, type ReportResult, type ReportSection, type ReportSpec, type Vendor } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type Field, type GeneratorInfo, type Report, type ReportResult, type ReportSection, type ReportSpec, type Contract, type Vendor } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
   import { placeholders } from '../../lib/template';
   import CategoryPicker from '../../components/CategoryPicker.svelte';
@@ -20,6 +20,7 @@
   let fields = $state<Field[]>([]);
   let generators = $state<GeneratorInfo[]>([]);
   let vendors = $state<Vendor[]>([]);
+  let contracts = $state<Contract[]>([]);
   // Bought between, apart from the filter so either end may be empty.
   let boughtFrom = $state('');
   let boughtTo = $state('');
@@ -43,6 +44,7 @@
         request<{ generators: GeneratorInfo[] }>('GET', '/generators').then((r) => r.generators ?? []),
       ]);
       vendors = await request<{ vendors: Vendor[] }>('GET', '/vendors').then((r) => r.vendors ?? [], () => []);
+      contracts = await request<{ contracts: Contract[] }>('GET', '/contracts').then((r) => r.contracts ?? [], () => []);
       if (id) {
         const r = (await request<{ report: Report }>('GET', `/reports/${encodeURIComponent(id)}`)).report;
         name = r.name;
@@ -76,6 +78,7 @@
     if (f.vendor) filter.vendor = f.vendor;
     if (boughtFrom || boughtTo) filter.purchased_between = { ...(boughtFrom ? { from: boughtFrom } : {}), ...(boughtTo ? { to: boughtTo } : {}) };
     if (f.warranty_ends_before) filter.warranty_ends_before = f.warranty_ends_before;
+    if (f.contract) filter.contract = f.contract;
     const sections = spec.sections.map((s) => {
       if (s.type === 'chart') {
         const chart: ReportSection = { type: 'chart', columns: [], chart: s.chart, measure: s.measure };
@@ -217,6 +220,14 @@
           <label class="label" for="report-warranty">Warranty ends before</label>
           <input id="report-warranty" class="input" type="date" bind:value={spec.filter.warranty_ends_before} />
         </div>
+      </div>
+      <div class="max-w-md">
+        <label class="label" for="report-contract">Covered by contract</label>
+        <select id="report-contract" class="input" aria-describedby="report-contract-help" bind:value={spec.filter.contract}>
+          <option value="">Any, or none</option>
+          {#each contracts as c (c.id)}<option value={c.id}>{c.name} ({c.vendor_name})</option>{/each}
+        </select>
+        <p id="report-contract-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Its fields then fill {'{{asset.contract.*}}'}.</p>
       </div>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={spec.filter.running_low} /> Only what is running low, or in a category running low</label>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={spec.filter.archived} /> Archived assets instead of active ones</label>

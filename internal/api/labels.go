@@ -207,7 +207,34 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 	p := a.Purchase
 	d.Purchase = labels.PurchaseData{Vendor: p.VendorName, OrderDate: p.OrderDate, ReceivedDate: p.ReceivedDate, Price: p.Price,
 		Currency: p.Currency, OrderNumber: p.OrderNumber, WarrantyEnd: p.WarrantyEnd}
+	if c := currentContract(a.Contracts, time.Now()); c != nil {
+		d.Contract = contractData(*c)
+	}
 	return d
+}
+
+// currentContract is the contract covering an asset that its bindings show:
+// of those in force at now, the one covering it longest, one with no end
+// first. It is nil when none is in force.
+func currentContract(cs []models.ContractCover, now time.Time) *models.ContractCover {
+	today := now.UTC().Format(store.DateLayout)
+	var best *models.ContractCover
+	for i := range cs {
+		c := &cs[i]
+		if c.StartDate > today || c.EndDate != "" && c.EndDate < today {
+			continue
+		}
+		if best == nil || best.EndDate != "" && (c.EndDate == "" || c.EndDate > best.EndDate) {
+			best = c
+		}
+	}
+	return best
+}
+
+// contractData is a contract covering an asset, as bindings show it.
+func contractData(c models.ContractCover) labels.ContractData {
+	return labels.ContractData{Name: c.Name, Kind: c.Kind, Vendor: c.VendorName, Reference: c.Reference, StartDate: c.StartDate,
+		EndDate: c.EndDate, Cost: c.Cost, Currency: c.Currency, Billing: c.Billing}
 }
 
 // conditionText is how a condition reads on a label or in a report.

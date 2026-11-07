@@ -10,7 +10,7 @@
 - **Attachments**: files such as price lists, terms and quotes, which work as a category's do.
 - **History**: when it was made, and each change to its details, contacts, scopes and files, with who made it to those who can see who changed assets.
 
-Its **Assets** tab lists the assets bought from it that you can see, with when each was ordered, its price where you may see prices, and when its warranty ends. An asset names its vendor in its **Purchase** section (see [Assets](/help/assets)). Later, a vendor's page will also show its contracts and its catalog.
+Its **Assets** tab lists the assets bought from it that you can see, with when each was ordered, its price where you may see prices, and when its warranty ends. An asset names its vendor in its **Purchase** section (see [Assets](/help/assets)). Its **Contracts** tab lists its warranties, service and maintenance agreements, leases and licenses (see [Contracts](/help/contracts)). Later, a vendor's page will also show its catalog.
 
 ## Reordering
 

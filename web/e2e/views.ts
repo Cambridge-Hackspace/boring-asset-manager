@@ -148,6 +148,28 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   await request.put(`/api/v1/assets/${asset.asset.asset.id}`, {
     data: { purchase: { vendor_id: vendor.vendor.id, order_date: '2026-01-05', price: '129.99', currency: 'GBP', order_number: 'PO-17', warranty_end: '2028-01-09' } },
   });
+  // A maintenance contract with it, covering the asset and the category,
+  // with a document, for the contract pages, the vendor's and category's
+  // Contracts tabs and the asset's Contracts section.
+  const contract = await post('/contracts', {
+    vendor_id: vendor.vendor.id,
+    kind: 'maintenance',
+    name: unique('A11y upkeep'),
+    reference: 'MA-9',
+    start_date: '2026-07-01',
+    end_date: '2099-06-30',
+    auto_renews: true,
+    notice_days: 30,
+    cost: '1200',
+    currency: 'GBP',
+    billing: 'yearly',
+    notes: 'Call **first**.',
+    asset_ids: [asset.asset.asset.id],
+    category_ids: [cat.category.id],
+  });
+  await request.post(`/api/v1/contracts/${contract.contract.id}/attachments`, {
+    multipart: { file: { name: 'contract.txt', mimeType: 'text/plain', buffer: Buffer.from('Terms.') } },
+  });
   const { entries } = await (await request.get('/api/v1/spool')).json();
   const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
   await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
@@ -175,6 +197,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/categories/${cat.category.id}?tab=attachments`, ''],
     [`/categories/${cat.category.id}?tab=scopes`, ''],
     [`/categories/${cat.category.id}?tab=vendors`, ''],
+    [`/categories/${cat.category.id}?tab=contracts`, ''],
     [`/categories/${cat.category.id}?tab=comments`, ''],
     ['/categories/new', 'New category'],
     ['/vendors', 'Vendors'],
@@ -184,7 +207,15 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/vendors/${vendor.vendor.id}?tab=assets`, ''],
     [`/vendors/${vendor.vendor.id}?tab=attachments`, ''],
     [`/vendors/${vendor.vendor.id}?tab=history`, ''],
+    [`/vendors/${vendor.vendor.id}?tab=contracts`, ''],
     [`/vendors/${vendor.vendor.id}?tab=scopes`, ''],
+    ['/contracts', 'Contracts'],
+    ['/contracts?q=nothing+matches+this', 'Contracts'],
+    ['/contracts/new', 'New contract'],
+    [`/contracts/${contract.contract.id}`, ''],
+    [`/contracts/${contract.contract.id}?tab=covers`, ''],
+    [`/contracts/${contract.contract.id}?tab=attachments`, ''],
+    [`/contracts/${contract.contract.id}?tab=history`, ''],
     ['/fields', 'Fields'],
     ['/templates', 'Label templates'],
     ['/templates/new', 'New template'],

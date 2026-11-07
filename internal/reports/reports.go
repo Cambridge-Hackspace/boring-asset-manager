@@ -60,6 +60,9 @@ type Filter struct {
 	// WarrantyEndsBefore keeps assets whose warranty ends before this date,
 	// YYYY-MM-DD.
 	WarrantyEndsBefore string `json:"warranty_ends_before,omitempty"`
+	// Contract keeps assets a contract covers, by ID (docs/contracts.md); a
+	// report filtering by one binds {{asset.contract.*}} to it.
+	Contract string `json:"contract,omitempty"`
 }
 
 // DateRange is from one date to another, both included, each YYYY-MM-DD,
@@ -137,6 +140,9 @@ func (s *Spec) check(fieldKnown func(string) bool) error {
 		return fail("%v", err)
 	}
 	if err := textcheck.Check("filter.vendor", s.Filter.Vendor, textcheck.MaxName); err != nil {
+		return fail("%v", err)
+	}
+	if err := textcheck.Check("filter.contract", s.Filter.Contract, textcheck.MaxName); err != nil {
 		return fail("%v", err)
 	}
 	if b := s.Filter.PurchasedBetween; b != nil {
@@ -256,11 +262,14 @@ type Row struct {
 }
 
 // Matches applies the parts of a filter the store does not: categories,
-// running low, and where it came from. categories is every category, for
-// their parents and flags. The asset is as the request may see it, so a
+// running low, where it came from, and the contract covering it.
+// categories is every category, for their parents and flags. The asset is as the request may see it, so a
 // vendor hidden from it matches no vendor.
 func (f Filter) Matches(a *models.AssetWithDetails, categories []models.Category) bool {
 	if !f.matchesPurchase(a.Purchase) {
+		return false
+	}
+	if f.Contract != "" && !coveredBy(a, f.Contract) {
 		return false
 	}
 	if len(f.CategoryIDs) == 0 && !f.RunningLow {
@@ -450,6 +459,17 @@ func safeCells(cells []string) []string {
 		out[i] = assetcsv.Defuse(c)
 	}
 	return out
+}
+
+// coveredBy reports whether a contract covers an asset, as the request
+// sees it: a contract whose vendor it may not see covers nothing.
+func coveredBy(a *models.AssetWithDetails, contract string) bool {
+	for _, c := range a.Contracts {
+		if c.ID == contract {
+			return true
+		}
+	}
+	return false
 }
 
 // matchesPurchase applies the filter's vendor, purchase dates and warranty

@@ -333,3 +333,33 @@ describe('AssetPage purchase', () => {
     expect(screen.queryByRole('heading', { name: 'Purchase' })).toBeNull();
   });
 });
+
+describe('AssetPage contracts', () => {
+  const page = (contracts: AssetWithDetails['contracts'], categories: AssetWithDetails['categories'] = []) => {
+    fakeApi({
+      'GET /assets/a1': () => ({ asset: { ...withStock(5, false), contracts, categories } }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+  };
+  const cover = { id: 'k1', name: 'Upkeep', kind: 'maintenance' as const, vendor_id: 'v1', vendor_name: 'Acme', reference: 'MA-9', start_date: '', end_date: '2099-06-30', auto_renews: false };
+
+  it('says what covers it, linking each contract', async () => {
+    page([cover, { ...cover, id: 'k2', name: 'Old lease', kind: 'lease', end_date: '2001-05-31', category_id: 'c1' }], [
+      { id: 'c1', name: 'Lasers', parent_id: null, color_hex: '#000000', is_consumable: false, unit: '', is_lendable: false, is_running_low: false, created_at: '', updated_at: '' },
+    ]);
+    const list = await screen.findByRole('list', { name: 'Contracts covering it' });
+    const now = screen.getByRole('link', { name: 'Under maintenance contract with Acme until June 2099' });
+    expect(now.getAttribute('href')).toBe('/contracts/k1');
+    expect(screen.getByRole('link', { name: 'Lease contract with Acme ended May 2001' }).getAttribute('href')).toBe('/contracts/k2');
+    expect(list.textContent).toContain('Upkeep · MA-9');
+    expect(list.textContent).toContain('through Lasers');
+  });
+
+  it('has no section when nothing covers it', async () => {
+    page([]);
+    await screen.findByText(/5 pcs left/);
+    expect(screen.queryByRole('heading', { name: 'Contracts' })).toBeNull();
+  });
+});

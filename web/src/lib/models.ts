@@ -309,6 +309,8 @@ export interface AssetWithDetails {
   resolved_icons?: Partial<Record<Rendition, ResolvedIcon>>;
   /** Where it came from (docs/data-model.md#purchases); empty when nothing is recorded. */
   purchase?: Purchase;
+  /** The contracts covering it, directly or through a category (docs/contracts.md), by when they end. */
+  contracts?: ContractCover[];
 }
 
 /**
@@ -917,6 +919,8 @@ export interface ReportFilter {
   purchased_between?: { from?: string; to?: string };
   /** Assets whose warranty ends before this date, YYYY-MM-DD. */
   warranty_ends_before?: string;
+  /** Assets a contract covers, by ID (docs/contracts.md); its fields bind as {{asset.contract.*}}. */
+  contract?: string;
 }
 
 export interface ReportSection {
@@ -972,10 +976,10 @@ export interface ReportResult {
 }
 
 /** What attachments belong to (docs/data-model.md#attachments). */
-export type AttachmentOwner = 'asset' | 'category' | 'vendor';
+export type AttachmentOwner = 'asset' | 'category' | 'vendor' | 'contract';
 
 /** Where in the API each owner's attachments are. */
-export const attachmentBase: Record<AttachmentOwner, string> = { asset: 'assets', category: 'categories', vendor: 'vendors' };
+export const attachmentBase: Record<AttachmentOwner, string> = { asset: 'assets', category: 'categories', vendor: 'vendors', contract: 'contracts' };
 
 /** A file attached to an asset, a category or a vendor: an image (an asset's photo), a document, or another file the instance allows. */
 export interface Attachment {
@@ -1274,6 +1278,85 @@ export interface Vendor {
   scope_ids: string[];
   created_at: string;
   updated_at: string;
+}
+
+/** The kinds a contract may be (docs/contracts.md). */
+export type ContractKind = 'warranty' | 'service' | 'maintenance' | 'lease' | 'license' | 'other';
+
+/** How often a contract's cost is paid; empty when not said. */
+export type Billing = '' | 'once' | 'monthly' | 'quarterly' | 'yearly';
+
+/** Something named by its ID and name. */
+export interface NamedThing {
+  id: string;
+  name: string;
+}
+
+/**
+ * An agreement with a vendor about assets (docs/contracts.md). Dates are
+ * YYYY-MM-DD, empty when not known. Its cost, currency and billing are
+ * left out for someone without purchases.read in its vendor's scopes, and
+ * costs_hidden says so. Its notes are Markdown.
+ */
+export interface Contract {
+  id: string;
+  vendor_id: string;
+  vendor_name: string;
+  kind: ContractKind;
+  name: string;
+  reference: string;
+  start_date: string;
+  end_date: string;
+  auto_renews: boolean;
+  notice_days: number;
+  /** When notice must be given to stop it renewing; only for one that renews automatically. */
+  notice_deadline?: string;
+  cost?: string;
+  currency?: string;
+  billing?: Billing;
+  costs_hidden?: boolean;
+  notes: string;
+  asset_ids: string[];
+  category_ids: string[];
+  assets: NamedThing[];
+  categories: NamedThing[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** A contract as the API takes it: every detail, so an absent one is emptied, but for what it covers, kept when left out. */
+export interface ContractRequest {
+  vendor_id: string;
+  kind: ContractKind;
+  name: string;
+  reference: string;
+  start_date: string;
+  end_date: string;
+  auto_renews: boolean;
+  notice_days: number;
+  cost: string;
+  currency: string;
+  billing: Billing;
+  notes: string;
+  asset_ids?: string[];
+  category_ids?: string[];
+}
+
+/** A contract covering an asset, as the asset shows it; category_id is the category it covers it through. */
+export interface ContractCover {
+  id: string;
+  name: string;
+  kind: ContractKind;
+  vendor_id: string;
+  vendor_name: string;
+  reference: string;
+  start_date: string;
+  end_date: string;
+  auto_renews: boolean;
+  category_id?: string;
+  cost?: string;
+  currency?: string;
+  billing?: Billing;
 }
 
 /** What comments are on (docs/comments.md). */

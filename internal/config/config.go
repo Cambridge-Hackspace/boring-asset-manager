@@ -44,6 +44,9 @@ type Config struct {
 	// Purchases says when warranties are announced
 	// (docs/data-model.md#purchases).
 	Purchases PurchasesConfig `toml:"purchases"`
+	// Contracts says when contracts ending are announced
+	// (docs/contracts.md).
+	Contracts ContractsConfig `toml:"contracts"`
 }
 
 // UpdatesConfig is whether BAM! asks, once a day, whether a newer release
@@ -64,6 +67,16 @@ type PurchasesConfig struct {
 
 // MaxWarrantyNoticeDays is the most purchases.warranty_notice_days may be.
 const MaxWarrantyNoticeDays = 365
+
+// ContractsConfig says how many days before a contract ends, or before the
+// deadline for giving notice on one that renews automatically, its
+// contract.expiring event is recorded: 0 on the day.
+type ContractsConfig struct {
+	ReminderDays int `toml:"reminder_days"`
+}
+
+// MaxContractReminderDays is the most contracts.reminder_days may be.
+const MaxContractReminderDays = 365
 
 // AttachmentsConfig bounds attachments, and says which types beyond images
 // and documents may be attached.
@@ -364,6 +377,7 @@ func DefaultConfig() *Config {
 		Attachments:   AttachmentsConfig{MaxFileMB: 25, MaxPerObject: 50},
 		Updates:       UpdatesConfig{URL: release.LatestURL},
 		Purchases:     PurchasesConfig{WarrantyNoticeDays: 30},
+		Contracts:     ContractsConfig{ReminderDays: 30},
 	}
 }
 
@@ -520,6 +534,7 @@ func applyEnvOverrides(cfg *Config) error {
 		"BAM_ATTACHMENTS_MAX_FILE_MB":        &cfg.Attachments.MaxFileMB,
 		"BAM_ATTACHMENTS_MAX_PER_OBJECT":     &cfg.Attachments.MaxPerObject,
 		"BAM_PURCHASES_WARRANTY_NOTICE_DAYS": &cfg.Purchases.WarrantyNoticeDays,
+		"BAM_CONTRACTS_REMINDER_DAYS":        &cfg.Contracts.ReminderDays,
 	} {
 		if v := os.Getenv(env); v != "" {
 			n, err := strconv.Atoi(v)
@@ -608,6 +623,9 @@ func (c *Config) Validate() error {
 	}
 	if d := c.Purchases.WarrantyNoticeDays; d < 0 || d > MaxWarrantyNoticeDays {
 		return fmt.Errorf("purchases.warranty_notice_days must be from 0 to %d", MaxWarrantyNoticeDays)
+	}
+	if d := c.Contracts.ReminderDays; d < 0 || d > MaxContractReminderDays {
+		return fmt.Errorf("contracts.reminder_days must be from 0 to %d", MaxContractReminderDays)
 	}
 	if p := c.Relay.BoneMeshPort; p <= 0 || p > 65535 {
 		return fmt.Errorf("invalid relay.bonemesh_port: %d", p)

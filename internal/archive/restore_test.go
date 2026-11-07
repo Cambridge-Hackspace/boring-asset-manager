@@ -142,6 +142,15 @@ func richSeed(t *testing.T, st *store.Store, blobs filestore.Blobs) seeded {
 	if _, err := st.RecordExpiringWarranties(time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC), 30); err != nil {
 		t.Fatal(err)
 	}
+	// A contract with it covers the drill and the parent category, and its
+	// end was announced.
+	if _, err := st.As(s.user.ID).CreateContract(store.ContractInput{VendorID: vendor.ID, Kind: "maintenance", Name: awkwardText[3], Notes: awkwardText[4],
+		EndDate: "2026-02-01", Cost: "99.95", Currency: "GBP", Billing: "yearly", AssetIDs: []string{drill}, CategoryIDs: []string{parent.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.RecordContractReminders(time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC), 30); err != nil {
+		t.Fatal(err)
+	}
 	return s
 }
 

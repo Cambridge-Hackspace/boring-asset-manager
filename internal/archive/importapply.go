@@ -169,6 +169,12 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 		return with(r, "link_id", ids.of(str(r, "link_id"))), true
 	case "asset_attachments":
 		return attachmentRow(r, ids, ap.b.files, "asset_id", ids.of(str(r, "asset_id"))), true
+	case "contract_assets":
+		// what a contract imported with its vendor covers
+		if !b.contractsImported[str(r, "contract_id")] {
+			return nil, false
+		}
+		return with(r, "contract_id", ids.of(str(r, "contract_id")), "asset_id", ids.of(str(r, "asset_id"))), true
 	case "asset_purchases":
 		// the vendor as it is here, by name, when there is one
 		var vendor, invoice any
@@ -208,7 +214,15 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 			}
 			vendor = id
 		}
-		return with(r, "id", ids.of(str(r, "id")), "kind", kind, "asset_id", asset, "category_id", cat, "vendor_id", vendor, "actor_user_id", nil, "payload", payload), true
+		// and a contract's with it
+		var contract any
+		if c := str(r, "contract_id"); c != "" {
+			if !b.contractsImported[c] {
+				return nil, false
+			}
+			contract = ids.of(c)
+		}
+		return with(r, "id", ids.of(str(r, "id")), "kind", kind, "asset_id", asset, "category_id", cat, "vendor_id", vendor, "contract_id", contract, "actor_user_id", nil, "payload", payload), true
 	}
 	return nil, false
 }

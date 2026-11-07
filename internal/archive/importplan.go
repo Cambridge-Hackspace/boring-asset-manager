@@ -169,6 +169,9 @@ type built struct {
 	// vendorsImported are the vendors created or copied, by ID in the
 	// archive, whose history comes with them.
 	vendorsImported map[string]bool
+	// contractsImported are the contracts imported, with their vendors, by
+	// ID in the archive, whose coverage and history come with them.
+	contractsImported map[string]bool
 	// imagesStored are the label images whose files are stored, by ID in
 	// the archive; files are the attachments' files stored, by ID in the
 	// archive, noted as their rows are imported.
@@ -294,7 +297,7 @@ func build(ctx context.Context, st *store.Store, q querier, a *archived, opts Im
 		ns = *importNamespace
 	}
 	b := &built{ids: newIDs(ns), cats: map[string]string{}, fields: map[string]string{}, relTypes: map[string]string{}, images: map[string]string{}, files: map[string]bool{},
-		vendors: map[string]string{}, vendorsImported: map[string]bool{},
+		vendors: map[string]string{}, vendorsImported: map[string]bool{}, contractsImported: map[string]bool{},
 		imagesStored: map[string]bool{}, iconRenames: map[string]string{}, catIcons: map[string]bool{}, kinds: a.kinds}
 	if opts.Anchor != "" {
 		c := h.cats[opts.Anchor]
@@ -975,6 +978,30 @@ func (m *matcher) rows() {
 	add("vendor_scopes", vendorScopes)
 	add("vendor_attachments", vendorFiles)
 	join("category_vendors", "vendor_id", ItemVendor, b.vendors)
+
+	// contracts, which come with their vendors, with their files and the
+	// categories they name; the assets they name come with the assets, and
+	// their reminders are this instance's own
+	var contracts, contractCats, contractFiles []map[string]any
+	for _, r := range a.rows["contracts"] {
+		if v := str(r, "vendor_id"); b.vendorsImported[v] {
+			b.contractsImported[str(r, "id")] = true
+			contracts = append(contracts, with(r, "id", b.ids.of(str(r, "id")), "vendor_id", b.vendors[v]))
+		}
+	}
+	for _, r := range a.rows["contract_categories"] {
+		if cat, ok := b.cats[str(r, "category_id")]; ok && b.contractsImported[str(r, "contract_id")] {
+			contractCats = append(contractCats, with(r, "contract_id", b.ids.of(str(r, "contract_id")), "category_id", cat))
+		}
+	}
+	for _, r := range a.rows["contract_attachments"] {
+		if c := str(r, "contract_id"); b.contractsImported[c] {
+			contractFiles = append(contractFiles, attachmentRow(r, b.ids, b.files, "contract_id", b.ids.of(c)))
+		}
+	}
+	add("contracts", contracts)
+	add("contract_categories", contractCats)
+	add("contract_attachments", contractFiles)
 
 	var images, templates []map[string]any
 	for _, r := range a.rows["images"] {

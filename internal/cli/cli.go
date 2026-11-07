@@ -286,6 +286,7 @@ func Serve(configPath string) error {
 	n := cfg.Notifications
 	worker := &notify.Worker{Store: st, BaseURL: cfg.Server.BaseURL,
 		WarrantyDays: cfg.Purchases.WarrantyNoticeDays,
+		ContractDays: cfg.Contracts.ReminderDays,
 		KeepFor:      time.Duration(n.KeepDays) * 24 * time.Hour,
 		Policy:       store.ChannelPolicy{FailingFor: time.Duration(n.DisableAfterHours) * time.Hour, Failures: n.DisableAfterFailures},
 		Updates:      notify.NewUpdateCheck(cfg.Updates, api.Version)}

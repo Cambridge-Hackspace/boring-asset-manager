@@ -76,7 +76,14 @@ func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, 
 		}
 	}
 	return spec.Run(kept, categories, func(a *models.AssetWithDetails) labels.Data {
-		return bindingData(a, s.cfg.Server.BaseURL)
+		d := bindingData(a, s.cfg.Server.BaseURL)
+		// A report filtering by a contract binds that one.
+		for _, c := range a.Contracts {
+			if f.Contract != "" && c.ID == f.Contract {
+				d.Contract = contractData(c)
+			}
+		}
+		return d
 	}, history, now), nil
 }
 
