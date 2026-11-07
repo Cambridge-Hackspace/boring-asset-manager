@@ -159,6 +159,8 @@ func writeVendorError(w http.ResponseWriter, err error, action string) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, store.ErrScopeReserved):
 		writeJSONError(w, http.StatusConflict, "The default scope, where assets in no other scope are, cannot be put on a vendor; leave it in no scope instead")
+	case errors.Is(err, store.ErrVendorHasContracts):
+		writeJSONError(w, http.StatusConflict, "Contracts are with this vendor; delete them, or move them to another vendor, first")
 	default:
 		writeStoreError(w, err, action)
 	}

@@ -3,7 +3,8 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { renderMarkdown } from '../../lib/markdown';
-  import type { AssetWithDetails, Category, Scope, Vendor, VendorContact } from '../../lib/models';
+  import type { AssetWithDetails, Category, Contract, Scope, Vendor, VendorContact } from '../../lib/models';
+  import { contractEnded, coverageText, kindLabel } from '../../lib/contracts';
   import { priceText } from '../../lib/purchases';
   import { actorName } from '../../lib/people';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
@@ -31,6 +32,8 @@
   let usedBy = $state<Category[]>([]);
   // The assets bought from it that the requester may read (#218).
   let bought = $state<AssetWithDetails[]>([]);
+  // The contracts with it that the requester may see (#221).
+  let contracts = $state<Contract[]>([]);
   // Scopes (docs/access.md): those who manage users, categories or vendors
   // see them; changing them takes vendors.manage in the scopes it ends up in.
   const canSeeScopes = $derived(session.canAny('users.manage', 'categories.manage', 'vendors.manage'));
@@ -77,13 +80,13 @@
 
   // The page in tabs (#161), kept in the address. All stay on the page,
   // hidden but for one, so changes not saved in one survive looking at
-  // another. Its catalog (#219) and its contracts (#221) are to join these
-  // as tabs of their own.
+  // another. Its catalog (#219) is to join these as a tab of its own.
   const tabOf: Record<string, string> = { details: 'details', scopes: 'scopes' };
   const tabs = $derived.by(() => {
     const all = [
       { key: 'details', label: 'Details', on: true },
       { key: 'assets', label: 'Assets', on: !isNew },
+      { key: 'contracts', label: 'Contracts', on: !isNew },
       { key: 'attachments', label: 'Attachments', on: true },
       { key: 'history', label: 'History', on: true },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
@@ -131,6 +134,9 @@
         .catch(() => []);
       bought = await request<{ assets: AssetWithDetails[] }>('GET', `/assets?vendor_id=${encodeURIComponent(id)}`)
         .then((a) => (a.assets ?? []).sort((x, y) => x.asset.name.localeCompare(y.asset.name)))
+        .catch(() => []);
+      contracts = await request<{ contracts: Contract[] }>('GET', `/contracts?vendor_id=${encodeURIComponent(id)}`)
+        .then((c) => c.contracts ?? [])
         .catch(() => []);
       await loadHistory();
     } catch (err) {
@@ -413,7 +419,7 @@
       {#if canManage}
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn-primary" onclick={edit}>Edit</button>
-          <ConfirmButton label="Delete" question="Delete this vendor? Categories stop naming it." onconfirm={remove} />
+          <ConfirmButton label="Delete" question="Delete this vendor? Categories stop naming it. A vendor that contracts are with cannot be deleted." onconfirm={remove} />
         </div>
       {/if}
     {/if}
@@ -451,6 +457,37 @@
               <td class="pr-4">{a.purchase?.order_date || a.purchase?.received_date || ''}</td>
               <td class="pr-4">{priceText(a.purchase)}</td>
               <td>{a.purchase?.warranty_end ?? ''}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
+  </section>
+
+  <section class="mt-6 max-w-3xl" id="tab-contracts" aria-labelledby="contracts-heading" hidden={tab !== 'contracts'}>
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <h2 id="contracts-heading" class="section-title">Contracts with it</h2>
+      {#if canManage}<a class="btn-secondary" href="/contracts/new?vendor_id={encodeURIComponent(id)}">New contract</a>{/if}
+    </div>
+    {#if contracts.length === 0}
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">No contracts with it yet: warranties, service or maintenance agreements, leases or licenses.</p>
+    {:else}
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-zinc-300 dark:border-zinc-700">
+            <th scope="col" class="py-2 pr-4 font-semibold">Contract</th>
+            <th scope="col" class="py-2 pr-4 font-semibold">Kind</th>
+            <th scope="col" class="py-2 pr-4 font-semibold">Ends</th>
+            <th scope="col" class="py-2 font-semibold">Covers</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each contracts as c (c.id)}
+            <tr class="border-b border-zinc-200 dark:border-zinc-800">
+              <td class="pr-4"><a class="inline-flex min-h-11 items-center underline" href="/contracts/{encodeURIComponent(c.id)}">{c.name}</a></td>
+              <td class="pr-4">{kindLabel(c.kind)}</td>
+              <td class="pr-4">{c.end_date ? `${c.end_date}${contractEnded(c) ? ' (ended)' : ''}` : 'No end'}</td>
+              <td>{coverageText(c)}</td>
             </tr>
           {/each}
         </tbody>

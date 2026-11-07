@@ -163,6 +163,9 @@ type Plan struct {
 	// prices are the assets whose prices the requester may see
 	// (purchases.read).
 	prices map[string]bool
+	// costs are the contracts whose costs the requester may see
+	// (purchases.read in their vendors' scopes).
+	costs map[string]bool
 	// extra are rows written besides the database's: what a top category
 	// inherits, as its own. scan are top categories' inherited scan
 	// templates.
@@ -296,13 +299,15 @@ type resolver struct {
 	scopeNames     map[string]string
 	scopesOf       func([]string) []string
 	// vendorScopes are each vendor's scopes, by ID.
-	vendorScopes  map[string][]string
-	chosenCats    map[string]bool
-	assetIDs      []string
-	assetCats     map[string][]string
-	assetIcons    map[string][]string
-	includedAsset map[string]bool
-	readEvents    map[string]bool
+	vendorScopes map[string][]string
+	// contractVendors are each contract's vendor, by ID.
+	contractVendors map[string]string
+	chosenCats      map[string]bool
+	assetIDs        []string
+	assetCats       map[string][]string
+	assetIcons      map[string][]string
+	includedAsset   map[string]bool
+	readEvents      map[string]bool
 	// assetVendors are the vendors assets were bought from, and
 	// readPrices the assets whose prices the requester may see.
 	assetVendors map[string]string
@@ -350,6 +355,7 @@ func (r *resolver) load() error {
 	r.fieldKeys, r.hookKeys, r.reportKinds = map[string]string{}, map[string]string{}, map[string]string{}
 	r.templateImgs, r.flows, r.library = map[string][]string{}, map[string]*flowRow{}, map[string]*iconSource{}
 	r.defined, r.scopeNames, r.vendorScopes = map[string][]Ref{}, map[string]string{}, map[string][]string{}
+	r.contractVendors = map[string]string{}
 	r.templateFields, r.templateIcons = map[string][]string{}, map[string][]string{}
 	r.reportFields, r.reportCats = map[string][]string{}, map[string][]string{}
 	read := func(query string, each func([]string)) error {
@@ -412,6 +418,7 @@ func (r *resolver) load() error {
 		}},
 		{"SELECT id, name FROM vendors", func(c []string) { r.names[Ref{Kind: ItemVendor, ID: c[0]}] = c[1] }},
 		{"SELECT vendor_id, scope_id FROM vendor_scopes", func(c []string) { r.vendorScopes[c[0]] = append(r.vendorScopes[c[0]], c[1]) }},
+		{"SELECT id, vendor_id FROM contracts", func(c []string) { r.contractVendors[c[0]] = c[1] }},
 		{"SELECT id, name FROM printers", func(c []string) { r.names[Ref{Kind: ItemPrinter, ID: c[0]}] = c[1] }},
 		{"SELECT id, name FROM printer_pools", func(c []string) { r.names[Ref{Kind: ItemPool, ID: c[0]}] = c[1] }},
 		{"SELECT id, path, source FROM icon_library", func(c []string) {
@@ -1113,6 +1120,23 @@ func (r *resolver) rowsOf(plan *Plan) {
 			}
 		}
 	}
+	// a vendor's contracts come with it, their costs only to those who may
+	// see them
+	plan.costs = map[string]bool{}
+	for id, v := range r.contractVendors {
+		if !has(ItemVendor, v) {
+			continue
+		}
+		set("contracts", id)
+		// not nil, so that one in no scope needs it in every scope
+		scopes := []string{}
+		for _, s := range r.vendorScopes[v] {
+			scopes = append(scopes, r.scopeNames[s])
+		}
+		if r.may(rbac.PermPurchasesRead, scopes) {
+			plan.costs[id] = true
+		}
+	}
 	if plan.sel.Icons {
 		plan.whole["icon_palette"] = true
 		plan.whole["icon_settings"] = true
@@ -1253,6 +1277,25 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 		}
 		setNull("added_by")
 		return true, nil
+	case "contracts":
+		if !p.rows[t.Name][get("id")] {
+			return false, nil
+		}
+		if !p.costs[get("id")] {
+			setNull("cost_minor")
+			vals[colIndex(t, "currency")], vals[colIndex(t, "billing")] = "", ""
+		}
+		return true, nil
+	case "contract_categories":
+		return p.rows["contracts"][get("contract_id")] && p.cats[get("category_id")], nil
+	case "contract_attachments":
+		if !p.rows["contracts"][get("contract_id")] {
+			return false, nil
+		}
+		setNull("added_by")
+		return true, nil
+	case "contract_assets":
+		return p.rows["contracts"][get("contract_id")] && asset("asset_id"), nil
 	case "category_comments":
 		if !p.sel.Comments || !p.rows["categories"][get("category_id")] || vals[colIndex(t, "deleted_at")] != nil {
 			return false, nil

@@ -15,7 +15,7 @@ export interface HelpTopic {
 }
 
 /** The order the help index lists topics in. */
-const order = ['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'comments', 'icons', 'links', 'import', 'labels', 'spool', 'scanning', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants'];
+const order = ['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'contracts', 'comments', 'icons', 'links', 'import', 'labels', 'spool', 'scanning', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants'];
 
 export const helpTopics: HelpTopic[] = Object.entries(sources)
   .map(([file, text]) => {
@@ -43,6 +43,7 @@ export function helpFor(path: string): string {
     [/^\/icons/, 'icons'],
     [/^\/(categories|fields)/, 'categories'],
     [/^\/vendors/, 'vendors'],
+    [/^\/contracts/, 'contracts'],
     [/^\/relations/, 'links'],
     [/^\/(templates|images|printers)/, 'labels'],
     [/^\/notifications/, 'notifications'],

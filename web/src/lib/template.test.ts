@@ -141,6 +141,7 @@ describe('other helpers', () => {
   it('lists placeholders', () => {
     expect(placeholders(['serial'], ['qr'])).toContain('{{field.serial}}');
     expect(placeholders([], ['micro_qr'])).toContain('{{asset.code.micro_qr}}');
+    expect(placeholders([], [])).toContain('{{asset.contract.end_date}}');
   });
 });
 

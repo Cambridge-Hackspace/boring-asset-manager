@@ -1,7 +1,7 @@
 # Notifications
 
 BAM! sends notifications when something happens that people should hear about: a category or
-asset running low, a loan overdue, an asset out of service, a warranty about to end, a hook
+asset running low, a loan overdue, an asset out of service, a warranty or a contract about to end, a hook
 pressed, BAM! itself upgraded. You set up any number of channels, each sending through a notifier
 driver: to Discord, an MQTT broker, email, or any URL as a webhook.
 
@@ -26,7 +26,8 @@ Secret options can be written but are never returned; reads show only whether th
 Which events a channel can subscribe to is listed with each feature; see
 [Stock and lending](stock-and-lending.md), [Hooks](hooks.md), [Access](access.md#too-many-wrong-passwords),
 [Relays](relays.md#health), [Installing](installing.md#knowing-when-bam-changes),
-[Comments](comments.md#events) for `comment.added`, and [Warranties](#warranties) below.
+[Comments](comments.md#events) for `comment.added`, [Warranties](#warranties) below, and
+[Contracts](contracts.md#reminders) for `contract.expiring` and `contract.expired`.
 
 ### Warranties
 
@@ -42,6 +43,19 @@ reminders are, each is claimed by inserting it into `warranty_notices` before it
 several servers sharing a database record it once, and a restored instance, whose backup holds
 them, does not announce them again. The asset's history shows it. See
 [Purchases](data-model.md#purchases).
+
+### Contracts
+
+`contract.expiring` (*A contract is about to end, or its notice deadline is near*) is recorded a
+number of days before a contract ends, or, for one that renews automatically, before the deadline
+for giving notice: `[contracts] reminder_days`, 30 unless configured, or 0 for the day itself.
+`contract.expired` (*A contract ends*) is recorded on the day it ends. Each names the contract,
+and the date as `due_at`. Discord and email say *Contract ending: Workshop service*, *Contract
+notice due: …*, *Contract ended: …* or, for one that renews automatically, *Contract renewed:
+…*, with its kind, vendor and dates, and link to the contract; MQTT publishes them under
+`<prefix>/<kind>/<contract ID>`. Each is recorded once for each contract and date, claimed in
+`contract_notices`. They are in the contract's history, not an asset's, so the events list and
+live connections do not carry them. See [Contracts](contracts.md#reminders).
 
 ## Delivery
 

@@ -264,6 +264,18 @@ const (
 	// soon (docs/data-model.md#purchases), with the end as DueAt, and again
 	// for a new end. Channels can subscribe to it.
 	EventWarrantyExpiring = "warranty.expiring"
+	// EventContractCreated and EventContractEdited record a contract made,
+	// and changes to one listed in the payload's Changes (docs/contracts.md).
+	// They are for its history.
+	EventContractCreated = "contract.created"
+	EventContractEdited  = "contract.edited"
+	// EventContractExpiring records once that a contract ends soon, or
+	// that the deadline for giving notice on one that renews automatically
+	// is near, with that date as DueAt; EventContractExpired records once
+	// that one ends, on the day. Each is recorded again for new dates.
+	// They name the Contract, and channels can subscribe to them.
+	EventContractExpiring = "contract.expiring"
+	EventContractExpired  = "contract.expired"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -272,7 +284,7 @@ func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
 		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventCategoryEdited, EventAuthRoleKept,
-		EventVendorCreated, EventVendorEdited, EventCommentEdited, EventCommentDeleted:
+		EventVendorCreated, EventVendorEdited, EventCommentEdited, EventCommentDeleted, EventContractCreated, EventContractEdited:
 		return true
 	}
 	return false
@@ -356,6 +368,22 @@ type EventPayload struct {
 	Instance *EventInstance `json:"instance,omitempty"`
 	// Comment is the comment a comment event is about.
 	Comment *EventComment `json:"comment,omitempty"`
+	// Contract is the contract a contract event is about, as it was then.
+	Contract *EventContract `json:"contract,omitempty"`
+}
+
+// EventContract is a contract, as an event names it (docs/contracts.md):
+// its kind, its vendor, when it ends, and whether it renews automatically,
+// with how many days' notice stops it.
+type EventContract struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	VendorID   string `json:"vendor_id"`
+	VendorName string `json:"vendor_name"`
+	EndDate    string `json:"end_date,omitempty"`
+	AutoRenews bool   `json:"auto_renews,omitempty"`
+	NoticeDays int    `json:"notice_days,omitempty"`
 }
 
 // EventInstance is a change of the release BAM! runs, as an instance event
@@ -723,6 +751,31 @@ type AssetWithDetails struct {
 	ResolvedIcons map[string]*ResolvedIcon `json:"resolved_icons"`
 	// Purchase is where it came from: empty when nothing is recorded.
 	Purchase Purchase `json:"purchase"`
+	// Contracts are the contracts covering it (docs/contracts.md): those
+	// naming it, and those naming one of its categories or a category
+	// above one, by when they end, those with no end last. The API leaves
+	// out those whose vendor the requester may not see.
+	Contracts []ContractCover `json:"contracts"`
+}
+
+// ContractCover is a contract covering an asset, as the asset shows it.
+// CategoryID is the category it covers the asset through, empty when it
+// names the asset itself. Cost, Currency and Billing are left out for a
+// requester without purchases.read in its vendor's scopes.
+type ContractCover struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	VendorID   string `json:"vendor_id"`
+	VendorName string `json:"vendor_name"`
+	Reference  string `json:"reference"`
+	StartDate  string `json:"start_date"`
+	EndDate    string `json:"end_date"`
+	AutoRenews bool   `json:"auto_renews"`
+	CategoryID string `json:"category_id,omitempty"`
+	Cost       string `json:"cost,omitempty"`
+	Currency   string `json:"currency,omitempty"`
+	Billing    string `json:"billing,omitempty"`
 }
 
 // Purchase is where an asset came from (docs/data-model.md#purchases). Every
@@ -1099,6 +1152,7 @@ const (
 	OwnerAsset    = "asset"
 	OwnerCategory = "category"
 	OwnerVendor   = "vendor"
+	OwnerContract = "contract"
 )
 
 // What comments are on (docs/comments.md). A filing is an asset a flow
@@ -1260,6 +1314,90 @@ type Vendor struct {
 	ScopeIDs  []string  `json:"scope_ids"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Contract kinds (docs/contracts.md).
+const (
+	ContractWarranty    = "warranty"
+	ContractService     = "service"
+	ContractMaintenance = "maintenance"
+	ContractLease       = "lease"
+	ContractLicense     = "license"
+	ContractOther       = "other"
+)
+
+// ContractKinds are the kinds a contract may be, in the order they are
+// offered.
+var ContractKinds = []string{ContractWarranty, ContractService, ContractMaintenance, ContractLease, ContractLicense, ContractOther}
+
+// How often a contract's cost is paid (docs/contracts.md): BillingNone
+// when it is not said.
+const (
+	BillingNone      = ""
+	BillingOnce      = "once"
+	BillingMonthly   = "monthly"
+	BillingQuarterly = "quarterly"
+	BillingYearly    = "yearly"
+)
+
+// Billings are the ways a contract's cost may be paid, BillingNone among
+// them.
+var Billings = []string{BillingNone, BillingOnce, BillingMonthly, BillingQuarterly, BillingYearly}
+
+// Contract is an agreement with a vendor about assets (docs/contracts.md):
+// a warranty, a service or maintenance agreement, a lease or a license.
+// Dates are YYYY-MM-DD, empty when not known; one with no end runs until
+// it is ended. One that renews automatically must be stopped NoticeDays
+// before it ends, by NoticeDeadline. Its cost is exact, a decimal in its
+// Currency, paid as Billing says. It covers the assets it names, and every
+// asset in the categories it names or below them. Its notes are Markdown.
+type Contract struct {
+	ID             string `json:"id"`
+	VendorID       string `json:"vendor_id"`
+	VendorName     string `json:"vendor_name"`
+	Kind           string `json:"kind"`
+	Name           string `json:"name"`
+	Reference      string `json:"reference"`
+	StartDate      string `json:"start_date"`
+	EndDate        string `json:"end_date"`
+	AutoRenews     bool   `json:"auto_renews"`
+	NoticeDays     int    `json:"notice_days"`
+	NoticeDeadline string `json:"notice_deadline,omitempty"`
+	// Cost, Currency and Billing are left out for a requester without
+	// purchases.read in its vendor's scopes, and CostsHidden says so.
+	Cost        string `json:"cost,omitempty"`
+	Currency    string `json:"currency,omitempty"`
+	Billing     string `json:"billing,omitempty"`
+	CostsHidden bool   `json:"costs_hidden,omitempty"`
+	Notes       string `json:"notes"`
+	// AssetIDs and CategoryIDs are what it covers, and Assets and
+	// Categories name them. The API leaves out assets the requester may
+	// not read.
+	AssetIDs    []string     `json:"asset_ids"`
+	CategoryIDs []string     `json:"category_ids"`
+	Assets      []NamedThing `json:"assets"`
+	Categories  []NamedThing `json:"categories"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+// NamedThing is something named by its ID and name.
+type NamedThing struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// HideCosts leaves out what only purchases.read sees: the cost, its
+// currency and how often it is paid.
+func (c *Contract) HideCosts() {
+	c.Cost, c.Currency, c.Billing = "", "", ""
+	c.CostsHidden = true
+}
+
+// HideCosts leaves out of a contract covering an asset what only
+// purchases.read sees.
+func (c *ContractCover) HideCosts() {
+	c.Cost, c.Currency, c.Billing = "", "", ""
 }
 
 // VendorContact is someone at a vendor: their role is what they are for,

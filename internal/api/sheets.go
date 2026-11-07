@@ -147,6 +147,14 @@ func (s *Server) drawSheet(r *http.Request, d *render.Document, a *models.AssetW
 	}
 	add("Order number", p.OrderNumber)
 	add("Warranty ends", p.WarrantyEnd)
+	// The contracts covering it that the request sees.
+	for _, c := range a.Contracts {
+		line := c.Name + " (" + c.Kind + ", " + c.VendorName
+		if c.EndDate != "" {
+			line += ", until " + c.EndDate
+		}
+		add("Contract", line+")")
+	}
 	for _, l := range a.Links {
 		add(capitalize(l.Label), l.Asset.Name)
 	}

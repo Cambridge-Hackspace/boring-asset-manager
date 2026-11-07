@@ -7,7 +7,7 @@
   import ConfirmButton from './ConfirmButton.svelte';
   import ErrorMessage from './ErrorMessage.svelte';
 
-  // The files attached to an asset, a category or a vendor (docs/data-model.md#attachments):
+  // The files attached to an asset, a category, a vendor or a contract (docs/data-model.md#attachments):
   // shown, added, renamed and described, put in order, and removed. Images
   // show as photos always have; documents and other files download.
   let {

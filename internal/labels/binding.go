@@ -35,6 +35,15 @@ const (
 	RefPurchaseCurrency                    // {{asset.purchase.currency}}
 	RefPurchaseOrderNumber                 // {{asset.purchase.order_number}}
 	RefPurchaseWarrantyEnd                 // {{asset.purchase.warranty_end}}
+	RefContractName                        // {{asset.contract.name}}
+	RefContractKind                        // {{asset.contract.kind}}
+	RefContractVendor                      // {{asset.contract.vendor}}
+	RefContractReference                   // {{asset.contract.reference}}
+	RefContractStartDate                   // {{asset.contract.start_date}}
+	RefContractEndDate                     // {{asset.contract.end_date}}
+	RefContractCost                        // {{asset.contract.cost}}
+	RefContractCurrency                    // {{asset.contract.currency}}
+	RefContractBilling                     // {{asset.contract.billing}}
 )
 
 // simpleRefs are the placeholders that take no argument.
@@ -58,6 +67,15 @@ var simpleRefs = map[string]RefKind{
 	"asset.purchase.currency":      RefPurchaseCurrency,
 	"asset.purchase.order_number":  RefPurchaseOrderNumber,
 	"asset.purchase.warranty_end":  RefPurchaseWarrantyEnd,
+	"asset.contract.name":          RefContractName,
+	"asset.contract.kind":          RefContractKind,
+	"asset.contract.vendor":        RefContractVendor,
+	"asset.contract.reference":     RefContractReference,
+	"asset.contract.start_date":    RefContractStartDate,
+	"asset.contract.end_date":      RefContractEndDate,
+	"asset.contract.cost":          RefContractCost,
+	"asset.contract.currency":      RefContractCurrency,
+	"asset.contract.billing":       RefContractBilling,
 }
 
 // Ref is one placeholder. Arg holds the generator type or field key.
@@ -189,6 +207,24 @@ type Data struct {
 	// Purchase is where the asset came from, as text: its price, currency
 	// and order number empty for a requester who may not see them.
 	Purchase PurchaseData `json:"purchase"`
+	// Contract is the contract covering the asset that bindings show
+	// (docs/contracts.md), as text: its cost, currency and billing empty
+	// for a requester who may not see them.
+	Contract ContractData `json:"contract"`
+}
+
+// ContractData is a contract, as bindings show it: dates YYYY-MM-DD, and
+// the cost a decimal in its currency.
+type ContractData struct {
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	Vendor    string `json:"vendor"`
+	Reference string `json:"reference"`
+	StartDate string `json:"start_date"`
+	EndDate   string `json:"end_date"`
+	Cost      string `json:"cost"`
+	Currency  string `json:"currency"`
+	Billing   string `json:"billing"`
 }
 
 // PurchaseData is an asset's purchase details, as bindings show them:
@@ -273,6 +309,24 @@ func (b Binding) Resolve(d Data) string {
 			sb.WriteString(d.Purchase.OrderNumber)
 		case RefPurchaseWarrantyEnd:
 			sb.WriteString(d.Purchase.WarrantyEnd)
+		case RefContractName:
+			sb.WriteString(d.Contract.Name)
+		case RefContractKind:
+			sb.WriteString(d.Contract.Kind)
+		case RefContractVendor:
+			sb.WriteString(d.Contract.Vendor)
+		case RefContractReference:
+			sb.WriteString(d.Contract.Reference)
+		case RefContractStartDate:
+			sb.WriteString(d.Contract.StartDate)
+		case RefContractEndDate:
+			sb.WriteString(d.Contract.EndDate)
+		case RefContractCost:
+			sb.WriteString(d.Contract.Cost)
+		case RefContractCurrency:
+			sb.WriteString(d.Contract.Currency)
+		case RefContractBilling:
+			sb.WriteString(d.Contract.Billing)
 		case RefScanURL:
 			// The asset's scan page (docs/scanning.md), by ID, which never changes.
 			sb.WriteString(strings.TrimRight(d.BaseURL, "/") + "/scan/" + d.AssetID)

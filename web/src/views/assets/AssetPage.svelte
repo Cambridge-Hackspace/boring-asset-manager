@@ -24,6 +24,7 @@
   import LocationPicker from '../../components/LocationPicker.svelte';
   import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
   import PurchaseSection from '../../components/PurchaseSection.svelte';
+  import ContractsSection from '../../components/ContractsSection.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import CommentsPanel from '../../components/CommentsPanel.svelte';
@@ -376,6 +377,7 @@
         {/if}
       </section>
       <PurchaseSection {asset} canEdit={session.canOn(asset.scopes, 'assets.write') && !archived} />
+      <ContractsSection {asset} />
       <LinksPanel {asset} onchange={assetChanged} />
       {#if contents.length}
         <section aria-labelledby="contents-heading">

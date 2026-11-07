@@ -317,6 +317,21 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/vendors/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerVendor)))
 	handle("PUT /api/v1/vendors/{id}/attachments/{attachment_id}", manageVendors(s.handleUpdateAttachment(models.OwnerVendor)))
 	handle("DELETE /api/v1/vendors/{id}/attachments/{attachment_id}", manageVendors(s.handleRemoveAttachment(models.OwnerVendor)))
+	// Contracts (docs/contracts.md): seen by those who see their vendors, and
+	// changed with vendors.manage in the vendors' scopes, which each handler
+	// checks.
+	handle("GET /api/v1/contracts", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListContracts)))
+	handle("POST /api/v1/contracts", manageVendors(http.HandlerFunc(s.handleCreateContract)))
+	handle("GET /api/v1/contracts/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetContract)))
+	handle("PUT /api/v1/contracts/{id}", manageVendors(http.HandlerFunc(s.handleUpdateContract)))
+	handle("DELETE /api/v1/contracts/{id}", manageVendors(http.HandlerFunc(s.handleDeleteContract)))
+	handle("GET /api/v1/contracts/{id}/history", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleContractHistory)))
+	handle("GET /api/v1/contracts/{id}/attachments", RequirePermission(rbac.PermAssetsRead)(s.handleListAttachments(models.OwnerContract)))
+	handle("POST /api/v1/contracts/{id}/attachments", manageVendors(s.handleAddAttachment(models.OwnerContract)))
+	handle("PUT /api/v1/contracts/{id}/attachments", manageVendors(s.handleReorderAttachments(models.OwnerContract)))
+	handle("GET /api/v1/contracts/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerContract)))
+	handle("PUT /api/v1/contracts/{id}/attachments/{attachment_id}", manageVendors(s.handleUpdateAttachment(models.OwnerContract)))
+	handle("DELETE /api/v1/contracts/{id}/attachments/{attachment_id}", manageVendors(s.handleRemoveAttachment(models.OwnerContract)))
 	// Icons (docs/icons.md): reading with assets.read; a category's own icon
 	// with categories.manage, and what every icon is drawn with, the
 	// library, palette and settings, with icons.manage.

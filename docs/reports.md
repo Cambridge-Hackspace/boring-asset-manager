@@ -55,6 +55,7 @@ Every filter is optional.
 | `vendor` | Assets bought from this vendor, by ID, as the reader may see it ([Purchases](data-model.md#purchases)). |
 | `purchased_between` | Assets ordered within `{"from": "2026-01-01", "to": "2026-03-31"}`, both days included, either left out for no limit. An asset with no order date counts by the day it was received; one with neither is left out. |
 | `warranty_ends_before` | Assets whose warranty ends before this day, `YYYY-MM-DD`. |
+| `contract` | Assets a contract covers, by ID, as the reader may see it ([Contracts](contracts.md)): those it names, and those in the categories it names or below them. The report then binds `{{asset.contract.*}}` to that contract. |
 
 ### Sections
 
@@ -73,6 +74,10 @@ A table has 1 to 30 columns, each a `heading` and a `binding`.
   `YYYY-MM-DD`, and a price a decimal, which sorts as a number. The price, currency and order
   number are blank for assets whose prices the reader may not see (see
   [Seeing prices](access.md#seeing-prices)).
+- The contract covering the asset binds as on labels: `{{asset.contract.name}}`, `kind`, `vendor`,
+  `reference`, `start_date`, `end_date`, `cost`, `currency` and `billing`, the contract filtered
+  by when the filter names one, and otherwise the one in force covering it longest (see
+  [Contracts](contracts.md#reports-and-labels)).
 - `group_by: "category"` lists each row under every category its asset is in. Groups are ordered
   by name, and those running low are marked.
 

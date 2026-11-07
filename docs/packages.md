@@ -32,7 +32,8 @@ Each of these can be chosen, by ID:
 - reports;
 - flows;
 - scopes;
-- vendors, with their contacts and attachments (see [Vendors](vendors.md));
+- vendors, with their contacts and attachments, and their contracts, with what they cover of the
+  package (see [Vendors](vendors.md) and [Contracts](contracts.md));
 - the icon library, with the palette and icon settings;
 - assets: those in the categories chosen, or every one, with or without their attachments (photos
   among them; `--photos`), the links between them, and their history.
@@ -103,6 +104,7 @@ A package holds only what the requester may read:
 | Assets | `assets.read` in their scopes |
 | Assets' history | `events.read` in their scopes |
 | Assets' prices, order numbers and invoices | `purchases.read` in their scopes |
+| Contracts' costs | `purchases.read` in their vendors' scopes, or in every scope for one in none |
 
 - Choosing what cannot be read is refused.
 - What something needs that cannot be read stays behind, and is listed.

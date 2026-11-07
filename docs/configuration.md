@@ -90,6 +90,13 @@ allowed_types = []
 # BAM_PURCHASES_WARRANTY_NOTICE_DAYS.
 warranty_notice_days = 30
 
+[contracts]
+# How many days before a contract ends, or before the deadline for giving
+# notice on one that renews automatically, its contract.expiring event is
+# recorded, for notification channels (docs/contracts.md#reminders): 0 to 365,
+# and 0 on the day. Environment: BAM_CONTRACTS_REMINDER_DAYS.
+reminder_days = 30
+
 [relay]
 # The relay bus's transports (docs/relays.md), each on or off: BoneMesh, on a
 # port of its own, and WebSocket, at /api/v1/relay/live on the server's own
@@ -231,6 +238,7 @@ Several settings can also be given in the environment:
 | `attachments.max_file_mb`, `attachments.max_per_object` | `BAM_ATTACHMENTS_MAX_FILE_MB`, `BAM_ATTACHMENTS_MAX_PER_OBJECT` |
 | `attachments.allowed_types` | `BAM_ATTACHMENTS_ALLOWED_TYPES`, comma-separated |
 | `purchases.warranty_notice_days` | `BAM_PURCHASES_WARRANTY_NOTICE_DAYS` |
+| `contracts.reminder_days` | `BAM_CONTRACTS_REMINDER_DAYS` |
 | `relay.allow` | `BAM_RELAY_ALLOW`, comma-separated: on a relay, what it may reach |
 | `updates.check` | `BAM_UPDATES_CHECK` (`true` or `false`) |
 | `updates.url` | `BAM_UPDATES_URL` |

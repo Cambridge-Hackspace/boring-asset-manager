@@ -53,8 +53,8 @@ Which scopes a vendor is in is shown only to those who manage users, categories 
 
 ## Who changes a vendor
 
-`vendors.manage` creates, edits and deletes vendors, and changes their attachments. It is
-scopable:
+`vendors.manage` creates, edits and deletes vendors, and changes their attachments, and their
+[contracts](contracts.md#who-changes-a-contract). It is scopable:
 
 - Changing a vendor needs `vendors.manage` in one of the scopes it is in, and in one of those it
   ends up in.
@@ -64,6 +64,9 @@ scopable:
 
 Its holders also read `GET /api/v1/scopes`, to choose among them. Migration `068` grants
 `vendors.manage`, in every scope, to every role that manages categories.
+
+A vendor with contracts is not deleted (`409`): delete them, or move them to another vendor,
+first.
 
 ## Preferred vendors
 
@@ -81,9 +84,9 @@ Duplicating a category copies its vendors. Deleting a vendor takes it off every 
 ## A vendor's page
 
 The **Vendors** page, in **Catalog**, lists the vendors one can see, with a search box. A
-vendor's page shows its details, contacts and notes, its attachments, its history, its scopes for
-those who see them, and the categories bought from it. It is laid out so that its contracts (#221)
-and its catalog (#219) can be added as parts of their own.
+vendor's page shows its details, contacts and notes, the assets bought from it, its contracts,
+its attachments, its history, its scopes for those who see them, and the categories bought from
+it. It is laid out so that its catalog (#219) can be added as a part of its own.
 
 ## Assets bought from it
 
@@ -121,7 +124,7 @@ in one of the vendor's scopes, or anywhere for one in none.
 | `POST /api/v1/vendors` | `vendors.manage` | Make one, with `{"name", "website", "account_number", "address", "notes", "contacts", "scope_ids"}`. Answers `201` with `vendor`. |
 | `GET /api/v1/vendors/{id}` | `assets.read` | One, as `vendor`, with `can_manage`, whether the requester may change it. |
 | `PUT /api/v1/vendors/{id}` | `vendors.manage` | Replace its details and contacts. A contact sent back with its `id` keeps it. `scope_ids` left out stay as they are. |
-| `DELETE /api/v1/vendors/{id}` | `vendors.manage` | Delete it, with its contacts and attachments' rows. Its files stay until `bam storage sweep`. |
+| `DELETE /api/v1/vendors/{id}` | `vendors.manage` | Delete it, with its contacts and attachments' rows. Its files stay until `bam storage sweep`. One with contracts answers `409`. |
 | `GET /api/v1/vendors/{id}/history` | `assets.read` | Its history, newest first, 50 at a time, as an asset's: `?before=` an event's ID for the next page; answers `events` and `more`. |
 | `GET`, `POST`, `PUT /api/v1/vendors/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/vendors/{id}/attachments/{attachment_id}` | Seeing it to read, `vendors.manage` in its scopes to change | Its attachments, as a category's (see [Attachments](data-model.md#attachments)). |
 | `PUT /api/v1/categories/{id}/vendors` | `categories.manage` | Name the vendors a category is bought from, with `{"vendor_ids": [...]}` in order of preference. Answers `category`. |
@@ -139,6 +142,8 @@ in one of the vendor's scopes, or anywhere for one in none.
 - **Reports:** `vendor` filters by it, and `{{asset.purchase.vendor}}` shows it (see
   [Reports](reports.md)).
 - **Packages:** an asset brings the vendor it was bought from.
+- **Contracts:** warranties, service and maintenance agreements, leases and licenses are with a
+  vendor, and follow its scopes; its page has a **Contracts** tab (see [Contracts](contracts.md)).
 
 ## Storage
 

@@ -85,6 +85,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -173,6 +184,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -919,6 +941,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {
@@ -1045,6 +1078,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -1131,6 +1175,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {
@@ -1214,6 +1269,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -1289,6 +1355,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -1412,6 +1489,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {
@@ -1503,6 +1591,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {
@@ -1591,6 +1690,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -1699,6 +1809,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {
@@ -1761,6 +1882,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -1850,6 +1982,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -2062,6 +2205,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {},
@@ -2272,6 +2426,17 @@
     "currency": "",
     "order_number": "",
     "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
    }
   },
   "images": {

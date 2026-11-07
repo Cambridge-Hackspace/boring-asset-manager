@@ -24,6 +24,10 @@ An asset's **Purchase** section says where it came from: the **vendor** it was b
 
 Seeing the price, order number and invoice takes **See prices**, which roles that read assets have unless it is taken away; without it, they are hidden, and editing the asset leaves them as they are. Before a warranty ends, a notification channel can tell you (see [Notifications](/help/notifications)).
 
+## Contracts
+
+The **Contracts** section lists the contracts covering the asset, such as *Under maintenance contract with Acme until June 2027*: those naming it, and those naming one of its categories, each linking to the contract. Its own warranty end, above, is the warranty it came with; an extended warranty is a contract (see [Contracts](/help/contracts)).
+
 ## Condition
 
 Anyone allowed can **Report a problem**: that it needs maintenance, or is out of service, with a note saying what is wrong. Someone who edits assets marks it working again when it is fixed. Assets out of service cannot be lent.

@@ -398,6 +398,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 		return nil, err
 	}
 	details.Scopes = traits.scopesOf(catIDs)
+	if err := s.contractDetails(details, ctx, catIDs, traits.parents); err != nil {
+		return nil, err
+	}
 	details.LabelTemplate = traits.chooseLabel(catIDs)
 	for i := range details.Categories {
 		setLabelTemplates(&details.Categories[i], traits.labels[details.Categories[i].ID])

@@ -420,3 +420,21 @@ describe('CategoryPage', () => {
     });
   });
 });
+
+describe('CategoryPage contracts', () => {
+  it('lists the contracts naming it in a tab of their own', async () => {
+    const contract = {
+      id: 'k1', vendor_id: 'v1', vendor_name: 'Acme', kind: 'service', name: 'Tool servicing', reference: '', start_date: '', end_date: '2099-06-30',
+      auto_renews: false, notice_days: 0, notes: '', asset_ids: [], category_ids: ['power'], assets: [], categories: [{ id: 'power', name: 'Power tools' }], created_at: '', updated_at: '',
+    };
+    const { sent } = api({ 'GET /contracts': () => ({ contracts: [contract] }) });
+    at('contracts');
+    render(CategoryPage, { params: { id: 'power' } });
+    const list = await screen.findByRole('list', { name: 'Contracts naming it' });
+    expect(within(list).getByRole('link', { name: 'Tool servicing' }).getAttribute('href')).toBe('/contracts/k1');
+    expect(list.textContent).toContain('Service: Under service contract with Acme until June 2099');
+    expect(sent.find((r) => r.path === '/contracts')).toBeTruthy();
+    const tabs = screen.getByRole('navigation', { name: 'Parts of this category' });
+    expect(within(tabs).getByRole('link', { name: 'Contracts' })).toBeTruthy();
+  });
+});

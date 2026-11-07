@@ -4,7 +4,7 @@ import { routes } from '../routes';
 
 describe('help', () => {
   it('has every topic, titled, in order', () => {
-    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'comments', 'icons', 'links', 'import', 'labels', 'spool', 'scanning', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants']);
+    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'contracts', 'comments', 'icons', 'links', 'import', 'labels', 'spool', 'scanning', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants']);
     for (const t of helpTopics) expect(t.title, t.slug).not.toBe('');
   });
 
@@ -23,6 +23,7 @@ describe('help', () => {
     expect(helpFor('/spool')).toBe('spool');
     expect(helpFor('/hooks')).toBe('hooks');
     expect(helpFor('/vendors/x')).toBe('vendors');
+    expect(helpFor('/contracts/x')).toBe('contracts');
     expect(helpFor('/relays')).toBe('relays');
     expect(helpFor('/')).toBe('start');
   });

@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetHook, type CategoryHook, type Vendor } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetHook, type CategoryHook, type Contract, type Vendor } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
@@ -19,6 +19,7 @@
   import CommentsPanel from '../../components/CommentsPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { reorderHref, siteName } from '../../lib/vendors';
+  import { contractEnded, coverSentence, kindLabel } from '../../lib/contracts';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -70,6 +71,8 @@
   // Vendors (docs/vendors.md): those it is bought from, in order of
   // preference, as the running-low list offers them.
   let vendors = $state<Vendor[]>([]);
+  // The contracts naming it (docs/contracts.md), which cover its assets and those below it.
+  let contracts = $state<Contract[]>([]);
   let vendorList = $state<string[]>([]);
   let addingVendor = $state('');
   const vendorOf = (vid: string) => vendors.find((v) => v.id === vid);
@@ -164,6 +167,7 @@
       { key: 'icon', label: 'Icon', on: !isSystem },
       { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
       { key: 'vendors', label: 'Vendors', on: !isSystem && ((canManage && vendors.length > 0) || vendorList.length > 0) },
+      { key: 'contracts', label: 'Contracts', on: !isSystem && contracts.length > 0 },
       { key: 'attachments', label: 'Attachments', on: !isSystem },
       { key: 'comments', label: 'Comments', on: !isSystem },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
@@ -211,6 +215,11 @@
         total = level.total ?? null;
         effective = (await request<{ fields: EffectiveField[] }>('GET', `/categories/${encodeURIComponent(id)}/fields`)).fields ?? [];
         vendorList = [...(c.vendor_ids ?? [])];
+        if (!isSystem) {
+          contracts = await request<{ contracts: Contract[] }>('GET', `/contracts?category_id=${encodeURIComponent(id)}`)
+            .then((r) => r.contracts ?? [])
+            .catch(() => []);
+        }
         if (canManage || vendorList.length) {
           vendors = await request<{ vendors: Vendor[] }>('GET', '/vendors')
             .then((r) => r.vendors ?? [])
@@ -874,6 +883,21 @@
           {/each}
         </ol>
       {/if}
+    </section>
+  {/if}
+
+  {#if !isSystem && contracts.length}
+    <section class="mt-6 max-w-2xl" id="tab-contracts" aria-labelledby="contracts-heading" hidden={tab !== 'contracts'}>
+      <h2 id="contracts-heading" class="mb-1 text-lg font-semibold">Contracts</h2>
+      <p class="mb-2 text-sm text-zinc-600 dark:text-zinc-400">The contracts naming it, which cover its assets and those of the categories below it.</p>
+      <ul class="space-y-1 text-sm" aria-label="Contracts naming it">
+        {#each contracts as c (c.id)}
+          <li class="flex flex-wrap items-center gap-x-3">
+            <a class="inline-flex min-h-11 items-center underline" href="/contracts/{encodeURIComponent(c.id)}">{c.name}</a>
+            <span class={contractEnded(c) ? 'text-zinc-600 dark:text-zinc-400' : ''}>{kindLabel(c.kind)}: {coverSentence(c)}</span>
+          </li>
+        {/each}
+      </ul>
     </section>
   {/if}
 

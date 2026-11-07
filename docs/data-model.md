@@ -184,9 +184,9 @@ queues its label. Then it keeps the form as it was, ready for the next one:
 
 ### Attachments
 
-Assets, categories and [vendors](vendors.md) carry files: **attachments**. Contracts will too (#216). Each
-has a name, a description, who added it and when, and its place in its owner's order. Each is of
-one kind, decided by its content, not by its file's name alone:
+Assets, categories, [vendors](vendors.md) and [contracts](contracts.md) carry files:
+**attachments**. Each has a name, a description, who added it and when, and its place in its
+owner's order. Each is of one kind, decided by its content, not by its file's name alone:
 
 | Kind | What | How it is kept and served |
 |---|---|---|
@@ -195,7 +195,7 @@ one kind, decided by its content, not by its file's name alone:
 | `other` | A type the configuration allows (`[attachments] allowed_types`, see [Configuration](configuration.md)): a media type the content shows, such as `application/zip`, or an extension, such as `.stl`, for content that shows no type of its own. | As uploaded, and only ever downloaded, as bytes. |
 
 Anything else is refused. A file is at most `max_file_mb` (25 MB unless configured), and an asset,
-a category or a vendor has at most `max_per_object` attachments (50 unless configured); an upload past
+a category, a vendor or a contract has at most `max_per_object` attachments (50 unless configured); an upload past
 either is refused with `413` or `409`. A PDF has no thumbnail: the page shows an icon for it, as
 drawing a PDF's first page needs more than BAM! carries.
 
@@ -313,6 +313,10 @@ changes, nor an edit that changed nothing else.
 [Notifications](notifications.md)). Each asset's warranty is announced once for each end it has:
 a new end is announced again. A warranty that had already ended when first seen is not, nor is
 an archived asset's. Several servers sharing a database announce it once.
+
+The warranty end is the warranty the asset came with. An extended warranty, or one bought
+separately, is a [contract](contracts.md#warranties) of the kind `warranty`, kept apart from it
+and reminded of on its own.
 
 The asset list keeps the assets bought from a vendor with `?vendor_id=`, which answers `404` for a
 vendor the requester cannot see. A vendor's page lists them. [Reports](reports.md) filter and
@@ -479,6 +483,7 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 | `POST /api/v1/assets/{id}/attachments/copy` | `assets.write` on this asset, `assets.read` on the other | Copy another asset's attachments, with `{"from_asset_id": "..."}`. |
 | `GET`, `POST`, `PUT /api/v1/categories/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/categories/{id}/attachments/{attachment_id}` | `assets.read` to see, `categories.manage` to change | A category's, as an asset's. |
 | `GET`, `POST`, `PUT /api/v1/vendors/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/vendors/{id}/attachments/{attachment_id}` | Seeing the vendor to see, `vendors.manage` in its scopes to change | A vendor's, as an asset's (see [Vendors](vendors.md)). |
+| `GET`, `POST`, `PUT /api/v1/contracts/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/contracts/{id}/attachments/{attachment_id}` | Seeing its vendor to see, `vendors.manage` in the vendor's scopes to change | A contract's, as a vendor's (see [Contracts](contracts.md)). |
 | `POST /api/v1/assets/{id}/photos` | `assets.write` | Add a photo, as the `file` part of a multipart form. |
 | `GET /api/v1/assets/{id}/photos/{photo_id}` | `assets.read` | Serve a photo; `?size=thumb` serves its thumbnail. |
 | `DELETE /api/v1/assets/{id}/photos/{photo_id}` | `assets.write` | Remove a photo. |
@@ -524,6 +529,9 @@ location.
 | `asset_links` | Links between assets | |
 | `asset_purchases` | Where each asset came from, a row for an asset with any | `asset_id`, `vendor_id` (nullable; `NULL` once the vendor is deleted), `order_date`, `received_date`, `warranty_end` (`YYYY-MM-DD`, nullable), `price_minor` (minor units, nullable), `currency` (ISO 4217, or empty), `order_number`, `invoice_attachment_id` (one of the asset's attachments, nullable; `NULL` once removed) |
 | `warranty_notices` | The warranties announced, each claimed by inserting it | `asset_id`, `warranty_end`, `sent_at` |
+| `contracts` | Contracts with vendors (see [Contracts](contracts.md)) | `vendor_id`, `kind`, `name`, `reference`, `start_date`, `end_date` (`YYYY-MM-DD`, nullable), `auto_renews`, `notice_days`, `cost_minor` (minor units, nullable), `currency`, `billing`, `notes` |
+| `contract_assets`, `contract_categories` | What each contract covers | `contract_id`, and `asset_id` or `category_id` |
+| `contract_notices` | The contract reminders recorded, each claimed by inserting it | `contract_id`, `kind` (`expiring` or `expired`), `due_date`, `sent_at` |
 
 For the `select` validation type, `options` holds the choices and an optional default:
 
@@ -561,3 +569,4 @@ Changes to links serialize on the `asset_links` lock.
 | `069` | Comments: `asset_comments`, `category_comments`, `loan_comments` and `flow_filing_comments`, a table for each kind of thing they are on. See [Comments](comments.md). |
 | `070` | Purchase details (`asset_purchases`), warranties announced (`warranty_notices`), and `purchases.read`, granted to every role that reads assets where it reads them. See [Purchases](#purchases). |
 | `071` | Mentions in comments: `comment_mentions`, each person a comment has mentioned and whether they were told, and `users.mention_emails`. See [Comments](comments.md#mentions). |
+| `072` | Contracts (`contracts`, `contract_categories`, `contract_assets`, `contract_attachments`), the reminders recorded (`contract_notices`), and `events.contract_id`. See [Contracts](contracts.md). |
