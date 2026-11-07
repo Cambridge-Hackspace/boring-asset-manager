@@ -90,6 +90,9 @@ func (w *Worker) Run(ctx context.Context) {
 		if _, err := w.SendLoanReminders(ctx); err != nil {
 			log.Printf("loan reminders: %v", err)
 		}
+		if _, err := w.SendMentions(ctx); err != nil {
+			log.Printf("mentions: %v", err)
+		}
 		if tag, err := w.CheckForUpdates(ctx); err != nil {
 			log.Printf("update check: %v; it is tried again in a day", err)
 		} else if tag != "" {

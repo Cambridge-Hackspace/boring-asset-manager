@@ -58,6 +58,16 @@
     }
   }
 
+  async function setMentions(on: boolean) {
+    emailError = emailStatus = '';
+    try {
+      session.user = (await request<{ user: User }>('PUT', '/auth/mention-emails', { mentions: on })).user;
+      emailStatus = on ? 'You will be emailed when someone mentions you.' : 'You will no longer be emailed when someone mentions you.';
+    } catch (err) {
+      emailError = messageOf(err);
+    }
+  }
+
   let current = $state('');
   let next = $state('');
   let confirm = $state('');
@@ -152,6 +162,17 @@
         <span>Remind me of what I borrow, before it is due and once it is overdue</span>
       </label>
       <p id="reminders-help" class="text-xs text-zinc-600 dark:text-zinc-400">When the space sends loan reminders.</p>
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          class="mt-0.5"
+          checked={session.user?.mention_emails !== false}
+          aria-describedby="mentions-help"
+          onchange={(event) => setMentions(event.currentTarget.checked)}
+        />
+        <span>Email me when a comment mentions me</span>
+      </label>
+      <p id="mentions-help" class="text-xs text-zinc-600 dark:text-zinc-400">Only about what you can see.</p>
       <ErrorMessage error={emailError} />
       {#if emailStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{emailStatus}</p>{/if}
     </section>

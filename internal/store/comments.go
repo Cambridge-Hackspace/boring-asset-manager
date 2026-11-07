@@ -188,7 +188,8 @@ func checkCommentBody(body string) error {
 }
 
 // AddComment writes a comment on a target, as the acting user or token,
-// and records it in the history of what it is on.
+// and records it in the history of what it is on, and the people it
+// mentions, to be told.
 func (s *Store) AddComment(t CommentTarget, body string) (*models.Comment, error) {
 	if err := checkCommentBody(body); err != nil {
 		return nil, err
@@ -212,7 +213,11 @@ func (s *Store) AddComment(t CommentTarget, body string) (*models.Comment, error
 	if _, err := s.TxExec(tx, "INSERT INTO "+ct.table+" ("+strings.Join(cols, ", ")+") VALUES ("+marks+")", args...); err != nil {
 		return nil, fmt.Errorf("adding the comment: %w", err)
 	}
-	if err := s.recordCommentTx(tx, models.EventCommentAdded, t, models.EventComment{ID: id, Text: body}, nil); err != nil {
+	mentions, err := s.recordMentionsTx(tx, id, body)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.recordCommentTx(tx, models.EventCommentAdded, t, models.EventComment{ID: id, Text: body, Mentions: mentions}, nil); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -322,6 +327,11 @@ func (s *Store) EditComment(id, body string) (*models.Comment, error) {
 	ct, _ := commentTableOf(c.On)
 	if _, err := s.TxExec(tx, "UPDATE "+ct.table+" SET body = ?, edited_at = ? WHERE id = ?", body, dbTime(time.Now()), id); err != nil {
 		return nil, fmt.Errorf("editing the comment: %w", err)
+	}
+	// Only those the edit mentions first are told; whoever the comment
+	// mentioned before was told then.
+	if _, err := s.recordMentionsTx(tx, id, body); err != nil {
+		return nil, err
 	}
 	change := models.EventChange{What: "comment", Key: id, From: c.Body, To: body}
 	if err := s.recordCommentTx(tx, models.EventCommentEdited, TargetOf(c), models.EventComment{ID: id}, []models.EventChange{change}); err != nil {

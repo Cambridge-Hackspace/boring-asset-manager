@@ -99,7 +99,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 	query := `
 		SELECT 
 			s.id, s.user_id, s.expires_at, s.created_at, s.factor_setup,
-			u.id, u.email, u.name, u.password_hash, u.totp_secret, u.is_active, u.created_at, u.updated_at, u.archived_at, u.theme, u.email_notifications, u.loan_reminders
+			u.id, u.email, u.name, u.password_hash, u.totp_secret, u.is_active, u.created_at, u.updated_at, u.archived_at, u.theme, u.email_notifications, u.loan_reminders, u.mention_emails
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
 		WHERE s.id = ? AND s.expires_at > ? AND u.is_active = TRUE AND u.archived_at IS NULL
@@ -113,7 +113,7 @@ func (s *Store) GetSession(token string) (*models.Session, *models.User, error) 
 
 	err := s.QueryRow(query, sessionKey(token), now).Scan(
 		&sess.ID, &sess.UserID, &sess.ExpiresAt, &sess.CreatedAt, &sess.FactorSetup,
-		&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme, &u.EmailNotifications, &u.LoanReminders,
+		&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme, &u.EmailNotifications, &u.LoanReminders, &u.MentionEmails,
 	)
 	u.Theme = themeOf(theme)
 	if err == sql.ErrNoRows {

@@ -272,6 +272,12 @@ func redactEvent(e models.Event, track bool) models.Event {
 			*p = &who
 		}
 	}
+	// Who a comment mentions shows as who did things does.
+	if c := e.Payload.Comment; c != nil && len(c.Mentions) > 0 && !track {
+		shown := *c
+		shown.Mentions = nil
+		e.Payload.Comment = &shown
+	}
 	return e
 }
 

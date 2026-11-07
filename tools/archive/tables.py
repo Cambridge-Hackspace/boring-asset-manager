@@ -57,6 +57,7 @@ ORDER = [
     ('icon_revisions', 'KindIcons'), ('icon_param_bindings', 'KindIcons'), ('icon_text_bindings', 'KindIcons'),
     ('roles', 'KindPeople'), ('role_permissions', 'KindPeople'), ('role_permission_scopes', 'KindPeople'), ('users', 'KindPeople'),
     ('user_roles', 'KindPeople'), ('user_role_scopes', 'KindPeople'), ('user_favorites', 'KindPeople'),
+    ('comment_mentions', 'KindPeople'),
     ('assets', 'KindAssets'), ('asset_categories', 'KindAssets'), ('asset_field_values', 'KindAssets'), ('asset_generator_keys', 'KindAssets'),
     ('asset_links', 'KindAssets'), ('asset_placements', 'KindAssets'), ('asset_loans', 'KindAssets'), ('loan_reminders', 'KindAssets'), ('loan_comments', 'KindAssets'), ('asset_attachments', 'KindAssets'),
     ('asset_comments', 'KindAssets'),

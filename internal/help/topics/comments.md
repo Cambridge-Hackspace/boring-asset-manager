@@ -15,6 +15,10 @@ Comments are written in Markdown: `**bold**`, `*italics*`, `# headings`, lists, 
 
 **Attach a file** while writing to put it on the asset or category, with a link to it in the comment where your cursor is; an image shows in the comment. A loan's or a filing's files go on its asset. Images from other sites show as links, so that the site never learns who read the comment.
 
+## Mentioning someone
+
+Type **@** and the start of someone's name, then pick them from the list (click, or use the arrow keys and **Enter**), to mention them. Only people who can see what you are commenting on are offered. They are emailed once, with a link to the comment, unless they have turned that off under [Your account](/help/account); editing the comment emails only the people you add. A mention always shows the person's name as it is now, even if they are renamed. To people who cannot see who changed assets, it reads **@someone**.
+
 ## Editing and deleting
 
 - You can **edit** your own comments. An edited one says *(edited)*.

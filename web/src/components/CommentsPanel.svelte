@@ -11,7 +11,8 @@
   // (docs/comments.md), oldest first, then those on its categories and
   // their ancestors, nearest first, each marked with its category and
   // linking to it there. They can be narrowed to its own. Authors edit and
-  // delete their own; moderators delete any.
+  // delete their own; moderators delete any. Writing one, @ offers the
+  // people to mention.
   let {
     id,
     path,
@@ -47,6 +48,8 @@
   let editing = $state('');
 
   const inherited = $derived(comments.some((c) => c.category));
+  // Who a comment here may mention (docs/comments.md#mentions).
+  const peoplePath = $derived(`${path}/people`);
   const shown = $derived(onlyOwn ? comments.filter((c) => !c.category) : comments);
 
   async function load() {
@@ -131,7 +134,7 @@
               Deleted by {c.deleted_by_name ?? 'someone'}, {when(c.deleted_at)}.
             </p>
           {:else if editing === c.id}
-            <CommentEditor id="edit-{c.id}" label="Edit the comment" value={c.body} {uploadPath} saveLabel="Save" onsave={(body) => save(c, body)} oncancel={() => (editing = '')} {onattached} />
+            <CommentEditor id="edit-{c.id}" label="Edit the comment" value={c.body} mentions={c.mentions} {uploadPath} {peoplePath} saveLabel="Save" onsave={(body) => save(c, body)} oncancel={() => (editing = '')} {onattached} />
           {:else}
             <div class="comment-body">
               <!-- Rendered and sanitized on the server (internal/markdown). -->
@@ -151,7 +154,7 @@
   </ol>
   {#if canWrite}
     <div class="mt-4">
-      <CommentEditor id="{id}-new" label="Add a comment" {uploadPath} saveLabel="Comment" onsave={add} {onattached} />
+      <CommentEditor id="{id}-new" label="Add a comment" {uploadPath} {peoplePath} saveLabel="Comment" onsave={add} {onattached} />
     </div>
   {/if}
 </section>
@@ -210,6 +213,12 @@
   }
   :global(.comment-body a) {
     text-decoration: underline;
+  }
+  :global(.comment-body .mention) {
+    border-radius: 0.25rem;
+    background: rgb(37 99 235 / 0.12);
+    padding: 0 0.125rem;
+    font-weight: 600;
   }
   :global(.comment-body img) {
     max-width: 100%;

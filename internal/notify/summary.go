@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/markdown"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
 
@@ -222,7 +223,11 @@ func summarize(n Notification, esc func(string) string) summary {
 			}
 		}
 		out.Title = "Comment on " + on
-		out.Description = esc(truncate(p.Comment.Text, 1000))
+		names := map[string]string{}
+		for _, m := range p.Comment.Mentions {
+			names[m.ID] = m.Name
+		}
+		out.Description = esc(truncate(markdown.PlainMentions(p.Comment.Text, func(id string) string { return names[id] }), 1000))
 		if by != "" {
 			out.Description += "\nBy " + by + "."
 		}

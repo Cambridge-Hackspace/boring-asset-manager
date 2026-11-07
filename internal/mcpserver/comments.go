@@ -65,7 +65,7 @@ type listCommentsIn struct {
 
 type addCommentIn struct {
 	commentOnIn
-	Body string `json:"body" jsonschema:"the comment, in Markdown: headings, lists, tables, code, links, images within BAM! and task lists"`
+	Body string `json:"body" jsonschema:"the comment, in Markdown: headings, lists, tables, code, links, images within BAM! and task lists; <@id> mentions a person by their user ID, as list_comment_people gives it"`
 }
 
 type editCommentIn struct {
@@ -128,7 +128,8 @@ func commentTools() []tool {
 				return say(out, "%s", commentsSaid(out))
 			}),
 		define(&mcp.Tool{Name: "add_comment", Description: "Write a comment, in Markdown, on an asset, a category, a loan or a flow's filing of an asset. " +
-			"Channels subscribed to comment.added are told. To attach a file, use attach_to_comment first and put the Markdown it gives in the comment.",
+			"Channels subscribed to comment.added are told. To attach a file, use attach_to_comment first and put the Markdown it gives in the comment. " +
+			"To mention someone, put <@id> with their user ID from list_comment_people: they are emailed once, if they may read it and have not turned mentions off.",
 			Annotations: changes("Add a comment", false)},
 			[]string{"POST /api/v1/assets/{id}/comments", "POST /api/v1/categories/{id}/comments", "POST /api/v1/loans/{id}/comments", "POST /api/v1/assets/{id}/filings/{flow_id}/comments"}, write,
 			func(ctx context.Context, e *env, in addCommentIn) (reply[map[string]any], error) {
@@ -151,7 +152,8 @@ func commentTools() []tool {
 				return request{path: pathOf("/api/v1/comments/{id}", in.ID)}, need(in.ID, "id")
 			},
 			func(idIn, map[string]any) string { return "The comment." }),
-		simple(&mcp.Tool{Name: "edit_comment", Description: "Replace the text of a comment the caller wrote. It shows as edited, and what it said before is kept in comment_history.",
+		simple(&mcp.Tool{Name: "edit_comment", Description: "Replace the text of a comment the caller wrote. It shows as edited, and what it said before is kept in comment_history. " +
+			"Only the people the edit mentions for the first time, with <@id>, are emailed.",
 			Annotations: changes("Edit a comment", true)}, "PUT /api/v1/comments/{id}", write,
 			func(in editCommentIn) (request, error) {
 				return request{path: pathOf("/api/v1/comments/{id}", in.ID), body: map[string]any{"body": in.Body}}, need(in.ID, "id")
@@ -180,6 +182,26 @@ func commentTools() []tool {
 			func(_ searchCommentsIn, out map[string]any) string {
 				return fmt.Sprintf("%d comments.", count(out, "comments"))
 			}),
+		func() tool {
+			t := define(&mcp.Tool{Name: "list_comment_people", Description: "The people a comment on an asset, a category, a loan or a flow's filing of an asset may mention: those who may read it, by name, with the user ID to mention each by, as <@id>. " +
+				"It takes comments.write and assets.track where it is, and leaves out the caller.",
+				Annotations: readOnly("List people to mention")},
+				[]string{"GET /api/v1/assets/{id}/comments/people", "GET /api/v1/categories/{id}/comments/people", "GET /api/v1/loans/{id}/comments/people", "GET /api/v1/assets/{id}/filings/{flow_id}/comments/people"},
+				write,
+				func(ctx context.Context, e *env, in commentOnIn) (reply[map[string]any], error) {
+					path, err := commentsPath(ctx, e, in, "/people")
+					if err != nil {
+						return reply[map[string]any]{}, err
+					}
+					out := map[string]any{}
+					if err := e.call(ctx, http.MethodGet, path, nil, &out); err != nil {
+						return reply[map[string]any]{}, err
+					}
+					return say(out, "%d people.", count(out, "people"))
+				})
+			t.needsAll = []string{rbac.PermCommentsWrite, rbac.PermAssetsTrack}
+			return t
+		}(),
 		simple(&mcp.Tool{Name: "list_filings", Description: "The flows that filed an asset, most recently first, with how many comments each filing has; comments can be on each.",
 			Annotations: readOnly("List an asset's filings")}, "GET /api/v1/assets/{id}/filings", read,
 			func(in idIn) (request, error) {

@@ -66,3 +66,35 @@ test('comment on an asset in Markdown with a photo, see its category’s comment
   await page.goto('/assets?search=corner+shop');
   await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
 });
+
+test('mention someone who can see the asset, by name, and see their name now', async ({ signedIn: page, api }) => {
+  const roles = (await api.call('GET', '/roles')).roles as { id: string; name: string }[];
+  const name = unique('Mina');
+  const { user } = await api.call('POST', '/users', { email: `${unique('mina')}@hackspace.org`, name, password: 'MinaPass123!' });
+  await api.call('PUT', `/users/${user.id}/roles`, { role_ids: [roles.find((r) => r.name === 'admin')!.id] });
+  const { asset } = await api.call('POST', '/assets', { name: unique('Lathe') });
+
+  await page.goto(`/assets/${asset.asset.id}`);
+  const comments = page.getByRole('region', { name: 'Comments', exact: true });
+  const box = comments.getByLabel('Add a comment');
+  await box.fill('Ask ');
+  await box.pressSequentially(`@${name.slice(0, 6)}`);
+  const offered = comments.getByRole('listbox', { name: 'People to mention' });
+  await expect(offered.getByRole('option', { name, exact: true })).toBeVisible();
+  await offered.getByRole('option', { name, exact: true }).click();
+  await expect(box).toHaveValue(`Ask @${name} `);
+  await box.pressSequentially('to oil it');
+  await comments.getByRole('button', { name: 'Preview' }).click();
+  await expect(comments.getByLabel('Preview').locator('.mention')).toHaveText(`@${name}`);
+  await comments.getByRole('button', { name: 'Comment', exact: true }).click();
+  const written = comments.getByRole('article').filter({ hasText: 'to oil it' });
+  await expect(written.locator('.mention')).toHaveText(`@${name}`);
+
+  // Renamed, the mention reads with the new name; edited, it shows by name.
+  await api.call('PUT', `/users/${user.id}/name`, { name: `${name} R` });
+  await page.reload();
+  await expect(written.locator('.mention')).toHaveText(`@${name} R`);
+  await written.getByRole('button', { name: 'Edit' }).click();
+  // Its text is in the editor now, so the comment is found by its label.
+  await expect(comments.getByLabel('Edit the comment')).toHaveValue(`Ask @${name} R to oil it`);
+});
