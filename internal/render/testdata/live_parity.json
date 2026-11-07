@@ -76,7 +76,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 945,
@@ -155,7 +164,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "icons": {
@@ -892,7 +910,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {
    "7c9e6679-7425-40de-944b-e07fc1f90ae7": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAA9UlEQVR4nOyXsQ1CMQxEkxNzMAcFczAJPaJnEuagYA4WAVFEouArdu6cfFBsCheJfc8OyCD9uG1KoLLt/v4s8Td73Ha5xArLPURHwmCUePYuPQFFccU0sAbxTE70KhSVW/4r9P5cL+lc4k87HNOpxCrLyg4tCfeCeL4P6C3ecrZWqwmAEaS6EwLACFFAQPF8ItxaE6O6r8pBAazBJ8AEmAAEgGK3YXMgcldn3FoTIzvIdl8C0CpEId4FUBupR1DtrPX5NP0ntuwoS+uBBdIjPgyAcS8AogtE50avQlE5aSHsk2KbAeIuLYAVL5mAdyIK0X9lrwEAHAtpPHnwid8AAAAASUVORK5CYII="
@@ -1009,7 +1036,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 780,
@@ -1086,7 +1122,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {
    "7c9e6679-7425-40de-944b-e07fc1f90ae7": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAAA9UlEQVR4nOyXsQ1CMQxEkxNzMAcFczAJPaJnEuagYA4WAVFEouArdu6cfFBsCheJfc8OyCD9uG1KoLLt/v4s8Td73Ha5xArLPURHwmCUePYuPQFFccU0sAbxTE70KhSVW/4r9P5cL+lc4k87HNOpxCrLyg4tCfeCeL4P6C3ecrZWqwmAEaS6EwLACFFAQPF8ItxaE6O6r8pBAazBJ8AEmAAEgGK3YXMgcldn3FoTIzvIdl8C0CpEId4FUBupR1DtrPX5NP0ntuwoS+uBBdIjPgyAcS8AogtE50avQlE5aSHsk2KbAeIuLYAVL5mAdyIK0X9lrwEAHAtpPHnwid8AAAAASUVORK5CYII="
@@ -1160,7 +1205,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 591,
@@ -1226,7 +1280,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 732,
@@ -1340,7 +1403,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
@@ -1422,7 +1494,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
@@ -1501,7 +1582,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 709,
@@ -1600,7 +1690,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
@@ -1653,7 +1752,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 472,
@@ -1733,7 +1841,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 1063,
@@ -1936,7 +2053,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {},
   "width": 945,
@@ -2137,7 +2263,16 @@
    "borrower": "",
    "due": "",
    "icon": "switch-poe",
-   "icon_color": "#b45309"
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   }
   },
   "images": {
    "0b3c5d7e-1f2a-4b6c-8d9e-0a1b2c3d4e5f": "iVBORw0KGgoAAAANSUhEUgAAADgAAAAoCAYAAACrUDmFAAAA00lEQVR4nNzWSwrDMAwEUCX0CL7/CX2HliwEIZRGtid0Pt6I7F7GIO9BktbaO2dkaIBPIamATyDpgGgkJRCJpAUmchVKDUS0KQFcQcoAZ5FSwBmkHHAUKQkcQcoCq0hpYAW5Vf6CQnrvW85WDd69emyAea5IO+AVaQk8I22BibQG2jd4rA5bYO7F3RlnCTzjjvPKwQ2W+frxn3sLibO4or9w8sA7nDSwgpMFVnGSwBGcHHAUJwWcwckAZ3H0L5kVGH2DCBwtEIWjBCJxdEA0LiLiMwAPU1QEBcQZewAAAABJRU5ErkJggg=="
