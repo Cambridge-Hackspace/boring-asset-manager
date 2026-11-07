@@ -122,6 +122,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `list_generators` | `assets.read` | The code types. |
 | `set_my_email_notifications` | Anyone signed in | Whether email sent to the caller's roles reaches them; for a person only. |
 | `set_my_loan_reminders` | Anyone signed in | Whether the caller is emailed about their loans ([Stock and lending](stock-and-lending.md#loan-reminders)); for a person only. |
+| `set_my_mention_emails` | Anyone signed in | Whether the caller is emailed when a comment mentions them ([Comments](comments.md#mentions)); for a person only. |
 | `set_my_name` | Anyone signed in | Sets the caller's name; for a person only. |
 | `list_favorites`, `add_favorite`, `remove_favorite` | Anyone signed in | The caller's favorites, and starring or unstarring an asset, category, report or flow; for a person only (see [Favorites](favorites.md)). |
 
@@ -222,7 +223,8 @@ or a code), `category_id`, `loan_id`, or `asset` with `flow_id` for a filing.
 | `get_comment`, `comment_history` | `assets.read` | One comment, and its history: each version's text. |
 | `search_comments` | `assets.read` | Comments whose text holds some words. |
 | `list_filings` | `assets.read` | The flows that filed an asset, whose filings take comments. |
-| `add_comment` | `comments.write` | Writes one, in Markdown. |
+| `list_comment_people` | `comments.write` and `assets.track` | The people a comment on something may mention, by name and user ID ([Mentions](comments.md#mentions)). |
+| `add_comment` | `comments.write` | Writes one, in Markdown; `<@id>` mentions a person, who is emailed once. |
 | `attach_to_comment` | `comments.write` | Attaches a file, base64, to the asset or category a comment is being written on, answering the Markdown that links to it. |
 | `edit_comment` | `comments.write` | The caller's own. |
 | `delete_comment` | `comments.write` or `comments.moderate` | The caller's own, or anyone's with `comments.moderate`. |

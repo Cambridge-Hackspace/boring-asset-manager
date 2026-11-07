@@ -30,6 +30,9 @@ type User struct {
 	// they are due and once overdue, when the instance sends reminders. It
 	// is on until they turn it off.
 	LoanReminders bool `json:"loan_reminders"`
+	// MentionEmails is whether they are emailed when a comment mentions
+	// them (docs/comments.md#mentions). It is on until they turn it off.
+	MentionEmails bool `json:"mention_emails"`
 }
 
 // Role represents a defined RBAC role.
@@ -385,6 +388,15 @@ type EventComment struct {
 	LoanID string     `json:"loan_id,omitempty"`
 	Flow   *EventFlow `json:"flow,omitempty"`
 	Text   string     `json:"text,omitempty"`
+	// Mentions name the people the text mentions, as <@id>, so that it
+	// can be told with their names.
+	Mentions []EventMention `json:"mentions,omitempty"`
+}
+
+// EventMention is a person a comment mentions, by ID and their name then.
+type EventMention struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // EventRelay is a relay, as an event names it.
@@ -1136,6 +1148,15 @@ type Comment struct {
 	// CanEdit and CanDelete say what the requester may do with it.
 	CanEdit   bool `json:"can_edit"`
 	CanDelete bool `json:"can_delete"`
+	// Mentions are the people its text mentions, as <@id>, by their names
+	// now, to those who may see who, so that an editor can show them.
+	Mentions []CommentMention `json:"mentions,omitempty"`
+}
+
+// CommentMention is a person a comment mentions, or may mention.
+type CommentMention struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // CommentPlace names what a comment is on, as lists and search show it.

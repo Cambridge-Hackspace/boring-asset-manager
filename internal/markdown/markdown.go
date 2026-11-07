@@ -16,6 +16,7 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	gmrenderer "github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
@@ -31,14 +32,18 @@ var renderer = goldmark.New(
 		extension.Linkify,
 		extension.TaskList,
 	),
-	goldmark.WithParserOptions(parser.WithASTTransformers(util.Prioritized(remoteImages{}, 100))),
-	goldmark.WithRendererOptions(html.WithHardWraps()),
+	goldmark.WithParserOptions(
+		parser.WithASTTransformers(util.Prioritized(remoteImages{}, 100)),
+		parser.WithInlineParsers(util.Prioritized(mentionParser{}, 250)),
+	),
+	goldmark.WithRendererOptions(html.WithHardWraps(), gmrenderer.WithNodeRenderers(util.Prioritized(mentionRenderer{}, 100))),
 )
 
 // policy is what the HTML may hold: the elements GitHub's Markdown makes,
 // links to http, https and mailto addresses or within BAM!, images from
-// within BAM!, and the disabled checkboxes of task lists. Everything else,
-// scripts, event handlers, styles, frames and SVG among it, is removed.
+// within BAM!, the disabled checkboxes of task lists, and mentions' spans.
+// Everything else, scripts, event handlers, styles, frames and SVG among
+// it, is removed.
 var policy = func() *bluemonday.Policy {
 	p := bluemonday.NewPolicy()
 	p.AllowElements("p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "code",
@@ -52,15 +57,23 @@ var policy = func() *bluemonday.Policy {
 	p.AllowAttrs("start").Matching(regexp.MustCompile(`^[0-9]{1,9}$`)).OnElements("ol")
 	p.AllowAttrs("align").Matching(regexp.MustCompile(`^(left|center|right)$`)).OnElements("th", "td")
 	p.AllowAttrs("class").Matching(regexp.MustCompile(`^language-[A-Za-z0-9_+.#-]{1,40}$`)).OnElements("code")
+	p.AllowAttrs("class").Matching(regexp.MustCompile(`^mention$`)).OnElements("span")
 	p.AllowAttrs("type").Matching(regexp.MustCompile(`^checkbox$`)).OnElements("input")
 	p.AllowAttrs("checked", "disabled").Matching(regexp.MustCompile(`^(|checked|disabled)$`)).OnElements("input")
 	return p
 }()
 
-// Render renders Markdown to sanitized HTML.
-func Render(source string) string {
+// Render renders Markdown to sanitized HTML, each mention reading as
+// Someone.
+func Render(source string) string { return RenderWith(source, nil) }
+
+// RenderWith renders Markdown to sanitized HTML, naming each person
+// mentioned by names, given their user ID; "" reads as Someone.
+func RenderWith(source string, names func(id string) string) string {
 	var buf bytes.Buffer
-	if err := renderer.Convert([]byte(source), &buf); err != nil {
+	pc := parser.NewContext()
+	pc.Set(namesKey, names)
+	if err := renderer.Convert([]byte(source), &buf, parser.WithContext(pc)); err != nil {
 		// goldmark fails only when writing fails, which a buffer does not;
 		// the text alone, escaped, is still worth showing.
 		return policy.Sanitize("<p>" + stdhtml.EscapeString(source) + "</p>")

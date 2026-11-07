@@ -57,6 +57,8 @@ export interface User {
   email_notifications?: boolean;
   /** Whether they are emailed about their loans, when the instance sends loan reminders. */
   loan_reminders?: boolean;
+  /** Whether they are emailed when a comment mentions them. */
+  mention_emails?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -1312,6 +1314,8 @@ export interface Comment {
   place?: CommentPlace;
   can_edit: boolean;
   can_delete: boolean;
+  /** The people its text mentions, by name now, to those who may see who. */
+  mentions?: { id: string; name: string }[];
 }
 
 /** An asset a flow filed, which comments can be on. */

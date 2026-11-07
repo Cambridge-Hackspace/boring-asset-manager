@@ -560,3 +560,4 @@ Changes to links serialize on the `asset_links` lock.
 | `068` | Vendors (`vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments`), categories' preferred vendors (`category_vendors`), and `events.vendor_id`. See [Vendors](vendors.md). |
 | `069` | Comments: `asset_comments`, `category_comments`, `loan_comments` and `flow_filing_comments`, a table for each kind of thing they are on. See [Comments](comments.md). |
 | `070` | Purchase details (`asset_purchases`), warranties announced (`warranty_notices`), and `purchases.read`, granted to every role that reads assets where it reads them. See [Purchases](#purchases). |
+| `071` | Mentions in comments: `comment_mentions`, each person a comment has mentioned and whether they were told, and `users.mention_emails`. See [Comments](comments.md#mentions). |
