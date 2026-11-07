@@ -465,4 +465,21 @@ describe('AccountPage', () => {
     expect(changes(sent)[0]!.body).toEqual({ reminders: false });
     expect(session.user!.loan_reminders).toBe(false);
   });
+
+  it('turns their mention emails off and on', async () => {
+    const { sent } = fakeApi({
+      ...assistants,
+      'PUT /auth/mention-emails': (body) => ({ user: { ...session.user, mention_emails: (body as { mentions: boolean }).mentions } }),
+    });
+    render(AccountPage, { params: {} });
+    const box = screen.getByRole('checkbox', { name: 'Email me when a comment mentions me' }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    await fireEvent.click(box);
+    await screen.findByText('You will no longer be emailed when someone mentions you.');
+    expect(changes(sent)[0]!.body).toEqual({ mentions: false });
+    expect(session.user!.mention_emails).toBe(false);
+    await fireEvent.click(box);
+    await screen.findByText('You will be emailed when someone mentions you.');
+    expect(changes(sent)[1]!.body).toEqual({ mentions: true });
+  });
 });

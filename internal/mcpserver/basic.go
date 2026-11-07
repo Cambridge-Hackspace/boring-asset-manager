@@ -44,6 +44,10 @@ type emailNotificationsIn struct {
 	Notifications bool `json:"notifications" jsonschema:"true to receive email sent to a role they hold, false to stop it"`
 }
 
+type mentionEmailsIn struct {
+	Mentions bool `json:"mentions" jsonschema:"true to be emailed when a comment mentions them, false to stop it"`
+}
+
 type loanRemindersIn struct {
 	Reminders bool `json:"reminders" jsonschema:"true to be emailed about their loans before they are due and once overdue, false to stop it"`
 }
@@ -128,6 +132,28 @@ func basicTools() []tool {
 					return say(loanRemindersIn{Reminders: true}, "They are reminded of their loans.")
 				}
 				return say(loanRemindersIn{}, "They are no longer reminded of their loans.")
+			})
+			t.person = true
+			return t
+		}(),
+		func() tool {
+			t := define(&mcp.Tool{
+				Name:        "set_my_mention_emails",
+				Description: "Whether the person you act for is emailed when a comment mentions them, on something they may read.",
+				Annotations: changes("Set my mention emails", true),
+			}, []string{"PUT /api/v1/auth/mention-emails"}, nil, func(ctx context.Context, e *env, in mentionEmailsIn) (reply[mentionEmailsIn], error) {
+				var res struct {
+					User struct {
+						MentionEmails bool `json:"mention_emails"`
+					} `json:"user"`
+				}
+				if err := e.call(ctx, http.MethodPut, "/api/v1/auth/mention-emails", in, &res); err != nil {
+					return reply[mentionEmailsIn]{}, err
+				}
+				if res.User.MentionEmails {
+					return say(mentionEmailsIn{Mentions: true}, "They are emailed when mentioned.")
+				}
+				return say(mentionEmailsIn{}, "They are no longer emailed when mentioned.")
 			})
 			t.person = true
 			return t

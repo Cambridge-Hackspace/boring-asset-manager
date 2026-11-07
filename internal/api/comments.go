@@ -98,6 +98,9 @@ type commentViewer struct {
 	r      *http.Request
 	me     string
 	scopes func(c *models.Comment) []string
+	store  *store.Store
+	// names are the names of people mentioned, read once each.
+	names map[string]string
 }
 
 // commentViewer reads what the viewer needs: the scopes of categories, for
@@ -112,7 +115,7 @@ func (s *Server) commentViewer(r *http.Request, known map[string][]string) (*com
 	for k, v := range known {
 		cache[k] = v
 	}
-	v := &commentViewer{r: r, me: actorKey(r)}
+	v := &commentViewer{r: r, me: actorKey(r), store: s.store, names: map[string]string{}}
 	v.scopes = func(c *models.Comment) []string {
 		key := c.AssetID
 		if c.On == models.CommentOnCategory {
@@ -146,18 +149,20 @@ func (v *commentViewer) sees(c *models.Comment) bool {
 }
 
 // shown is a comment as the viewer sees it: rendered, with who wrote and
-// deleted it only to those who may see who, and what they may do with it.
+// deleted it, and who it mentions, only to those who may see who, and what
+// they may do with it.
 func (v *commentViewer) shown(c models.Comment) models.Comment {
 	ctx := v.r.Context()
 	scopes := v.scopes(&c)
+	seesWho := Allows(ctx, rbac.PermAssetsTrack, scopes)
 	c.Mine = v.me != "" && c.AuthorID == v.me
 	if c.DeletedAt == nil {
-		c.HTML = markdown.Render(c.Body)
+		v.render(&c, seesWho)
 		write := Allows(ctx, rbac.PermCommentsWrite, scopes)
 		c.CanEdit = c.Mine && write
 		c.CanDelete = c.Mine && write || Allows(ctx, rbac.PermCommentsModerate, scopes)
 	}
-	if Allows(ctx, rbac.PermAssetsTrack, scopes) {
+	if seesWho {
 		if c.AuthorID != "" && c.AuthorName == "" {
 			c.AuthorName = UnnamedUser
 		}
@@ -461,7 +466,9 @@ func AttachmentMarkdown(name, url string, image bool) string {
 }
 
 // handleRenderMarkdown renders Markdown as comments are, for the comment
-// editor's preview: POST /api/v1/markdown
+// editor's preview: POST /api/v1/markdown. People mentioned are named to
+// those who see who somewhere, as the editor offered them; to others they
+// read as someone.
 func (s *Server) handleRenderMarkdown(w http.ResponseWriter, r *http.Request) {
 	var req CommentRequest
 	if !decodeJSON(w, r, &req) {
@@ -471,5 +478,9 @@ func (s *Server) handleRenderMarkdown(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, store.ErrCommentTooLong.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"html": markdown.Render(req.Body)})
+	var names map[string]string
+	if HasPermission(r.Context(), rbac.PermAssetsTrack) {
+		names, _ = s.store.MentionNames(markdown.Mentions(req.Body))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"html": markdown.RenderWith(req.Body, func(id string) string { return names[id] })})
 }

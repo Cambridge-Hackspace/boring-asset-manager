@@ -102,4 +102,44 @@ describe('CommentsPanel', () => {
     await vi.waitFor(() => expect(done).toContain('Comment deleted.'));
     expect(await within(mine).findByText(/Deleted by Ada/)).toBeTruthy();
   });
+
+  it('offers the people to mention on @, shows them by name, and stores them by ID', async () => {
+    const bob = '0b0b0b0b-0000-4000-8000-00000000000b';
+    let added: Comment | null = null;
+    const { sent } = fakeApi({
+      'GET /assets/a1/comments': () => ({ comments: [] }),
+      'GET /assets/a1/comments/people': () => ({ people: [{ id: 'u2', name: 'Ada Bobbins' }, { id: bob, name: 'Bob' }, { id: 'u3', name: 'Cy' }] }),
+      'POST /assets/a1/comments': (body) => {
+        added = comment('c9', { body: (body as { body: string }).body, mine: true, can_edit: true, mentions: [{ id: bob, name: 'Bob' }] });
+        return { status: 201, body: { comment: added } };
+      },
+      'PUT /comments/c9': (body) => ({ comment: { ...added!, body: (body as { body: string }).body } }),
+    });
+    render(CommentsPanel, { id: 'comments', path: '/assets/a1/comments', canWrite: true, own: 'this asset’s' });
+    expect(await screen.findByText('No comments yet.')).toBeTruthy();
+
+    const box = screen.getByLabelText('Add a comment') as HTMLTextAreaElement;
+    await fireEvent.input(box, { target: { value: 'Ask @bo' } });
+    const list = await screen.findByRole('listbox', { name: 'People to mention' });
+    expect(within(list).getAllByRole('option').map((o) => o.textContent?.trim())).toEqual(['Bob', 'Ada Bobbins']);
+    expect(screen.queryByRole('option', { name: 'Cy' })).toBeNull();
+    await fireEvent.keyDown(box, { key: 'Enter' });
+    expect(box.value).toBe('Ask @Bob ');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await fireEvent.input(box, { target: { value: 'Ask @Bob to look' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+    await vi.waitFor(() => expect(added).not.toBeNull());
+    expect(sent.find((r) => r.method === 'POST' && r.path === '/assets/a1/comments')!.body).toEqual({ body: `Ask <@${bob}> to look` });
+    expect(sent.filter((r) => r.path === '/assets/a1/comments/people').length).toBe(1);
+
+    // Edited, its mention shows by name, and is stored by ID again.
+    const mine = await screen.findByRole('article', { name: 'Comment by You' });
+    await fireEvent.click(within(mine).getByRole('button', { name: 'Edit' }));
+    const edit = screen.getByLabelText('Edit the comment') as HTMLTextAreaElement;
+    expect(edit.value).toBe('Ask @Bob to look');
+    await fireEvent.input(edit, { target: { value: 'Ask @Bob to look again' } });
+    await fireEvent.click(within(mine).getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.find((r) => r.method === 'PUT')).toBeTruthy());
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ body: `Ask <@${bob}> to look again` });
+  });
 });

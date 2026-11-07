@@ -199,6 +199,10 @@ A channel needs addresses, roles or both.
   `undisclosed-recipients`, so nobody sees the others' addresses.
 - When nobody is left to receive it, nothing is sent and the delivery succeeds.
 
+The same `[email]` setup also sends what goes to one person rather than through a channel: loan
+reminders ([Stock and lending](stock-and-lending.md#loan-reminders)) and mentions in comments
+([Comments](comments.md#mentions)), each of which a person can turn off under **Your account**.
+
 ### Errors
 
 | Server's answer | What happens |
@@ -346,7 +350,9 @@ settings are not used for webhooks.
 
 Channels are stored in the `notification_channels` table. Whether email reaching someone through a
 role reaches them is `users.email_notifications` (migration `052`). Loan reminders, set on the
-same page, are described in [Stock and lending](stock-and-lending.md#loan-reminders).
+same page, are described in [Stock and lending](stock-and-lending.md#loan-reminders), and the
+emails for mentions in comments (`comment_mentions`, `users.mention_emails`, migration `071`) in
+[Comments](comments.md#mentions).
 
 ## Internals
 
