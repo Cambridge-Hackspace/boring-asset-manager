@@ -68,7 +68,7 @@ describe('VendorPage', () => {
     render(VendorPage, { params: { id: 'v1' } });
     const tabs = await screen.findByRole('navigation', { name: 'Parts of this vendor' });
     // Those who do not manage vendors, categories or users see no scopes.
-    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Assets', 'Attachments', 'History']);
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Assets', 'Contracts', 'Attachments', 'History']);
 
     const site = screen.getByRole('link', { name: 'https://acme.example' });
     expect([site.getAttribute('href'), site.getAttribute('rel'), site.getAttribute('target')]).toEqual(['https://acme.example', 'noopener noreferrer', '_blank']);
@@ -231,5 +231,25 @@ describe('VendorPage assets', () => {
     at('assets');
     render(VendorPage, { params: { id: 'v1' } });
     expect(await screen.findByText(/No asset you can see was bought from it/)).toBeTruthy();
+  });
+});
+
+describe('VendorPage contracts', () => {
+  it('lists the contracts with it, offering a new one to those who manage it', async () => {
+    session.permissions = ['assets.read', 'vendors.manage'];
+    const contract = {
+      id: 'k1', vendor_id: 'v1', vendor_name: 'Acme', kind: 'maintenance', name: 'Laser upkeep', reference: '', start_date: '', end_date: '2027-06-30',
+      auto_renews: false, notice_days: 0, notes: '', asset_ids: ['a1'], category_ids: [], assets: [{ id: 'a1', name: 'Laser' }], categories: [], created_at: '', updated_at: '',
+    };
+    const { sent } = api(true, { 'GET /contracts': () => ({ contracts: [contract] }) });
+    at('contracts');
+    render(VendorPage, { params: { id: 'v1' } });
+    const section = (await screen.findByRole('heading', { name: 'Contracts with it' })).closest('section')!;
+    await vi.waitFor(() => expect(within(section).getAllByRole('row')).toHaveLength(2));
+    const cells = within(within(section).getAllByRole('row')[1]!).getAllByRole('cell').map((c) => c.textContent?.trim());
+    expect(cells).toEqual(['Laser upkeep', 'Maintenance', '2027-06-30', '1 asset']);
+    expect(within(section).getByRole('link', { name: 'Laser upkeep' }).getAttribute('href')).toBe('/contracts/k1');
+    expect(within(section).getByRole('link', { name: 'New contract' }).getAttribute('href')).toBe('/contracts/new?vendor_id=v1');
+    expect(sent.some((r) => r.method === 'GET' && r.path === '/contracts')).toBe(true);
   });
 });

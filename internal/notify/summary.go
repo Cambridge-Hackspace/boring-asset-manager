@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/markdown"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -240,6 +241,8 @@ func summarize(n Notification, esc func(string) string) summary {
 		if p.DueAt != nil {
 			out.Description = "Its warranty ends on " + p.DueAt.UTC().Format("2 January 2006") + "."
 		}
+	case (e.Kind == models.EventContractExpiring || e.Kind == models.EventContractExpired) && p.Contract != nil:
+		out = contractSummary(e.Kind, p, base, esc)
 	case e.Kind == models.EventAssetHook:
 		label := "Hook"
 		if p.Hook != nil {
@@ -314,6 +317,55 @@ func instanceSummary(kind string, in *models.EventInstance, base string, esc fun
 	out.URL = in.NotesURL
 	if out.URL == "" {
 		out.URL = base
+	}
+	return out
+}
+
+// contractSummary describes a contract about to end, or whose notice
+// deadline is near, and one ending (docs/contracts.md). The link is to the
+// contract.
+func contractSummary(kind string, p models.EventPayload, base string, esc func(string) string) summary {
+	c := p.Contract
+	var out summary
+	if base != "" {
+		out.URL = base + "/contracts/" + url.PathEscape(c.ID)
+	}
+	name := esc(truncate(c.Name, 200))
+	with := ""
+	if c.VendorName != "" {
+		with = " with " + esc(truncate(c.VendorName, 200))
+	}
+	what := "Its " + c.Kind + " contract" + with
+	if c.Kind == models.ContractWarranty {
+		what = "Its warranty" + with
+	}
+	day := func(s string) string {
+		t, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			return s
+		}
+		return t.Format("2 January 2006")
+	}
+	due := day(c.EndDate)
+	if p.DueAt != nil {
+		due = p.DueAt.UTC().Format("2 January 2006")
+	}
+	switch {
+	case kind == models.EventContractExpired && c.AutoRenews:
+		out.Title, out.Color = "Contract renewed: "+name, discordNeutral
+		out.Description = what + " reached the end of its term on " + day(c.EndDate) + ", and renews automatically. Give it its new end date."
+	case kind == models.EventContractExpired:
+		out.Title, out.Color = "Contract ended: "+name, discordDanger
+		out.Description = what + " ended on " + day(c.EndDate) + "."
+	case c.AutoRenews && c.NoticeDays > 0:
+		out.Title, out.Color = "Contract notice due: "+name, discordWarning
+		out.Description = what + " renews automatically on " + day(c.EndDate) + " unless notice is given by " + due + "."
+	case c.AutoRenews:
+		out.Title, out.Color = "Contract renewing: "+name, discordWarning
+		out.Description = what + " renews automatically on " + due + "."
+	default:
+		out.Title, out.Color = "Contract ending: "+name, discordWarning
+		out.Description = what + " ends on " + due + "."
 	}
 	return out
 }

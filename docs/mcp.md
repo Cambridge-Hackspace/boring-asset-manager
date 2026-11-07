@@ -164,9 +164,9 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `list_photos` | `assets.read` | As images; thumbnails unless asked. |
 | `add_photo` | `assets.write` | Base64. |
 | `reorder_photos`, `remove_photo` | `assets.write` | |
-| `list_attachments`, `read_attachment` | `assets.read` | An asset's, a category's or a vendor's attachments (docs/data-model.md#attachments), named by `asset`, `category_id` or `vendor_id`; a file is read as an image, as text, or as a file to keep. |
-| `add_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's | Base64, with its file's name; its type is checked by its content. |
-| `update_attachment`, `reorder_attachments`, `remove_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's | |
+| `list_attachments`, `read_attachment` | `assets.read` | An asset's, a category's, a vendor's or a contract's attachments (docs/data-model.md#attachments), named by `asset`, `category_id`, `vendor_id` or `contract_id`; a file is read as an image, as text, or as a file to keep. |
+| `add_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's or a contract's | Base64, with its file's name; its type is checked by its content. |
+| `update_attachment`, `reorder_attachments`, `remove_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's or a contract's | |
 | `import_assets` | `assets.write` | See below. |
 
 `import_assets` runs a preview first. Then it is called with the same file, mapping and choice of
@@ -210,6 +210,21 @@ changing needs `vendors.manage` in the vendor's scopes. Deleting is marked destr
 | `save_vendor` | `vendors.manage` | Makes one, or changes only what is given; contacts and scopes, when given, replace the vendor's. |
 | `delete_vendor` | `vendors.manage` | |
 | `vendor_history` | `assets.read` | Its history, newest first, a page at a time. |
+
+### Contracts
+
+See [Contracts](contracts.md). Reading needs `assets.read`, and shows only the contracts whose
+vendors the caller sees, their costs only with `purchases.read` there; changing needs
+`vendors.manage` in the vendor's scopes. Deleting is marked destructive. The attachment tools take
+`contract_id`.
+
+| Tool | Permission | What it does |
+| :--- | :--- | :--- |
+| `list_contracts` | `assets.read` | The contracts, by when they end; `vendor_id`, `category_id`, `asset` and `query` narrow them. |
+| `get_contract` | `assets.read` | One, with what it covers and whether the caller may change it. |
+| `save_contract` | `vendors.manage` | Makes one, or changes only what is given; the assets and categories it covers, when given, replace its. |
+| `delete_contract` | `vendors.manage` | |
+| `contract_history` | `assets.read` | Its history, newest first, a page at a time, its reminders among it. |
 
 ### Comments
 

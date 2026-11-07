@@ -149,6 +149,8 @@ func outbound(n Notification) mqttEvent {
 		out.URL = base + "/assets/" + *e.AssetID
 	case e.CategoryID != nil:
 		out.URL = base + "/categories/" + *e.CategoryID
+	case p.Contract != nil:
+		out.URL = base + "/contracts/" + p.Contract.ID
 	case p.Instance != nil:
 		// About the instance itself; the payload links to the release.
 		out.URL = base
@@ -172,6 +174,8 @@ func mqttMessageFor(prefix string, n Notification) (mqttMessage, error) {
 		topic += "/" + *e.AssetID
 	case e.CategoryID != nil:
 		topic += "/" + *e.CategoryID
+	case e.Payload.Contract != nil:
+		topic += "/" + e.Payload.Contract.ID
 	}
 	data, err := json.Marshal(out)
 	if err != nil {

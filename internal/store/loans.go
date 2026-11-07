@@ -559,6 +559,8 @@ type assetContext struct {
 	// purchases holds every asset's purchase details, when ctx serves a
 	// list.
 	purchases map[string]models.Purchase
+	// contracts holds every contract, and what each covers, once read.
+	contracts *contractCoverage
 	// defaultScan is the default scan template's ID, once read.
 	defaultScan *string
 	// suggestions maps categories to the relation types they suggest.

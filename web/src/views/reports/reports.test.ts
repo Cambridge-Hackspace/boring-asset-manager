@@ -174,3 +174,23 @@ describe('ReportEditor, purchases', () => {
     });
   });
 });
+
+describe('ReportEditor, contracts', () => {
+  it('filters by the contract covering assets', async () => {
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories }),
+      'GET /fields': () => ({ fields: [] }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /vendors': () => ({ vendors: [] }),
+      'GET /contracts': () => ({ contracts: [{ id: 'k1', name: 'Laser upkeep', vendor_name: 'Acme' }] }),
+      'POST /reports': () => ({ status: 201, body: { report: { ...lowReport, id: 'new' } } }),
+    });
+    render(ReportEditor, { params: {} });
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Covered' } });
+    await vi.waitFor(() => expect(screen.getByRole('option', { name: 'Laser upkeep (Acme)' })).toBeTruthy());
+    await fireEvent.change(screen.getByLabelText('Covered by contract'), { target: { value: 'k1' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save report' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
+    expect((sent.find((r) => r.method === 'POST')!.body as { spec: { filter: unknown } }).spec.filter).toEqual({ contract: 'k1' });
+  });
+});
