@@ -71,6 +71,7 @@ type linkTypeIn struct {
 	IsSymmetric *bool   `json:"is_symmetric,omitempty" jsonschema:"reads the same both ways, as used with"`
 	IsSingle    *bool   `json:"is_single,omitempty" jsonschema:"the second asset can have one such link only"`
 	IsLocation  *bool   `json:"is_location,omitempty" jsonschema:"its links say where things are (must be single)"`
+	IsFollowed  *bool   `json:"is_followed,omitempty" jsonschema:"its links make chains, followed through several hops by asset_graph and counted by reports, as depends on does; may change while links use it"`
 }
 
 type hookIn struct {
@@ -369,16 +370,17 @@ func catalogTools() []tool {
 			func(idIn, map[string]any) string { return "Deleted the field." }),
 
 		// Link types.
-		simple(&mcp.Tool{Name: "list_link_types", Description: "The kinds of link between assets, each read from both ends (contains / contained in), and which says where things are.",
+		simple(&mcp.Tool{Name: "list_link_types", Description: "The kinds of link between assets, each read from both ends (contains / contained in), which says where things are, " +
+			"and which are followed through several hops (is_followed), as asset_graph follows them.",
 			Annotations: readOnly("List link types")}, "GET /api/v1/relation-types", read,
 			func(none) (request, error) { return request{path: "/api/v1/relation-types"}, nil },
 			func(_ none, out map[string]any) string {
 				return fmt.Sprintf("%d link types.", count(out, "relation_types"))
 			}),
-		define(&mcp.Tool{Name: "save_link_type", Description: "Make a link type, or change one: only what is given changes. While links use it only its names can change.",
+		define(&mcp.Tool{Name: "save_link_type", Description: "Make a link type, or change one: only what is given changes. While links use it only its names, and whether it is followed, can change.",
 			Annotations: changes("Save a link type", true)}, []string{"POST /api/v1/relation-types", "PUT /api/v1/relation-types/{id}"}, manage,
 			func(ctx context.Context, e *env, in linkTypeIn) (reply[map[string]any], error) {
-				c := given(map[string]any{"name": in.Name, "inverse_name": in.InverseName, "is_symmetric": in.IsSymmetric, "is_single": in.IsSingle, "is_location": in.IsLocation})
+				c := given(map[string]any{"name": in.Name, "inverse_name": in.InverseName, "is_symmetric": in.IsSymmetric, "is_single": in.IsSingle, "is_location": in.IsLocation, "is_followed": in.IsFollowed})
 				out := map[string]any{}
 				if in.ID == "" {
 					if err := e.call(ctx, http.MethodPost, "/api/v1/relation-types", c, &out); err != nil {

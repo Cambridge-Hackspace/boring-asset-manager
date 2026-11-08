@@ -225,6 +225,25 @@ func checkColumns(cols []Column, where string, fieldKnown func(string) bool) err
 	return nil
 }
 
+// UsesLinkCounts reports whether a column of the report counts followed
+// links ({{asset.needs}} and the rest), which are read only then.
+func (s *Spec) UsesLinkCounts() bool {
+	for _, sec := range s.Sections {
+		for _, c := range sec.Columns {
+			b, err := labels.ParseBinding(c.Binding)
+			if err != nil {
+				continue
+			}
+			for _, ref := range b.Refs() {
+				if ref.IsLinkCount() {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // Result is a report run against assets.
 type Result struct {
 	Sections []SectionResult `json:"sections"`

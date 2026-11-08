@@ -235,6 +235,22 @@ func currentContract(cs []models.ContractCover, now time.Time) *models.ContractC
 func contractData(c models.ContractCover) labels.ContractData {
 	return labels.ContractData{Name: c.Name, Kind: c.Kind, Vendor: c.VendorName, Reference: c.Reference, StartDate: c.StartDate,
 		EndDate: c.EndDate, Cost: c.Cost, Currency: c.Currency, Billing: c.Billing}
+
+}
+
+// withLinkCounts fills in what each asset's bindings count of followed
+// links, as the request may read them, by asset ID.
+func (s *Server) withLinkCounts(r *http.Request, ids []string) (map[string]labels.LinkData, error) {
+	counts, err := s.store.FollowCounts(ids, canRead(r))
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]labels.LinkData, len(counts))
+	for id, c := range counts {
+		out[id] = labels.LinkData{Needs: strconv.Itoa(c.Needs), NeedsAll: strconv.Itoa(c.NeedsAll),
+			NeededBy: strconv.Itoa(c.NeededBy), NeededByAll: strconv.Itoa(c.NeededByAll)}
+	}
+	return out, nil
 }
 
 // conditionText is how a condition reads on a label or in a report.
@@ -269,6 +285,13 @@ func (s *Server) layoutAssetData(r *http.Request, t *labels.Template, assetID st
 		return nil, labels.Data{}, &LabelProblem{AssetID: assetID, Message: "asset is archived"}, nil
 	}
 	data := s.labelData(s.shown(r, a))
+	if t.UsesLinkCounts() {
+		counts, err := s.withLinkCounts(r, []string{a.Asset.ID})
+		if err != nil {
+			return nil, labels.Data{}, nil, err
+		}
+		data.Links = counts[a.Asset.ID]
+	}
 	scene, err := render.Layout(t, data, images)
 	var le *render.LayoutError
 	if errors.As(err, &le) {
@@ -427,7 +450,15 @@ func (s *Server) handlePreviewData(w http.ResponseWriter, r *http.Request) {
 			Details: []LabelProblem{{AssetID: req.AssetID, Message: "asset is archived"}}})
 		return
 	}
-	writeJSON(w, http.StatusOK, PreviewDataResponse{Data: s.labelData(s.shown(r, a))})
+	data := s.labelData(s.shown(r, a))
+	// The template being edited may come to count links at any time.
+	counts, err := s.withLinkCounts(r, []string{a.Asset.ID})
+	if err != nil {
+		writeServerError(w, err, "count the asset's links")
+		return
+	}
+	data.Links = counts[a.Asset.ID]
+	writeJSON(w, http.StatusOK, PreviewDataResponse{Data: data})
 }
 
 // handlePreviewTemplate renders an unsaved template for the editor, as SVG,

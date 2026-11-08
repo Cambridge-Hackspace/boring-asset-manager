@@ -52,6 +52,15 @@ func (in searchIn) query() string {
 	return "?" + q.Encode()
 }
 
+type graphIn struct {
+	Asset      string   `json:"asset,omitempty" jsonschema:"the asset whose links to follow: its ID, or one of its codes; leave it out for a map"`
+	CategoryID string   `json:"category_id,omitempty" jsonschema:"for a map: the assets in this category or below it"`
+	Search     string   `json:"search,omitempty" jsonschema:"for a map: the assets whose name or codes hold these words"`
+	Types      []string `json:"types,omitempty" jsonschema:"the followed link types to follow, by ID (list_link_types marks them is_followed); all of them if not given"`
+	Direction  string   `json:"direction,omitempty" jsonschema:"from an asset: out for what it needs, in for what needs it, or both (the default)"`
+	Depth      int      `json:"depth,omitempty" jsonschema:"from an asset: how many hops to follow, 1 to 10 (5 if not given)"`
+}
+
 type assetIn struct {
 	Asset string `json:"asset" jsonschema:"the asset's ID, or one of its codes"`
 }
@@ -203,6 +212,78 @@ func findingTools() []tool {
 			}
 			loc, _ := out["location"].(map[string]any)
 			return say(out, "%d things in %v.", len(items), loc["name"])
+		}),
+		define(&mcp.Tool{
+			Name: "asset_graph",
+			Description: "Follow links through several hops: what an asset needs (direction out), what needs it (in: what stops working if it does), " +
+				"or both, through the link types marked is_followed, such as depends on / needed by. Without an asset, the map of a category or a search: " +
+				"its assets and the followed links among them. Each asset comes with its name, categories, icon, condition, whether it is archived, " +
+				"and its hops from the asset; each link with its type, from the asset that needs to the one needed. At most 500 assets: past that, " +
+				"truncated is set, at truncated_at hops, and cut marks the assets with links not followed. Assets the person may not read are only " +
+				"counted (hidden), and never followed through. loops lists each loop's assets: following stops where it comes back round.",
+			Annotations: readOnly("Follow links"),
+		}, []string{"GET /api/v1/assets/{id}/graph", "GET /api/v1/assets/graph"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in graphIn) (reply[map[string]any], error) {
+			q := url.Values{}
+			if len(in.Types) > 0 {
+				q.Set("types", strings.Join(in.Types, ","))
+			}
+			path := "/api/v1/assets/graph"
+			if strings.TrimSpace(in.Asset) != "" {
+				if in.CategoryID != "" || in.Search != "" {
+					return reply[map[string]any]{}, fmt.Errorf("give an asset, or a category or search for a map, not both")
+				}
+				id, err := e.assetID(ctx, in.Asset)
+				if err != nil {
+					return reply[map[string]any]{}, err
+				}
+				path = assetPath(id, "/graph")
+				if in.Direction != "" {
+					q.Set("direction", in.Direction)
+				}
+				if in.Depth != 0 {
+					q.Set("depth", strconv.Itoa(in.Depth))
+				}
+			} else {
+				if in.Direction != "" || in.Depth != 0 {
+					return reply[map[string]any]{}, fmt.Errorf("direction and depth follow links from an asset: name one, or leave them out for a map")
+				}
+				if in.CategoryID != "" {
+					q.Set("category_id", in.CategoryID)
+				}
+				if in.Search != "" {
+					q.Set("search", in.Search)
+				}
+			}
+			if len(q) > 0 {
+				path += "?" + q.Encode()
+			}
+			var res struct {
+				Graph map[string]any `json:"graph"`
+			}
+			if err := e.call(ctx, http.MethodGet, path, nil, &res); err != nil {
+				return reply[map[string]any]{}, err
+			}
+			out := res.Graph
+			// where a person's page draws them
+			assets, _ := out["assets"].([]any)
+			for _, a := range assets {
+				if m, ok := a.(map[string]any); ok {
+					delete(m, "layer")
+					delete(m, "row")
+				}
+			}
+			links, _ := out["links"].([]any)
+			text := fmt.Sprintf("%d assets and %d links", len(assets), len(links))
+			if n, _ := out["hidden"].(float64); n > 0 {
+				text += fmt.Sprintf("; %d not shown, which the person may not read", int(n))
+			}
+			if loops, _ := out["loops"].([]any); len(loops) > 0 {
+				text += fmt.Sprintf("; %d loops", len(loops))
+			}
+			if cut, _ := out["truncated"].(bool); cut {
+				text += "; cut short at 500 assets"
+			}
+			return say(out, "%s.", text)
 		}),
 		define(&mcp.Tool{
 			Name: "render_scene",

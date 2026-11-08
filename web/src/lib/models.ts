@@ -866,9 +866,53 @@ export interface RelationType {
   is_single: boolean;
   /** Its links make an asset's location. */
   is_location: boolean;
+  /** Its links make chains, followed through several hops by graphs and counted by reports. */
+  is_followed: boolean;
   created_at: string;
   updated_at: string;
   link_count: number;
+}
+
+/** An asset in a graph of followed links (docs/data-model.md#following-links). */
+export interface GraphAsset {
+  id: string;
+  name: string;
+  categories: { id: string; name: string; color_hex?: string }[];
+  icon: ResolvedIcon | null;
+  condition: Condition;
+  archived?: boolean;
+  /** How many links from the root it is, and on which side: root, out (what it needs) or in (what needs it). */
+  hops: number;
+  side?: 'root' | 'out' | 'in';
+  /** Where the drawing puts it: its column from the left, and its row. */
+  layer: number;
+  row: number;
+  /** It has links the graph did not follow, as it was cut short. */
+  cut?: boolean;
+}
+
+/** A link in a graph, from the asset that needs to the one needed. */
+export interface GraphLink {
+  id: string;
+  type_id: string;
+  from: string;
+  to: string;
+}
+
+/** What following links found: an asset's graph (with a root), or a map of a category or search. */
+export interface AssetGraph {
+  root?: string;
+  direction?: 'out' | 'in' | 'both';
+  depth?: number;
+  types: RelationType[];
+  assets: GraphAsset[];
+  links: GraphLink[];
+  /** Assets reached that may not be read: never named, nor followed through. */
+  hidden: number;
+  /** Each loop's assets, by ID. */
+  loops: string[][];
+  truncated: boolean;
+  truncated_at?: number;
 }
 
 /** The asset at the other end of a link, or in a location. */

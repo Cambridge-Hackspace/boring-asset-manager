@@ -134,6 +134,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `get_asset` | `assets.read` | Its fields, codes, place, contents, links, photos, hooks and icon, and where the icon comes from; and where it came from, its `purchase`, its price, order number and invoice only with `purchases.read`. |
 | `look_up_code` | `assets.scan` | Its scan page ([Scanning](scanning.md)). |
 | `asset_history` | `assets.read` | |
+| `asset_graph` | `assets.read` | Follows followed links ([Following links](data-model.md#following-links)) from an asset, out, in or both, 1 to 10 hops, through the types chosen; or, without one, the map of a category or a search. At most 500 assets, saying when cut short; those the person may not read only counted. |
 | `list_loans` | `assets.track` | |
 | `list_people` | `assets.lend` or `users.manage` | Emails only to tell apart two people of the same name. |
 | `next_code` | `assets.write` | |
