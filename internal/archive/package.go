@@ -1374,6 +1374,8 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 		if !p.cats[get("category_id")] {
 			setNull("category_id")
 		}
+		// Purchase orders never travel in a package.
+		setNull("purchase_order_id")
 		payload, err := withoutPeople(vals[colIndex(t, "payload")])
 		if err != nil {
 			return false, err

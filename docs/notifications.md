@@ -27,7 +27,8 @@ Which events a channel can subscribe to is listed with each feature; see
 [Stock and lending](stock-and-lending.md), [Hooks](hooks.md), [Access](access.md#too-many-wrong-passwords),
 [Relays](relays.md#health), [Installing](installing.md#knowing-when-bam-changes),
 [Comments](comments.md#events) for `comment.added`, [Warranties](#warranties) below, and
-[Contracts](contracts.md#reminders) for `contract.expiring` and `contract.expired`.
+[Contracts](contracts.md#reminders) for `contract.expiring` and `contract.expired`, and
+[Purchase orders](#purchase-orders) below.
 
 ### Warranties
 
@@ -56,6 +57,17 @@ notice due: …*, *Contract ended: …* or, for one that renews automatically, *
 `<prefix>/<kind>/<contract ID>`. Each is recorded once for each contract and date, claimed in
 `contract_notices`. They are in the contract's history, not an asset's, so the events list and
 live connections do not carry them. See [Contracts](contracts.md#reminders).
+
+### Purchase orders
+
+`purchase_order.ordered` (*A purchase order is placed*) is recorded when an order is placed with its
+vendor, and `purchase_order.received` (*A delivery against a purchase order is received*) for each
+delivery received against one. Each names the order's number and vendor, and each line's text and
+packs, never a price. Discord and email say *Order placed: PO-0012* or *Delivery received:
+PO-0012*, with the vendor and lines, and link to the order; MQTT publishes them under
+`<prefix>/<kind>/<order ID>`. They are in the order's history, so the events list and live
+connections do not carry them; the changes a receipt makes to assets do reach them. See
+[Purchase orders](purchase-orders.md#notifications).
 
 ## Delivery
 

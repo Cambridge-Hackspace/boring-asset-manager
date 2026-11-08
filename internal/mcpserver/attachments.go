@@ -16,28 +16,31 @@ import (
 )
 
 // Attachments (docs/data-model.md#attachments): files on assets,
-// categories, vendors and contracts. They are added over MCP as photos are,
+// categories, vendors, contracts and purchase orders. They are added over MCP as photos are,
 // base64-encoded, up to the size people may upload.
 
 type ownerIn struct {
-	Asset      string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id or contract_id"`
-	CategoryID string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id or contract_id"`
-	VendorID   string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id or contract_id"`
-	ContractID string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id or vendor_id"`
+	Asset      string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id, contract_id or purchase_order_id"`
+	CategoryID string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id, contract_id or purchase_order_id"`
+	VendorID   string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id, contract_id or purchase_order_id"`
+	ContractID string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id, vendor_id or purchase_order_id"`
+	OrderID    string `json:"purchase_order_id,omitempty" jsonschema:"the purchase order, by ID; or give asset, category_id, vendor_id or contract_id"`
 }
 
-// attachmentsPath is the route of an asset's, a category's, a vendor's or a
-// contract's attachments, with rest after it.
-func attachmentsPath(ctx context.Context, e *env, asset, categoryID, vendorID, contractID string, rest ...string) (string, error) {
+// attachmentsPath is the route of an asset's, a category's, a vendor's, a
+// contract's or a purchase order's attachments, with rest after it.
+func attachmentsPath(ctx context.Context, e *env, asset, categoryID, vendorID, contractID, orderID string, rest ...string) (string, error) {
 	given := 0
-	for _, o := range []string{asset, categoryID, vendorID, contractID} {
+	for _, o := range []string{asset, categoryID, vendorID, contractID, orderID} {
 		if o != "" {
 			given++
 		}
 	}
 	switch {
 	case given > 1:
-		return "", errors.New("give one of asset, category_id, vendor_id and contract_id")
+		return "", errors.New("give one of asset, category_id, vendor_id, contract_id and purchase_order_id")
+	case orderID != "":
+		return "/api/v1/purchase-orders/" + url.PathEscape(orderID) + "/attachments" + strings.Join(rest, ""), nil
 	case contractID != "":
 		return "/api/v1/contracts/" + url.PathEscape(contractID) + "/attachments" + strings.Join(rest, ""), nil
 	case vendorID != "":
@@ -51,7 +54,7 @@ func attachmentsPath(ctx context.Context, e *env, asset, categoryID, vendorID, c
 	case categoryID != "":
 		return "/api/v1/categories/" + url.PathEscape(categoryID) + "/attachments" + strings.Join(rest, ""), nil
 	}
-	return "", errors.New("give the asset, the category_id, the vendor_id or the contract_id the attachments are on")
+	return "", errors.New("give the asset, the category_id, the vendor_id, the contract_id or the purchase_order_id the attachments are on")
 }
 
 type attachmentView struct {
@@ -76,19 +79,21 @@ type attachmentsBody struct {
 }
 
 type readAttachmentIn struct {
-	Asset        string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id or contract_id"`
-	CategoryID   string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id or contract_id"`
-	VendorID     string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id or contract_id"`
-	ContractID   string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id or vendor_id"`
+	Asset        string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id, contract_id or purchase_order_id"`
+	CategoryID   string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id, contract_id or purchase_order_id"`
+	VendorID     string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id, contract_id or purchase_order_id"`
+	ContractID   string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id, vendor_id or purchase_order_id"`
+	OrderID      string `json:"purchase_order_id,omitempty" jsonschema:"the purchase order, by ID; or give asset, category_id, vendor_id or contract_id"`
 	AttachmentID string `json:"attachment_id"`
 	Thumbnail    bool   `json:"thumbnail,omitempty" jsonschema:"an image's thumbnail rather than the image"`
 }
 
 type addAttachmentIn struct {
-	Asset       string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id or contract_id"`
-	CategoryID  string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id or contract_id"`
-	VendorID    string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id or contract_id"`
-	ContractID  string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id or vendor_id"`
+	Asset       string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id, contract_id or purchase_order_id"`
+	CategoryID  string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id, contract_id or purchase_order_id"`
+	VendorID    string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id, contract_id or purchase_order_id"`
+	ContractID  string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id, vendor_id or purchase_order_id"`
+	OrderID     string `json:"purchase_order_id,omitempty" jsonschema:"the purchase order, by ID; or give asset, category_id, vendor_id or contract_id"`
 	Data        string `json:"data" jsonschema:"the file, base64-encoded: a JPEG or PNG image, a PDF, plain text, Markdown or CSV, or a type the instance allows"`
 	Filename    string `json:"filename" jsonschema:"its file's name, with its extension, such as manual.pdf"`
 	Name        string `json:"name,omitempty" jsonschema:"what to call it; its file's name if not given"`
@@ -96,28 +101,31 @@ type addAttachmentIn struct {
 }
 
 type updateAttachmentIn struct {
-	Asset        string  `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id or contract_id"`
-	CategoryID   string  `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id or contract_id"`
-	VendorID     string  `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id or contract_id"`
-	ContractID   string  `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id or vendor_id"`
+	Asset        string  `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id, contract_id or purchase_order_id"`
+	CategoryID   string  `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id, contract_id or purchase_order_id"`
+	VendorID     string  `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id, contract_id or purchase_order_id"`
+	ContractID   string  `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id, vendor_id or purchase_order_id"`
+	OrderID      string  `json:"purchase_order_id,omitempty" jsonschema:"the purchase order, by ID; or give asset, category_id, vendor_id or contract_id"`
 	AttachmentID string  `json:"attachment_id"`
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 }
 
 type reorderAttachmentsIn struct {
-	Asset         string   `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id or contract_id"`
-	CategoryID    string   `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id or contract_id"`
-	VendorID      string   `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id or contract_id"`
-	ContractID    string   `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id or vendor_id"`
+	Asset         string   `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id, contract_id or purchase_order_id"`
+	CategoryID    string   `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id, contract_id or purchase_order_id"`
+	VendorID      string   `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id, contract_id or purchase_order_id"`
+	ContractID    string   `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id, vendor_id or purchase_order_id"`
+	OrderID       string   `json:"purchase_order_id,omitempty" jsonschema:"the purchase order, by ID; or give asset, category_id, vendor_id or contract_id"`
 	AttachmentIDs []string `json:"attachment_ids" jsonschema:"every attachment's ID, in order; an asset's first image is the one its page and lists show"`
 }
 
 type removeAttachmentIn struct {
-	Asset        string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id or contract_id"`
-	CategoryID   string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id or contract_id"`
-	VendorID     string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id or contract_id"`
-	ContractID   string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id or vendor_id"`
+	Asset        string `json:"asset,omitempty" jsonschema:"the asset, by ID or code; or give category_id, vendor_id, contract_id or purchase_order_id"`
+	CategoryID   string `json:"category_id,omitempty" jsonschema:"the category, by ID; or give asset, vendor_id, contract_id or purchase_order_id"`
+	VendorID     string `json:"vendor_id,omitempty" jsonschema:"the vendor, by ID; or give asset, category_id, contract_id or purchase_order_id"`
+	ContractID   string `json:"contract_id,omitempty" jsonschema:"the contract, by ID; or give asset, category_id, vendor_id or purchase_order_id"`
+	OrderID      string `json:"purchase_order_id,omitempty" jsonschema:"the purchase order, by ID; or give asset, category_id, vendor_id or contract_id"`
 	AttachmentID string `json:"attachment_id"`
 }
 
@@ -130,10 +138,10 @@ func attachmentTools() []tool {
 	return []tool{
 		define(&mcp.Tool{
 			Name:        "list_attachments",
-			Description: "The files attached to an asset, a category, a vendor or a contract, in order: images (an asset's photos), documents and other files.",
+			Description: "The files attached to an asset, a category, a vendor, a contract or a purchase order, in order: images (an asset's photos), documents and other files.",
 			Annotations: readOnly("Attachments"),
-		}, []string{"GET /api/v1/assets/{id}/attachments", "GET /api/v1/categories/{id}/attachments", "GET /api/v1/vendors/{id}/attachments", "GET /api/v1/contracts/{id}/attachments"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in ownerIn) (reply[attachmentsOut], error) {
-			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID)
+		}, []string{"GET /api/v1/assets/{id}/attachments", "GET /api/v1/categories/{id}/attachments", "GET /api/v1/vendors/{id}/attachments", "GET /api/v1/contracts/{id}/attachments", "GET /api/v1/purchase-orders/{id}/attachments"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in ownerIn) (reply[attachmentsOut], error) {
+			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, in.OrderID)
 			if err != nil {
 				return reply[attachmentsOut]{}, err
 			}
@@ -151,8 +159,8 @@ func attachmentTools() []tool {
 			Name:        "read_attachment",
 			Description: "One attachment's file: an image to look at, text as text, and anything else as a file to keep.",
 			Annotations: readOnly("Read an attachment"),
-		}, []string{"GET /api/v1/assets/{id}/attachments/{attachment_id}", "GET /api/v1/categories/{id}/attachments/{attachment_id}", "GET /api/v1/vendors/{id}/attachments/{attachment_id}", "GET /api/v1/contracts/{id}/attachments/{attachment_id}"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in readAttachmentIn) (reply[attachmentsOut], error) {
-			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, "/", url.PathEscape(in.AttachmentID))
+		}, []string{"GET /api/v1/assets/{id}/attachments/{attachment_id}", "GET /api/v1/categories/{id}/attachments/{attachment_id}", "GET /api/v1/vendors/{id}/attachments/{attachment_id}", "GET /api/v1/contracts/{id}/attachments/{attachment_id}", "GET /api/v1/purchase-orders/{id}/attachments/{attachment_id}"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in readAttachmentIn) (reply[attachmentsOut], error) {
+			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, in.OrderID, "/", url.PathEscape(in.AttachmentID))
 			if err != nil {
 				return reply[attachmentsOut]{}, err
 			}
@@ -173,9 +181,9 @@ func attachmentTools() []tool {
 		}),
 		define(&mcp.Tool{
 			Name:        "add_attachment",
-			Description: "Attach a file to an asset, a category, a vendor or a contract, base64-encoded, up to the size people may upload. Its type is checked by its content.",
+			Description: "Attach a file to an asset, a category, a vendor, a contract or a purchase order, base64-encoded, up to the size people may upload. Its type is checked by its content.",
 			Annotations: changes("Add an attachment", false),
-		}, []string{"POST /api/v1/assets/{id}/attachments", "POST /api/v1/categories/{id}/attachments", "POST /api/v1/vendors/{id}/attachments", "POST /api/v1/contracts/{id}/attachments"}, anyChange, func(ctx context.Context, e *env, in addAttachmentIn) (reply[attachmentOut], error) {
+		}, []string{"POST /api/v1/assets/{id}/attachments", "POST /api/v1/categories/{id}/attachments", "POST /api/v1/vendors/{id}/attachments", "POST /api/v1/contracts/{id}/attachments", "POST /api/v1/purchase-orders/{id}/attachments"}, anyChange, func(ctx context.Context, e *env, in addAttachmentIn) (reply[attachmentOut], error) {
 			data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(in.Data))
 			if err != nil {
 				return reply[attachmentOut]{}, fmt.Errorf("data must be base64: %v", err)
@@ -183,7 +191,7 @@ func attachmentTools() []tool {
 			if strings.TrimSpace(in.Filename) == "" {
 				return reply[attachmentOut]{}, errors.New("filename is required, with its extension")
 			}
-			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID)
+			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, in.OrderID)
 			if err != nil {
 				return reply[attachmentOut]{}, err
 			}
@@ -205,8 +213,8 @@ func attachmentTools() []tool {
 			Name:        "update_attachment",
 			Description: "Rename an attachment, or describe it.",
 			Annotations: changes("Rename or describe an attachment", true),
-		}, []string{"PUT /api/v1/assets/{id}/attachments/{attachment_id}", "PUT /api/v1/categories/{id}/attachments/{attachment_id}", "PUT /api/v1/vendors/{id}/attachments/{attachment_id}", "PUT /api/v1/contracts/{id}/attachments/{attachment_id}"}, anyChange, func(ctx context.Context, e *env, in updateAttachmentIn) (reply[attachmentOut], error) {
-			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, "/", url.PathEscape(in.AttachmentID))
+		}, []string{"PUT /api/v1/assets/{id}/attachments/{attachment_id}", "PUT /api/v1/categories/{id}/attachments/{attachment_id}", "PUT /api/v1/vendors/{id}/attachments/{attachment_id}", "PUT /api/v1/contracts/{id}/attachments/{attachment_id}", "PUT /api/v1/purchase-orders/{id}/attachments/{attachment_id}"}, anyChange, func(ctx context.Context, e *env, in updateAttachmentIn) (reply[attachmentOut], error) {
+			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, in.OrderID, "/", url.PathEscape(in.AttachmentID))
 			if err != nil {
 				return reply[attachmentOut]{}, err
 			}
@@ -222,8 +230,8 @@ func attachmentTools() []tool {
 			Name:        "reorder_attachments",
 			Description: "Put the attachments of an asset, a category, a vendor or a contract in order.",
 			Annotations: changes("Reorder attachments", true),
-		}, []string{"PUT /api/v1/assets/{id}/attachments", "PUT /api/v1/categories/{id}/attachments", "PUT /api/v1/vendors/{id}/attachments", "PUT /api/v1/contracts/{id}/attachments"}, anyChange, func(ctx context.Context, e *env, in reorderAttachmentsIn) (reply[attachmentsOut], error) {
-			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID)
+		}, []string{"PUT /api/v1/assets/{id}/attachments", "PUT /api/v1/categories/{id}/attachments", "PUT /api/v1/vendors/{id}/attachments", "PUT /api/v1/contracts/{id}/attachments", "PUT /api/v1/purchase-orders/{id}/attachments"}, anyChange, func(ctx context.Context, e *env, in reorderAttachmentsIn) (reply[attachmentsOut], error) {
+			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, in.OrderID)
 			if err != nil {
 				return reply[attachmentsOut]{}, err
 			}
@@ -237,8 +245,8 @@ func attachmentTools() []tool {
 			Name:        "remove_attachment",
 			Description: "Remove an attachment from an asset, a category, a vendor or a contract, with its file, for good.",
 			Annotations: destroys("Remove an attachment", true),
-		}, []string{"DELETE /api/v1/assets/{id}/attachments/{attachment_id}", "DELETE /api/v1/categories/{id}/attachments/{attachment_id}", "DELETE /api/v1/vendors/{id}/attachments/{attachment_id}", "DELETE /api/v1/contracts/{id}/attachments/{attachment_id}"}, anyChange, func(ctx context.Context, e *env, in removeAttachmentIn) (reply[attachmentsOut], error) {
-			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, "/", url.PathEscape(in.AttachmentID))
+		}, []string{"DELETE /api/v1/assets/{id}/attachments/{attachment_id}", "DELETE /api/v1/categories/{id}/attachments/{attachment_id}", "DELETE /api/v1/vendors/{id}/attachments/{attachment_id}", "DELETE /api/v1/contracts/{id}/attachments/{attachment_id}", "DELETE /api/v1/purchase-orders/{id}/attachments/{attachment_id}"}, anyChange, func(ctx context.Context, e *env, in removeAttachmentIn) (reply[attachmentsOut], error) {
+			path, err := attachmentsPath(ctx, e, in.Asset, in.CategoryID, in.VendorID, in.ContractID, in.OrderID, "/", url.PathEscape(in.AttachmentID))
 			if err != nil {
 				return reply[attachmentsOut]{}, err
 			}

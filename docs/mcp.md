@@ -235,6 +235,26 @@ vendors the caller sees, their costs only with `purchases.read` there; changing 
 | `delete_contract` | `vendors.manage` | |
 | `contract_history` | `assets.read` | Its history, newest first, a page at a time, its reminders among it. |
 
+### Purchase orders
+
+See [Purchase orders](purchase-orders.md). Reading needs `assets.read`, and shows only the orders
+whose vendors the caller sees, their prices only with `purchases.read` there; changing needs
+`vendors.manage` in the vendor's scopes, and receiving what each line's change needs. Deleting is
+marked destructive. The attachment tools take `purchase_order_id`.
+
+| Tool | Permission | What it does |
+| :--- | :--- | :--- |
+| `list_purchase_orders` | `assets.read` | The orders, newest first; `vendor_id`, `state` (or `open`), `category_id`, `asset` and `query` narrow them. |
+| `get_purchase_order` | `assets.read` | One, with its lines, what has come, and totals where the caller sees prices. |
+| `save_purchase_order` | `vendors.manage` | Makes a draft, or changes only what is given; its lines, when given, replace its. |
+| `delete_purchase_order` | `vendors.manage` | |
+| `place_purchase_order`, `cancel_purchase_order` | `vendors.manage` | Places a draft; cancels one placed. |
+| `receive_purchase_order` | `stock.record` or `assets.write` per line | Receives a delivery, every line or none; `queue_labels` adds the assets made to the print queue. |
+| `suggest_purchase_orders` | `vendors.manage` | Draft orders of what is running low, by vendor, with what is already on order apart. |
+| `purchase_order_history` | `assets.read` | Its history, newest first, a page at a time. |
+| `purchase_order_pdf` | `assets.read` | The order as a PDF to send, as an embedded file. |
+| `get_order_numbering`, `set_order_numbering` | `assets.read`, and `settings.manage` to set | How orders' numbers are shown: a prefix, and at least how many digits. |
+
 ### Comments
 
 See [Comments](comments.md). Reading needs `assets.read`, and shows only the comments on what the

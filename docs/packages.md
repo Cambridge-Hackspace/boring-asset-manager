@@ -87,6 +87,7 @@ A package never holds:
 - notification channels and their secrets;
 - printers;
 - loans;
+- purchase orders, which are this instance's dealings;
 - the warranties announced;
 - what flows filed;
 - icon revisions;

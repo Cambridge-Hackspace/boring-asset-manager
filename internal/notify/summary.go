@@ -243,6 +243,11 @@ func summarize(n Notification, esc func(string) string) summary {
 		}
 	case (e.Kind == models.EventContractExpiring || e.Kind == models.EventContractExpired) && p.Contract != nil:
 		out = contractSummary(e.Kind, p, base, esc)
+	case (e.Kind == models.EventOrderOrdered || e.Kind == models.EventOrderReceived) && p.PurchaseOrder != nil:
+		out = orderSummary(e.Kind, p, base, esc)
+		if by != "" {
+			out.Description += " By " + by + "."
+		}
 	case e.Kind == models.EventAssetHook:
 		label := "Hook"
 		if p.Hook != nil {
@@ -366,6 +371,45 @@ func contractSummary(kind string, p models.EventPayload, base string, esc func(s
 	default:
 		out.Title, out.Color = "Contract ending: "+name, discordWarning
 		out.Description = what + " ends on " + due + "."
+	}
+	return out
+}
+
+// orderSummary describes a purchase order placed, or a delivery received
+// against one (docs/purchase-orders.md): its number, its vendor, and each
+// line's packs, never a price. The link is to the order.
+func orderSummary(kind string, p models.EventPayload, base string, esc func(string) string) summary {
+	o := p.PurchaseOrder
+	var out summary
+	if base != "" {
+		out.URL = base + "/orders/" + url.PathEscape(o.ID)
+	}
+	name := esc(truncate(o.Number, 200))
+	from := ""
+	if o.VendorName != "" {
+		from = esc(truncate(o.VendorName, 200))
+	}
+	var lines []string
+	for i, l := range p.OrderLines {
+		if i == 10 {
+			lines = append(lines, fmt.Sprintf("and %d more", len(p.OrderLines)-10))
+			break
+		}
+		text := strings.TrimSpace(l.PartNumber + " " + l.Description)
+		lines = append(lines, fmt.Sprintf("%d × %s", l.Quantity, esc(truncate(text, 200))))
+	}
+	if kind == models.EventOrderOrdered {
+		out.Title, out.Color = "Order placed: "+name, discordNeutral
+		out.Description = "Placed with " + from + "."
+	} else {
+		out.Title, out.Color = "Delivery received: "+name, discordNeutral
+		out.Description = "Received from " + from + "."
+	}
+	if from == "" {
+		out.Description = strings.Replace(strings.Replace(out.Description, " with .", ".", 1), " from .", ".", 1)
+	}
+	if len(lines) > 0 {
+		out.Description += " " + strings.Join(lines, "; ") + "."
 	}
 	return out
 }

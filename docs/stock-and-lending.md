@@ -124,6 +124,10 @@ use someone made while the form was open; the web form sends the quantity only w
 Using more than there is answers `409` (`not enough stock: 40 left`) and changes nothing. Changes
 run under the inventory lock, so people using stock at once each take their share.
 
+Receiving a [purchase order](purchase-orders.md#receiving) restocks what it brings in the same way,
+and makes the assets of what is counted by items, recording each change with the trigger
+`purchase_order`.
+
 #### Thresholds
 
 Thresholds and the flag follow [the same rule](#how-the-flag-works) as categories. Dropping below

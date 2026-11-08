@@ -89,6 +89,8 @@ var EventKinds = []EventKind{
 	{Kind: models.EventWarrantyExpiring, Label: "A warranty is about to end"},
 	{Kind: models.EventContractExpiring, Label: "A contract is about to end, or its notice deadline is near"},
 	{Kind: models.EventContractExpired, Label: "A contract ends"},
+	{Kind: models.EventOrderOrdered, Label: "A purchase order is placed"},
+	{Kind: models.EventOrderReceived, Label: "A delivery against a purchase order is received"},
 	{Kind: models.EventAssetHook, Label: "A hook, such as Identify, is triggered on an asset"},
 	{Kind: models.EventAuthThrottled, Label: "Sign-ins are held back after too many wrong passwords or codes"},
 	{Kind: models.EventNotifierDisabled, Label: "A notification channel is turned off for failing"},

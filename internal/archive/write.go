@@ -83,16 +83,18 @@ var writeFormat = FormatVersion
 // filesNamed are the columns whose values name a stored file, with the
 // prefix of its key (filestore.Images).
 var filesNamed = map[string][]struct{ column, prefix string }{
-	"asset_attachments":    {{"id", "photos/"}, {"thumb_id", "photos/"}},
-	"category_attachments": {{"id", "photos/"}, {"thumb_id", "photos/"}},
-	"vendor_attachments":   {{"id", "photos/"}, {"thumb_id", "photos/"}},
-	"contract_attachments": {{"id", "photos/"}, {"thumb_id", "photos/"}},
-	"images":               {{"id", "images/"}},
+	"asset_attachments":          {{"id", "photos/"}, {"thumb_id", "photos/"}},
+	"category_attachments":       {{"id", "photos/"}, {"thumb_id", "photos/"}},
+	"vendor_attachments":         {{"id", "photos/"}, {"thumb_id", "photos/"}},
+	"contract_attachments":       {{"id", "photos/"}, {"thumb_id", "photos/"}},
+	"purchase_order_attachments": {{"id", "photos/"}, {"thumb_id", "photos/"}},
+	"images":                     {{"id", "images/"}},
 }
 
 // attachmentTables are the tables of attachments, whose documents and
 // other files Options.NoDocuments and Selection.NoDocuments leave out.
-var attachmentTables = map[string]bool{"asset_attachments": true, "category_attachments": true, "vendor_attachments": true, "contract_attachments": true}
+var attachmentTables = map[string]bool{"asset_attachments": true, "category_attachments": true, "vendor_attachments": true, "contract_attachments": true,
+	"purchase_order_attachments": true}
 
 // leftOut reports whether a row is an attachment that is not an image,
 // which an archive without documents leaves out, noting it in documents,
