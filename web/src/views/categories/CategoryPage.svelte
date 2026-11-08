@@ -3,7 +3,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetHook, type CategoryHook, type Contract, type Vendor } from '../../lib/models';
+  import { UNCATEGORIZED, type Category, type EffectiveField, type Field, type RelationType, type Report, type Scope, type TemplateSummary, type AssetHook, type CategoryHook, type Contract, type Vendor, type LinkWarning } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { session } from '../../lib/session.svelte';
@@ -21,6 +21,7 @@
   import { reorderHref, siteName } from '../../lib/vendors';
   import { contractEnded, coverSentence, kindLabel } from '../../lib/contracts';
   import CatalogPanel from '../../components/CatalogPanel.svelte';
+  import { categoryPath, linkChoices } from '../../lib/pools';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -75,6 +76,16 @@
   // The contracts naming it (docs/contracts.md), which cover its assets and those below it.
   let contracts = $state<Contract[]>([]);
   let vendorList = $state<string[]>([]);
+  // Links (docs/stock-and-lending.md#pools): the categories its members also
+  // count in, and those whose members count in it; both edit the same links.
+  let impliesList = $state<string[]>([]);
+  let includedList = $state<string[]>([]);
+  let addingImplied = $state('');
+  let addingIncluded = $state('');
+  let linkWarnings = $state<LinkWarning[]>([]);
+  const pathOf = (cid: string) => categoryPath(categories, cid, 'a deleted category');
+  const impliedChoices = $derived(linkChoices(categories, id, impliesList, id ? subtree(categories, id) : new Set(), UNCATEGORIZED));
+  const includedChoices = $derived(linkChoices(categories, id, includedList, new Set(id ? ancestry(categories, id).map((a) => a.id) : []), UNCATEGORIZED));
   let addingVendor = $state('');
   const vendorOf = (vid: string) => vendors.find((v) => v.id === vid);
   const vendorName = (vid: string) => vendorOf(vid)?.name ?? 'A vendor';
@@ -135,6 +146,7 @@
     scan: 'scan template',
     labels: 'label templates',
     vendors: 'its vendors',
+    links: 'what it counts in',
     hooks: 'hooks',
     scopes: 'who can see its assets',
     icon: 'its icon',
@@ -147,6 +159,7 @@
     scan: scanTemplate,
     labels: JSON.stringify(labelList),
     vendors: JSON.stringify(vendorList),
+    links: JSON.stringify([impliesList, includedList]),
     hooks: JSON.stringify(offered),
     scopes: JSON.stringify([...scopeIds].sort()),
   });
@@ -158,7 +171,7 @@
   // The page in tabs (#161), each a part of it, kept in the address. All
   // stay on the page, hidden but for one, so changes not saved in one
   // survive looking at another; a tab with any says so.
-  const tabOf: Record<string, string> = { details: 'about', stock: 'stock', suggestions: 'links', scan: 'links', hooks: 'links', labels: 'labels', vendors: 'vendors', scopes: 'scopes', icon: 'icon' };
+  const tabOf: Record<string, string> = { details: 'about', stock: 'stock', suggestions: 'links', scan: 'links', hooks: 'links', labels: 'labels', vendors: 'vendors', links: 'counts', scopes: 'scopes', icon: 'icon' };
   const tabs = $derived.by(() => {
     const all = [
       { key: 'about', label: 'About', on: true },
@@ -167,6 +180,7 @@
       { key: 'labels', label: 'Labels', on: (canManage && labelTemplates.length > 0) || canSpool || (labelConflicts[id] ?? 0) > 0 },
       { key: 'icon', label: 'Icon', on: !isSystem },
       { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
+      { key: 'counts', label: 'Counts in', on: !isSystem && (canManage || impliesList.length > 0 || includedList.length > 0) },
       { key: 'vendors', label: 'Vendors', on: !isSystem && ((canManage && vendors.length > 0) || vendorList.length > 0) },
       { key: 'catalog', label: 'Catalog', on: !isSystem },
       { key: 'contracts', label: 'Contracts', on: !isSystem && contracts.length > 0 },
@@ -212,9 +226,12 @@
         assetCount = await request<{ assets: unknown[] }>('GET', `/assets?category_id=${encodeURIComponent(id)}`)
           .then((r) => (r.assets ?? []).length)
           .catch(() => null);
-        const level = await request<{ active_count: number; total?: number }>('GET', `/categories/${encodeURIComponent(id)}`);
+        const level = await request<{ active_count: number; total?: number; link_warnings?: LinkWarning[] }>('GET', `/categories/${encodeURIComponent(id)}`);
         activeCount = level.active_count;
         total = level.total ?? null;
+        linkWarnings = level.link_warnings ?? [];
+        impliesList = [...(c.implies ?? [])];
+        includedList = [...(c.included_by ?? [])];
         effective = (await request<{ fields: EffectiveField[] }>('GET', `/categories/${encodeURIComponent(id)}/fields`)).fields ?? [];
         vendorList = [...(c.vendor_ids ?? [])];
         if (!isSystem) {
@@ -360,6 +377,29 @@
       vendorList = [...(res.category.vendor_ids ?? [])];
       markSaved('vendors');
       saved = 'Vendors saved.';
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function saveLinks(event: SubmitEvent) {
+    event.preventDefault();
+    error = saved = '';
+    try {
+      const res = await request<{ category: Category; link_warnings?: LinkWarning[] }>('PUT', `/categories/${encodeURIComponent(id)}/links`, {
+        implies: impliesList,
+        included_by: includedList,
+      });
+      impliesList = [...(res.category.implies ?? [])];
+      includedList = [...(res.category.included_by ?? [])];
+      linkWarnings = res.link_warnings ?? [];
+      markSaved('links');
+      saved = 'Links saved.';
+      // The totals they make, and the flags, may have moved.
+      categories = (await request<{ categories: Category[] }>('GET', '/categories')).categories ?? [];
+      const level = await request<{ active_count: number; total?: number }>('GET', `/categories/${encodeURIComponent(id)}`);
+      activeCount = level.active_count;
+      total = level.total ?? null;
     } catch (err) {
       error = messageOf(err);
     }
@@ -679,12 +719,12 @@
         <p class="text-sm">
           <strong>{category.is_running_low ? 'Running low.' : 'In stock.'}</strong>
           {#if category.unit}
-            {amount(total ?? 0, category.unit)} here and in its subcategories, in
+            {amount(total ?? 0, category.unit)} here and in its subcategories{category.included_by?.length ? ' and the categories it includes' : ''}, in
             {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`}{category.low_stock_threshold
               ? `; flagged automatically below ${amount(category.low_stock_threshold, category.unit)}`
               : ''}.
           {:else}
-            {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`} here and in its subcategories{category.low_stock_threshold
+            {activeCount === 1 ? '1 active asset' : `${activeCount ?? 0} active assets`} here and in its subcategories{category.included_by?.length ? ' and the categories it includes' : ''}{category.low_stock_threshold
               ? `; flagged automatically below ${category.low_stock_threshold}`
               : ''}.
           {/if}
@@ -886,6 +926,75 @@
           {/each}
         </ol>
       {/if}
+    </section>
+  {/if}
+
+  {#if !isSystem && (canManage || impliesList.length || includedList.length)}
+    <section class="mt-6 max-w-2xl space-y-4" id="tab-counts" aria-labelledby="counts-heading" hidden={tab !== 'counts'}>
+      <div>
+        <h2 id="counts-heading" class="mb-1 text-lg font-semibold">Counts in</h2>
+        <p class="text-sm text-zinc-600 dark:text-zinc-400">
+          Its assets, and those of its subcategories, can count in other categories too, wherever they are, for totals,
+          thresholds, filters and reports: one pool for stock kept in several places. Nothing else comes through: no scopes,
+          fields or templates. <a class="underline" href="/help/stock">How pools work</a>.
+        </p>
+      </div>
+      {#each linkWarnings as w (w.category_id + w.implied_id)}
+        <p class="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100" role="note">
+          <span aria-hidden="true">⚠ </span>{w.message}
+        </p>
+      {/each}
+      {#snippet linkList(label: string, list: string[], remove: (cid: string) => void)}
+        {#if list.length}
+          <ul class="space-y-1 text-sm" aria-label={label}>
+            {#each list as cid (cid)}
+              <li class="flex flex-wrap items-center gap-2">
+                <a class="inline-flex min-h-11 min-w-48 items-center underline" href="/categories/{encodeURIComponent(cid)}">{pathOf(cid)}</a>
+                {#if canManage}<button type="button" class="btn-secondary" aria-label="Remove {pathOf(cid)} from {label.toLowerCase()}" onclick={() => remove(cid)}>Remove</button>{/if}
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="text-sm text-zinc-600 dark:text-zinc-400">None.</p>
+        {/if}
+      {/snippet}
+      <form class="space-y-4" aria-label="What it counts in" onsubmit={saveLinks}>
+        <fieldset class="space-y-2">
+          <legend class="label">Also counts in…</legend>
+          <p class="text-xs text-zinc-600 dark:text-zinc-400">The categories its assets count in as well, such as the pool “M5 bolts”.</p>
+          {@render linkList('Also counts in', impliesList, (cid) => (impliesList = impliesList.filter((x) => x !== cid)))}
+          {#if canManage}
+            <div class="flex flex-wrap items-end gap-2">
+              <div>
+                <label class="label" for="implies-add">Add a category it counts in</label>
+                <select id="implies-add" class="input" bind:value={addingImplied}>
+                  <option value="">Choose one</option>
+                  {#each impliedChoices as c (c.id)}<option value={c.id}>{pathOf(c.id)}</option>{/each}
+                </select>
+              </div>
+              <button type="button" class="btn-secondary" disabled={!addingImplied} onclick={() => { impliesList = [...impliesList, addingImplied]; addingImplied = ''; }}>Add</button>
+            </div>
+          {/if}
+        </fieldset>
+        <fieldset class="space-y-2">
+          <legend class="label">Also includes…</legend>
+          <p class="text-xs text-zinc-600 dark:text-zinc-400">The categories whose assets count in this one as well, such as each place the stock is kept.</p>
+          {@render linkList('Also includes', includedList, (cid) => (includedList = includedList.filter((x) => x !== cid)))}
+          {#if canManage}
+            <div class="flex flex-wrap items-end gap-2">
+              <div>
+                <label class="label" for="includes-add">Add a category it includes</label>
+                <select id="includes-add" class="input" bind:value={addingIncluded}>
+                  <option value="">Choose one</option>
+                  {#each includedChoices as c (c.id)}<option value={c.id}>{pathOf(c.id)}</option>{/each}
+                </select>
+              </div>
+              <button type="button" class="btn-secondary" disabled={!addingIncluded} onclick={() => { includedList = [...includedList, addingIncluded]; addingIncluded = ''; }}>Add</button>
+            </div>
+          {/if}
+        </fieldset>
+        {#if canManage}<button type="submit" class="btn-secondary" disabled={!unsaved.includes('links')}>Save links</button>{/if}
+      </form>
     </section>
   {/if}
 

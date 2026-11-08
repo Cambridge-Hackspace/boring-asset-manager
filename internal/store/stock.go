@@ -78,26 +78,63 @@ func (s *stockScan) stock() *models.AssetStock {
 	return st
 }
 
-// assetLevels reads every active asset with a threshold, with its quantity.
-func (s *Store) assetLevels(tx *sql.Tx) (map[string]stock, error) {
-	rows, err := s.TxQuery(tx, `SELECT id, stock_quantity, low_stock_threshold, is_running_low FROM assets
+// assetLevels reads every active asset with a threshold, with its quantity
+// and whether a pool it counts in covers it, given the categories' levels
+// and the graph they were measured through: a pool with a threshold, whose
+// unit is the asset's, holding at least its threshold
+// (docs/stock-and-lending.md#quiet-bins).
+func (s *Store) assetLevels(tx *sql.Tx, categories map[string]stock, graph *catGraph) (map[string]stock, error) {
+	rows, err := s.TxQuery(tx, `SELECT id, stock_quantity, low_stock_threshold, is_running_low, stock_unit FROM assets
 		WHERE archived_at IS NULL AND stock_quantity IS NOT NULL AND low_stock_threshold IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("reading asset stock: %w", err)
 	}
-	defer rows.Close()
 	levels := map[string]stock{}
+	pooled := false
 	for rows.Next() {
 		var (
 			id string
 			l  stock
 		)
-		if err := rows.Scan(&id, &l.count, &l.threshold, &l.runningLow); err != nil {
+		if err := rows.Scan(&id, &l.count, &l.threshold, &l.runningLow, &l.unit); err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("scanning asset stock: %w", err)
 		}
 		levels[id] = l
+		pooled = pooled || l.unit != ""
 	}
-	return levels, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	covering := false
+	for _, c := range categories {
+		covering = covering || (c.unit != "" && !c.below())
+	}
+	if !pooled || !covering {
+		return levels, nil
+	}
+	cats := map[string][]string{}
+	err = s.scanPairs(tx, `SELECT ac.asset_id, ac.category_id FROM asset_categories ac JOIN assets a ON a.id = ac.asset_id
+		WHERE a.archived_at IS NULL AND a.low_stock_threshold IS NOT NULL AND a.stock_unit <> ?`, "", func(asset, cat string) {
+		cats[asset] = append(cats[asset], cat)
+	})
+	if err != nil {
+		return nil, err
+	}
+	for id, l := range levels {
+		if l.unit == "" {
+			continue
+		}
+		for c := range graph.reach(cats[id]).Counted {
+			if p, ok := categories[c]; ok && p.unit == l.unit && !p.below() {
+				l.covered = true
+				levels[id] = l
+				break
+			}
+		}
+	}
+	return levels, nil
 }
 
 // applyAssetThresholds flags or clears each asset whose quantity crossed its
@@ -262,4 +299,85 @@ func (s *Store) SetAssetRunningLow(id string, low bool) (*models.AssetWithDetail
 	}
 	a, err := s.GetAssetByID(id)
 	return a, changed, err
+}
+
+var (
+	// ErrMoveAmount is a move of less than one.
+	ErrMoveAmount = errors.New("move at least 1")
+	// ErrMoveSameAsset is a move from an asset to itself.
+	ErrMoveSameAsset = errors.New("stock cannot move to the asset it is in")
+	// ErrMoveUnits is a move between assets counting in different units.
+	ErrMoveUnits = errors.New("stock can only move between assets counted in the same unit")
+)
+
+// MoveStock moves amount of stock from one asset to another in one step
+// (docs/stock-and-lending.md#moving-stock): both must be active, counted by
+// quantity in the same unit. Moving more than there is fails with
+// ErrNotEnoughStock and changes nothing. Each records the change in its
+// history as a move, naming the other; a pool both count in keeps its
+// total, so it does not alert, while each asset's own threshold is checked
+// as usual. It returns both assets, as they are after.
+func (s *Store) MoveStock(fromID, toID string, amount int) (*models.AssetWithDetails, *models.AssetWithDetails, error) {
+	if amount < 1 || amount > MaxQuantity {
+		return nil, nil, ErrMoveAmount
+	}
+	if fromID == toID {
+		return nil, nil, ErrMoveSameAsset
+	}
+	err := s.withInventory(func(ic *inventoryChange) error {
+		from, err := s.readStockTx(ic.tx, fromID)
+		if err != nil {
+			return err
+		}
+		to, err := s.readStockTx(ic.tx, toID)
+		if err != nil {
+			return err
+		}
+		if from == nil || to == nil {
+			return ErrNotStocked
+		}
+		if from.Unit != to.Unit {
+			return ErrMoveUnits
+		}
+		if amount > from.Quantity {
+			return fmt.Errorf("%w: %d left", ErrNotEnoughStock, from.Quantity)
+		}
+		if to.Quantity+amount > MaxQuantity {
+			return ErrQuantityOutOfRange
+		}
+		var move models.EventMove
+		if err := s.TxQueryRow(ic.tx, "SELECT id, name FROM assets WHERE id = ?", fromID).Scan(&move.From.ID, &move.From.Name); err != nil {
+			return fmt.Errorf("reading asset: %w", err)
+		}
+		if err := s.TxQueryRow(ic.tx, "SELECT id, name FROM assets WHERE id = ?", toID).Scan(&move.To.ID, &move.To.Name); err != nil {
+			return fmt.Errorf("reading asset: %w", err)
+		}
+		now := time.Now().UTC()
+		for _, side := range []struct {
+			id     string
+			was    *models.AssetStock
+			change int
+		}{{fromID, from, -amount}, {toID, to, amount}} {
+			quantity := side.was.Quantity + side.change
+			if _, err := s.TxExec(ic.tx, "UPDATE assets SET stock_quantity = ?, updated_at = ? WHERE id = ?", quantity, now, side.id); err != nil {
+				return fmt.Errorf("setting quantity: %w", err)
+			}
+			change := side.change
+			if err := s.recordAssetEvent(ic.tx, models.EventQuantityChanged, side.id, models.EventPayload{
+				Trigger: models.TriggerManual, Quantity: &quantity, Change: &change, Move: &move,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	a, err := s.GetAssetByID(fromID)
+	if err != nil {
+		return nil, nil, err
+	}
+	b, err := s.GetAssetByID(toID)
+	return a, b, err
 }

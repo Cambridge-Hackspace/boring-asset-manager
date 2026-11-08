@@ -36,7 +36,25 @@ const (
 type Spec struct {
 	Filter   Filter    `json:"filter"`
 	Sections []Section `json:"sections"`
+	// Pools are what a table grouped by pool needs, set by whoever runs
+	// the report; without them its assets are in no pool.
+	Pools *PoolData `json:"-"`
 }
+
+// PoolData are the pools assets count in (docs/stock-and-lending.md#pools):
+// Of maps each asset to the pools whose totals it adds to, and Totals each
+// pool to its total, over the assets the reader may see, whatever the
+// report's filter finds (docs/reports.md#by-pool-or-by-bin).
+//
+// The shopping list (#214) should offer the same choice, by pool or by bin,
+// and group by pool from the same data.
+type PoolData struct {
+	Of     map[string][]string
+	Totals map[string]int
+}
+
+// NotInAPool titles the group, in a table by pool, of the assets in none.
+const NotInAPool = "Not in a pool"
 
 // Filter chooses the assets a report looks at. Empty fields match every
 // asset.
@@ -92,8 +110,10 @@ type Section struct {
 	// SortBy is the column rows sort by, from 0; Descending reverses it.
 	SortBy     int  `json:"sort_by,omitempty"`
 	Descending bool `json:"descending,omitempty"`
-	// GroupBy is, for a table, "" or "category": rows are grouped under each
-	// category their asset is in. A bar or donut chart's bars group by it.
+	// GroupBy is, for a table, "" (by bin: a row for each asset),
+	// "category": rows are grouped under each category their asset is in,
+	// or "pool": a group for each pool, with its total and threshold, and
+	// its places under it. A bar or donut chart's bars group by it.
 	GroupBy string `json:"group_by,omitempty"`
 	// Source, in a scan template's table, is what its rows are: "contents",
 	// what the scanned asset holds. Actions are an actions section's.
@@ -188,8 +208,8 @@ func (s *Spec) check(fieldKnown func(string) bool) error {
 		if sec.SortBy < 0 || sec.SortBy >= len(sec.Columns) {
 			return fail("%s: sort_by must name one of its columns", where)
 		}
-		if sec.GroupBy != "" && sec.GroupBy != "category" {
-			return fail("%s: group_by must be category", where)
+		if sec.GroupBy != "" && sec.GroupBy != "category" && sec.GroupBy != "pool" {
+			return fail("%s: group_by must be category or pool", where)
 		}
 	}
 	return nil
@@ -272,6 +292,30 @@ type GroupResult struct {
 	// RunningLow marks a category group whose category is flagged.
 	RunningLow bool  `json:"running_low,omitempty"`
 	Rows       []Row `json:"rows"`
+	// Pool is, for a pool's group, its total and threshold.
+	Pool *PoolSummary `json:"pool,omitempty"`
+}
+
+// PoolSummary is a pool's line in a table by pool.
+type PoolSummary struct {
+	CategoryID        string `json:"category_id"`
+	Total             int    `json:"total"`
+	Unit              string `json:"unit"`
+	LowStockThreshold *int   `json:"low_stock_threshold"`
+}
+
+// Label is how a table's CSV names the group: its title, and for a pool
+// its total and threshold, as "M5 bolts: 440 pcs (threshold 200 pcs)".
+func (g GroupResult) Label() string {
+	if g.Pool == nil {
+		return g.Title
+	}
+	amount := func(n int) string { return strings.TrimSpace(strconv.Itoa(n) + " " + g.Pool.Unit) }
+	label := g.Title + ": " + amount(g.Pool.Total)
+	if t := g.Pool.LowStockThreshold; t != nil {
+		label += " (threshold " + amount(*t) + ")"
+	}
+	return label
 }
 
 // Row is one asset's row.
@@ -303,20 +347,25 @@ func (f Filter) Matches(a *models.AssetWithDetails, categories []models.Category
 		wanted[id] = true
 	}
 	inCategory, flagged := len(f.CategoryIDs) == 0, false
-	for _, c := range a.Categories {
-		id := c.ID
-		for depth := 0; id != "" && depth < 100; depth++ {
-			cat, ok := byID[id]
-			if !ok {
-				break
-			}
-			inCategory = inCategory || wanted[id]
-			flagged = flagged || (cat.IsConsumable && cat.IsRunningLow)
-			if cat.ParentID == nil {
-				break
-			}
-			id = *cat.ParentID
+	direct := make([]string, len(a.Categories))
+	for i, c := range a.Categories {
+		direct[i] = c.ID
+	}
+	// Every category it counts in: its own, those above them, and those
+	// they imply (docs/stock-and-lending.md#pools).
+	reached := models.Reach(direct, func(id string) string {
+		if c, ok := byID[id]; ok && c.ParentID != nil {
+			return *c.ParentID
 		}
+		return ""
+	}, func(id string) []string { return byID[id].Implies })
+	for id := range reached.Counted {
+		cat, ok := byID[id]
+		if !ok {
+			continue
+		}
+		inCategory = inCategory || wanted[id]
+		flagged = flagged || (cat.IsConsumable && cat.IsRunningLow)
 	}
 	if f.RunningLow && !(flagged || (a.Asset.Stock != nil && a.Asset.Stock.IsRunningLow)) {
 		return false
@@ -360,6 +409,11 @@ func (s *Spec) Run(assets []models.AssetWithDetails, categories []models.Categor
 			rows[i] = row
 		}
 		sortRows(rows, sec.SortBy, sec.Descending)
+		if sec.GroupBy == "pool" {
+			out.Groups = s.byPool(rows, categories, flagged)
+			res.Sections = append(res.Sections, out)
+			continue
+		}
 		if sec.GroupBy != "category" {
 			out.Groups = append(out.Groups, GroupResult{Rows: rows})
 			res.Sections = append(res.Sections, out)
@@ -390,6 +444,53 @@ func (s *Spec) Run(assets []models.AssetWithDetails, categories []models.Categor
 		res.Sections = append(res.Sections, out)
 	}
 	return res
+}
+
+// byPool groups rows by the pools their assets add to, a pool's group with
+// its total and threshold, by name, and those in none last; an asset in
+// two pools is in both.
+func (s *Spec) byPool(rows []Row, categories []models.Category, flagged map[string]bool) []GroupResult {
+	byID := make(map[string]models.Category, len(categories))
+	for _, c := range categories {
+		byID[c.ID] = c
+	}
+	groups := map[string]*GroupResult{}
+	var order []string
+	none := GroupResult{Title: NotInAPool, Rows: []Row{}}
+	for _, row := range rows {
+		var pools []string
+		if s.Pools != nil {
+			pools = s.Pools.Of[row.AssetID]
+		}
+		in := false
+		for _, id := range pools {
+			c, ok := byID[id]
+			if !ok {
+				continue
+			}
+			in = true
+			g, ok := groups[id]
+			if !ok {
+				g = &GroupResult{Title: c.Name, RunningLow: flagged[id], Rows: []Row{},
+					Pool: &PoolSummary{CategoryID: id, Total: s.Pools.Totals[id], Unit: c.Unit, LowStockThreshold: c.LowStockThreshold}}
+				groups[id] = g
+				order = append(order, id)
+			}
+			g.Rows = append(g.Rows, row)
+		}
+		if !in {
+			none.Rows = append(none.Rows, row)
+		}
+	}
+	sort.SliceStable(order, func(i, j int) bool { return groups[order[i]].Title < groups[order[j]].Title })
+	out := []GroupResult{}
+	for _, id := range order {
+		out = append(out, *groups[id])
+	}
+	if len(none.Rows) > 0 {
+		out = append(out, none)
+	}
+	return out
 }
 
 // sortRows sorts by a column: as numbers when both cells are numbers, and
@@ -444,7 +545,7 @@ func Table(sec SectionResult) [][]string {
 		for _, r := range g.Rows {
 			cells := r.Cells
 			if grouped {
-				cells = append([]string{g.Title}, cells...)
+				cells = append([]string{g.Label()}, cells...)
 			}
 			out = append(out, cells)
 		}

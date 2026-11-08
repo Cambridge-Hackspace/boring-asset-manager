@@ -86,6 +86,9 @@ type ScanAsset struct {
 	Icon *models.ResolvedIcon `json:"icon,omitempty"`
 	// Flows are the flows the viewer may start from it (docs/flows.md).
 	Flows []FlowLink `json:"flows,omitempty"`
+	// Pools are the pools its stock counts in, with where else theirs is
+	// kept, of the places the viewer may see (docs/stock-and-lending.md#pools).
+	Pools []models.AssetPool `json:"pools,omitempty"`
 }
 
 // ScanTemplateRef names the template a scan used.
@@ -180,6 +183,10 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	out := ScanResponse{Asset: ScanAsset{ID: asset.Asset.ID, Name: asset.Asset.Name, Icon: asset.ResolvedIcon, Flows: offered}, Template: ref, Result: result}
 	if st := asset.Asset.Stock; st != nil {
 		out.Asset.Counted, out.Asset.Unit = true, st.Unit
+		if out.Asset.Pools, err = s.poolsFor(r, asset.Asset.ID); err != nil {
+			writeServerError(w, err, "find where else its stock is")
+			return
+		}
 	}
 	if may["hooks"] {
 		out.Asset.Hooks = asset.Hooks

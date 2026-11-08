@@ -301,6 +301,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermCategoriesManage)(s.handleUpdateAttachment(models.OwnerCategory)))
 	handle("DELETE /api/v1/categories/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermCategoriesManage)(s.handleRemoveAttachment(models.OwnerCategory)))
 	handle("PUT /api/v1/categories/{id}/vendors", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryVendors)))
+	handle("PUT /api/v1/categories/{id}/links", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleSetCategoryLinks)))
 	// Vendors (docs/vendors.md): seen by those who read assets in their
 	// scopes, and changed with vendors.manage there, which each handler
 	// checks.
@@ -486,6 +487,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/assets/{id}/restore", RequirePermission(rbac.PermAssetsDelete)(http.HandlerFunc(s.handleRestoreAsset)))
 	handle("POST /api/v1/assets/{id}/quantity", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleAdjustQuantity)))
 	handle("PUT /api/v1/assets/{id}/running-low", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleSetAssetRunningLow)))
+	handle("POST /api/v1/assets/{id}/move", RequirePermission(rbac.PermStockRecord)(http.HandlerFunc(s.handleMoveStock)))
 	handle("PUT /api/v1/assets/{id}/condition", RequireAnyPermission(rbac.PermAssetsReport, rbac.PermAssetsWrite)(http.HandlerFunc(s.handleSetAssetCondition)))
 	// Attachments (docs/data-model.md#attachments); the photo routes are
 	// kept as they were, for an asset's image attachments.

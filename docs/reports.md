@@ -84,8 +84,23 @@ A table has 1 to 30 columns, each a `heading` and a `binding`.
   `{{asset.needed_by_all}}`, `descending`, ranks the assets whose loss would reach furthest.
   Assets the reader may not read are counted, but not followed through. They are read only for a
   report with such a column.
+- A report on a category finds the assets in it, below it, and in the categories implying it.
 - `group_by: "category"` lists each row under every category its asset is in. Groups are ordered
   by name, and those running low are marked.
+
+### By pool or by bin
+
+Where stock is kept in several places that pool (see [Pools](stock-and-lending.md#pools)), each
+table chooses how it lists them, under **Group** in the editor:
+
+- **By bin**, with no groups: each place on its own line.
+- **By pool**, `group_by: "pool"`: one line for each pool, with its total and threshold, and its
+  places listed under it: "M5 bolts: 440 pcs (threshold 200 pcs)", then the workshop's 140 and the
+  laser bay's 300. The CSV, Excel and PDF name each group so. An asset in two pools is under both,
+  and those in none come last, under *Not in a pool*.
+
+A pool's total is of every asset in it the reader may see, whatever the filter finds; places they
+may not see are neither listed nor added.
 
 ### Charts
 

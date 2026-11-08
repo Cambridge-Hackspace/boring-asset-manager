@@ -158,3 +158,53 @@ func TestWriteCSV(t *testing.T) {
 		t.Errorf("ungrouped: %q, %v", buf.String(), err)
 	}
 }
+
+func TestFiltersFollowCategoriesThatImplyOthers(t *testing.T) {
+	cats, assets := fixtures()
+	// Tools imply a pool, which implies another: their members count in
+	// both, and a pool running low flags them.
+	cats[2].Implies = []string{"pool"}
+	cats = append(cats,
+		models.Category{ID: "pool", Name: "Pool", IsConsumable: true, Unit: "pcs", Implies: []string{"stock"}},
+		models.Category{ID: "stock", Name: "Stock", IsConsumable: true, IsRunningLow: true})
+	if got := names(assets, Filter{CategoryIDs: []string{"pool"}}, cats); !reflect.DeepEqual(got, []string{"Drill", "screws", "PETG"}) {
+		t.Errorf("in the pool: %v", got)
+	}
+	if got := names(assets, Filter{CategoryIDs: []string{"stock"}}, cats); len(got) != 3 {
+		t.Errorf("through a chain: %v", got)
+	}
+	if got := names(assets, Filter{RunningLow: true}, cats); len(got) != 4 {
+		t.Errorf("running low through a link: %v", got)
+	}
+}
+
+func TestRunByPool(t *testing.T) {
+	cats, assets := fixtures()
+	threshold := 200
+	cats = append(cats, models.Category{ID: "bolts", Name: "M5 bolts", IsConsumable: true, Unit: "pcs", LowStockThreshold: &threshold})
+	spec, err := Parse([]byte(`{"sections":[{"type":"table","columns":[{"heading":"Asset","binding":"{{asset.name}}"}],"group_by":"pool"}]}`), known)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := func(a *models.AssetWithDetails) labels.Data {
+		return labels.Data{AssetID: a.Asset.ID, AssetName: a.Asset.Name}
+	}
+	// Without pool data everything is in none.
+	res := spec.Run(assets, cats, data, nil, time.Now())
+	if g := res.Sections[0].Groups; len(g) != 1 || g[0].Title != NotInAPool || len(g[0].Rows) != 4 {
+		t.Errorf("with no pools: %+v", g)
+	}
+	spec.Pools = &PoolData{Of: map[string][]string{"screws": {"bolts"}, "drill": {"bolts"}}, Totals: map[string]int{"bolts": 440}}
+	res = spec.Run(assets, cats, data, nil, time.Now())
+	g := res.Sections[0].Groups
+	if len(g) != 2 || g[0].Title != "M5 bolts" || len(g[0].Rows) != 2 || g[1].Title != NotInAPool || len(g[1].Rows) != 2 {
+		t.Fatalf("by pool: %+v", g)
+	}
+	table := Table(res.Sections[0])
+	if table[0][0] != "Group" || table[1][0] != "M5 bolts: 440 pcs (threshold 200 pcs)" || table[3][0] != NotInAPool {
+		t.Errorf("as a table: %v", table)
+	}
+	if _, err := Parse([]byte(`{"sections":[{"type":"table","columns":[{"heading":"A","binding":"x"}],"group_by":"bin"}]}`), known); !errors.Is(err, ErrInvalidSpec) {
+		t.Errorf("an unknown grouping: %v", err)
+	}
+}

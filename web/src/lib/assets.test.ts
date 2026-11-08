@@ -108,6 +108,9 @@ describe('stock', () => {
       id: 'e', kind, created_at: '', payload: { trigger: 'manual', ...payload },
     });
     expect(describeEvent(event('asset.quantity_changed', { quantity: 200, unit: 'pcs' }))).toBe('Started counting at 200 pcs');
+    const move = { from: { id: 'a', name: 'Bay bin' }, to: { id: 'b', name: 'Drawer bin' } };
+    expect(describeEvent(event('asset.quantity_changed', { quantity: 200, change: -100, unit: 'pcs', move }))).toBe('Moved 100 pcs to Drawer bin; 200 pcs left');
+    expect(describeEvent(event('asset.quantity_changed', { quantity: 240, change: 100, unit: 'pcs', move }))).toBe('Moved 100 pcs here from Bay bin; 240 pcs now');
     expect(describeEvent(event('comment.added', { comment: { id: 'c', on: 'asset', text: 'Belt   ordered' } }))).toBe('Commented: “Belt ordered”');
     expect(describeEvent(event('comment.added', { comment: { id: 'c', on: 'loan', loan_id: 'l', text: 'x' } }))).toBe('Commented on its loan: “x”');
     expect(describeEvent(event('comment.edited', { comment: { id: 'c', on: 'filing', flow: { slug: 'leave', name: 'Leave it' } } }))).toBe('Comment edited on its filing by Leave it');

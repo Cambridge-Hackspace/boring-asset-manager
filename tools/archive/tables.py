@@ -51,7 +51,7 @@ ORDER = [
     ('categories', 'KindCatalog'), ('category_fields', 'KindCatalog'), ('category_actions', 'KindCatalog'),
     ('category_relation_types', 'KindCatalog'), ('category_scopes', 'KindCatalog'), ('category_attachments', 'KindCatalog'),
     ('vendors', 'KindCatalog'), ('vendor_contacts', 'KindCatalog'), ('vendor_scopes', 'KindCatalog'), ('vendor_attachments', 'KindCatalog'),
-    ('category_vendors', 'KindCatalog'), ('category_catalog_entries', 'KindCatalog'), ('category_comments', 'KindCatalog'),
+    ('category_vendors', 'KindCatalog'), ('category_catalog_entries', 'KindCatalog'), ('category_comments', 'KindCatalog'), ('category_implies', 'KindCatalog'),
     ('contracts', 'KindCatalog'), ('contract_categories', 'KindCatalog'), ('contract_attachments', 'KindCatalog'), ('contract_notices', 'KindCatalog'),
     ('templates', 'KindLabels'), ('images', 'KindLabels'), ('category_label_templates', 'KindLabels'),
     ('icon_palette', 'KindIcons'), ('icon_settings', 'KindIcons'), ('icon_library', 'KindIcons'), ('category_icons', 'KindIcons'),

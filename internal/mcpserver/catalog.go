@@ -324,6 +324,32 @@ func catalogTools() []tool {
 				return fmt.Sprintf("It offers %d hooks.", len(in.Hooks))
 			}),
 
+		simple(&mcp.Tool{Name: "set_category_links", Description: "Say which categories a category's members also count in (implies), or which categories' members count in it (included_by), " +
+			"for totals, running-low alerts, filters and reports: one pool for stock kept in several places, or a view across the tree. Only what is given changes; " +
+			"each list is the whole of that side. A link gives no scopes, fields or templates, and one leading back to where it starts is refused.",
+			Annotations: changes("Link categories", true)}, "PUT /api/v1/categories/{id}/links", manage,
+			func(in categoryLinksIn) (request, error) {
+				body := map[string]any{}
+				if in.Implies != nil {
+					body["implies"] = *in.Implies
+				}
+				if in.IncludedBy != nil {
+					body["included_by"] = *in.IncludedBy
+				}
+				return request{path: pathOf("/api/v1/categories/{id}/links", in.CategoryID), body: body}, need(in.CategoryID, "category_id")
+			},
+			func(_ categoryLinksIn, out map[string]any) string {
+				msg := fmt.Sprintf("Saved %q's links.", nameOf(out, "category"))
+				if w, ok := out["link_warnings"].([]any); ok {
+					for _, x := range w {
+						if m, ok := x.(map[string]any); ok {
+							msg += fmt.Sprintf(" %v", m["message"])
+						}
+					}
+				}
+				return msg
+			}),
+
 		// Fields.
 		simple(&mcp.Tool{Name: "list_fields", Description: "Every field assets can record, shared by all categories: key, label, type and, for select, the choices.",
 			Annotations: readOnly("List fields")}, "GET /api/v1/fields", read,
@@ -460,4 +486,10 @@ func catalogTools() []tool {
 			},
 			func(idIn, map[string]any) string { return "Deleted the hook." }),
 	}
+}
+
+type categoryLinksIn struct {
+	CategoryID string    `json:"category_id"`
+	Implies    *[]string `json:"implies,omitempty" jsonschema:"the categories its members also count in, by ID: the whole list; absent leaves them as they are"`
+	IncludedBy *[]string `json:"included_by,omitempty" jsonschema:"the categories whose members count in it, by ID: the whole list; absent leaves them as they are"`
 }

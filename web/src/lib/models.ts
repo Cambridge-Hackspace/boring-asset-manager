@@ -124,6 +124,9 @@ export interface Category {
   label_template_ids?: string[];
   /** The vendors it is bought from, in order of preference: those the requester may see (docs/vendors.md). */
   vendor_ids?: string[];
+  /** The categories its members also count in, and those whose members count in it (docs/stock-and-lending.md#pools). */
+  implies?: string[];
+  included_by?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -221,6 +224,8 @@ export interface AssetEvent {
     trigger: 'manual' | 'threshold' | 'import' | 'schedule';
     quantity?: number;
     change?: number;
+    /** For a quantity changed by moving stock between assets: where it came from and went. */
+    move?: { from: { id: string; name: string }; to: { id: string; name: string } };
     threshold?: number;
     unit?: string;
     /** What a created, edited or archived event changed. */
@@ -311,6 +316,44 @@ export interface AssetWithDetails {
   purchase?: Purchase;
   /** The contracts covering it, directly or through a category (docs/contracts.md), by when they end. */
   contracts?: ContractCover[];
+  /** The categories it counts in through categories implying others, each with the one it comes through. */
+  counts_in?: CountsIn[];
+  /** On its own page, the pools its stock counts in, with the places theirs is kept that the viewer may see. */
+  pools?: AssetPool[];
+}
+
+/** A category an asset counts in through a link, and the category, its own or one above it, it comes through. */
+export interface CountsIn {
+  category_id: string;
+  category_name: string;
+  through_id: string;
+  through_name: string;
+}
+
+/** A pool an asset counts in: a consumable category with a unit, its total over the places the viewer sees, and those places. */
+export interface AssetPool {
+  category_id: string;
+  name: string;
+  unit: string;
+  low_stock_threshold: number | null;
+  total: number;
+  places: PoolPlace[];
+}
+
+/** One asset holding a pool's stock, with where it is, outermost first. */
+export interface PoolPlace {
+  asset_id: string;
+  name: string;
+  quantity: number;
+  location: LinkedAsset[];
+}
+
+/** A link adding nothing to a total: none of the members of the category implying another count in its unit. */
+export interface LinkWarning {
+  category_id: string;
+  implied_id: string;
+  unit: string;
+  message: string;
 }
 
 /**
@@ -1004,6 +1047,14 @@ export interface ChartSeries {
   points: { label: string; value: number }[];
 }
 
+/** A pool's line in a table by pool: its total, over what the reader sees, and threshold. */
+export interface PoolSummary {
+  category_id: string;
+  total: number;
+  unit: string;
+  low_stock_threshold: number | null;
+}
+
 /** A report run against the assets its filter found. */
 export interface ReportResult {
   assets: number;
@@ -1012,7 +1063,7 @@ export interface ReportResult {
     title: string;
     actions?: ScanAction[];
     columns?: string[];
-    groups?: { title: string; running_low?: boolean; rows: { asset_id: string; cells: string[] }[] }[];
+    groups?: { title: string; running_low?: boolean; pool?: PoolSummary; rows: { asset_id: string; cells: string[] }[] }[];
     chart?: 'bar' | 'donut' | 'line';
     measure?: string;
     series?: ChartSeries[];

@@ -45,13 +45,14 @@ edit categories or assets. Editing the category (`categories.manage`) can set it
 
 A consumable category may have an optional `low_stock_threshold` (a positive integer, or `null` for
 none). Its *active count* is the number of distinct active (not archived) assets in the category or
-any of its descendants. An asset in two subcategories counts once. `GET /api/v1/categories/{id}`
-reports it as `active_count`.
+any of its descendants, and in the categories implying it ([Pools](#pools)). An asset in two
+subcategories counts once. `GET /api/v1/categories/{id}` reports it as `active_count`.
 
 Anything that changes an active count is checked against the threshold:
 
 - creating, archiving, deleting or recategorizing assets;
 - moving or deleting categories;
+- linking categories, or taking links away ([Pools](#pools));
 - imports, checked once, after the whole file;
 - changing the threshold itself: setting it above the current count flags at once.
 
@@ -137,6 +138,104 @@ quantity, threshold and unit, and who caused it. Channels can subscribe to them.
 
 Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the
 asset's history. Channels cannot subscribe to it.
+
+## Pools
+
+The same thing is often kept in more than one place: M5 bolts in a drawer in the workshop and a bin
+by the laser cutter, or zip ties in three toolboxes. Each place is its own asset, with its own count.
+A category can say that its members **also count in** another category, anywhere in the tree, so
+that the places pool.
+
+### What it does in practice
+
+1. **Bolts in two places.** The workshop drawer's category and the laser bay's both imply
+   *M5 bolts*, a consumable category with the unit `pcs` and a threshold of 200. One threshold
+   watches the total of both, 440. An empty bin says where else to look: "140 here, 300 in the laser
+   bay". Only a real shortage alerts: the drawer emptying while the laser bay holds 300 raises
+   nothing.
+2. **Views across the tree.** *PPE* gathers gloves, goggles and ear defenders from wherever they
+   are filed, for one report, without moving anything.
+3. **What it doesn't do.** No scopes, fields, label or scan templates, or suggested link types come
+   through a link, and assets it brings in are not made [weighed](#weighing-instead-of-counting).
+   Who can see an asset, and what its form asks for, are unchanged by it.
+
+### Linking categories
+
+A link says **the members of X are also members of Y**: the assets in X, and in the categories below
+X, count in Y's totals and thresholds, and are found when filtering by Y and in reports on Y. They
+count in the categories above Y too, as Y's own assets do.
+
+- **Either side edits it.** On X's page, under **Counts in**, *Also counts in…* lists the categories
+  it implies; on Y's, *Also includes…* lists those implying it. Each page lists its links both ways.
+- **The API.** Categories carry `implies` and `included_by`, the IDs of each side.
+  `PUT /api/v1/categories/{id}/links` with `{"implies": [...]}`, `{"included_by": [...]}` or both
+  (`categories.manage`) replaces that side, leaving one not given as it is. MCP's
+  `set_category_links` does the same.
+- **Computed, not stored.** Membership through a link is worked out when it is needed, as a
+  category's total includes its subcategories. Taking an asset out of X takes it out of Y at once. An
+  asset put in Y directly stays there.
+- **Chains, never cycles.** If X implies Y and Y implies Z, X's assets count in Z. A link leading back
+  to where it starts, directly or through the tree (X implying a category inside X), is refused
+  (`409`), and so is moving a category under one whose links lead back to it. An asset reached by
+  more than one path counts once.
+- **Rechecked.** Changing links goes through the same check as moving a category: a link that drops
+  Y below its threshold flags it, and one that lifts it back clears it, recording
+  `category.running_low` or `category.restocked`.
+- **Shown.** An asset's page lists the categories it counts in through links, with the category each
+  comes through: "Counts in Stock › M5 bolts (through Workshop › Fasteners › M5)". The API gives
+  them as the asset's `counts_in`.
+- **Copied and deleted.** Duplicating a category copies what it counts in, not what counts in it.
+  Deleting either category deletes the link.
+
+Links are not in asset CSV or Excel files, since they belong to categories. They travel in
+[backups](backups.md) and [packages](packages.md) with the rest of the categories.
+
+### Units
+
+A pool is a consumable category with a unit ([above](#weighing-instead-of-counting)). Any link is
+allowed, but its total includes only the assets whose stock is in its unit, as subcategories' do.
+Other assets still count as members, for filters and reports.
+
+A link warns when it is made, and on Y's page, when none of X's members count their stock in Y's
+unit: "None of Workshop › Fasteners › M5's assets count in pcs, so they add nothing to M5 bolts'
+total." `GET /api/v1/categories/{id}` and the links answer give these as `link_warnings`.
+
+### Where else to look
+
+An asset counted by quantity lists, on its page and its scan page, each pool it counts in, with the
+pool's total and threshold and the other assets in it that have stock, with where they are and how
+many. The API gives them as the asset's `pools`, on `GET /api/v1/assets/{id}` and the scan, each
+listing every place, empty ones too, so stock can be moved to them.
+
+### Quiet bins
+
+An asset's own running-low flag holds off while the total of a pool it counts in is at or above
+that pool's threshold. Only pools whose unit is the asset's, and that have a threshold, hold it off.
+So an empty bin raises nothing while there is plenty elsewhere. When the pool runs short, the pool
+flags itself, and so does each of its bins below its own threshold; when the pool is restocked, from
+any bin, they clear.
+
+### Moving stock
+
+**Move to another place**, on an asset counted by quantity, takes some from it and adds it to
+another in one step: `POST /api/v1/assets/{id}/move` with `{"to": "<asset id>", "amount": n}`
+(`stock.record` in both assets' scopes), or MCP's `move_stock`.
+
+- Both must be counted in the same unit.
+- Moving more than there is answers `409` and changes nothing.
+- Each asset's history records `asset.quantity_changed` with `move`, naming where it came from and
+  went.
+- A pool both count in keeps its total, so it does not alert on the way. Each asset's own flag is
+  checked as usual.
+
+### Partial visibility
+
+People see only what they may:
+
+- **Where else to look** lists only the assets the reader can see, besides the one they are on.
+- **Any pool total shown to them**, on a category's page, an asset's or in a report, sums only
+  those, and so does a category's `active_count`.
+- **Alerts use the real total**, since they go to channels, not to that reader.
 
 ## Lending
 
@@ -273,13 +372,15 @@ the email and name of whoever made each change, and `more` when older events rem
 
 | Method and route | Permission | Purpose |
 |---|---|---|
-| `GET /api/v1/categories/{id}` | `assets.read` | Includes `active_count`, and `total` for a category that weighs |
+| `GET /api/v1/categories/{id}` | `assets.read` | Includes `active_count`, `total` for a category that weighs, both of the assets the requester sees, and `link_warnings` |
+| `PUT /api/v1/categories/{id}/links` | `categories.manage` | Set the categories it implies, or that imply it ([Pools](#pools)) |
 | `PUT /api/v1/categories/{id}/running-low` | `stock.record` | Set or clear a category's flag by hand |
 | `POST /api/v1/assets` | `assets.write` | Create an asset; a `stock` object starts counting |
 | `PUT /api/v1/assets/{id}` | `assets.write` | Update an asset's `stock` |
 | `POST /api/v1/assets/{id}/quantity` | `stock.record` | Use or restock |
 | `PUT /api/v1/assets/{id}/running-low` | `stock.record` | Set or clear an asset's flag by hand |
-| `GET /api/v1/assets/{id}` | `assets.read` | Includes `lendable` and the open `loan` |
+| `POST /api/v1/assets/{id}/move` | `stock.record` | Move stock to another asset ([Moving stock](#moving-stock)) |
+| `GET /api/v1/assets/{id}` | `assets.read` | Includes `lendable`, the open `loan`, `counts_in` and `pools` |
 | `POST /api/v1/assets/{id}/checkout` | `assets.borrow` or `assets.lend` | Check out |
 | `POST /api/v1/assets/{id}/checkin` | `assets.borrow` or `assets.lend` | Check in |
 | `GET /api/v1/loans` | `assets.track` | List loans |
@@ -295,7 +396,7 @@ the email and name of whoever made each change, and `more` when older events rem
 |---|---|---|
 | `category.running_low`, `category.restocked` | A category's flag changes | Yes |
 | `asset.running_low`, `asset.restocked` | An asset's flag changes | Yes |
-| `asset.quantity_changed` | An asset's quantity changes | No |
+| `asset.quantity_changed` | An asset's quantity changes, with `move` when stock moved between assets | No |
 | `asset.created`, `asset.edited`, `asset.archived`, `asset.restored` | An asset is created, edited, archived or restored | No |
 | `asset.checked_out`, `asset.checked_in` | An asset is lent or returned | No |
 | `asset.overdue` | A loan passes its due date | Yes |
@@ -308,3 +409,4 @@ the email and name of whoever made each change, and `more` when older events rem
 | `014` | Lending; grants `assets.borrow` and `assets.lend` to every role that had `assets.write` |
 | `016` | A category's `unit`, for weighing |
 | `064` | Loan reminders sent (`loan_reminders`), and whether each user gets them (`users.loan_reminders`) |
+| `075` | Categories that imply other categories (`category_implies`), for [pools](#pools) |

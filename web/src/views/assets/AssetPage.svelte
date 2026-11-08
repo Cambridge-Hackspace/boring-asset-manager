@@ -5,7 +5,7 @@
   import { amount, conditionLabel, contentsOf, describeChange, describeEvent, isWebURL, keptValues, placeLink } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { actorName } from '../../lib/people';
-  import type { AssetEvent, AssetWithDetails, Condition, Field, Filing, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
+  import type { AssetEvent, AssetWithDetails, Category,Condition, Field, Filing, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
@@ -26,6 +26,8 @@
   import PurchaseSection from '../../components/PurchaseSection.svelte';
   import ContractsSection from '../../components/ContractsSection.svelte';
   import CatalogPanel from '../../components/CatalogPanel.svelte';
+  import PoolsSection from '../../components/PoolsSection.svelte';
+  import { categoryPath, otherPlaces, placeName } from '../../lib/pools';
   import LoanPanel from '../../components/LoanPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import CommentsPanel from '../../components/CommentsPanel.svelte';
@@ -56,6 +58,8 @@
   let moving = $state(false);
   // Every field, to name values kept from former categories by their labels.
   let allFields = $state<Field[]>([]);
+  // Every category, to name those it counts in through links with those above them.
+  let allCategories = $state<Category[]>([]);
 
   const path = `/assets/${encodeURIComponent(id)}`;
 
@@ -78,6 +82,9 @@
     // Signed out, the catalog is closed (docs/access.md): where it is shows,
     // but not what it holds.
     if (!session.user) return;
+    if (asset?.counts_in?.length) {
+      allCategories = await request<{ categories: Category[] }>('GET', '/categories').then((r) => r.categories ?? [], () => []);
+    }
     try {
       relationTypes = (await request<{ relation_types: RelationType[] }>('GET', '/relation-types')).relation_types ?? [];
     } catch {
@@ -168,6 +175,42 @@
       () => request('POST', `${path}/quantity`, { adjust: sign * n }),
       sign < 0 ? `Used ${amount(n, unit)}.` : `Added ${amount(n, unit)}.`,
     );
+  }
+
+  // Moving stock to or from another place in a pool it counts in
+  // (docs/stock-and-lending.md#moving-stock).
+  let movingStock = $state(false);
+  let moveDirection = $state<'from' | 'to'>('to');
+  let movePlace = $state('');
+  let moveAmount = $state<number | null>(null);
+  const places = $derived(asset ? otherPlaces(asset.pools ?? [], asset.asset.id) : []);
+
+  async function moveStock(event: SubmitEvent) {
+    event.preventDefault();
+    if (!asset) return;
+    const n = moveAmount ?? 0;
+    const other = places.find((p) => p.asset_id === movePlace);
+    if (!other || !Number.isInteger(n) || n < 1) {
+      error = 'Choose where, and a whole number of at least 1.';
+      return;
+    }
+    const [from, to] = moveDirection === 'to' ? [asset.asset.id, other.asset_id] : [other.asset_id, asset.asset.id];
+    const unit = asset.asset.stock?.unit;
+    error = saved = '';
+    busy = true;
+    try {
+      await request('POST', `/assets/${encodeURIComponent(from)}/move`, { to, amount: n });
+      // Read again, for the pools as they are now.
+      asset = (await request<{ asset: AssetWithDetails }>('GET', path)).asset;
+      saved = moveDirection === 'to' ? `Moved ${amount(n, unit)} to ${placeName(other)}.` : `Moved ${amount(n, unit)} here from ${placeName(other)}.`;
+      movingStock = false;
+      moveAmount = null;
+      await loadHistory();
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      busy = false;
+    }
   }
 
   function setRunningLow(low: boolean) {
@@ -327,6 +370,19 @@
           <dd class="flex flex-wrap gap-1">
             {#each asset.categories as c (c.id)}<CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />{/each}
           </dd>
+          {#if asset.counts_in?.length}
+            <dt class="text-zinc-600 dark:text-zinc-400">Counts in</dt>
+            <dd>
+              <ul class="space-y-0.5" aria-label="Counts in">
+                {#each asset.counts_in as c (c.category_id)}
+                  <li>
+                    <a class="underline" href="/categories/{encodeURIComponent(c.category_id)}">{categoryPath(allCategories, c.category_id, c.category_name)}</a>
+                    <span class="text-zinc-600 dark:text-zinc-400">(through {categoryPath(allCategories, c.through_id, c.through_name)})</span>
+                  </li>
+                {/each}
+              </ul>
+            </dd>
+          {/if}
           {#if asset.resolved_icon}
             {@const icon = asset.resolved_icon}
             <dt class="text-zinc-600 dark:text-zinc-400">Icon</dt>
@@ -494,6 +550,37 @@
                 <button type="button" class="btn-secondary" disabled={busy} onclick={() => setRunningLow(true)}>Mark running low</button>
               {/if}
             </div>
+          {/if}
+          {#if asset.pools?.length}
+            <PoolsSection pools={asset.pools} hereId={asset.asset.id} />
+          {/if}
+          {#if places.length && session.canOn(asset.scopes, 'stock.record') && !archived}
+            {#if movingStock}
+              <form class="mt-3 space-y-2" aria-label="Move to another place" onsubmit={moveStock}>
+                <fieldset class="flex flex-wrap gap-4 text-sm">
+                  <legend class="sr-only">Which way</legend>
+                  <label class="flex items-center gap-2"><input type="radio" value="to" bind:group={moveDirection} /> From here to</label>
+                  <label class="flex items-center gap-2"><input type="radio" value="from" bind:group={moveDirection} /> To here from</label>
+                </fieldset>
+                <div class="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label class="label" for="move-place">Place</label>
+                    <select id="move-place" class="input" bind:value={movePlace} required>
+                      <option value="">Choose one</option>
+                      {#each places as p (p.asset_id)}<option value={p.asset_id}>{placeName(p)}{placeName(p) !== p.name ? ` (${p.name})` : ''}: {amount(p.quantity, stock.unit)}</option>{/each}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="label" for="move-amount">How many to move{stock.unit ? ` (${stock.unit})` : ''}</label>
+                    <input id="move-amount" class="input w-28" type="number" min="1" step="1" required bind:value={moveAmount} />
+                  </div>
+                  <button type="submit" class="btn-primary" disabled={busy}>Move</button>
+                  <button type="button" class="btn-secondary" onclick={() => (movingStock = false)}>Cancel</button>
+                </div>
+              </form>
+            {:else}
+              <button type="button" class="btn-secondary mt-3" onclick={() => (movingStock = true)}>Move to another place</button>
+            {/if}
           {/if}
         </section>
       {/if}

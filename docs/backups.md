@@ -92,7 +92,7 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Kind | Key | Tables |
 |---|---|---|
 | Reports | `reports` | `reports` |
-| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`, `category_attachments` and their files, `vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments` and their files, `category_vendors`, the vendors categories are bought from, `category_catalog_entries`, what vendors sell of each category, `category_comments`, `contracts`, `contract_categories`, the categories they cover, `contract_attachments` and their files, and the `contract_notices` recorded for them |
+| The catalog | `catalog` | `scopes`, `relation_types`, `fields`, `asset_actions`, `categories`, `category_fields`, `category_actions`, `category_relation_types`, `category_scopes`, `category_attachments` and their files, `vendors`, `vendor_contacts`, `vendor_scopes`, `vendor_attachments` and their files, `category_vendors`, the vendors categories are bought from, `category_catalog_entries`, what vendors sell of each category, `category_comments`, `category_implies`, the categories each implies, `contracts`, `contract_categories`, the categories they cover, `contract_attachments` and their files, and the `contract_notices` recorded for them |
 | Labels | `labels` | `templates`, `images` and their files, `category_label_templates` |
 | Icons | `icons` | `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings` |
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites`, `comment_mentions` |
@@ -214,6 +214,7 @@ table has none of it, and restores and imports with no such rows:
 | `070` | `asset_purchases`, `warranty_notices` |
 | `071` | `comment_mentions` |
 | `072` | `contracts`, `contract_categories`, `contract_attachments`, `contract_notices`, `contract_assets` |
+| `075` | `category_implies` |
 
 Its rows also lack the columns added since. A restore leaves those to the migrations, as they left
 them in the database it was written from. An import leaves them to the columns' defaults.

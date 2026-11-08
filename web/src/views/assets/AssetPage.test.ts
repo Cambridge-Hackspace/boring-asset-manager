@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import AssetPage from './AssetPage.svelte';
 import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
@@ -361,5 +361,76 @@ describe('AssetPage contracts', () => {
     page([]);
     await screen.findByText(/5 pcs left/);
     expect(screen.queryByRole('heading', { name: 'Contracts' })).toBeNull();
+  });
+});
+
+describe('AssetPage pools', () => {
+  const inPool = (quantity: number, there: number): AssetWithDetails => ({
+    ...withStock(quantity, false),
+    counts_in: [{ category_id: 'bolts', category_name: 'M5 bolts', through_id: 'drawer', through_name: 'Workshop drawer' }],
+    pools: [{
+      category_id: 'bolts', name: 'M5 bolts', unit: 'pcs', low_stock_threshold: 200, total: quantity + there,
+      places: [
+        { asset_id: 'a1', name: 'M3 screws', quantity, location: [] },
+        { asset_id: 'bay', name: 'Bay bin', quantity: there, location: [{ id: 'room', name: 'Laser bay' }] },
+      ],
+    }],
+  });
+
+  it('says what it counts in through links, and where else the stock is', async () => {
+    fakeApi({
+      'GET /assets/a1': () => ({ asset: inPool(140, 300) }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    const counts = await screen.findByRole('list', { name: 'Counts in' });
+    expect(counts.textContent?.replace(/\s+/g, ' ').trim()).toBe('M5 bolts (through Workshop drawer)');
+    expect(screen.getByText('M5 bolts: 440 pcs (threshold 200 pcs)')).toBeTruthy();
+    const where = screen.getByRole('list', { name: 'Where M5 bolts is kept' });
+    expect(within(where).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['140 pcs here', '300 pcs in Laser bay (Bay bin)']);
+    expect(screen.getByRole('link', { name: 'Laser bay' }).getAttribute('href')).toBe('/assets/bay');
+  });
+
+  it('moves stock to it from another place, refusing more than there is', async () => {
+    let here = 0;
+    let there = 300;
+    const { sent } = fakeApi({
+      'GET /assets/a1': () => ({ asset: inPool(here, there) }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+      'POST /assets/bay/move': (body) => {
+        const n = (body as { amount: number }).amount;
+        if (n > there) return { status: 409, body: { error: `not enough stock: ${there} left` } };
+        there -= n;
+        here += n;
+        return { from: {}, to: {} };
+      },
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Move to another place' }));
+    const form = screen.getByRole('form', { name: 'Move to another place' });
+    await fireEvent.click(screen.getByLabelText('To here from'));
+    await fireEvent.change(screen.getByLabelText('Place'), { target: { value: 'bay' } });
+    await fireEvent.input(screen.getByLabelText('How many to move (pcs)'), { target: { value: '400' } });
+    await fireEvent.submit(form);
+    expect(await screen.findByText(/not enough stock: 300 left/)).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('How many to move (pcs)'), { target: { value: '100' } });
+    await fireEvent.submit(form);
+    expect(await screen.findByText('Moved 100 pcs here from Laser bay.')).toBeTruthy();
+    expect(sent.filter((r) => r.method === 'POST').at(-1)!.body).toEqual({ to: 'a1', amount: 100 });
+    expect(screen.getByText('M5 bolts: 300 pcs (threshold 200 pcs)')).toBeTruthy();
+  });
+
+  it('offers no move to those who cannot record stock', async () => {
+    session.permissions = ['assets.read'];
+    fakeApi({
+      'GET /assets/a1': () => ({ asset: inPool(140, 300) }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    expect(await screen.findByText('M5 bolts: 440 pcs (threshold 200 pcs)')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Move to another place' })).toBeNull();
   });
 });

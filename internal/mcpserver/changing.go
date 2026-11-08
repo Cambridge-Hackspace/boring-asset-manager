@@ -643,6 +643,29 @@ func changingTools() []tool {
 			return say(out, "%s is no longer flagged running low.", describe(out.Asset))
 		}),
 		define(&mcp.Tool{
+			Name:        "move_stock",
+			Description: "Move stock counted by quantity from one asset to another in one step, such as bolts from the laser bay's bin to the workshop's: both must count in the same unit. Refuses more than there is. Both histories record it as a move, and a pool both count in keeps its total, so it does not alert.",
+			Annotations: changes("Move stock", false),
+		}, []string{"POST /api/v1/assets/{id}/move"}, []string{rbac.PermStockRecord}, func(ctx context.Context, e *env, in moveStockIn) (reply[movedOut], error) {
+			from, err := e.assetID(ctx, in.From)
+			if err != nil {
+				return reply[movedOut]{}, err
+			}
+			to, err := e.assetID(ctx, in.To)
+			if err != nil {
+				return reply[movedOut]{}, err
+			}
+			var res struct {
+				From models.AssetWithDetails `json:"from"`
+				To   models.AssetWithDetails `json:"to"`
+			}
+			if err := e.call(ctx, http.MethodPost, assetPath(from, "/move"), map[string]any{"to": to, "amount": in.Amount}, &res); err != nil {
+				return reply[movedOut]{}, err
+			}
+			out := movedOut{From: summarize(&res.From, e.baseURL(ctx)), To: summarize(&res.To, e.baseURL(ctx))}
+			return say(out, "Moved %d: %s now has %d, %s %d.", in.Amount, describe(out.From), out.From.Stock.Quantity, describe(out.To), out.To.Stock.Quantity)
+		}),
+		define(&mcp.Tool{
 			Name:        "set_condition",
 			Description: "Report an asset needing maintenance or out of service, with a note saying what is wrong; or mark it ok again.",
 			Annotations: changes("Set condition", true),
@@ -815,4 +838,15 @@ func orNone(names []string) string {
 		return "none"
 	}
 	return strings.Join(names, ", ")
+}
+
+type moveStockIn struct {
+	From   string `json:"from" jsonschema:"the asset to take it from, by ID or code"`
+	To     string `json:"to" jsonschema:"the asset to put it in, by ID or code"`
+	Amount int    `json:"amount" jsonschema:"how much to move, in their unit"`
+}
+
+type movedOut struct {
+	From assetSummary `json:"from"`
+	To   assetSummary `json:"to"`
 }

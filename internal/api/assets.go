@@ -249,8 +249,17 @@ func (s *Server) handleGetAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	shown := s.shown(r, asset)
+	if asset.Asset.Stock != nil {
+		pools, err := s.poolsFor(r, id)
+		if err != nil {
+			writeServerError(w, err, "find where else its stock is")
+			return
+		}
+		shown.Pools = pools
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"asset": s.shown(r, asset),
+		"asset": shown,
 	})
 }
 

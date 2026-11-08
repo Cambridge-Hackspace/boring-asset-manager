@@ -131,7 +131,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
 | `search_assets` | `assets.read` | Every filter the asset list takes, favorites and the vendor bought from among them, and running low; 25 at a time, up to 200, with `offset`. |
-| `get_asset` | `assets.read` | Its fields, codes, place, contents, links, photos, hooks and icon, and where the icon comes from; and where it came from, its `purchase`, its price, order number and invoice only with `purchases.read`. |
+| `get_asset` | `assets.read` | Its fields, codes, place, contents, links, photos, hooks and icon, and where the icon comes from; and where it came from, its `purchase`, its price, order number and invoice only with `purchases.read`; the categories it `counts_in` through links, and the `pools` its stock counts in, with where else theirs is. |
 | `look_up_code` | `assets.scan` | Its scan page ([Scanning](scanning.md)). |
 | `asset_history` | `assets.read` | |
 | `asset_graph` | `assets.read` | Follows followed links ([Following links](data-model.md#following-links)) from an asset, out, in or both, 1 to 10 hops, through the types chosen; or, without one, the map of a category or a search. At most 500 assets, saying when cut short; those the person may not read only counted. |
@@ -155,6 +155,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `unlink_assets` | `assets.write` | |
 | `record_stock` | `stock.record` | Use, restock or set. |
 | `set_running_low` | `stock.record` | |
+| `move_stock` | `stock.record` | From one asset to another, both in the same unit; refuses more than there is. See [Moving stock](stock-and-lending.md#moving-stock). |
 | `set_condition` | `assets.report` or `assets.write` | |
 | `borrow` | `assets.borrow` | A person, for themselves. |
 | `lend` | `assets.lend` | |
@@ -198,6 +199,7 @@ Reading needs `assets.read`; changing needs `categories.manage`. Deleting is mar
 | `list_hooks` | `assets.read` | |
 | `save_hook`, `delete_hook` | `categories.manage` | `save_hook` takes `triggers`: a button, events or a schedule (see [Hooks](hooks.md#triggers)); left out, they stay as they were. |
 | `set_category_vendors` | `categories.manage` | The vendors a category is bought from, in order of preference. |
+| `set_category_links` | `categories.manage` | The categories a category's members also count in (`implies`), or whose members count in it (`included_by`); each list given replaces that side. See [Pools](stock-and-lending.md#pools). |
 
 ### Vendors
 

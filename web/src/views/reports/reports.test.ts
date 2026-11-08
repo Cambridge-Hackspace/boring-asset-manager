@@ -194,3 +194,41 @@ describe('ReportEditor, contracts', () => {
     expect((sent.find((r) => r.method === 'POST')!.body as { spec: { filter: unknown } }).spec.filter).toEqual({ contract: 'k1' });
   });
 });
+
+describe('Reports by pool', () => {
+  it('shows a pool\'s line with its total and threshold over its places', async () => {
+    const byPool: ReportResult = {
+      assets: 2,
+      sections: [{
+        type: 'table', title: 'Stock', columns: ['Place', 'Left'],
+        groups: [{
+          title: 'M5 bolts', running_low: false, pool: { category_id: 'bolts', total: 440, unit: 'pcs', low_stock_threshold: 200 },
+          rows: [{ asset_id: 'a', cells: ['Drawer bin', '140'] }, { asset_id: 'b', cells: ['Bay bin', '300'] }],
+        }],
+      }],
+    };
+    fakeApi({ 'GET /reports/low/run': () => ({ report: lowReport, result: byPool }) });
+    render(ReportView, { params: { id: 'low' } });
+    const table = await screen.findByRole('region', { name: 'Stock' });
+    expect(within(table).getByRole('heading', { name: 'M5 bolts: 440 pcs (threshold 200 pcs)' })).toBeTruthy();
+    expect(within(table).getAllByRole('link').map((a) => a.textContent)).toContain('Bay bin');
+  });
+
+  it('chooses by pool or by bin for each table', async () => {
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories }),
+      'GET /fields': () => ({ fields: [] }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /reports/low': () => ({ report: lowReport }),
+      'PUT /reports/low': () => ({ report: lowReport }),
+    });
+    render(ReportEditor, { params: { id: 'low' } });
+    const group = (await screen.findByLabelText('Group')) as HTMLSelectElement;
+    expect([...group.options].map((o) => o.value)).toEqual(['', 'category', 'pool']);
+    await fireEvent.change(group, { target: { value: 'pool' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save report' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const spec = (sent.find((r) => r.method === 'PUT')!.body as { spec: { sections: { group_by?: string }[] } }).spec;
+    expect(spec.sections[0]!.group_by).toBe('pool');
+  });
+});

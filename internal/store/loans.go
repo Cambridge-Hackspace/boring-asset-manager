@@ -93,6 +93,9 @@ type categoryTraits struct {
 	// colors maps each category with a color to it, and names every
 	// category to its name.
 	colors, names map[string]string
+	// graph is the tree with the links between categories, which assets
+	// count in through (docs/stock-and-lending.md#pools).
+	graph *catGraph
 }
 
 // weighs reports whether an asset in these categories, counting its stock
@@ -165,7 +168,11 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, hooks: hooks, offers: offers, icons: icons, colors: colors, names: names}
+	implies, err := readImplies(q)
+	if err != nil {
+		return categoryTraits{}, err
+	}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, hooks: hooks, offers: offers, icons: icons, colors: colors, names: names, graph: newCatGraph(parents, implies)}
 	t.depth, t.descendants = shape(parents)
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {

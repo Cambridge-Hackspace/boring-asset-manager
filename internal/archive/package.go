@@ -257,7 +257,9 @@ type category struct {
 	labelTemplates, scopes     []string
 	vendors                    []string
 	// catalog are the vendors of its catalog entries.
-	catalog  []string
+	catalog []string
+	// implies are the categories its members also count in.
+	implies  []string
 	required map[string]bool
 	// icons are its icons, one for each rendition it has one for, and
 	// iconFields the fields their params are bound to.
@@ -450,6 +452,7 @@ func (r *resolver) load() error {
 		{"SELECT category_id, scope_id FROM category_scopes", func(c *category, v string) { c.scopes = append(c.scopes, v) }},
 		{"SELECT category_id, vendor_id FROM category_vendors ORDER BY sort_order", func(c *category, v string) { c.vendors = append(c.vendors, v) }},
 		{"SELECT category_id, vendor_id FROM category_catalog_entries ORDER BY vendor_id", func(c *category, v string) { c.catalog = append(c.catalog, v) }},
+		{"SELECT category_id, implied_id FROM category_implies", func(c *category, v string) { c.implies = append(c.implies, v) }},
 		{"SELECT category_id, field_id FROM icon_param_bindings", func(c *category, v string) {
 			c.iconFields = append(c.iconFields, v)
 		}},
@@ -1109,6 +1112,12 @@ func (r *resolver) rowsOf(plan *Plan) {
 				set("category_vendors", id, v)
 			}
 		}
+		// a link comes when both its categories do
+		for _, y := range c.implies {
+			if has(ItemCategory, y) {
+				set("category_implies", id, y)
+			}
+		}
 		if !ids[ItemCategory][c.parent] {
 			// a top category of the package keeps what it inherits
 			fields, labels, scan := r.inherited(id)
@@ -1217,6 +1226,8 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 		return p.rows[t.Name][keyOf("vendor_id", "scope_id")], nil
 	case "category_vendors":
 		return p.rows[t.Name][keyOf("category_id", "vendor_id")], nil
+	case "category_implies":
+		return p.rows[t.Name][keyOf("category_id", "implied_id")], nil
 	case "flows":
 		if !p.rows[t.Name][get("id")] {
 			return false, nil

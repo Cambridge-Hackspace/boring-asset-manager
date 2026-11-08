@@ -170,7 +170,7 @@ func scanCategory(row interface{ Scan(...any) error }) (models.Category, error) 
 	if template.Valid && template.String != "" {
 		c.ScanTemplateID = &template.String
 	}
-	c.LabelTemplateIDs, c.VendorIDs = []string{}, []string{}
+	c.LabelTemplateIDs, c.VendorIDs, c.Implies, c.IncludedBy = []string{}, []string{}, []string{}, []string{}
 	return c, nil
 }
 
@@ -195,7 +195,8 @@ func labelTemplateLists(q interface {
 	return lists, rows.Err()
 }
 
-// withLabelTemplates sets categories' label templates.
+// withLabelTemplates sets categories' label templates, and their links to other
+// categories.
 func (s *Store) withLabelTemplates(categories []models.Category) error {
 	lists, err := labelTemplateLists(storeQuerier{s})
 	if err != nil {
@@ -204,7 +205,7 @@ func (s *Store) withLabelTemplates(categories []models.Category) error {
 	for i := range categories {
 		setLabelTemplates(&categories[i], lists[categories[i].ID])
 	}
-	return nil
+	return withImplies(storeQuerier{s}, categories)
 }
 
 func setLabelTemplates(c *models.Category, list []string) {
@@ -270,11 +271,12 @@ var cloneCategoryLinks = []struct{ table, columns string }{
 	{"category_label_templates", "template_id, sort_order"},
 	{"category_scopes", "scope_id"},
 	{"category_vendors", "vendor_id, sort_order"},
+	{"category_implies", "implied_id"},
 }
 
 // CloneCategory makes a copy of a category beside it, under the same
 // parent: its settings, fields, suggested link types, hooks, scopes,
-// preferred vendors and scan and label templates (the same templates, not copies of them), but
+// preferred vendors, the categories it counts in, and scan and label templates (the same templates, not copies of them), but
 // not its subcategories or its assets. An empty name names it "<name>
 // copy". The copy is not flagged running low by hand; with a threshold, it
 // flags itself, as a new category does.
@@ -403,6 +405,9 @@ func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Categor
 
 	if in.ParentID != nil && *in.ParentID != "" {
 		if err := s.DetectCycle(id, in.ParentID); err != nil {
+			return nil, err
+		}
+		if err := s.checkMoveCycle(id, in.ParentID); err != nil {
 			return nil, err
 		}
 	} else {

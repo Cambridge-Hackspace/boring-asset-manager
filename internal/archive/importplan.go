@@ -953,6 +953,8 @@ func (m *matcher) rows() {
 	join("category_actions", "action_id", ItemHook, hookIDs)
 	join("category_relation_types", "relation_type_id", ItemRelationType, b.relTypes)
 	join("category_scopes", "scope_id", ItemScope, scopeIDs)
+	// links between categories, when both come
+	join("category_implies", "implied_id", ItemCategory, b.cats)
 
 	// vendors, with their contacts, scopes and files, and the categories
 	// naming them

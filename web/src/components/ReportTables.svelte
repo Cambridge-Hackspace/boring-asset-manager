@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ReportResult } from '../lib/models';
   import ReportChart from './ReportChart.svelte';
+  import { poolLine } from '../lib/pools';
 
   // A report's sections, as tables. downloadHref, if given, links each
   // table to its download as CSV or an Excel workbook.
@@ -26,7 +27,7 @@
     {#each section.groups ?? [] as group, g (g)}
       {#if group.title}
         <h3 class="mt-4 mb-1 font-medium">
-          {group.title}
+          {group.pool ? poolLine(group.title, group.pool) : group.title}
           {#if group.running_low}<span class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Running low</span>{/if}
         </h3>
       {/if}

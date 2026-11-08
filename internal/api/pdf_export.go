@@ -192,7 +192,7 @@ func (s *Server) handleReportPDF(w http.ResponseWriter, r *http.Request) {
 			}
 			table := render.Table{Columns: sec.Columns, PictureColumns: req.pictureColumns()}
 			for _, g := range sec.Groups {
-				group := render.TableGroup{Title: g.Title}
+				group := render.TableGroup{Title: g.Label()}
 				for _, row := range g.Rows {
 					tr := render.TableRow{Cells: row.Cells}
 					if len(table.PictureColumns) > 0 {

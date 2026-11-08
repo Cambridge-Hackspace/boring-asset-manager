@@ -398,6 +398,7 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 		return nil, err
 	}
 	details.Scopes = traits.scopesOf(catIDs)
+	details.CountsIn = traits.countsIn(catIDs)
 	if err := s.contractDetails(details, ctx, catIDs, traits.parents); err != nil {
 		return nil, err
 	}
@@ -486,8 +487,17 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 		args = append(args, f.Within)
 	}
 	if categoryID != "" {
-		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_categories WHERE category_id = ?)")
-		args = append(args, categoryID)
+		// Its own assets, and the members of the categories implying it
+		// (docs/stock-and-lending.md#pools).
+		graph, err := readCatGraph(storeQuerier{s})
+		if err != nil {
+			return nil, err
+		}
+		members := graph.membersOf(categoryID)
+		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_categories WHERE category_id IN ("+strings.TrimSuffix(strings.Repeat("?, ", len(members)), ", ")+"))")
+		for _, m := range members {
+			args = append(args, m)
+		}
 	}
 	if f.VendorID != "" {
 		whereClauses = append(whereClauses, "a.id IN (SELECT asset_id FROM asset_purchases WHERE vendor_id = ?)")

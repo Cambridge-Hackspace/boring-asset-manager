@@ -68,6 +68,14 @@ func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, 
 			kept = append(kept, assets[i])
 		}
 	}
+	for _, sec := range spec.Sections {
+		if sec.Type == "table" && sec.GroupBy == "pool" {
+			if spec.Pools, err = s.poolData(r); err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
 	now := time.Now()
 	var history []models.Event
 	if kinds, since := spec.HistoryKinds(now); len(kinds) > 0 {

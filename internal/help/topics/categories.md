@@ -15,6 +15,7 @@ A category's page is in tabs, and each part of it saves with its own button. A t
 - **About**: its name, the category it sits in, and its color.
 - **Fields**: what its assets fill in, its own and those it inherits.
 - **Stock and lending**: whether it is consumable, with an optional unit and threshold (see [Stock](/help/stock)), and whether its assets can be lent (see [Lending](/help/loans)).
+- **Counts in**: the other categories its assets count in, and those whose assets count in it, for totals, thresholds, filters and reports, such as one pool for stock kept in several places. Nothing else comes through a link. See [Stock](/help/stock).
 - **Labels**: the templates its assets' labels are printed with, and a button that adds them all to the print queue.
 - **Icon**: a small drawing of what its assets are, which its subcategories inherit. See [Icons](/help/icons).
 - **Links and hooks**: the kinds of link offered first for its assets, what scanning them shows (see [Scanning](/help/scanning)), and the [hooks](/help/hooks) offered on them: buttons such as Identify.
