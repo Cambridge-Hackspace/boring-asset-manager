@@ -599,7 +599,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `assets.lend` | Lending assets (see [Stock and lending](stock-and-lending.md)). | Yes |
 | `assets.scan` | Scanning (see [Scanning](scanning.md)). | Yes |
 | `assets.track` | Seeing the people around assets: who borrowed them, who changed them, and the loans list. | Yes |
-| `purchases.read` | Seeing what assets cost: their price, currency, order number and invoice, what contracts cost, and the prices in vendors' catalogs (see [Seeing prices](#seeing-prices)). | Yes |
+| `purchases.read` | Seeing what assets cost: their price, currency, order number and invoice, what contracts cost, the prices in vendors' catalogs, and purchase orders' prices (see [Seeing prices](#seeing-prices)). | Yes |
 | `assets.hook` | Triggering hooks (see [Hooks](hooks.md)). | Yes |
 | `events.read` | Receiving events live (see [Hooks](hooks.md)). | Yes |
 | `stock.record` | Using, restocking and flagging stock, without being able to edit assets. | Yes |
@@ -609,7 +609,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `labels.print` | Printing labels (see [Printing](printing.md)). | No |
 | `reports.manage` | Managing reports (see [Reports](reports.md)). | No |
 | `categories.manage` | Managing categories, including moving them under others, and relation types. | No |
-| `vendors.manage` | Creating and editing vendors, their contacts and attachments, and their contracts (see [Vendors](vendors.md) and [Contracts](contracts.md)). | Yes |
+| `vendors.manage` | Creating and editing vendors, their contacts and attachments, their contracts, and purchase orders to them (see [Vendors](vendors.md), [Contracts](contracts.md) and [Purchase orders](purchase-orders.md)). | Yes |
 | `comments.write` | Writing comments on what one may read, attaching files to it while writing, and editing and deleting one's own (see [Comments](comments.md)). | Yes |
 | `comments.moderate` | Deleting anyone's comments (see [Comments](comments.md)). | Yes |
 | `icons.manage` | Changing what every icon is drawn with: the icon library, the palette and the icon settings (see [Icons](icons.md)). | No |
@@ -738,6 +738,11 @@ public role among them, so that no one sees less than before. Take it from a rol
 A contract's cost, currency and billing need `purchases.read` in its vendor's scopes, or in every
 scope for a vendor in none, and are left out in the same places, and of the assets it covers (see
 [Contracts](contracts.md#who-sees-a-contract)).
+
+A purchase order's prices, totals and currency follow the same rule as a contract's cost, and are
+left out of its answers, its PDF, its history and MCP (see
+[Purchase orders](purchase-orders.md#who-sees-an-order)). Receiving one needs `stock.record` for
+what it restocks and `assets.write` where the assets it makes go, not `vendors.manage`.
 
 ### The public role
 

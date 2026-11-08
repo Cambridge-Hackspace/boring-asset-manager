@@ -15,6 +15,7 @@ These pages describe how BAM! works, for people running it and for people workin
 - [Data model](data-model.md): fields, categories, assets, codes, attachments and photos, links and places, stored text and databases.
 - [Vendors](vendors.md): suppliers and how to reach them, who sees them, and the vendors categories are bought from.
 - [Contracts](contracts.md): warranties, service and maintenance agreements, leases and licenses with vendors, what they cover, and their reminders.
+- [Purchase orders](purchase-orders.md): orders to vendors from their catalogs, started from what is running low, sent as PDFs, and received into stock.
 - [Comments](comments.md): notes in Markdown on assets, categories, loans and filings, how they are rendered safely, and who sees and writes them.
 - [Labels](labels.md): label templates, content bindings, codes and output formats.
 - [Template editor](template-editor.md): the label editor, its tools and shortcuts.

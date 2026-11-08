@@ -12,7 +12,8 @@ import (
 )
 
 // DefaultMaxAttachments is how many attachments an asset, a category, a
-// vendor or a contract may have, unless the configuration says otherwise.
+// vendor, a contract or a purchase order may have, unless the
+// configuration says otherwise.
 const DefaultMaxAttachments = 50
 
 var (
@@ -44,6 +45,7 @@ var attachmentOwners = map[string]attachmentOwner{
 	models.OwnerCategory: {models.OwnerCategory, "category_attachments", "category_id", "categories"},
 	models.OwnerVendor:   {models.OwnerVendor, "vendor_attachments", "vendor_id", "vendors"},
 	models.OwnerContract: {models.OwnerContract, "contract_attachments", "contract_id", "contracts"},
+	models.OwnerOrder:    {models.OwnerOrder, "purchase_order_attachments", "purchase_order_id", "purchase_orders"},
 }
 
 // AttachmentTables are the tables attachments are kept in, by owner.
@@ -155,7 +157,7 @@ func (s *Store) editableAttachmentsTx(tx *sql.Tx, o attachmentOwner, ownerID str
 		if archived.Valid {
 			return nil, ErrAssetArchived
 		}
-	case models.OwnerCategory, models.OwnerVendor, models.OwnerContract:
+	case models.OwnerCategory, models.OwnerVendor, models.OwnerContract, models.OwnerOrder:
 		res, err := s.TxExec(tx, "UPDATE "+o.parent+" SET updated_at = updated_at WHERE id = ?", ownerID)
 		if err != nil {
 			return nil, fmt.Errorf("locking %s: %w", o.kind, err)
@@ -171,6 +173,9 @@ func (s *Store) editableAttachmentsTx(tx *sql.Tx, o attachmentOwner, ownerID str
 			}
 			if exists == 0 && o.kind == models.OwnerContract {
 				return nil, ErrContractNotFound
+			}
+			if exists == 0 && o.kind == models.OwnerOrder {
+				return nil, ErrOrderNotFound
 			}
 			if exists == 0 {
 				return nil, ErrCategoryNotFound
@@ -226,6 +231,8 @@ func (s *Store) recordAttachmentsTx(tx *sql.Tx, o attachmentOwner, ownerID strin
 		return s.recordVendorEvent(tx, models.EventVendorEdited, ownerID, name, payload)
 	case models.OwnerContract:
 		return s.recordContractEditedTx(tx, ownerID, payload)
+	case models.OwnerOrder:
+		return s.recordOrderEditedTx(tx, ownerID, payload)
 	}
 	return s.recordAssetEvent(tx, models.EventAssetEdited, ownerID, payload)
 }

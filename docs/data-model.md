@@ -192,7 +192,8 @@ queues its label. Then it keeps the form as it was, ready for the next one:
 
 ### Attachments
 
-Assets, categories, [vendors](vendors.md) and [contracts](contracts.md) carry files:
+Assets, categories, [vendors](vendors.md), [contracts](contracts.md) and
+[purchase orders](purchase-orders.md) carry files:
 **attachments**. Each has a name, a description, who added it and when, and its place in its
 owner's order. Each is of one kind, decided by its content, not by its file's name alone:
 
@@ -292,6 +293,8 @@ warranties can rely on them.
   says so.
 - **A vendor deleted** is forgotten as the vendor of every asset bought from it. The rest of
   their purchase details stay.
+- **Received against a purchase order**, an asset is given its details by the order: its vendor,
+  dates, number and price (see [Purchase orders](purchase-orders.md#receiving)).
 
 **Who sees them.** Anyone who reads an asset sees its vendor, when they may see the vendor (see
 [Vendors](vendors.md)), and its dates. Its price, currency, order number and invoice also need
@@ -547,6 +550,7 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 | `GET`, `POST`, `PUT /api/v1/categories/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/categories/{id}/attachments/{attachment_id}` | `assets.read` to see, `categories.manage` to change | A category's, as an asset's. |
 | `GET`, `POST`, `PUT /api/v1/vendors/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/vendors/{id}/attachments/{attachment_id}` | Seeing the vendor to see, `vendors.manage` in its scopes to change | A vendor's, as an asset's (see [Vendors](vendors.md)). |
 | `GET`, `POST`, `PUT /api/v1/contracts/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/contracts/{id}/attachments/{attachment_id}` | Seeing its vendor to see, `vendors.manage` in the vendor's scopes to change | A contract's, as a vendor's (see [Contracts](contracts.md)). |
+| `GET`, `POST`, `PUT /api/v1/purchase-orders/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/purchase-orders/{id}/attachments/{attachment_id}` | Seeing its vendor to see, `vendors.manage` in the vendor's scopes to change | A purchase order's, as a contract's (see [Purchase orders](purchase-orders.md)). |
 | `POST /api/v1/assets/{id}/photos` | `assets.write` | Add a photo, as the `file` part of a multipart form. |
 | `GET /api/v1/assets/{id}/photos/{photo_id}` | `assets.read` | Serve a photo; `?size=thumb` serves its thumbnail. |
 | `DELETE /api/v1/assets/{id}/photos/{photo_id}` | `assets.write` | Remove a photo. |
@@ -604,6 +608,8 @@ each asset's `cut`.
 | `contracts` | Contracts with vendors (see [Contracts](contracts.md)) | `vendor_id`, `kind`, `name`, `reference`, `start_date`, `end_date` (`YYYY-MM-DD`, nullable), `auto_renews`, `notice_days`, `cost_minor` (minor units, nullable), `currency`, `billing`, `notes` |
 | `contract_assets`, `contract_categories` | What each contract covers | `contract_id`, and `asset_id` or `category_id` |
 | `contract_notices` | The contract reminders recorded, each claimed by inserting it | `contract_id`, `kind` (`expiring` or `expired`), `due_date`, `sent_at` |
+| `purchase_orders` | Purchase orders to vendors (see [Purchase orders](purchase-orders.md)) | `number` (unique), `vendor_id`, `state`, `currency`, `vendor_reference`, `ordered_on`, `expected_on`, `received_on` (`YYYY-MM-DD`, nullable), `deliver_to`, `notes` |
+| `purchase_order_lines` | Their lines, in order | `purchase_order_id`, `position`, `category_entry_id` or `asset_entry_id` (nullable), `category_id` or `asset_id` (nullable), `part_number`, `description`, `pack_size`, `pack_unit`, `quantity`, `quantity_received`, `unit_price_minor` (minor units, nullable) |
 
 For the `select` validation type, `options` holds the choices and an optional default:
 
@@ -643,3 +649,4 @@ Changes to links serialize on the `asset_links` lock.
 | `071` | Mentions in comments: `comment_mentions`, each person a comment has mentioned and whether they were told, and `users.mention_emails`. See [Comments](comments.md#mentions). |
 | `072` | Contracts (`contracts`, `contract_categories`, `contract_assets`, `contract_attachments`), the reminders recorded (`contract_notices`), and `events.contract_id`. See [Contracts](contracts.md). |
 | `075` | Categories that imply other categories (`category_implies`). See [Pools](stock-and-lending.md#pools). |
+| `076` | Purchase orders (`purchase_orders`, `purchase_order_lines`, `purchase_order_attachments`), `events.purchase_order_id`, and the lock orders are numbered under. See [Purchase orders](purchase-orders.md). |

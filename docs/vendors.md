@@ -2,7 +2,8 @@
 
 A **vendor** is a supplier a space buys from, and how to reach it. Vendors are one list per
 instance, shared out with scopes as categories' assets are. This is the core of #216: where each
-asset came from (#218), what each vendor sells (#219) and contracts (#221) build on it.
+asset came from (#218), what each vendor sells (#219), contracts (#221) and
+[purchase orders](purchase-orders.md) (#222) build on it.
 
 ## What a vendor has
 
@@ -66,7 +67,7 @@ Its holders also read `GET /api/v1/scopes`, to choose among them. Migration `068
 `vendors.manage`, in every scope, to every role that manages categories.
 
 A vendor with contracts is not deleted (`409`): delete them, or move them to another vendor,
-first.
+first. Nor is one with [purchase orders](purchase-orders.md) (`409`): delete them first.
 
 ## Preferred vendors
 
@@ -209,6 +210,9 @@ in one of the vendor's scopes, or anywhere for one in none.
 - **Packages:** an asset brings the vendor it was bought from.
 - **Contracts:** warranties, service and maintenance agreements, leases and licenses are with a
   vendor, and follow its scopes; its page has a **Contracts** tab (see [Contracts](contracts.md)).
+- **Purchase orders** are to a vendor, follow its scopes, and draw their lines from its catalog;
+  its page has an **Orders** tab, and the running-low list starts orders from preferred entries
+  (see [Purchase orders](purchase-orders.md)).
 
 ## Storage
 

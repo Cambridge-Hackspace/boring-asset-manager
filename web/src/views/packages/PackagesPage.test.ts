@@ -43,6 +43,7 @@ function server() {
     'GET /flows': () => ({ flows: [{ id: 'l', slug: 'lend', name: 'Lend a tool' }] }),
     'GET /vendors': () => ({ vendors: [{ id: 'v2', name: 'Zed Supplies' }, { id: 'v1', name: 'Acme' }] }),
     'GET /settings/documents': () => ({ instance_name: 'BAM!', page_size: 'letter' }),
+    'GET /settings/purchase-orders': () => ({ prefix: 'PO-', padding: 4 }),
     'POST /exports/plan': (body) => planOf((body as { selection: Selection }).selection),
     'POST /exports': (body) => ({ status: 201, body: { id: 'e1', download: '/api/v1/exports/e1', plan: planOf((body as { selection: Selection }).selection) } }),
   });

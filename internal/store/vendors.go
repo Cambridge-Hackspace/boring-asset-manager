@@ -403,13 +403,18 @@ func (s *Store) writeVendorListsTx(tx *sql.Tx, id string, contacts, had []models
 
 // DeleteVendor deletes a vendor, with its contacts and files' rows;
 // categories stop naming it. Its files stay until bam storage sweep, as
-// other attachments' do. A vendor that contracts are with is not deleted:
-// that would delete them too.
+// other attachments' do. A vendor that contracts or purchase orders are
+// with is not deleted: that would delete them too.
 func (s *Store) DeleteVendor(id string) error {
 	if has, err := s.vendorHasContracts(id); err != nil {
 		return err
 	} else if has {
 		return ErrVendorHasContracts
+	}
+	if has, err := s.vendorHasOrders(id); err != nil {
+		return err
+	} else if has {
+		return ErrVendorHasOrders
 	}
 	res, err := s.Exec("DELETE FROM vendors WHERE id = ?", id)
 	if err != nil {

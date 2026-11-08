@@ -3,7 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/svelte';
 import Home from './Home.svelte';
 import { fakeApi } from '../test/fetch';
 import { session } from '../lib/session.svelte';
-import type { AssetWithDetails, CatalogEntry, Category, Vendor } from '../lib/models';
+import type { AssetWithDetails, CatalogEntry, Category, PurchaseOrder, Vendor } from '../lib/models';
 
 const cat = (id: string, name: string, over: Partial<Category> = {}): Category => ({
   id, name, parent_id: null, color_hex: '#1d4ed8', is_consumable: true, unit: '', is_lendable: false, is_running_low: true, created_at: '', updated_at: '', ...over,
@@ -22,7 +22,7 @@ afterEach(() => {
   session.user = null;
 });
 
-function api(categories: Category[], vendors: Vendor[] = [], assets: AssetWithDetails[] = [], entries: CatalogEntry[] = []) {
+function api(categories: Category[], vendors: Vendor[] = [], assets: AssetWithDetails[] = [], entries: CatalogEntry[] = [], orders: PurchaseOrder[] = []) {
   return fakeApi({
     'GET /auth/me/favorites': () => ({ favorites: [] }),
     'GET /loans': () => ({ loans: [] }),
@@ -30,6 +30,7 @@ function api(categories: Category[], vendors: Vendor[] = [], assets: AssetWithDe
     'GET /assets': () => ({ assets }),
     'GET /vendors': () => ({ vendors }),
     'GET /catalog': () => ({ entries }),
+    'GET /purchase-orders': () => ({ orders }),
   });
 }
 
@@ -73,6 +74,23 @@ describe('Home', () => {
     const solderLink = await screen.findByRole('link', { name: 'Reorder part Solder, 500 g of Solder from Corner shop' });
     expect(solderLink.getAttribute('href')).toBe('/vendors/v2');
     expect(sent.find((r) => r.path === '/catalog')).toBeTruthy();
+  });
+
+  it('says what is on order, and offers to start orders to those who manage vendors', async () => {
+    session.permissions = ['assets.read', 'vendors.manage'];
+    const solder = { asset: { id: 'a1', name: 'Solder', condition: 'ok', stock: { quantity: 1, unit: 'reels', is_running_low: true } } } as unknown as AssetWithDetails;
+    const order = (id: string, number: number, state: PurchaseOrder['state'], thing: Partial<PurchaseOrder['lines'][number]>): PurchaseOrder => ({
+      id, number, reference: `PO-${String(number).padStart(4, '0')}`, vendor_id: 'v1', vendor_name: 'Acme', state, vendor_reference: '', ordered_on: '',
+      expected_on: '', received_on: '', deliver_to: '', notes: '', can_manage: true, created_at: '', updated_at: '',
+      lines: [{ id: `l${id}`, part_number: '', description: 'x', pack_size: null, pack_unit: '', quantity: 1, quantity_received: 0, ...thing }],
+    });
+    const { sent } = api([cat('screws', 'Screws')], [], [solder], [], [order('o2', 2, 'draft', { asset_id: 'a1' }), order('o1', 1, 'ordered', { category_id: 'screws' })]);
+    render(Home, { params: {} });
+    const screws = await screen.findByRole('link', { name: 'On order: PO-0001' });
+    expect(screws.getAttribute('href')).toBe('/orders/o1');
+    expect(screen.getByRole('link', { name: 'In draft PO-0002' }).getAttribute('href')).toBe('/orders/o2');
+    expect(screen.getByRole('link', { name: 'Start orders…' }).getAttribute('href')).toBe('/orders/new?from=running-low');
+    expect(sent.find((r) => r.path === '/purchase-orders')).toBeTruthy();
   });
 
   it('reads no vendors when no running-low category names one', async () => {

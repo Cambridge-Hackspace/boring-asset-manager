@@ -378,25 +378,37 @@ type linkEnd struct {
 // Links that would make a loop of a single type are refused. Both assets
 // record the change in their history.
 func (s *Store) AddLink(assetID, typeID, otherID string, outgoing bool) (*models.AssetWithDetails, error) {
-	if assetID == otherID {
-		return nil, ErrLinkToSelf
-	}
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer tx.Rollback()
-	if err := s.takeLock(tx, linksLock); err != nil {
+	if err := s.addLinkTx(tx, assetID, typeID, otherID, outgoing, models.TriggerManual); err != nil {
 		return nil, err
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing: %w", err)
+	}
+	return s.GetAssetByID(assetID)
+}
+
+// addLinkTx links two assets as AddLink does, within tx, taking the links
+// lock, and records it in both assets' history with trigger.
+func (s *Store) addLinkTx(tx *sql.Tx, assetID, typeID, otherID string, outgoing bool, trigger string) error {
+	if assetID == otherID {
+		return ErrLinkToSelf
+	}
+	if err := s.takeLock(tx, linksLock); err != nil {
+		return err
+	}
 	var t models.RelationType
-	err = s.TxQueryRow(tx, "SELECT id, name, inverse_name, is_symmetric, is_single FROM relation_types WHERE id = ?", typeID).
+	err := s.TxQueryRow(tx, "SELECT id, name, inverse_name, is_symmetric, is_single FROM relation_types WHERE id = ?", typeID).
 		Scan(&t.ID, &t.Name, &t.InverseName, &t.IsSymmetric, &t.IsSingle)
 	if err == sql.ErrNoRows {
-		return nil, ErrRelationTypeNotFound
+		return ErrRelationTypeNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("reading relation type: %w", err)
+		return fmt.Errorf("reading relation type: %w", err)
 	}
 	ends := map[string]linkEnd{}
 	for _, id := range []string{assetID, otherID} {
@@ -404,13 +416,13 @@ func (s *Store) AddLink(assetID, typeID, otherID string, outgoing bool) (*models
 		e := linkEnd{id: id}
 		err := s.TxQueryRow(tx, "SELECT name, archived_at FROM assets WHERE id = ?", id).Scan(&e.name, &archived)
 		if err == sql.ErrNoRows {
-			return nil, ErrAssetNotFound
+			return ErrAssetNotFound
 		}
 		if err != nil {
-			return nil, fmt.Errorf("reading asset: %w", err)
+			return fmt.Errorf("reading asset: %w", err)
 		}
 		if archived.Valid {
-			return nil, ErrAssetArchived
+			return ErrAssetArchived
 		}
 		ends[id] = e
 	}
@@ -423,10 +435,10 @@ func (s *Store) AddLink(assetID, typeID, otherID string, outgoing bool) (*models
 	err = s.TxQueryRow(tx, "SELECT COUNT(*) FROM asset_links WHERE relation_type_id = ? AND ((from_asset_id = ? AND to_asset_id = ?) OR (? AND from_asset_id = ? AND to_asset_id = ?))",
 		t.ID, from.id, to.id, t.IsSymmetric, to.id, from.id).Scan(&existing)
 	if err != nil {
-		return nil, fmt.Errorf("checking links: %w", err)
+		return fmt.Errorf("checking links: %w", err)
 	}
 	if existing > 0 {
-		return nil, ErrLinkExists
+		return ErrLinkExists
 	}
 
 	// The changes each asset's history records, by asset.
@@ -440,10 +452,10 @@ func (s *Store) AddLink(assetID, typeID, otherID string, outgoing bool) (*models
 				break
 			}
 			if err != nil {
-				return nil, fmt.Errorf("checking for a loop: %w", err)
+				return fmt.Errorf("checking for a loop: %w", err)
 			}
 			if parent == to.id {
-				return nil, ErrLinkCycle
+				return ErrLinkCycle
 			}
 			at = parent
 		}
@@ -452,11 +464,11 @@ func (s *Store) AddLink(assetID, typeID, otherID string, outgoing bool) (*models
 		err := s.TxQueryRow(tx, `SELECT l.id, a.id, a.name FROM asset_links l JOIN assets a ON a.id = l.from_asset_id
 			WHERE l.relation_type_id = ? AND l.to_asset_id = ?`, t.ID, to.id).Scan(&oldID, &oldFrom, &oldName)
 		if err != nil && err != sql.ErrNoRows {
-			return nil, fmt.Errorf("checking where it is: %w", err)
+			return fmt.Errorf("checking where it is: %w", err)
 		}
 		if err == nil {
 			if _, err := s.TxExec(tx, "DELETE FROM asset_links WHERE id = ?", oldID); err != nil {
-				return nil, fmt.Errorf("moving: %w", err)
+				return fmt.Errorf("moving: %w", err)
 			}
 			changes[oldFrom] = append(changes[oldFrom], models.EventChange{What: "link", Key: to.id, Label: t.Name, From: to.name})
 			changes[to.id] = append(changes[to.id], models.EventChange{What: "link", Key: oldFrom, Label: t.InverseName, From: oldName})
@@ -464,17 +476,11 @@ func (s *Store) AddLink(assetID, typeID, otherID string, outgoing bool) (*models
 	}
 	if _, err := s.TxExec(tx, "INSERT INTO asset_links (id, relation_type_id, from_asset_id, to_asset_id, created_at) VALUES (?, ?, ?, ?, ?)",
 		uuid.NewString(), t.ID, from.id, to.id, time.Now().UTC()); err != nil {
-		return nil, fmt.Errorf("linking: %w", err)
+		return fmt.Errorf("linking: %w", err)
 	}
 	changes[from.id] = append(changes[from.id], models.EventChange{What: "link", Key: to.id, Label: t.Name, To: to.name})
 	changes[to.id] = append(changes[to.id], models.EventChange{What: "link", Key: from.id, Label: t.InverseName, To: from.name})
-	if err := s.recordLinkChanges(tx, changes, models.TriggerManual); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("committing: %w", err)
-	}
-	return s.GetAssetByID(assetID)
+	return s.recordLinkChanges(tx, changes, trigger)
 }
 
 // RemoveLink removes one of an asset's links, recording it on both assets.

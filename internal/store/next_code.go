@@ -33,7 +33,13 @@ func (s *Store) NextCodeLike(generatorType, code string) (string, error) {
 
 // nextCode is NextCode among the codes with prefix, or all when it is nil.
 func (s *Store) nextCode(generatorType string, only *string) (string, error) {
-	rows, err := s.Query("SELECT assigned_code FROM asset_generator_keys WHERE generator_type = ?", generatorType)
+	return nextCodeIn(storeQuerier{s}, generatorType, only)
+}
+
+// nextCodeIn is nextCode, reading the codes through q, such as a
+// transaction's.
+func nextCodeIn(q vendorQuerier, generatorType string, only *string) (string, error) {
+	rows, err := q.Query("SELECT assigned_code FROM asset_generator_keys WHERE generator_type = ?", generatorType)
 	if err != nil {
 		return "", fmt.Errorf("reading codes: %w", err)
 	}
