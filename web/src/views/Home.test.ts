@@ -3,7 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/svelte';
 import Home from './Home.svelte';
 import { fakeApi } from '../test/fetch';
 import { session } from '../lib/session.svelte';
-import type { Category, Vendor } from '../lib/models';
+import type { AssetWithDetails, CatalogEntry, Category, Vendor } from '../lib/models';
 
 const cat = (id: string, name: string, over: Partial<Category> = {}): Category => ({
   id, name, parent_id: null, color_hex: '#1d4ed8', is_consumable: true, unit: '', is_lendable: false, is_running_low: true, created_at: '', updated_at: '', ...over,
@@ -22,15 +22,21 @@ afterEach(() => {
   session.user = null;
 });
 
-function api(categories: Category[], vendors: Vendor[] = []) {
+function api(categories: Category[], vendors: Vendor[] = [], assets: AssetWithDetails[] = [], entries: CatalogEntry[] = []) {
   return fakeApi({
     'GET /auth/me/favorites': () => ({ favorites: [] }),
     'GET /loans': () => ({ loans: [] }),
     'GET /categories': () => ({ categories }),
-    'GET /assets': () => ({ assets: [] }),
+    'GET /assets': () => ({ assets }),
     'GET /vendors': () => ({ vendors }),
+    'GET /catalog': () => ({ entries }),
   });
 }
+
+const entry = (over: Partial<CatalogEntry>): CatalogEntry => ({
+  id: 'e1', vendor_id: 'v1', vendor_name: 'Acme', linked_name: '', part_number: '', description: '', url: '', pack_size: null, pack_unit: '',
+  preferred: true, can_manage: false, created_at: '', updated_at: '', ...over,
+});
 
 describe('Home', () => {
   it('offers to reorder a running-low category from its vendors, in order of preference', async () => {
@@ -51,6 +57,22 @@ describe('Home', () => {
     // A category naming no vendor shows none, and one not running low is not listed.
     expect(screen.queryByRole('list', { name: 'Vendors of Glue' })).toBeNull();
     expect(screen.queryByText('Tape')).toBeNull();
+  });
+
+  it('shows the preferred catalog entry of each running-low category and asset, with its part number, price and link', async () => {
+    const solder = { asset: { id: 'a1', name: 'Solder', condition: 'ok', stock: { quantity: 1, unit: 'reels', is_running_low: true } } } as unknown as AssetWithDetails;
+    const { sent } = api([cat('screws', 'Screws')], [vendor('v2', 'Corner shop')], [solder], [
+      entry({ category_id: 'screws', linked_name: 'Screws', part_number: 'SC-100', price: '4.50', currency: 'GBP', pack_size: 100, pack_unit: 'screws', url: 'https://acme.example/sc-100' }),
+      entry({ id: 'e2', vendor_id: 'v2', vendor_name: 'Corner shop', asset_id: 'a1', linked_name: 'Solder', description: 'Solder, 500 g' }),
+    ]);
+    render(Home, { params: {} });
+    const screws = await screen.findByRole('link', { name: 'Reorder part SC-100 of Screws from Acme' });
+    expect([screws.getAttribute('href'), screws.getAttribute('target')]).toEqual(['https://acme.example/sc-100', '_blank']);
+    expect(screws.closest('p')?.textContent).toContain('4.50 GBP for 100 screws');
+    // Without a product page or a website, reordering starts at the vendor's page.
+    const solderLink = await screen.findByRole('link', { name: 'Reorder part Solder, 500 g of Solder from Corner shop' });
+    expect(solderLink.getAttribute('href')).toBe('/vendors/v2');
+    expect(sent.find((r) => r.path === '/catalog')).toBeTruthy();
   });
 
   it('reads no vendors when no running-low category names one', async () => {

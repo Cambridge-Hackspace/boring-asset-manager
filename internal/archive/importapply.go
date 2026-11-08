@@ -185,6 +185,13 @@ func (ap *applier) row(t *Table, r map[string]any, ids newIDs) (map[string]any, 
 			invoice = ids.of(i)
 		}
 		return with(r, "asset_id", ids.of(str(r, "asset_id")), "vendor_id", vendor, "invoice_attachment_id", invoice), true
+	case "asset_catalog_entries":
+		// what a vendor here sells of it
+		v, ok := b.vendors[str(r, "vendor_id")]
+		if !ok || v == "" {
+			return nil, false
+		}
+		return with(r, "id", ids.of(str(r, "id")), "asset_id", ids.of(str(r, "asset_id")), "vendor_id", v), true
 	case "events":
 		var cat any
 		if c, ok := b.cats[str(r, "category_id")]; ok {

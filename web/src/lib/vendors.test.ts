@@ -23,6 +23,10 @@ describe('vendor history', () => {
     expect(describeVendorChange({ what: 'scope', to: 'workshop' })).toBe('Put in the scope workshop');
     expect(describeVendorChange({ what: 'scope', from: 'workshop' })).toBe('Taken out of the scope workshop');
     expect(describeVendorChange({ what: 'attachment', to: 'Price list' })).toBe('Attachment added: Price list');
+    expect(describeVendorChange({ what: 'catalog', to: 'SC-100 (Screws)' })).toBe('Catalog entry added: SC-100 (Screws)');
+    expect(describeVendorChange({ what: 'catalog', from: 'SC-100 (Screws)', to: 'SC-100 (Screws)' })).toBe('Catalog entry changed: SC-100 (Screws)');
+    expect(describeVendorChange({ what: 'catalog', from: 'SC-100 (Screws)', to: 'SC-200 (Screws)' })).toBe('Catalog entry: SC-100 (Screws) → SC-200 (Screws)');
+    expect(describeVendorChange({ what: 'catalog', from: 'SC-100 (Screws)' })).toBe('Catalog entry removed: SC-100 (Screws)');
   });
 });
 

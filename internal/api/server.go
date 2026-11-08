@@ -332,6 +332,16 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/contracts/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerContract)))
 	handle("PUT /api/v1/contracts/{id}/attachments/{attachment_id}", manageVendors(s.handleUpdateAttachment(models.OwnerContract)))
 	handle("DELETE /api/v1/contracts/{id}/attachments/{attachment_id}", manageVendors(s.handleRemoveAttachment(models.OwnerContract)))
+	// Catalogs (docs/vendors.md#catalogs): what each vendor sells, seen as
+	// the vendor and what each entry is for are, and changed with
+	// vendors.manage for the vendor, which each handler checks.
+	handle("GET /api/v1/vendors/{id}/catalog.csv", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportCatalog)))
+	handle("POST /api/v1/vendors/{id}/catalog.csv", manageVendors(http.HandlerFunc(s.handleImportCatalog)))
+	handle("GET /api/v1/catalog", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListCatalog)))
+	handle("POST /api/v1/catalog", manageVendors(http.HandlerFunc(s.handleCreateCatalogEntry)))
+	handle("GET /api/v1/catalog/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetCatalogEntry)))
+	handle("PUT /api/v1/catalog/{id}", manageVendors(http.HandlerFunc(s.handleUpdateCatalogEntry)))
+	handle("DELETE /api/v1/catalog/{id}", manageVendors(http.HandlerFunc(s.handleDeleteCatalogEntry)))
 	// Icons (docs/icons.md): reading with assets.read; a category's own icon
 	// with categories.manage, and what every icon is drawn with, the
 	// library, palette and settings, with icons.manage.

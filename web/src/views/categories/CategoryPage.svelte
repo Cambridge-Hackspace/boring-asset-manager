@@ -20,6 +20,7 @@
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { reorderHref, siteName } from '../../lib/vendors';
   import { contractEnded, coverSentence, kindLabel } from '../../lib/contracts';
+  import CatalogPanel from '../../components/CatalogPanel.svelte';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -167,6 +168,7 @@
       { key: 'icon', label: 'Icon', on: !isSystem },
       { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
       { key: 'vendors', label: 'Vendors', on: !isSystem && ((canManage && vendors.length > 0) || vendorList.length > 0) },
+      { key: 'catalog', label: 'Catalog', on: !isSystem },
       { key: 'contracts', label: 'Contracts', on: !isSystem && contracts.length > 0 },
       { key: 'attachments', label: 'Attachments', on: !isSystem },
       { key: 'comments', label: 'Comments', on: !isSystem },
@@ -902,6 +904,10 @@
   {/if}
 
   {#if !isSystem}
+    <!-- What vendors sell of it, one preferred for the running-low list (docs/vendors.md#catalogs). -->
+    <div class="mt-6 max-w-2xl" id="tab-catalog" hidden={tab !== 'catalog'}>
+      <CatalogPanel category={{ id, name: category.name }} canAdd={session.can('vendors.manage')} onchange={(done) => (saved = done)} />
+    </div>
     <div class="mt-6 max-w-2xl" id="tab-attachments" hidden={tab !== 'attachments'}>
       {#key attachedByComments}<AttachmentsPanel owner="category" ownerId={id} ownerName={category.name} canEdit={canManage} onchange={(done) => (saved = done)} />{/key}
     </div>

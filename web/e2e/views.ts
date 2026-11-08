@@ -139,6 +139,14 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     multipart: { file: { name: 'prices.txt', mimeType: 'text/plain', buffer: Buffer.from('Screws: 2p each.') } },
   });
   await request.put(`/api/v1/categories/${cat.category.id}/vendors`, { data: { vendor_ids: [vendor.vendor.id] } });
+  // What it sells (#219): the running-low category and the screws counted by
+  // quantity, each preferred, for the Catalog tabs, the screws' page and the
+  // home page's running-low list.
+  await post('/catalog', {
+    vendor_id: vendor.vendor.id, category_id: cat.category.id, part_number: 'SP-120', description: 'Sandpaper, 120 grit',
+    url: 'https://supplies.example/sp-120', pack_size: 50, pack_unit: 'sheets', price: '12.50', currency: 'GBP', price_checked: '2026-11-01', preferred: true,
+  });
+  await post('/catalog', { vendor_id: vendor.vendor.id, asset_id: screws.asset.asset.id, part_number: 'M3-100', pack_size: 100, pack_unit: 'pcs', price: '4', currency: 'GBP', preferred: true });
   // Comments in Markdown on the category and the asset, with a heading, a
   // task list and a table, for the asset page and the Comments tab.
   await post(`/categories/${cat.category.id}/comments`, { body: '## Care\n\n- [x] Oiled\n- [ ] Sharpened\n\n| Part | Size |\n|---|---|\n| Belt | 10 mm |' });
@@ -198,12 +206,14 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/categories/${cat.category.id}?tab=scopes`, ''],
     [`/categories/${cat.category.id}?tab=vendors`, ''],
     [`/categories/${cat.category.id}?tab=contracts`, ''],
+    [`/categories/${cat.category.id}?tab=catalog`, ''],
     [`/categories/${cat.category.id}?tab=comments`, ''],
     ['/categories/new', 'New category'],
     ['/vendors', 'Vendors'],
     ['/vendors?q=nothing+matches+this', 'Vendors'],
     ['/vendors/new', 'New vendor'],
     [`/vendors/${vendor.vendor.id}`, ''],
+    [`/vendors/${vendor.vendor.id}?tab=catalog`, ''],
     [`/vendors/${vendor.vendor.id}?tab=assets`, ''],
     [`/vendors/${vendor.vendor.id}?tab=attachments`, ''],
     [`/vendors/${vendor.vendor.id}?tab=history`, ''],

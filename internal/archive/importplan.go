@@ -978,6 +978,17 @@ func (m *matcher) rows() {
 	add("vendor_scopes", vendorScopes)
 	add("vendor_attachments", vendorFiles)
 	join("category_vendors", "vendor_id", ItemVendor, b.vendors)
+	// what the vendors sell of each category (docs/vendors.md#catalogs),
+	// when both are here
+	var catalog []map[string]any
+	for _, r := range a.rows["category_catalog_entries"] {
+		cat, ok := b.cats[str(r, "category_id")]
+		v, ok2 := b.vendors[str(r, "vendor_id")]
+		if ok && ok2 && cat != "" && v != "" {
+			catalog = append(catalog, with(r, "id", b.ids.of(str(r, "id")), "category_id", cat, "vendor_id", v))
+		}
+	}
+	add("category_catalog_entries", catalog)
 
 	// contracts, which come with their vendors, with their files and the
 	// categories they name; the assets they name come with the assets, and

@@ -5,7 +5,7 @@ import type { AssetEvent, Vendor, VendorContact } from './models';
 
 /** One change to a vendor, as it read then; an absent from or to means none. */
 export interface VendorChange {
-  what: 'name' | 'website' | 'account_number' | 'address' | 'notes' | 'contact' | 'scope' | 'photo' | 'attachment';
+  what: 'name' | 'website' | 'account_number' | 'address' | 'notes' | 'contact' | 'scope' | 'photo' | 'attachment' | 'catalog';
   key?: string;
   from?: string;
   to?: string;
@@ -44,6 +44,11 @@ export function describeVendorChange(c: VendorChange): string {
       return `Contact: ${c.from} → ${c.to}`;
     case 'scope':
       return c.to ? `Put in the scope ${c.to}` : `Taken out of the scope ${c.from}`;
+    case 'catalog':
+      if (!c.from) return `Catalog entry added: ${c.to}`;
+      if (!c.to) return `Catalog entry removed: ${c.from}`;
+      if (c.from === c.to) return `Catalog entry changed: ${c.to}`;
+      return `Catalog entry: ${c.from} → ${c.to}`;
     case 'photo':
       return c.to ? `Photo added: ${c.to}` : `Photo removed: ${c.from}`;
     case 'attachment':

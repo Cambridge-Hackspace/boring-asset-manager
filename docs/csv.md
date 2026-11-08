@@ -260,3 +260,39 @@ types, the styles that say which numbers are dates, and cached values. It takes 
 Both import routes take the file, the mapping, and optionally `remove_links`. For a workbook,
 `sheet` names the sheet; a preview without it answers the workbook's `{"sheets"}`, and an import
 without it is refused.
+
+## Vendor catalogs
+
+A vendor's [catalog](vendors.md#catalogs) is read and written as CSV of its own, one row per entry,
+from its **Catalog** tab. The columns are those an export writes, in its order:
+
+| Column | Meaning |
+| :--- | :--- |
+| `id` | The entry's ID. Blank on import makes a new entry. |
+| `category` | The category it is for, as in an asset's `categories` cell: a path of names, or an ID. |
+| `asset` | Or the asset it is for, as a `links` cell names one: by name when no other active asset has it, or by ID or code. |
+| `part_number`, `description`, `url` | The vendor's part number, a description and the product page. |
+| `pack_size`, `pack_unit` | What a pack holds, such as `100` and `screws`. |
+| `price`, `currency`, `price_checked` | The price of a pack, as a decimal in its currency, such as `4.50`, and when it was checked, `YYYY-MM-DD`. |
+| `preferred` | `yes` for the one to reorder from, or blank. |
+
+An export writes the entries the exporter sees, with formulas defused as an asset export's are,
+and the price columns blank where they may not see prices.
+
+An import is checked first (`check=true`), and then applied all or nothing:
+
+- A row with an `id` replaces that entry of this vendor's; one without makes an entry. A file's
+  header names the columns it has, in any order, and a column it leaves out keeps what an entry has.
+- Without `purchases.read` for the vendor, the price columns keep what entries have, and filling
+  one in is a problem.
+- A row names a category or an asset, not both, and needs a part number or a description.
+- Two rows preferring entries for the same category or asset are a problem. A row preferred makes
+  the others for the same not, those not in the file among them.
+- An exported file imported again changes nothing. Entries the file does not mention stay.
+- The file may be at most 5 MB and 5,000 rows, and may be an Excel workbook's sheet, named in
+  `sheet`, as an asset import's may.
+
+| Method | Route | Permission | Purpose |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/vendors/{id}/catalog.csv` | `assets.read`, and seeing the vendor | Export its catalog. |
+| `POST` | `/api/v1/vendors/{id}/catalog.csv` | `vendors.manage` for the vendor | With `check=true`, what importing the `file` would do, as `rows`, `create`, `update`, `unchanged` and `problems`; without it, import it, or answer `422` with the problems. |

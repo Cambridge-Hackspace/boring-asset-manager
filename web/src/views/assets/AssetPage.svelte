@@ -25,6 +25,7 @@
   import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
   import PurchaseSection from '../../components/PurchaseSection.svelte';
   import ContractsSection from '../../components/ContractsSection.svelte';
+  import CatalogPanel from '../../components/CatalogPanel.svelte';
   import LoanPanel from '../../components/LoanPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import CommentsPanel from '../../components/CommentsPanel.svelte';
@@ -378,6 +379,12 @@
       </section>
       <PurchaseSection {asset} canEdit={session.canOn(asset.scopes, 'assets.write') && !archived} />
       <ContractsSection {asset} />
+      {#if session.user && asset.asset.stock && session.can('assets.read')}
+        <!-- What vendors sell of it, counted by quantity, one preferred for the running-low list (docs/vendors.md#catalogs). -->
+        {#key asset.asset.id}
+          <CatalogPanel asset={{ id: asset.asset.id, name: asset.asset.name }} canAdd={session.can('vendors.manage') && !archived} />
+        {/key}
+      {/if}
       <LinksPanel {asset} onchange={assetChanged} />
       {#if contents.length}
         <section aria-labelledby="contents-heading">

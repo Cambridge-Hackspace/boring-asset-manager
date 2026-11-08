@@ -68,7 +68,7 @@ describe('VendorPage', () => {
     render(VendorPage, { params: { id: 'v1' } });
     const tabs = await screen.findByRole('navigation', { name: 'Parts of this vendor' });
     // Those who do not manage vendors, categories or users see no scopes.
-    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Assets', 'Contracts', 'Attachments', 'History']);
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Catalog', 'Assets', 'Contracts', 'Attachments', 'History']);
 
     const site = screen.getByRole('link', { name: 'https://acme.example' });
     expect([site.getAttribute('href'), site.getAttribute('rel'), site.getAttribute('target')]).toEqual(['https://acme.example', 'noopener noreferrer', '_blank']);

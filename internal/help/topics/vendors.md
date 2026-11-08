@@ -10,11 +10,23 @@
 - **Attachments**: files such as price lists, terms and quotes, which work as a category's do.
 - **History**: when it was made, and each change to its details, contacts, scopes and files, with who made it to those who can see who changed assets.
 
-Its **Assets** tab lists the assets bought from it that you can see, with when each was ordered, its price where you may see prices, and when its warranty ends. An asset names its vendor in its **Purchase** section (see [Assets](/help/assets)). Its **Contracts** tab lists its warranties, service and maintenance agreements, leases and licenses (see [Contracts](/help/contracts)). Later, a vendor's page will also show its catalog.
+Its **Assets** tab lists the assets bought from it that you can see, with when each was ordered, its price where you may see prices, and when its warranty ends. An asset names its vendor in its **Purchase** section (see [Assets](/help/assets)). Its **Contracts** tab lists its warranties, service and maintenance agreements, leases and licenses (see [Contracts](/help/contracts)).
+
+## Catalogs
+
+A vendor's **Catalog** tab lists what it sells, one entry for each thing: the vendor's **part number**, a **description**, a link to the **product page**, the **pack** (such as 100 screws), and its **price**, with the date it was checked. Only the last checked price is kept, and prices are typed in, never fetched from the vendor.
+
+Each entry is for a **category**, for things counted by items, such as a category of screw boxes, or for an **asset** counted by quantity, such as a reel of solder. A category's **Catalog** tab, and such an asset's page, list what every vendor sells of it. Several vendors may sell the same thing; mark one entry **preferred**, and it is the one to reorder from.
+
+**Export CSV** on the vendor's Catalog tab writes its catalog as a spreadsheet; edit it and import it again, or import a vendor's price list in the same columns. A file is checked first, and imported all or nothing.
+
+Prices in catalogs are hidden from those without **See prices**, as assets' prices are. Adding and changing entries takes **Manage vendors** for the vendor.
 
 ## Reordering
 
 A category can name the vendors it is bought from, in order of preference, on its **Vendors** tab. When the category is **running low**, the home page lists them under it, with a **Reorder** link to each vendor's website.
+
+When a category or an asset is running low and has a **preferred** catalog entry, the home page shows it first: the vendor, part number and price, and a **Reorder** link to the product page.
 
 ## Who can see and change them
 

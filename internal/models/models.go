@@ -1410,6 +1410,50 @@ type VendorContact struct {
 	Phone string `json:"phone"`
 }
 
+// CatalogEntry is one thing a vendor sells (docs/vendors.md#catalogs): its
+// part number, description and product page, its pack, and its price as
+// last checked. It is linked to a category, for things counted by items,
+// or to an asset, for things counted by quantity: CategoryID or AssetID,
+// never both. Preferred marks the one to reorder from, of those linked to
+// the same category or asset.
+type CatalogEntry struct {
+	ID         string `json:"id"`
+	VendorID   string `json:"vendor_id"`
+	VendorName string `json:"vendor_name"`
+	CategoryID string `json:"category_id,omitempty"`
+	AssetID    string `json:"asset_id,omitempty"`
+	// LinkedName is the category's or the asset's name.
+	LinkedName  string `json:"linked_name"`
+	PartNumber  string `json:"part_number"`
+	Description string `json:"description"`
+	URL         string `json:"url"`
+	// PackSize is how many of PackUnit a pack holds, such as 100 screws;
+	// nil when not known.
+	PackSize *int   `json:"pack_size"`
+	PackUnit string `json:"pack_unit"`
+	// Price is a decimal with as many places as its Currency has, kept
+	// exactly as minor units (internal/money), and PriceChecked when it was
+	// last checked, YYYY-MM-DD. They are left out for a requester without
+	// purchases.read in the vendor's scopes, and PricesHidden says so.
+	Price        string `json:"price,omitempty"`
+	Currency     string `json:"currency,omitempty"`
+	PriceChecked string `json:"price_checked,omitempty"`
+	PricesHidden bool   `json:"prices_hidden,omitempty"`
+	Preferred    bool   `json:"preferred"`
+	// CanManage is whether the requester may change it: vendors.manage in
+	// the vendor's scopes. Set by the API.
+	CanManage bool      `json:"can_manage"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// HidePrices leaves out what only purchases.read sees: the price, its
+// currency and when it was checked.
+func (e *CatalogEntry) HidePrices() {
+	e.Price, e.Currency, e.PriceChecked = "", "", ""
+	e.PricesHidden = true
+}
+
 // Spool destinations (docs/printing.md): DestinationDownload, or
 // DestinationPrinterPrefix or DestinationPoolPrefix followed by a printer's
 // or a pool's ID. An entry with none waits for one to be chosen.
