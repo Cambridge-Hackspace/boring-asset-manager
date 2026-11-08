@@ -178,6 +178,7 @@ var mergeTables = map[string]bool{
 	"asset_placements": true, "asset_attachments": true, "asset_purchases": true, "events": true, "category_attachments": true,
 	"flows":   true,
 	"vendors": true, "vendor_contacts": true, "vendor_scopes": true, "vendor_attachments": true, "category_vendors": true,
+	"category_catalog_entries": true, "asset_catalog_entries": true,
 	"category_comments": true,
 	"contracts":         true, "contract_categories": true, "contract_attachments": true, "contract_assets": true,
 }

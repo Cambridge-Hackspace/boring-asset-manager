@@ -161,8 +161,9 @@ type Plan struct {
 	// events are the assets whose history the requester may read.
 	events map[string]bool
 	// prices are the assets whose prices the requester may see
-	// (purchases.read).
-	prices map[string]bool
+	// (purchases.read), and vendorPrices the vendors whose catalog's.
+	prices       map[string]bool
+	vendorPrices map[string]bool
 	// costs are the contracts whose costs the requester may see
 	// (purchases.read in their vendors' scopes).
 	costs map[string]bool
@@ -255,7 +256,9 @@ type category struct {
 	fields, hooks, relTypes    []string
 	labelTemplates, scopes     []string
 	vendors                    []string
-	required                   map[string]bool
+	// catalog are the vendors of its catalog entries.
+	catalog  []string
+	required map[string]bool
 	// icons are its icons, one for each rendition it has one for, and
 	// iconFields the fields their params are bound to.
 	icons      []*iconSource
@@ -446,6 +449,7 @@ func (r *resolver) load() error {
 		{"SELECT category_id, template_id FROM category_label_templates ORDER BY sort_order", func(c *category, v string) { c.labelTemplates = append(c.labelTemplates, v) }},
 		{"SELECT category_id, scope_id FROM category_scopes", func(c *category, v string) { c.scopes = append(c.scopes, v) }},
 		{"SELECT category_id, vendor_id FROM category_vendors ORDER BY sort_order", func(c *category, v string) { c.vendors = append(c.vendors, v) }},
+		{"SELECT category_id, vendor_id FROM category_catalog_entries ORDER BY vendor_id", func(c *category, v string) { c.catalog = append(c.catalog, v) }},
 		{"SELECT category_id, field_id FROM icon_param_bindings", func(c *category, v string) {
 			c.iconFields = append(c.iconFields, v)
 		}},
@@ -716,6 +720,10 @@ func (r *resolver) needs(x Ref) {
 		for _, id := range c.vendors {
 			r.need(Ref{Kind: ItemVendor, ID: id}, x)
 		}
+		// and those that sell it (docs/vendors.md#catalogs)
+		for _, id := range c.catalog {
+			r.need(Ref{Kind: ItemVendor, ID: id}, x)
+		}
 		for _, id := range c.iconFields {
 			r.need(Ref{Kind: ItemField, ID: id}, x)
 		}
@@ -944,6 +952,14 @@ func (r *resolver) assets(plan *Plan) error {
 	for _, row := range bought {
 		r.assetVendors[row[0]] = row[1]
 	}
+	sold, err := r.strings("SELECT asset_id, vendor_id FROM asset_catalog_entries ORDER BY vendor_id")
+	if err != nil {
+		return fmt.Errorf("reading what vendors sell: %w", err)
+	}
+	sellers := map[string][]string{}
+	for _, row := range sold {
+		sellers[row[0]] = append(sellers[row[0]], row[1])
+	}
 	counts := &AssetCounts{}
 	plan.Assets = counts
 	r.includedAsset, r.readEvents = map[string]bool{}, map[string]bool{}
@@ -975,6 +991,10 @@ func (r *resolver) assets(plan *Plan) error {
 		}
 		// the vendor it was bought from
 		if v := r.assetVendors[id]; v != "" {
+			r.need(Ref{Kind: ItemVendor, ID: v}, whole)
+		}
+		// and those that sell it
+		for _, v := range sellers[id] {
 			r.need(Ref{Kind: ItemVendor, ID: v}, whole)
 		}
 		for _, c := range cats {
@@ -1113,7 +1133,13 @@ func (r *resolver) rowsOf(plan *Plan) {
 			plan.whole["icon_text_bindings:"+id] = true
 		}
 	}
+	plan.vendorPrices = map[string]bool{}
 	for id := range ids[ItemVendor] {
+		var names []string
+		for _, s := range r.vendorScopes[id] {
+			names = append(names, r.scopeNames[s])
+		}
+		plan.vendorPrices[id] = r.may(rbac.PermPurchasesRead, names)
 		for _, s := range r.vendorScopes[id] {
 			if has(ItemScope, s) {
 				set("vendor_scopes", id, s)
@@ -1263,6 +1289,21 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 			setNull("price_minor")
 			setNull("invoice_attachment_id")
 			vals[colIndex(t, "currency")], vals[colIndex(t, "order_number")] = "", ""
+		}
+		return true, nil
+	case "category_catalog_entries", "asset_catalog_entries":
+		// an entry goes with its vendor and what it is for, and its price
+		// only to those who may see the vendor's
+		if !p.rows["vendors"][get("vendor_id")] {
+			return false, nil
+		}
+		if t.Name == "category_catalog_entries" && !p.cats[get("category_id")] || t.Name == "asset_catalog_entries" && !asset("asset_id") {
+			return false, nil
+		}
+		if !p.vendorPrices[get("vendor_id")] {
+			setNull("price_minor")
+			setNull("price_checked")
+			vals[colIndex(t, "currency")] = ""
 		}
 		return true, nil
 	case "category_attachments":

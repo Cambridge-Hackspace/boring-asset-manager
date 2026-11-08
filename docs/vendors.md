@@ -76,17 +76,70 @@ A category can name the vendors it is bought from, in order of preference
 requester sees, and keeps after them those it does not.
 
 The running-low list on the home page shows each running-low category's vendors, with a link to
-reorder: the vendor's website, or its page when it has none. The phone's shopping list (#214) will
-show them the same way once it exists.
+reorder: the vendor's website, or its page when it has none. It shows the
+[preferred catalog entry](#catalogs) above them. The phone's shopping list (#214) will show them the
+same way once it exists.
 
 Duplicating a category copies its vendors. Deleting a vendor takes it off every category.
 
 ## A vendor's page
 
 The **Vendors** page, in **Catalog**, lists the vendors one can see, with a search box. A
-vendor's page shows its details, contacts and notes, the assets bought from it, its contracts,
-its attachments, its history, its scopes for those who see them, and the categories bought from
-it. It is laid out so that its catalog (#219) can be added as a part of its own.
+vendor's page shows its details, contacts and notes, its [catalog](#catalogs), the assets
+bought from it, its contracts, its attachments, its history, its scopes for those who see them,
+and the categories bought from it.
+## Catalogs
+
+A vendor's **catalog** is what it sells (#219), one **entry** for each thing. The scope is kept
+small on purpose: prices are typed in, never fetched from vendors' sites or APIs, and only the last
+price checked is kept.
+
+| Field | What |
+|---|---|
+| `vendor_id` | The vendor that sells it. |
+| `category_id` or `asset_id` | What it is for: a category, for things counted by items (a box of screws is an asset of the category *Screws*), or an asset, for things counted by quantity (a reel of solder, whose stock is a number). One of them, never both. |
+| `part_number` | The vendor's part number, up to 255 characters. An entry needs a part number or a description. |
+| `description` | Up to 2000 characters. |
+| `url` | The product page: empty, or an `http://` or `https://` address with a host, as a vendor's website. |
+| `pack_size`, `pack_unit` | What a pack holds, such as `100` `screws`: a whole number of at least 1, or none, and up to 64 characters. |
+| `price`, `currency`, `price_checked` | The price of a pack, kept exactly as a purchase's is (see [Purchases](data-model.md#purchases)), and when it was last checked, `YYYY-MM-DD`. A price needs its currency. |
+| `preferred` | The one to reorder from. |
+
+Answers also carry `vendor_name`, `linked_name` (the category's or asset's name) and `can_manage`.
+
+### Several vendors, one preferred
+
+A category or an asset may have entries from several vendors, and several from one vendor (in
+different packs, say). At most one of them is **preferred**: saving one as preferred makes the
+others not. The running-low list on the home page shows the preferred entry of each running-low
+category and asset: its vendor, part number, price and pack, and a **Reorder** link to its product
+page, or else its vendor's website, or else the vendor's page here.
+
+This is apart from a category's [preferred vendors](#preferred-vendors), its list of vendors in
+order, which the running-low list still shows below it.
+
+### Who sees and changes entries
+
+- An entry is seen by those who see its vendor and what it is for: any category, or an asset they
+  may read. Others never learn of it.
+- Its price, currency and when it was checked need `purchases.read` in one of the vendor's
+  scopes, or anywhere for a vendor in none, as seeing the vendor is decided (see
+  [Seeing prices](access.md#seeing-prices)). Without it they are left out, and the entry says
+  `"prices_hidden": true`.
+- Changing an entry takes `vendors.manage` for its vendor, as changing the vendor does, and for the
+  vendor it moves to. An edit by someone who cannot see its price keeps the price.
+
+### Where it shows
+
+- A vendor's **Catalog** tab lists its entries, by what they are for. Those who manage the vendor
+  add, edit and remove them, and export and import the catalog as [CSV](csv.md#vendor-catalogs).
+- A category's **Catalog** tab, and the page of an asset counted by quantity, list what each vendor
+  sells of it, and offer to make one preferred.
+- Entries go with their vendor, and with their category or asset. Archiving an asset keeps its
+  entries. Duplicating a category or an asset copies none.
+- Each change is recorded in the vendor's history as `catalog`, naming the entry by its part number
+  (or description) and what it is for, never its price, since the history is shown to those who
+  may not see prices.
 
 ## Assets bought from it
 
@@ -129,16 +182,28 @@ in one of the vendor's scopes, or anywhere for one in none.
 | `GET`, `POST`, `PUT /api/v1/vendors/{id}/attachments`, and `GET`, `PUT`, `DELETE /api/v1/vendors/{id}/attachments/{attachment_id}` | Seeing it to read, `vendors.manage` in its scopes to change | Its attachments, as a category's (see [Attachments](data-model.md#attachments)). |
 | `PUT /api/v1/categories/{id}/vendors` | `categories.manage` | Name the vendors a category is bought from, with `{"vendor_ids": [...]}` in order of preference. Answers `category`. |
 | `GET /api/v1/assets?vendor_id={id}` | `assets.read`, and seeing the vendor | The assets bought from it that the requester may read, as the asset list (`404` for a vendor they cannot see). |
+| `GET /api/v1/catalog` | `assets.read` | The catalog entries the requester sees, as `entries`, by what they are for, then vendor. `?vendor_id=`, `?category_id=` and `?asset_id=` narrow them, and `?preferred=true` keeps the preferred ones. |
+| `POST /api/v1/catalog` | `vendors.manage` for its vendor | Make one, with every field above. Answers `201` with `entry`. |
+| `GET /api/v1/catalog/{id}` | `assets.read` | One, as `entry`. |
+| `PUT /api/v1/catalog/{id}` | `vendors.manage` for its vendor, and the one it moves to | Replace it, every field. |
+| `DELETE /api/v1/catalog/{id}` | `vendors.manage` for its vendor | Delete it. |
+| `GET /api/v1/vendors/{id}/catalog.csv` | `assets.read`, and seeing the vendor | Its catalog as CSV (see [CSV](csv.md#vendor-catalogs)). |
+| `POST /api/v1/vendors/{id}/catalog.csv` | `vendors.manage` for it | Import its catalog from CSV, or a workbook's sheet: with `check=true`, only what it would do. |
 
 ## Everywhere else
 
 - **MCP:** `list_vendors`, `get_vendor`, `save_vendor`, `delete_vendor`, `vendor_history` and
-  `set_category_vendors`; the attachment tools take `vendor_id` (see [MCP](mcp.md)).
-- **Backups:** vendors are part of the catalog (see [Backups](backups.md#kinds-of-information)).
-- **Packages:** vendors can be chosen, and a category brings the vendors it is bought from (see
+  `set_category_vendors`; the attachment tools take `vendor_id`. Catalogs have `list_catalog`,
+  `get_catalog_entry`, `save_catalog_entry`, `delete_catalog_entry`, `export_vendor_catalog` and
+  `import_vendor_catalog` (see [MCP](mcp.md)).
+- **Backups:** vendors are part of the catalog, with categories' catalog entries; assets' entries
+  are part of the assets (see [Backups](backups.md#kinds-of-information)).
+- **Packages:** vendors can be chosen, and a category brings the vendors it is bought from and
+  those that sell it, with their entries; assets bring those that sell them (see
   [Packages](packages.md)).
-- **CSV:** categories have no CSV import or export of their own, so neither do vendors. Assets'
-  `vendor` column names theirs, by name (see [CSV](csv.md)).
+- **CSV:** categories have no CSV import or export of their own, so neither do vendors' details.
+  Assets' `vendor` column names theirs, by name, and a vendor's catalog is read and written as CSV
+  of its own (see [CSV](csv.md#vendor-catalogs)).
 - **Reports:** `vendor` filters by it, and `{{asset.purchase.vendor}}` shows it (see
   [Reports](reports.md)).
 - **Packages:** an asset brings the vendor it was bought from.
@@ -148,6 +213,8 @@ in one of the vendor's scopes, or anywhere for one in none.
 ## Storage
 
 Migration `068` adds `vendors`, `vendor_contacts`, `vendor_scopes` and `vendor_attachments`, and
-`category_vendors` for categories' preferred vendors, on every database. It adds `vendor_id` to
+`category_vendors` for categories' preferred vendors, on every database. Migration `073` adds
+`category_catalog_entries` and `asset_catalog_entries`, alike but for what they are for, so that
+each goes with its kind of information in a backup. Their IDs are unique across both. It adds `vendor_id` to
 `events`, which, like `category_id` and `asset_id`, is deliberately not a foreign key, so a
 vendor's events read as they were after it is deleted.

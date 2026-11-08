@@ -599,7 +599,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `assets.lend` | Lending assets (see [Stock and lending](stock-and-lending.md)). | Yes |
 | `assets.scan` | Scanning (see [Scanning](scanning.md)). | Yes |
 | `assets.track` | Seeing the people around assets: who borrowed them, who changed them, and the loans list. | Yes |
-| `purchases.read` | Seeing what assets cost: their price, currency, order number and invoice, and what contracts cost (see [Seeing prices](#seeing-prices)). | Yes |
+| `purchases.read` | Seeing what assets cost: their price, currency, order number and invoice, what contracts cost, and the prices in vendors' catalogs (see [Seeing prices](#seeing-prices)). | Yes |
 | `assets.hook` | Triggering hooks (see [Hooks](hooks.md)). | Yes |
 | `events.read` | Receiving events live (see [Hooks](hooks.md)). | Yes |
 | `stock.record` | Using, restocking and flagging stock, without being able to edit assets. | Yes |
@@ -723,6 +723,10 @@ invoice are left out of:
 - the CSV and Excel exports, and reports, labels and sheets, whose `{{asset.purchase.price}}`,
   `{{asset.purchase.currency}}` and `{{asset.purchase.order_number}}` are blank;
 - packages, and MCP, which reads through the API.
+
+The same permission sees the prices in vendors' catalogs, in one of the vendor's scopes, or anywhere
+for a vendor in none (see [Catalogs](vendors.md#catalogs)). A catalog's price is a list price, not
+what was paid, but it says what the space spends, so it is kept with what was paid.
 
 Its vendor and dates still show to whoever reads it, as the vendor's page lists the assets bought
 from it. Editing it, with `assets.write`, leaves what they cannot see as it is, and an import

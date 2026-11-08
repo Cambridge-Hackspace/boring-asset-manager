@@ -211,6 +211,12 @@ changing needs `vendors.manage` in the vendor's scopes. Deleting is marked destr
 | `save_vendor` | `vendors.manage` | Makes one, or changes only what is given; contacts and scopes, when given, replace the vendor's. |
 | `delete_vendor` | `vendors.manage` | |
 | `vendor_history` | `assets.read` | Its history, newest first, a page at a time. |
+| `list_catalog` | `assets.read` | What vendors sell (see [Catalogs](vendors.md#catalogs)), narrowed by `vendor_id`, `category_id` or `asset_id`, or to the `preferred` entries. |
+| `get_catalog_entry` | `assets.read` | One entry. |
+| `save_catalog_entry` | `vendors.manage` | Makes one, or changes only what is given; naming a category forgets an asset, and the other way about. |
+| `delete_catalog_entry` | `vendors.manage` | |
+| `export_vendor_catalog` | `assets.read` | A vendor's catalog as CSV. |
+| `import_vendor_catalog` | `vendors.manage` | Checks a vendor's catalog as CSV, then, with `confirm`, imports it; up to 50 entries made or changed at a time. |
 
 ### Contracts
 
