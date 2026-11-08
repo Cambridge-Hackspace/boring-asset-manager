@@ -282,6 +282,18 @@ const (
 	// They name the Contract, and channels can subscribe to them.
 	EventContractExpiring = "contract.expiring"
 	EventContractExpired  = "contract.expired"
+	// EventOrderCreated, EventOrderEdited and EventOrderCanceled record a
+	// purchase order made, changes to one listed in the payload's Changes,
+	// and one canceled (docs/purchase-orders.md); they are for its
+	// history. EventOrderOrdered records one placed with its vendor, and
+	// EventOrderReceived each delivery received, with what was ordered or
+	// came in OrderLines; channels can subscribe to them. Each names the
+	// PurchaseOrder.
+	EventOrderCreated  = "purchase_order.created"
+	EventOrderEdited   = "purchase_order.edited"
+	EventOrderCanceled = "purchase_order.canceled"
+	EventOrderOrdered  = "purchase_order.ordered"
+	EventOrderReceived = "purchase_order.received"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -290,7 +302,8 @@ func HistoryOnly(kind string) bool {
 	switch kind {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
 		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventCategoryEdited, EventAuthRoleKept,
-		EventVendorCreated, EventVendorEdited, EventCommentEdited, EventCommentDeleted, EventContractCreated, EventContractEdited:
+		EventVendorCreated, EventVendorEdited, EventCommentEdited, EventCommentDeleted, EventContractCreated, EventContractEdited,
+		EventOrderCreated, EventOrderEdited, EventOrderCanceled:
 		return true
 	}
 	return false
@@ -313,6 +326,9 @@ const (
 	TriggerSchedule = "schedule"
 	// TriggerEvent marks a hook fired by another event (docs/hooks.md).
 	TriggerEvent = "event"
+	// TriggerOrder marks a change made by receiving a purchase order
+	// (docs/purchase-orders.md#receiving).
+	TriggerOrder = "purchase_order"
 )
 
 // Event records something notifiers may announce. Its payload is a snapshot
@@ -379,6 +395,34 @@ type EventPayload struct {
 	// Move is where stock went, or came from, for a quantity changed by
 	// moving it between two assets (docs/stock-and-lending.md#moving-stock).
 	Move *EventMove `json:"move,omitempty"`
+	// PurchaseOrder is the purchase order an order event is about, or that
+	// a receipt's change to an asset came from.
+	PurchaseOrder *EventOrder `json:"purchase_order,omitempty"`
+	// OrderLines are what a purchase_order.ordered event ordered, or a
+	// purchase_order.received event received.
+	OrderLines []EventOrderLine `json:"order_lines,omitempty"`
+}
+
+// EventOrder is a purchase order, as an event names it
+// (docs/purchase-orders.md): its number, as PO-0012, and its vendor.
+type EventOrder struct {
+	ID         string `json:"id"`
+	Number     string `json:"number"`
+	VendorID   string `json:"vendor_id"`
+	VendorName string `json:"vendor_name"`
+}
+
+// EventOrderLine is one line of an order placed or a delivery received:
+// the line's text, the packs ordered or that came, how much an asset was
+// restocked by, and the assets made; never a price.
+type EventOrderLine struct {
+	LineID      string       `json:"line_id"`
+	PartNumber  string       `json:"part_number,omitempty"`
+	Description string       `json:"description,omitempty"`
+	Quantity    int          `json:"quantity"`
+	AssetID     string       `json:"asset_id,omitempty"`
+	Restocked   int          `json:"restocked,omitempty"`
+	Assets      []NamedThing `json:"assets,omitempty"`
 }
 
 // EventContract is a contract, as an event names it (docs/contracts.md):
@@ -1293,6 +1337,7 @@ const (
 	OwnerCategory = "category"
 	OwnerVendor   = "vendor"
 	OwnerContract = "contract"
+	OwnerOrder    = "purchase_order"
 )
 
 // What comments are on (docs/comments.md). A filing is an asset a flow
@@ -1592,6 +1637,96 @@ type CatalogEntry struct {
 func (e *CatalogEntry) HidePrices() {
 	e.Price, e.Currency, e.PriceChecked = "", "", ""
 	e.PricesHidden = true
+}
+
+// Purchase orders' states (docs/purchase-orders.md#states).
+const (
+	OrderDraft          = "draft"
+	OrderOrdered        = "ordered"
+	OrderPartlyReceived = "partly_received"
+	OrderReceived       = "received"
+	OrderCanceled       = "canceled"
+)
+
+// OrderStates are a purchase order's states, in the order an order goes
+// through them.
+var OrderStates = []string{OrderDraft, OrderOrdered, OrderPartlyReceived, OrderReceived, OrderCanceled}
+
+// OrderOpen reports whether an order in this state is still to come:
+// drafted, placed, or partly received.
+func OrderOpen(state string) bool {
+	return state == OrderDraft || state == OrderOrdered || state == OrderPartlyReceived
+}
+
+// PurchaseOrder is an order to a vendor (docs/purchase-orders.md), with
+// its lines.
+type PurchaseOrder struct {
+	ID string `json:"id"`
+	// Number is the order's own, shown as Reference, PO-0012.
+	Number          int    `json:"number"`
+	Reference       string `json:"reference"`
+	VendorID        string `json:"vendor_id"`
+	VendorName      string `json:"vendor_name"`
+	State           string `json:"state"`
+	VendorReference string `json:"vendor_reference"`
+	OrderedOn       string `json:"ordered_on"`
+	ExpectedOn      string `json:"expected_on"`
+	ReceivedOn      string `json:"received_on"`
+	DeliverTo       string `json:"deliver_to"`
+	Notes           string `json:"notes"`
+	// Currency and Total, the sum of the lines' totals, are left out for a
+	// requester without purchases.read in the vendor's scopes, as the
+	// lines' prices are, and PricesHidden says so.
+	Currency     string              `json:"currency,omitempty"`
+	Total        string              `json:"total,omitempty"`
+	PricesHidden bool                `json:"prices_hidden,omitempty"`
+	Lines        []PurchaseOrderLine `json:"lines"`
+	// CanManage is whether the requester may change it: vendors.manage in
+	// the vendor's scopes. Set by the API.
+	CanManage bool      `json:"can_manage"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// PurchaseOrderLine is one line of an order: drawn from a catalog entry,
+// or written freely, for a category or an asset, or for neither.
+type PurchaseOrderLine struct {
+	ID string `json:"id"`
+	// CatalogEntryID is the entry it was drawn from, while it exists.
+	CatalogEntryID string `json:"catalog_entry_id,omitempty"`
+	// CategoryID or AssetID is what receiving it acts on, and LinkedName
+	// its name. The API leaves out an asset the requester may not read.
+	CategoryID  string `json:"category_id,omitempty"`
+	AssetID     string `json:"asset_id,omitempty"`
+	LinkedName  string `json:"linked_name,omitempty"`
+	PartNumber  string `json:"part_number"`
+	Description string `json:"description"`
+	// PackSize is how many of PackUnit a pack holds; nil when not known.
+	PackSize *int   `json:"pack_size"`
+	PackUnit string `json:"pack_unit"`
+	// Quantity is how many packs are ordered, and QuantityReceived how
+	// many have come.
+	Quantity         int `json:"quantity"`
+	QuantityReceived int `json:"quantity_received"`
+	// UnitPrice is a pack's price, and Total the line's, in the order's
+	// currency; left out where prices are hidden.
+	UnitPrice string `json:"unit_price,omitempty"`
+	Total     string `json:"total,omitempty"`
+}
+
+// Outstanding is how many packs of a line are still to come.
+func (l PurchaseOrderLine) Outstanding() int {
+	return l.Quantity - l.QuantityReceived
+}
+
+// HidePrices leaves out what only purchases.read sees: the currency, and
+// every price and total.
+func (o *PurchaseOrder) HidePrices() {
+	o.Currency, o.Total = "", ""
+	for i := range o.Lines {
+		o.Lines[i].UnitPrice, o.Lines[i].Total = "", ""
+	}
+	o.PricesHidden = true
 }
 
 // Spool destinations (docs/printing.md): DestinationDownload, or

@@ -50,6 +50,9 @@ type Store struct {
 	events *EventLog
 	// via is the assistant changes are made through; see Via.
 	via string
+	// order is the purchase order whose receipt makes the changes; their
+	// events name it. See forOrder.
+	order *models.EventOrder
 	// texts keeps icons drawn with assets' texts, for every view of the
 	// store.
 	texts *iconTexts

@@ -126,9 +126,9 @@ func oldMariaDBSchema(t *testing.T, st *Store) {
 
 	timestamp := regexp.MustCompile(`\bTIMESTAMP\b`)
 	// Migrations 9, 10, 13 to 19, 22, 23, 26, 30, 34, 36 to 38, 40, 47, 48, 53,
-	// 67, 68, 70, 72 and 75 too, though they came later: they add columns and tables
+	// 67, 68, 70, 72, 73, 75 and 76 too, though they came later: they add columns and tables
 	// the store reads, so the test can write through the store. Their columns are latin1 as well.
-	for _, v := range []int{1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16, 17, 18, 19, 22, 23, 26, 30, 34, 36, 37, 38, 40, 47, 48, 53, 67, 68, 70, 72, 75} {
+	for _, v := range []int{1, 2, 3, 4, 5, 6, 7, 9, 10, 13, 14, 15, 16, 17, 18, 19, 22, 23, 26, 30, 34, 36, 37, 38, 40, 47, 48, 53, 67, 68, 70, 72, 73, 75, 76} {
 		matches, _ := fs.Glob(migrations.MigrationFiles, fmt.Sprintf("%03d_*.sql", v))
 		if len(matches) != 1 {
 			t.Fatalf("migration %d: %v", v, matches)
@@ -150,12 +150,14 @@ func oldMariaDBSchema(t *testing.T, st *Store) {
 		}
 	}
 	// Seeded at the old schema's version, which decides what roles start
-	// with; 67, 68, 70, 72 and 75, which the store reads attachments, vendors,
-	// purchases, contracts and links between categories through, are recorded after.
+	// with; 67, 68, 70, 72, 73, 75 and 76, which the store reads attachments,
+	// vendors, purchases, contracts, catalogs, links between categories and
+	// purchase orders through,
+	// are recorded after.
 	if err := st.SeedDefaultPermissionsAndRoles(); err != nil {
 		t.Fatal(err)
 	}
-	for _, v := range []int{67, 68, 70, 72, 75} {
+	for _, v := range []int{67, 68, 70, 72, 73, 75, 76} {
 		exec(fmt.Sprintf("INSERT INTO schema_migrations (version, applied_at) VALUES (%d, NOW())", v))
 	}
 }

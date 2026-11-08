@@ -1071,10 +1071,16 @@ export interface ReportResult {
 }
 
 /** What attachments belong to (docs/data-model.md#attachments). */
-export type AttachmentOwner = 'asset' | 'category' | 'vendor' | 'contract';
+export type AttachmentOwner = 'asset' | 'category' | 'vendor' | 'contract' | 'purchase_order';
 
 /** Where in the API each owner's attachments are. */
-export const attachmentBase: Record<AttachmentOwner, string> = { asset: 'assets', category: 'categories', vendor: 'vendors', contract: 'contracts' };
+export const attachmentBase: Record<AttachmentOwner, string> = {
+  asset: 'assets',
+  category: 'categories',
+  vendor: 'vendors',
+  contract: 'contracts',
+  purchase_order: 'purchase-orders',
+};
 
 /** A file attached to an asset, a category or a vendor: an image (an asset's photo), a document, or another file the instance allows. */
 export interface Attachment {
@@ -1449,6 +1455,128 @@ export interface CatalogEntry {
   can_manage: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** A purchase order's state (docs/purchase-orders.md#states). */
+export type OrderState = 'draft' | 'ordered' | 'partly_received' | 'received' | 'canceled';
+
+/** A line of a purchase order: drawn from a catalog entry, or written freely, for a category or an asset, or for neither. */
+export interface PurchaseOrderLine {
+  id: string;
+  /** The catalog entry it was drawn from, while it exists. */
+  catalog_entry_id?: string;
+  /** What receiving it acts on: a category it makes assets in, or an asset counted by quantity it restocks. */
+  category_id?: string;
+  asset_id?: string;
+  linked_name?: string;
+  part_number: string;
+  description: string;
+  pack_size: number | null;
+  pack_unit: string;
+  /** Packs ordered, and packs come. */
+  quantity: number;
+  quantity_received: number;
+  /** A pack's price, and the line's total, in the order's currency; left out where prices are hidden. */
+  unit_price?: string;
+  total?: string;
+}
+
+/** A purchase order to a vendor (docs/purchase-orders.md). */
+export interface PurchaseOrder {
+  id: string;
+  number: number;
+  /** Its number as shown, such as PO-0012. */
+  reference: string;
+  vendor_id: string;
+  vendor_name: string;
+  state: OrderState;
+  vendor_reference: string;
+  /** YYYY-MM-DD, or empty. */
+  ordered_on: string;
+  expected_on: string;
+  received_on: string;
+  deliver_to: string;
+  notes: string;
+  currency?: string;
+  total?: string;
+  prices_hidden?: boolean;
+  lines: PurchaseOrderLine[];
+  /** Whether the requester may change it: vendors.manage in its vendor's scopes. */
+  can_manage: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A line as the API takes it: with the id of one of the order's lines to keep it. */
+export interface OrderLineRequest {
+  id?: string;
+  catalog_entry_id?: string;
+  category_id?: string;
+  asset_id?: string;
+  part_number: string;
+  description: string;
+  pack_size: number | null;
+  pack_unit: string;
+  quantity: number;
+  /** Left out, a line keeps its price and a new catalog line takes the entry's; empty, it has none. */
+  unit_price?: string;
+}
+
+/** An order as the API takes it: every detail, so an absent one is emptied, but for its lines, kept when left out. */
+export interface OrderRequest {
+  vendor_id: string;
+  currency: string;
+  vendor_reference: string;
+  ordered_on: string;
+  expected_on: string;
+  deliver_to: string;
+  notes: string;
+  lines?: OrderLineRequest[];
+}
+
+/** What came of one line of an order (docs/purchase-orders.md#receiving). */
+export interface ReceiptLineRequest {
+  line_id: string;
+  quantity: number;
+  restock?: number;
+  assets?: number;
+  like?: string;
+  name?: string;
+  fields?: Record<string, string>;
+  each?: number;
+  warranty_end?: string;
+}
+
+/** Something running low, suggested for an order with its preferred catalog entry, or already on one. */
+export interface SuggestedLine {
+  category_id?: string;
+  asset_id?: string;
+  name: string;
+  level: number;
+  threshold: number | null;
+  unit?: string;
+  catalog_entry_id?: string;
+  part_number?: string;
+  description?: string;
+  pack_size?: number | null;
+  pack_unit?: string;
+  unit_price?: string;
+  currency?: string;
+  quantity: number;
+  order?: { id: string; reference: string; state: OrderState };
+}
+
+/** Draft orders of what is running low, by vendor. */
+export interface OrderSuggestions {
+  vendors: { vendor_id: string; vendor_name: string; lines: SuggestedLine[] }[];
+  on_order: SuggestedLine[];
+  without_entry: SuggestedLine[];
+}
+
+/** How purchase orders' numbers are shown: a prefix, and at least how many digits. */
+export interface OrderNumbering {
+  prefix: string;
+  padding: number;
 }
 
 /** A contract as the API takes it: every detail, so an absent one is emptied, but for what it covers, kept when left out. */

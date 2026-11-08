@@ -124,6 +124,34 @@ func (s *Store) CreateAssetWithIcon(name string, categoryIDs []string, generator
 // its purchase details when purchase is not nil. Its invoice cannot be
 // named yet, since it has no attachments.
 func (s *Store) CreateAssetWithPurchase(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockInput, icon string, purchase *PurchaseInput) (*models.AssetWithDetails, error) {
+	na, err := s.prepareAsset(name, categoryIDs, generatorKeys, fieldValues, stock, icon, purchase)
+	if err != nil {
+		return nil, err
+	}
+	assetID := uuid.NewString()
+	err = s.withInventory(func(ic *inventoryChange) error {
+		return s.insertNewAssetTx(ic.tx, assetID, na, models.TriggerManual)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.GetAssetByID(assetID)
+}
+
+// newAsset is an asset checked and ready to create.
+type newAsset struct {
+	name     string
+	cats     []string
+	keys     []models.AssetGeneratorKey
+	values   map[string]string
+	stock    *StockInput
+	icon     string
+	purchase *PurchaseInput
+}
+
+// prepareAsset checks an asset to create, as CreateAssetWithPurchase
+// takes it, and gives what insertNewAssetTx writes.
+func (s *Store) prepareAsset(name string, categoryIDs []string, generatorKeys []models.AssetGeneratorKey, fieldValues map[string]string, stock *StockInput, icon string, purchase *PurchaseInput) (*newAsset, error) {
 	if purchase != nil {
 		if _, err := purchase.check(); err != nil {
 			return nil, err
@@ -185,38 +213,34 @@ func (s *Store) CreateAssetWithPurchase(name string, categoryIDs []string, gener
 	if err != nil {
 		return nil, err
 	}
+	return &newAsset{name: name, cats: cats, keys: generatorKeys, values: resolvedValues, stock: stock, icon: icon, purchase: purchase}, nil
+}
 
-	// 4. Persistence Transaction
-	assetID := uuid.NewString()
+// insertNewAssetTx creates an asset prepareAsset checked, within tx, which
+// holds the inventory lock, and records it in its history with trigger.
+func (s *Store) insertNewAssetTx(tx *sql.Tx, assetID string, na *newAsset, trigger string) error {
 	now := time.Now().UTC()
-
-	err = s.withInventory(func(ic *inventoryChange) error {
-		if err := s.insertAsset(ic.tx, assetID, name, now, cats, generatorKeys, resolvedValues); err != nil {
+	if err := s.insertAsset(tx, assetID, na.name, now, na.cats, na.keys, na.values); err != nil {
+		return err
+	}
+	if na.purchase != nil {
+		if err := s.setPurchaseTx(tx, assetID, *na.purchase); err != nil {
 			return err
 		}
-		if purchase != nil {
-			if err := s.setPurchaseTx(ic.tx, assetID, *purchase); err != nil {
-				return err
-			}
-		}
-		if icon != "" {
-			if err := s.setAssetIconTx(ic.tx, assetID, models.RenditionScreen, icon); err != nil {
-				return err
-			}
-		}
-		var recordQuantity func() error
-		if stock != nil {
-			if recordQuantity, err = s.setStockTx(ic.tx, assetID, nil, stock); err != nil {
-				return err
-			}
-		}
-		return s.recordAfter(ic.tx, assetID, nil, models.TriggerManual, recordQuantity)
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	return s.GetAssetByID(assetID)
+	if na.icon != "" {
+		if err := s.setAssetIconTx(tx, assetID, models.RenditionScreen, na.icon); err != nil {
+			return err
+		}
+	}
+	var recordQuantity func() error
+	if na.stock != nil {
+		var err error
+		if recordQuantity, err = s.setStockTx(tx, assetID, nil, na.stock); err != nil {
+			return err
+		}
+	}
+	return s.recordAfter(tx, assetID, nil, trigger, recordQuantity)
 }
 
 // insertAsset writes a new, validated asset within tx.

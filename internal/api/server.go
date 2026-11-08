@@ -333,6 +333,26 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/contracts/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerContract)))
 	handle("PUT /api/v1/contracts/{id}/attachments/{attachment_id}", manageVendors(s.handleUpdateAttachment(models.OwnerContract)))
 	handle("DELETE /api/v1/contracts/{id}/attachments/{attachment_id}", manageVendors(s.handleRemoveAttachment(models.OwnerContract)))
+	// Purchase orders (docs/purchase-orders.md): seen by those who see their
+	// vendors, and changed with vendors.manage in the vendors' scopes;
+	// received with what each line's change needs. Each handler checks.
+	handle("GET /api/v1/purchase-orders", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListOrders)))
+	handle("POST /api/v1/purchase-orders", manageVendors(http.HandlerFunc(s.handleCreateOrder)))
+	handle("GET /api/v1/purchase-orders/suggestions", manageVendors(http.HandlerFunc(s.handleOrderSuggestions)))
+	handle("GET /api/v1/purchase-orders/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetOrder)))
+	handle("PUT /api/v1/purchase-orders/{id}", manageVendors(http.HandlerFunc(s.handleUpdateOrder)))
+	handle("DELETE /api/v1/purchase-orders/{id}", manageVendors(http.HandlerFunc(s.handleDeleteOrder)))
+	handle("POST /api/v1/purchase-orders/{id}/place", manageVendors(http.HandlerFunc(s.handlePlaceOrder)))
+	handle("POST /api/v1/purchase-orders/{id}/cancel", manageVendors(http.HandlerFunc(s.handleCancelOrder)))
+	handle("POST /api/v1/purchase-orders/{id}/receive", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleReceiveOrder)))
+	handle("GET /api/v1/purchase-orders/{id}/history", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleOrderHistory)))
+	handle("GET /api/v1/purchase-orders/{id}/export.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleOrderPDF)))
+	handle("GET /api/v1/purchase-orders/{id}/attachments", RequirePermission(rbac.PermAssetsRead)(s.handleListAttachments(models.OwnerOrder)))
+	handle("POST /api/v1/purchase-orders/{id}/attachments", manageVendors(s.handleAddAttachment(models.OwnerOrder)))
+	handle("PUT /api/v1/purchase-orders/{id}/attachments", manageVendors(s.handleReorderAttachments(models.OwnerOrder)))
+	handle("GET /api/v1/purchase-orders/{id}/attachments/{attachment_id}", RequirePermission(rbac.PermAssetsRead)(s.handleGetAttachment(models.OwnerOrder)))
+	handle("PUT /api/v1/purchase-orders/{id}/attachments/{attachment_id}", manageVendors(s.handleUpdateAttachment(models.OwnerOrder)))
+	handle("DELETE /api/v1/purchase-orders/{id}/attachments/{attachment_id}", manageVendors(s.handleRemoveAttachment(models.OwnerOrder)))
 	// Catalogs (docs/vendors.md#catalogs): what each vendor sells, seen as
 	// the vendor and what each entry is for are, and changed with
 	// vendors.manage for the vendor, which each handler checks.
@@ -470,6 +490,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// them, for their defaults.
 	handle("GET /api/v1/settings/documents", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleDocumentSettings)))
 	handle("PUT /api/v1/settings/documents", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetDocumentSettings)))
+	handle("GET /api/v1/settings/purchase-orders", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleOrderNumbering)))
+	handle("PUT /api/v1/settings/purchase-orders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetOrderNumbering)))
 	handle("GET /api/v1/settings/loan-reminders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleLoanReminderSettings)))
 	handle("PUT /api/v1/settings/loan-reminders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetLoanReminderSettings)))
 	handle("GET /api/v1/assets/export.xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssetsXLSX)))

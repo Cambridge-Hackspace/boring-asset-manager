@@ -3,8 +3,9 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { renderMarkdown } from '../../lib/markdown';
-  import type { AssetWithDetails, Category, Contract, Scope, Vendor, VendorContact } from '../../lib/models';
+  import type { AssetWithDetails, Category, Contract, PurchaseOrder, Scope, Vendor, VendorContact } from '../../lib/models';
   import { contractEnded, coverageText, kindLabel } from '../../lib/contracts';
+  import { moneyText, stateLabel } from '../../lib/orders';
   import { priceText } from '../../lib/purchases';
   import { actorName } from '../../lib/people';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
@@ -35,6 +36,8 @@
   let bought = $state<AssetWithDetails[]>([]);
   // The contracts with it that the requester may see (#221).
   let contracts = $state<Contract[]>([]);
+  // The purchase orders to it (#222).
+  let orders = $state<PurchaseOrder[]>([]);
   // Scopes (docs/access.md): those who manage users, categories or vendors
   // see them; changing them takes vendors.manage in the scopes it ends up in.
   const canSeeScopes = $derived(session.canAny('users.manage', 'categories.manage', 'vendors.manage'));
@@ -89,6 +92,7 @@
       { key: 'catalog', label: 'Catalog', on: !isNew },
       { key: 'assets', label: 'Assets', on: !isNew },
       { key: 'contracts', label: 'Contracts', on: !isNew },
+      { key: 'orders', label: 'Orders', on: !isNew },
       { key: 'attachments', label: 'Attachments', on: true },
       { key: 'history', label: 'History', on: true },
       { key: 'scopes', label: 'Who can see it', on: canSeeScopes && scopes.length > 0 },
@@ -139,6 +143,9 @@
         .catch(() => []);
       contracts = await request<{ contracts: Contract[] }>('GET', `/contracts?vendor_id=${encodeURIComponent(id)}`)
         .then((c) => c.contracts ?? [])
+        .catch(() => []);
+      orders = await request<{ orders: PurchaseOrder[] }>('GET', `/purchase-orders?vendor_id=${encodeURIComponent(id)}`)
+        .then((o) => o.orders ?? [])
         .catch(() => []);
       await loadHistory();
     } catch (err) {
@@ -457,7 +464,7 @@
       {#if canManage}
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn-primary" onclick={edit}>Edit</button>
-          <ConfirmButton label="Delete" question="Delete this vendor? Categories stop naming it. A vendor that contracts are with cannot be deleted." onconfirm={remove} />
+          <ConfirmButton label="Delete" question="Delete this vendor? Categories stop naming it. A vendor that contracts or purchase orders are with cannot be deleted." onconfirm={remove} />
         </div>
       {/if}
     {/if}
@@ -563,6 +570,37 @@
               <td class="pr-4">{kindLabel(c.kind)}</td>
               <td class="pr-4">{c.end_date ? `${c.end_date}${contractEnded(c) ? ' (ended)' : ''}` : 'No end'}</td>
               <td>{coverageText(c)}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {/if}
+  </section>
+
+  <section class="mt-6 max-w-3xl" id="tab-orders" aria-labelledby="orders-heading" hidden={tab !== 'orders'}>
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <h2 id="orders-heading" class="section-title">Orders to it</h2>
+      {#if canManage}<a class="btn-secondary" href="/orders/new?vendor_id={encodeURIComponent(id)}">New order</a>{/if}
+    </div>
+    {#if orders.length === 0}
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">No purchase orders to it yet.</p>
+    {:else}
+      <table class="w-full text-left text-sm" aria-label="Orders to it">
+        <thead>
+          <tr class="border-b border-zinc-300 dark:border-zinc-700">
+            <th scope="col" class="py-2 pr-4 font-semibold">Order</th>
+            <th scope="col" class="py-2 pr-4 font-semibold">State</th>
+            <th scope="col" class="py-2 pr-4 font-semibold">Ordered</th>
+            <th scope="col" class="py-2 font-semibold">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each orders as o (o.id)}
+            <tr class="border-b border-zinc-200 dark:border-zinc-800">
+              <td class="pr-4"><a class="inline-flex min-h-11 items-center font-mono underline" href="/orders/{encodeURIComponent(o.id)}">{o.reference}</a></td>
+              <td class="pr-4">{stateLabel(o.state)}</td>
+              <td class="pr-4">{o.ordered_on}</td>
+              <td>{moneyText(o.total, o.currency)}</td>
             </tr>
           {/each}
         </tbody>

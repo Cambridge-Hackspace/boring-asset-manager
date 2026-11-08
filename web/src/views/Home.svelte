@@ -3,8 +3,9 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import { dueDate } from '../lib/assets';
-  import type { AssetWithDetails, CatalogEntry, Category, Favorite, FavoriteKind, Loan, Vendor } from '../lib/models';
+  import type { AssetWithDetails, CatalogEntry, Category, Favorite, FavoriteKind, Loan, PurchaseOrder, Vendor } from '../lib/models';
   import { entryHref, entryPrice, preferredByThing } from '../lib/catalog';
+  import { onOrderByThing, onOrderText } from '../lib/orders';
   import { favorites } from '../lib/favorites.svelte';
   import { navSections, type NavLink } from '../lib/nav';
   import { navigate } from '../lib/router.svelte';
@@ -30,6 +31,9 @@
   // The preferred catalog entry of each running-low category and asset
   // (docs/vendors.md#catalogs), by its ID.
   let preferred = $state<Map<string, CatalogEntry>>(new Map());
+  // The open purchase order each running-low category and asset is on
+  // (docs/purchase-orders.md), by its ID, so nothing is ordered twice.
+  let onOrder = $state<Map<string, PurchaseOrder>>(new Map());
   let attention = $state<AssetWithDetails[]>([]);
   // Out on loan, and due back within the week or overdue.
   let due = $state<Loan[]>([]);
@@ -101,6 +105,11 @@
             .then((r) => r.entries ?? [])
             .catch(() => []),
         );
+        onOrder = onOrderByThing(
+          await request<{ orders: PurchaseOrder[] }>('GET', '/purchase-orders?state=open')
+            .then((r) => r.orders ?? [])
+            .catch(() => []),
+        );
       }
       if (low.some((c) => c.vendor_ids?.length) || [...preferred.values()].some((e) => !e.url)) {
         const found = await request<{ vendors: Vendor[] }>('GET', '/vendors')
@@ -159,11 +168,14 @@
       {#if low}
         <section class="card" aria-labelledby="low-heading">
           <h2 id="low-heading" class="mb-2 text-lg font-bold"><span class="shadow-[inset_0_-0.38em_0_var(--color-highlight)] dark:shadow-none">Running low</span></h2>
+          {#if (low.length || lowAssets.length) && session.can('vendors.manage')}
+            <p class="mb-2"><a class="inline-flex min-h-11 items-center font-medium underline" href="/orders/new?from=running-low">Start orders…</a></p>
+          {/if}
           {#if low.length === 0 && lowAssets.length === 0}
             <p class="text-sm text-zinc-600 dark:text-zinc-400">Nothing is running low.</p>
           {:else}
             <ul class="divide-y divide-zinc-300 text-sm dark:divide-zinc-700">
-              <!-- The phone's shopping list (#214) does not exist yet; when it does, it shows each preferred catalog entry, and each category's vendors and reorder links, as this does. -->
+              <!-- The phone's shopping list (#214) does not exist yet; when it does, it shows each preferred catalog entry, what is on order, and each category's vendors and reorder links, as this does. -->
               {#snippet entry(e: CatalogEntry, what: string)}
                 {@const r = entryHref(e, vendors.get(e.vendor_id))}
                 <p class="flex w-full flex-wrap items-center gap-x-2 text-zinc-600 dark:text-zinc-400" data-preferred-entry>
@@ -177,11 +189,16 @@
                   {/if}
                 </p>
               {/snippet}
+              {#snippet ordered(thing: string)}
+                {@const o = onOrder.get(thing)}
+                {#if o}<a class="inline-flex min-h-11 items-center underline" href="/orders/{encodeURIComponent(o.id)}" data-on-order>{onOrderText(o)}</a>{/if}
+              {/snippet}
               {#each low as c (c.id)}
                 {@const from = vendorsOf(c)}
                 {@const best = preferred.get(c.id)}
                 <li class="flex min-h-11 flex-wrap items-center gap-x-3">
                   <CategoryBadge category={c} href="/categories/{encodeURIComponent(c.id)}" />
+                  {@render ordered(c.id)}
                   {#if best}{@render entry(best, c.name)}{/if}
                   {#if from.length}
                     <ul class="w-full pb-2 text-zinc-600 dark:text-zinc-400" aria-label="Vendors of {c.name}">
@@ -204,6 +221,7 @@
                 {@const best = preferred.get(a.asset.id)}
                 <li class="flex min-h-11 flex-wrap items-center gap-x-3">
                   <a class="inline-flex min-h-11 items-center underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a>
+                  {@render ordered(a.asset.id)}
                   {#if best}{@render entry(best, a.asset.name)}{/if}
                 </li>
               {/each}

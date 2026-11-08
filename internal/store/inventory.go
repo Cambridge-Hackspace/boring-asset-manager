@@ -357,14 +357,25 @@ func (s *Store) insertEventID(tx *sql.Tx, kind string, categoryID, assetID *stri
 	if payload.Actor != nil {
 		payload.Actor.Via = s.via
 	}
+	// A receipt's changes name the purchase order they came from.
+	var orderID *string
+	if s.order != nil {
+		if payload.PurchaseOrder == nil {
+			order := *s.order
+			payload.PurchaseOrder = &order
+		}
+		orderID = &s.order.ID
+	} else if payload.PurchaseOrder != nil {
+		orderID = &payload.PurchaseOrder.ID
+	}
 
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("encoding event: %w", err)
 	}
 	id, now := uuid.NewString(), dbTime(time.Now())
-	_, err = s.TxExec(tx, "INSERT INTO events (id, kind, category_id, asset_id, actor_user_id, payload, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		id, kind, categoryID, assetID, actorID, string(raw), now)
+	_, err = s.TxExec(tx, "INSERT INTO events (id, kind, category_id, asset_id, actor_user_id, payload, created_at, purchase_order_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		id, kind, categoryID, assetID, actorID, string(raw), now, orderID)
 	if err != nil {
 		return "", fmt.Errorf("recording event: %w", err)
 	}

@@ -68,7 +68,7 @@ describe('VendorPage', () => {
     render(VendorPage, { params: { id: 'v1' } });
     const tabs = await screen.findByRole('navigation', { name: 'Parts of this vendor' });
     // Those who do not manage vendors, categories or users see no scopes.
-    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Catalog', 'Assets', 'Contracts', 'Attachments', 'History']);
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['Details', 'Catalog', 'Assets', 'Contracts', 'Orders', 'Attachments', 'History']);
 
     const site = screen.getByRole('link', { name: 'https://acme.example' });
     expect([site.getAttribute('href'), site.getAttribute('rel'), site.getAttribute('target')]).toEqual(['https://acme.example', 'noopener noreferrer', '_blank']);
@@ -251,5 +251,24 @@ describe('VendorPage contracts', () => {
     expect(within(section).getByRole('link', { name: 'Laser upkeep' }).getAttribute('href')).toBe('/contracts/k1');
     expect(within(section).getByRole('link', { name: 'New contract' }).getAttribute('href')).toBe('/contracts/new?vendor_id=v1');
     expect(sent.some((r) => r.method === 'GET' && r.path === '/contracts')).toBe(true);
+  });
+});
+
+describe('VendorPage orders', () => {
+  it('lists the purchase orders to it, offering a new one to those who manage it', async () => {
+    session.permissions = ['assets.read', 'vendors.manage'];
+    const order = {
+      id: 'o1', number: 12, reference: 'PO-0012', vendor_id: 'v1', vendor_name: 'Acme', state: 'ordered', vendor_reference: '', ordered_on: '2026-11-01',
+      expected_on: '', received_on: '', deliver_to: '', notes: '', currency: 'GBP', total: '13.50', lines: [], can_manage: true, created_at: '', updated_at: '',
+    };
+    const { sent } = api(true, { 'GET /purchase-orders': () => ({ orders: [order] }) });
+    at('orders');
+    render(VendorPage, { params: { id: 'v1' } });
+    const section = (await screen.findByRole('heading', { name: 'Orders to it' })).closest('section')!;
+    await vi.waitFor(() => expect(within(section).getAllByRole('row')).toHaveLength(2));
+    const cells = within(within(section).getAllByRole('row')[1]!).getAllByRole('cell').map((c) => c.textContent?.trim());
+    expect(cells).toEqual(['PO-0012', 'Ordered', '2026-11-01', '13.50 GBP']);
+    expect(within(section).getByRole('link', { name: 'New order' }).getAttribute('href')).toBe('/orders/new?vendor_id=v1');
+    expect(sent.some((r) => r.method === 'GET' && r.path === '/purchase-orders')).toBe(true);
   });
 });

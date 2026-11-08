@@ -22,12 +22,14 @@ import (
 )
 
 // Attachments (docs/data-model.md#attachments): files on assets,
-// categories, vendors and contracts, grown out of assets' photos, whose routes are
+// categories, vendors, contracts and purchase orders, grown out of assets'
+// photos, whose routes are
 // kept as aliases (photos.go). An asset's follow assets.write to change and
 // its read access, scopes and all, to see; a category's follow
 // categories.manage to change, and assets.read, as the category itself
 // does, to see; a vendor's follow vendors.manage in its scopes to change,
-// and seeing the vendor to see; and a contract's follow its vendor's.
+// and seeing the vendor to see; and a contract's and a purchase order's
+// follow its vendor's.
 
 // multipartSlack is the room a multipart form takes beyond its file.
 const multipartSlack = 64 << 10
@@ -40,7 +42,7 @@ const attachmentBodyCeiling = config.MaxAttachmentMB<<20 + multipartSlack
 // isAttachmentUpload reports whether a POST to path uploads an attachment
 // or a photo: to /api/v1/assets/{id}/attachments, /api/v1/assets/{id}/photos,
 // /api/v1/categories/{id}/attachments, /api/v1/vendors/{id}/attachments or
-// /api/v1/contracts/{id}/attachments,
+// /api/v1/contracts/{id}/attachments, /api/v1/purchase-orders/{id}/attachments,
 // or with a comment, to /api/v1/{assets,categories}/{id}/comments/attachments.
 func isAttachmentUpload(path string) bool {
 	for _, p := range []struct{ prefix, suffix string }{
@@ -49,6 +51,7 @@ func isAttachmentUpload(path string) bool {
 		{"/api/v1/categories/", "/attachments"},
 		{"/api/v1/vendors/", "/attachments"},
 		{"/api/v1/contracts/", "/attachments"},
+		{"/api/v1/purchase-orders/", "/attachments"},
 		{"/api/v1/assets/", "/comments/attachments"},
 		{"/api/v1/categories/", "/comments/attachments"},
 	} {
@@ -97,6 +100,12 @@ func (s *Server) ownerFor(w http.ResponseWriter, r *http.Request, kind string, c
 			return nil, false
 		}
 		return &attachmentOwner{kind: kind, id: c.ID, name: c.Name, who: tracksVendor(r.Context(), scopes)}, true
+	case models.OwnerOrder:
+		o, scopes, ok := s.orderFor(w, r, id, change)
+		if !ok {
+			return nil, false
+		}
+		return &attachmentOwner{kind: kind, id: o.ID, name: o.Reference, who: tracksVendor(r.Context(), scopes)}, true
 	default:
 		c, err := s.store.GetCategoryByID(id)
 		if errors.Is(err, store.ErrCategoryNotFound) {

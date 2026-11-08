@@ -131,7 +131,7 @@ test('the home page lists the same pages, in the same groups', async ({ signedIn
   await page.goto('/');
   const main = page.locator('#main');
   for (const [group, links] of [
-    ['Catalog', ['Categories', 'Vendors', 'Contracts', 'Fields', 'Link types', 'Hooks', 'Icons']],
+    ['Catalog', ['Categories', 'Vendors', 'Contracts', 'Orders', 'Fields', 'Link types', 'Hooks', 'Icons']],
     ['Labels', ['Templates', 'Images', 'Printers']],
     ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Incoming hooks', 'Sign-in', 'Backups', 'Import & export']],
   ] as const) {

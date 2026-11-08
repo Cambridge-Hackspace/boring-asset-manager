@@ -18,6 +18,9 @@ import VendorsPage from './views/vendors/VendorsPage.svelte';
 import VendorPage from './views/vendors/VendorPage.svelte';
 import ContractsPage from './views/contracts/ContractsPage.svelte';
 import ContractPage from './views/contracts/ContractPage.svelte';
+import OrdersPage from './views/orders/OrdersPage.svelte';
+import OrderPage from './views/orders/OrderPage.svelte';
+import ReceivePage from './views/orders/ReceivePage.svelte';
 import FieldsPage from './views/fields/FieldsPage.svelte';
 import TemplatesPage from './views/templates/TemplatesPage.svelte';
 import TemplateEditor from './views/templates/TemplateEditor.svelte';
@@ -100,6 +103,10 @@ export const routes: Route[] = [
   { pattern: '/contracts', component: ContractsPage, title: 'Contracts', permissions: ['assets.read'], nav: 'Contracts', group: 'Catalog' },
   { pattern: '/contracts/new', component: ContractPage, title: 'New contract', permissions: ['vendors.manage'] },
   { pattern: '/contracts/:id', component: ContractPage, title: 'Contract', permissions: ['assets.read'] },
+  { pattern: '/orders', component: OrdersPage, title: 'Orders', permissions: ['assets.read'], nav: 'Orders', group: 'Catalog' },
+  { pattern: '/orders/new', component: OrderPage, title: 'New order', permissions: ['vendors.manage'] },
+  { pattern: '/orders/:id', component: OrderPage, title: 'Order', permissions: ['assets.read'] },
+  { pattern: '/orders/:id/receive', component: ReceivePage, title: 'Receive an order', permissions: ['assets.read'] },
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields', group: 'Catalog' },
   { pattern: '/relations', component: RelationsPage, title: 'Link types', permissions: ['categories.manage'], nav: 'Link types', group: 'Catalog' },
   { pattern: '/hooks', component: HooksPage, title: 'Hooks', permissions: ['categories.manage'], nav: 'Hooks', group: 'Catalog' },

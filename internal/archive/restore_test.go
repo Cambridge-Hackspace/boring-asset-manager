@@ -154,11 +154,26 @@ func richSeed(t *testing.T, st *store.Store, blobs filestore.Blobs) seeded {
 	// What it sells (#219): the category, preferred, in awkward text, and
 	// the drill, at a price in a currency of three places.
 	pack := 100
-	if _, err := st.CreateCatalogEntry(store.CatalogEntryInput{VendorID: vendor.ID, CategoryID: parent.ID, PartNumber: "SC-100", Description: awkwardText[1],
-		URL: "https://example.com/tools/sc-100", PackSize: &pack, PackUnit: awkwardText[0], Price: "4.5", Currency: "GBP", PriceChecked: "2026-11-01", Preferred: true}); err != nil {
+	screws, err := st.CreateCatalogEntry(store.CatalogEntryInput{VendorID: vendor.ID, CategoryID: parent.ID, PartNumber: "SC-100", Description: awkwardText[1],
+		URL: "https://example.com/tools/sc-100", PackSize: &pack, PackUnit: awkwardText[0], Price: "4.5", Currency: "GBP", PriceChecked: "2026-11-01", Preferred: true})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.CreateCatalogEntry(store.CatalogEntryInput{VendorID: vendor.ID, AssetID: drill, PartNumber: awkwardText[4], Price: "12.345", Currency: "KWD"}); err != nil {
+		t.Fatal(err)
+	}
+	// An order to it (#222), placed, with a catalog line and a free one in
+	// awkward text, and part of it received.
+	price := "7.25"
+	order, err := st.As(s.user.ID).CreatePurchaseOrder(store.OrderInput{VendorID: vendor.ID, DeliverTo: awkwardText[2], Notes: awkwardText[5],
+		Lines: []store.OrderLineInput{{CatalogEntryID: screws.ID, Quantity: 4}, {Description: awkwardText[3], Quantity: 1, Price: &price}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.PlacePurchaseOrder(order.ID, "2026-01-10"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ReceivePurchaseOrder(order.ID, store.ReceiptInput{ReceivedOn: "2026-01-12", Lines: []store.ReceiptLine{{LineID: order.Lines[1].ID, Quantity: 1}}}); err != nil {
 		t.Fatal(err)
 	}
 	return s

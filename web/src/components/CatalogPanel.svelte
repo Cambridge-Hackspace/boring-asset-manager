@@ -6,7 +6,8 @@
   import { request } from '../lib/api';
   import { entryHref, entryName, entryPrice, entryProblem, entryRequest, packText } from '../lib/catalog';
   import { messageOf } from '../lib/errors';
-  import type { AssetWithDetails, CatalogEntry, CatalogEntryRequest, Category, Vendor } from '../lib/models';
+  import type { AssetWithDetails, CatalogEntry, CatalogEntryRequest, Category, PurchaseOrder, Vendor } from '../lib/models';
+  import { onOrderText } from '../lib/orders';
   import { currencies } from '../lib/purchases';
   import { session } from '../lib/session.svelte';
   import ConfirmButton from './ConfirmButton.svelte';
@@ -63,7 +64,19 @@
     }
   }
 
-  onMount(load);
+  // The open purchase orders with a line for a category or an asset
+  // (docs/purchase-orders.md), so its page says what is on order.
+  let onOrder = $state<PurchaseOrder[]>([]);
+
+  onMount(() => {
+    void load();
+    if (category || asset) {
+      const q = category ? `category_id=${encodeURIComponent(category.id)}` : `asset_id=${encodeURIComponent(asset?.id ?? '')}`;
+      request<{ orders: PurchaseOrder[] }>('GET', `/purchase-orders?state=open&${q}`)
+        .then((r) => (onOrder = r.orders ?? []))
+        .catch(() => {});
+    }
+  });
 
   /** How an entry is named on this page: by what it is for on a vendor's, or by vendor on the others. */
   const label = (e: CatalogEntry) => (onVendor ? `${entryName(e)} for ${e.linked_name}` : `${entryName(e)} from ${e.vendor_name}`);
@@ -173,6 +186,11 @@
 <section aria-labelledby="catalog-heading" class="space-y-4">
   <h2 id="catalog-heading" class="section-title">Catalog</h2>
   <ErrorMessage {error} />
+  {#if onOrder.length}
+    <p class="flex flex-wrap gap-x-3 text-sm">
+      {#each onOrder as o (o.id)}<a class="inline-flex min-h-11 items-center underline" href="/orders/{encodeURIComponent(o.id)}">{onOrderText(o)}</a>{/each}
+    </p>
+  {/if}
   {#if !loaded}
     <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
   {:else if entries.length === 0}

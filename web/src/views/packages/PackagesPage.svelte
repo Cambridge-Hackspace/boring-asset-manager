@@ -26,6 +26,7 @@
   import PageHeader from '../../components/PageHeader.svelte';
   import ImportSection from './ImportSection.svelte';
   import DocumentSettings from './DocumentSettings.svelte';
+  import OrderNumbering from './OrderNumbering.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -251,6 +252,8 @@
 <ImportSection {tree} onimported={() => void load()} />
 
 <DocumentSettings />
+
+<OrderNumbering />
 
 <section class="card mb-6 max-w-3xl space-y-4" aria-labelledby="export-heading">
   <h2 id="export-heading" class="text-lg font-semibold">Export a package</h2>

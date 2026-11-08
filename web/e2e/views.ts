@@ -182,6 +182,14 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   await request.post(`/api/v1/contracts/${contract.contract.id}/attachments`, {
     multipart: { file: { name: 'contract.txt', mimeType: 'text/plain', buffer: Buffer.from('Terms.') } },
   });
+  // A purchase order to it (#222), placed, with a catalog line for the
+  // screws and a free one, for the order pages, the vendor's Orders tab,
+  // the receive page and the running-low list's "On order".
+  const order = await post('/purchase-orders', {
+    vendor_id: vendor.vendor.id, deliver_to: 'The Hackspace\n1 Workshop Lane', notes: 'Ring the **back** door.', expected_on: '2026-01-01',
+    lines: [{ catalog_entry_id: (await (await request.get(`/api/v1/catalog?asset_id=${screws.asset.asset.id}`)).json()).entries[0].id, quantity: 2 }, { description: 'Delivery', quantity: 1, unit_price: '5' }],
+  });
+  await post(`/purchase-orders/${order.order.id}/place`, { ordered_on: '2025-12-20' });
   const { entries } = await (await request.get('/api/v1/spool')).json();
   const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
   await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
@@ -224,6 +232,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/vendors/${vendor.vendor.id}?tab=attachments`, ''],
     [`/vendors/${vendor.vendor.id}?tab=history`, ''],
     [`/vendors/${vendor.vendor.id}?tab=contracts`, ''],
+    [`/vendors/${vendor.vendor.id}?tab=orders`, ''],
     [`/vendors/${vendor.vendor.id}?tab=scopes`, ''],
     ['/contracts', 'Contracts'],
     ['/contracts?q=nothing+matches+this', 'Contracts'],
@@ -232,6 +241,15 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/contracts/${contract.contract.id}?tab=covers`, ''],
     [`/contracts/${contract.contract.id}?tab=attachments`, ''],
     [`/contracts/${contract.contract.id}?tab=history`, ''],
+    ['/orders', 'Orders'],
+    ['/orders?q=nothing+matches+this', 'Orders'],
+    ['/orders/new', 'New order'],
+    ['/orders/new?from=running-low', 'Start orders'],
+    [`/orders/${order.order.id}`, ''],
+    [`/orders/${order.order.id}?tab=details`, ''],
+    [`/orders/${order.order.id}?tab=attachments`, ''],
+    [`/orders/${order.order.id}?tab=history`, ''],
+    [`/orders/${order.order.id}/receive`, ''],
     ['/fields', 'Fields'],
     ['/templates', 'Label templates'],
     ['/templates/new', 'New template'],

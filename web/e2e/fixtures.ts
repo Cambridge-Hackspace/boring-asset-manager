@@ -78,7 +78,7 @@ export { expect };
 
 /** The navigation group each grouped page is listed under (src/routes.ts). */
 const navGroupOf: Record<string, string> = {
-  Categories: 'Catalog', Vendors: 'Catalog', Contracts: 'Catalog', Fields: 'Catalog', 'Link types': 'Catalog', Hooks: 'Catalog', Icons: 'Catalog',
+  Categories: 'Catalog', Vendors: 'Catalog', Contracts: 'Catalog', Orders: 'Catalog', Fields: 'Catalog', 'Link types': 'Catalog', Hooks: 'Catalog', Icons: 'Catalog',
   Templates: 'Labels', Images: 'Labels', Printers: 'Labels',
   Users: 'Admin', Roles: 'Admin', 'API tokens': 'Admin', Notifications: 'Admin', Relays: 'Admin', 'Sign-in': 'Admin', Backups: 'Admin', 'Import & export': 'Admin',
 };
