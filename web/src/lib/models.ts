@@ -1368,6 +1368,38 @@ export interface Contract {
   updated_at: string;
 }
 
+/**
+ * One thing a vendor sells (docs/vendors.md#catalogs), for a category
+ * (things counted by items) or an asset (things counted by quantity). Its
+ * price, currency and when it was checked are left out without
+ * purchases.read for the vendor, and prices_hidden says so.
+ */
+export interface CatalogEntry {
+  id: string;
+  vendor_id: string;
+  vendor_name: string;
+  category_id?: string;
+  asset_id?: string;
+  /** The category's or the asset's name. */
+  linked_name: string;
+  part_number: string;
+  description: string;
+  url: string;
+  pack_size: number | null;
+  pack_unit: string;
+  price?: string;
+  currency?: string;
+  /** YYYY-MM-DD. */
+  price_checked?: string;
+  prices_hidden?: boolean;
+  /** The one to reorder from, of its category's or asset's entries. */
+  preferred: boolean;
+  /** Whether the requester may change it: vendors.manage for its vendor. */
+  can_manage: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 /** A contract as the API takes it: every detail, so an absent one is emptied, but for what it covers, kept when left out. */
 export interface ContractRequest {
   vendor_id: string;
@@ -1401,6 +1433,22 @@ export interface ContractCover {
   cost?: string;
   currency?: string;
   billing?: Billing;
+}
+
+/** A catalog entry as made or replaced: every property, so an absent one is emptied. */
+export interface CatalogEntryRequest {
+  vendor_id: string;
+  category_id: string;
+  asset_id: string;
+  part_number: string;
+  description: string;
+  url: string;
+  pack_size: number | null;
+  pack_unit: string;
+  price: string;
+  currency: string;
+  price_checked: string;
+  preferred: boolean;
 }
 
 /** What comments are on (docs/comments.md). */

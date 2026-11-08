@@ -350,6 +350,10 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 				if isAttachmentUpload(r.URL.Path) {
 					limit = attachmentBodyCeiling
 				}
+				// A vendor's catalog, imported as assets are.
+				if strings.HasPrefix(r.URL.Path, "/api/v1/vendors/") && strings.HasSuffix(r.URL.Path, "/catalog.csv") {
+					limit = importBodyLimit
+				}
 			}
 		}
 		if r.ContentLength > limit {

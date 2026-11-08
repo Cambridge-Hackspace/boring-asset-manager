@@ -53,13 +53,13 @@ What is chosen brings what it needs:
 
 | Chosen | Brings |
 |---|---|
-| A category | Its fields, the hooks it offers, the link types it suggests, its label templates and scan template, its icon and the fields its icon draws, the flows that file into it or take from it, and the vendors it is bought from |
+| A category | Its fields, the hooks it offers, the link types it suggests, its label templates and scan template, its icon and the fields its icon draws, the flows that file into it or take from it, the vendors it is bought from, and those that sell it, with their [catalog entries](vendors.md#catalogs) for it |
 | A vendor | Its contacts and attachments, and its scopes when they are chosen too, as a category's are |
 | An icon | What it `extends`, and the library files it `insert`s, `badge`s, takes `axes` from or sets text in, which are read from the sources |
 | A label template | Its images, the fields it binds, and the icons it draws by name |
 | A report or scan template | The fields it shows or groups by, and the categories it looks in |
 | A flow | Its categories, label templates, hooks, the fields it asks or sets, and the flow whose filings it finds |
-| Assets | Their categories, the icons they draw as their own, the link types of their links, their purchase details, and the vendors they were bought from |
+| Assets | Their categories, the icons they draw as their own, the link types of their links, their purchase details, the vendors they were bought from, and those that sell them, with their catalog entries |
 
 A category whose parent is not in the package keeps what it inherits as its own: its parent's
 fields, and its parent's label templates and scan template when it names none.
@@ -193,7 +193,9 @@ something else.
 
 What comes in is the catalog, labels, reports, icons, flows and assets.
 An asset's purchase details name its vendor as imported, or matched with one here, and its
-invoice among its attachments; a package without its attachments names no invoice.
+invoice among its attachments; a package without its attachments names no invoice. Catalog entries
+come in with their category or asset, naming the vendor as imported or matched. A package made by
+someone without `purchases.read` for a vendor holds its entries without their prices.
 
 People, roles, settings, printers, notification channels and authentication are never merged:
 they are an instance's own. An archive holding authentication is imported without it, with a

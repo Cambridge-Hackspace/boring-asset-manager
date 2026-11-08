@@ -13,6 +13,7 @@
   import { currentTab } from '../../lib/tabs';
   import { describeVendorChange, describeVendorEvent, telHref, websiteHref, type VendorEvent } from '../../lib/vendors';
   import AttachmentsPanel from '../../components/AttachmentsPanel.svelte';
+  import CatalogPanel from '../../components/CatalogPanel.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -80,11 +81,12 @@
 
   // The page in tabs (#161), kept in the address. All stay on the page,
   // hidden but for one, so changes not saved in one survive looking at
-  // another. Its catalog (#219) is to join these as a tab of its own.
+  // another.
   const tabOf: Record<string, string> = { details: 'details', scopes: 'scopes' };
   const tabs = $derived.by(() => {
     const all = [
       { key: 'details', label: 'Details', on: true },
+      { key: 'catalog', label: 'Catalog', on: !isNew },
       { key: 'assets', label: 'Assets', on: !isNew },
       { key: 'contracts', label: 'Contracts', on: !isNew },
       { key: 'attachments', label: 'Attachments', on: true },
@@ -253,6 +255,42 @@
     try {
       await request('DELETE', `/vendors/${encodeURIComponent(id)}`);
       navigate('/vendors');
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  // Its catalog as CSV (docs/csv.md#vendor-catalogs): checked first, then
+  // imported, all or none. The panel is remade after an import, to show it.
+  let catalogFile = $state<File | null>(null);
+  let catalogPlan = $state<CatalogPlan | null>(null);
+  let catalogRound = $state(0);
+  interface CatalogPlan {
+    rows: number;
+    create: number;
+    update: number;
+    unchanged: number;
+    problem_count: number;
+    problems: { row: number; column?: string; message: string }[];
+  }
+
+  async function sendCatalog(check: boolean) {
+    if (!catalogFile) return;
+    error = saved = '';
+    const form = new FormData();
+    form.append('file', catalogFile);
+    if (check) form.append('check', 'true');
+    try {
+      const plan = await request<CatalogPlan>('POST', `/vendors/${encodeURIComponent(id)}/catalog.csv`, form);
+      if (check) {
+        catalogPlan = plan;
+        return;
+      }
+      catalogPlan = null;
+      catalogFile = null;
+      catalogRound++;
+      saved = `Catalog imported: ${plan.create} added, ${plan.update} changed.`;
+      await loadHistory().catch(() => {});
     } catch (err) {
       error = messageOf(err);
     }
@@ -432,6 +470,43 @@
         </ul>
       {:else}
         <p class="text-sm text-zinc-600 dark:text-zinc-400">No category names it yet. A category’s Vendors tab chooses those it is bought from.</p>
+      {/if}
+    </section>
+  </div>
+
+  <div class="mt-6 max-w-3xl space-y-6" id="tab-catalog" hidden={tab !== 'catalog'}>
+    {#key catalogRound}
+      <CatalogPanel {vendor} canAdd={canManage} onchange={attachmentsChanged} />
+    {/key}
+    <section aria-labelledby="catalog-csv-heading" class="space-y-2">
+      <h2 id="catalog-csv-heading" class="text-lg font-semibold">As a spreadsheet</h2>
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">
+        Its catalog as CSV, one row per entry, to keep or to edit and import again. Rows with an id change that entry; rows
+        without one add one.
+      </p>
+      <a class="btn-secondary inline-flex min-h-11 items-center" href="/api/v1/vendors/{encodeURIComponent(id)}/catalog.csv" download>Export CSV</a>
+      {#if canManage}
+        <div class="flex flex-wrap items-end gap-2">
+          <div>
+            <label class="label" for="catalog-file">Import a CSV or Excel file</label>
+            <input id="catalog-file" class="input" type="file" accept=".csv,text/csv,.xlsx"
+              onchange={(ev) => { catalogFile = ev.currentTarget.files?.[0] ?? null; catalogPlan = null; }} />
+          </div>
+          <button type="button" class="btn-secondary" disabled={!catalogFile} onclick={() => sendCatalog(true)}>Check the file</button>
+        </div>
+        {#if catalogPlan}
+          <div class="card space-y-2 text-sm" role="region" aria-label="What importing would do">
+            <p>Importing would add {catalogPlan.create}, change {catalogPlan.update} and leave {catalogPlan.unchanged} as they are.</p>
+            {#if catalogPlan.problem_count}
+              <p class="font-semibold text-red-700 dark:text-red-400">{catalogPlan.problem_count} problems; nothing can be imported until they are fixed:</p>
+              <ul class="list-disc pl-5">
+                {#each catalogPlan.problems as p, i (i)}<li>Line {p.row}{p.column ? `, ${p.column}` : ''}: {p.message}</li>{/each}
+              </ul>
+            {:else}
+              <button type="button" class="btn-primary" onclick={() => sendCatalog(false)}>Import</button>
+            {/if}
+          </div>
+        {/if}
       {/if}
     </section>
   </div>
