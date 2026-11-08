@@ -7,7 +7,7 @@
   import { actorName } from '../../lib/people';
   import type { AssetEvent, AssetWithDetails, Condition, Field, Filing, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
-  import { navigate } from '../../lib/router.svelte';
+  import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import AssetIcon from '../../components/AssetIcon.svelte';
   import { paramsNote, plainIcon, stateNote, textsNote } from '../../lib/iconStates';
@@ -28,6 +28,9 @@
   import LoanPanel from '../../components/LoanPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import CommentsPanel from '../../components/CommentsPanel.svelte';
+  import GraphView from '../../components/GraphView.svelte';
+  import TabLinks from '../../components/TabLinks.svelte';
+  import { currentTab } from '../../lib/tabs';
 
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
@@ -127,6 +130,13 @@
   }
 
   const archived = $derived(!!asset?.asset.archived_at);
+
+  // Its graph of followed links is a tab of its own, for those signed in.
+  const tabs = [
+    { key: 'asset', label: 'Asset' },
+    { key: 'graph', label: 'Graph' },
+  ];
+  const tab = $derived(session.user ? currentTab(router.search, tabs.map((t) => t.key)) : 'asset');
 
   const generatorName = (type: string) => generators.find((g) => g.type === type)?.name ?? type;
 
@@ -296,7 +306,16 @@
     </div>
   {/if}
 
-  <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+  {#if session.user}
+    <div class="mb-6"><TabLinks label="Asset page sections" {tabs} /></div>
+  {/if}
+  {#if tab === 'graph'}
+    <section aria-labelledby="graph-heading">
+      <h2 id="graph-heading" class="section-title mb-3">What it needs, and what needs it</h2>
+      <GraphView assetId={asset.asset.id} />
+    </section>
+  {/if}
+  <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]" class:hidden={tab === 'graph'}>
     <!-- The main column is plain sections; the side column, cards. -->
     <div class="space-y-10">
       {#key attachedByComments}<AttachmentsPanel owner="asset" ownerId={asset.asset.id} ownerName={asset.asset.name} canEdit={session.canOn(asset.scopes, 'assets.write') && !asset.asset.archived_at} onchange={attachmentsChanged} />{/key}

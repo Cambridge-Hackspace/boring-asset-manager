@@ -6,7 +6,7 @@ import { session } from '../lib/session.svelte';
 import type { AssetWithDetails, RelationType } from '../lib/models';
 
 const contains: RelationType = {
-  id: 'c', name: 'contains', inverse_name: 'contained in', is_symmetric: false, is_single: true, is_location: true, created_at: '', updated_at: '', link_count: 0,
+  id: 'c', name: 'contains', inverse_name: 'contained in', is_symmetric: false, is_single: true, is_location: true, is_followed: false, created_at: '', updated_at: '', link_count: 0,
 };
 const asset = (id: string, name: string, over: Partial<AssetWithDetails> = {}): AssetWithDetails => ({
   asset: { id, name, created_at: '', updated_at: '', condition: 'ok', condition_note: '' },

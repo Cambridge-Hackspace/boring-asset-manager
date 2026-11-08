@@ -14,7 +14,7 @@
   let status = $state('');
   // The type being edited: null for none, '' for a new one.
   let editing = $state<string | null>(null);
-  let draft = $state({ name: '', inverse_name: '', is_symmetric: false, is_single: false, is_location: false });
+  let draft = $state({ name: '', inverse_name: '', is_symmetric: false, is_single: false, is_location: false, is_followed: false });
 
   const inUse = $derived(editing ? (types.find((t) => t.id === editing)?.link_count ?? 0) > 0 : false);
 
@@ -33,8 +33,8 @@
     error = status = '';
     editing = t?.id ?? '';
     draft = t
-      ? { name: t.name, inverse_name: t.inverse_name, is_symmetric: t.is_symmetric, is_single: t.is_single, is_location: t.is_location }
-      : { name: '', inverse_name: '', is_symmetric: false, is_single: false, is_location: false };
+      ? { name: t.name, inverse_name: t.inverse_name, is_symmetric: t.is_symmetric, is_single: t.is_single, is_location: t.is_location, is_followed: t.is_followed }
+      : { name: '', inverse_name: '', is_symmetric: false, is_single: false, is_location: false, is_followed: false };
   }
 
   // A symmetric relation has no direction, so it is neither single nor a
@@ -73,10 +73,11 @@
   }
 
   function describe(t: RelationType): string {
-    if (t.is_symmetric) return `A ${t.name} B, and B ${t.name} A.`;
+    if (t.is_symmetric) return `A ${t.name} B, and B ${t.name} A.${t.is_followed ? ' Followed through several hops, in graphs and reports.' : ''}`;
     const parts = [`A ${t.name} B; B is ${t.inverse_name} A.`];
     if (t.is_single) parts.push(`B can be ${t.inverse_name} one asset only.`);
     if (t.is_location) parts.push('It gives where things are.');
+    if (t.is_followed) parts.push('Followed through several hops, in graphs and reports.');
     return parts.join(' ');
   }
 </script>
@@ -118,8 +119,12 @@
         <input type="checkbox" bind:checked={draft.is_location} disabled={inUse || !draft.is_single} />
         Gives where things are, like "contains"
       </label>
-      {#if inUse}<p id="rel-in-use" class="text-xs text-zinc-600 dark:text-zinc-400">Links use it, so only its names can change.</p>{/if}
+      {#if inUse}<p id="rel-in-use" class="text-xs text-zinc-600 dark:text-zinc-400">Links use it, so only its names, and whether it is followed, can change.</p>{/if}
     </fieldset>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" bind:checked={draft.is_followed} />
+      Follow its links through several hops, like "depends on": in an asset's graph, and in reports' counts
+    </label>
     <div class="flex gap-2">
       <button type="submit" class="btn-primary">{editing ? 'Save relation' : 'Create relation'}</button>
       <button type="button" class="btn-secondary" onclick={() => (editing = null)}>Cancel</button>

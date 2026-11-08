@@ -508,6 +508,7 @@
   {#if category && assetCount !== null}
     <div class="flex flex-wrap gap-2">
       {#if assetCount > 0}<a class="btn-secondary" href="/assets?category={encodeURIComponent(id)}">See its {assetCount} asset{assetCount === 1 ? '' : 's'}</a>{/if}
+      {#if assetCount > 0}<a class="btn-secondary" href="/assets/graph?category={encodeURIComponent(id)}">Graph</a>{/if}
       {#if session.can('assets.write') && !isSystem}<a class="btn-secondary" href="/assets/new?category={encodeURIComponent(id)}">Add an asset to it</a>{/if}
     </div>
   {/if}

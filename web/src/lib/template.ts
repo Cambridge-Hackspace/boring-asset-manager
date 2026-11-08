@@ -589,6 +589,10 @@ export function placeholders(fieldKeys: string[], generatorTypes: string[]): str
     '{{asset.contract.cost}}',
     '{{asset.contract.currency}}',
     '{{asset.contract.billing}}',
+    '{{asset.needs}}',
+    '{{asset.needs_all}}',
+    '{{asset.needed_by}}',
+    '{{asset.needed_by_all}}',
     ...generatorTypes.map((t) => `{{asset.code.${t}}}`),
     ...fieldKeys.map((k) => `{{field.${k}}}`),
   ];

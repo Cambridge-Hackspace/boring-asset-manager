@@ -448,6 +448,13 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/assets/sheets.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetSheets)))
 	handle("GET /api/v1/assets/stocktake.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleStocktake)))
 	handle("GET /api/v1/assets/{id}/sheet.pdf", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetSheet)))
+	// Graphs of followed links (docs/data-model.md#following-links).
+	handle("GET /api/v1/assets/graph", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleMapGraph)))
+	handle("GET /api/v1/assets/graph.svg", RequirePermission(rbac.PermAssetsRead)(s.handleMapGraphDrawing("svg")))
+	handle("GET /api/v1/assets/graph.pdf", RequirePermission(rbac.PermAssetsRead)(s.handleMapGraphDrawing("pdf")))
+	handle("GET /api/v1/assets/{id}/graph", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleAssetGraph)))
+	handle("GET /api/v1/assets/{id}/graph.svg", RequirePermission(rbac.PermAssetsRead)(s.handleAssetGraphDrawing("svg")))
+	handle("GET /api/v1/assets/{id}/graph.pdf", RequirePermission(rbac.PermAssetsRead)(s.handleAssetGraphDrawing("pdf")))
 	// Documents' settings (docs/reports.md#pdf): read by those who make
 	// them, for their defaults.
 	handle("GET /api/v1/settings/documents", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleDocumentSettings)))

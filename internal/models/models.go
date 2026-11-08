@@ -1108,11 +1108,96 @@ type RelationType struct {
 	// so linking it again moves it.
 	IsSingle bool `json:"is_single"`
 	// IsLocation makes its links an asset's location.
-	IsLocation bool      `json:"is_location"`
+	IsLocation bool `json:"is_location"`
+	// IsFollowed makes its links a chain, followed through several hops
+	// by an asset's graph and counted by reports, as "depends on" is.
+	IsFollowed bool      `json:"is_followed"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 	// LinkCount is how many links use it.
 	LinkCount int `json:"link_count"`
+}
+
+// AssetGraph is what following links of followed types finds
+// (docs/data-model.md#following-links): the assets reached, as far as the
+// requester may read them, and the links between them. For one asset's
+// graph, Root is that asset; for a map of a category or a search, it is
+// empty, and the assets are those it holds with the links among them.
+type AssetGraph struct {
+	Root string `json:"root,omitempty"`
+	// Direction is out (what the root needs), in (what needs it) or both;
+	// Depth how many hops were followed.
+	Direction string `json:"direction,omitempty"`
+	Depth     int    `json:"depth,omitempty"`
+	// Types are the followed link types the graph follows.
+	Types  []RelationType `json:"types"`
+	Assets []GraphAsset   `json:"assets"`
+	Links  []GraphLink    `json:"links"`
+	// Hidden counts the assets reached that the requester may not read:
+	// never named, and never followed through.
+	Hidden int `json:"hidden"`
+	// Loops are the loops found, each the IDs of the assets in it, by
+	// name: following one stops where it comes back round.
+	Loops [][]string `json:"loops"`
+	// Truncated says the graph was cut short at MaxGraphAssets, at
+	// TruncatedAt hops; the assets marked Cut have links not followed.
+	Truncated   bool `json:"truncated"`
+	TruncatedAt int  `json:"truncated_at,omitempty"`
+}
+
+// GraphAsset is an asset in a graph, with how far it is from the root and
+// where the drawing puts it: in Layer, from 0 at the left, at Row from 0
+// at the top.
+type GraphAsset struct {
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Categories []GraphCategory `json:"categories"`
+	Icon       *ResolvedIcon   `json:"icon"`
+	Condition  string          `json:"condition"`
+	Archived   bool            `json:"archived,omitempty"`
+	// Hops is how many links from the root it is, and Side whether it is
+	// the root, needed by it (out) or needing it (in); for a map, Hops is
+	// 0 and Side empty.
+	Hops  int    `json:"hops"`
+	Side  string `json:"side,omitempty"`
+	Layer int    `json:"layer"`
+	Row   int    `json:"row"`
+	// Cut marks an asset with links the graph did not follow, as it was
+	// cut short.
+	Cut bool `json:"cut,omitempty"`
+}
+
+// GraphCategory is a category a graph's asset is in.
+type GraphCategory struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color_hex,omitempty"`
+}
+
+// GraphLink is a link in a graph, as stored: From <type's name> To, as
+// "Laser cutter depends on Extractor".
+type GraphLink struct {
+	ID     string `json:"id"`
+	TypeID string `json:"type_id"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+}
+
+// The sides of a graph's assets, and its directions.
+const (
+	GraphRoot = "root"
+	GraphOut  = "out"
+	GraphIn   = "in"
+	GraphBoth = "both"
+)
+
+// LinkCounts are how many assets an asset needs, and how many need it,
+// through followed links: directly, and in all, as far as a graph follows.
+type LinkCounts struct {
+	Needs       int `json:"needs"`
+	NeedsAll    int `json:"needs_all"`
+	NeededBy    int `json:"needed_by"`
+	NeededByAll int `json:"needed_by_all"`
 }
 
 // LinkedAsset is the asset at the other end of a link, or in a location.

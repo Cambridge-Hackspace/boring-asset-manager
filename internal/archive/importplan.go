@@ -88,7 +88,7 @@ func loadHere(ctx context.Context, st *store.Store, q querier) (*here, error) {
 	}{
 		{"SELECT field_key, id, label, validation_type, options FROM fields", func(r []string) { h.fields[r[0]] = hereField{r[1], r[2], r[3], r[4]} }},
 		{"SELECT action_key, id, label, confirm_question FROM asset_actions", func(r []string) { h.hooks[r[0]] = r[1:] }},
-		{"SELECT name, id, inverse_name, is_symmetric, is_single, is_location FROM relation_types", func(r []string) { h.relTypes[r[0]] = r[1:] }},
+		{"SELECT name, id, inverse_name, is_symmetric, is_single, is_location, is_followed FROM relation_types", func(r []string) { h.relTypes[r[0]] = r[1:] }},
 		{"SELECT name, id FROM scopes", func(r []string) { h.scopes[r[0]], scopeNames[r[1]] = r[1], r[0] }},
 		{"SELECT name, id, units, width, height, dpi, layout_json FROM templates ORDER BY id", func(r []string) {
 			if _, ok := h.templates[r[0]]; !ok {
@@ -348,6 +348,11 @@ func (m *matcher) match() {
 		if e, ok := h.relTypes[str(r, "name")]; ok {
 			ex = &Ref{Kind: ItemRelationType, ID: e[0], Name: str(r, "name")}
 			same = e[1] == str(r, "inverse_name") && truthy(e[2]) == boolOf(r["is_symmetric"]) && truthy(e[3]) == boolOf(r["is_single"]) && truthy(e[4]) == boolOf(r["is_location"])
+			// An archive from before migration 074 does not say whether it
+			// is followed, and differs in nothing for that.
+			if followed, ok := r["is_followed"]; ok {
+				same = same && truthy(e[5]) == boolOf(followed)
+			}
 		}
 		m.item(ItemRelationType, str(r, "id"), str(r, "name"), ex, same, allChoices)
 	}

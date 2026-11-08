@@ -16,10 +16,11 @@ type RelationTypeRequest struct {
 	IsSymmetric bool   `json:"is_symmetric"`
 	IsSingle    bool   `json:"is_single"`
 	IsLocation  bool   `json:"is_location"`
+	IsFollowed  bool   `json:"is_followed"`
 }
 
 func (r RelationTypeRequest) input() store.RelationTypeInput {
-	return store.RelationTypeInput{Name: r.Name, InverseName: r.InverseName, IsSymmetric: r.IsSymmetric, IsSingle: r.IsSingle, IsLocation: r.IsLocation}
+	return store.RelationTypeInput{Name: r.Name, InverseName: r.InverseName, IsSymmetric: r.IsSymmetric, IsSingle: r.IsSingle, IsLocation: r.IsLocation, IsFollowed: r.IsFollowed}
 }
 
 // handleListRelationTypes: GET /api/v1/relation-types

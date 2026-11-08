@@ -44,6 +44,10 @@ const (
 	RefContractCost                        // {{asset.contract.cost}}
 	RefContractCurrency                    // {{asset.contract.currency}}
 	RefContractBilling                     // {{asset.contract.billing}}
+	RefLinksNeeds                          // {{asset.needs}}
+	RefLinksNeedsAll                       // {{asset.needs_all}}
+	RefLinksNeededBy                       // {{asset.needed_by}}
+	RefLinksNeededByAll                    // {{asset.needed_by_all}}
 )
 
 // simpleRefs are the placeholders that take no argument.
@@ -76,6 +80,21 @@ var simpleRefs = map[string]RefKind{
 	"asset.contract.cost":          RefContractCost,
 	"asset.contract.currency":      RefContractCurrency,
 	"asset.contract.billing":       RefContractBilling,
+	"asset.needs":                  RefLinksNeeds,
+	"asset.needs_all":              RefLinksNeedsAll,
+	"asset.needed_by":              RefLinksNeededBy,
+	"asset.needed_by_all":          RefLinksNeededByAll,
+}
+
+// IsLinkCount reports whether the placeholder counts followed links
+// (docs/data-model.md#following-links), which are read for it only when a
+// template or report uses one.
+func (r Ref) IsLinkCount() bool {
+	switch r.Kind {
+	case RefLinksNeeds, RefLinksNeedsAll, RefLinksNeededBy, RefLinksNeededByAll:
+		return true
+	}
+	return false
 }
 
 // Ref is one placeholder. Arg holds the generator type or field key.
@@ -211,6 +230,10 @@ type Data struct {
 	// (docs/contracts.md), as text: its cost, currency and billing empty
 	// for a requester who may not see them.
 	Contract ContractData `json:"contract"`
+	// Links counts the assets it needs, and those that need it, through
+	// followed links: directly, and in all. They are empty where nothing
+	// binds them, as they are read only for a template or report that does.
+	Links LinkData `json:"links"`
 }
 
 // ContractData is a contract, as bindings show it: dates YYYY-MM-DD, and
@@ -225,6 +248,15 @@ type ContractData struct {
 	Cost      string `json:"cost"`
 	Currency  string `json:"currency"`
 	Billing   string `json:"billing"`
+}
+
+// LinkData is how many assets an asset needs and how many need it, as
+// bindings show them.
+type LinkData struct {
+	Needs       string `json:"needs"`
+	NeedsAll    string `json:"needs_all"`
+	NeededBy    string `json:"needed_by"`
+	NeededByAll string `json:"needed_by_all"`
 }
 
 // PurchaseData is an asset's purchase details, as bindings show them:
@@ -327,6 +359,14 @@ func (b Binding) Resolve(d Data) string {
 			sb.WriteString(d.Contract.Currency)
 		case RefContractBilling:
 			sb.WriteString(d.Contract.Billing)
+		case RefLinksNeeds:
+			sb.WriteString(d.Links.Needs)
+		case RefLinksNeedsAll:
+			sb.WriteString(d.Links.NeedsAll)
+		case RefLinksNeededBy:
+			sb.WriteString(d.Links.NeededBy)
+		case RefLinksNeededByAll:
+			sb.WriteString(d.Links.NeededByAll)
 		case RefScanURL:
 			// The asset's scan page (docs/scanning.md), by ID, which never changes.
 			sb.WriteString(strings.TrimRight(d.BaseURL, "/") + "/scan/" + d.AssetID)

@@ -26,7 +26,7 @@ func TestAssetLinksAPI(t *testing.T) {
 			contains = r.ID
 		}
 	}
-	if rec.Code != http.StatusOK || len(types.RelationTypes) != 3 || contains == "" {
+	if rec.Code != http.StatusOK || len(types.RelationTypes) != 4 || contains == "" {
 		t.Fatalf("relation types: %d %s", rec.Code, rec.Body)
 	}
 

@@ -363,17 +363,21 @@ Relation types are a shared list, like the field corpus. Each type has:
   name.
 - **single**, when the second asset can have only one such link (a thing is in one place).
 - **location**, for a type whose links say where things are. A location type must be single.
+- **followed**, for a type whose links make sense as a chain, followed through several hops (see
+  [Following links](#following-links)).
 
-Names and inverse names are up to 64 characters. BAM! seeds three types: `contains` (a location
-type), `has part` and `used with`.
+Names and inverse names are up to 64 characters. BAM! seeds four types: `contains` (a location
+type), `has part`, `used with` and `depends on` / `needed by` (followed). Migration 074 seeds
+`depends on` unless a type already has one of its names, and follows a type of the instance's own
+named `depends on` instead.
 
 Names are also written as verbs in CSV files (see [CSV](csv.md)): lowercased, with each run of
 characters other than letters and digits made `_`, so `contained in` becomes `contained_in`. A
 name whose verb another type already has is refused (`409`), and so is a name with no letters or
 digits.
 
-While links use a type, only its names can change, and it cannot be deleted (`409`, with how many
-links use it).
+While links use a type, only its names, and whether it is followed, can change, and it cannot be
+deleted (`409`, with how many links use it).
 
 A category can suggest relation types. An asset gathers the suggestions of its categories and
 their ancestors, and the web app offers those types first.
@@ -412,6 +416,57 @@ In the web app:
 - an asset's page always has a **Where** row, with **Move**;
 - an asset that holds others lists them under **Contents**;
 - the asset list has a **Where** column, showing the place each asset is directly in.
+
+### Following links
+
+Some links mean more when followed: the laser cutter depends on the extractor, which depends on
+the three-phase supply, which depends on the main breaker. Following the links of followed types
+answers "what stops working if the breaker trips?". `contains` forms chains through location links
+already, and keeps working as it does.
+
+An asset's graph follows its followed links:
+
+- **out**, to what it needs, from the link's first asset to its second ("the cutter depends on
+  the extractor");
+- **in**, to what needs it;
+- or **both**, the default.
+
+It follows 1 to 10 hops, 5 by default, through every followed type or those chosen. A symmetric
+followed type is followed both ways. Each asset comes with its name, categories, icon and
+condition, whether it is archived (archived assets are included, since a dependency on something
+archived is worth knowing), and how many hops away it is; each link with its type and its two
+assets, as stored.
+
+- **Loops** are allowed for followed types that are not single (A needs B, B needs A). Following
+  one stops where it comes back round, and the graph lists each loop's assets.
+- **Limits:** at most 500 assets. Past that, the graph is cut short at the hop where it went past,
+  keeping the first assets by name; it says so (`truncated`, `truncated_at`), and marks the assets
+  whose links were not all followed (`cut`).
+- **Scopes:** an asset the requester may not read is never named. It is counted (`hidden`), and
+  links are not followed through it, so a chain the requester cannot see stays unseen.
+
+Following reads each hop with a query or two for the whole of it, never one per asset. It uses
+`asset_links` as it is: its unique key (type, from, to) and `idx_asset_links_to` (to, type)
+already index both ends, so no index is added.
+
+The **map** of a category or a search is every asset in it, as the asset list finds them, with the
+followed links among them, cut short at 500 assets.
+
+In the web app, an asset's page has a **Graph** tab, drawing it with what needs it to the left and
+what it needs to the right, by hops; the asset list and a category's page link to the **Graph**
+page, the map. Each asset shows its icon and name, and is marked when its condition is not
+working; clicking one opens it, its graph redrawn around it. Under the drawing, the same graph is
+a nested list, by hops, for the keyboard and screen readers. The drawing downloads as SVG or PDF,
+drawn on a page by the server from the same layout. The layout is BAM!'s own: each asset in a
+column by hops (for the map, one column left of what it needs, loops broken where a walk by name
+comes back round), and the rows of each column ordered by where their links lead, to cross as few
+as a few sweeps find.
+
+Reports and labels count followed links (see [Reports](reports.md)): `{{asset.needs}}` and
+`{{asset.needed_by}}`, the assets one hop away, and `{{asset.needs_all}}` and
+`{{asset.needed_by_all}}`, those within 10 hops. Sorting by `{{asset.needed_by_all}}`, descending,
+ranks the assets whose loss would reach furthest. An asset the requester may not read is counted
+but not followed through, as in a graph.
 
 ## Stored text
 
@@ -498,6 +553,9 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 | `DELETE /api/v1/relation-types/{id}` | `categories.manage` | Delete a relation type no link uses. |
 | `POST /api/v1/assets/{id}/links` | `assets.write` | Link to another asset, with `{"type_id", "asset_id", "outgoing"}`. |
 | `DELETE /api/v1/assets/{id}/links/{link_id}` | `assets.write` | Remove a link. |
+| `GET /api/v1/assets/{id}/graph` | `assets.read` | Follow its links (see [Following links](#following-links)), as `graph`. Takes `?types=` (followed types' IDs, comma-separated; all by default), `?direction=` (`out`, `in` or `both`) and `?depth=` (1 to 10, 5 by default). |
+| `GET /api/v1/assets/graph` | `assets.read` | The map of the assets the asset list's filters find, with the followed links among them, as `graph`. Takes the list's filters and `?types=`. |
+| `GET /api/v1/assets/{id}/graph.svg`, `.pdf`, and `GET /api/v1/assets/graph.svg`, `.pdf` | `assets.read` | The same, drawn on a page, landscape unless `?orientation=portrait`, with `?page_size=` as other documents take it. |
 
 The asset list (`GET /api/v1/assets`) also takes the category and search filters, and
 `?condition=`.
@@ -513,6 +571,12 @@ The asset list (`GET /api/v1/assets`) also takes the category and search filters
 
 The copy draft's `links` give each link's type, label, other asset, direction and whether it is a
 location.
+
+A `graph` has `assets`, each with `id`, `name`, `categories`, `icon`, `condition`, `archived`,
+`hops`, `side` (`root`, `out` or `in`, for an asset's graph), and `layer` and `row`, where the
+drawing puts it; `links`, each with `id`, `type_id`, `from` and `to`; the followed `types` it
+follows; `hidden`; `loops`, each a list of asset IDs; and `truncated`, with `truncated_at` and
+each asset's `cut`.
 
 ## Storage
 

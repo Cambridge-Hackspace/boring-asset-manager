@@ -9,6 +9,7 @@
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { exportUrl } from '../../lib/importing';
+  import { graphUrl } from '../../lib/graph';
   import { personName } from '../../lib/people';
   import { flattenTree } from '../../lib/tree';
   import AssetThumb from '../../components/AssetThumb.svelte';
@@ -138,6 +139,7 @@
       <a class="btn-secondary" href={exportUrl(applied.search, applied.categoryId)} download>Export CSV</a>
       <a class="btn-secondary" href={exportUrl(applied.search, applied.categoryId, 'xlsx')} download>Export Excel</a>
       <PdfDownload base="/api/v1/assets/export.pdf" query={{ search: applied.search.trim(), category_id: applied.categoryId }} assetColumns />
+      <a class="btn-secondary" href={graphUrl(applied.search, applied.categoryId)}>Graph</a>
     {/if}
     {#if session.can('assets.write')}
       <a class="btn-secondary" href="/assets/import">Import CSV</a>

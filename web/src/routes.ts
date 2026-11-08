@@ -9,6 +9,7 @@ import Home from './views/Home.svelte';
 import AssetsPage from './views/assets/AssetsPage.svelte';
 import AssetPage from './views/assets/AssetPage.svelte';
 import ScenePage from './views/assets/ScenePage.svelte';
+import GraphPage from './views/assets/GraphPage.svelte';
 import AssetForm from './views/assets/AssetForm.svelte';
 import ImportPage from './views/assets/ImportPage.svelte';
 import CategoriesPage from './views/categories/CategoriesPage.svelte';
@@ -71,6 +72,7 @@ export const routes: Route[] = [
   { pattern: '/assets', component: AssetsPage, title: 'Assets', permissions: ['assets.read'], nav: 'Assets' },
   { pattern: '/assets/new', component: AssetForm, title: 'New asset', permissions: ['assets.write'] },
   { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets.write'] },
+  { pattern: '/assets/graph', component: GraphPage, title: 'Graph', permissions: ['assets.read'] },
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'], public: true },
   { pattern: '/scan', component: ScanLookupPage, title: 'Scan', permissions: ['assets.scan'], nav: 'Scan', public: true },
   { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true },

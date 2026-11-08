@@ -235,6 +235,7 @@ turned bounds are used. An adaptive element's anchors place its box, which is th
 | `{{asset.purchase.price}}`, `{{asset.purchase.currency}}`, `{{asset.purchase.order_number}}` | What it cost, as a decimal such as `12.50`, its ISO 4217 currency, and its order or invoice number (empty without `purchases.read`, see [Access](access.md#seeing-prices)) |
 | `{{asset.contract.name}}`, `{{asset.contract.kind}}`, `{{asset.contract.vendor}}`, `{{asset.contract.reference}}`, `{{asset.contract.start_date}}`, `{{asset.contract.end_date}}` | The contract in force covering it longest: its name, kind, vendor's name, reference and dates, as `YYYY-MM-DD` (empty when none is; see [Contracts](contracts.md#reports-and-labels)) |
 | `{{asset.contract.cost}}`, `{{asset.contract.currency}}`, `{{asset.contract.billing}}` | That contract's cost, as a decimal, its currency, and how often it is paid (empty without `purchases.read` in its vendor's scopes) |
+| `{{asset.needs}}`, `{{asset.needs_all}}`, `{{asset.needed_by}}`, `{{asset.needed_by_all}}` | How many assets it needs, and how many need it, through followed links (see [Following links](data-model.md#following-links)): one hop away, and within 10 hops |
 | `{{scan_url}}` | The asset's scan page, `{{base_url}}/scan/<asset ID>` (see [Scanning](scanning.md)): a QR code of it takes whoever scans the label there |
 | `{{asset.icon}}` | The name of the icon the asset is drawn with (see [Icons](icons.md)), its own or its categories' (empty when none); as an `icon` element's `icon`, the icon itself |
 

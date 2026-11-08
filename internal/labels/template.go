@@ -971,6 +971,29 @@ func (t *Template) FieldKeys() []string {
 	return keys
 }
 
+// UsesLinkCounts reports whether a binding of the template counts followed
+// links ({{asset.needs}} and the rest), which are read only then.
+func (t *Template) UsesLinkCounts() bool {
+	uses := func(e *Element) bool {
+		b, err := e.Binding()
+		if err != nil {
+			return false
+		}
+		for _, ref := range b.Refs() {
+			if ref.IsLinkCount() {
+				return true
+			}
+		}
+		return false
+	}
+	for i := range t.Elements {
+		if uses(&t.Elements[i]) || (t.Elements[i].Alternative != nil && uses(t.Elements[i].Alternative)) {
+			return true
+		}
+	}
+	return false
+}
+
 // IconNames returns the distinct icons the template draws by name, not
 // as each asset's.
 func (t *Template) IconNames() []string {

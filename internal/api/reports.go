@@ -75,6 +75,16 @@ func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, 
 			return nil, err
 		}
 	}
+	var counts map[string]labels.LinkData
+	if spec.UsesLinkCounts() {
+		ids := make([]string, len(kept))
+		for i := range kept {
+			ids[i] = kept[i].Asset.ID
+		}
+		if counts, err = s.withLinkCounts(r, ids); err != nil {
+			return nil, err
+		}
+	}
 	return spec.Run(kept, categories, func(a *models.AssetWithDetails) labels.Data {
 		d := bindingData(a, s.cfg.Server.BaseURL)
 		// A report filtering by a contract binds that one.
@@ -83,6 +93,7 @@ func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, 
 				d.Contract = contractData(c)
 			}
 		}
+		d.Links = counts[a.Asset.ID]
 		return d
 	}, history, now), nil
 }
@@ -329,8 +340,20 @@ func (s *Server) runScan(r *http.Request, spec *reports.Spec, asset *models.Asse
 		return nil, err
 	}
 	shown := s.shown(r, asset)
+	var counts map[string]labels.LinkData
+	if spec.UsesLinkCounts() {
+		ids := []string{shown.Asset.ID}
+		for i := range contents {
+			ids = append(ids, contents[i].Asset.ID)
+		}
+		if counts, err = s.withLinkCounts(r, ids); err != nil {
+			return nil, err
+		}
+	}
 	return spec.RunScan(shown, contents, func(a *models.AssetWithDetails) labels.Data {
-		return bindingData(a, s.cfg.Server.BaseURL)
+		d := bindingData(a, s.cfg.Server.BaseURL)
+		d.Links = counts[a.Asset.ID]
+		return d
 	}), nil
 }
 

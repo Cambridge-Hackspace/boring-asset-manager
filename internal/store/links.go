@@ -41,6 +41,9 @@ const MaxRelationName = 64
 type RelationTypeInput struct {
 	Name, InverseName                 string
 	IsSymmetric, IsSingle, IsLocation bool
+	// IsFollowed may change while links use it: it changes only how they
+	// are read, not what they are.
+	IsFollowed bool
 }
 
 func (in *RelationTypeInput) normalize() error {
@@ -67,7 +70,7 @@ func (in *RelationTypeInput) normalize() error {
 	return nil
 }
 
-const relationTypeColumns = "t.id, t.name, t.inverse_name, t.is_symmetric, t.is_single, t.is_location, t.created_at, t.updated_at"
+const relationTypeColumns = "t.id, t.name, t.inverse_name, t.is_symmetric, t.is_single, t.is_location, t.is_followed, t.created_at, t.updated_at"
 
 // ListRelationTypes lists every relation type by name, with how many links
 // use each.
@@ -80,7 +83,7 @@ func (s *Store) ListRelationTypes() ([]models.RelationType, error) {
 	types := []models.RelationType{}
 	for rows.Next() {
 		var t models.RelationType
-		if err := rows.Scan(&t.ID, &t.Name, &t.InverseName, &t.IsSymmetric, &t.IsSingle, &t.IsLocation, &t.CreatedAt, &t.UpdatedAt, &t.LinkCount); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.InverseName, &t.IsSymmetric, &t.IsSingle, &t.IsLocation, &t.IsFollowed, &t.CreatedAt, &t.UpdatedAt, &t.LinkCount); err != nil {
 			return nil, fmt.Errorf("scanning relation type: %w", err)
 		}
 		types = append(types, t)
@@ -112,8 +115,8 @@ func (s *Store) CreateRelationType(in RelationTypeInput) (*models.RelationType, 
 		return nil, err
 	}
 	id, now := uuid.NewString(), time.Now().UTC()
-	_, err := s.Exec("INSERT INTO relation_types (id, name, inverse_name, is_symmetric, is_single, is_location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id, in.Name, in.InverseName, in.IsSymmetric, in.IsSingle, in.IsLocation, now, now)
+	_, err := s.Exec("INSERT INTO relation_types (id, name, inverse_name, is_symmetric, is_single, is_location, is_followed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		id, in.Name, in.InverseName, in.IsSymmetric, in.IsSingle, in.IsLocation, in.IsFollowed, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("inserting relation type: %w", err)
 	}
@@ -122,7 +125,8 @@ func (s *Store) CreateRelationType(in RelationTypeInput) (*models.RelationType, 
 
 // UpdateRelationType renames a relation type. How it behaves (symmetric,
 // single, location) can change only while no links use it, since links made
-// under the old rules might break the new ones.
+// under the old rules might break the new ones; whether it is followed can
+// change at any time.
 func (s *Store) UpdateRelationType(id string, in RelationTypeInput) (*models.RelationType, error) {
 	if err := in.normalize(); err != nil {
 		return nil, err
@@ -137,8 +141,8 @@ func (s *Store) UpdateRelationType(id string, in RelationTypeInput) (*models.Rel
 	if was.LinkCount > 0 && (was.IsSymmetric != in.IsSymmetric || was.IsSingle != in.IsSingle || was.IsLocation != in.IsLocation) {
 		return nil, fmt.Errorf("%w: %d links use it, so only its names can change", ErrRelationTypeInUse, was.LinkCount)
 	}
-	_, err = s.Exec("UPDATE relation_types SET name = ?, inverse_name = ?, is_symmetric = ?, is_single = ?, is_location = ?, updated_at = ? WHERE id = ?",
-		in.Name, in.InverseName, in.IsSymmetric, in.IsSingle, in.IsLocation, time.Now().UTC(), id)
+	_, err = s.Exec("UPDATE relation_types SET name = ?, inverse_name = ?, is_symmetric = ?, is_single = ?, is_location = ?, is_followed = ?, updated_at = ? WHERE id = ?",
+		in.Name, in.InverseName, in.IsSymmetric, in.IsSingle, in.IsLocation, in.IsFollowed, time.Now().UTC(), id)
 	if err != nil {
 		return nil, fmt.Errorf("updating relation type: %w", err)
 	}
