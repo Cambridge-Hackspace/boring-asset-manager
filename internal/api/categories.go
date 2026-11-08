@@ -103,23 +103,26 @@ func (s *Server) handleGetCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := s.store.ActiveCount(id)
+	// Measured over the assets the requester may see, those of the
+	// categories implying it among them.
+	count, total, err := s.categoryLevel(r, cat)
 	if err != nil {
 		writeServerError(w, err, "count assets")
 		return
 	}
+	warnings, err := s.store.CategoryLinkWarnings(id)
+	if err != nil {
+		writeServerError(w, err, "check the links")
+		return
+	}
 
 	body := map[string]any{
-		"category":     cat,
-		"active_count": count,
+		"category":      cat,
+		"active_count":  count,
+		"link_warnings": warnings,
 	}
 	// A category with a unit is measured by the total of its stock in it.
 	if cat.Unit != "" {
-		total, err := s.store.CategoryTotal(id, cat.Unit)
-		if err != nil {
-			writeServerError(w, err, "total the stock")
-			return
-		}
 		body["total"] = total
 	}
 	writeJSON(w, http.StatusOK, body)
@@ -192,6 +195,10 @@ func (s *Server) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 	cat, err := s.actingStore(r).UpdateCategoryFrom(id, CreateCategoryRequest(req).input())
 	if errors.Is(err, store.ErrCategoryNotFound) {
 		writeJSONError(w, http.StatusNotFound, "Category not found")
+		return
+	}
+	if errors.Is(err, store.ErrImpliesCycle) {
+		writeJSONError(w, http.StatusConflict, err.Error())
 		return
 	}
 	if err != nil {

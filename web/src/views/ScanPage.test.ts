@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import ScanPage from './ScanPage.svelte';
 import { fakeApi } from '../test/fetch';
 import { session } from '../lib/session.svelte';
@@ -153,5 +153,32 @@ describe('ScanPage', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Identify' }));
     expect(await screen.findByText('Identify: sent.')).toBeTruthy();
     expect(sent.at(-1)!.path).toBe('/assets/b1/hooks/identify');
+  });
+});
+
+describe('ScanPage pools', () => {
+  it('says where else to look', async () => {
+    const scan = scanOf(0, ['open']);
+    fakeApi({
+      'GET /scan/BIN-A3': () => ({
+        ...scan,
+        asset: {
+          ...scan.asset,
+          pools: [{
+            category_id: 'bolts', name: 'M5 bolts', unit: 'pcs', low_stock_threshold: 200, total: 300,
+            places: [
+              { asset_id: 'b1', name: 'Bin A3', quantity: 0, location: [] },
+              { asset_id: 'bay', name: 'Bay bin', quantity: 300, location: [{ id: 'room', name: 'Laser bay' }] },
+              { asset_id: 'tray', name: 'Empty tray', quantity: 0, location: [] },
+            ],
+          }],
+        },
+      }),
+    });
+    render(ScanPage, { params: { code: 'BIN-A3' } });
+    expect(await screen.findByRole('heading', { name: 'Where else to look' })).toBeTruthy();
+    expect(screen.getByText('M5 bolts: 300 pcs (threshold 200 pcs)')).toBeTruthy();
+    const where = screen.getByRole('list', { name: 'Where M5 bolts is kept' });
+    expect(within(where).getAllByRole('listitem').map((li) => li.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['0 pcs here', '300 pcs in Laser bay (Bay bin)']);
   });
 });

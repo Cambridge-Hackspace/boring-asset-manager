@@ -71,7 +71,7 @@ describe('CategoryPage', () => {
     api();
     render(CategoryPage, { params: { id: 'power' } });
     const tabs = await screen.findByRole('navigation', { name: 'Parts of this category' });
-    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['About', 'Fields', 'Stock and lending', 'Icon', 'Catalog', 'Attachments', 'Comments']);
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['About', 'Fields', 'Stock and lending', 'Icon', 'Counts in', 'Catalog', 'Attachments', 'Comments']);
     expect(within(tabs).getByRole('link', { name: 'About' }).getAttribute('aria-current')).toBe('page');
     expect(within(tabs).getByRole('link', { name: 'Fields' }).getAttribute('href')).toBe('/?tab=fields');
     expect(screen.queryByRole('table')).toBeNull();
@@ -436,5 +436,63 @@ describe('CategoryPage contracts', () => {
     expect(sent.find((r) => r.path === '/contracts')).toBeTruthy();
     const tabs = screen.getByRole('navigation', { name: 'Parts of this category' });
     expect(within(tabs).getByRole('link', { name: 'Contracts' })).toBeTruthy();
+  });
+});
+
+describe('CategoryPage links', () => {
+  const extra = {
+    'GET /relation-types': () => ({ relation_types: [] }),
+    'GET /categories/power/relation-types': () => ({ relation_type_ids: [] }),
+    'GET /scopes': () => ({ scopes: [] }),
+    'GET /categories/power/scopes': () => ({ scope_ids: [] }),
+  };
+
+  it('edits what it counts in and what counts in it, offering nothing that would lead back to it', async () => {
+    const linked = { ...categories[1]!, implies: ['paint'] };
+    const { sent } = api({
+      ...extra,
+      'GET /categories': () => ({ categories: [categories[0], linked, ...categories.slice(2)] }),
+      'PUT /categories/power/links': (body) => {
+        const b = body as { implies: string[]; included_by: string[] };
+        return { category: { ...linked, implies: b.implies, included_by: b.included_by }, link_warnings: [] };
+      },
+    });
+    at('counts');
+    render(CategoryPage, { params: { id: 'power' } });
+    const form = await screen.findByRole('form', { name: 'What it counts in' });
+    expect(within(within(form).getByRole('list', { name: 'Also counts in' })).getByRole('link', { name: 'Paint' }).getAttribute('href')).toBe('/categories/paint');
+    // Not itself, Uncategorized, what it already counts in, nor what is inside it.
+    const addImplied = within(form).getByLabelText('Add a category it counts in') as HTMLSelectElement;
+    expect([...addImplied.options].map((o) => o.textContent)).toEqual(['Choose one', 'Tools']);
+    // Nor, from the other side, what is above it.
+    const addIncluded = within(form).getByLabelText('Add a category it includes') as HTMLSelectElement;
+    expect([...addIncluded.options].map((o) => o.textContent)).toEqual(['Choose one', 'Tools › Power tools › Drills', 'Paint']);
+
+    await fireEvent.change(addIncluded, { target: { value: 'drills' } });
+    await fireEvent.click(within(form).getAllByRole('button', { name: 'Add' })[1]!);
+    await fireEvent.click(within(form).getByRole('button', { name: 'Remove Paint from also counts in' }));
+    expect(await screen.findByText(/Not saved yet: what it counts in\./)).toBeTruthy();
+    await fireEvent.submit(within(form).getByRole('button', { name: 'Save links' }));
+    await screen.findByText('Links saved.');
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ implies: [], included_by: ['drills'] });
+  });
+
+  it('warns of a link adding nothing to its total, and shows links read-only to others', async () => {
+    session.permissions = ['assets.read'];
+    const linked = { ...categories[3]!, unit: 'pcs', included_by: ['tools'] };
+    api({
+      'GET /categories': () => ({ categories: [categories[0], categories[1], categories[2], linked, categories[4]] }),
+      'GET /categories/paint': () => ({
+        category: linked, active_count: 2, total: 0,
+        link_warnings: [{ category_id: 'tools', implied_id: 'paint', unit: 'pcs', message: "None of Tools' assets count in pcs, so they add nothing to Paint's total." }],
+      }),
+    });
+    at('counts');
+    render(CategoryPage, { params: { id: 'paint' } });
+    expect(await screen.findByText("None of Tools' assets count in pcs, so they add nothing to Paint's total.")).toBeTruthy();
+    const list = screen.getByRole('list', { name: 'Also includes' });
+    expect(within(list).getByRole('link', { name: 'Tools' })).toBeTruthy();
+    expect(within(list).queryByRole('button')).toBeNull();
+    expect(screen.queryByLabelText('Add a category it includes')).toBeNull();
   });
 });

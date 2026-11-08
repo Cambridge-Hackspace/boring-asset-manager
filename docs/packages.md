@@ -38,6 +38,10 @@ Each of these can be chosen, by ID:
 - assets: those in the categories chosen, or every one, with or without their attachments (photos
   among them; `--photos`), the links between them, and their history.
 
+The links between the categories chosen come with them, so a drawer's category still counts in its
+pool when both are packaged; a link to a category left out is left out with it (see
+[Pools](stock-and-lending.md#pools)).
+
 The categories' attachments come with them. `--without-documents`, or **Leave out documents**,
 leaves out the attachments that are not images. Who added each is left out, as people are.
 

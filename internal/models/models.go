@@ -156,9 +156,15 @@ type Category struct {
 	// VendorIDs are the vendors it is bought from, in order of preference
 	// (docs/vendors.md): set by the API, with those the requester may see,
 	// and left empty by the store's reads (store.WithCategoryVendors).
-	VendorIDs []string  `json:"vendor_ids"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	VendorIDs []string `json:"vendor_ids"`
+	// Implies are the categories its members also count in, and IncludedBy
+	// those whose members count in it (docs/stock-and-lending.md#pools):
+	// only for totals, filters and reports, never for scopes, fields or
+	// templates.
+	Implies    []string  `json:"implies"`
+	IncludedBy []string  `json:"included_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Event kinds (docs/stock-and-lending.md).
@@ -370,6 +376,9 @@ type EventPayload struct {
 	Comment *EventComment `json:"comment,omitempty"`
 	// Contract is the contract a contract event is about, as it was then.
 	Contract *EventContract `json:"contract,omitempty"`
+	// Move is where stock went, or came from, for a quantity changed by
+	// moving it between two assets (docs/stock-and-lending.md#moving-stock).
+	Move *EventMove `json:"move,omitempty"`
 }
 
 // EventContract is a contract, as an event names it (docs/contracts.md):
@@ -497,6 +506,13 @@ type EventVendor struct {
 type EventAsset struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+// EventMove is stock moved from one asset to another, as the history of
+// each records it.
+type EventMove struct {
+	From EventAsset `json:"from"`
+	To   EventAsset `json:"to"`
 }
 
 // EventCategory is the category an event is about, as it was then.
@@ -756,6 +772,45 @@ type AssetWithDetails struct {
 	// above one, by when they end, those with no end last. The API leaves
 	// out those whose vendor the requester may not see.
 	Contracts []ContractCover `json:"contracts"`
+	// CountsIn are the categories it counts in through categories that
+	// imply others (docs/stock-and-lending.md#pools), each with the
+	// category it comes through.
+	CountsIn []CountsIn `json:"counts_in"`
+	// Pools are, on an asset's own page, the pools it counts in, each with
+	// the places their stock is kept: set by the API, with the assets the
+	// requester may see.
+	Pools []AssetPool `json:"pools,omitempty"`
+}
+
+// CountsIn is a category an asset counts in through a link, and the
+// category, its own or one above it, whose link it comes through.
+type CountsIn struct {
+	CategoryID   string `json:"category_id"`
+	CategoryName string `json:"category_name"`
+	ThroughID    string `json:"through_id"`
+	ThroughName  string `json:"through_name"`
+}
+
+// AssetPool is a pool an asset counts in: a consumable category with a
+// unit, its threshold, and the assets whose stock in that unit it totals,
+// the asset itself among them, each with its quantity and where it is.
+// Total is theirs together.
+type AssetPool struct {
+	CategoryID        string      `json:"category_id"`
+	Name              string      `json:"name"`
+	Unit              string      `json:"unit"`
+	LowStockThreshold *int        `json:"low_stock_threshold"`
+	Total             int         `json:"total"`
+	Places            []PoolPlace `json:"places"`
+}
+
+// PoolPlace is one asset holding a pool's stock: its quantity and where it
+// is, outermost first, through location links.
+type PoolPlace struct {
+	AssetID  string        `json:"asset_id"`
+	Name     string        `json:"name"`
+	Quantity int           `json:"quantity"`
+	Location []LinkedAsset `json:"location"`
 }
 
 // ContractCover is a contract covering an asset, as the asset shows it.

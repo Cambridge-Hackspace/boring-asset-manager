@@ -182,6 +182,11 @@ export function describeEvent(e: AssetEvent): string {
   switch (e.kind) {
     case 'asset.quantity_changed':
       if (p.change === undefined) return `Started counting at ${of(p.quantity)}`;
+      if (p.move) {
+        return p.change < 0
+          ? `Moved ${of(-p.change)} to ${p.move.to.name}; ${of(p.quantity)} left`
+          : `Moved ${of(p.change)} here from ${p.move.from.name}; ${of(p.quantity)} now`;
+      }
       if (p.change < 0) return `Used ${of(-p.change)}; ${of(p.quantity)} left`;
       return `Added ${of(p.change)}; ${of(p.quantity)} now`;
     case 'asset.running_low':

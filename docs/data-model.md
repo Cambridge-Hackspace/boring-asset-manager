@@ -74,6 +74,13 @@ An asset can belong to several categories at once. It has the union of the field
 all of its categories and all of their ancestors. When a field is required in one of those
 categories and optional in another, required wins.
 
+### Categories that imply others
+
+A category can say that its members also count in other categories, anywhere in the tree: an
+asset in it, or below it, counts in their totals and thresholds, and is found when filtering by
+them and in reports on them. That is all: no fields, scopes or templates come through, so an asset's
+form and who can see it are unchanged. See [Pools](stock-and-lending.md#pools).
+
 ### Uncategorized
 
 An asset removed from every category goes into the virtual system category **Uncategorized**.
@@ -92,6 +99,7 @@ same parent. A copy is named "<name> copy" unless you give it a name. The copy t
 - the link types it suggests;
 - the actions it offers, and whether they cascade;
 - its scopes;
+- the categories it counts in, but not those counting in it;
 - its scan and label templates. These are the same templates, shared, not copies of them.
 
 The copy does not take the category's subcategories or assets, nor a running-low flag set by
@@ -634,3 +642,4 @@ Changes to links serialize on the `asset_links` lock.
 | `070` | Purchase details (`asset_purchases`), warranties announced (`warranty_notices`), and `purchases.read`, granted to every role that reads assets where it reads them. See [Purchases](#purchases). |
 | `071` | Mentions in comments: `comment_mentions`, each person a comment has mentioned and whether they were told, and `users.mention_emails`. See [Comments](comments.md#mentions). |
 | `072` | Contracts (`contracts`, `contract_categories`, `contract_assets`, `contract_attachments`), the reminders recorded (`contract_notices`), and `events.contract_id`. See [Contracts](contracts.md). |
+| `075` | Categories that imply other categories (`category_implies`). See [Pools](stock-and-lending.md#pools). |

@@ -66,19 +66,21 @@ type linkView struct {
 
 type assetDetail struct {
 	assetSummary
-	CategoryRefs []ref            `json:"category_refs,omitempty"`
-	Fields       []fieldView      `json:"fields,omitempty" jsonschema:"its fields, those its categories give it, with their values"`
-	Location     []ref            `json:"location,omitempty" jsonschema:"the places it is in, outermost first"`
-	Contents     []ref            `json:"contents,omitempty" jsonschema:"what is in it, directly"`
-	Links        []linkView       `json:"links,omitempty"`
-	Photos       []photoView      `json:"photos,omitempty"`
-	Hooks        []hookView       `json:"hooks,omitempty" jsonschema:"the hooks it offers, to trigger_hook"`
-	Lendable     bool             `json:"lendable"`
-	Scopes       []string         `json:"scopes,omitempty"`
-	ScanURL      string           `json:"scan_url,omitempty" jsonschema:"what its QR labels open"`
-	Icon         *iconView        `json:"icon,omitempty" jsonschema:"the icon it is drawn with, when it or a category has one"`
-	LabelIcon    *iconView        `json:"label_icon,omitempty" jsonschema:"the icon its labels draw, when it is not icon: its own label icon or its categories'"`
-	Purchase     *models.Purchase `json:"purchase,omitempty" jsonschema:"where it came from: its vendor, order and received dates, warranty end, price and currency, order number and invoice (an attachment); prices_hidden says the price, order number and invoice are left out, for want of purchases.read"`
+	CategoryRefs []ref              `json:"category_refs,omitempty"`
+	Fields       []fieldView        `json:"fields,omitempty" jsonschema:"its fields, those its categories give it, with their values"`
+	Location     []ref              `json:"location,omitempty" jsonschema:"the places it is in, outermost first"`
+	Contents     []ref              `json:"contents,omitempty" jsonschema:"what is in it, directly"`
+	Links        []linkView         `json:"links,omitempty"`
+	Photos       []photoView        `json:"photos,omitempty"`
+	Hooks        []hookView         `json:"hooks,omitempty" jsonschema:"the hooks it offers, to trigger_hook"`
+	Lendable     bool               `json:"lendable"`
+	Scopes       []string           `json:"scopes,omitempty"`
+	ScanURL      string             `json:"scan_url,omitempty" jsonschema:"what its QR labels open"`
+	Icon         *iconView          `json:"icon,omitempty" jsonschema:"the icon it is drawn with, when it or a category has one"`
+	LabelIcon    *iconView          `json:"label_icon,omitempty" jsonschema:"the icon its labels draw, when it is not icon: its own label icon or its categories'"`
+	Purchase     *models.Purchase   `json:"purchase,omitempty" jsonschema:"where it came from: its vendor, order and received dates, warranty end, price and currency, order number and invoice (an attachment); prices_hidden says the price, order number and invoice are left out, for want of purchases.read"`
+	CountsIn     []models.CountsIn  `json:"counts_in,omitempty" jsonschema:"the categories it counts in through categories implying others, each with the one it comes through"`
+	Pools        []models.AssetPool `json:"pools,omitempty" jsonschema:"the pools its stock counts in, each with its total, threshold and the places its stock is kept: where else to look"`
 }
 
 type iconView struct {
@@ -163,6 +165,7 @@ func (e *env) detail(ctx context.Context, a *models.AssetWithDetails) (assetDeta
 	for _, c := range a.Categories {
 		d.CategoryRefs = append(d.CategoryRefs, ref{ID: c.ID, Name: c.Name})
 	}
+	d.CountsIn, d.Pools = a.CountsIn, a.Pools
 	for _, f := range a.EffectiveFields {
 		d.Fields = append(d.Fields, fieldView{Key: f.Field.Key, Label: f.Field.Label, Type: f.Field.ValidationType,
 			Value: a.FieldValues[f.Field.Key], Required: f.IsRequired})
