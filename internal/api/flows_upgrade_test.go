@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,6 +40,59 @@ func openBlankStore(t *testing.T) *store.Store {
 	return st
 }
 
+// applyEarly runs later migrations that only add tables the store reads, so
+// a test at an older schema can write through the store; recordEarly then
+// records them as run. On MariaDB each table takes the
+// collation categories has, for its foreign keys.
+func applyEarly(t *testing.T, st *store.Store, versions ...int) {
+	t.Helper()
+	collation := ""
+	if st.Dialect == "mariadb" || st.Dialect == "mysql" {
+		if err := st.QueryRow("SELECT TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'categories'").Scan(&collation); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, v := range versions {
+		matches, _ := fs.Glob(migrations.MigrationFiles, fmt.Sprintf("%03d_*.sql", v))
+		if len(matches) != 1 {
+			t.Fatalf("migration %d: %v", v, matches)
+		}
+		raw, err := migrations.MigrationFiles.ReadFile(matches[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var lines []string
+		for _, line := range strings.Split(string(raw), "\n") {
+			if !strings.HasPrefix(strings.TrimSpace(line), "--") {
+				lines = append(lines, line)
+			}
+		}
+		for _, stmt := range strings.Split(strings.Join(lines, "\n"), ";") {
+			if stmt = strings.TrimSpace(stmt); stmt == "" {
+				continue
+			}
+			if collation != "" && strings.HasPrefix(stmt, "CREATE TABLE") {
+				stmt += " DEFAULT CHARACTER SET utf8mb4 COLLATE " + collation
+			}
+			if _, err := st.Exec(stmt); err != nil {
+				t.Fatalf("migration %d: %v", v, err)
+			}
+		}
+	}
+}
+
+// recordEarly records migrations applyEarly ran as run, so Migrate leaves
+// them be. It comes after the test has written at the older schema: the
+// store reads which columns there are from the latest migration run.
+func recordEarly(t *testing.T, st *store.Store, versions ...int) {
+	t.Helper()
+	for _, v := range versions {
+		if _, err := st.Exec("INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)", v, time.Now().UTC()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // Migration 050 converts every flow saved at version 1 to version 2 (#174),
 // and each runs as it did: filing the same asset with the same fields
 // (and, now, the fields it hid with a default), updating as its Change
@@ -49,6 +103,8 @@ func TestMigratingFlowsToVersion2(t *testing.T) {
 	if err := migrations.MigrateTo(st.DB, st.Dialect, migrations.FormQuestionsVersion-1); err != nil {
 		t.Fatal(err)
 	}
+	// Categories are read with their links (075).
+	applyEarly(t, st, 75)
 	if err := st.SeedDefaultPermissionsAndRoles(); err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +169,7 @@ func TestMigratingFlowsToVersion2(t *testing.T) {
 		}
 		return out
 	}
+	recordEarly(t, st, 75)
 	if err := st.Migrate(); err != nil {
 		t.Fatal(err)
 	}

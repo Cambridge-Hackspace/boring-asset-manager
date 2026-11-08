@@ -4,7 +4,7 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import { endOfDay } from '../lib/assets';
-  import type { Condition, OfferedHook, ReportResult, ResolvedIcon } from '../lib/models';
+  import type { AssetPool, Condition, OfferedHook, ReportResult, ResolvedIcon } from '../lib/models';
   import { scanActionLabel } from '../lib/scan';
   import { session } from '../lib/session.svelte';
   import AddToSpool from '../components/AddToSpool.svelte';
@@ -13,6 +13,7 @@
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import ReportProblemForm from '../components/ReportProblemForm.svelte';
   import ScanResult from '../components/ScanResult.svelte';
+  import PoolsSection from '../components/PoolsSection.svelte';
   import SignInToSee from '../components/SignInToSee.svelte';
 
   // /scan/:code: what scanning an asset's code shows (docs/scanning.md), with the
@@ -22,7 +23,7 @@
   const code = untrack(() => params.code ?? '');
 
   interface Scan {
-    asset: { id: string; name: string; counted: boolean; unit?: string; hooks?: OfferedHook[]; icon?: ResolvedIcon; flows?: FlowLink[] };
+    asset: { id: string; name: string; counted: boolean; unit?: string; hooks?: OfferedHook[]; icon?: ResolvedIcon; flows?: FlowLink[]; pools?: AssetPool[] };
     template: { id: string; name: string };
     result: ReportResult;
   }
@@ -144,6 +145,12 @@
       {/if}
     {/snippet}
   </ScanResult>
+  {#if scan.asset.pools?.length}
+    <section class="mt-6" aria-labelledby="pools-heading">
+      <h2 id="pools-heading" class="text-lg font-semibold">Where else to look</h2>
+      <PoolsSection pools={scan.asset.pools} hereId={scan.asset.id} linked={!!session.user} />
+    </section>
+  {/if}
   {#if session.can('labels.print')}
     {@const assetId = scan.asset.id}
     <p class="mt-4"><AddToSpool what={() => ({ asset_ids: [assetId] })} label="Add its label to the print queue" /></p>

@@ -68,11 +68,11 @@ func (s *Store) withInventory(change func(ic *inventoryChange) error) error {
 	if err := s.takeLock(tx, inventoryLock); err != nil {
 		return err
 	}
-	before, err := s.stockLevels(tx)
+	before, graph, err := s.stockLevels(tx)
 	if err != nil {
 		return err
 	}
-	assetsBefore, err := s.assetLevels(tx)
+	assetsBefore, err := s.assetLevels(tx, before, graph)
 	if err != nil {
 		return err
 	}
@@ -80,14 +80,14 @@ func (s *Store) withInventory(change func(ic *inventoryChange) error) error {
 	if err := change(ic); err != nil {
 		return err
 	}
-	after, err := s.stockLevels(tx)
+	after, graph, err := s.stockLevels(tx)
 	if err != nil {
 		return err
 	}
 	if err := s.applyThresholds(ic, before, after); err != nil {
 		return err
 	}
-	assetsAfter, err := s.assetLevels(tx)
+	assetsAfter, err := s.assetLevels(tx, after, graph)
 	if err != nil {
 		return err
 	}
@@ -104,22 +104,25 @@ func (s *Store) withInventory(change func(ic *inventoryChange) error) error {
 }
 
 // stock is a thresholded category's state: its count of active assets,
-// or for one with a unit, the total of their stock in it.
+// or for one with a unit, the total of their stock in it. For an asset,
+// covered says a pool it counts in holds enough, which keeps it from
+// running low by itself (docs/stock-and-lending.md#quiet-bins).
 type stock struct {
 	threshold  int
 	count      int
 	runningLow bool
 	unit       string
+	covered    bool
 }
 
-func (s stock) below() bool { return s.count < s.threshold }
+func (s stock) below() bool { return s.count < s.threshold && !s.covered }
 
 // stockLevels reads every category that has a threshold, with its active
-// count.
-func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, error) {
+// count, and the tree with its links that it was measured through.
+func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, *catGraph, error) {
 	rows, err := s.TxQuery(tx, "SELECT id, parent_id, is_running_low, low_stock_threshold, stock_unit FROM categories")
 	if err != nil {
-		return nil, fmt.Errorf("reading categories: %w", err)
+		return nil, nil, fmt.Errorf("reading categories: %w", err)
 	}
 	parents := map[string]string{}
 	levels := map[string]stock{}
@@ -133,7 +136,7 @@ func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, error) {
 		)
 		if err := rows.Scan(&id, &parent, &runningLow, &threshold, &unit); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("scanning category: %w", err)
+			return nil, nil, fmt.Errorf("scanning category: %w", err)
 		}
 		if parent.Valid {
 			parents[id] = parent.String
@@ -144,28 +147,34 @@ func (s *Store) stockLevels(tx *sql.Tx) (map[string]stock, error) {
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if len(levels) == 0 {
-		return levels, nil
-	}
-	counts, err := s.countActive(tx, parents, levels)
+	implies, err := readImplies(txQuerier{s, tx})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	graph := newCatGraph(parents, implies)
+	if len(levels) == 0 {
+		return levels, graph, nil
+	}
+	counts, err := s.countActive(tx, graph, levels)
+	if err != nil {
+		return nil, nil, err
 	}
 	for id, l := range levels {
 		l.count = counts[id]
 		levels[id] = l
 	}
-	return levels, nil
+	return levels, graph, nil
 }
 
-// countActive measures each target category with its descendants, given
-// every category's parent: the number of distinct active assets in it, or,
-// for a target with a unit, the total of their stock in that unit. An asset
-// in two subcategories counts once, and one whose stock is not counted in
-// the unit adds nothing to a total.
-func (s *Store) countActive(tx *sql.Tx, parents map[string]string, targets map[string]stock) (map[string]int, error) {
+// countActive measures each target category with its descendants and the
+// categories implying it (docs/stock-and-lending.md#pools): the number of
+// distinct active assets in it, or, for a target with a unit, the total of
+// their stock in that unit. An asset in two subcategories, or reached
+// through several links, counts once, and one whose stock is not counted
+// in the unit adds nothing to a total.
+func (s *Store) countActive(tx *sql.Tx, graph *catGraph, targets map[string]stock) (map[string]int, error) {
 	rows, err := s.TxQuery(tx, `
 		SELECT ac.category_id, ac.asset_id, a.stock_quantity, a.stock_unit
 		FROM asset_categories ac
@@ -190,15 +199,15 @@ func (s *Store) countActive(tx *sql.Tx, parents map[string]string, targets map[s
 		if err := rows.Scan(&cat, &asset, &h.quantity, &h.unit); err != nil {
 			return nil, fmt.Errorf("scanning category assignment: %w", err)
 		}
-		// Credit the asset to the category and each ancestor, once each.
-		for depth := 0; cat != "" && depth < 100; depth++ {
-			if _, ok := targets[cat]; ok {
-				if seen[cat] == nil {
-					seen[cat] = map[string]held{}
+		// Credit the asset to every category it counts in through this
+		// one, once each.
+		for c := range graph.reach([]string{cat}).Counted {
+			if _, ok := targets[c]; ok {
+				if seen[c] == nil {
+					seen[c] = map[string]held{}
 				}
-				seen[cat][asset] = h
+				seen[c][asset] = h
 			}
-			cat = parents[cat]
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -434,28 +443,52 @@ func (s *Store) measureCategory(id, unit string) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := s.TxQuery(tx, "SELECT id, parent_id FROM categories")
+	graph, err := readCatGraph(txQuerier{s, tx})
 	if err != nil {
-		return 0, fmt.Errorf("reading categories: %w", err)
+		return 0, err
 	}
-	parents := map[string]string{}
-	for rows.Next() {
-		var cid string
-		var parent sql.NullString
-		if err := rows.Scan(&cid, &parent); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		if parent.Valid {
-			parents[cid] = parent.String
-		}
-	}
-	rows.Close()
-	counts, err := s.countActive(tx, parents, map[string]stock{id: {unit: unit}})
+	counts, err := s.countActive(tx, graph, map[string]stock{id: {unit: unit}})
 	if err != nil {
 		return 0, err
 	}
 	return counts[id], nil
+}
+
+// CategoryAssets maps each active asset counted in a category, as
+// ActiveCount counts them, to its stock in unit: 0 for one whose stock is
+// not counted in it. Their number is the active count and, with a unit,
+// their sum the total, so a caller can measure only those a requester may
+// see (docs/stock-and-lending.md#partial-visibility).
+func (s *Store) CategoryAssets(id, unit string) (map[string]int, error) {
+	q := storeQuerier{s}
+	graph, err := readCatGraph(q)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.Query(`SELECT ac.category_id, ac.asset_id, a.stock_quantity, a.stock_unit
+		FROM asset_categories ac JOIN assets a ON a.id = ac.asset_id WHERE a.archived_at IS NULL`)
+	if err != nil {
+		return nil, fmt.Errorf("reading category assignments: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var (
+			cat, asset, u string
+			quantity      sql.NullInt64
+		)
+		if err := rows.Scan(&cat, &asset, &quantity, &u); err != nil {
+			return nil, fmt.Errorf("scanning category assignment: %w", err)
+		}
+		if !graph.reach([]string{cat}).Counted[id] {
+			continue
+		}
+		out[asset] = 0
+		if unit != "" && quantity.Valid && u == unit {
+			out[asset] = int(quantity.Int64)
+		}
+	}
+	return out, rows.Err()
 }
 
 // ListEvents returns the most recent events, newest first.

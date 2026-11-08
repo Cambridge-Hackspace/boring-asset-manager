@@ -306,8 +306,9 @@
           <div>
             <label class="label" for="section-{s}-group">Group</label>
             <select id="section-{s}-group" class="input" bind:value={section.group_by}>
-              <option value="">No groups</option>
+              <option value="">No groups (by bin)</option>
               <option value="category">By category</option>
+              <option value="pool">By pool, with its total and threshold</option>
             </select>
           </div>
         </div>
