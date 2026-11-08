@@ -200,7 +200,7 @@ describe('links', () => {
 
   it('offers each relation from both ends, suggested ones first', () => {
     const type = (id: string, name: string, inverse: string, symmetric = false): RelationType => ({
-      id, name, inverse_name: inverse, is_symmetric: symmetric, is_single: false, is_location: false, created_at: '', updated_at: '', link_count: 0,
+      id, name, inverse_name: inverse, is_symmetric: symmetric, is_single: false, is_location: false, is_followed: false, created_at: '', updated_at: '', link_count: 0,
     });
     const choices = linkChoices([type('c', 'contains', 'contained in'), type('u', 'used with', 'used with', true)], ['u']);
     expect(choices.map((c) => [c.label, c.outgoing, c.suggested])).toEqual([

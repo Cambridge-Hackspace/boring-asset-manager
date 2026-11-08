@@ -41,6 +41,10 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   const { relation_types } = await (await request.get('/api/v1/relation-types')).json();
   const contains = relation_types.find((r: { name: string }) => r.name === 'contains');
   await post(`/assets/${box.asset.asset.id}/links`, { type_id: contains.id, asset_id: asset.asset.asset.id, outgoing: true });
+  // It depends on a compressor, for its Graph tab and its category's Graph page.
+  const compressor = await post('/assets', { name: unique('Compressor'), category_ids: [cat.category.id] });
+  const dependsOn = relation_types.find((r: { name: string }) => r.name === 'depends on');
+  await post(`/assets/${asset.asset.asset.id}/links`, { type_id: dependsOn.id, asset_id: compressor.asset.asset.id, outgoing: true });
   // Out of service, so its page, the list and the home page show it.
   await request.put(`/api/v1/assets/${asset.asset.asset.id}/condition`, { data: { condition: 'out_of_service', note: 'Wobbly rung' } });
   const { template } = await post('/templates', {
@@ -180,6 +184,8 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/assets/import', 'Import assets'],
     [`/assets/${asset.asset.asset.id}`, ''],
     [`/assets/${asset.asset.asset.id}/edit`, 'Edit asset'],
+    [`/assets/${asset.asset.asset.id}?tab=graph`, ''],
+    [`/assets/graph?category=${cat.category.id}`, ''],
     [`/assets/${screws.asset.asset.id}`, ''],
     [`/assets/${screws.asset.asset.id}/edit`, 'Edit asset'],
     [`/scan/${screws.asset.asset.id}`, ''],

@@ -14,6 +14,7 @@ describe('help', () => {
       expect(helpTopic(helpFor(path)), path).toBeTruthy();
     }
     expect(helpFor('/assets/import')).toBe('import');
+    expect(helpFor('/assets/graph')).toBe('links');
     expect(helpFor('/oauth/consent')).toBe('assistants');
     expect(helpFor('/assets/x/edit')).toBe('assets');
     expect(helpFor('/f/leave')).toBe('flows');

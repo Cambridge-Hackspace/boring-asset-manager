@@ -13,7 +13,7 @@ var Tables = []Table{
 		Columns: []Column{{"id", Text}, {"name", Text}, {"created_at", Time}},
 	},
 	{Name: "relation_types", Kind: KindCatalog, Since: 15, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"name", Text}, {"inverse_name", Text}, {"is_symmetric", Bool}, {"is_single", Bool}, {"is_location", Bool}, {"created_at", Time}, {"updated_at", Time}},
+		Columns: []Column{{"id", Text}, {"name", Text}, {"inverse_name", Text}, {"is_symmetric", Bool}, {"is_single", Bool}, {"is_location", Bool}, {"created_at", Time}, {"updated_at", Time}, {"is_followed", Bool}},
 	},
 	{Name: "fields", Kind: KindCatalog, Since: 1, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"field_key", Text}, {"label", Text}, {"validation_type", Text}, {"options", JSON}, {"created_at", Time}, {"updated_at", Time}},

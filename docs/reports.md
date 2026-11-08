@@ -78,6 +78,12 @@ A table has 1 to 30 columns, each a `heading` and a `binding`.
   `reference`, `start_date`, `end_date`, `cost`, `currency` and `billing`, the contract filtered
   by when the filter names one, and otherwise the one in force covering it longest (see
   [Contracts](contracts.md#reports-and-labels)).
+- Followed links (see [Following links](data-model.md#following-links)) are counted by
+  `{{asset.needs}}` and `{{asset.needed_by}}`, the assets one hop away, and `{{asset.needs_all}}`
+  and `{{asset.needed_by_all}}`, those within 10 hops. A table sorted by
+  `{{asset.needed_by_all}}`, `descending`, ranks the assets whose loss would reach furthest.
+  Assets the reader may not read are counted, but not followed through. They are read only for a
+  report with such a column.
 - `group_by: "category"` lists each row under every category its asset is in. Groups are ordered
   by name, and those running low are marked.
 

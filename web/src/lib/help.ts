@@ -33,6 +33,7 @@ export function helpTopic(slug: string): HelpTopic | undefined {
 export function helpFor(path: string): string {
   const rules: [RegExp, string][] = [
     [/^\/assets\/import/, 'import'],
+    [/^\/assets\/graph$/, 'links'],
     [/^\/assets/, 'assets'],
     [/^\/(scan|scan-templates)(\/|$)/, 'scanning'],
     [/^\/(flows|f)(\/|$)/, 'flows'],

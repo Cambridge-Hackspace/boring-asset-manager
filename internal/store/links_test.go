@@ -143,7 +143,7 @@ func TestSymmetricLinksAndRemoving(t *testing.T) {
 func TestRelationTypes(t *testing.T) {
 	st := setupTestStore(t)
 	defer st.Close()
-	if types, _ := st.ListRelationTypes(); len(types) != 3 {
+	if types, _ := st.ListRelationTypes(); len(types) != 4 {
 		t.Fatalf("seeded %+v", types)
 	}
 	powers, err := st.CreateRelationType(RelationTypeInput{Name: " powers ", InverseName: "powered by", IsSingle: true})
