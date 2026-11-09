@@ -426,6 +426,9 @@ func (s *Store) addLinkTx(tx *sql.Tx, assetID, typeID, otherID string, outgoing 
 		}
 		ends[id] = e
 	}
+	if err := s.holdForReviewTx(tx, assetID, otherID); err != nil {
+		return err
+	}
 	from, to := ends[assetID], ends[otherID]
 	if !outgoing && !t.IsSymmetric {
 		from, to = to, from
@@ -467,6 +470,9 @@ func (s *Store) addLinkTx(tx *sql.Tx, assetID, typeID, otherID string, outgoing 
 			return fmt.Errorf("checking where it is: %w", err)
 		}
 		if err == nil {
+			if err := s.holdForReviewTx(tx, oldFrom); err != nil {
+				return err
+			}
 			if _, err := s.TxExec(tx, "DELETE FROM asset_links WHERE id = ?", oldID); err != nil {
 				return fmt.Errorf("moving: %w", err)
 			}
@@ -510,6 +516,9 @@ func (s *Store) RemoveLink(assetID, linkID string) (*models.AssetWithDetails, er
 	}
 	if archived.Valid {
 		return nil, ErrAssetArchived
+	}
+	if err := s.holdForReviewTx(tx, from, to); err != nil {
+		return nil, err
 	}
 	if _, err := s.TxExec(tx, "DELETE FROM asset_links WHERE id = ?", linkID); err != nil {
 		return nil, fmt.Errorf("unlinking: %w", err)

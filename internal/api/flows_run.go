@@ -601,7 +601,7 @@ func (f *flowRunner) create(st *store.FlowRunState, step *flows.Step, placeCode 
 	if name == "" {
 		return refuseStep("Its name came out empty: give the details its name is made from")
 	}
-	body := CreateAssetRequest{Name: name, CategoryIDs: []string{st.Values[flows.ValueCategoryID]}, FieldValues: map[string]string{}}
+	body := CreateAssetRequest{Name: name, CategoryIDs: []string{st.Values[flows.ValueCategoryID]}, FieldValues: map[string]string{}, Confirm: step.Confirm}
 	for k, v := range st.Fields {
 		if v != "" {
 			body.FieldValues[k] = v
@@ -1093,6 +1093,17 @@ func (f *flowRunner) change(st *store.FlowRunState, step *flows.Step) error {
 		case flows.ChangeHook:
 			if err = f.call(http.MethodPost, path+"/hooks/"+url.PathEscape(c.Hook), nil, nil); err == nil {
 				f.said(st, step, "Triggered %s on %s.", c.Hook, name)
+			}
+		case flows.ChangeConfirm:
+			// Only where its categories use review states, and it is not
+			// confirmed already.
+			var had struct {
+				Asset models.AssetWithDetails `json:"asset"`
+			}
+			if err = f.call(http.MethodGet, path, nil, &had); err == nil && had.Asset.Review != nil && had.Asset.Review.State != models.ReviewConfirmed {
+				if err = f.call(http.MethodPost, path+"/review", ReviewRequest{Move: models.ReviewMoveConfirm}, nil); err == nil {
+					f.said(st, step, "Confirmed %s.", name)
+				}
 			}
 		}
 		if err != nil {

@@ -113,6 +113,11 @@ func (s *Store) PlaceAsset(assetID, in string, at *[3]float64) (string, error) {
 		}
 	}
 	change := models.EventChange{What: "place", Key: placeID, Label: placeName, From: position(was), To: position(at)}
+	// Placements are not part of what rejecting an assistant's changes
+	// puts back, so the asset as it is now is what it was before.
+	if err := s.holdForReviewTx(tx, assetID); err != nil {
+		return "", err
+	}
 	if err := s.recordAssetEvent(tx, models.EventAssetEdited, assetID, models.EventPayload{Trigger: models.TriggerManual, Changes: []models.EventChange{change}}); err != nil {
 		return "", err
 	}

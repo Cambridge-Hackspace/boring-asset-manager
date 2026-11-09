@@ -243,7 +243,7 @@ func (s *Store) AuthenticateToken(secret string) (*models.APIToken, map[string]b
 // through an assistant, by the name its MCP client gives (docs/mcp.md).
 func (s *Store) Via(assistant string) *Store {
 	c := *s
-	c.via = assistant
+	c.via, c.held = assistant, newHeldRecords()
 	return &c
 }
 

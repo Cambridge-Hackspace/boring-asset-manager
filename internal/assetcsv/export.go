@@ -31,8 +31,12 @@ const (
 	ColumnCurrency     = "currency"
 	ColumnOrderNumber  = "order_number"
 	ColumnWarrantyEnd  = "warranty_end"
-	CodePrefix         = "code."
-	FieldPrefix        = "field."
+	// ColumnReviewState is an asset's review state (docs/review.md), when
+	// any asset's categories use review states. An import ignores it:
+	// assets it makes are drafts unless the importer confirms them.
+	ColumnReviewState = "review_state"
+	CodePrefix        = "code."
+	FieldPrefix       = "field."
 )
 
 // A links cell lists links as verb:asset, separated by LinkSeparator.
@@ -71,7 +75,8 @@ func Undefuse(s string) string {
 // by quantity, an icon column when any asset has an icon of its own (blank
 // for those drawn with their categories'), the purchase columns when any
 // asset has purchase details (the price, currency and order number only
-// when one shows any), a field column for every field any asset has a
+// when one shows any), a review_state column when any asset's categories
+// use review states, a field column for every field any asset has a
 // value for, by key, and, when any asset has links and refs is given, a links column,
 // naming other assets as refs does.
 func Export(w io.Writer, assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs) error {
@@ -160,9 +165,10 @@ type column struct{ name, kind string }
 // are, before CSV defuses them: Export's columns, with fieldKeys as the
 // field columns, of the kinds fieldKinds gives by key (text when not).
 func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []string, refs *AssetRefs, fieldKeys []string, fieldKinds map[string]string) ([]column, [][]string) {
-	stocked, linked, iconed, bought, priced := false, false, false, false, false
+	stocked, linked, iconed, bought, priced, reviewed := false, false, false, false, false, false
 	for _, a := range assets {
 		stocked = stocked || a.Asset.Stock != nil
+		reviewed = reviewed || a.Review != nil
 		p := a.Purchase
 		bought = bought || p.VendorName != "" || p.OrderDate != "" || p.ReceivedDate != "" || p.WarrantyEnd != ""
 		priced = priced || p.Price != "" || p.Currency != "" || p.OrderNumber != ""
@@ -188,6 +194,9 @@ func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []
 	}
 	if bought {
 		cols = append(cols, column{ColumnWarrantyEnd, kindDate})
+	}
+	if reviewed {
+		cols = append(cols, column{ColumnReviewState, kindText})
 	}
 	for _, k := range fieldKeys {
 		kind := fieldKinds[k]
@@ -229,6 +238,13 @@ func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []
 		}
 		if bought {
 			row = append(row, p.WarrantyEnd)
+		}
+		if reviewed {
+			state := ""
+			if a.Review != nil {
+				state = a.Review.State
+			}
+			row = append(row, state)
 		}
 		for _, k := range fieldKeys {
 			row = append(row, fieldCell(&a, k))

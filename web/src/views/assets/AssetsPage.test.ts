@@ -123,6 +123,33 @@ describe('AssetsPage', () => {
     session.user = null;
   });
 
+  it('filters by review state where a category uses review states, and marks each asset’s', async () => {
+    navigate('/assets', true);
+    const reviewed = { ...category, effective_review: { enabled: true, months: 12, on_edit: 'draft' as const, self_verify: false } };
+    const saw: AssetWithDetails = {
+      ...asset('a1', 'Saw'),
+      review: { state: 'confirmed', set_by: null, set_at: null, confirmed_by: null, confirmed_at: null, reviewed_at: null, due_at: '2026-11-01T00:00:00Z', due: true, overdue: true, rules: reviewed.effective_review, proposal: null },
+    };
+    const { fetchMock } = fakeApi({
+      'GET /categories': () => ({ categories: [reviewed] }),
+      'GET /assets': () => ({ assets: [saw] }),
+    });
+    render(AssetsPage, { params: {} });
+    await screen.findByRole('link', { name: 'Saw' });
+    expect(screen.getByText('Confirmed, review overdue').className).toContain('chip-red');
+    await fireEvent.change(screen.getByLabelText('Review'), { target: { value: 'due' } });
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('review=due'))).toBe(true));
+    expect(location.search).toContain('review=due');
+  });
+
+  it('has no review filter where no category uses review states', async () => {
+    navigate('/assets', true);
+    fakeApi({ 'GET /categories': () => ({ categories: [category] }), 'GET /assets': () => ({ assets: [asset('a1', 'Drill')] }) });
+    render(AssetsPage, { params: {} });
+    await screen.findByRole('link', { name: 'Drill' });
+    expect(screen.queryByLabelText('Review')).toBeNull();
+  });
+
   it('offers the spool only to those who print labels', async () => {
     fakeApi({ 'GET /categories': () => ({ categories: [category] }), 'GET /assets': () => ({ assets: [asset('a1', 'Drill')] }) });
     render(AssetsPage, { params: {} });

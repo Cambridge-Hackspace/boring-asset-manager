@@ -234,6 +234,11 @@ func (s *Store) recordAttachmentsTx(tx *sql.Tx, o attachmentOwner, ownerID strin
 	case models.OwnerOrder:
 		return s.recordOrderEditedTx(tx, ownerID, payload)
 	}
+	// Attachments are not part of what rejecting an assistant's changes
+	// puts back, so the asset as it is now is what it was before.
+	if err := s.holdForReviewTx(tx, ownerID); err != nil {
+		return err
+	}
 	return s.recordAssetEvent(tx, models.EventAssetEdited, ownerID, payload)
 }
 

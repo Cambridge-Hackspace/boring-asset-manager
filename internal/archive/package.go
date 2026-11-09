@@ -1243,8 +1243,19 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 			p.rows[personFieldRows][get("id")] = true
 		}
 		return p.rows[t.Name][get("id")], nil
-	case "asset_actions", "relation_types", "templates", "images", "reports", "scopes", "assets", "vendors":
+	case "asset_actions", "relation_types", "templates", "images", "reports", "scopes", "vendors":
 		return p.rows[t.Name][get("id")], nil
+	case "assets":
+		if !p.rows[t.Name][get("id")] {
+			return false, nil
+		}
+		// Who checked an asset, and when, is this instance's to say:
+		// imported, it is a draft where its categories use review states
+		// (docs/review.md).
+		for _, col := range []string{"review_state", "review_by", "review_at", "confirmed_by", "confirmed_at", "reviewed_at", "review_due", "review_notified"} {
+			setNull(col)
+		}
+		return true, nil
 	case "vendor_contacts":
 		return p.rows["vendors"][get("vendor_id")], nil
 	case "vendor_scopes":

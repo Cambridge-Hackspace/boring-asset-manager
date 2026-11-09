@@ -96,6 +96,8 @@ type categoryTraits struct {
 	// graph is the tree with the links between categories, which assets
 	// count in through (docs/stock-and-lending.md#pools).
 	graph *catGraph
+	// review is each category's review settings (docs/review.md).
+	review reviewTree
 }
 
 // weighs reports whether an asset in these categories, counting its stock
@@ -172,7 +174,11 @@ func (s *Store) categoryTraits(q interface {
 	if err != nil {
 		return categoryTraits{}, err
 	}
-	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, hooks: hooks, offers: offers, icons: icons, colors: colors, names: names, graph: newCatGraph(parents, implies)}
+	review, err := readReviewTree(q)
+	if err != nil {
+		return categoryTraits{}, err
+	}
+	t := categoryTraits{lendable: map[string]bool{}, units: map[string]map[string]bool{}, parents: parents, scopes: scopes, scan: scan, label: label, labels: labels, created: created, hooks: hooks, offers: offers, icons: icons, colors: colors, names: names, graph: newCatGraph(parents, implies), review: review}
 	t.depth, t.descendants = shape(parents)
 	for id := range lendable {
 		for c, depth := id, 0; c != "" && depth < 100; c, depth = parents[c], depth+1 {
@@ -586,6 +592,8 @@ type assetContext struct {
 	// textBindings maps each icon with text params bound to an asset's
 	// texts to them, once read.
 	textBindings map[string][]textBinding
+	// review holds what reading assets' reviews needs, once read.
+	review reviewContext
 }
 
 // contextTraits returns the category traits, reading them the first time.

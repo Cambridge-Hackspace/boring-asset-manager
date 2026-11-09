@@ -22,6 +22,7 @@ These pages describe how BAM! works, for people running it and for people workin
 - [Printing](printing.md): printers, label stock, printer drivers and connections, and the print queue.
 - [Icons](icons.md): isometric icons written in isolex, and how BAM! compiles and draws them.
 - [Stock and lending](stock-and-lending.md): running low, quantities and weights, asset history, and loans.
+- [Review states](review.md): draft, confirmed and verified assets, dates to review by, and assistants' changes landing as drafts.
 - [Notifications](notifications.md): channels, drivers and deliveries.
 - [Hooks and live connections](hooks.md): buttons on assets that tell devices to act.
 - [Relays](relays.md): the relay bus, over BoneMesh and WebSocket, linking a hosted BAM! to printers and devices on a local network.

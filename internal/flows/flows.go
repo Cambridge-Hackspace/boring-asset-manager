@@ -91,8 +91,11 @@ type Step struct {
 	Match   *Match   `json:"match,omitempty"`
 
 	// Create: the new asset's name, a template, and where to place it.
+	// Confirm files it as confirmed rather than as a draft, where its
+	// category uses review states (docs/review.md).
 	Name     string    `json:"name,omitempty"`
 	Location *Location `json:"location,omitempty"`
+	Confirm  bool      `json:"confirm,omitempty"`
 
 	// Link (#264): the relation type it links the asset by, and which way
 	// it reads: outgoing, the asset is the link's from end, read by the
@@ -281,8 +284,11 @@ type Change struct {
 
 // The changes a Change step can make. Archiving is how bam removes an
 // asset: it is kept, out of the lists, and can be restored. Setting its
-// fields is a Set fields step's work (#174).
+// fields is a Set fields step's work (#174). Confirming confirms it where
+// its categories use review states (docs/review.md), and does nothing
+// elsewhere.
 const (
+	ChangeConfirm   = "confirm"
 	ChangeArchive   = "archive"
 	ChangeCondition = "condition"
 	ChangeBorrow    = "borrow"
@@ -476,6 +482,9 @@ func (d *Definition) Permissions() []string {
 			}
 		case KindCreate, KindSetFields:
 			set[rbac.PermAssetsWrite] = true
+			if s.Kind == KindCreate && s.Confirm {
+				set[rbac.PermAssetsConfirm] = true
+			}
 		case KindLink:
 			set[rbac.PermAssetsWrite] = true
 			if s.Find != nil {
@@ -515,6 +524,8 @@ func changePermission(kind string) string {
 		return rbac.PermAssetsWrite
 	case ChangeHook:
 		return rbac.PermAssetsHook
+	case ChangeConfirm:
+		return rbac.PermAssetsConfirm
 	}
 	return ""
 }
@@ -893,7 +904,7 @@ func (d *Definition) Check(c Catalog) []Problem {
 			}
 			for _, ch := range s.Changes {
 				switch ch.Kind {
-				case ChangeArchive, ChangeBorrow, ChangeReturn:
+				case ChangeArchive, ChangeBorrow, ChangeReturn, ChangeConfirm:
 				case ChangeCondition:
 					switch ch.Condition {
 					case "ok", "needs_maintenance", "out_of_service":

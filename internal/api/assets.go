@@ -29,6 +29,10 @@ type CreateAssetRequest struct {
 	// Purchase is where it came from (docs/data-model.md#purchases); its
 	// invoice cannot be named until it has attachments.
 	Purchase *PurchaseRequest `json:"purchase,omitempty"`
+	// Confirm files it as confirmed rather than as a draft, where its
+	// categories use review states (docs/review.md); it needs
+	// assets.confirm in their scopes.
+	Confirm bool `json:"confirm,omitempty"`
 }
 
 // UpdateAssetRequest defines the payload for modifying an asset. Omitted parts
@@ -124,7 +128,7 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	// them, so where they are counts only as far as it may read.
 	search := q.Get("search")
 	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan"), Icon: q.Get("icon"), VendorID: q.Get("vendor_id"),
-		Person: q.Get("person"), PersonField: q.Get("person_field")}
+		Person: q.Get("person"), PersonField: q.Get("person_field"), Review: q.Get("review")}
 	// ?person=me finds the assets whose person fields name the requester
 	// (docs/data-model.md#person-fields).
 	if f.Person == "me" {
@@ -168,6 +172,10 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	}
 	if errors.Is(err, store.ErrInvalidLoanFilter) {
 		writeJSONError(w, http.StatusBadRequest, "loan must be open or overdue")
+		return nil, false
+	}
+	if errors.Is(err, store.ErrInvalidReviewFilter) {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return nil, false
 	}
 	if err != nil {
@@ -288,6 +296,13 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 	if !s.mayPlace(w, r, rbac.PermAssetsWrite, req.CategoryIDs) {
 		return
 	}
+	acting := s.actingStore(r)
+	if req.Confirm {
+		if !s.mayPlace(w, r, rbac.PermAssetsConfirm, req.CategoryIDs) {
+			return
+		}
+		acting = acting.Confirming()
+	}
 	var purchase *store.PurchaseInput
 	if req.Purchase != nil {
 		scopes, err := s.store.ScopesForCategories(req.CategoryIDs)
@@ -309,7 +324,7 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	asset, err := s.actingStore(r).CreateAssetWithPurchase(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input(), req.IconName, purchase)
+	asset, err := acting.CreateAssetWithPurchase(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input(), req.IconName, purchase)
 	if errors.Is(err, store.ErrGeneratorCodeExists) {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return

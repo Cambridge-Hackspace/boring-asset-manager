@@ -27,8 +27,10 @@ Which events a channel can subscribe to is listed with each feature; see
 [Stock and lending](stock-and-lending.md), [Hooks](hooks.md), [Access](access.md#too-many-wrong-passwords),
 [Relays](relays.md#health), [Installing](installing.md#knowing-when-bam-changes),
 [Comments](comments.md#events) for `comment.added`, [Warranties](#warranties) below, and
-[Contracts](contracts.md#reminders) for `contract.expiring` and `contract.expired`, and
-[Purchase orders](#purchase-orders) below.
+[Contracts](contracts.md#reminders) for `contract.expiring` and `contract.expired`,
+[Purchase orders](#purchase-orders) below, and [Review states](review.md#review-dates) for
+`asset.review_due` (*An asset's review falls due*), which Discord and email announce as
+*Review due: Band saw*, with the date.
 
 ### Warranties
 

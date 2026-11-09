@@ -180,9 +180,14 @@ func Suggest(header []string, corpus []models.Field) []string {
 	out := make([]string, len(header))
 	used := map[string]bool{}
 	for i, h := range header {
-		if t := byName[strings.ToLower(strings.TrimSpace(h))]; t != "" && !used[t] {
+		name := strings.ToLower(strings.TrimSpace(h))
+		if t := byName[name]; t != "" && !used[t] {
 			out[i] = t
 			used[t] = true
+		} else if name == ColumnReviewState {
+			// An export's review states are for reading: imported assets
+			// are drafts unless the importer confirms them.
+			out[i] = TargetIgnore
 		}
 	}
 	return out

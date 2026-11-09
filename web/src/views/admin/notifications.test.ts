@@ -48,6 +48,7 @@ function api(channels: Channel[], extra: Record<string, (b: unknown) => unknown>
     'GET /notifiers/drivers': () => ({ drivers, events }),
     'GET /notifiers': () => ({ channels }),
     'GET /settings/loan-reminders': () => ({ on: false, days_before: 1, overdue_times: 4, can_email: true }),
+    'GET /settings/review': () => ({ assistant_drafts: true, due_days: 14 }),
     'GET /notifiers/deliveries': () => ({
       deliveries: [
         delivery({}),
@@ -225,6 +226,20 @@ describe('LoanReminderSettings', () => {
     await fireEvent.click(within(section).getByRole('button', { name: 'Save' }));
     expect(await within(section).findByText('Saved.')).toBeTruthy();
     expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ on: true, days_before: 2, overdue_times: 3 });
+  });
+
+  it('sets whether assistants’ changes land as drafts, and how early reviews fall due', async () => {
+    const { sent } = api([], { 'PUT /settings/review': (body) => body });
+    render(NotificationsPage);
+    const section = await screen.findByRole('region', { name: 'Review' });
+    const box = within(section).getByLabelText(/Changes through an assistant land as drafts/) as HTMLInputElement;
+    await vi.waitFor(() => expect((within(section).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(box.checked).toBe(true);
+    await fireEvent.click(box);
+    await fireEvent.input(within(section).getByLabelText('Days before a review date it is due'), { target: { value: '30' } });
+    await fireEvent.click(within(section).getByRole('button', { name: 'Save' }));
+    expect(await within(section).findByText('Saved.')).toBeTruthy();
+    expect(sent.find((r) => r.method === 'PUT' && r.path === '/settings/review')!.body).toEqual({ assistant_drafts: false, due_days: 30 });
   });
 
   it('cannot be turned on without email', async () => {

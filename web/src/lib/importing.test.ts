@@ -48,5 +48,7 @@ describe('import links', () => {
     const form = importForm(new File(['x'], 'a.csv'), ['links'], true);
     expect(form.get('remove_links')).toBe('true');
     expect(importForm(new File(['x'], 'a.csv'), ['links']).get('remove_links')).toBeNull();
+    expect(importForm(new File(['x'], 'a.csv'), ['name'], false, '', true).get('confirm')).toBe('true');
+    expect(importForm(new File(['x'], 'a.csv'), ['name']).get('confirm')).toBeNull();
   });
 });
