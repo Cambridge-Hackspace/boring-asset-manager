@@ -30,6 +30,7 @@ const (
 	KindSetFields      = "set_fields"
 	KindFind           = "find"
 	KindCreate         = "create"
+	KindLink           = "link"
 	KindLabel          = "label"
 	KindChange         = "change"
 	KindConfirm        = "confirm"
@@ -37,7 +38,7 @@ const (
 )
 
 // Kinds lists the kinds of step, in the order an editor offers them.
-var Kinds = []string{KindChooseCategory, KindForm, KindSetFields, KindFind, KindCreate, KindLabel, KindChange, KindConfirm, KindDone}
+var Kinds = []string{KindChooseCategory, KindForm, KindSetFields, KindFind, KindCreate, KindLink, KindLabel, KindChange, KindConfirm, KindDone}
 
 // Definition is what a flow does: the categories it files into or takes
 // from, and its steps, in order.
@@ -92,6 +93,22 @@ type Step struct {
 	// Create: the new asset's name, a template, and where to place it.
 	Name     string    `json:"name,omitempty"`
 	Location *Location `json:"location,omitempty"`
+
+	// Link (#264): the relation type it links the asset by, and which way
+	// it reads: outgoing, the asset is the link's from end, read by the
+	// type's name ("contains"), and otherwise by its inverse ("contained
+	// in"). What it links to the runner finds, as Find says, or the flow
+	// names (Assets). Repeat links any number, not one; Required refuses
+	// none; AllowCreate lets the runner file something new to link to,
+	// with only a name, in CreateCategory.
+	RelationType   string    `json:"relation_type,omitempty"`
+	Outgoing       bool      `json:"outgoing,omitempty"`
+	Find           *LinkFind `json:"find,omitempty"`
+	Assets         []string  `json:"assets,omitempty"`
+	Repeat         bool      `json:"repeat,omitempty"`
+	Required       bool      `json:"required,omitempty"`
+	AllowCreate    bool      `json:"allow_create,omitempty"`
+	CreateCategory string    `json:"create_category,omitempty"`
 
 	// Label: what to do with the asset's label.
 	Label *Label `json:"label,omitempty"`
@@ -196,6 +213,17 @@ type Match struct {
 	Value string `json:"value"`
 }
 
+// LinkFind is how a Link step finds what to link to, as Find finds: by
+// scan, search or list, among the assets in Categories or below them (in
+// any category when it names none), narrowed to those a flow filed and
+// those whose field matches a value.
+type LinkFind struct {
+	FindBy     []string `json:"find_by"`
+	Categories []string `json:"categories,omitempty"`
+	FiledBy    string   `json:"filed_by,omitempty"`
+	Match      *Match   `json:"match,omitempty"`
+}
+
 // Location is where Create places the asset: a fixed place, or one the
 // person scans.
 type Location struct {
@@ -270,6 +298,8 @@ const (
 	ValueAsset      = "asset"
 	ValueAssetID    = "asset_id"
 	ValueCode       = "code"
+	// ValueLinked is the names of what a Link step linked the asset to.
+	ValueLinked = "linked"
 )
 
 // builtIn are the values a run has from the start.
@@ -375,6 +405,9 @@ func (s *Step) Auto() bool {
 	switch s.Kind {
 	case KindLabel, KindChange, KindSetFields:
 		return true
+	case KindLink:
+		// Linking to what the flow names asks nothing.
+		return s.Find == nil
 	case KindChooseCategory:
 		return s.Fixed != ""
 	case KindCreate:
@@ -431,6 +464,14 @@ func (d *Definition) Permissions() []string {
 			}
 		case KindCreate, KindSetFields:
 			set[rbac.PermAssetsWrite] = true
+		case KindLink:
+			set[rbac.PermAssetsWrite] = true
+			if s.Find != nil {
+				set[rbac.PermAssetsRead] = true
+				if slices.Contains(s.Find.FindBy, FindScan) {
+					set[rbac.PermAssetsScan] = true
+				}
+			}
 		case KindLabel:
 			if s.Label != nil && s.Label.Mode != LabelShow {
 				set[rbac.PermLabelsPrint] = true
@@ -469,8 +510,8 @@ func changePermission(kind string) string {
 // Catalog is what a flow's settings may name, as the instance has it: the
 // categories, the keys of the fields their assets record (own and
 // inherited, across all the flow's categories), label templates, printers
-// and pools as destinations, hooks by key, flows by ID, and assets (for
-// places).
+// and pools as destinations, hooks by key, flows by ID, relation types by
+// ID, and assets (for places, and what a Link step links to).
 type Catalog struct {
 	Flows        map[string]bool
 	Categories   map[string]bool
@@ -479,7 +520,9 @@ type Catalog struct {
 	Templates    map[string]bool
 	Destinations map[string]bool
 	Hooks        map[string]bool
-	Asset        func(id string) bool
+	// RelationTypes are the relation types a Link step may link by, by ID.
+	RelationTypes map[string]RelationType
+	Asset         func(id string) bool
 	// Names are the categories' names, by ID, and Labels the fields', by
 	// key, to say what is missing.
 	Names  map[string]string
@@ -489,6 +532,19 @@ type Catalog struct {
 	Required map[string][]string
 	// Suits says why a fixed value does not suit a field, if it does not.
 	Suits func(field, value string) error
+	// FieldsIn lists the keys of the fields assets in any of these
+	// categories record, own and inherited (every field, given none), for
+	// what a Link step finds by; RequiredIn, the labels of the fields a
+	// category requires, own and inherited, for what a Link step files.
+	FieldsIn   func(categoryIDs []string) map[string]bool
+	RequiredIn func(categoryID string) []string
+}
+
+// RelationType is what saving a Link step needs to know of a relation
+// type: whether it holds each thing in one place only (Single), so that
+// linking it again moves it, and whether it reads the same both ways.
+type RelationType struct {
+	Single, Symmetric bool
 }
 
 // Problem is something that stops a flow being saved, by the step at fault
@@ -851,6 +907,75 @@ func (d *Definition) Check(c Catalog) []Problem {
 					bad("%q is not a change it can make", ch.Kind)
 				}
 			}
+		case KindLink:
+			needsAsset()
+			t, known := c.RelationTypes[s.RelationType]
+			switch {
+			case s.RelationType == "":
+				bad("choose the kind of link it makes")
+			case !known:
+				bad("no relation type has the ID %q", s.RelationType)
+			case s.Repeat && t.Single && !t.Symmetric && !s.Outgoing:
+				// Held in one place, it would only move from one to the next.
+				bad("each link of this kind moves it out of the last, so it links to one thing only")
+			}
+			switch {
+			case s.Find != nil && len(s.Assets) > 0:
+				bad("it links to what the runner finds, or to assets the flow names, not both")
+			case s.Find == nil && len(s.Assets) == 0:
+				bad("it needs something to link to: let the runner find it, or name the assets")
+			}
+			for _, id := range s.Assets {
+				if c.Asset == nil || !c.Asset(id) {
+					bad("an asset it links to is not one, or is archived")
+					break
+				}
+			}
+			if f := s.Find; f != nil {
+				if len(f.FindBy) == 0 {
+					bad("it needs a way to find: scan, search or list")
+				}
+				for _, by := range f.FindBy {
+					if by != FindScan && by != FindSearch && by != FindList {
+						bad("it finds by scan, search or list, not %q", by)
+					}
+				}
+				for _, id := range f.Categories {
+					if !c.Categories[id] {
+						bad("it finds in a category that does not exist: %q", id)
+					}
+				}
+				if f.FiledBy != "" && !c.Flows[f.FiledBy] {
+					bad("it looks among what a flow filed, but no flow has the ID %q", f.FiledBy)
+				}
+				if f.Match != nil {
+					if c.FieldsIn == nil || !c.FieldsIn(f.Categories)[f.Match.Field] {
+						bad("no field the categories it finds in record has the key %q", f.Match.Field)
+					}
+					uses("its match", f.Match.Value)
+				}
+			}
+			if s.AllowCreate {
+				switch {
+				case s.Find == nil:
+					bad("only a Link that lets the runner find what to link to can file something new")
+				case s.CreateCategory == "":
+					bad("choose the category something new it files goes in")
+				case !c.Categories[s.CreateCategory]:
+					bad("the category something new it files goes in does not exist")
+				case c.RequiredIn != nil:
+					// It files with a name and nothing else, as Set fields
+					// before a Create would fill the rest (#174).
+					if missing := c.RequiredIn(s.CreateCategory); len(missing) > 0 {
+						name := c.Names[s.CreateCategory]
+						if name == "" {
+							name = s.CreateCategory
+						}
+						bad("%s requires %s, which something new it files, with only a name, would not have", name, strings.Join(missing, ", "))
+					}
+				}
+			}
+			set[ValueLinked] = true
 		case KindConfirm:
 		case KindDone:
 			if i != len(d.Steps)-1 {
@@ -876,7 +1001,7 @@ func (c *Catalog) label(key string) string {
 
 func isStepValue(name string) bool {
 	switch name {
-	case ValueCategory, ValueCategoryID, ValueAsset, ValueAssetID, ValueCode:
+	case ValueCategory, ValueCategoryID, ValueAsset, ValueAssetID, ValueCode, ValueLinked:
 		return true
 	}
 	return false
@@ -886,7 +1011,7 @@ func isStepValue(name string) bool {
 // makes them (web/src/lib/flowEditor.ts newStepID).
 var stepBases = map[string]string{
 	KindChooseCategory: "kind", KindForm: "form", KindSetFields: "set", KindFind: "find", KindCreate: "file",
-	KindLabel: "label", KindChange: "change", KindConfirm: "confirm", KindDone: "done",
+	KindLink: "link", KindLabel: "label", KindChange: "change", KindConfirm: "confirm", KindDone: "done",
 }
 
 // NewStepID is an ID for a new step of a kind, not among those taken, as
@@ -914,13 +1039,15 @@ type Starter struct {
 	Definition  Definition `json:"definition"`
 }
 
-// Starters are the two ready-made flows, filing into or taking from these
-// categories: Leave something, and Collect it. Leave something asks for
-// what it is and for each field the categories record, as fieldsOf gives
-// them, and sets those fields: it is the version 1 starter, which asked
-// for the categories' fields, converted (UpgradeV1). fieldsOf may be nil,
-// for categories that record none.
-func Starters(categoryIDs []string, fieldsOf func(categoryID string) ([]FieldDef, error)) ([]Starter, error) {
+// Starters are the ready-made flows, filing into or taking from these
+// categories: Leave something, Collect it, and Add to a kit. Leave
+// something asks for what it is and for each field the categories record,
+// as fieldsOf gives them, and sets those fields: it is the version 1
+// starter, which asked for the categories' fields, converted (UpgradeV1).
+// fieldsOf may be nil, for categories that record none. Add to a kit links
+// what it finds by linkType, the relation type that holds things (empty
+// when there is none, for its maker to choose).
+func Starters(categoryIDs []string, fieldsOf func(categoryID string) ([]FieldDef, error), linkType string) ([]Starter, error) {
 	cats := append([]string{}, categoryIDs...)
 	v1 := v1Definition{Version: 1, Description: "Scan to leave something here, with your name on it.", CategoryIDs: cats, Steps: []v1Step{
 		{Step: Step{ID: "kind", Kind: KindChooseCategory, Title: "What are you leaving?"}},
@@ -942,8 +1069,15 @@ func Starters(categoryIDs []string, fieldsOf func(categoryID string) ([]FieldDef
 		{ID: "finish", Kind: KindChange, Changes: []Change{{Kind: ChangeArchive}}},
 		{ID: "done", Kind: KindDone, Title: "Collected", Text: "{asset} is collected."},
 	}}
+	kit := Definition{Version: Version, Description: "Scan to put something in a kit.", CategoryIDs: cats, Steps: []Step{
+		{ID: "find", Kind: KindFind, Title: "What are you adding?", FindBy: []string{FindScan, FindSearch, FindList}},
+		{ID: "link", Kind: KindLink, Title: "Which kit does it go in?", RelationType: linkType, Required: true,
+			Find: &LinkFind{FindBy: []string{FindScan, FindSearch, FindList}}},
+		{ID: "done", Kind: KindDone, Title: "Added", Text: "{asset} is in {linked}."},
+	}}
 	return []Starter{
 		{Key: "leave", Name: "Leave something", Description: "Choose what kind of thing it is, fill in its form, set its fields from the answers, file it and label it.", Definition: leave},
 		{Key: "collect", Name: "Collect it", Description: "Find it by its code, by search or from a list, then archive it.", Definition: collect},
+		{Key: "kit", Name: "Add to a kit", Description: "Find it, then link it to the kit it goes in, found the same ways.", Definition: kit},
 	}, nil
 }

@@ -136,7 +136,8 @@ func (s *Server) mayRun(r *http.Request, f *models.Flow) (bool, error) {
 
 // runState is a run's state as the store keeps it.
 func runState(run *models.FlowRun) store.FlowRunState {
-	return store.FlowRunState{Step: run.Step, Values: run.Values, Done: run.Done, Finished: run.Finished, Fields: run.Fields, Progress: run.Progress, Answered: run.Answered, Photos: run.Photos}
+	return store.FlowRunState{Step: run.Step, Values: run.Values, Done: run.Done, Finished: run.Finished, Fields: run.Fields, Progress: run.Progress, Answered: run.Answered, Photos: run.Photos,
+		Linked: run.Linked, Made: run.Made}
 }
 
 // startRun begins a run of a flow by the person making the request, and
@@ -235,6 +236,9 @@ func (f *flowRunner) runUnattended(in UnattendedAnswers) (store.FlowRunState, er
 			a.AssetID = in.AssetID
 		case flows.KindCreate:
 			a.PlaceCode = in.PlaceCode
+		case flows.KindLink:
+			// Nothing to choose with: one not required is passed over.
+			a.Done = true
 		}
 		if err = f.take(&st, step, a); err == nil {
 			st, err = f.advance(st)
@@ -264,9 +268,23 @@ type FlowAnswer struct {
 	Code    string `json:"code,omitempty"`
 	// Create: the code of the place it is put, when it is scanned.
 	PlaceCode string `json:"place_code,omitempty"`
+	// Link (#264): what to link the asset to, chosen or scanned (as well
+	// as asset_id and code), or something new to file and link to; and
+	// done, to move on from it, having linked what it will, or none when
+	// it is not required.
+	AssetIDs []string      `json:"asset_ids,omitempty"`
+	Codes    []string      `json:"codes,omitempty"`
+	Create   *FlowNewAsset `json:"create,omitempty"`
+	Done     bool          `json:"done,omitempty"`
 	// given is set on an answer the server gives for the person, as when a
 	// run started from an asset finds it: not counted as a step they took.
 	given bool
+}
+
+// FlowNewAsset is something new a Link step files to link to, with only a
+// name.
+type FlowNewAsset struct {
+	Name string `json:"name"`
 }
 
 // answer takes an answer to the step a run is on, then does the steps that
@@ -289,12 +307,14 @@ func (f *flowRunner) answer(run *models.FlowRun, a FlowAnswer) (*models.FlowRun,
 		return nil, err
 	}
 	st := runState(run)
-	step := &d.Steps[st.Step]
+	at := st.Step
+	step := &d.Steps[at]
 	stepErr := f.take(&st, step, a)
 	if stepErr == nil {
-		// A step that asks something, answered by the person: one more
-		// toward "step 2 of 3". Trying a failed Label again is not one.
-		if step.Asks() && !a.given {
+		// A step that asks something, answered by the person and left: one
+		// more toward "step 2 of 3". Trying a failed Label again is not
+		// one, nor is each link a Link step that links any number makes.
+		if step.Asks() && !a.given && (st.Step != at || st.Finished) {
 			st.Answered++
 		}
 		st, stepErr = f.advance(st)
@@ -321,6 +341,12 @@ func (f *flowRunner) take(st *store.FlowRunState, step *flows.Step, a FlowAnswer
 		err = f.find(st, step, a)
 	case flows.KindCreate:
 		err = f.create(st, step, a.PlaceCode)
+	case flows.KindLink:
+		var stay bool
+		if stay, err = f.takeLink(st, step, a); err == nil && stay {
+			// Linking any number, it stays for the next, until done.
+			return nil
+		}
 	case flows.KindLabel, flows.KindChange, flows.KindSetFields:
 		// Answered only to try again.
 		err = f.do(st, step)
@@ -371,6 +397,8 @@ func (f *flowRunner) do(st *store.FlowRunState, step *flows.Step) error {
 		return f.change(st, step)
 	case flows.KindSetFields:
 		return f.setFields(st, step)
+	case flows.KindLink:
+		return f.link(st, step, step.Assets)
 	}
 	return nil
 }
@@ -709,6 +737,275 @@ func (f *flowRunner) setFields(st *store.FlowRunState, step *flows.Step) error {
 	return nil
 }
 
+// relationType is the relation type a Link step links by.
+func (f *flowRunner) relationType(step *flows.Step) (*models.RelationType, error) {
+	types, err := f.s.store.ListRelationTypes()
+	if err != nil {
+		return nil, err
+	}
+	for i := range types {
+		if types[i].ID == step.RelationType {
+			return &types[i], nil
+		}
+	}
+	return nil, refuseStep("The kind of link this step makes is gone: the flow needs changing")
+}
+
+// linkable says whether a Link step may link to an asset, whatever its
+// state: in the categories the step finds in, or below them (any, when it
+// names none), one the runner may read and change, and narrowed as the
+// step says. An archived one is the links endpoint's to refuse.
+func (f *flowRunner) linkable(step *flows.Step, v flows.Values) (func(a *models.AssetWithDetails) bool, error) {
+	find := step.Find
+	fc, err := f.s.flowCategories()
+	if err != nil {
+		return nil, err
+	}
+	var filed map[string]bool
+	if find.FiledBy != "" {
+		if filed, err = f.s.store.FiledBy(find.FiledBy); err != nil {
+			return nil, err
+		}
+	}
+	match := ""
+	if find.Match != nil {
+		match = strings.TrimSpace(flows.Render(find.Match.Value, v))
+	}
+	ctx := f.r.Context()
+	return func(a *models.AssetWithDetails) bool {
+		if !Allows(ctx, rbac.PermAssetsRead, a.Scopes) || !Allows(ctx, rbac.PermAssetsWrite, a.Scopes) {
+			return false
+		}
+		if filed != nil && !filed[a.Asset.ID] {
+			return false
+		}
+		if find.Match != nil && !strings.EqualFold(strings.TrimSpace(a.FieldValues[find.Match.Field]), match) {
+			return false
+		}
+		if len(find.Categories) == 0 {
+			return true
+		}
+		for _, c := range a.Categories {
+			if fc.within(c.ID, find.Categories) {
+				return true
+			}
+		}
+		return false
+	}, nil
+}
+
+// linkCandidates are the assets a Link step offers to link the run's asset
+// to: the active ones it may link to, other than the asset itself,
+// narrowed by search.
+func (f *flowRunner) linkCandidates(step *flows.Step, v flows.Values, search string) ([]models.AssetWithDetails, error) {
+	all, err := f.s.store.FilterAssets(store.AssetFilter{})
+	if err != nil {
+		return nil, err
+	}
+	ok, err := f.linkable(step, v)
+	if err != nil {
+		return nil, err
+	}
+	out := []models.AssetWithDetails{}
+	for i := range all {
+		if all[i].Asset.ID != v[flows.ValueAssetID] && ok(&all[i]) {
+			out = append(out, all[i])
+		}
+	}
+	return searched(out, search), nil
+}
+
+// takeLink takes the answer to a Link step the runner finds for (#264):
+// what it names, chosen or scanned, or something new to file, is linked
+// to, each through the links endpoint; done moves on. stay is set when
+// the step links any number and is not done: the run stays on it for the
+// next. Something it filed and failed to link is linked first, on any
+// answer, rather than filed again.
+func (f *flowRunner) takeLink(st *store.FlowRunState, step *flows.Step, a FlowAnswer) (stay bool, err error) {
+	if step.Find == nil {
+		// Linking to what the flow names, answered only to try again.
+		return false, f.link(st, step, step.Assets)
+	}
+	var targets []string
+	if made, ok := st.Made[step.ID]; ok {
+		targets = append(targets, made.ID)
+	} else if a.Create != nil {
+		if !step.AllowCreate {
+			return false, refuseStep("This step does not file anything new")
+		}
+		name := strings.TrimSpace(a.Create.Name)
+		if name == "" {
+			return false, refuseStep("Give the new one a name")
+		}
+		var made struct {
+			Asset models.AssetWithDetails `json:"asset"`
+		}
+		if err := f.call(http.MethodPost, "/api/v1/assets", CreateAssetRequest{Name: name, CategoryIDs: []string{step.CreateCategory}}, &made); err != nil {
+			return false, err
+		}
+		if st.Made == nil {
+			st.Made = map[string]models.FlowLinked{}
+		}
+		st.Made[step.ID] = models.FlowLinked{ID: made.Asset.Asset.ID, Name: made.Asset.Asset.Name}
+		fc, _ := f.s.flowCategories()
+		f.said(st, step, "Filed %s in %s.", made.Asset.Asset.Name, fc.name(step.CreateCategory))
+		targets = append(targets, made.Asset.Asset.ID)
+	}
+	ids := slices.Clone(a.AssetIDs)
+	if a.AssetID != "" {
+		ids = append(ids, a.AssetID)
+	}
+	codes := slices.Clone(a.Codes)
+	if a.Code != "" {
+		codes = append(codes, a.Code)
+	}
+	if len(codes) > 0 && !slices.Contains(step.Find.FindBy, flows.FindScan) {
+		return false, refuseStep("This step does not find by scanning")
+	}
+	for _, code := range codes {
+		var scanned ScanResponse
+		if err := f.call(http.MethodGet, "/api/v1/scan/"+url.PathEscape(strings.TrimSpace(code)), nil, &scanned); err != nil {
+			return false, refuseStep("Nothing has the code %s", strings.TrimSpace(code))
+		}
+		ids = append(ids, scanned.Asset.ID)
+	}
+	if len(ids) > 0 {
+		ok, err := f.linkable(step, st.Values)
+		if err != nil {
+			return false, err
+		}
+		for _, id := range ids {
+			if id == "" || slices.Contains(targets, id) {
+				continue
+			}
+			other, err := f.s.store.GetAssetByID(id)
+			if errors.Is(err, store.ErrAssetNotFound) || (err == nil && !ok(other)) {
+				return false, refuseStep("That is not something this step can link to")
+			}
+			if err != nil {
+				return false, err
+			}
+			targets = append(targets, id)
+		}
+	}
+	linked := map[string]bool{}
+	for _, l := range st.Linked[step.ID] {
+		linked[l.ID] = true
+	}
+	if !step.Repeat {
+		n := len(linked)
+		for _, id := range targets {
+			if !linked[id] {
+				n++
+			}
+		}
+		if n > 1 {
+			return false, refuseStep("This step links to one thing only")
+		}
+	}
+	if len(targets) == 0 {
+		if !a.Done {
+			return false, refuseStep("Choose what to link it to, or scan its code")
+		}
+		if step.Required && len(linked) == 0 {
+			return false, refuseStep("Choose at least one thing to link it to")
+		}
+		return false, nil
+	}
+	if err := f.link(st, step, targets); err != nil {
+		return false, err
+	}
+	return step.Repeat && !a.Done, nil
+}
+
+// link links the run's asset to each of these assets, by the step's
+// relation type and way round, through the links endpoint as the runner,
+// so every rule links follow holds: not to itself, not twice, nothing
+// archived, no loop of a single type. Those it linked before, on a try
+// that failed part way, are not linked again. A link of a single type
+// moves what it holds out of where it was, and says so. {linked} is the
+// names of all the step has linked.
+func (f *flowRunner) link(st *store.FlowRunState, step *flows.Step, targets []string) error {
+	id := st.Values[flows.ValueAssetID]
+	if id == "" {
+		return refuseStep("There is nothing to link: nothing was found or filed")
+	}
+	t, err := f.relationType(step)
+	if err != nil {
+		return err
+	}
+	done := map[string]bool{}
+	for _, l := range st.Linked[step.ID] {
+		done[l.ID] = true
+	}
+	label := t.InverseName
+	if step.Outgoing || t.IsSymmetric {
+		label = t.Name
+	}
+	for _, other := range targets {
+		if done[other] {
+			continue
+		}
+		this, err := f.s.store.GetAssetByID(id)
+		if err != nil {
+			return err
+		}
+		that, err := f.s.store.GetAssetByID(other)
+		if errors.Is(err, store.ErrAssetNotFound) {
+			return refuseStep("Something it links to is gone")
+		}
+		if err != nil {
+			return err
+		}
+		who, from := moving(t, step.Outgoing, this, that)
+		if err := f.call(http.MethodPost, "/api/v1/assets/"+url.PathEscape(id)+"/links", AddLinkRequest{TypeID: t.ID, AssetID: other, Outgoing: step.Outgoing}, nil); err != nil {
+			var fe *flowError
+			if errors.As(err, &fe) {
+				return &flowError{Status: fe.Status, Message: fmt.Sprintf("%s: %s", that.Asset.Name, fe.Message)}
+			}
+			return err
+		}
+		if st.Linked == nil {
+			st.Linked = map[string][]models.FlowLinked{}
+		}
+		st.Linked[step.ID] = append(st.Linked[step.ID], models.FlowLinked{ID: other, Name: that.Asset.Name})
+		done[other] = true
+		if made, ok := st.Made[step.ID]; ok && made.ID == other {
+			delete(st.Made, step.ID)
+		}
+		moved := ""
+		if who != "" {
+			moved = fmt.Sprintf(" Moved %s out of %s.", who, from)
+		}
+		f.said(st, step, "Linked %s: %s %s.%s", this.Asset.Name, label, that.Asset.Name, moved)
+	}
+	var names []string
+	for _, l := range st.Linked[step.ID] {
+		names = append(names, l.Name)
+	}
+	st.Values[flows.ValueLinked] = strings.Join(names, ", ")
+	return nil
+}
+
+// moving says what a link of a single type between this asset and that
+// moves, and out of what: the asset at its far end leaves the one it was
+// linked from. Both are empty when it moves nothing.
+func moving(t *models.RelationType, outgoing bool, this, that *models.AssetWithDetails) (who, from string) {
+	if !t.IsSingle {
+		return "", ""
+	}
+	held, by := that, this
+	if !outgoing && !t.IsSymmetric {
+		held, by = this, that
+	}
+	for _, l := range held.Links {
+		if l.TypeID == t.ID && !l.Outgoing && l.Asset.ID != by.Asset.ID {
+			return held.Asset.Name, l.Asset.Name
+		}
+	}
+	return "", ""
+}
+
 func (f *flowRunner) label(st *store.FlowRunState, step *flows.Step) error {
 	l := step.Label
 	id := st.Values[flows.ValueAssetID]
@@ -821,5 +1118,61 @@ func (s *Server) checkFlow(r *http.Request, d *flows.Definition) ([]flows.Proble
 			problems = append(problems, flows.Problem{Message: fmt.Sprintf("its steps use %s, which you do not hold", p)})
 		}
 	}
-	return problems, nil
+	more, err := s.checkLinkScopes(r, d)
+	return append(problems, more...), err
+}
+
+// checkLinkScopes lists what a flow's Link steps offer that its creator
+// could not do themselves (#264): finding in a category where they may not
+// read, filing into one where they may not write, or linking to an asset
+// named in the flow that they may not change.
+func (s *Server) checkLinkScopes(r *http.Request, d *flows.Definition) ([]flows.Problem, error) {
+	var out []flows.Problem
+	scopesOf, err := s.store.ScopeResolver()
+	if err != nil {
+		return nil, err
+	}
+	fc, err := s.flowCategories()
+	if err != nil {
+		return nil, err
+	}
+	name := func(id string) string {
+		if n := fc.name(id); n != "" {
+			return n
+		}
+		return id
+	}
+	for _, step := range d.Steps {
+		if step.Kind != flows.KindLink {
+			continue
+		}
+		bad := func(format string, args ...any) {
+			out = append(out, flows.Problem{Step: step.ID, Message: fmt.Sprintf(format, args...)})
+		}
+		if step.Find != nil {
+			for _, id := range step.Find.Categories {
+				if _, ok := fc.byID[id]; ok && !Allows(r.Context(), rbac.PermAssetsRead, scopesOf([]string{id})) {
+					bad("it finds in %s, where you do not hold %s", name(id), rbac.PermAssetsRead)
+				}
+			}
+		}
+		if id := step.CreateCategory; step.AllowCreate && id != "" {
+			if _, ok := fc.byID[id]; ok && !Allows(r.Context(), rbac.PermAssetsWrite, scopesOf([]string{id})) {
+				bad("it files into %s, where you do not hold %s", name(id), rbac.PermAssetsWrite)
+			}
+		}
+		if len(step.Assets) > 0 {
+			scopes, err := s.store.AssetScopes(step.Assets)
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range step.Assets {
+				if !Allows(r.Context(), rbac.PermAssetsWrite, scopes[id]) {
+					bad("it links to an asset you may not change")
+					break
+				}
+			}
+		}
+	}
+	return out, nil
 }

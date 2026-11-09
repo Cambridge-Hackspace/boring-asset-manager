@@ -221,14 +221,17 @@ func TestMigratingFlowsToVersion2(t *testing.T) {
 		t.Errorf("finish: %s", got)
 	}
 	// The starter is today's starter.
-	today, err := flows.Starters([]string{w.short.ID}, st.FlowFields)
+	today, err := flows.Starters([]string{w.short.ID}, st.FlowFields, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(read["starter"].Definition, today[0].Definition) {
 		t.Errorf("the starter:\n%+v\ntoday's\n%+v", read["starter"].Definition, today[0].Definition)
 	}
-	if !reflect.DeepEqual(read["collect"].Definition, func() flows.Definition { all, _ := flows.Starters([]string{w.wood.ID}, nil); return all[1].Definition }()) {
+	if !reflect.DeepEqual(read["collect"].Definition, func() flows.Definition {
+		all, _ := flows.Starters([]string{w.wood.ID}, nil, "")
+		return all[1].Definition
+	}()) {
 		t.Errorf("collect: %+v", read["collect"].Definition)
 	}
 

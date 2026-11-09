@@ -27,6 +27,10 @@
   let added = new Set<string>();
   let code = $state('');
   let search = $state('');
+  // Link (#264): the name of something new to add, and whether, having
+  // linked one of any number, they chose Add another.
+  let newName = $state('');
+  let adding = $state(false);
 
   const prompt = $derived<Prompt | null>(view?.prompt ?? null);
   // What a yes/no or choice question offers to choose.
@@ -36,6 +40,9 @@
     { value: 'no', label: 'No' },
   ];
   const flowName = $derived(view?.run.values.flow ?? 'Flow');
+  // Whether to offer what to find: always for Find; for a Link, until it
+  // has linked one of any number, then again on Add another.
+  const choosing = $derived(prompt?.kind === 'find' || (prompt?.kind === 'link' && (!prompt.repeat || !prompt.linked?.length || adding)));
 
   onMount(start);
 
@@ -60,12 +67,17 @@
 
   async function show(next: RunView) {
     const moved = next.prompt.step !== view?.prompt.step || next.run.id !== view?.run.id;
+    const linkedMore = (next.prompt.linked?.length ?? 0) !== (view?.prompt.linked?.length ?? 0);
     view = next;
     error = next.error ?? '';
-    if (moved) {
-      answers = formDefaults(next.prompt);
+    if (moved || linkedMore) {
       code = '';
       search = '';
+      newName = '';
+      adding = false;
+    }
+    if (moved) {
+      answers = formDefaults(next.prompt);
       await tick();
       heading?.focus();
     }
@@ -114,6 +126,12 @@
   function scanned(text: string, as: 'code' | 'place_code') {
     const c = scannedCode(text);
     if (c) void answer({ [as]: c });
+  }
+
+  function createNew(event: SubmitEvent) {
+    event.preventDefault();
+    const name = newName.trim();
+    if (name) void answer({ create: { name } });
   }
 
   async function find(event: SubmitEvent) {
@@ -243,40 +261,75 @@
         {/each}
         <button type="submit" class="flow-button-primary" disabled={busy}>Next</button>
       </form>
-    {:else if prompt.kind === 'find'}
-      {#if prompt.find_by?.includes('scan')}
-        <form class="space-y-3" onsubmit={(e) => submitCode(e, 'code')}>
-          <label class="label" for="flow-code">Its code</label>
-          <div class="flex gap-2">
-            <input id="flow-code" class="flow-input" autocomplete="off" placeholder="Type or scan it" bind:value={code} />
-            <button type="submit" class="btn-primary min-h-12 text-lg" disabled={busy || !code.trim()}>Find</button>
+    {:else if prompt.kind === 'find' || prompt.kind === 'link'}
+      {#if prompt.kind === 'link'}
+        {#if prompt.moves}<p class="text-base">Linking it moves it out of {prompt.moves}.</p>{/if}
+        {#if prompt.linked?.length}
+          <div>
+            <p class="label" id="flow-linked">Linked so far</p>
+            <ul class="space-y-1" aria-labelledby="flow-linked">
+              {#each prompt.linked as l (l.id)}<li>{prompt.relation} <strong>{l.name}</strong></li>{/each}
+            </ul>
           </div>
-          <CodeScanner onfound={(text) => scanned(text, 'code')} />
-        </form>
+        {/if}
+        {#if !choosing}
+          <div class="flex flex-wrap gap-3">
+            <button type="button" class="flow-button-secondary" disabled={busy} onclick={() => (adding = true)}>Add another</button>
+            <button type="button" class="flow-button-primary" disabled={busy} onclick={() => answer({ done: true })}>Done</button>
+          </div>
+        {/if}
       {/if}
-      {#if prompt.find_by?.includes('search')}
-        <form class="flex gap-2" onsubmit={find} role="search">
-          <label class="sr-only" for="flow-search">Search</label>
-          <input id="flow-search" class="flow-input" type="search" autocomplete="off" placeholder="Search by name" bind:value={search} />
-          <button type="submit" class="btn-secondary min-h-12 text-lg" disabled={busy}>Search</button>
-        </form>
-      {/if}
-      {#if prompt.assets?.length}
-        <ul class="space-y-2" aria-label="Found">
-          {#each prompt.assets as a (a.id)}
-            <li>
-              <button type="button" class="flow-choice" disabled={busy} onclick={() => answer({ asset_id: a.id })}>
-                <span class="flex flex-col items-start text-left">
-                  <span>{a.name}</span>
-                  <span class="text-sm text-zinc-600 dark:text-zinc-400">{[a.code, ...a.categories].filter(Boolean).join(' · ')}</span>
-                  {#if a.overdue}<span class="text-sm text-amber-800 dark:text-amber-400">Past its date, {a.overdue}</span>{/if}
-                </span>
-              </button>
-            </li>
-          {/each}
-        </ul>
-      {:else if prompt.find_by?.includes('list') || search}
-        <p class="text-zinc-600 dark:text-zinc-400">Nothing here to find.</p>
+      {#if choosing}
+        {#if prompt.find_by?.includes('scan')}
+          <form class="space-y-3" onsubmit={(e) => submitCode(e, 'code')}>
+            <label class="label" for="flow-code">Its code</label>
+            <div class="flex gap-2">
+              <input id="flow-code" class="flow-input" autocomplete="off" placeholder="Type or scan it" bind:value={code} />
+              <button type="submit" class="btn-primary min-h-12 text-lg" disabled={busy || !code.trim()}>Find</button>
+            </div>
+            <CodeScanner onfound={(text) => scanned(text, 'code')} />
+          </form>
+        {/if}
+        {#if prompt.find_by?.includes('search')}
+          <form class="flex gap-2" onsubmit={find} role="search">
+            <label class="sr-only" for="flow-search">Search</label>
+            <input id="flow-search" class="flow-input" type="search" autocomplete="off" placeholder="Search by name" bind:value={search} />
+            <button type="submit" class="btn-secondary min-h-12 text-lg" disabled={busy}>Search</button>
+          </form>
+        {/if}
+        {#if prompt.assets?.length}
+          <ul class="space-y-2" aria-label="Found">
+            {#each prompt.assets as a (a.id)}
+              <li>
+                <button type="button" class="flow-choice" disabled={busy} onclick={() => answer({ asset_id: a.id })}>
+                  <span class="flex flex-col items-start text-left">
+                    <span>{a.name}</span>
+                    <span class="text-sm text-zinc-600 dark:text-zinc-400">{[a.code, ...a.categories].filter(Boolean).join(' · ')}</span>
+                    {#if a.overdue}<span class="text-sm text-amber-800 dark:text-amber-400">Past its date, {a.overdue}</span>{/if}
+                  </span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else if prompt.find_by?.includes('list') || search}
+          <p class="text-zinc-600 dark:text-zinc-400">Nothing here to find.</p>
+        {/if}
+        {#if prompt.kind === 'link'}
+          {#if prompt.create_in}
+            <form class="space-y-2" onsubmit={createNew}>
+              <label class="label" for="flow-new-name">Not listed? Add it to {prompt.create_in}</label>
+              <div class="flex gap-2">
+                <input id="flow-new-name" class="flow-input" autocomplete="off" placeholder="Its name" bind:value={newName} />
+                <button type="submit" class="btn-secondary min-h-12 text-lg" disabled={busy || !newName.trim()}>Add it</button>
+              </div>
+            </form>
+          {/if}
+          {#if prompt.repeat && prompt.linked?.length}
+            <button type="button" class="flow-button-primary" disabled={busy} onclick={() => answer({ done: true })}>Done</button>
+          {:else if !prompt.required}
+            <button type="button" class="flow-button-secondary" disabled={busy} onclick={() => answer({ done: true })}>Skip</button>
+          {/if}
+        {/if}
       {/if}
     {:else if prompt.kind === 'create'}
       <form class="space-y-3" onsubmit={(e) => submitCode(e, 'place_code')}>

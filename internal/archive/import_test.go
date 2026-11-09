@@ -227,6 +227,12 @@ func TestAPackageImportedTwiceUnderTwoAnchors(t *testing.T) {
 	if !reflect.DeepEqual(d.CategoryIDs, []string{toolsB}) || d.Steps[0].Label.Mode != flows.LabelQueue || d.Steps[0].Label.Destination != "" {
 		t.Errorf("the copied flow %s", def)
 	}
+	// Its Link step links by the imported link type, and finds in, and
+	// files into, its own copy of the drills (#264).
+	stores := idOf(t, dst, "SELECT id FROM relation_types WHERE name = 'Stores'")
+	if l := d.Steps[2]; l.RelationType != stores || l.CreateCategory != drills || l.Find == nil || !reflect.DeepEqual(l.Find.Categories, []string{drills}) || l.Find.Match.Field != "serial" {
+		t.Errorf("the copied flow's link %+v", l)
+	}
 	if src := idOf(t, dst, "SELECT source FROM category_icons WHERE icon_name = 'toolbox-2'"); !strings.Contains(src, `icon "toolbox-2"`) {
 		t.Errorf("the copied icon's source %s", src)
 	}
@@ -300,6 +306,13 @@ func TestConflictsResolveAsChosen(t *testing.T) {
 	def := idOf(t, dst, "SELECT definition FROM flows WHERE slug = 'lend-a-tool'")
 	if !strings.Contains(def, `"hook":"open_2"`) {
 		t.Errorf("the flow triggers %s", def)
+	}
+	// Its Link step's link type skipped, it is turned off (#264).
+	if f, err := dst.GetFlow("lend-a-tool"); err != nil || f.Enabled {
+		t.Errorf("the flow linking by a skipped link type: %+v %v", f, err)
+	}
+	if it := itemOf(t, done, ItemFlow, "Lend-a-tool"); !strings.Contains(it.Note, "link type that is skipped") {
+		t.Errorf("the flow's notes: %+v", it)
 	}
 
 	// a choice that is not one, or for what clashes with nothing

@@ -358,6 +358,7 @@ that asks something from the request:
 | Form | `answers`, by its questions' keys; without `answers`, the request's own keys |
 | Find | the asset the hook found |
 | Create, with a place to scan | `place_code` |
+| Link, finding what to link to | nothing: one not required is passed over, and one required stops the flow |
 
 A step that cannot be answered, or that fails, stops the flow there. The answer names the step, as
 in `Running the flow: Step "about": What is it? is required`. What the steps before it did stays

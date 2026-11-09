@@ -1322,6 +1322,9 @@ func (m *matcher) flow(it *ImportItem, d *flows.Definition) bool {
 				m.note(it, "Its place is asked for, as the one it named is not imported.")
 			}
 		}
+		if s.Kind == flows.KindLink && !m.linkStep(it, who, s, cat) {
+			on = false
+		}
 		if s.Label != nil {
 			if t := s.Label.TemplateID; t != "" {
 				if m.skippedTemplates[t] {
@@ -1370,6 +1373,82 @@ func (m *matcher) flow(it *ImportItem, d *flows.Definition) bool {
 		}
 	}
 	return on
+}
+
+// linkStep rewrites a Link step as imported (#264): its relation type,
+// the categories it finds in and files into, the flow whose filings it
+// finds, the field it matches, and the assets it names, reporting whether
+// the flow may stay turned on. With its relation type skipped, it is
+// turned off until another is chosen. An asset it names that is not
+// imported is dropped; with none left, the flow is turned off until they
+// are chosen again.
+func (m *matcher) linkStep(it *ImportItem, who string, s *flows.Step, cat func(string) string) bool {
+	on := true
+	if id := s.RelationType; id != "" {
+		if n, ok := m.b.relTypes[id]; ok {
+			s.RelationType = n
+		} else if m.archived(ItemRelationType, id) {
+			m.note(it, "It links by a link type that is skipped, and is turned off until another is chosen.")
+			on = false
+		} else if !m.hasRelationType(id) {
+			m.problem("%s links by a link type the archive does not hold: import the catalog too", who)
+		}
+	}
+	s.CreateCategory = cat(s.CreateCategory)
+	if f := s.Find; f != nil {
+		for j, id := range f.Categories {
+			f.Categories[j] = cat(id)
+		}
+		if f.FiledBy != "" {
+			if m.skippedFlows[f.FiledBy] {
+				m.problem("%s links to what the flow it names files, which is skipped", who)
+			} else if id, ok := m.flows[f.FiledBy]; ok {
+				f.FiledBy = id
+			}
+		}
+		if f.Match != nil {
+			f.Match.Field = m.fieldKey(f.Match.Field, who)
+			f.Match.Value = m.flowText(f.Match.Value)
+		}
+	}
+	if len(s.Assets) == 0 {
+		return on
+	}
+	kept := []string{}
+	for _, id := range s.Assets {
+		if m.a.assetIDs[id] {
+			kept = append(kept, m.b.ids.of(id))
+		}
+	}
+	switch {
+	case len(kept) == 0:
+		m.note(it, "It no longer links to the assets it named, as they are not imported, and is turned off until they are chosen again.")
+		on = false
+	case len(kept) < len(s.Assets):
+		m.note(it, "It links to fewer assets, as some it named are not imported.")
+	}
+	s.Assets = kept
+	return on
+}
+
+// archived reports whether the archive holds an item of a kind, by its ID.
+func (m *matcher) archived(kind, id string) bool {
+	for _, it := range m.items {
+		if it.Kind == kind && it.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// hasRelationType reports whether this instance has a relation type by ID.
+func (m *matcher) hasRelationType(id string) bool {
+	for _, e := range m.h.relTypes {
+		if e[0] == id {
+			return true
+		}
+	}
+	return false
 }
 
 // permissions works out what the import needs of the importer.

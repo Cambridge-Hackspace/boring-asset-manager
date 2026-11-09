@@ -1998,6 +1998,18 @@ type FlowRun struct {
 	// Answered is kept for the run's own use too: how many steps that ask
 	// something the person has answered (#166).
 	Answered int `json:"-"`
+	// Linked and Made are kept for the run's own use too: what each Link
+	// step has linked the asset to, and what it filed to link to and has
+	// yet to link (#264).
+	Linked map[string][]FlowLinked `json:"-"`
+	Made   map[string]FlowLinked   `json:"-"`
+}
+
+// FlowLinked is an asset a Link step linked a run's asset to, or filed to
+// link it to.
+type FlowLinked struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // FlowPhoto is a photo question's answer that a Set fields step put on an

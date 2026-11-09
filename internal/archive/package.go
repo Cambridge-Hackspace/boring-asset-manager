@@ -854,9 +854,9 @@ func (r *resolver) needIcons(names []string, by Ref) {
 }
 
 // flowNeeds adds what a flow names: its categories, the label templates
-// and hooks it uses, the fields it asks or sets, and the flow whose
-// filings it finds. Printers and pools, and the places it puts things,
-// stay behind.
+// and hooks it uses, the fields it asks or sets, the flow whose filings it
+// finds, and the relation types it links by. Printers and pools, the
+// places it puts things, and the assets it links to, stay behind.
 func (r *resolver) flowNeeds(x Ref) {
 	f := r.flows[x.ID]
 	d := &f.def
@@ -885,6 +885,22 @@ func (r *resolver) flowNeeds(x Ref) {
 			field(s.Match.Field)
 		}
 		r.need(Ref{Kind: ItemFlow, ID: s.FiledBy}, x)
+		if s.Kind == flows.KindLink {
+			r.need(Ref{Kind: ItemRelationType, ID: s.RelationType}, x)
+			cat(s.CreateCategory)
+			if f := s.Find; f != nil {
+				for _, id := range f.Categories {
+					cat(id)
+				}
+				r.need(Ref{Kind: ItemFlow, ID: f.FiledBy}, x)
+				if f.Match != nil {
+					field(f.Match.Field)
+				}
+			}
+			for _, id := range s.Assets {
+				r.stays(Ref{Kind: ItemAsset, ID: id}, x, "an asset a Link step links to is one of this instance's: imported, the flow asks for it to be chosen again")
+			}
+		}
 		if s.Location != nil && s.Location.AssetID != "" {
 			r.stays(Ref{Kind: ItemAsset, ID: s.Location.AssetID}, x, "a place is one of this instance's assets: imported, the flow asks for the place to be chosen again")
 		}

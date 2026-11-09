@@ -2,11 +2,14 @@
   // The settings of one step of a flow (docs/flows.md), as its card in the
   // editor shows them.
   import { untrack } from 'svelte';
-  import type { Category, Field } from '../../lib/models';
-  import type { Change, ChangeKind, FieldValue, Flow, Option, Question, Step } from '../../lib/flows';
+  import { request } from '../../lib/api';
+  import { messageOf } from '../../lib/errors';
+  import type { AssetWithDetails, Category, Field, RelationType } from '../../lib/models';
+  import type { Change, ChangeKind, FieldValue, Flow, LinkFind, Option, Question, Step } from '../../lib/flows';
   import { optionLabel, questionTypes } from '../../lib/flows';
   import { kindLabels, setsOn, setsOnText, stepsUsing, valuesBefore, type AvailableValue } from '../../lib/flowEditor';
   import { keyFrom, valueFrom } from '../../lib/keys';
+  import CategoryPicker from '../../components/CategoryPicker.svelte';
   import DerivedKey from '../../components/DerivedKey.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
   import TemplateInput from '../../components/TemplateInput.svelte';
@@ -25,6 +28,9 @@
     destinations,
     templates,
     hooks,
+    allCategories = [],
+    allFields = [],
+    relationTypes = [],
   }: {
     /** Unique on the page, for the ids of its controls. */
     prefix: string;
@@ -46,6 +52,10 @@
     destinations: { value: string; label: string }[];
     templates: { id: string; name: string }[];
     hooks: { key: string; label: string }[];
+    /** Every category and field, and the relation types, for a Link step, which may link to anything. */
+    allCategories?: Category[];
+    allFields?: Field[];
+    relationTypes?: RelationType[];
   } = $props();
 
   const p = $derived(prefix);
@@ -180,6 +190,81 @@
     step.find_by = (['scan', 'search', 'list'] as const).filter((b) => list.has(b));
   }
 
+  // Link (#264): how it links, each type read either way round, as the
+  // asset's page reads a link ("contained in", "contains"); a type that
+  // reads the same both ways, once.
+  const relationChoices = $derived(
+    relationTypes.flatMap((t) =>
+      t.is_symmetric
+        ? [{ value: `${t.id}:out`, label: `${t.name}…` }]
+        : [
+            { value: `${t.id}:in`, label: `${t.inverse_name}…` },
+            { value: `${t.id}:out`, label: `${t.name}…` },
+          ],
+    ),
+  );
+  const linkType = $derived(relationTypes.find((t) => t.id === step.relation_type));
+  const relationValue = $derived(step.relation_type ? `${step.relation_type}:${step.outgoing || linkType?.is_symmetric ? 'out' : 'in'}` : '');
+  function setRelation(value: string) {
+    const [id, way] = value.split(':');
+    step.relation_type = id || undefined;
+    step.outgoing = way === 'out' || undefined;
+  }
+  function setSource(found: boolean) {
+    if (found) {
+      step.assets = undefined;
+      step.find = { find_by: ['scan', 'search', 'list'] };
+    } else {
+      step.find = undefined;
+      step.repeat = step.required = step.allow_create = undefined;
+      step.create_category = undefined;
+      step.assets = [];
+    }
+  }
+  function setFind(change: Partial<LinkFind>) {
+    step.find = { ...(step.find ?? { find_by: [] }), ...change };
+  }
+  function toggleLinkFindBy(by: 'scan' | 'search' | 'list', on: boolean) {
+    const list = new Set(step.find?.find_by ?? []);
+    if (on) list.add(by);
+    else list.delete(by);
+    setFind({ find_by: (['scan', 'search', 'list'] as const).filter((b) => list.has(b)) });
+  }
+  // The assets a Link step names, by name once read, and finding more.
+  let assetNames = $state<Record<string, string>>({});
+  let assetSearch = $state('');
+  let assetsFound = $state<{ id: string; name: string; where: string }[] | null>(null);
+  let assetError = $state('');
+  $effect(() => {
+    for (const id of step.assets ?? []) {
+      if (id in untrack(() => assetNames)) continue;
+      assetNames[id] = '';
+      void request<{ asset: AssetWithDetails }>('GET', `/assets/${encodeURIComponent(id)}`).then(
+        (r) => (assetNames[id] = r.asset.asset.name),
+        () => (assetNames[id] = 'An asset that is gone'),
+      );
+    }
+  });
+  async function findAssets() {
+    assetError = '';
+    const q = assetSearch.trim();
+    if (!q) return;
+    try {
+      const list = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?search=${encodeURIComponent(q)}`)).assets ?? [];
+      assetsFound = list
+        .filter((a) => !(step.assets ?? []).includes(a.asset.id))
+        .slice(0, 20)
+        .map((a) => ({ id: a.asset.id, name: a.asset.name, where: a.categories.map((c) => c.name).join(', ') }));
+    } catch (err) {
+      assetError = messageOf(err);
+    }
+  }
+  function addAsset(a: { id: string; name: string }) {
+    assetNames[a.id] = a.name;
+    step.assets = [...(step.assets ?? []), a.id];
+    assetsFound = (assetsFound ?? []).filter((x) => x.id !== a.id);
+  }
+
   // Choose category's Offer: every category the flow has, which is saved
   // as no list, or some, ticked. Some is never none, which would be saved
   // as every.
@@ -271,7 +356,7 @@
       <TemplateInput id="{p}-title" name="Heading" labelled values={available} bind:value={step.title} />
     </div>
   {/if}
-  {#if step.kind === 'confirm' || step.kind === 'done' || step.kind === 'form' || step.kind === 'find'}
+  {#if step.kind === 'confirm' || step.kind === 'done' || step.kind === 'form' || step.kind === 'find' || (step.kind === 'link' && step.find)}
     <div>
       <label class="label" for="{p}-text">Text</label>
       <TemplateInput
@@ -535,6 +620,178 @@
         </div>
       </div>
     </div>
+  {:else if step.kind === 'link'}
+    <div class="sm:max-w-[50%]">
+      <label class="label" for="{p}-relation">How it links</label>
+      <select id="{p}-relation" class="input" value={relationValue} aria-describedby="{p}-relation-help" onchange={(e) => setRelation(e.currentTarget.value)}>
+        <option value="">Choose…</option>
+        {#each relationChoices as c (c.value)}<option value={c.value}>{c.label}</option>{/each}
+      </select>
+      <p id="{p}-relation-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        {#if linkType}
+          Its page will say “{relationValue.endsWith(':out') ? linkType.name : linkType.inverse_name}” and the other's name.
+          {#if linkType.is_single}Each thing is linked this way to one other only, so linking it again moves it, and Confirm says so.{/if}
+        {:else}
+          Read from the asset found or filed, as its page reads its links. Kinds of link are set up under <a class="underline" href="/relations">Link types</a>.
+        {/if}
+      </p>
+    </div>
+    <fieldset>
+      <legend class="label">Links it to</legend>
+      <label class="flex min-h-11 items-center gap-2">
+        <input type="radio" name="{p}-source" checked={!!step.find} onchange={() => setSource(true)} />
+        What they find
+      </label>
+      <label class="flex min-h-11 items-center gap-2">
+        <input type="radio" name="{p}-source" checked={!step.find} onchange={() => setSource(false)} />
+        Assets you choose, every time: nothing is asked
+      </label>
+    </fieldset>
+    {#if step.find}
+      <fieldset>
+        <legend class="label">They find it by</legend>
+        {#each [['scan', 'Scanning its code'], ['search', 'Search'], ['list', 'A list to pick from']] as [by, label] (by)}
+          <label class="mr-4 inline-flex items-center gap-2">
+            <input type="checkbox" checked={step.find.find_by.includes(by as 'scan')} onchange={(e) => toggleLinkFindBy(by as 'scan', e.currentTarget.checked)} />
+            {label}
+          </label>
+        {/each}
+      </fieldset>
+      <div>
+        <CategoryPicker
+          id="{p}-link-categories"
+          label="Among"
+          categories={allCategories}
+          value={step.find.categories ?? []}
+          onchange={(v) => setFind({ categories: v.length ? v : undefined })}
+        />
+        <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">With none chosen, among anything they may change. Those under a category chosen count too.</p>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="label" for="{p}-link-filed">Only what a flow filed</label>
+          <select id="{p}-link-filed" class="input" value={step.find.filed_by ?? ''} onchange={(e) => setFind({ filed_by: e.currentTarget.value || undefined })}>
+            <option value="">— anything there —</option>
+            {#each flows as f (f.id)}<option value={f.id}>{f.name}</option>{/each}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="{p}-link-match">Only where a field is</label>
+          <div class="flex flex-wrap gap-2">
+            <select
+              id="{p}-link-match"
+              class="input"
+              value={step.find.match?.field ?? ''}
+              onchange={(e) => setFind({ match: e.currentTarget.value ? { field: e.currentTarget.value, value: step.find?.match?.value ?? '' } : null })}
+            >
+              <option value="">—</option>
+              {#each allFields as f (f.key)}<option value={f.key}>{f.label}</option>{/each}
+            </select>
+            {#if step.find.match}
+              <TemplateInput
+                id="{p}-link-match-value"
+                name="The value it matches"
+                class="min-w-48 flex-1"
+                values={available}
+                placeholder={'{owner}'}
+                bind:value={() => step.find?.match?.value ?? '', (v) => setFind({ match: { field: step.find!.match!.field, value: v ?? '' } })}
+              />
+            {/if}
+          </div>
+        </div>
+      </div>
+      <fieldset>
+        <legend class="label">How many</legend>
+        <label class="flex min-h-11 items-center gap-2">
+          <input type="radio" name="{p}-repeat" checked={!step.repeat} onchange={() => (step.repeat = undefined)} />
+          One
+        </label>
+        <label class="flex min-h-11 items-center gap-2">
+          <input type="radio" name="{p}-repeat" checked={!!step.repeat} onchange={() => (step.repeat = true)} />
+          Any number, with Add another and Done
+        </label>
+      </fieldset>
+      <label class="flex min-h-11 items-center gap-2">
+        <input type="checkbox" checked={!!step.required} onchange={(e) => (step.required = e.currentTarget.checked || undefined)} />
+        Required: they cannot skip it
+      </label>
+      <div class="space-y-2">
+        <label class="flex min-h-11 items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!step.allow_create}
+            aria-describedby="{p}-create-help"
+            onchange={(e) => {
+              step.allow_create = e.currentTarget.checked || undefined;
+              if (!step.allow_create) step.create_category = undefined;
+            }}
+          />
+          Not listed? They can add it
+        </label>
+        {#if step.allow_create}
+          <div class="pl-6 sm:max-w-[50%]">
+            <label class="label" for="{p}-create-category">In</label>
+            <select id="{p}-create-category" class="input" value={step.create_category ?? ''} onchange={(e) => (step.create_category = e.currentTarget.value || undefined)}>
+              <option value="">Choose…</option>
+              {#each allCategories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+            </select>
+          </div>
+        {/if}
+        <p id="{p}-create-help" class="text-xs text-zinc-600 dark:text-zinc-400">
+          With just a name, so the category must require no fields.
+        </p>
+      </div>
+    {:else}
+      <div class="space-y-2">
+        {#if step.assets?.length}
+          <ul class="space-y-1" aria-label="The assets it links to">
+            {#each step.assets as id, i (id)}
+              <li class="flex flex-wrap items-center gap-2">
+                <span>{assetNames[id] || '…'}</span>
+                <button type="button" class="btn-sm" aria-label="Remove {assetNames[id] || 'this asset'}" onclick={() => (step.assets = (step.assets ?? []).filter((_, j) => j !== i))}>Remove</button>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="text-sm">None yet.</p>
+        {/if}
+        <div class="flex flex-wrap items-end gap-2">
+          <div class="grow">
+            <label class="label" for="{p}-asset-search">Add an asset</label>
+            <input
+              id="{p}-asset-search"
+              class="input"
+              type="search"
+              placeholder="By name or code"
+              bind:value={assetSearch}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void findAssets();
+                }
+              }}
+            />
+          </div>
+          <button type="button" class="btn-secondary" onclick={findAssets}>Find</button>
+        </div>
+        {#if assetError}<p class="error-text" role="alert">{assetError}</p>{/if}
+        {#if assetsFound}
+          {#if assetsFound.length}
+            <ul class="space-y-1" aria-label="Found">
+              {#each assetsFound as a (a.id)}
+                <li>
+                  <button type="button" class="inline-flex min-h-11 items-center gap-2 text-left underline" onclick={() => addAsset(a)}>
+                    Add {a.name}{#if a.where}<span class="text-xs text-zinc-600 no-underline dark:text-zinc-400">{a.where}</span>{/if}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="text-sm">Nothing found.</p>
+          {/if}
+        {/if}
+      </div>
+    {/if}
   {:else if step.kind === 'create'}
     <div>
       <label class="label" for="{p}-name">Its name</label>

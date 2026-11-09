@@ -24,14 +24,14 @@ type saveFlowIn struct {
 	NewSlug    string          `json:"new_slug,omitempty" jsonschema:"its address, /f/<slug>: lowercase letters, digits, - and _; for a new flow, required"`
 	Name       *string         `json:"name,omitempty"`
 	Enabled    *bool           `json:"enabled,omitempty"`
-	Definition json.RawMessage `json:"definition,omitempty" jsonschema:"what it does, the whole of it (docs/flows.md): {version: 2, description, category_ids, steps}; a form asks its own questions, and a set_fields step puts answers or other values into the asset's fields: {kind: set_fields, fields: [{field, value}], photo}; start from flow_starters"`
+	Definition json.RawMessage `json:"definition,omitempty" jsonschema:"what it does, the whole of it (docs/flows.md): {version: 2, description, category_ids, steps}; a form asks its own questions, and a set_fields step puts answers or other values into the asset's fields: {kind: set_fields, fields: [{field, value}], photo}; a link step links the asset found or filed to others: {kind: link, relation_type, outgoing, find: {find_by, categories, filed_by, match} or assets: [ids], repeat, required, allow_create, create_category}; start from flow_starters"`
 }
 
 type runFlowIn struct {
 	Slug   string          `json:"slug" jsonschema:"the flow's address, from list_flows"`
 	RunID  string          `json:"run_id,omitempty" jsonschema:"the run to go on with; empty to start one"`
 	From   string          `json:"from_asset_id,omitempty" jsonschema:"starting: an asset to start from, for a flow that begins by finding something; it starts with that found"`
-	Answer json.RawMessage `json:"answer,omitempty" jsonschema:"the answer to the step the run is on, naming it: {step, category_id | answers (by question key) | asset_id | code | place_code}; just {step} tries a step that failed again"`
+	Answer json.RawMessage `json:"answer,omitempty" jsonschema:"the answer to the step the run is on, naming it: {step, category_id | answers (by question key) | asset_id | code | place_code}; a link step: {step, asset_ids | codes | create: {name}, done}, done moving on from it; just {step} tries a step that failed again"`
 	Search string          `json:"search,omitempty" jsonschema:"with run_id and no answer: narrows a Find step's list"`
 	End    bool            `json:"end,omitempty" jsonschema:"true to give the run up"`
 }
@@ -105,7 +105,7 @@ func flowTools() []tool {
 				}
 				return say(out, "%d flows.", count(out, "flows"))
 			}),
-		simple(&mcp.Tool{Name: "flow_starters", Description: "The ready-made flows to adjust before saving, over the categories given: Leave something (choose, form, set fields, file, label) and Collect it (find, confirm, archive). Definitions are version 2.",
+		simple(&mcp.Tool{Name: "flow_starters", Description: "The ready-made flows to adjust before saving, over the categories given: Leave something (choose, form, set fields, file, label), Collect it (find, confirm, archive) and Add to a kit (find, link). Definitions are version 2.",
 			Annotations: readOnly("Flow starters")}, "GET /api/v1/flow-starters", manage,
 			func(in struct {
 				CategoryIDs []string `json:"category_ids" jsonschema:"the categories it files into or takes from"`
@@ -201,6 +201,27 @@ func promptSummary(out map[string]any) string {
 	}
 	if kind == "form" && len(keys) > 0 {
 		return fmt.Sprintf("On step %q (%s%s); answer it with {\"step\": %q, \"answers\": {%s}}.", step, kind, where, step, strings.Join(keys, ", "))
+	}
+	// A Link step the runner finds for offers what to link to (#264).
+	if _, finds := p["find_by"]; kind == "link" && finds {
+		var linked []string
+		list, _ := p["linked"].([]any)
+		for _, l := range list {
+			if m, ok := l.(map[string]any); ok {
+				if n, ok := m["name"].(string); ok {
+					linked = append(linked, n)
+				}
+			}
+		}
+		so := ""
+		if len(linked) > 0 {
+			so = " Linked so far: " + strings.Join(linked, ", ") + "."
+		}
+		create := ""
+		if in, _ := p["create_in"].(string); in != "" {
+			create = fmt.Sprintf(", {\"create\": {\"name\": ...}} to file something new in %s", in)
+		}
+		return fmt.Sprintf("On step %q (%s%s); answer it with {\"step\": %q, \"asset_ids\": [...]} or \"codes\"%s, and \"done\": true to move on.%s", step, kind, where, step, create, so)
 	}
 	return fmt.Sprintf("On step %q (%s%s); answer it with {\"step\": %q, ...}.", step, kind, where, step)
 }
