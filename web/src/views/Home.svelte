@@ -3,7 +3,7 @@
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
   import { dueDate } from '../lib/assets';
-  import type { AssetWithDetails, CatalogEntry, Category, Favorite, FavoriteKind, Loan, PurchaseOrder, Vendor } from '../lib/models';
+  import type { AssetWithDetails, CatalogEntry, Category, Favorite, FavoriteKind, Loan, PurchaseOrder, ReviewSummary, Vendor } from '../lib/models';
   import { entryHref, entryPrice, preferredByThing } from '../lib/catalog';
   import { onOrderByThing, onOrderText } from '../lib/orders';
   import { favorites } from '../lib/favorites.svelte';
@@ -35,6 +35,20 @@
   // (docs/purchase-orders.md), by its ID, so nothing is ordered twice.
   let onOrder = $state<Map<string, PurchaseOrder>>(new Map());
   let attention = $state<AssetWithDetails[]>([]);
+  // What waits for the person to review (docs/review.md), where any
+  // category uses review states.
+  let toReview = $state<ReviewSummary | null>(null);
+  const reviewLines = $derived(
+    toReview
+      ? [
+          { n: toReview.overdue, label: 'reviews overdue', href: '/assets?review=overdue' },
+          { n: toReview.due, label: 'reviews due', href: '/assets?review=due' },
+          { n: toReview.proposals, label: 'with assistant changes to accept or reject', href: '/assets?review=proposed' },
+          { n: toReview.drafts, label: 'drafts to confirm', href: '/assets?review=draft' },
+          { n: toReview.to_verify, label: 'confirmed, to verify', href: '/assets?review=confirmed' },
+        ].filter((l) => l.n > 0)
+      : [],
+  );
   // Out on loan, and due back within the week or overdue.
   let due = $state<Loan[]>([]);
   let error = $state('');
@@ -98,6 +112,9 @@
       lowAssets = assets.filter((a) => a.asset.stock?.is_running_low).sort((a, b) => a.asset.name.localeCompare(b.asset.name));
       attention = assets.filter((a) => a.asset.condition !== 'ok').sort((a, b) => a.asset.name.localeCompare(b.asset.name));
       low = all.filter((c) => c.is_consumable && c.is_running_low).sort((a, b) => a.name.localeCompare(b.name));
+      if (all.some((c) => c.effective_review?.enabled) && session.canAny('assets.confirm', 'assets.verify', 'assets.write')) {
+        toReview = await request<ReviewSummary>('GET', '/review').catch(() => null);
+      }
       // Read only when something is low; the list stands without them.
       if (low.length || lowAssets.length) {
         preferred = preferredByThing(
@@ -142,7 +159,7 @@
     </form>
   {/if}
 
-  {#if favoritesRead || low || attention.length || due.length}
+  {#if favoritesRead || low || attention.length || due.length || reviewLines.length}
     <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
       {#if favoritesRead}
         <section class="card" aria-labelledby="favorites-heading">
@@ -227,6 +244,16 @@
               {/each}
             </ul>
           {/if}
+        </section>
+      {/if}
+      {#if reviewLines.length}
+        <section class="card" aria-labelledby="review-heading">
+          <h2 id="review-heading" class="mb-2 text-lg font-bold"><span class="shadow-[inset_0_-0.38em_0_var(--color-highlight)] dark:shadow-none">To review</span></h2>
+          <ul class="divide-y divide-zinc-300 text-sm dark:divide-zinc-700">
+            {#each reviewLines as l (l.href)}
+              <li><a class="flex min-h-11 items-center gap-2 underline" href={l.href}><span class="font-mono font-semibold">{l.n}</span> {l.n === 1 ? l.label.replace(/^reviews/, 'review') : l.label}</a></li>
+            {/each}
+          </ul>
         </section>
       {/if}
       {#if attention.length}

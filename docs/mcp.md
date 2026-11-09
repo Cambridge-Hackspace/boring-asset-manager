@@ -149,7 +149,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
-| `create_asset` | `assets.write` | Up to 50, with field values by key, codes or the next free code, the place it is in, stock, and an icon of its own. A field its categories do not give it is refused before anything is added. A person field's people are given by user ID, email or a name only one person has, separated by `;`, as in `update_asset` and `copy_asset`. |
+| `create_asset` | `assets.write` | Up to 50, with field values by key, codes or the next free code, the place it is in, stock, and an icon of its own, and `confirm` to file them as confirmed where review states are on; where the instance lands assistants' changes as drafts, they are drafts for a person to accept or reject (see [Review states](review.md#assistants)). A field its categories do not give it is refused before anything is added. A person field's people are given by user ID, email or a name only one person has, separated by `;`, as in `update_asset` and `copy_asset`. |
 | `copy_asset` | `assets.write` | One like another, as `GET /api/v1/assets/{id}/copy` drafts it, with a name, field values, codes and quantity that differ, and its photos, or all its attachments, if asked. |
 | `update_asset` | `assets.write` | Only what is given changes: categories and codes are added or removed, fields set or cleared, an icon of its own given or dropped, purchase details set or cleared one at a time; the rest is kept. Without `purchases.read`, its price, order number and invoice stay as they are. |
 | `move_asset` | `assets.write` | |
@@ -159,6 +159,10 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `set_running_low` | `stock.record` | |
 | `move_stock` | `stock.record` | From one asset to another, both in the same unit; refuses more than there is. See [Moving stock](stock-and-lending.md#moving-stock). |
 | `set_condition` | `assets.report` or `assets.write` | |
+| `confirm_asset` | `assets.confirm` | Confirms an asset in a category using [review states](review.md). Refused through an assistant where the instance lands assistants' changes as drafts. |
+| `verify_asset` | `assets.verify` | Verifies a confirmed asset, as someone other than whoever confirmed it unless its categories allow it. Refused as `confirm_asset` is. |
+| `return_to_draft` | `assets.verify` | Returns a confirmed or verified asset to draft, with a note saying why. |
+| `review_summary` | `assets.read` | What waits for the person to review: drafts, reviews due and overdue, confirmed assets to verify, and assistants' changes. |
 | `borrow` | `assets.borrow` | A person, for themselves. |
 | `lend` | `assets.lend` | |
 | `return_asset` | `assets.borrow` or `assets.lend` | |
@@ -201,6 +205,7 @@ Reading needs `assets.read`; changing needs `categories.manage`. Deleting is mar
 | `list_hooks` | `assets.read` | |
 | `save_hook`, `delete_hook` | `categories.manage` | `save_hook` takes `triggers`: a button, events or a schedule (see [Hooks](hooks.md#triggers)); left out, they stay as they were. |
 | `set_category_vendors` | `categories.manage` | The vendors a category is bought from, in order of preference. |
+| `set_category_review` | `categories.manage` | A category's own review settings; each left out takes its parent's. See [Review states](review.md#category-settings). |
 | `set_category_links` | `categories.manage` | The categories a category's members also count in (`implies`), or whose members count in it (`included_by`); each list given replaces that side. See [Pools](stock-and-lending.md#pools). |
 
 ### Vendors
@@ -358,6 +363,7 @@ Reading needs `assets.read`; changing needs `reports.manage`. See [Reports](repo
 | `report_csv` | `assets.read` | A section as a CSV file. |
 | `report_pdf` | `assets.read` | The report as a PDF ([Reports](reports.md#pdf)), as an embedded file. |
 | `get_loan_reminder_settings`, `set_loan_reminder_settings` | `settings.manage` | Whether borrowers are emailed about their loans, and when ([Stock and lending](stock-and-lending.md#loan-reminders)). |
+| `get_review_settings` | `settings.manage` | Whether assistants' changes land as drafts, and how many days before a review date it is due ([Review states](review.md#review-dates)). Changing them is refused over MCP. |
 | `get_document_settings`, `set_document_settings` | `assets.read`, and `settings.manage` to set | The instance's name on PDFs, and their page size. |
 | `preview_report` | `reports.manage` | A spec unsaved; or a scan template for an asset. |
 | `save_report` | `reports.manage` | Its name or spec; what is not given is kept. |

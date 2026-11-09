@@ -79,6 +79,27 @@ describe('AssetForm', () => {
     expect((sent.find((r) => r.method === 'POST' && r.path === '/assets')!.body as { field_values: unknown }).field_values).toEqual({ keeper: 'u1' });
   });
 
+  it('confirms a new asset in a category using review states, for those who may confirm', async () => {
+    session.permissions = ['assets.read', 'assets.write', 'assets.confirm'];
+    const reviewed = { ...cat('tools', 'Tools'), effective_review: { enabled: true, months: 0, on_edit: 'draft' as const, self_verify: false }, review: { enabled: true, months: null, on_edit: null, self_verify: null } };
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories: [reviewed, cat('glue', 'Glue')] }),
+      'GET /generators': () => ({ generators }),
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' } } } }),
+    });
+    render(AssetForm, { params: {} });
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Saw' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Glue' }));
+    expect(screen.queryByLabelText(/Confirm it/)).toBeNull();
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Tools' }));
+    await fireEvent.click(await screen.findByLabelText(/Confirm it/));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+    expect(sent.find((r) => r.method === 'POST' && r.path === '/assets')!.body).toMatchObject({ name: 'Saw', confirm: true });
+  });
+
   it('fills a new asset in from one it is like, links it as that one is, and leaves out what is unticked', async () => {
     navigate('/assets/new?like=spool');
     const rel = (id: string, name: string, inverse: string, over = {}) => ({

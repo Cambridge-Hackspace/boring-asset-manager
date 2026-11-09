@@ -28,6 +28,7 @@
   import ContractsSection from '../../components/ContractsSection.svelte';
   import CatalogPanel from '../../components/CatalogPanel.svelte';
   import PoolsSection from '../../components/PoolsSection.svelte';
+  import ReviewPanel from '../../components/ReviewPanel.svelte';
   import { categoryPath, otherPlaces, placeName } from '../../lib/pools';
   import LoanPanel from '../../components/LoanPanel.svelte';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
@@ -344,6 +345,9 @@
       <ConditionBadge condition={asset.asset.condition} />
       {#if asset.asset.condition_note}<span>{asset.asset.condition_note}</span>{/if}
     </p>
+  {/if}
+  {#if asset.review}
+    <ReviewPanel {asset} review={asset.review} onchange={assetChanged} />
   {/if}
   {#if reporting}
     <div class="mb-4">

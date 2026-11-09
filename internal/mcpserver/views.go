@@ -27,7 +27,16 @@ type assetSummary struct {
 	ConditionNote string            `json:"condition_note,omitempty"`
 	Stock         *stockView        `json:"stock,omitempty" jsonschema:"set when it is counted by quantity"`
 	Loan          *loanView         `json:"loan,omitempty" jsonschema:"set while it is lent out"`
+	Review        *reviewView       `json:"review,omitempty" jsonschema:"set while one of its categories uses review states"`
 	Archived      bool              `json:"archived,omitempty"`
+}
+
+type reviewView struct {
+	State    string     `json:"state" jsonschema:"draft, confirmed or verified"`
+	DueAt    *time.Time `json:"due_at,omitempty" jsonschema:"when it is next to be reviewed"`
+	Due      bool       `json:"due,omitempty"`
+	Overdue  bool       `json:"overdue,omitempty"`
+	Proposed bool       `json:"proposed,omitempty" jsonschema:"changes made through an assistant wait for a person to accept or reject them"`
 }
 
 type stockView struct {
@@ -142,6 +151,9 @@ func summarize(a *models.AssetWithDetails, base string) assetSummary {
 	}
 	if l := a.Loan; l != nil {
 		s.Loan = &loanView{Borrower: l.Borrower.Name, Since: l.CheckedOutAt, Due: l.DueAt, Overdue: l.Overdue}
+	}
+	if r := a.Review; r != nil {
+		s.Review = &reviewView{State: r.State, DueAt: r.DueAt, Due: r.Due, Overdue: r.Overdue, Proposed: r.Proposal != nil}
 	}
 	return s
 }

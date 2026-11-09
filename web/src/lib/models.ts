@@ -27,7 +27,9 @@ export type Permission =
   | 'comments.write'
   | 'comments.moderate'
   | 'purchases.read'
-  | 'people.add';
+  | 'people.add'
+  | 'assets.confirm'
+  | 'assets.verify';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -137,8 +139,74 @@ export interface Category {
   /** The categories its members also count in, and those whose members count in it (docs/stock-and-lending.md#pools). */
   implies?: string[];
   included_by?: string[];
+  /** Its own review settings, each null to take its parent's, and those in effect (docs/review.md). */
+  review?: CategoryReview;
+  effective_review?: ReviewRules;
   created_at: string;
   updated_at: string;
+}
+
+/** An asset's review state (docs/review.md). */
+export type ReviewState = 'draft' | 'confirmed' | 'verified';
+
+/** A category's own review settings; each null takes its parent's. */
+export interface CategoryReview {
+  enabled: boolean | null;
+  /** Months between reviews; 0 asks for none. */
+  months: number | null;
+  on_edit: 'draft' | 'keep' | null;
+  self_verify: boolean | null;
+}
+
+/** Review settings in effect, for a category or an asset. */
+export interface ReviewRules {
+  enabled: boolean;
+  months: number;
+  on_edit: 'draft' | 'keep';
+  self_verify: boolean;
+}
+
+/** Changes an assistant made, waiting for someone to accept or reject them. */
+export interface Proposal {
+  /** The assistant made the asset; rejecting archives it. */
+  new: boolean;
+  /** False when the changes can only be accepted. */
+  undoable: boolean;
+  prior_state: ReviewState;
+  by: Person | null;
+  via: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** An asset's review, while one of its categories uses review states. */
+export interface AssetReview {
+  state: ReviewState;
+  set_by: Person | null;
+  set_at: string | null;
+  confirmed_by: Person | null;
+  confirmed_at: string | null;
+  reviewed_at: string | null;
+  due_at: string | null;
+  due: boolean;
+  overdue: boolean;
+  rules: ReviewRules;
+  proposal: Proposal | null;
+}
+
+/** What waits for the requester to review (GET /api/v1/review). */
+export interface ReviewSummary {
+  drafts: number;
+  due: number;
+  overdue: number;
+  proposals: number;
+  to_verify: number;
+}
+
+/** The instance's review settings. */
+export interface ReviewSettings {
+  assistant_drafts: boolean;
+  due_days: number;
 }
 
 export interface EffectiveField {
@@ -236,6 +304,8 @@ export interface AssetEvent {
     change?: number;
     /** For a quantity changed by moving stock between assets: where it came from and went. */
     move?: { from: { id: string; name: string }; to: { id: string; name: string } };
+    /** A review state moving: the state it left and took, and what moved it. */
+    review?: { from?: ReviewState; to: ReviewState; cause: 'move' | 'create' | 'edit' | 'assistant' | 'accept' | 'reject'; due_at?: string };
     threshold?: number;
     unit?: string;
     /** What a created, edited or archived event changed. */
@@ -332,6 +402,8 @@ export interface AssetWithDetails {
   counts_in?: CountsIn[];
   /** On its own page, the pools its stock counts in, with the places theirs is kept that the viewer may see. */
   pools?: AssetPool[];
+  /** Its review, while one of its categories uses review states (docs/review.md). */
+  review?: AssetReview | null;
   /** The people its person fields name, by user ID, as the viewer may see them (docs/data-model.md#person-fields). */
   people?: Record<string, FieldPerson>;
   /** By field key, how many people a person field names that the viewer may not see. */

@@ -37,6 +37,7 @@ var hookEventKinds = map[string]bool{
 	models.EventQuantityChanged: true, models.EventAssetRunningLow: true, models.EventAssetRestocked: true,
 	models.EventAssetConditionChanged: true, models.EventAssetCheckedOut: true, models.EventAssetCheckedIn: true,
 	models.EventAssetOverdue: true, models.EventFlowOverdue: true, models.EventAssetLabelPrinted: true,
+	models.EventAssetReviewDue: true,
 }
 
 // maxHookInterval is the longest least interval between an event

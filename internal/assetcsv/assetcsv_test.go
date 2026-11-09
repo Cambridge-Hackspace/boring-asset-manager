@@ -195,3 +195,23 @@ func TestExportingIcons(t *testing.T) {
 		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
 	}
 }
+
+// An export has a review_state column when any asset's categories use
+// review states (docs/review.md), and an import ignores it.
+func TestExportingReviewStates(t *testing.T) {
+	assets := []models.AssetWithDetails{
+		{Asset: models.Asset{ID: "a1", Name: "Saw"}, Review: &models.AssetReview{State: models.ReviewVerified}},
+		{Asset: models.Asset{ID: "a2", Name: "Broom"}},
+	}
+	var b strings.Builder
+	if err := Export(&b, assets, NewCategories(tree), nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	want := BOM + "id,name,categories,review_state\r\n" + "a1,Saw,,verified\r\n" + "a2,Broom,,\r\n"
+	if b.String() != want {
+		t.Errorf("got\n%q\nwant\n%q", b.String(), want)
+	}
+	if got := Suggest([]string{"id", "name", "review_state"}, nil); got[2] != TargetIgnore {
+		t.Errorf("review_state maps to %q", got[2])
+	}
+}

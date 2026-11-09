@@ -53,6 +53,15 @@ type Store struct {
 	// order is the purchase order whose receipt makes the changes; their
 	// events name it. See forOrder.
 	order *models.EventOrder
+	// held keeps assets as they were before an assistant changed them, for
+	// one request through it (docs/review.md#assistants); see Via.
+	held *heldRecords
+	// confirm files new assets as confirmed rather than as drafts, where
+	// review states are on; see Confirming.
+	confirm bool
+	// noReview leaves review states as they are when assets change; see
+	// quietReview.
+	noReview bool
 	// texts keeps icons drawn with assets' texts, for every view of the
 	// store.
 	texts *iconTexts

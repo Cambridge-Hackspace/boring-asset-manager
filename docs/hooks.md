@@ -59,6 +59,7 @@ An event trigger fires when an event about an asset is recorded, for any of thes
 | `asset.overdue` | Overdue: its loan is past due |
 | `asset.flow_overdue` | Past the date a flow left it until |
 | `asset.label_printed` | Its label printed or downloaded |
+| `asset.review_due` | Its review falls due (see [Review states](review.md#review-dates)) |
 
 A hook's own events (`asset.hook`) never fire a hook, so hooks cannot fire each other in a loop.
 Archiving does not either: no hook fires on an archived asset.

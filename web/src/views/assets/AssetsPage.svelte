@@ -12,6 +12,7 @@
   import { graphUrl } from '../../lib/graph';
   import { personName } from '../../lib/people';
   import { flattenTree } from '../../lib/tree';
+  import { dueText, reviewChip, reviewFilters, reviewLabel } from '../../lib/review';
   import AssetThumb from '../../components/AssetThumb.svelte';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConditionBadge from '../../components/ConditionBadge.svelte';
@@ -35,6 +36,9 @@
   let condition = $state(router.query.get('condition') ?? '');
   // '' for any, 'open' for assets lent out, 'overdue' for those past due.
   let loan = $state(router.query.get('loan') ?? '');
+  // '' for any, a review state, due, overdue, or proposed for assistants'
+  // changes waiting (docs/review.md).
+  let review = $state(router.query.get('review') ?? '');
   // scan_template or label_template lists only assets whose scan or label
   // template was chosen by a tie.
   let conflict = $state(router.query.get('conflict') ?? '');
@@ -57,6 +61,8 @@
 
   const categoryChoices = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const uncategorized = $derived(categories.find((c) => c.id === UNCATEGORIZED));
+  // The review filter shows where a category uses review states, or one is chosen.
+  const reviewing = $derived(!!review || categories.some((c) => c.effective_review?.enabled));
   const allSelected = $derived(assets.length > 0 && assets.every((a) => selected.includes(a.asset.id)));
 
   onMount(async () => {
@@ -83,6 +89,7 @@
     if (archived) q.archived = 'true';
     if (condition) q.condition = condition;
     if (loan) q.loan = loan;
+    if (review) q.review = review;
     if (conflict) q.conflict = conflict;
     if (icon) q.icon = icon;
     if (favorite) q.favorite = 'true';
@@ -121,6 +128,7 @@
     if (archived) q.set('archived', 'true');
     if (condition) q.set('condition', condition);
     if (loan) q.set('loan', loan);
+    if (review) q.set('review', review);
     if (conflict) q.set('conflict', conflict);
     if (icon) q.set('icon', icon);
     if (favorite) q.set('favorite', 'true');
@@ -145,7 +153,7 @@
 
   // On a phone, the filters beyond search fold away until wanted.
   let filtersOpen = $state(false);
-  const activeFilters = $derived([categoryId, condition, loan, person].filter(Boolean).length + (archived ? 1 : 0) + (favorite ? 1 : 0));
+  const activeFilters = $derived([categoryId, condition, loan, person, review].filter(Boolean).length + (archived ? 1 : 0) + (favorite ? 1 : 0));
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -220,6 +228,15 @@
       </select>
     </div>
   {/if}
+  {#if reviewing}
+    <div>
+      <label class="label" for="asset-review">Review</label>
+      <select id="asset-review" class="input" bind:value={review} onchange={() => applyFilters()}>
+        <option value="">Any</option>
+        {#each reviewFilters.slice(1) as f (f.value)}<option value={f.value}>{f.label}</option>{/each}
+      </select>
+    </div>
+  {/if}
   <div>
     <label class="label" for="asset-favorite">Favorites</label>
     <select id="asset-favorite" class="input" bind:value={favorite} onchange={() => applyFilters()}>
@@ -287,7 +304,7 @@
             <!-- The star has a column of its own, so the name's cell is named by the name alone. -->
             {#if session.user}<td class="py-2 pr-1"><span class="-my-2 inline-block align-middle"><FavoriteStar kind="asset" id={a.asset.id} name={a.asset.name} /></span></td>{/if}
             <td class="py-2 pr-4 font-medium">
-              <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
+              <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.review}{' '}<span class={a.review.overdue ? 'chip-red' : reviewChip(a.review.state)} title={dueText(a.review) || undefined}>{reviewLabel(a.review.state)}{a.review.overdue ? ', review overdue' : a.review.due ? ', review due' : ''}</span>{/if}{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
             </td>
             <td class="py-2 pr-4">
