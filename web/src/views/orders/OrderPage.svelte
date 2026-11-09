@@ -417,8 +417,8 @@
                   <tr class="border-b border-zinc-200 dark:border-zinc-800">
                     <td class="py-2 pr-4">{#if l.part_number}<span class="font-mono">{l.part_number}</span>{' '}{/if}{l.description}</td>
                     <td class="pr-4">
-                      {#if l.asset_id}<a class="underline" href="/assets/{encodeURIComponent(l.asset_id)}">{l.linked_name}</a>
-                      {:else if l.category_id}<a class="underline" href="/categories/{encodeURIComponent(l.category_id)}">{l.linked_name}</a>
+                      {#if l.asset_id}<a class="inline-flex min-h-11 items-center underline" href="/assets/{encodeURIComponent(l.asset_id)}">{l.linked_name}</a>
+                      {:else if l.category_id}<a class="inline-flex min-h-11 items-center underline" href="/categories/{encodeURIComponent(l.category_id)}">{l.linked_name}</a>
                       {:else}<span class="text-zinc-600 dark:text-zinc-400">Nothing kept</span>{/if}
                     </td>
                     <td class="pr-4">{linePack(l)}</td>
@@ -447,7 +447,7 @@
         <h2 id="details-heading" class="section-title">Details</h2>
         <dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[max-content_1fr]">
           <dt class="font-semibold">Vendor</dt>
-          <dd><a class="underline" href="/vendors/{encodeURIComponent(order.vendor_id)}">{order.vendor_name}</a></dd>
+          <dd><a class="inline-flex min-h-11 items-center underline" href="/vendors/{encodeURIComponent(order.vendor_id)}">{order.vendor_name}</a></dd>
           <dt class="font-semibold">State</dt>
           <dd>{stateLabel(order.state)}</dd>
           <dt class="font-semibold">Vendor’s reference</dt>
