@@ -5,6 +5,7 @@
   import { amount, conditionLabel, contentsOf, describeChange, describeEvent, isWebURL, keptValues, placeLink } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { actorName } from '../../lib/people';
+  import { fieldPeopleText } from '../../lib/fieldPeople';
   import type { AssetEvent, AssetWithDetails, Category,Condition, Field, Filing, GeneratorInfo, GeneratorKey, RelationType } from '../../lib/models';
   import { DEFAULT_SCOPE } from '../../lib/permissions';
   import { navigate, router } from '../../lib/router.svelte';
@@ -421,7 +422,9 @@
           {#each asset.effective_fields as e (e.field.id)}
             <dt class="text-zinc-600 dark:text-zinc-400">{e.field.label}</dt>
             <dd>
-              {#if asset.field_values[e.field.key]}
+              {#if e.field.validation_type === 'person' && (asset.field_values[e.field.key] || asset.hidden_people?.[e.field.key])}
+                {fieldPeopleText(asset, e.field.key)}
+              {:else if asset.field_values[e.field.key]}
                 {@const value = asset.field_values[e.field.key]!}
                 {#if e.field.validation_type === 'url' && isWebURL(value)}
                   <a class="underline" href={value} rel="noopener noreferrer" target="_blank">{value}</a>
@@ -446,7 +449,7 @@
             <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
               {#each kept as k (k.key)}
                 <dt class={k.label ? '' : 'font-mono'}>{k.label ?? k.key}</dt>
-                <dd>{k.value}</dd>
+                <dd>{allFields.find((f) => f.key === k.key)?.validation_type === 'person' ? fieldPeopleText(asset, k.key) : k.value}</dd>
               {/each}
             </dl>
           </details>

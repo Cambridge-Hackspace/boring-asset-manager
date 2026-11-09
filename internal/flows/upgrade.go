@@ -360,6 +360,8 @@ func questionType(validation string) string {
 		return QuestionDate
 	case "select":
 		return QuestionChoice
+	case "person":
+		return QuestionPerson
 	case "boolean", "bool":
 		return QuestionYesNo
 	}

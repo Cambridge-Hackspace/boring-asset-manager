@@ -225,6 +225,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/users/{id}/identities", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleLinkUserIdentity)))
 	handle("DELETE /api/v1/users/{id}/identities/{identity}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUnlinkUserIdentity)))
 	handle("PUT /api/v1/users/{id}/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleSetUserRoles)))
+	handle("POST /api/v1/users/{id}/merge", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleMergePerson)))
+	// People for person fields (docs/data-model.md#person-fields): those a
+	// field may be set to, to those who see who, and adding someone without
+	// an account, with people.add.
+	handle("GET /api/v1/people/choices", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleChoosePeople)))
+	handle("POST /api/v1/people", RequireAnyPermission(rbac.PermPeopleAdd, rbac.PermUsersManage)(http.HandlerFunc(s.handleAddPerson)))
 	handle("GET /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleListRoles)))
 	handle("POST /api/v1/roles", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleCreateRole)))
 	handle("PUT /api/v1/roles/{id}", RequirePermission(rbac.PermUsersManage)(http.HandlerFunc(s.handleUpdateRole)))

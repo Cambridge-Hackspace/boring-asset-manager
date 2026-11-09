@@ -103,7 +103,7 @@ describe('FlowEditor', () => {
     expect(preview.textContent).toContain('Leave until');
     await fireEvent.input(within(second).getByLabelText('Help for question 2'), { target: { value: "When you'll take it home" } });
     expect(preview.textContent).toContain("When you'll take it home");
-    expect(within(second).getAllByRole('option').map((o) => o.textContent)).toEqual(['Text', 'Long text', 'Number', 'Date', 'Yes or no', 'A choice', 'A photo']);
+    expect(within(second).getAllByRole('option').map((o) => o.textContent)).toEqual(['Text', 'Long text', 'Number', 'Date', 'Yes or no', 'A choice', 'People', 'A photo']);
 
     // A yes/no question's default is yes or no.
     await fireEvent.click(screen.getByRole('button', { name: 'Add a question' }));

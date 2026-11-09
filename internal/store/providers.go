@@ -563,6 +563,9 @@ func (s *Store) LinkIdentity(userID, providerID, subject, email string) (*Identi
 		}
 		return nil, fmt.Errorf("linking identity: %w", err)
 	}
+	if err := s.allowSignIn(userID); err != nil {
+		return nil, err
+	}
 	return s.IdentityBySubject(providerID, subject)
 }
 

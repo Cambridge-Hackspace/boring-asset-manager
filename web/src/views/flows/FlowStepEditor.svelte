@@ -119,7 +119,7 @@
     }
     if (type !== 'choice') change.options = undefined;
     // A default that suited the old type may not suit the new.
-    if (type === 'yes_no' || type === 'choice' || type === 'photo') change.default = '';
+    if (type === 'yes_no' || type === 'choice' || type === 'person' || type === 'photo') change.default = '';
     setQuestion(i, change);
   }
   function setOption(i: number, j: number, change: Partial<Option>) {
@@ -473,7 +473,7 @@
                   {#each (q.options ?? []).filter((o) => o.value) as o (o.value)}<option value={o.value}>{optionLabel(o)}</option>{/each}
                 {/if}
               </select>
-            {:else if q.type !== 'photo'}
+            {:else if q.type !== 'photo' && q.type !== 'person'}
               <TemplateInput
                 id="{p}-question-{qid}-default"
                 name="Default for question {n}"

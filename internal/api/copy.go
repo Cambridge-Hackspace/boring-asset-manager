@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
@@ -53,8 +54,25 @@ func (s *Server) handleCopyAsset(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// What its categories give it; values kept from former ones stay behind.
+	// A person field's people only to one who may choose them, as the copy
+	// must name only such people.
+	may, err := s.choosable(r.Context(), a.Scopes)
+	if err != nil {
+		writeServerError(w, err, "read whom it may name")
+		return
+	}
 	for _, f := range a.EffectiveFields {
-		if v := a.FieldValues[f.Field.Key]; v != "" {
+		v := a.FieldValues[f.Field.Key]
+		if f.Field.ValidationType == fields.TypePerson {
+			var kept []string
+			for _, id := range fields.PersonIDs(v) {
+				if may[id] {
+					kept = append(kept, id)
+				}
+			}
+			v = fields.PersonValue(kept)
+		}
+		if v != "" {
 			out.FieldValues[f.Field.Key] = v
 		}
 	}

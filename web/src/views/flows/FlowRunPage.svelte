@@ -8,6 +8,7 @@
   import { formDefaults, inputType, missing, optionLabel, photosToAdd, runRequest, runsPath, scannedCode, type Prompt, type Question, type RunView } from '../../lib/flows';
   import CodeScanner from '../../components/CodeScanner.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import PersonPicker from '../../components/PersonPicker.svelte';
   import RunProgress from '../../components/RunProgress.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
@@ -229,6 +230,8 @@
                   <option value="">—</option>
                   {#each q.options ?? [] as o (o.value)}<option value={o.value}>{optionLabel(o)}</option>{/each}
                 </select>
+              {:else if q.type === 'person'}
+                <PersonPicker id="flow-q-{q.key}" multiple required={q.required} describedBy={help} bind:value={answers[q.key]} />
               {:else if q.type === 'long_text'}
                 <textarea id="flow-q-{q.key}" class="flow-input min-h-32" required={q.required} aria-describedby={help} bind:value={answers[q.key]}></textarea>
               {:else if q.type === 'photo'}

@@ -17,7 +17,7 @@ import (
 var (
 	ErrInvalidKey            = errors.New("field key must be non-empty snake_case (lowercase letters, numbers, underscores)")
 	ErrInvalidLabel          = errors.New("field label cannot be empty")
-	ErrInvalidValidationType = errors.New("validation_type must be one of: text, number, date, url, select")
+	ErrInvalidValidationType = errors.New("validation_type must be one of: text, number, date, url, select, person")
 	ErrSelectOptionsRequired = errors.New("options schema is required for validation_type 'select'")
 	ErrEmptyChoices          = errors.New("select options must contain at least one choice")
 	ErrDuplicateChoiceValue  = errors.New("select choices must have unique values")
@@ -31,17 +31,19 @@ const (
 	TypeDate   = "date"
 	TypeURL    = "url"
 	TypeSelect = "select"
+	// TypePerson names people, by user ID (docs/data-model.md#person-fields).
+	TypePerson = "person"
 )
 
 // ValidValidationTypes returns the allowed validation type strings.
 func ValidValidationTypes() []string {
-	return []string{TypeText, TypeNumber, TypeDate, TypeURL, TypeSelect}
+	return []string{TypeText, TypeNumber, TypeDate, TypeURL, TypeSelect, TypePerson}
 }
 
 // IsValidValidationType checks whether a validation type is recognized.
 func IsValidValidationType(t string) bool {
 	switch t {
-	case TypeText, TypeNumber, TypeDate, TypeURL, TypeSelect:
+	case TypeText, TypeNumber, TypeDate, TypeURL, TypeSelect, TypePerson:
 		return true
 	default:
 		return false
@@ -119,8 +121,74 @@ func ValidateFieldDefinition(key, label, validationType string, rawOptions json.
 	if validationType == TypeSelect {
 		return ValidateSelectOptions(rawOptions)
 	}
+	if validationType == TypePerson {
+		if _, err := ParsePersonOptions(rawOptions); err != nil {
+			return nil, err
+		}
+	}
 
 	return nil, nil
+}
+
+// ParsePersonOptions reads a person field's options: none are needed.
+func ParsePersonOptions(raw json.RawMessage) (models.PersonOptions, error) {
+	var opts models.PersonOptions
+	if len(raw) == 0 || string(raw) == "null" {
+		return opts, nil
+	}
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&opts); err != nil {
+		return opts, fmt.Errorf("person options take only multiple and public, each true or false: %w", err)
+	}
+	return opts, nil
+}
+
+// PersonOptionsOf are a field's person options, none when it is not a
+// person field or they cannot be read.
+func PersonOptionsOf(f *models.Field) models.PersonOptions {
+	if f == nil || f.ValidationType != TypePerson {
+		return models.PersonOptions{}
+	}
+	opts, _ := ParsePersonOptions(f.Options)
+	return opts
+}
+
+// PersonSeparator separates the user IDs a person field's value holds.
+const PersonSeparator = ","
+
+// PersonIDs are the user IDs a person field's value names, in order, each
+// once.
+func PersonIDs(value string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, id := range strings.Split(value, PersonSeparator) {
+		id = strings.TrimSpace(id)
+		if id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// PersonValue is the value of a person field naming these user IDs.
+func PersonValue(ids []string) string {
+	return strings.Join(PersonIDs(strings.Join(ids, PersonSeparator)), PersonSeparator)
+}
+
+// validPersonID reports whether id could be a user ID: up to 36 letters,
+// digits and dashes.
+func validPersonID(id string) bool {
+	if id == "" || len(id) > 36 {
+		return false
+	}
+	for _, r := range id {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateFieldValue validates that a string value adheres to the field's validation type and options.
@@ -180,6 +248,22 @@ func ValidateFieldValue(f *models.Field, val string) error {
 			}
 		}
 		return fmt.Errorf("%w: %q is not an allowed choice for field %q", ErrInvalidFieldValue, val, f.Key)
+
+	case TypePerson:
+		opts, err := ParsePersonOptions(f.Options)
+		if err != nil {
+			return fmt.Errorf("invalid person field configuration: %w", err)
+		}
+		ids := PersonIDs(val)
+		for _, id := range ids {
+			if !validPersonID(id) {
+				return fmt.Errorf("%w: %q does not name a person by user ID", ErrInvalidFieldValue, id)
+			}
+		}
+		if len(ids) > 1 && !opts.Multiple {
+			return fmt.Errorf("%w: field %q names one person", ErrInvalidFieldValue, f.Key)
+		}
+		return nil
 
 	default:
 		return fmt.Errorf("unsupported validation type: %s", f.ValidationType)

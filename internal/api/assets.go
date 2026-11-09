@@ -123,7 +123,18 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	// The search is matched once the assets are as the request may see
 	// them, so where they are counts only as far as it may read.
 	search := q.Get("search")
-	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan"), Icon: q.Get("icon"), VendorID: q.Get("vendor_id")}
+	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan"), Icon: q.Get("icon"), VendorID: q.Get("vendor_id"),
+		Person: q.Get("person"), PersonField: q.Get("person_field")}
+	// ?person=me finds the assets whose person fields name the requester
+	// (docs/data-model.md#person-fields).
+	if f.Person == "me" {
+		u := CurrentUser(r.Context())
+		if u == nil {
+			writeJSONError(w, http.StatusBadRequest, "person=me needs a person: a signed-in session, or their personal token")
+			return nil, false
+		}
+		f.Person = u.ID
+	}
 	// Only a vendor the request may see can be asked about.
 	if f.VendorID != "" {
 		seen, _, err := s.visibleVendors(r.Context())
@@ -166,6 +177,10 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	if assets, err = s.readable(r, assets); err != nil {
 		writeServerError(w, err, "read the assets' links")
 		return nil, false
+	}
+	// Only whom the request sees in a person field finds an asset by them.
+	if f.Person != "" {
+		assets = personFilter(assets, f.Person, f.PersonField)
 	}
 	// A search also finds assets by their comments' text, and their
 	// loans' and filings' (docs/comments.md); the assets are already
@@ -285,6 +300,15 @@ func (s *Server) handleCreateAsset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if len(req.FieldValues) > 0 {
+		scopes, err := s.store.ScopesForCategories(req.CategoryIDs)
+		if err == nil {
+			req.FieldValues, err = s.checkFieldPeople(r.Context(), req.FieldValues, scopes, nil)
+		}
+		if !writeFieldPeopleError(w, err) {
+			return
+		}
+	}
 	asset, err := s.actingStore(r).CreateAssetWithPurchase(req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, req.Stock.input(), req.IconName, purchase)
 	if errors.Is(err, store.ErrGeneratorCodeExists) {
 		writeJSONError(w, http.StatusConflict, err.Error())
@@ -335,6 +359,19 @@ func (s *Server) handleUpdateAsset(w http.ResponseWriter, r *http.Request) {
 	purchase, ok := s.purchaseInput(w, r, req.Purchase, &had.Purchase, had.Scopes)
 	if !ok {
 		return
+	}
+	if len(req.FieldValues) > 0 {
+		scopes := had.Scopes
+		var err error
+		if req.CategoryIDs != nil {
+			scopes, err = s.store.ScopesForCategories(req.CategoryIDs)
+		}
+		if err == nil {
+			req.FieldValues, err = s.checkFieldPeople(r.Context(), req.FieldValues, scopes, had)
+		}
+		if !writeFieldPeopleError(w, err) {
+			return
+		}
 	}
 	asset, err := s.actingStore(r).UpdateAssetWithPurchase(id, req.Name, req.CategoryIDs, req.GeneratorKeys, req.FieldValues, stock, icon, purchase)
 	if errors.Is(err, store.ErrAssetNotFound) {

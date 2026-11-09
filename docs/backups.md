@@ -96,7 +96,7 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Labels | `labels` | `templates`, `images` and their files, `category_label_templates` |
 | Icons | `icons` | `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings` |
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites`, `comment_mentions` |
-| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, `asset_purchases`, where they came from, the `warranty_notices` recorded for them, `contract_assets`, the contracts covering them, `asset_catalog_entries`, what vendors sell of each, `purchase_orders`, `purchase_order_lines` and `purchase_order_attachments` and their files, the purchase orders bringing them, `asset_comments` and `loan_comments`, and their history, `events`, contracts' and purchase orders' among it |
+| Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_field_people`, whom person fields name, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, `asset_purchases`, where they came from, the `warranty_notices` recorded for them, `contract_assets`, the contracts covering them, `asset_catalog_entries`, what vendors sell of each, `purchase_orders`, `purchase_order_lines` and `purchase_order_attachments` and their files, the purchase orders bringing them, `asset_comments` and `loan_comments`, and their history, `events`, contracts' and purchase orders' among it |
 | Flows | `flows` | `flows`, `flow_filings`, `flow_filing_comments` |
 | Settings | `settings` | `settings` (how purchase orders' numbers are shown among them), `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes` |
 | Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, `relay_mesh`, and the secret columns described under [Authentication](#authentication) |
@@ -216,6 +216,7 @@ table has none of it, and restores and imports with no such rows:
 | `072` | `contracts`, `contract_categories`, `contract_attachments`, `contract_notices`, `contract_assets` |
 | `075` | `category_implies` |
 | `076` | `purchase_orders`, `purchase_order_lines`, `purchase_order_attachments` |
+| `078` | `asset_field_people` |
 
 Its rows also lack the columns added since. A restore leaves those to the migrations, as they left
 them in the database it was written from. An import leaves them to the columns' defaults.

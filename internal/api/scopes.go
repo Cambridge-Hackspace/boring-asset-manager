@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -80,6 +81,7 @@ func (s *Server) readable(r *http.Request, assets []models.AssetWithDetails) ([]
 	}
 	for i := range kept {
 		redactPeople(r, &kept[i])
+		redactFieldPeople(r.Context(), &kept[i])
 	}
 	s.redactPurchases(r.Context(), kept)
 	s.redactContracts(r.Context(), kept)
@@ -96,6 +98,7 @@ func (s *Server) shown(r *http.Request, a *models.AssetWithDetails) *models.Asse
 	}
 	one := []models.AssetWithDetails{*a}
 	redactPeople(r, &one[0])
+	redactFieldPeople(r.Context(), &one[0])
 	s.redactPurchases(r.Context(), one)
 	s.redactContracts(r.Context(), one)
 	if err := s.hideLinks(r, one); err != nil {
@@ -273,6 +276,19 @@ func redactEvent(e models.Event, track bool) models.Event {
 			who.Email = ""
 			*p = &who
 		}
+	}
+	// Whom a person field named shows as who did things does
+	// (docs/data-model.md#person-fields).
+	if !track && slices.ContainsFunc(e.Payload.Changes, func(c models.EventChange) bool { return c.What == store.PersonChange }) {
+		kept := make([]models.EventChange, 0, len(e.Payload.Changes))
+		for _, c := range e.Payload.Changes {
+			if c.What != store.PersonChange {
+				kept = append(kept, c)
+			}
+		}
+		e.Payload.Changes = kept
+		// A merge's note names them too.
+		e.Payload.Note = ""
 	}
 	// Who a comment mentions shows as who did things does.
 	if c := e.Payload.Comment; c != nil && len(c.Mentions) > 0 && !track {

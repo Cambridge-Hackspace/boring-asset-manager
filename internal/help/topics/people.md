@@ -2,6 +2,12 @@
 
 Those who manage users add people on the **Users** page, with their name and email. Everyone signs in with their email; asset pages show their name, never their email.
 
+## People in fields
+
+A **person field** names people: who looks after a machine, whom to ask about it, who trained on it. Typing part of a name offers the people you may choose, and fields follow someone when they are renamed. Names show to those who see who, and to anyone for a field marked **public**; others see that someone is set, but not who. Emails never show.
+
+Someone who has no account yet can still be named. With **Add people**, typing a name that matches no one offers to add them as a **person without an account**: a name, and an email if you know it. They show on the **Users** page as unable to sign in. When they first sign in through an identity provider that links by verified email, they join that person, and their fields are already theirs. **Merge into…** on the **Users** page moves every field naming a person without an account to someone else, and their history says so.
+
 ## Wrong passwords
 
 After 5 wrong passwords in 15 minutes, an account waits before its next try, longer after each further wrong one, up to 15 minutes. It is never locked. The **Users** page shows who is waiting, and **Clear sign-in delay** lets them try again at once; setting their password does too. A channel subscribed to *Sign-ins are held back* tells you when it starts, since someone may be guessing.

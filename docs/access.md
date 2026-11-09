@@ -417,6 +417,10 @@ When someone signs in and no identity matches:
 1. **Linking by email,** when it is on for the provider, links them to the account with the same
    email, but only if the email is verified. A provider's email counts as verified only when the
    provider says so (OIDC's `email_verified`), or when the admin says its emails can be trusted.
+   A person without an account (see [Person fields](data-model.md#person-fields)) with that email
+   is joined the same way: the identity is linked to them, they can sign in from then on, and the
+   fields naming them are already theirs. Only someone with no password and no identity is joined;
+   an unverified email joins no one. They join with no roles but those the provider's rules give.
 2. **Otherwise, an account is made,** when that is on for the provider. It gets the email and name
    the provider gives, no password, and the provider's default roles. With none, the account can
    see nothing until someone gives it a role. Accounts can be limited to emails at given domains,
@@ -614,7 +618,8 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `comments.moderate` | Deleting anyone's comments (see [Comments](comments.md)). | Yes |
 | `icons.manage` | Changing what every icon is drawn with: the icon library, the palette and the icon settings (see [Icons](icons.md)). | No |
 | `settings.manage` | Managing settings. | No |
-| `users.manage` | Managing users, roles, scopes and API tokens. | No |
+| `users.manage` | Managing users, roles, scopes and API tokens. It includes `people.add`. | No |
+| `people.add` | Adding people without accounts, to name in person fields (see [Person fields](data-model.md#person-fields)). | No |
 
 ### Scopes
 
@@ -708,10 +713,13 @@ API tokens' roles are narrowed the same way (see [API tokens](#api-tokens)).
 Without `assets.track` for an asset:
 
 - its loan says only that it is lent out, and to the requester if it is theirs;
-- its history leaves out who did each thing and who borrowed it;
-- `{{loan.borrower}}` is blank.
+- its history leaves out who did each thing and who borrowed it, and changes to person fields;
+- `{{loan.borrower}}` is blank;
+- its person fields say that someone is set, but not who, unless it is the requester or the field
+  is public (see [Person fields](data-model.md#person-fields)).
 
-With it, people show by name. Emails never show on asset pages, lists, history or the loans list.
+With it, people show by name. Emails never show on asset pages, lists, history, labels or the
+loans list.
 
 ### Seeing prices
 
@@ -1007,6 +1015,7 @@ is an RFC 3339 time, or `null` for never.
 | `068` | Grants `vendors.manage`, in every scope, to every role that manages categories. |
 | `069` | Grants `comments.write` to every role that writes assets, and `comments.moderate` to every role that archives them, in the same scopes. |
 | `070` | Grants `purchases.read` to every role that reads assets, in the scopes it reads them in, since reading showed prices until then. |
+| `078` | Grants `people.add` to every role that manages users, which includes it. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 )
@@ -36,6 +37,9 @@ type assetSnapshot struct {
 
 type fieldSnapshot struct {
 	key, label, value string
+	// person is set for a person field, whose value is the names, then,
+	// of the people it names.
+	person bool
 }
 
 // snapshotAssetTx reads an asset within tx for its history.
@@ -67,17 +71,21 @@ func (s *Store) snapshotAssetTx(tx *sql.Tx, id string) (*assetSnapshot, error) {
 		return nil, err
 	}
 
-	rows, err := s.TxQuery(tx, `SELECT f.id, f.field_key, f.label, afv.value FROM asset_field_values afv
+	rows, err := s.TxQuery(tx, `SELECT f.id, f.field_key, f.label, f.validation_type, afv.value FROM asset_field_values afv
 		JOIN fields f ON afv.field_id = f.id WHERE afv.asset_id = ?`, id)
 	if err != nil {
 		return nil, fmt.Errorf("reading field values for history: %w", err)
 	}
 	defer rows.Close()
+	var personIDs []string
 	for rows.Next() {
-		var fieldID string
+		var fieldID, kind string
 		var f fieldSnapshot
-		if err := rows.Scan(&fieldID, &f.key, &f.label, &f.value); err != nil {
+		if err := rows.Scan(&fieldID, &f.key, &f.label, &kind, &f.value); err != nil {
 			return nil, err
+		}
+		if f.person = kind == fields.TypePerson; f.person {
+			personIDs = append(personIDs, fields.PersonIDs(f.value)...)
 		}
 		snap.fields[fieldID] = f
 	}
@@ -85,11 +93,45 @@ func (s *Store) snapshotAssetTx(tx *sql.Tx, id string) (*assetSnapshot, error) {
 		return nil, err
 	}
 	rows.Close()
+	// A person field reads as the names of whom it names, then: never their
+	// emails.
+	if len(personIDs) > 0 {
+		people, err := s.fieldPeopleTx(tx, personIDs)
+		if err != nil {
+			return nil, err
+		}
+		for id, f := range snap.fields {
+			if !f.person {
+				continue
+			}
+			var names []string
+			for _, pid := range fields.PersonIDs(f.value) {
+				if p, ok := people[pid]; ok {
+					names = append(names, p.Name)
+				}
+			}
+			f.value = strings.Join(names, ", ")
+			snap.fields[id] = f
+		}
+	}
 	if snap.purchase, err = s.purchaseTx(tx, id); err != nil {
 		return nil, err
 	}
 	return snap, nil
 }
+
+// what is what a change of the field is in history: "person" for a person
+// field, which only those who see who are shown, and "field" otherwise.
+func (f fieldSnapshot) what() string {
+	if f.person {
+		return PersonChange
+	}
+	return "field"
+}
+
+// PersonChange is the change to a person field in an asset's history,
+// From and To the names of whom it named.
+const PersonChange = "person"
 
 // scanPairs runs a query for one asset that returns two text columns.
 func (s *Store) scanPairs(tx *sql.Tx, query, id string, add func(k, v string)) error {
@@ -138,19 +180,19 @@ func diffAssets(before, after *assetSnapshot) []models.EventChange {
 	sort.Slice(cats, func(i, j int) bool { return cats[i].From+cats[i].To < cats[j].From+cats[j].To })
 	changes = append(changes, cats...)
 
-	var fields []models.EventChange
+	var changed []models.EventChange
 	for id, f := range after.fields {
 		if b := before.fields[id]; b.value != f.value {
-			fields = append(fields, models.EventChange{What: "field", Key: f.key, Label: f.label, From: b.value, To: f.value})
+			changed = append(changed, models.EventChange{What: f.what(), Key: f.key, Label: f.label, From: b.value, To: f.value})
 		}
 	}
 	for id, b := range before.fields {
 		if _, ok := after.fields[id]; !ok {
-			fields = append(fields, models.EventChange{What: "field", Key: b.key, Label: b.label, From: b.value})
+			changed = append(changed, models.EventChange{What: b.what(), Key: b.key, Label: b.label, From: b.value})
 		}
 	}
-	sort.Slice(fields, func(i, j int) bool { return fields[i].Label < fields[j].Label })
-	changes = append(changes, fields...)
+	sort.Slice(changed, func(i, j int) bool { return changed[i].Label < changed[j].Label })
+	changes = append(changes, changed...)
 
 	changes = append(changes, diffCodes(before.codes, after.codes)...)
 

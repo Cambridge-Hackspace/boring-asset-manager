@@ -59,7 +59,7 @@ ORDER = [
     ('roles', 'KindPeople'), ('role_permissions', 'KindPeople'), ('role_permission_scopes', 'KindPeople'), ('users', 'KindPeople'),
     ('user_roles', 'KindPeople'), ('user_role_scopes', 'KindPeople'), ('user_favorites', 'KindPeople'),
     ('comment_mentions', 'KindPeople'),
-    ('assets', 'KindAssets'), ('asset_categories', 'KindAssets'), ('asset_field_values', 'KindAssets'), ('asset_generator_keys', 'KindAssets'),
+    ('assets', 'KindAssets'), ('asset_categories', 'KindAssets'), ('asset_field_values', 'KindAssets'), ('asset_field_people', 'KindAssets'), ('asset_generator_keys', 'KindAssets'),
     ('asset_links', 'KindAssets'), ('asset_placements', 'KindAssets'), ('asset_loans', 'KindAssets'), ('loan_reminders', 'KindAssets'), ('loan_comments', 'KindAssets'), ('asset_attachments', 'KindAssets'),
     ('asset_comments', 'KindAssets'),
     ('asset_purchases', 'KindAssets'), ('warranty_notices', 'KindAssets'), ('contract_assets', 'KindAssets'), ('asset_catalog_entries', 'KindAssets'),

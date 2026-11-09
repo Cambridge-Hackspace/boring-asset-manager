@@ -24,6 +24,11 @@
   // Bought between, apart from the filter so either end may be empty.
   let boughtFrom = $state('');
   let boughtTo = $state('');
+  // Whom its person fields name (docs/data-model.md#person-fields): '' for
+  // anyone, 'me' for whoever runs it in any person field, or 'me:' and a
+  // field's key.
+  let assigned = $state('');
+  const personFields = $derived(fields.filter((f) => f.validation_type === 'person'));
   let preview = $state<ReportResult | null>(null);
   let loading = $state(true);
   let busy = $state(false);
@@ -51,6 +56,7 @@
         categoryIds = [...(r.spec.filter.category_ids ?? [])];
         boughtFrom = r.spec.filter.purchased_between?.from ?? '';
         boughtTo = r.spec.filter.purchased_between?.to ?? '';
+        assigned = r.spec.filter.person === 'me' ? (r.spec.filter.person_field ? `me:${r.spec.filter.person_field}` : 'me') : '';
         spec = {
           filter: { ...r.spec.filter },
           sections: r.spec.sections.map((s) =>
@@ -79,6 +85,14 @@
     if (boughtFrom || boughtTo) filter.purchased_between = { ...(boughtFrom ? { from: boughtFrom } : {}), ...(boughtTo ? { to: boughtTo } : {}) };
     if (f.warranty_ends_before) filter.warranty_ends_before = f.warranty_ends_before;
     if (f.contract) filter.contract = f.contract;
+    if (assigned) {
+      filter.person = 'me';
+      if (assigned.startsWith('me:')) filter.person_field = assigned.slice(3);
+    } else if (f.person) {
+      // Someone else, set over the API, is kept.
+      filter.person = f.person;
+      if (f.person_field) filter.person_field = f.person_field;
+    }
     const sections = spec.sections.map((s) => {
       if (s.type === 'chart') {
         const chart: ReportSection = { type: 'chart', columns: [], chart: s.chart, measure: s.measure };
@@ -229,6 +243,18 @@
         </select>
         <p id="report-contract-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Its fields then fill {'{{asset.contract.*}}'}.</p>
       </div>
+      {#if personFields.length}
+        <div class="max-w-md">
+          <label class="label" for="report-assigned">Assigned to</label>
+          <select id="report-assigned" class="input" bind:value={assigned} onchange={() => (spec.filter.person = undefined)}>
+            <option value="">Anyone</option>
+            <option value="me">Whoever runs it</option>
+            {#if personFields.length > 1}
+              {#each personFields as f (f.key)}<option value="me:{f.key}">Whoever runs it, as {f.label}</option>{/each}
+            {/if}
+          </select>
+        </div>
+      {/if}
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={spec.filter.running_low} /> Only what is running low, or in a category running low</label>
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={spec.filter.archived} /> Archived assets instead of active ones</label>
       <CategoryPicker id="report-categories" label="In these categories, or below them (none for all)" categories={categoryChoices} bind:value={categoryIds} />

@@ -899,6 +899,16 @@ func (s *Server) accountFor(p *store.Provider, c *idp.Claims) (*models.User, str
 		if !p.LinkByEmail || !verified {
 			return nil, noAccount(p), nil
 		}
+		// A person without an account (docs/data-model.md#person-fields)
+		// is joined to this first sign-in, their fields already theirs,
+		// only while they have no password and no identity.
+		if !existing.CanSignIn {
+			user, err := s.store.JoinPerson(existing.ID, p.ID, c.Subject, c.Email)
+			if errors.Is(err, store.ErrHasAccount) || errors.Is(err, store.ErrUserNotFound) || errors.Is(err, store.ErrIdentityTaken) {
+				return nil, noAccount(p), nil
+			}
+			return user, "", err
+		}
 		if _, err := s.store.LinkIdentity(existing.ID, p.ID, c.Subject, c.Email); err != nil {
 			return nil, "", err
 		}
