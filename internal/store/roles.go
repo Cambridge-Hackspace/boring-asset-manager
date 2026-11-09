@@ -228,6 +228,10 @@ func (s *Store) SetPassword(userID, next, keepToken string) error {
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
 		return ErrUserNotFound
 	}
+	// A person without an account given a password has one now.
+	if _, err := s.TxExec(tx, "UPDATE users SET can_sign_in = TRUE WHERE id = ?", userID); err != nil {
+		return fmt.Errorf("letting them sign in: %w", err)
+	}
 	if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ? AND id <> ?", userID, sessionKey(keepToken)); err != nil {
 		return fmt.Errorf("ending sessions: %w", err)
 	}

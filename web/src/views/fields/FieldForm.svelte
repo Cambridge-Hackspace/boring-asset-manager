@@ -16,6 +16,7 @@
     date: 'Date',
     url: 'Web address',
     select: 'Choice from a list',
+    person: 'People',
   };
 
   // Copied from the field once: the form edits its own state.
@@ -33,6 +34,9 @@
   // Values two choices share, which the server refuses.
   const shared = $derived([...new Set(choices.map((c) => c.value.trim()).filter((v, i, all) => v && all.indexOf(v) !== i))]);
   let defaultChoice = $state(initial?.options?.default ?? '');
+  // A person field's options (docs/data-model.md#person-fields).
+  let multiple = $state(Boolean(initial?.options?.multiple));
+  let isPublic = $state(Boolean(initial?.options?.public));
   let error = $state('');
   let busy = $state(false);
 
@@ -51,7 +55,9 @@
     const options =
       type === 'select'
         ? { choices: choices.filter((c) => c.label.trim() || c.value.trim()).map((c) => ({ label: c.label, value: c.value })), default: defaultChoice || null }
-        : undefined;
+        : type === 'person'
+          ? { ...(multiple ? { multiple: true } : {}), ...(isPublic ? { public: true } : {}) }
+          : undefined;
     try {
       const body = { label, validation_type: type, options };
       const res = initial
@@ -133,6 +139,24 @@
           {/each}
         </select>
       </div>
+    </fieldset>
+  {/if}
+
+  {#if type === 'person'}
+    <fieldset class="space-y-2">
+      <legend class="label">People</legend>
+      <label class="flex items-start gap-2">
+        <input type="checkbox" class="mt-1" bind:checked={multiple} />
+        <span>Several people <span class="block text-xs text-zinc-600 dark:text-zinc-400">Off, it names one person.</span></span>
+      </label>
+      <label class="flex items-start gap-2">
+        <input type="checkbox" class="mt-1" bind:checked={isPublic} />
+        <span
+          >Public <span class="block text-xs text-zinc-600 dark:text-zinc-400"
+            >Names show to anyone who can read the asset, signed out too, as for “Ask about this”. Off, only those who see who.</span
+          ></span
+        >
+      </label>
     </fieldset>
   {/if}
 

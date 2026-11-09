@@ -52,9 +52,13 @@ type ref struct {
 type fieldView struct {
 	Key      string `json:"key"`
 	Label    string `json:"label"`
-	Type     string `json:"type" jsonschema:"text, number, date, url or select"`
-	Value    string `json:"value"`
+	Type     string `json:"type" jsonschema:"text, number, date, url, select or person"`
+	Value    string `json:"value" jsonschema:"its value; a person field's names, as you may see them"`
 	Required bool   `json:"required,omitempty"`
+	// People are whom a person field names, as the caller may see them,
+	// with the user IDs to set it by; Hidden counts those not shown.
+	People []models.FieldPerson `json:"people,omitempty"`
+	Hidden int                  `json:"hidden,omitempty" jsonschema:"how many people it names that you may not see"`
 }
 
 type linkView struct {
@@ -167,8 +171,24 @@ func (e *env) detail(ctx context.Context, a *models.AssetWithDetails) (assetDeta
 	}
 	d.CountsIn, d.Pools = a.CountsIn, a.Pools
 	for _, f := range a.EffectiveFields {
-		d.Fields = append(d.Fields, fieldView{Key: f.Field.Key, Label: f.Field.Label, Type: f.Field.ValidationType,
-			Value: a.FieldValues[f.Field.Key], Required: f.IsRequired})
+		v := fieldView{Key: f.Field.Key, Label: f.Field.Label, Type: f.Field.ValidationType,
+			Value: a.FieldValues[f.Field.Key], Required: f.IsRequired, Hidden: a.HiddenPeople[f.Field.Key]}
+		// A person field reads as names: the asset comes from the API,
+		// which says whom it names but not which fields name people.
+		if f.Field.ValidationType == "person" {
+			var names []string
+			for _, id := range strings.Split(a.FieldValues[f.Field.Key], ",") {
+				if p, ok := a.People[strings.TrimSpace(id)]; ok {
+					v.People = append(v.People, p)
+					names = append(names, p.Name)
+				}
+			}
+			if v.Hidden > 0 {
+				names = append(names, "someone")
+			}
+			v.Value = strings.Join(names, ", ")
+		}
+		d.Fields = append(d.Fields, v)
 	}
 	for _, l := range a.Location {
 		d.Location = append(d.Location, ref{ID: l.ID, Name: l.Name})

@@ -85,6 +85,11 @@ type Plan struct {
 	// Links the links.
 	Changes []store.ImportRow  `json:"-"`
 	Links   []store.ImportLink `json:"-"`
+	// NewPeople are the names in person fields matching no one, which the
+	// importer may add as people without accounts when CanAddPeople is set
+	// (docs/csv.md).
+	NewPeople    []string `json:"new_people"`
+	CanAddPeople bool     `json:"can_add_people"`
 }
 
 func (p *Plan) problem(row int, column, format string, args ...any) {
@@ -211,7 +216,22 @@ type Options struct {
 	// in these scopes (purchases.read). Rows giving the price, currency or
 	// order number of assets they may not are problems.
 	SeesPrices func(scopes []string) bool
+	// Person finds the one person a person field's cell names for an asset
+	// in these scopes (docs/data-model.md#person-fields), by email or by a
+	// display name only one person has, among those the importer may
+	// choose there: ErrNoSuchPerson or ErrSeveralPeople when it cannot.
+	// Without it, person fields are not imported. AddPeople says whether
+	// the importer may add people without accounts, to offer adding a name
+	// matching no one.
+	Person    func(ref string, scopes []string) (string, error)
+	AddPeople bool
 }
+
+// The reasons a person field's cell names no one.
+var (
+	ErrNoSuchPerson  = errors.New("no one you may choose has that name or email")
+	ErrSeveralPeople = errors.New("several people have that name")
+)
 
 // PrepareWith plans an import as Prepare does, with options.
 func PrepareWith(src Source, data []byte, mapping []string, opts Options) (*Plan, error) {
@@ -230,7 +250,8 @@ func PrepareWith(src Source, data []byte, mapping []string, opts Options) (*Plan
 	if len(mapping) != len(header) {
 		return nil, fmt.Errorf("%w: the mapping has %d entries for %d columns", ErrUnreadable, len(mapping), len(header))
 	}
-	plan := &Plan{Rows: len(rows), Problems: []Problem{}, UnknownCategories: []string{}, LinkChanges: []LinkChange{}, RemoveLinks: opts.RemoveLinks}
+	plan := &Plan{Rows: len(rows), Problems: []Problem{}, UnknownCategories: []string{}, LinkChanges: []LinkChange{}, RemoveLinks: opts.RemoveLinks,
+		NewPeople: []string{}, CanAddPeople: opts.AddPeople}
 	for i, h := range header {
 		col := Column{Header: h, Suggested: suggested[i], Target: strings.TrimSpace(mapping[i])}
 		for _, rec := range rows {
@@ -336,6 +357,8 @@ type owner struct {
 }
 
 type planner struct {
+	// newPeople are the names offered to add, lowercased.
+	newPeople map[string]bool
 	src       Source
 	plan      *Plan
 	cats      *Categories
@@ -548,6 +571,12 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 			continue
 		}
 		f := p.fields[strings.TrimPrefix(c.Target, FieldPrefix)]
+		if f.ValidationType == fields.TypePerson {
+			var ok bool
+			if v, ok = p.people(line, c.Header, v, finalCats); !ok {
+				continue
+			}
+		}
 		if err := fields.ValidateFieldValue(&f, v); err != nil {
 			plan.problem(line, c.Header, "%v", err)
 			continue
@@ -622,6 +651,50 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 		plan.problem(line, "", "you cannot see the prices of assets in %s", bad)
 	}
 	return nil
+}
+
+// people reads a person field's cell, names separated by RefSeparator,
+// as the user IDs it names for an asset in these categories, reporting
+// whether it could. A name matching no one is offered to add.
+func (p *planner) people(line int, column, cell string, cats []string) (string, bool) {
+	if p.opts.Person == nil {
+		p.plan.problem(line, column, "people cannot be imported here")
+		return "", false
+	}
+	var scopes []string
+	if p.opts.ScopesOf != nil {
+		scopes = p.opts.ScopesOf(cats)
+	}
+	var ids []string
+	ok := true
+	for _, ref := range strings.Split(cell, RefSeparator) {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		id, err := p.opts.Person(ref, scopes)
+		switch {
+		case errors.Is(err, ErrSeveralPeople):
+			p.plan.problem(line, column, "several people are named %q: give their email instead", ref)
+			ok = false
+		case errors.Is(err, ErrNoSuchPerson):
+			p.plan.problem(line, column, "no one you may choose is %q", ref)
+			if !strings.Contains(ref, "@") && !p.newPeople[strings.ToLower(ref)] {
+				if p.newPeople == nil {
+					p.newPeople = map[string]bool{}
+				}
+				p.newPeople[strings.ToLower(ref)] = true
+				p.plan.NewPeople = append(p.plan.NewPeople, ref)
+			}
+			ok = false
+		case err != nil:
+			p.plan.problem(line, column, "%v", err)
+			ok = false
+		default:
+			ids = append(ids, id)
+		}
+	}
+	return fields.PersonValue(ids), ok
 }
 
 // stock plans a row's stock cells: nil when they are all blank, and

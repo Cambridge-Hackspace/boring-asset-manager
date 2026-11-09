@@ -225,7 +225,7 @@ func groupsOf(by string, a *models.AssetWithDetails, d labels.Data) []string {
 		}
 		return or(a.Asset.Stock.Unit, "No unit")
 	}
-	return or(a.FieldValues[strings.TrimPrefix(by, "field:")], "(none)")
+	return or(a.FieldText(strings.TrimPrefix(by, "field:")), "(none)")
 }
 
 // lineSeries totals history per period for the assets: stock used or

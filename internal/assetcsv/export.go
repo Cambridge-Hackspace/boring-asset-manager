@@ -130,6 +130,22 @@ func filledFieldKeys(assets []models.AssetWithDetails) []string {
 	return out
 }
 
+// fieldCell is a field's value as a cell holds it: a person field's names,
+// those the exporter sees, separated by RefSeparator, as an import reads
+// them back; never emails.
+func fieldCell(a *models.AssetWithDetails, key string) string {
+	if _, ok := a.PersonFields[key]; !ok {
+		return a.FieldValues[key]
+	}
+	var names []string
+	for _, id := range strings.Split(a.FieldValues[key], ",") {
+		if p, ok := a.People[strings.TrimSpace(id)]; ok {
+			names = append(names, p.Name)
+		}
+	}
+	return strings.Join(names, RefSeparator+" ")
+}
+
 // What a column's cells hold, for a workbook.
 const (
 	kindText   = "text"
@@ -215,7 +231,7 @@ func table(assets []models.AssetWithDetails, cats *Categories, generatorTypes []
 			row = append(row, p.WarrantyEnd)
 		}
 		for _, k := range fieldKeys {
-			row = append(row, a.FieldValues[k])
+			row = append(row, fieldCell(&a, k))
 		}
 		if linked {
 			row = append(row, linksCell(a.Links, refs))

@@ -387,6 +387,37 @@ describe('UsersPage', () => {
     expect(sent.find((r) => r.path === '/users/u2/name')!.body).toEqual({ name: 'Bo Diddley' });
   });
 
+  it('marks people without accounts, adds one, and merges one into someone', async () => {
+    const { sent } = fakeApi({
+      'GET /users': () => ({
+        users: [
+          { id: 'u2', email: 'bo@hackspace.org', name: 'Bo', is_active: true, can_sign_in: true, created_at: '', updated_at: '', role_ids: [], roles: [] },
+          { id: 'u3', email: '', name: 'Cy', is_active: true, can_sign_in: false, created_at: '', updated_at: '', role_ids: [], roles: [] },
+        ],
+      }),
+      'GET /roles': () => ({ roles: [] }),
+      'POST /people': () => ({ status: 201, body: { person: { id: 'u4', name: 'Dee', no_account: true } } }),
+      'POST /users/u3/merge': () => ({ assets: 2 }),
+    });
+    render(UsersPage, { params: {} });
+    const cy = (await screen.findByRole('cell', { name: 'Cy' })).closest('tr')!;
+    expect(within(cy).getByText('No account: cannot sign in')).toBeTruthy();
+    expect(within(cy).queryByRole('button', { name: /Change roles/ })).toBeNull();
+    expect(within(cy).queryByRole('button', { name: /invitation/ })).toBeNull();
+
+    await fireEvent.click(within(cy).getByRole('button', { name: 'Merge Cy into someone' }));
+    await fireEvent.change(within(cy).getByLabelText('Merge Cy into'), { target: { value: 'u2' } });
+    await fireEvent.click(within(cy).getByRole('button', { name: 'Merge' }));
+    expect(await screen.findByText('Cy merged into bo@hackspace.org: 2 assets changed.')).toBeTruthy();
+    expect(sent.find((r) => r.path === '/users/u3/merge')!.body).toEqual({ into: 'u2' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Add person without account' }));
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Dee' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add person' }));
+    await screen.findByText(/Dee added/);
+    expect(sent.find((r) => r.path === '/people')!.body).toEqual({ name: 'Dee', email: '' });
+  });
+
   it('finds someone by name or email', async () => {
     api(() => ({}));
     render(UsersPage, { params: {} });

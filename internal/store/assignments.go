@@ -254,6 +254,15 @@ func (s *Store) SetUserRoleAssignments(userID string, assignments []models.RoleA
 		if archived {
 			return ErrUserNotFound
 		}
+		if len(assignments) > 0 {
+			var signsIn bool
+			if err := s.TxQueryRow(tx, "SELECT can_sign_in FROM users WHERE id = ?", userID).Scan(&signsIn); err != nil {
+				return fmt.Errorf("reading the user: %w", err)
+			}
+			if !signsIn {
+				return ErrNoAccount
+			}
+		}
 		merged, err := s.mergeAssignments(tx, assignments)
 		if err != nil {
 			return err

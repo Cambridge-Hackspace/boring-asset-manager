@@ -14,6 +14,7 @@
   import IsoIcon from '../../components/IsoIcon.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import LocationPicker from '../../components/LocationPicker.svelte';
+  import PersonPicker from '../../components/PersonPicker.svelte';
   import { currencies, priceProblem, purchaseRequest } from '../../lib/purchases';
 
   // /assets/new and /assets/:id/edit
@@ -528,7 +529,19 @@
           <label class="label" for={target}>
             {e.field.label}{#if e.is_required}<span aria-hidden="true" class="text-red-700 dark:text-red-400"> *</span>{/if}
           </label>
-          {#if e.field.validation_type === 'select'}
+          {#if e.field.validation_type === 'person'}
+            <PersonPicker
+              id={target}
+              bind:value={values[e.field.key]}
+              multiple={!!e.field.options?.multiple}
+              required={e.is_required}
+              known={original?.people ?? {}}
+              hidden={original?.hidden_people?.[e.field.key] ?? 0}
+              {categoryIds}
+              invalid={errorFor === target}
+              describedBy={describedBy(target)}
+            />
+          {:else if e.field.validation_type === 'select'}
             <select id={target} class="input" required={e.is_required} aria-invalid={errorFor === target} aria-describedby={describedBy(target)} bind:value={values[e.field.key]}>
               <option value="">{e.is_required ? 'Choose…' : 'None'}</option>
               {#each e.field.options?.choices ?? [] as c (c.value)}

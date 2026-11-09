@@ -97,6 +97,7 @@ func (s *Store) peopleTx(tx *sql.Tx, ids []string) (map[string]models.Person, er
 		if err := rows.Scan(&p.ID, &p.Email, &p.Name, &archived); err != nil {
 			return nil, err
 		}
+		p.Email = shownEmail(p.Email)
 		p.Archived = archived.Valid
 		out[p.ID] = p
 	}
@@ -254,7 +255,7 @@ type PendingMention struct {
 // DueMentions lists the mentions not yet dealt with, made since since,
 // oldest first. Older ones are left: a mention is news only for so long.
 func (s *Store) DueMentions(since time.Time) ([]PendingMention, error) {
-	rows, err := s.Query(`SELECT m.comment_id, m.mentioned_at, u.id, u.email, u.name, u.is_active, u.archived_at, u.mention_emails
+	rows, err := s.Query(`SELECT m.comment_id, m.mentioned_at, u.id, u.email, u.name, u.is_active AND u.can_sign_in, u.archived_at, u.mention_emails
 		FROM comment_mentions m JOIN users u ON u.id = m.user_id
 		WHERE m.notified_at IS NULL AND m.mentioned_at >= ?
 		ORDER BY m.mentioned_at, m.comment_id, m.user_id`, dbTime(since))
@@ -271,6 +272,7 @@ func (s *Store) DueMentions(since time.Time) ([]PendingMention, error) {
 			return nil, err
 		}
 		m.MentionedAt = m.MentionedAt.UTC()
+		m.Person.Email = shownEmail(m.Person.Email)
 		m.Person.Archived = archived.Valid
 		m.Emailed = active && !archived.Valid && on
 		out = append(out, m)

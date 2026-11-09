@@ -15,7 +15,7 @@ export interface Condition {
   to?: string;
 }
 
-export type QuestionType = 'text' | 'long_text' | 'number' | 'date' | 'yes_no' | 'choice' | 'photo';
+export type QuestionType = 'text' | 'long_text' | 'number' | 'date' | 'yes_no' | 'choice' | 'person' | 'photo';
 
 /** The types of question, in the order the editor offers them. */
 export const questionTypes: [QuestionType, string][] = [
@@ -25,6 +25,7 @@ export const questionTypes: [QuestionType, string][] = [
   ['date', 'Date'],
   ['yes_no', 'Yes or no'],
   ['choice', 'A choice'],
+  ['person', 'People'],
   ['photo', 'A photo'],
 ];
 

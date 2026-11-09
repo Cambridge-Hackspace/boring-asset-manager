@@ -161,3 +161,44 @@ func TestStoredTextRules(t *testing.T) {
 		}
 	}
 }
+
+// TestPersonFields: a person field's value is user IDs, separated by
+// commas, one unless it names several; its options are only multiple and
+// public.
+func TestPersonFields(t *testing.T) {
+	if _, err := ValidateFieldDefinition("keeper", "Keeper", TypePerson, nil); err != nil {
+		t.Errorf("no options: %v", err)
+	}
+	if _, err := ValidateFieldDefinition("keeper", "Keeper", TypePerson, []byte(`{"multiple":true,"public":true}`)); err != nil {
+		t.Errorf("both options: %v", err)
+	}
+	if _, err := ValidateFieldDefinition("keeper", "Keeper", TypePerson, []byte(`{"choices":[]}`)); err == nil {
+		t.Error("a select's options taken")
+	}
+	ada, bob := "6f1c2d3e-4a5b-4c6d-8e7f-001122334455", "7a8b9c0d-1e2f-4a3b-9c4d-5e6f70819203"
+	one := &models.Field{Key: "keeper", ValidationType: TypePerson}
+	several := &models.Field{Key: "trained", ValidationType: TypePerson, Options: []byte(`{"multiple":true}`)}
+	if err := ValidateFieldValue(one, ada); err != nil {
+		t.Errorf("one person: %v", err)
+	}
+	if err := ValidateFieldValue(one, ada+","+bob); !errors.Is(err, ErrInvalidFieldValue) {
+		t.Errorf("two in a field naming one: %v", err)
+	}
+	if err := ValidateFieldValue(several, ada+", "+bob); err != nil {
+		t.Errorf("two in a field naming several: %v", err)
+	}
+	for _, v := range []string{"Ada Lovelace", "ada@example.org", strings.Repeat("a", 37)} {
+		if err := ValidateFieldValue(several, v); !errors.Is(err, ErrInvalidFieldValue) {
+			t.Errorf("%q taken as a person", v)
+		}
+	}
+	if got := PersonIDs(" " + ada + ",," + bob + "," + ada); len(got) != 2 || got[0] != ada || got[1] != bob {
+		t.Errorf("IDs: %v", got)
+	}
+	if got := PersonValue([]string{bob, ada, bob}); got != bob+","+ada {
+		t.Errorf("value: %q", got)
+	}
+	if !PersonOptionsOf(several).Multiple || PersonOptionsOf(&models.Field{ValidationType: TypeSelect, Options: []byte(`{"multiple":true}`)}).Multiple {
+		t.Error("options of a field")
+	}
+}

@@ -161,7 +161,8 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 		AssetName: a.Asset.Name,
 		BaseURL:   baseURL,
 		Codes:     codes,
-		Fields:    a.FieldValues,
+		// A person field prints the names the request sees, never emails.
+		Fields:    a.FieldTexts(),
 		Condition: conditionText(a.Asset.Condition),
 	}
 	names := make([]string, 0, len(a.Categories))

@@ -290,7 +290,9 @@ func (s *Server) handleRequestPasswordReset(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	user, err := s.store.GetUserByEmail(req.Email)
-	if err == nil && user.IsActive && user.ArchivedAt == nil {
+	// A person without an account has no password to reset: they are
+	// given one by whoever manages users, or join a provider's sign-in.
+	if err == nil && user.IsActive && user.ArchivedAt == nil && user.CanSignIn {
 		token, err := s.store.CreateAccountLink(user.ID, store.LinkPasswordReset, store.PasswordResetTTL)
 		if err != nil {
 			writeServerError(w, err, "make the link")

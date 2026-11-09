@@ -117,7 +117,9 @@ func (s *Store) iconTexts(ctx *assetContext, d *models.AssetWithDetails, icon *m
 		case TextFromCode:
 			v = d.FirstCode()
 		case TextFromField:
-			v = d.FieldValues[b.fieldKey]
+			// An icon shows to anyone who reads the asset, so a person
+			// field's names only when it is public.
+			v = d.PublicFieldText(b.fieldKey)
 		}
 		if v = strings.TrimSpace(v); v != "" {
 			texts[b.param] = v

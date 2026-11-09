@@ -21,7 +21,7 @@ Each row is one asset, with these columns:
 | `quantity`, `unit`, `low_stock_threshold` | Stock counted by quantity ([Stock](stock-and-lending.md)). See [Stock](#stock). |
 | `icon` | The asset's own icon ([Icons](icons.md)). See [Icons](#icons). |
 | `vendor`, `order_date`, `received_date`, `price`, `currency`, `order_number`, `warranty_end` | Where it came from ([Purchases](data-model.md#purchases)). See [Purchases](#purchases). |
-| `field.<key>` | A field value, by corpus key. |
+| `field.<key>` | A field value, by corpus key. A person field's people by name. See [People](#people). |
 | `links` | The asset's links ([Links](data-model.md)), each `verb:asset`, separated by `;`. See [Links](#links). |
 
 ### Categories
@@ -68,6 +68,20 @@ On import:
 - A price needs a currency, in the row or the asset's own, and no more places than it has.
 - Giving the price, currency or order number of an asset whose prices the importer may not see is
   a problem.
+
+### People
+
+A person field's cell ([Person fields](data-model.md#person-fields)) holds the people it names,
+separated by `;`. Export writes their names, never their emails, and only those the exporter sees.
+
+On import:
+
+- A person is named by their email, or by a name only one person has, ignoring case, among those
+  the importer may choose for the asset. Without `assets.track` for it, that is only themselves.
+- A name several people have is a problem: give their email instead. So is one no one has.
+- With `people.add`, the preview lists the names matching no one in `new_people`, with
+  `can_add_people`, and offers to add them as people without accounts before checking again.
+- The people a field names that the importer does not see stay, as they do in the form.
 
 ### Links
 
@@ -151,7 +165,7 @@ unknown references.
 Each row is then checked as the API would check it:
 
 - required fields, from the asset's effective fields
-- field types and select choices
+- field types, select choices, and the people in person fields
 - generator codes: their format, and uniqueness both within the file and against other assets
 
 Duplicate IDs within the file, unknown IDs, and archived assets are errors.

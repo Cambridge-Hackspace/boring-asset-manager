@@ -5,7 +5,7 @@
   import { request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
-  import { UNCATEGORIZED, type AssetWithDetails, type Category } from '../../lib/models';
+  import { UNCATEGORIZED, type AssetWithDetails, type Category, type Field } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import { exportUrl } from '../../lib/importing';
@@ -43,6 +43,11 @@
   let icon = $state(router.query.get('icon') ?? '');
   // Only the assets the person has starred (docs/favorites.md).
   let favorite = $state(router.query.get('favorite') === 'true');
+  // Only the assets whose person fields name the signed-in person
+  // (docs/data-model.md#person-fields): '' for any, 'me' in any person
+  // field, or 'me:' and a field's key.
+  let person = $state(router.query.get('person') === 'me' ? (router.query.get('person_field') ? `me:${router.query.get('person_field')}` : 'me') : '');
+  let personFields = $state<Field[]>([]);
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
@@ -57,6 +62,9 @@
   onMount(async () => {
     try {
       categories = (await request<{ categories: Category[] }>('GET', '/categories')).categories ?? [];
+      if (session.user) {
+        personFields = await request<{ fields: Field[] }>('GET', '/fields').then((r) => (r.fields ?? []).filter((f) => f.validation_type === 'person'), () => []);
+      }
     } catch (err) {
       error = messageOf(err);
     }
@@ -78,6 +86,10 @@
     if (conflict) q.conflict = conflict;
     if (icon) q.icon = icon;
     if (favorite) q.favorite = 'true';
+    if (person) {
+      q.person = 'me';
+      if (person.startsWith('me:')) q.person_field = person.slice(3);
+    }
     return q;
   }
 
@@ -112,6 +124,10 @@
     if (conflict) q.set('conflict', conflict);
     if (icon) q.set('icon', icon);
     if (favorite) q.set('favorite', 'true');
+    if (person) {
+      q.set('person', 'me');
+      if (person.startsWith('me:')) q.set('person_field', person.slice(3));
+    }
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
     void load();
@@ -129,7 +145,7 @@
 
   // On a phone, the filters beyond search fold away until wanted.
   let filtersOpen = $state(false);
-  const activeFilters = $derived([categoryId, condition, loan].filter(Boolean).length + (archived ? 1 : 0) + (favorite ? 1 : 0));
+  const activeFilters = $derived([categoryId, condition, loan, person].filter(Boolean).length + (archived ? 1 : 0) + (favorite ? 1 : 0));
 </script>
 
 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -192,6 +208,18 @@
       <option value="overdue">Overdue</option>
     </select>
   </div>
+  {#if personFields.length}
+    <div>
+      <label class="label" for="asset-person">Assigned to</label>
+      <select id="asset-person" class="input" bind:value={person} onchange={() => applyFilters()}>
+        <option value="">Anyone</option>
+        <option value="me">Me</option>
+        {#if personFields.length > 1}
+          {#each personFields as f (f.key)}<option value="me:{f.key}">Me, as {f.label}</option>{/each}
+        {/if}
+      </select>
+    </div>
+  {/if}
   <div>
     <label class="label" for="asset-favorite">Favorites</label>
     <select id="asset-favorite" class="input" bind:value={favorite} onchange={() => applyFilters()}>

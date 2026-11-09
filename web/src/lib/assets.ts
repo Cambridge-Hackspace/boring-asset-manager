@@ -196,6 +196,8 @@ export function describeEvent(e: AssetEvent): string {
     case 'asset.created':
       return p.trigger === 'import' ? 'Created by an import' : 'Created';
     case 'asset.edited':
+      // A merge of people says so (docs/data-model.md#person-fields).
+      if (p.note) return p.note.replace(/\.$/, '');
       return p.trigger === 'import' ? 'Edited by an import' : 'Edited';
     case 'asset.archived':
       return 'Archived';
@@ -275,6 +277,7 @@ export function describeChange(c: AssetChange, kind: string): string {
       }
       return fromTo(c.label ?? c.key ?? 'Code', c);
     case 'field':
+    case 'person':
       return fromTo(c.label ?? c.key ?? 'Field', c);
     case 'unit':
       return fromTo('Unit', c);

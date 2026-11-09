@@ -159,11 +159,15 @@ const (
 	QuestionYesNo    = "yes_no"
 	QuestionChoice   = "choice"
 	QuestionPhoto    = "photo"
+	// QuestionPerson asks for people, for a person field
+	// (docs/data-model.md#person-fields): its answer is their user IDs,
+	// separated by commas.
+	QuestionPerson = "person"
 )
 
 // QuestionTypes lists the types of question, in the order an editor
 // offers them.
-var QuestionTypes = []string{QuestionText, QuestionLongText, QuestionNumber, QuestionDate, QuestionYesNo, QuestionChoice, QuestionPhoto}
+var QuestionTypes = []string{QuestionText, QuestionLongText, QuestionNumber, QuestionDate, QuestionYesNo, QuestionChoice, QuestionPerson, QuestionPhoto}
 
 // Option is one choice of a choice question: its value, the answer, and
 // how it is shown (as the value, when empty).
@@ -194,6 +198,14 @@ func (q *Question) Problem(answer string) string {
 	case QuestionChoice:
 		if !slices.ContainsFunc(q.Options, func(o Option) bool { return o.Value == answer }) {
 			return "is one of its choices"
+		}
+	case QuestionPerson:
+		for _, id := range strings.Split(answer, ",") {
+			if id = strings.TrimSpace(id); id == "" || len(id) > 36 || strings.ContainsFunc(id, func(r rune) bool {
+				return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-')
+			}) {
+				return "is people, chosen by name"
+			}
 		}
 	}
 	return ""

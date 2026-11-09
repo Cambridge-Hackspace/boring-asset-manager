@@ -20,13 +20,14 @@ var (
 )
 
 // userColumns are the columns scanUser reads, in order.
-const userColumns = "id, email, name, password_hash, totp_secret, is_active, created_at, updated_at, archived_at, theme, email_notifications, loan_reminders, mention_emails"
+const userColumns = "id, email, name, password_hash, totp_secret, is_active, created_at, updated_at, archived_at, theme, email_notifications, loan_reminders, mention_emails, can_sign_in"
 
 func scanUser(row interface{ Scan(...any) error }) (models.User, error) {
 	var u models.User
 	var theme sql.NullString
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme, &u.EmailNotifications, &u.LoanReminders, &u.MentionEmails)
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.TOTPSecret, &u.IsActive, &u.CreatedAt, &u.UpdatedAt, &u.ArchivedAt, &theme, &u.EmailNotifications, &u.LoanReminders, &u.MentionEmails, &u.CanSignIn)
 	u.Theme = themeOf(theme)
+	u.Email = shownEmail(u.Email)
 	return u, err
 }
 
@@ -67,6 +68,9 @@ func (s *Store) GetUserByID(id string) (*models.User, error) {
 // GetUserByEmail retrieves a user by their email address (case-insensitive).
 func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 	normalized := auth.NormalizeEmail(email)
+	if normalized == "" || strings.HasPrefix(normalized, noEmailPrefix) {
+		return nil, ErrUserNotFound // no one is found by having no email
+	}
 	query := `
 		SELECT ` + userColumns + `
 		FROM users
@@ -165,6 +169,7 @@ func (s *Store) CreateNamedUser(email, name, password string, isActive bool) (*m
 		CreatedAt: now,
 		UpdatedAt: now,
 		Theme:     ThemeSystem,
+		CanSignIn: true,
 	}, nil
 }
 

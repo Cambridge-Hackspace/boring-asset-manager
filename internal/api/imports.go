@@ -140,6 +140,7 @@ func (s *Server) prepareImport(w http.ResponseWriter, r *http.Request, data []by
 		opts.Vendors = append(opts.Vendors, v)
 	}
 	opts.SeesPrices = func(scopes []string) bool { return Allows(r.Context(), rbac.PermPurchasesRead, scopes) }
+	opts.Person, opts.AddPeople = s.importPerson(r.Context()), mayAddPeople(r.Context())
 	plan, err := assetcsv.PrepareWith(readableSource{s.store, s, r}, data, mapping, opts)
 	if errors.Is(err, assetcsv.ErrUnreadable) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
@@ -195,6 +196,10 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 			Error:   fmt.Sprintf("The file has %d problems; nothing was imported", plan.ProblemCount),
 			Details: plan,
 		})
+		return
+	}
+	if err := s.keepHiddenPeople(r.Context(), plan.Changes); err != nil {
+		writeServerError(w, err, "check the people in its fields")
 		return
 	}
 	created, err := s.actingStore(r).ImportAssets(plan.Changes, plan.Links)

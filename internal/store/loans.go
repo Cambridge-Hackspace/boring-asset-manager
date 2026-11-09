@@ -330,7 +330,7 @@ func (s *Store) CheckOut(assetID, borrowerID string, dueAt *time.Time) (*models.
 		return nil, ErrAlreadyLent
 	}
 	var active int
-	if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM users WHERE id = ? AND is_active = TRUE AND archived_at IS NULL", borrowerID).Scan(&active); err != nil {
+	if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM users WHERE id = ? AND is_active = TRUE AND archived_at IS NULL AND can_sign_in = TRUE", borrowerID).Scan(&active); err != nil {
 		return nil, fmt.Errorf("checking borrower: %w", err)
 	}
 	if active == 0 {
@@ -533,9 +533,10 @@ func (s *Store) recordOverdue(loanID, assetID, borrowerID string, dueAt, now tim
 	return true, tx.Commit()
 }
 
-// ListPeople lists the active users a loan can name, by name then email.
+// ListPeople lists the active users a loan can name, by name then email:
+// those who can sign in, not people without accounts.
 func (s *Store) ListPeople() ([]models.Person, error) {
-	rows, err := s.Query("SELECT id, email, name FROM users WHERE is_active = TRUE AND archived_at IS NULL ORDER BY name, email")
+	rows, err := s.Query("SELECT id, email, name FROM users WHERE is_active = TRUE AND archived_at IS NULL AND can_sign_in = TRUE ORDER BY name, email")
 	if err != nil {
 		return nil, fmt.Errorf("listing people: %w", err)
 	}
@@ -556,6 +557,8 @@ func (s *Store) ListPeople() ([]models.Person, error) {
 // than once per asset.
 type assetContext struct {
 	traits *categoryTraits
+	// people are the people person fields name, as read so far, by ID.
+	people map[string]models.FieldPerson
 	// list is set when the context serves a list, which reads every link
 	// and open loan at once; links and loans then hold them by asset.
 	list  bool

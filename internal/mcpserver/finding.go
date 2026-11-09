@@ -14,17 +14,19 @@ import (
 )
 
 type searchIn struct {
-	Search     string `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in at any depth"`
-	CategoryID string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
-	Condition  string `json:"condition,omitempty" jsonschema:"ok, needs_maintenance, out_of_service, or problem for either of the last two"`
-	Loan       string `json:"loan,omitempty" jsonschema:"open for assets lent out, overdue for those past due"`
-	Icon       string `json:"icon,omitempty" jsonschema:"only assets with this icon as their own, by name, such as one in icons_overview's missing_icons"`
-	VendorID   string `json:"vendor_id,omitempty" jsonschema:"only assets bought from this vendor (list_vendors gives their IDs)"`
-	RunningLow bool   `json:"running_low,omitempty" jsonschema:"only assets flagged running low, themselves or by a category"`
-	Archived   bool   `json:"archived,omitempty" jsonschema:"list archived assets instead of active ones"`
-	Favorite   bool   `json:"favorite,omitempty" jsonschema:"only assets the person you act for has starred"`
-	Limit      int    `json:"limit,omitempty" jsonschema:"how many to return, 1 to 200 (25 if not given)"`
-	Offset     int    `json:"offset,omitempty" jsonschema:"how many to skip, to page through"`
+	Search      string `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in at any depth"`
+	CategoryID  string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
+	Condition   string `json:"condition,omitempty" jsonschema:"ok, needs_maintenance, out_of_service, or problem for either of the last two"`
+	Loan        string `json:"loan,omitempty" jsonschema:"open for assets lent out, overdue for those past due"`
+	Icon        string `json:"icon,omitempty" jsonschema:"only assets with this icon as their own, by name, such as one in icons_overview's missing_icons"`
+	VendorID    string `json:"vendor_id,omitempty" jsonschema:"only assets bought from this vendor (list_vendors gives their IDs)"`
+	RunningLow  bool   `json:"running_low,omitempty" jsonschema:"only assets flagged running low, themselves or by a category"`
+	Archived    bool   `json:"archived,omitempty" jsonschema:"list archived assets instead of active ones"`
+	Favorite    bool   `json:"favorite,omitempty" jsonschema:"only assets the person you act for has starred"`
+	Person      string `json:"person,omitempty" jsonschema:"only assets whose person fields name this person, by user ID, or me for the person you act for"`
+	PersonField string `json:"person_field,omitempty" jsonschema:"with person, only this person field, by key"`
+	Limit       int    `json:"limit,omitempty" jsonschema:"how many to return, 1 to 200 (25 if not given)"`
+	Offset      int    `json:"offset,omitempty" jsonschema:"how many to skip, to page through"`
 }
 
 type searchOut struct {
@@ -35,7 +37,8 @@ type searchOut struct {
 
 func (in searchIn) query() string {
 	q := url.Values{}
-	for k, v := range map[string]string{"search": in.Search, "category_id": in.CategoryID, "condition": in.Condition, "loan": in.Loan, "icon": in.Icon, "vendor_id": in.VendorID} {
+	for k, v := range map[string]string{"search": in.Search, "category_id": in.CategoryID, "condition": in.Condition, "loan": in.Loan, "icon": in.Icon, "vendor_id": in.VendorID,
+		"person": in.Person, "person_field": in.PersonField} {
 		if v != "" {
 			q.Set(k, v)
 		}

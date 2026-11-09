@@ -56,6 +56,8 @@ Every filter is optional.
 | `purchased_between` | Assets ordered within `{"from": "2026-01-01", "to": "2026-03-31"}`, both days included, either left out for no limit. An asset with no order date counts by the day it was received; one with neither is left out. |
 | `warranty_ends_before` | Assets whose warranty ends before this day, `YYYY-MM-DD`. |
 | `contract` | Assets a contract covers, by ID, as the reader may see it ([Contracts](contracts.md)): those it names, and those in the categories it names or below them. The report then binds `{{asset.contract.*}}` to that contract. |
+| `person` | Assets whose person fields name this person, by user ID, or `me` for whoever runs it ([Person fields](data-model.md#person-fields)): only whom the reader sees in a field counts. |
+| `person_field` | With `person`, only this person field, by key. |
 
 ### Sections
 

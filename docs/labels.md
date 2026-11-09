@@ -224,7 +224,7 @@ turned bounds are used. An adaptive element's anchors place its box, which is th
 | `{{asset.id}}` | The asset's UUID |
 | `{{asset.name}}` | The asset's name |
 | `{{asset.code.<generator_type>}}` | The asset's assigned code for that generator, e.g. `{{asset.code.micro_qr}}` |
-| `{{field.<key>}}` | The asset's value for that corpus field (empty when unset) |
+| `{{field.<key>}}` | The asset's value for that corpus field (empty when unset). A person field prints the names of whom it names, as the one printing may see them, never their emails ([Person fields](data-model.md#person-fields)) |
 | `{{base_url}}` | `server.base_url` from the configuration |
 | `{{asset.categories}}` | The asset's categories, by name, separated by commas |
 | `{{asset.location}}` | Where the asset is, through location links (see [Data model](data-model.md)): `Shelf 2 › Bin A3` |

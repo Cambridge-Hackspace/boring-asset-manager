@@ -28,7 +28,7 @@ type stockIn struct {
 type newAsset struct {
 	Name           string            `json:"name"`
 	CategoryIDs    []string          `json:"category_ids,omitempty" jsonschema:"its categories, by ID (list_categories)"`
-	Fields         map[string]string `json:"fields,omitempty" jsonschema:"field values by field key, as get_category lists them"`
+	Fields         map[string]string `json:"fields,omitempty" jsonschema:"field values by field key, as get_category lists them; a person field's people by user ID, email or a name only one has, several separated by ;"`
 	Codes          []codeIn          `json:"codes,omitempty"`
 	AssignNextCode []string          `json:"assign_next_code,omitempty" jsonschema:"code types to give it the next free code of, such as [\"qr\"]"`
 	Where          string            `json:"where,omitempty" jsonschema:"the asset it is in, by ID or code, such as a shelf or bin"`
@@ -77,7 +77,7 @@ type updateIn struct {
 	Name              string            `json:"name,omitempty" jsonschema:"a new name"`
 	AddCategories     []string          `json:"add_categories,omitempty" jsonschema:"category IDs to put it in"`
 	RemoveCategories  []string          `json:"remove_categories,omitempty" jsonschema:"category IDs to take it out of"`
-	Fields            map[string]string `json:"fields,omitempty" jsonschema:"field values to set, by key; an empty value clears one. Others are kept"`
+	Fields            map[string]string `json:"fields,omitempty" jsonschema:"field values to set, by key; an empty value clears one. Others are kept. A person field's people by user ID, email or a name only one has, several separated by ;"`
 	Codes             []codeIn          `json:"codes,omitempty" jsonschema:"codes to set, replacing its code of the same type. Others are kept"`
 	RemoveCodes       []string          `json:"remove_codes,omitempty" jsonschema:"code types to remove its codes of"`
 	Stock             *stockIn          `json:"stock,omitempty" jsonschema:"count it by quantity, or change how"`
@@ -312,7 +312,11 @@ func changingTools() []tool {
 				if in.Name != "" {
 					c.Name = in.Name
 				}
-				for k, v := range in.Fields {
+				fieldsIn, err := e.resolvePeople(ctx, in.Fields, "", c.CategoryIDs)
+				if err != nil {
+					return reply[copyOut]{}, err
+				}
+				for k, v := range fieldsIn {
 					c.FieldValues[k] = v
 				}
 				codes := map[string]string{}
@@ -429,7 +433,12 @@ func changingTools() []tool {
 				body["category_ids"] = sortedKeys(ids)
 			}
 			if len(in.Fields) > 0 {
-				body["field_values"] = in.Fields
+				cats, _ := body["category_ids"].([]string)
+				values, err := e.resolvePeople(ctx, in.Fields, a.Asset.ID, cats)
+				if err != nil {
+					return reply[assetOut]{}, err
+				}
+				body["field_values"] = values
 			}
 			if len(in.Codes) > 0 || len(in.RemoveCodes) > 0 {
 				codes := map[string]string{}
@@ -802,7 +811,11 @@ func (e *env) createOne(ctx context.Context, a newAsset) (assetSummary, error) {
 		}
 		keys = append(keys, map[string]string{"generator_type": t, "assigned_code": next.Code})
 	}
-	body := map[string]any{"name": a.Name, "category_ids": a.CategoryIDs, "generator_keys": keys, "field_values": a.Fields}
+	values, err := e.resolvePeople(ctx, a.Fields, "", a.CategoryIDs)
+	if err != nil {
+		return assetSummary{}, err
+	}
+	body := map[string]any{"name": a.Name, "category_ids": a.CategoryIDs, "generator_keys": keys, "field_values": values}
 	if a.Stock != nil {
 		body["stock"] = stockBody(a.Stock)
 	}

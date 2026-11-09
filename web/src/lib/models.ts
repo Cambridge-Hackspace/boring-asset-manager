@@ -26,7 +26,8 @@ export type Permission =
   | 'vendors.manage'
   | 'comments.write'
   | 'comments.moderate'
-  | 'purchases.read';
+  | 'purchases.read'
+  | 'people.add';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -59,6 +60,8 @@ export interface User {
   loan_reminders?: boolean;
   /** Whether they are emailed when a comment mentions them. */
   mention_emails?: boolean;
+  /** False for a person without an account: a name for person fields, who cannot sign in (docs/data-model.md#person-fields). */
+  can_sign_in?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -77,7 +80,7 @@ export interface Me {
   factor_setup_required?: boolean;
 }
 
-export const fieldTypes = ['text', 'number', 'date', 'url', 'select'] as const;
+export const fieldTypes = ['text', 'number', 'date', 'url', 'select', 'person'] as const;
 export type FieldType = (typeof fieldTypes)[number];
 
 export interface SelectChoice {
@@ -90,12 +93,19 @@ export interface SelectOptions {
   default?: string | null;
 }
 
+/** A person field's options: whether it names several people, and whether its names show to anyone who can read the asset. */
+export interface PersonOptions {
+  multiple?: boolean;
+  public?: boolean;
+}
+
 export interface Field {
   id: string;
   key: string;
   label: string;
   validation_type: FieldType;
-  options?: SelectOptions | null;
+  /** A select field's choices, or a person field's options. */
+  options?: (SelectOptions & PersonOptions) | null;
   created_at: string;
   updated_at: string;
 }
@@ -251,6 +261,8 @@ export interface AssetChange {
     | 'icon'
     | 'category'
     | 'field'
+    // A person field: whom it named, by name, shown only to those who see who.
+    | 'person'
     | 'code'
     | 'stock'
     | 'unit'
@@ -320,6 +332,20 @@ export interface AssetWithDetails {
   counts_in?: CountsIn[];
   /** On its own page, the pools its stock counts in, with the places theirs is kept that the viewer may see. */
   pools?: AssetPool[];
+  /** The people its person fields name, by user ID, as the viewer may see them (docs/data-model.md#person-fields). */
+  people?: Record<string, FieldPerson>;
+  /** By field key, how many people a person field names that the viewer may not see. */
+  hidden_people?: Record<string, number>;
+}
+
+/** A person a person field names, by name, never by email. */
+export interface FieldPerson {
+  id: string;
+  name: string;
+  /** Deactivated or archived: the fields naming them stay set. */
+  inactive?: boolean;
+  /** A person without an account, who cannot sign in. */
+  no_account?: boolean;
 }
 
 /** A category an asset counts in through a link, and the category, its own or one above it, it comes through. */
@@ -692,6 +718,9 @@ export interface ImportPlan {
   links_removed: number;
   link_changes: LinkChange[];
   remove_links: boolean;
+  /** Names in person fields matching no one, which can be added as people without accounts when can_add_people is set. */
+  new_people?: string[];
+  can_add_people?: boolean;
 }
 
 /** A link an import would change, as "Screws contained in Bin A3". */
@@ -1008,6 +1037,9 @@ export interface ReportFilter {
   warranty_ends_before?: string;
   /** Assets a contract covers, by ID (docs/contracts.md); its fields bind as {{asset.contract.*}}. */
   contract?: string;
+  /** Assets whose person field, person_field or any, names this person, by user ID, or "me" for whoever runs it. */
+  person?: string;
+  person_field?: string;
 }
 
 export interface ReportSection {

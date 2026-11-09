@@ -131,12 +131,14 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
 | `search_assets` | `assets.read` | Every filter the asset list takes, favorites and the vendor bought from among them, and running low; 25 at a time, up to 200, with `offset`. |
-| `get_asset` | `assets.read` | Its fields, codes, place, contents, links, photos, hooks and icon, and where the icon comes from; and where it came from, its `purchase`, its price, order number and invoice only with `purchases.read`; the categories it `counts_in` through links, and the `pools` its stock counts in, with where else theirs is. |
+| `get_asset` | `assets.read` | Its fields (a person field's names and user IDs, as the caller may see them), codes, place, contents, links, photos, hooks and icon, and where the icon comes from; and where it came from, its `purchase`, its price, order number and invoice only with `purchases.read`; the categories it `counts_in` through links, and the `pools` its stock counts in, with where else theirs is. |
 | `look_up_code` | `assets.scan` | Its scan page ([Scanning](scanning.md)). |
 | `asset_history` | `assets.read` | |
 | `asset_graph` | `assets.read` | Follows followed links ([Following links](data-model.md#following-links)) from an asset, out, in or both, 1 to 10 hops, through the types chosen; or, without one, the map of a category or a search. At most 500 assets, saying when cut short; those the person may not read only counted. |
 | `list_loans` | `assets.track` | |
 | `list_people` | `assets.lend` or `users.manage` | Emails only to tell apart two people of the same name. |
+| `list_field_people` | `assets.read` | The people a person field of an asset, or of one being added in some categories, may be set to, by name and user ID; with `assets.track` there, and otherwise only the caller ([Person fields](data-model.md#person-fields)). `can_add` says whether `add_person` may add someone. |
+| `add_person` | `people.add` or `users.manage` | Adds a person without an account, with a name and an email or none, to name in person fields. |
 | `next_code` | `assets.write` | |
 | `export_assets` | `assets.read` | The CSV ([CSV](csv.md)), as an embedded file. |
 | `assets_pdf` | `assets.read` | The assets a search selects as a PDF table of the columns chosen ([Reports](reports.md#pdf)), as an embedded file. |
@@ -147,7 +149,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
-| `create_asset` | `assets.write` | Up to 50, with field values by key, codes or the next free code, the place it is in, stock, and an icon of its own. A field its categories do not give it is refused before anything is added. |
+| `create_asset` | `assets.write` | Up to 50, with field values by key, codes or the next free code, the place it is in, stock, and an icon of its own. A field its categories do not give it is refused before anything is added. A person field's people are given by user ID, email or a name only one person has, separated by `;`, as in `update_asset` and `copy_asset`. |
 | `copy_asset` | `assets.write` | One like another, as `GET /api/v1/assets/{id}/copy` drafts it, with a name, field values, codes and quantity that differ, and its photos, or all its attachments, if asked. |
 | `update_asset` | `assets.write` | Only what is given changes: categories and codes are added or removed, fields set or cleared, an icon of its own given or dropped, purchase details set or cleared one at a time; the rest is kept. Without `purchases.read`, its price, order number and invoice stay as they are. |
 | `move_asset` | `assets.write` | |
@@ -372,6 +374,7 @@ People, roles and scopes need `users.manage`. Channels need `settings.manage`.
 | `invite_user` | `users.manage` | Email someone an invitation again ([Access](access.md#invitations)). |
 | `set_user_password` | `users.manage` | Someone else's. The anti-lockout rule holds, as anywhere. |
 | `clear_sign_in_delay` | `users.manage` | Lets someone sign in again at once, when wrong passwords hold them back. |
+| `merge_person` | `users.manage` | Merges a person without an account into another person: every person field naming them names the other, each asset's history saying so ([Person fields](data-model.md#person-fields)). |
 | `reset_user_factors` | `users.manage` | Removes someone's second factors, for one who has lost theirs, and signs them out everywhere. Setting up one's own is never over MCP. |
 | `set_user_roles` | `users.manage` | Each role in every scope, or narrowed to some. |
 | `list_roles`, `save_role` (changing only what is given), `delete_role` | `users.manage` | `save_role` sets whether a role requires two-factor sign-in, but not the admin role's: turning that off stays with a person. |

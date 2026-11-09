@@ -156,6 +156,8 @@ func TestCheckFindsWhatStopsAFlow(t *testing.T) {
 		{"a question asked twice", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "what", Label: "What?"}, {Key: "what", Label: "And?"}}}), `"what" is asked twice`},
 		{"a question of no type", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "q", Label: "Q", Type: "colour"}}}), "of a type there is not"},
 		{"a choice with nothing to choose", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "q", Label: "Q", Type: QuestionChoice}}}), "needs choices"},
+		{"a person question with choices", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "q", Label: "Q", Type: QuestionPerson, Options: []Option{{Value: "a"}}}}}), "only a choice question"},
+		{"a person question's default not people", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "q", Label: "Q", Type: QuestionPerson, Default: "Ada Lovelace"}}}), "is people"},
 		{"a choice offered twice", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "q", Label: "Q", Type: QuestionChoice, Options: []Option{{Value: "a"}, {Value: "a"}}}}}), `offers "a" twice`},
 		{"a default that does not suit", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "q", Label: "Q", Type: QuestionYesNo, Default: "maybe"}}}), "is yes or no"},
 		{"a template naming a later value", base(choose, Step{ID: "c", Kind: KindConfirm, Text: "Leave {what}?"}, form), "names {what}, which no earlier step sets"},

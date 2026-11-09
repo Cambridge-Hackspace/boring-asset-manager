@@ -26,6 +26,7 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'templates.manage', label: 'Manage templates', description: 'Design label templates and upload their images.' },
   { key: 'reports.manage', label: 'Manage reports', description: 'Create, edit and delete saved reports; anyone who reads assets can run them.' },
   { key: 'settings.manage', label: 'Manage settings', description: 'Set up printers and notification channels.' },
+  { key: 'people.add', label: 'Add people', description: 'Add people without accounts, to name in person fields; managing users includes it.' },
   { key: 'users.manage', label: 'Manage users', description: 'Create and archive users, and manage roles and what they allow.' },
 ];
 

@@ -53,6 +53,9 @@ func (s *Store) CheckIconImport(ctx context.Context, c IconCompiler, library, ic
 // RecordImportedTx records, in each asset's history, that an import made
 // it, by whoever s acts for.
 func (s *Store) RecordImportedTx(tx *sql.Tx, assetIDs []string) error {
+	if err := s.peopleOfImportedTx(tx, assetIDs); err != nil {
+		return err
+	}
 	for _, id := range assetIDs {
 		if err := s.recordAssetEvent(tx, models.EventAssetCreated, id, models.EventPayload{Trigger: models.TriggerImport}); err != nil {
 			return err

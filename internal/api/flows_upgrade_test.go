@@ -103,8 +103,9 @@ func TestMigratingFlowsToVersion2(t *testing.T) {
 	if err := migrations.MigrateTo(st.DB, st.Dialect, migrations.FormQuestionsVersion-1); err != nil {
 		t.Fatal(err)
 	}
-	// Categories are read with their links (075).
-	applyEarly(t, st, 75)
+	// Categories are read with their links (075), and users with whether
+	// they can sign in (078).
+	applyEarly(t, st, 75, 78)
 	if err := st.SeedDefaultPermissionsAndRoles(); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +170,7 @@ func TestMigratingFlowsToVersion2(t *testing.T) {
 		}
 		return out
 	}
-	recordEarly(t, st, 75)
+	recordEarly(t, st, 75, 78)
 	if err := st.Migrate(); err != nil {
 		t.Fatal(err)
 	}

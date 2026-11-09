@@ -46,6 +46,19 @@ describe('FieldForm', () => {
     });
   });
 
+  it('creates a person field naming several people, public', async () => {
+    const { sent } = fakeApi({ 'POST /fields': (b) => ({ status: 201, body: { field: { ...field(), ...(b as object) } } }) });
+    const onsaved = vi.fn();
+    render(FieldForm, { onsaved, oncancel: () => {} });
+    await fireEvent.input(screen.getByLabelText('Label'), { target: { value: 'Trained' } });
+    await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'person' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Several people/ }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Public/ }));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create field' }));
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect(sent[0]!.body).toEqual({ key: 'trained', label: 'Trained', validation_type: 'person', options: { multiple: true, public: true } });
+  });
+
   it('stops making a value from the label once it is changed by hand', async () => {
     const { sent } = fakeApi({ 'POST /fields': (b) => ({ status: 201, body: { field: { ...field(), ...(b as object) } } }) });
     render(FieldForm, { onsaved: () => {}, oncancel: () => {} });

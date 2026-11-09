@@ -1234,7 +1234,16 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 			setNull("scan_template_id")
 		}
 		return true, nil
-	case "fields", "asset_actions", "relation_types", "templates", "images", "reports", "scopes", "assets", "vendors":
+	case "fields":
+		// A person field's values name people, whom a package never holds.
+		if p.rows[t.Name][get("id")] && get("validation_type") == "person" {
+			if p.rows[personFieldRows] == nil {
+				p.rows[personFieldRows] = map[string]bool{}
+			}
+			p.rows[personFieldRows][get("id")] = true
+		}
+		return p.rows[t.Name][get("id")], nil
+	case "asset_actions", "relation_types", "templates", "images", "reports", "scopes", "assets", "vendors":
 		return p.rows[t.Name][get("id")], nil
 	case "vendor_contacts":
 		return p.rows["vendors"][get("vendor_id")], nil
@@ -1287,7 +1296,7 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 	case "asset_categories":
 		return asset("asset_id") && p.cats[get("category_id")], nil
 	case "asset_field_values":
-		return asset("asset_id") && p.rows["fields"][get("field_id")], nil
+		return asset("asset_id") && p.rows["fields"][get("field_id")] && !p.rows[personFieldRows][get("field_id")], nil
 	case "asset_generator_keys":
 		return asset("asset_id"), nil
 	case "asset_attachments":
@@ -1410,7 +1419,12 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 	return false, nil
 }
 
-// withoutPeople is an event's payload without who did it or borrowed.
+// personFieldRows holds, among a plan's rows, the person fields it
+// packages, whose values it leaves out.
+const personFieldRows = "fields:person"
+
+// withoutPeople is an event's payload without who did it or borrowed, nor
+// whom person fields named.
 func withoutPeople(v any) (any, error) {
 	s, ok := text(v)
 	if !ok || s == "" {
@@ -1422,6 +1436,23 @@ func withoutPeople(v any) (any, error) {
 	}
 	delete(m, "actor")
 	delete(m, "borrower")
+	var changes []models.EventChange
+	if raw, ok := m["changes"]; ok && json.Unmarshal(raw, &changes) == nil {
+		kept := make([]models.EventChange, 0, len(changes))
+		for _, c := range changes {
+			if c.What != store.PersonChange {
+				kept = append(kept, c)
+			}
+		}
+		if len(kept) < len(changes) {
+			raw, err := json.Marshal(kept)
+			if err != nil {
+				return nil, err
+			}
+			m["changes"] = raw
+			delete(m, "note") // a merge's names them
+		}
+	}
 	b, err := json.Marshal(m)
 	return string(b), err
 }

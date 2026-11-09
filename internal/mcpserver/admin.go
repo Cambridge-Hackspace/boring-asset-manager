@@ -111,6 +111,18 @@ func adminTools() []tool {
 			func(userIn, map[string]any) string {
 				return "Removed their second factors; they are signed out everywhere."
 			}),
+		simple(&mcp.Tool{Name: "merge_person", Description: "Merge a person without an account (list_users gives can_sign_in false) into another person, by user ID: " +
+			"every person field naming them names the other instead, each asset's history saying so, and they leave the user list.",
+			Annotations: destroys("Merge a person", true)}, "POST /api/v1/users/{id}/merge", users,
+			func(in mergePersonIn) (request, error) {
+				if in.Into == "" {
+					return request{}, fmt.Errorf("into is required: the user ID to merge them into")
+				}
+				return request{path: pathOf("/api/v1/users/{id}/merge", in.ID), body: map[string]string{"into": in.Into}}, need(in.ID, "id")
+			},
+			func(_ mergePersonIn, out map[string]any) string {
+				return fmt.Sprintf("Merged them: %v assets now name the other person.", out["assets"])
+			}),
 		simple(&mcp.Tool{Name: "set_user_name", Description: "Change someone's name, as others see them.",
 			Annotations: changes("Rename a user", true)}, "PUT /api/v1/users/{id}/name", users,
 			func(in struct {
@@ -505,4 +517,10 @@ func incomingTools() []tool {
 type deliveriesIn struct {
 	ChannelID string `json:"channel_id,omitempty"`
 	Limit     int    `json:"limit,omitempty"`
+}
+
+// mergePersonIn merges a person without an account into another.
+type mergePersonIn struct {
+	ID   string `json:"id" jsonschema:"the person without an account, by user ID"`
+	Into string `json:"into" jsonschema:"the person to merge them into, by user ID"`
 }

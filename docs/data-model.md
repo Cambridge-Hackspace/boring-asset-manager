@@ -45,7 +45,8 @@ Who may see and change each piece is covered in [Access](access.md).
 ## Fields
 
 Every field is defined once, in a global corpus, and reused by any category that needs it. A
-field has a key, a label and a validation type: `text`, `number`, `date`, `url` or `select`.
+field has a key, a label and a validation type: `text`, `number`, `date`, `url`, `select` or
+`person`.
 
 A `select` field offers a fixed set of choices, and may name one of them as the default. Each
 choice's value must be unique, and a default, if present, must be one of the choice values.
@@ -53,6 +54,48 @@ choice's value must be unique, and a default, if present, must be one of the cho
 On the Fields page you give each choice a label only. BAM! makes the choice's value from the
 label, the same way it makes field keys, and shows it under the label with **Change** to set a
 different one. A value that is already stored never changes by itself.
+
+### Person fields
+
+A `person` field names people: who looks after a machine, whom to ask about it, who trained on
+it. It names one person, or several with `{"multiple": true}` in its options.
+
+- **Stored by user ID.** The value holds the people's user IDs, separated by commas, so a
+  renamed person's fields show their new name, and two people of the same name stay apart.
+  `asset_field_people` indexes them, so assets are found by who is in a field.
+- **Choosing someone.** Typing part of a name offers the people whose names hold it: the people
+  who may read assets there, and the people without accounts. Only those with `assets.track` for
+  the asset are offered anyone (`GET /api/v1/people/choices`). Anyone may name themselves. A
+  value naming anyone else is refused (`403`).
+- **Who sees whom.** With `assets.track` for the asset, a person field shows names. Without it,
+  it shows that someone is set, but not who (`hidden_people` counts them), and the requester
+  only themselves. A field marked public, `{"public": true}`, shows its names to anyone who can
+  read the asset, the public role included. Emails never show on asset pages, lists, history or
+  labels.
+- **Keeping whom one cannot see.** An edit keeps the people a field names that the requester
+  does not see. In a field naming one person, naming someone replaces them.
+- **People without accounts.** With `people.add`, which `users.manage` includes, typing a name
+  that matches no one offers to add it (`POST /api/v1/people`). A person without an account has
+  a name, an email or none, no password, no identity and no roles, and shows on the **Users**
+  page as unable to sign in. Signing in first through an identity provider that links by
+  verified email joins them (see [Who signs in as whom](access.md#who-signs-in-as-whom)). Giving
+  them a password, or linking an identity by hand, gives them an account too.
+- **Merging.** Those who manage users can merge a person without an account into another person
+  (`POST /api/v1/users/{id}/merge`). Every field naming the first then names the second, each
+  asset's history saying so, and the first is archived.
+- **People who leave.** Deactivating or archiving someone leaves their fields set, their name
+  marked as no longer active.
+- **History.** A change to a person field is recorded with the names it held then, and shows
+  only to those with `assets.track`.
+- **Everywhere else.** The asset list finds assets by person (`?person=me`, with
+  `person_field` to name the field), as do reports (`"person": "me"` in the filter). Label
+  bindings, `{{field.owner}}`, print the names the requester sees. CSV and Excel exports hold
+  names, and imports take emails or names (see [CSV](csv.md)). Over MCP, person fields are set
+  by user ID, email or a name only one person has. A flow's form asks for people with a
+  `person` question.
+
+A field becomes a person field, or stops being one, only while no asset has a value for it, as
+its values mean nothing as another type's.
 
 ## Categories
 
@@ -650,3 +693,4 @@ Changes to links serialize on the `asset_links` lock.
 | `072` | Contracts (`contracts`, `contract_categories`, `contract_assets`, `contract_attachments`), the reminders recorded (`contract_notices`), and `events.contract_id`. See [Contracts](contracts.md). |
 | `075` | Categories that imply other categories (`category_implies`). See [Pools](stock-and-lending.md#pools). |
 | `076` | Purchase orders (`purchase_orders`, `purchase_order_lines`, `purchase_order_attachments`), `events.purchase_order_id`, and the lock orders are numbered under. See [Purchase orders](purchase-orders.md). |
+| `078` | Person fields: the `person` validation type, `asset_field_people`, whom each asset's person fields name, `users.can_sign_in`, false for a person without an account, and the `people.add` permission. See [Person fields](#person-fields). |

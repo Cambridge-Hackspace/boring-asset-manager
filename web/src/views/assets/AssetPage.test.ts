@@ -434,3 +434,31 @@ describe('AssetPage pools', () => {
     expect(screen.queryByRole('button', { name: 'Move to another place' })).toBeNull();
   });
 });
+
+describe('AssetPage person fields', () => {
+  const personField = (key: string, label: string) => ({
+    field: { id: key, key, label, validation_type: 'person' as const, options: null, created_at: '', updated_at: '' },
+    is_required: false,
+  });
+
+  it('names people by name, marking those who left, and says someone is set without saying who', async () => {
+    const asset: AssetWithDetails = {
+      ...withStock(5, false),
+      effective_fields: [personField('keeper', 'Keeper'), personField('trained', 'Trained'), personField('ask', 'Ask about it')],
+      field_values: { keeper: 'u1', trained: 'u2' },
+      people: { u1: { id: 'u1', name: 'Ada', inactive: true }, u2: { id: 'u2', name: 'Cy', no_account: true } },
+      hidden_people: { trained: 1, ask: 1 },
+    };
+    fakeApi({
+      'GET /assets/a1': () => ({ asset }),
+      'GET /generators': () => ({ generators: [] }),
+      'GET /assets/a1/history': () => ({ events: [] }),
+    });
+    render(AssetPage, { params: { id: 'a1' } });
+    const keeper = await screen.findByText('Keeper');
+    expect(keeper.nextElementSibling!.textContent!.trim()).toBe('Ada (no longer active)');
+    expect(screen.getByText('Trained').nextElementSibling!.textContent!.trim()).toBe('Cy (no account), someone else');
+    expect(screen.getByText('Ask about it').nextElementSibling!.textContent!.trim()).toBe('Someone');
+    expect(document.body.textContent).not.toContain('u1');
+  });
+});

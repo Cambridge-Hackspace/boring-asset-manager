@@ -264,7 +264,12 @@ func (s *Store) LongestLabelValues() (codes, fields map[string]string, err error
 		return nil, nil, err
 	}
 	if err := longest(fields, `SELECT f.field_key, v.value FROM asset_field_values v
-		JOIN fields f ON f.id = v.field_id JOIN assets a ON a.id = v.asset_id WHERE a.archived_at IS NULL`); err != nil {
+		JOIN fields f ON f.id = v.field_id JOIN assets a ON a.id = v.asset_id WHERE a.archived_at IS NULL AND f.validation_type <> 'person'`); err != nil {
+		return nil, nil, err
+	}
+	// A person field prints names, not the IDs it holds.
+	if err := longest(fields, `SELECT f.field_key, u.name FROM asset_field_people p
+		JOIN fields f ON f.id = p.field_id JOIN users u ON u.id = p.user_id JOIN assets a ON a.id = p.asset_id WHERE a.archived_at IS NULL`); err != nil {
 		return nil, nil, err
 	}
 	return codes, fields, nil

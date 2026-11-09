@@ -124,6 +124,10 @@ describe('stock', () => {
     expect(describeEvent(event('asset.restocked', {}))).toBe('Marked restocked');
     expect(describeEvent(event('asset.created', { trigger: 'import' }))).toBe('Created by an import');
     expect(describeEvent(event('asset.edited', {}))).toBe('Edited');
+    expect(describeEvent(event('asset.edited', { note: 'Merged Cy into Ada.' }))).toBe('Merged Cy into Ada');
+    expect(describeChange({ what: 'person', key: 'keeper', label: 'Keeper', from: 'Cy', to: 'Ada' }, 'asset.edited')).toBe(
+      describeChange({ what: 'field', key: 'keeper', label: 'Keeper', from: 'Cy', to: 'Ada' }, 'asset.edited'),
+    );
     expect(describeEvent(event('asset.restored', {}))).toBe('Restored');
     const condition = (to: string, note?: string) =>
       describeEvent(event('asset.condition_changed', { changes: [{ what: 'condition', from: 'ok', to }], note }));

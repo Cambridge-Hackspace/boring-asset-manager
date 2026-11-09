@@ -81,7 +81,16 @@ type Filter struct {
 	// Contract keeps assets a contract covers, by ID (docs/contracts.md); a
 	// report filtering by one binds {{asset.contract.*}} to it.
 	Contract string `json:"contract,omitempty"`
+	// Person keeps assets whose person field keyed PersonField, or any
+	// person field when it is empty, names this person, by user ID, or
+	// PersonMe for whoever runs the report (docs/data-model.md#person-fields).
+	// Only whom the runner sees in a field counts.
+	Person      string `json:"person,omitempty"`
+	PersonField string `json:"person_field,omitempty"`
 }
+
+// PersonMe, as Filter.Person, is whoever runs the report.
+const PersonMe = "me"
 
 // DateRange is from one date to another, both included, each YYYY-MM-DD,
 // and either empty for no limit.
@@ -160,6 +169,12 @@ func (s *Spec) check(fieldKnown func(string) bool) error {
 		return fail("%v", err)
 	}
 	if err := textcheck.Check("filter.vendor", s.Filter.Vendor, textcheck.MaxName); err != nil {
+		return fail("%v", err)
+	}
+	if err := textcheck.Check("filter.person", s.Filter.Person, textcheck.MaxName); err != nil {
+		return fail("%v", err)
+	}
+	if err := textcheck.Check("filter.person_field", s.Filter.PersonField, textcheck.MaxName); err != nil {
 		return fail("%v", err)
 	}
 	if err := textcheck.Check("filter.contract", s.Filter.Contract, textcheck.MaxName); err != nil {
@@ -324,8 +339,25 @@ type Row struct {
 	Cells   []string `json:"cells"`
 }
 
+// namesPerson reports whether an asset's person field keyed field, or any
+// person field when it is empty, names person, as the asset is shown.
+func namesPerson(a *models.AssetWithDetails, person, field string) bool {
+	for key := range a.PersonFields {
+		if field != "" && key != field {
+			continue
+		}
+		for _, id := range strings.Split(a.FieldValues[key], ",") {
+			if strings.TrimSpace(id) == person {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Matches applies the parts of a filter the store does not: categories,
-// running low, where it came from, and the contract covering it.
+// running low, where it came from, the contract covering it, and whom
+// its person fields name.
 // categories is every category, for their parents and flags. The asset is as the request may see it, so a
 // vendor hidden from it matches no vendor.
 func (f Filter) Matches(a *models.AssetWithDetails, categories []models.Category) bool {
@@ -333,6 +365,9 @@ func (f Filter) Matches(a *models.AssetWithDetails, categories []models.Category
 		return false
 	}
 	if f.Contract != "" && !coveredBy(a, f.Contract) {
+		return false
+	}
+	if f.Person != "" && !namesPerson(a, f.Person, f.PersonField) {
 		return false
 	}
 	if len(f.CategoryIDs) == 0 && !f.RunningLow {

@@ -143,6 +143,26 @@ func (s *Store) UpdateField(id, label, validationType string, rawOptions json.Ra
 	if _, err := fields.ValidateFieldDefinition(existing.Key, label, validationType, rawOptions); err != nil {
 		return nil, err
 	}
+	// A person field's values are user IDs, which mean nothing as another
+	// type's, and other types' values name no one.
+	if (existing.ValidationType == fields.TypePerson) != (validationType == fields.TypePerson) {
+		if used, err := s.fieldHasValues(id); err != nil {
+			return nil, err
+		} else if used {
+			return nil, ErrFieldInUse
+		}
+	}
+	// A field naming several people may not become one naming one while
+	// an asset's value names several.
+	if validationType == fields.TypePerson && fields.PersonOptionsOf(existing).Multiple {
+		if next, _ := fields.ParsePersonOptions(rawOptions); !next.Multiple {
+			if several, err := s.fieldNamesSeveral(id); err != nil {
+				return nil, err
+			} else if several {
+				return nil, fmt.Errorf("%w: an asset's value names several people", ErrFieldInUse)
+			}
+		}
+	}
 
 	now := time.Now().UTC()
 	var optionsStr *string

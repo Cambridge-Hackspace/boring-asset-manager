@@ -1,6 +1,6 @@
 # Assets
 
-An asset is anything you keep track of. Open **Assets** to list them; search by name, code, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition, loan or favorites. The **Where** column says what each is in.
+An asset is anything you keep track of. Open **Assets** to list them; search by name, code, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition, loan or favorites. **Assigned to: Me** lists the assets whose person fields name you. The **Where** column says what each is in.
 
 ## Favorites
 

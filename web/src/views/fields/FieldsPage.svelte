@@ -46,6 +46,10 @@
   }
 
   function describe(f: Field): string {
+    if (f.validation_type === 'person') {
+      const parts = [f.options?.multiple ? 'several' : 'one', ...(f.options?.public ? ['public'] : [])];
+      return parts.join(', ');
+    }
     if (f.validation_type !== 'select') return '';
     const n = f.options?.choices.length ?? 0;
     return `${n} choice${n === 1 ? '' : 's'}`;
