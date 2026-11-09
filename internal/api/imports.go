@@ -202,7 +202,30 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "check the people in its fields")
 		return
 	}
-	created, err := s.actingStore(r).ImportAssets(plan.Changes, plan.Links)
+	// confirm=true files the assets it makes as confirmed, where their
+	// categories use review states (docs/review.md), which needs
+	// assets.confirm in each one's scopes; otherwise they are drafts.
+	acting := s.actingStore(r)
+	switch r.FormValue("confirm") {
+	case "", "false":
+	case "true":
+		scopesOf, err := s.store.ScopeResolver()
+		if err != nil {
+			writeServerError(w, err, "read the categories' scopes")
+			return
+		}
+		for _, row := range plan.Changes {
+			if row.ID == "" && !Allows(r.Context(), rbac.PermAssetsConfirm, scopesOf(row.CategoryIDs)) {
+				writeJSONError(w, http.StatusForbidden, fmt.Sprintf("Confirming %q needs assets.confirm in its scopes; nothing was imported", row.Name))
+				return
+			}
+		}
+		acting = acting.Confirming()
+	default:
+		writeJSONError(w, http.StatusBadRequest, "confirm must be true or false")
+		return
+	}
+	created, err := acting.ImportAssets(plan.Changes, plan.Links)
 	if errors.Is(err, store.ErrGeneratorCodeExists) || errors.Is(err, store.ErrAssetNotFound) || errors.Is(err, store.ErrImportOutdated) {
 		// Something changed since the check; nothing was imported.
 		writeJSONError(w, http.StatusConflict, "Assets changed while importing, and nothing was imported: "+err.Error())

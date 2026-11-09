@@ -2,6 +2,7 @@
 
 import type { AssetChange, AssetEvent, AssetLink, AssetStock, AssetWithDetails, Condition, EffectiveField, Field, FieldType, GeneratorKey, LinkedAsset, RelationType } from './models';
 import { personName } from './people';
+import { describeReviewEvent } from './review';
 
 /** The HTML input type for a field type (select fields use <select>). */
 export function inputType(type: FieldType): string {
@@ -173,6 +174,7 @@ const hookCauses: Record<string, string> = {
   'asset.overdue': 'as its loan became overdue',
   'asset.flow_overdue': 'as it passed its date',
   'asset.label_printed': 'as its label was printed',
+  'asset.review_due': 'as its review fell due',
 };
 
 /** What an event in an asset's history says, without who did it. */
@@ -230,6 +232,9 @@ export function describeEvent(e: AssetEvent): string {
       return `Comment edited${commentWhere(p.comment)}`;
     case 'comment.deleted':
       return `Comment deleted${commentWhere(p.comment)}`;
+    case 'asset.review_changed':
+    case 'asset.review_due':
+      return describeReviewEvent(e);
     case 'warranty.expiring':
       // The day it ends, as written: a date, not a moment.
       return p.due_at ? `Warranty ending on ${p.due_at.slice(0, 10)}` : 'Warranty ending';

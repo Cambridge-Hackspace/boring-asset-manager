@@ -21,6 +21,7 @@
   import { reorderHref, siteName } from '../../lib/vendors';
   import { contractEnded, coverSentence, kindLabel } from '../../lib/contracts';
   import CatalogPanel from '../../components/CatalogPanel.svelte';
+  import CategoryReviewSection from '../../components/CategoryReviewSection.svelte';
   import { categoryPath, linkChoices } from '../../lib/pools';
 
   // /categories/new and /categories/:id
@@ -181,6 +182,7 @@
       { key: 'icon', label: 'Icon', on: !isSystem },
       { key: 'links', label: 'Links and hooks', on: (canManage && (relationTypes.length > 0 || scanTemplates.length > 0 || hooks.length > 0)) || (conflicts[id] ?? 0) > 0 },
       { key: 'counts', label: 'Counts in', on: !isSystem && (canManage || impliesList.length > 0 || includedList.length > 0) },
+      { key: 'review', label: 'Review', on: canManage || !!category?.effective_review?.enabled },
       { key: 'vendors', label: 'Vendors', on: !isSystem && ((canManage && vendors.length > 0) || vendorList.length > 0) },
       { key: 'catalog', label: 'Catalog', on: !isSystem },
       { key: 'contracts', label: 'Contracts', on: !isSystem && contracts.length > 0 },
@@ -996,6 +998,20 @@
         {#if canManage}<button type="submit" class="btn-secondary" disabled={!unsaved.includes('links')}>Save links</button>{/if}
       </form>
     </section>
+  {/if}
+
+  {#if canManage || category.effective_review?.enabled}
+    <div id="tab-review" hidden={tab !== 'review'}>
+      <CategoryReviewSection
+        {category}
+        {categories}
+        {canManage}
+        onsaved={(c) => {
+          categories = categories.map((x) => (x.id === c.id ? c : x));
+          saved = 'Saved the review settings.';
+        }}
+      />
+    </div>
   {/if}
 
   {#if !isSystem && contracts.length}

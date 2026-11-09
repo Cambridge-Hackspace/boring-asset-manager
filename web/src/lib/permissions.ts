@@ -14,6 +14,8 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'assets.lend', label: 'Lend', description: 'Check lendable assets out to anyone, and any loan back in.' },
   { key: 'assets.write', label: 'Edit assets', description: 'Create, edit and import assets, and mark them working again.' },
   { key: 'assets.delete', label: 'Archive assets', description: 'Archive and restore assets.' },
+  { key: 'assets.confirm', label: 'Confirm assets', description: 'Confirm assets in categories that use review states, and add them as confirmed.' },
+  { key: 'assets.verify', label: 'Verify assets', description: 'Verify confirmed assets, or return them to draft saying why.' },
   { key: 'labels.print', label: 'Print labels', description: 'Send labels to printers.' },
   { key: 'comments.write', label: 'Write comments', description: 'Comment on what they may read, attaching files, and edit and delete their own, in its scopes.' },
   { key: 'comments.moderate', label: 'Moderate comments', description: 'Delete anyone’s comments, in the scopes of what they are on.' },
@@ -37,11 +39,11 @@ export function permissionLabel(key: string): string {
 
 /**
  * The permissions a role may hold in some scopes only: those acting on
- * assets, seeing what they cost, running flows, managing vendors, which
+ * assets, reviewing them, seeing what they cost, running flows, managing vendors, which
  * are in scopes as assets are, and writing and moderating comments, in
  * the scopes of what they are on.
  */
-export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hook', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run', 'vendors.manage', 'comments.write', 'comments.moderate', 'purchases.read'];
+export const scopable: Permission[] = ['assets.read', 'assets.scan', 'assets.hook', 'events.read', 'assets.track', 'stock.record', 'assets.report', 'assets.borrow', 'assets.lend', 'assets.write', 'assets.delete', 'flows.run', 'vendors.manage', 'comments.write', 'comments.moderate', 'purchases.read', 'assets.confirm', 'assets.verify'];
 
 /**
  * The permissions of a role that assigning it in these scopes only leaves

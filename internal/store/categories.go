@@ -275,7 +275,7 @@ var cloneCategoryLinks = []struct{ table, columns string }{
 }
 
 // CloneCategory makes a copy of a category beside it, under the same
-// parent: its settings, fields, suggested link types, hooks, scopes,
+// parent: its settings, review settings among them, fields, suggested link types, hooks, scopes,
 // preferred vendors, the categories it counts in, and scan and label templates (the same templates, not copies of them), but
 // not its subcategories or its assets. An empty name names it "<name>
 // copy". The copy is not flagged running low by hand; with a threshold, it
@@ -298,8 +298,8 @@ func (s *Store) CloneCategory(id, name string) (*models.Category, error) {
 	cloneID := uuid.NewString()
 	now := time.Now().UTC()
 	err = s.withInventory(func(ic *inventoryChange) error {
-		res, err := s.TxExec(ic.tx, `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, stock_unit, is_lendable, is_running_low, low_stock_threshold, scan_template_id, created_at, updated_at)
-			SELECT ?, ?, parent_id, color_hex, is_consumable, stock_unit, is_lendable, ?, low_stock_threshold, scan_template_id, ?, ? FROM categories WHERE id = ?`,
+		res, err := s.TxExec(ic.tx, `INSERT INTO categories (id, name, parent_id, color_hex, is_consumable, stock_unit, is_lendable, is_running_low, low_stock_threshold, scan_template_id, `+reviewColumns+`, created_at, updated_at)
+			SELECT ?, ?, parent_id, color_hex, is_consumable, stock_unit, is_lendable, ?, low_stock_threshold, scan_template_id, `+reviewColumns+`, ?, ? FROM categories WHERE id = ?`,
 			cloneID, name, false, now, now, id)
 		if err != nil {
 			return fmt.Errorf("copying category: %w", err)
@@ -334,6 +334,9 @@ func (s *Store) GetCategoryByID(id string) (*models.Category, error) {
 	}
 	list := []models.Category{c}
 	if err := s.withLabelTemplates(list); err != nil {
+		return nil, err
+	}
+	if err := s.fillCategoryReview(list); err != nil {
 		return nil, err
 	}
 	return &list[0], nil
@@ -374,6 +377,9 @@ func (s *Store) ListCategories() ([]models.Category, error) {
 		result = append(result, cat)
 	}
 	if err := s.withLabelTemplates(result); err != nil {
+		return nil, err
+	}
+	if err := s.fillCategoryReview(result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -419,8 +425,11 @@ func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Categor
 
 	err := s.withInventory(func(ic *inventoryChange) error {
 		// Read the flag under the lock, so two simultaneous changes record one event.
-		var was bool
-		err := s.TxQueryRow(ic.tx, "SELECT is_running_low FROM categories WHERE id = ?", id).Scan(&was)
+		var (
+			was       bool
+			oldParent sql.NullString
+		)
+		err := s.TxQueryRow(ic.tx, "SELECT is_running_low, parent_id FROM categories WHERE id = ?", id).Scan(&was, &oldParent)
 		if err == sql.ErrNoRows {
 			return ErrCategoryNotFound
 		}
@@ -430,6 +439,16 @@ func (s *Store) UpdateCategoryFrom(id string, in CategoryInput) (*models.Categor
 		query := `UPDATE categories SET name = ?, parent_id = ?, color_hex = ?, is_consumable = ?, stock_unit = ?, is_lendable = ?, is_running_low = ?, low_stock_threshold = ?, updated_at = ? WHERE id = ?`
 		if _, err := s.TxExec(ic.tx, query, in.Name, in.ParentID, in.ColorHex, in.IsConsumable, in.Unit, in.IsLendable, in.IsRunningLow, in.LowStockThreshold, time.Now().UTC(), id); err != nil {
 			return fmt.Errorf("updating category: %w", err)
+		}
+		// Moved, it takes other review settings from above.
+		newParent := ""
+		if in.ParentID != nil {
+			newParent = *in.ParentID
+		}
+		if oldParent.String != newParent {
+			if err := s.refreshAllDueTx(ic.tx); err != nil {
+				return err
+			}
 		}
 		return s.setFlagByHand(ic, id, was, in.IsRunningLow)
 	})
@@ -469,7 +488,8 @@ func (s *Store) DeleteCategory(id string) error {
 		if err != nil {
 			return fmt.Errorf("reattaching orphaned assets to uncategorized: %w", err)
 		}
-		return nil
+		// Its assets and subcategories may no longer take its review settings.
+		return s.refreshAllDueTx(ic.tx)
 	})
 }
 
@@ -643,5 +663,8 @@ func (s *Store) ListAllCategories() ([]models.Category, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return all, s.withLabelTemplates(all)
+	if err := s.withLabelTemplates(all); err != nil {
+		return nil, err
+	}
+	return all, s.fillCategoryReview(all)
 }

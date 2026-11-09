@@ -67,6 +67,7 @@
     ['place', 'Move it to a place'],
     ['category', 'Move it to another category'],
     ['hook', 'Trigger a hook'],
+    ['confirm', 'Confirm it, where review states are on'],
   ];
 
   // Form: each question, by a number of its own, so that removing or moving
@@ -813,6 +814,9 @@
     {#if step.location?.mode === 'fixed'}
       <LocationPicker id="{p}-place" value={step.location.asset_id ? { id: step.location.asset_id, name: 'The place chosen' } : null} onchange={(place) => (step.location = { mode: 'fixed', asset_id: place?.id })} />
     {/if}
+    <label class="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={!!step.confirm} onchange={(e) => (step.confirm = e.currentTarget.checked || undefined)} /> File it as confirmed, where its category uses review states
+    </label>
   {:else if step.kind === 'label'}
     <div class="grid gap-3 sm:grid-cols-3">
       <div>

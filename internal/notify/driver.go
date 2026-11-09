@@ -87,6 +87,7 @@ var EventKinds = []EventKind{
 	{Kind: models.EventAssetOverdue, Label: "A loan is overdue"},
 	{Kind: models.EventFlowOverdue, Label: "Something left through a flow is past its date"},
 	{Kind: models.EventWarrantyExpiring, Label: "A warranty is about to end"},
+	{Kind: models.EventAssetReviewDue, Label: "An asset's review falls due"},
 	{Kind: models.EventContractExpiring, Label: "A contract is about to end, or its notice deadline is near"},
 	{Kind: models.EventContractExpired, Label: "A contract ends"},
 	{Kind: models.EventOrderOrdered, Label: "A purchase order is placed"},

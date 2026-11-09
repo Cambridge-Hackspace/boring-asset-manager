@@ -71,6 +71,11 @@ func (s *Store) ImportAssets(rows []ImportRow, links []ImportLink) ([]string, er
 				return err
 			}
 			before[i] = snap
+			if snap != nil {
+				if err := s.holdForReviewTx(tx, row.ID); err != nil {
+					return err
+				}
+			}
 			for _, t := range sortedKeys(row.Codes) {
 				if _, err := s.TxExec(tx, "DELETE FROM asset_generator_keys WHERE asset_id = ? AND generator_type = ?", row.ID, t); err != nil {
 					return fmt.Errorf("releasing code: %w", err)

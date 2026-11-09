@@ -243,10 +243,16 @@ func writeScopeError(w http.ResponseWriter, err error, action string) {
 // name only, and the borrower too unless the request holds assets.track
 // for the asset or is the borrower.
 func redactPeople(r *http.Request, a *models.AssetWithDetails) {
+	track := Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes)
+	self := ""
+	if u := CurrentUser(r.Context()); u != nil {
+		self = u.ID
+	}
+	redactReview(a, track, self)
 	if a.Loan == nil {
 		return
 	}
-	loan := redactLoan(r, *a.Loan, Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes))
+	loan := redactLoan(r, *a.Loan, track)
 	a.Loan = &loan
 }
 

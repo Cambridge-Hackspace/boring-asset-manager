@@ -15,6 +15,7 @@
     { kind: 'asset.overdue', label: 'Its loan becomes overdue' },
     { kind: 'asset.flow_overdue', label: 'Past the date a flow left it until' },
     { kind: 'asset.label_printed', label: 'Its label is printed' },
+    { kind: 'asset.review_due', label: 'Its review falls due' },
   ];
 
   /** What fires a hook, in a few words, for the list of hooks. */

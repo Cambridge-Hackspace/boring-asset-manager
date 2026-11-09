@@ -236,6 +236,8 @@ turned bounds are used. An adaptive element's anchors place its box, which is th
 | `{{asset.contract.name}}`, `{{asset.contract.kind}}`, `{{asset.contract.vendor}}`, `{{asset.contract.reference}}`, `{{asset.contract.start_date}}`, `{{asset.contract.end_date}}` | The contract in force covering it longest: its name, kind, vendor's name, reference and dates, as `YYYY-MM-DD` (empty when none is; see [Contracts](contracts.md#reports-and-labels)) |
 | `{{asset.contract.cost}}`, `{{asset.contract.currency}}`, `{{asset.contract.billing}}` | That contract's cost, as a decimal, its currency, and how often it is paid (empty without `purchases.read` in its vendor's scopes) |
 | `{{asset.needs}}`, `{{asset.needs_all}}`, `{{asset.needed_by}}`, `{{asset.needed_by_all}}` | How many assets it needs, and how many need it, through followed links (see [Following links](data-model.md#following-links)): one hop away, and within 10 hops |
+| `{{asset.review_state}}`, `{{asset.review_due}}` | Its review state, *Draft*, *Confirmed* or *Verified*, and when it is next due for review, YYYY-MM-DD; empty where its categories do not use [review states](review.md) |
+| `{{asset.confirmed_at}}`, `{{asset.confirmed_by}}` | When it was last confirmed, YYYY-MM-DD, and by whom (empty without `assets.track`) |
 | `{{scan_url}}` | The asset's scan page, `{{base_url}}/scan/<asset ID>` (see [Scanning](scanning.md)): a QR code of it takes whoever scans the label there |
 | `{{asset.icon}}` | The name of the icon the asset is drawn with (see [Icons](icons.md)), its own or its categories' (empty when none); as an `icon` element's `icon`, the icon itself |
 

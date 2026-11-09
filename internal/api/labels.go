@@ -211,7 +211,33 @@ func bindingData(a *models.AssetWithDetails, baseURL string) labels.Data {
 	if c := currentContract(a.Contracts, time.Now()); c != nil {
 		d.Contract = contractData(*c)
 	}
+	if rv := a.Review; rv != nil {
+		d.Review.State = reviewStateText(rv.State)
+		if rv.DueAt != nil {
+			d.Review.Due = rv.DueAt.UTC().Format("2006-01-02")
+		}
+		if rv.ConfirmedAt != nil {
+			d.Review.ConfirmedAt = rv.ConfirmedAt.UTC().Format("2006-01-02")
+		}
+		if by := rv.ConfirmedBy; by != nil {
+			d.Review.ConfirmedBy = by.Name
+			if d.Review.ConfirmedBy == "" {
+				d.Review.ConfirmedBy = UnnamedUser
+			}
+		}
+	}
 	return d
+}
+
+// reviewStateText is how a review state reads on a label or in a report.
+func reviewStateText(state string) string {
+	switch state {
+	case models.ReviewConfirmed:
+		return "Confirmed"
+	case models.ReviewVerified:
+		return "Verified"
+	}
+	return "Draft"
 }
 
 // currentContract is the contract covering an asset that its bindings show:

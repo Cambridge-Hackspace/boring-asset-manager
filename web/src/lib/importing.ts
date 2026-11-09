@@ -30,13 +30,18 @@ export function targetOptions(fields: Field[], generators: GeneratorInfo[]): Tar
   ];
 }
 
-/** The form an import request sends; removeLinks removes links no row states, and sheet names a workbook's sheet. */
-export function importForm(file: File, mapping?: string[], removeLinks = false, sheet = ''): FormData {
+/**
+ * The form an import request sends; removeLinks removes links no row states,
+ * sheet names a workbook's sheet, and confirm files the assets it adds as
+ * confirmed where their categories use review states (docs/review.md).
+ */
+export function importForm(file: File, mapping?: string[], removeLinks = false, sheet = '', confirm = false): FormData {
   const form = new FormData();
   form.append('file', file);
   if (sheet) form.append('sheet', sheet);
   if (mapping) form.append('mapping', JSON.stringify(mapping));
   if (removeLinks) form.append('remove_links', 'true');
+  if (confirm) form.append('confirm', 'true');
   return form;
 }
 

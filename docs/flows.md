@@ -261,7 +261,9 @@ Optionally it narrows to:
 #### Create (`create`)
 
 Files a new asset in the chosen category, with the fields Set fields steps gave it, named from a
-template (`name`). Optionally it puts the asset in a place, fixed or scanned (`location`).
+template (`name`). Optionally it puts the asset in a place, fixed or scanned (`location`). Where
+the category uses [review states](review.md), the asset is a draft, or confirmed with
+`"confirm": true`, which needs `assets.confirm`.
 
 #### Link (`link`)
 
@@ -305,6 +307,8 @@ Does, in order, any of:
 - `borrow` it to the runner, or `return` it
 - move it to a `place`, or another `category`
 - trigger a `hook`: `{"kind": "hook", "hook": key}`
+- `confirm` it, where its categories use [review states](review.md) and it is not confirmed
+  already; elsewhere this does nothing. It needs `assets.confirm`.
 
 Archiving is how bam removes an asset: it is kept, out of the lists, and restorable. Setting its
 fields is a Set fields step's job.

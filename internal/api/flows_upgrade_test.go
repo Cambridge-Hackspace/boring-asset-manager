@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -40,10 +41,14 @@ func openBlankStore(t *testing.T) *store.Store {
 	return st
 }
 
-// applyEarly runs later migrations that only add tables the store reads, so
-// a test at an older schema can write through the store; recordEarly then
-// records them as run. On MariaDB each table takes the
-// collation categories has, for its foreign keys.
+// timestampType finds the type MariaDB is given as DATETIME(6).
+var timestampType = regexp.MustCompile(`\bTIMESTAMP\b`)
+
+// applyEarly runs later migrations that only add tables and columns the
+// store reads, so a test at an older schema can write through the store;
+// recordEarly then records them as run. On MariaDB each table takes the
+// collation categories has, for its foreign keys, and timestamps are
+// DATETIME(6), as migrating makes them.
 func applyEarly(t *testing.T, st *store.Store, versions ...int) {
 	t.Helper()
 	collation := ""
@@ -74,6 +79,9 @@ func applyEarly(t *testing.T, st *store.Store, versions ...int) {
 			if collation != "" && strings.HasPrefix(stmt, "CREATE TABLE") {
 				stmt += " DEFAULT CHARACTER SET utf8mb4 COLLATE " + collation
 			}
+			if collation != "" {
+				stmt = timestampType.ReplaceAllString(stmt, "DATETIME(6)")
+			}
 			if _, err := st.Exec(stmt); err != nil {
 				t.Fatalf("migration %d: %v", v, err)
 			}
@@ -103,9 +111,10 @@ func TestMigratingFlowsToVersion2(t *testing.T) {
 	if err := migrations.MigrateTo(st.DB, st.Dialect, migrations.FormQuestionsVersion-1); err != nil {
 		t.Fatal(err)
 	}
-	// Categories are read with their links (075), and users with whether
-	// they can sign in (078).
-	applyEarly(t, st, 75, 78)
+	// Categories are read with their links (075), users with whether they
+	// can sign in (078), and assets and categories with their review states
+	// (079).
+	applyEarly(t, st, 75, 78, 79)
 	if err := st.SeedDefaultPermissionsAndRoles(); err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +179,7 @@ func TestMigratingFlowsToVersion2(t *testing.T) {
 		}
 		return out
 	}
-	recordEarly(t, st, 75, 78)
+	recordEarly(t, st, 75, 78, 79)
 	if err := st.Migrate(); err != nil {
 		t.Fatal(err)
 	}

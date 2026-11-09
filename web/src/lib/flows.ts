@@ -58,7 +58,7 @@ export interface FlowLabel {
   template_id?: string;
 }
 
-export type ChangeKind = 'archive' | 'condition' | 'borrow' | 'return' | 'place' | 'category' | 'hook';
+export type ChangeKind = 'archive' | 'condition' | 'borrow' | 'return' | 'place' | 'category' | 'hook' | 'confirm';
 
 export interface Change {
   kind: ChangeKind;
@@ -98,6 +98,8 @@ export interface Step {
   match?: { field: string; value: string } | null;
   name?: string;
   location?: { mode: 'fixed' | 'scan'; asset_id?: string } | null;
+  /** Create: file it as confirmed where its category uses review states (docs/review.md). */
+  confirm?: boolean;
   label?: FlowLabel | null;
   changes?: Change[];
   /**

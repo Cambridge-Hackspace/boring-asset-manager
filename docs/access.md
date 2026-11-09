@@ -604,6 +604,8 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `assets.scan` | Scanning (see [Scanning](scanning.md)). | Yes |
 | `assets.track` | Seeing the people around assets: who borrowed them, who changed them, and the loans list. | Yes |
 | `purchases.read` | Seeing what assets cost: their price, currency, order number and invoice, what contracts cost, the prices in vendors' catalogs, and purchase orders' prices (see [Seeing prices](#seeing-prices)). | Yes |
+| `assets.confirm` | Confirming assets in categories that use review states, and filing new ones as confirmed (see [Review states](review.md)). | Yes |
+| `assets.verify` | Verifying confirmed assets, or returning them to draft with a note saying why (see [Review states](review.md)). | Yes |
 | `assets.hook` | Triggering hooks (see [Hooks](hooks.md)). | Yes |
 | `events.read` | Receiving events live (see [Hooks](hooks.md)). | Yes |
 | `stock.record` | Using, restocking and flagging stock, without being able to edit assets. | Yes |
@@ -651,8 +653,8 @@ decide who reaches what. Moving categories under others changes their assets' sc
 A role holds each permission either in every scope (`assets.write`) or in some
 (`tools:assets.write`, `default:assets.write`). Only the asset permissions are scopable:
 `assets.read`, `assets.scan`, `assets.hook`, `events.read`, `assets.track`, `assets.write`,
-`assets.delete`, `assets.report`, `assets.borrow`, `assets.lend`, `stock.record`, `purchases.read`
-and `flows.run`, and `vendors.manage`, since vendors are in scopes as assets are (see
+`assets.delete`, `assets.report`, `assets.borrow`, `assets.lend`, `stock.record`, `purchases.read`,
+`assets.confirm`, `assets.verify` and `flows.run`, and `vendors.manage`, since vendors are in scopes as assets are (see
 [Vendors](vendors.md)), and `comments.write` and `comments.moderate`, in the scopes of what
 comments are on (see [Comments](comments.md#who-sees-and-writes-them)).
 
@@ -1016,6 +1018,7 @@ is an RFC 3339 time, or `null` for never.
 | `069` | Grants `comments.write` to every role that writes assets, and `comments.moderate` to every role that archives them, in the same scopes. |
 | `070` | Grants `purchases.read` to every role that reads assets, in the scopes it reads them in, since reading showed prices until then. |
 | `078` | Grants `people.add` to every role that manages users, which includes it. |
+| `079` | Grants `assets.confirm` to every role that writes assets, in the scopes it writes them in, so what it adds is taken as true as before until a category uses review states. `assets.verify` goes to the admin role only. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

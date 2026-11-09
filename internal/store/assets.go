@@ -305,13 +305,14 @@ func (s *Store) GetAssetByID(id string) (*models.AssetWithDetails, error) {
 // readAsset reads an asset as GetAssetByID does, taking what it needs from
 // whole tables from ctx, which a list shares across its assets.
 func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetails, error) {
-	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, icon_name, label_icon_name, ` + stockColumns + ` FROM assets WHERE id = ?`
+	query := `SELECT id, name, created_at, updated_at, archived_at, asset_condition, condition_note, icon_name, label_icon_name, ` + stockColumns + `, ` + assetReviewColumns + ` FROM assets WHERE id = ?`
 	var (
 		a               models.Asset
 		sc              stockScan
 		icon, labelIcon sql.NullString
+		review          assetReviewRow
 	)
-	err := s.QueryRow(query, id).Scan(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt, &a.Condition, &a.ConditionNote, &icon, &labelIcon}, sc.dest()...)...)
+	err := s.QueryRow(query, id).Scan(append(append([]any{&a.ID, &a.Name, &a.CreatedAt, &a.UpdatedAt, &a.ArchivedAt, &a.Condition, &a.ConditionNote, &icon, &labelIcon}, sc.dest()...), review.dest()...)...)
 	if err == sql.ErrNoRows {
 		return nil, ErrAssetNotFound
 	}
@@ -455,6 +456,9 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 		return nil, err
 	}
 	details.Scopes = traits.scopesOf(catIDs)
+	if err := s.reviewDetails(details, review, ctx, traits, catIDs); err != nil {
+		return nil, err
+	}
 	details.CountsIn = traits.countsIn(catIDs)
 	if err := s.contractDetails(details, ctx, catIDs, traits.parents); err != nil {
 		return nil, err
@@ -520,12 +524,53 @@ type AssetFilter struct {
 	// (docs/data-model.md#person-fields).
 	Person      string
 	PersonField string
+	// Review is a review state, or ReviewDue, ReviewOverdue or
+	// ReviewProposed (docs/review.md#finding-what-to-review): the assets in
+	// categories using review states that match.
+	Review string
+}
+
+// Review filters beyond the states: assets whose review is due, those
+// overdue, and those with changes from an assistant waiting.
+const (
+	ReviewDue      = "due"
+	ReviewOverdue  = "overdue"
+	ReviewProposed = "proposed"
+)
+
+// ErrInvalidReviewFilter is returned for a review filter that is none of
+// those.
+var ErrInvalidReviewFilter = errors.New("review must be draft, confirmed, verified, due, overdue or proposed")
+
+// matchesReview reports whether an asset matches a review filter.
+func matchesReview(a *models.AssetWithDetails, filter string) bool {
+	r := a.Review
+	if filter == "" {
+		return true
+	}
+	if r == nil {
+		return false
+	}
+	switch filter {
+	case ReviewDue:
+		return r.Due
+	case ReviewOverdue:
+		return r.Overdue
+	case ReviewProposed:
+		return r.Proposal != nil
+	}
+	return r.State == filter
 }
 
 // FilterAssets lists the assets a filter matches: active ones newest first,
 // archived ones most recently archived first.
 func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 	categoryID, search, archived := f.CategoryID, f.Search, f.Archived
+	switch f.Review {
+	case "", ReviewDue, ReviewOverdue, ReviewProposed, models.ReviewDraft, models.ReviewConfirmed, models.ReviewVerified:
+	default:
+		return nil, ErrInvalidReviewFilter
+	}
 	var (
 		whereClauses []string
 		args         []any
@@ -628,6 +673,9 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 			continue
 		}
 		if search != "" && !matchesNameOrCode(detail, search) {
+			continue
+		}
+		if !matchesReview(detail, f.Review) {
 			continue
 		}
 		results = append(results, *detail)
@@ -804,6 +852,9 @@ func (s *Store) UpdateAssetWithPurchase(id, name string, categoryIDs []string, g
 	err = s.withInventory(func(ic *inventoryChange) error {
 		before, err := s.snapshotAssetTx(ic.tx, id)
 		if err != nil {
+			return err
+		}
+		if err := s.holdForReviewTx(ic.tx, id); err != nil {
 			return err
 		}
 		if err := s.updateAssetTx(ic.tx, id, name, now, cats, replaceKeys, generatorKeys, resolvedValues); err != nil {

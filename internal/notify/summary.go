@@ -241,6 +241,12 @@ func summarize(n Notification, esc func(string) string) summary {
 		if p.DueAt != nil {
 			out.Description = "Its warranty ends on " + p.DueAt.UTC().Format("2 January 2006") + "."
 		}
+	case e.Kind == models.EventAssetReviewDue:
+		out.Title, out.Color = "Review due: "+name, discordWarning
+		out.Description = "It is due to be checked again."
+		if p.DueAt != nil {
+			out.Description = "It is due to be checked again by " + p.DueAt.UTC().Format("2 January 2006") + "."
+		}
 	case (e.Kind == models.EventContractExpiring || e.Kind == models.EventContractExpired) && p.Contract != nil:
 		out = contractSummary(e.Kind, p, base, esc)
 	case (e.Kind == models.EventOrderOrdered || e.Kind == models.EventOrderReceived) && p.PurchaseOrder != nil:
@@ -441,6 +447,8 @@ func hookCause(kind string) string {
 		return "as it passed its date"
 	case models.EventAssetLabelPrinted:
 		return "as its label was printed"
+	case models.EventAssetReviewDue:
+		return "as its review fell due"
 	}
 	return "by an event"
 }

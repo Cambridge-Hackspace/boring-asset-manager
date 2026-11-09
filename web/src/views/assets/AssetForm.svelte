@@ -16,6 +16,7 @@
   import LocationPicker from '../../components/LocationPicker.svelte';
   import PersonPicker from '../../components/PersonPicker.svelte';
   import { currencies, priceProblem, purchaseRequest } from '../../lib/purchases';
+  import { usesReview } from '../../lib/review';
 
   // /assets/new and /assets/:id/edit
   let { params }: { params: Record<string, string> } = $props();
@@ -85,6 +86,10 @@
   let codeNotes = $state<Record<string, string>>({});
   // New assets' labels join the print queue (docs/printing.md), as each person last chose.
   const canSpool = isNew && session.can('labels.print');
+  // Where its categories use review states (docs/review.md), it is a draft
+  // unless whoever adds it may confirm it and chooses to.
+  let confirmIt = $state(false);
+  const mayConfirm = $derived(isNew && session.can('assets.confirm') && usesReview(categories, categoryIds));
   let queueLabel = $state(canSpool && queueNewLabels(session.user?.id ?? ''));
 
   const tree = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
@@ -278,6 +283,7 @@
     }
     // Every detail, so one emptied is forgotten; a new asset sends them only if it has any.
     if (!isNew || hasPurchaseDraft) body.purchase = Object.fromEntries(Object.entries(purchase).map(([k, v]) => [k, v.trim()]));
+    if (mayConfirm && confirmIt) body.confirm = true;
     try {
       if (isNew) {
         const res = await request<{ asset: AssetWithDetails }>('POST', '/assets', body);
@@ -660,6 +666,9 @@
       {/each}
     </details>
 
+    {#if mayConfirm}
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={confirmIt} /> Confirm it: I have checked its record is right</label>
+    {/if}
     {#if canSpool}
       <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={queueLabel} /> Add a label to the print queue</label>
     {/if}

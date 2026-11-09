@@ -184,6 +184,12 @@ a bin and fill it in the same import. A link stated from both ends counts once.
 Links that do not exist yet are added. For a single type ([Links](data-model.md)), a new link moves
 the asset, ending its old one. By default, nothing else is removed.
 
+Where categories use [review states](review.md), the assets an import adds are drafts. With
+`confirm=true`, a form field beside the file and mapping, they are confirmed instead, which needs
+`assets.confirm` in each one's scopes (`403` otherwise, importing nothing). An export's
+`review_state` column, there when any asset's categories use review states, is for reading: an
+import ignores it.
+
 With `remove_links=true`, the links of the file's assets that no row states are removed too. This
 is a form field, sent beside the file and mapping; the web app calls it "Also remove links that no
 row states". With it, an exported file, edited, imports back exactly. Assets the file does not

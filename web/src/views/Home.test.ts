@@ -93,6 +93,25 @@ describe('Home', () => {
     expect(sent.find((r) => r.path === '/purchase-orders')).toBeTruthy();
   });
 
+  it('lists what waits to be reviewed, for those who can confirm, linking to the list filtered', async () => {
+    session.permissions = ['assets.read', 'assets.confirm'];
+    fakeApi({
+      'GET /auth/me/favorites': () => ({ favorites: [] }),
+      'GET /loans': () => ({ loans: [] }),
+      'GET /categories': () => ({ categories: [cat('tools', 'Tools', { is_running_low: false, effective_review: { enabled: true, months: 12, on_edit: 'draft', self_verify: false } })] }),
+      'GET /assets': () => ({ assets: [] }),
+      'GET /review': () => ({ drafts: 3, due: 1, overdue: 0, proposals: 2, to_verify: 0 }),
+    });
+    render(Home, { params: {} });
+    const card = await screen.findByRole('region', { name: 'To review' });
+    const links = within(card).getAllByRole('link');
+    expect(links.map((l) => [l.textContent?.replace(/\s+/g, ' ').trim(), l.getAttribute('href')])).toEqual([
+      ['1 review due', '/assets?review=due'],
+      ['2 with assistant changes to accept or reject', '/assets?review=proposed'],
+      ['3 drafts to confirm', '/assets?review=draft'],
+    ]);
+  });
+
   it('reads no vendors when no running-low category names one', async () => {
     const { sent } = api([cat('glue', 'Glue'), cat('tape', 'Tape', { is_running_low: false, vendor_ids: ['v1'] })]);
     render(Home, { params: {} });

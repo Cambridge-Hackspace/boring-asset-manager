@@ -34,6 +34,7 @@ type newAsset struct {
 	Where          string            `json:"where,omitempty" jsonschema:"the asset it is in, by ID or code, such as a shelf or bin"`
 	Stock          *stockIn          `json:"stock,omitempty" jsonschema:"count it by quantity"`
 	Icon           string            `json:"icon,omitempty" jsonschema:"an icon of its own, by name (icons_overview lists them); empty to be drawn with its categories'"`
+	Confirm        bool              `json:"confirm,omitempty" jsonschema:"in categories using review states, file it as confirmed rather than as a draft; it is a draft anyway where the instance lands assistants' changes as drafts"`
 }
 
 type createIn struct {
@@ -821,6 +822,9 @@ func (e *env) createOne(ctx context.Context, a newAsset) (assetSummary, error) {
 	}
 	if a.Icon != "" {
 		body["icon_name"] = a.Icon
+	}
+	if a.Confirm {
+		body["confirm"] = true
 	}
 	var res apiAsset
 	if err := e.call(ctx, http.MethodPost, "/api/v1/assets", body, &res); err != nil {

@@ -4,6 +4,7 @@
   import { request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import { session } from '../../lib/session.svelte';
 
   let {
     entry,
@@ -136,6 +137,18 @@
         <p id="remove-links-help-{entry.id}" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
           Without this, an import only adds links and moves things between containers. With it, links of the file's assets that
           no row mentions are removed, so an exported file you edit imports back exactly.
+        </p>
+      </div>
+    {/if}
+
+    {#if session.can('assets.confirm') && (entry.plan?.create ?? 0) > 0}
+      <div class="mb-4 max-w-prose">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" bind:checked={entry.confirm} aria-describedby="confirm-help-{entry.id}" /> Confirm the assets it adds
+        </label>
+        <p id="confirm-help-{entry.id}" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+          Where their categories use review states, the assets an import adds are drafts until someone confirms them. Tick this if you
+          have checked the file.
         </p>
       </div>
     {/if}

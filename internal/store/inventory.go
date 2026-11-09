@@ -315,7 +315,18 @@ func (s *Store) recordAssetEventID(tx *sql.Tx, kind, assetID string, payload mod
 		return "", fmt.Errorf("reading asset for event: %w", err)
 	}
 	payload.Asset = &a
-	return s.insertEventID(tx, kind, nil, &assetID, payload)
+	id, err := s.insertEventID(tx, kind, nil, &assetID, payload)
+	if err != nil || s.noReview {
+		return id, err
+	}
+	// What making or editing an asset does to its review (docs/review.md).
+	switch kind {
+	case models.EventAssetCreated:
+		err = s.reviewCreatedTx(tx, assetID)
+	case models.EventAssetEdited:
+		err = s.reviewEditedTx(tx, assetID)
+	}
+	return id, err
 }
 
 // insertEvent stores an event about a category or an asset, filling in the

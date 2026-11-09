@@ -59,6 +59,7 @@ describe('kindHelp', () => {
       place: /\bto a place\b/,
       category: /\banother category\b/,
       hook: /\btriggers a hook\b/,
+      confirm: /\bconfirms it\b/,
     };
     for (const [kind, words] of Object.entries(named)) expect(kindHelp.change, kind).toMatch(words);
   });

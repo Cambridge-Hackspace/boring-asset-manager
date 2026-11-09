@@ -328,6 +328,13 @@ func eventText(e models.Event) string {
 		return "A flow passed its date"
 	case models.EventWarrantyExpiring:
 		return "Warranty ending"
+	case models.EventAssetReviewChanged:
+		if p.Review != nil {
+			return "Review: " + p.Review.To
+		}
+		return "Review changed"
+	case models.EventAssetReviewDue:
+		return "Review due"
 	}
 	return e.Kind
 }

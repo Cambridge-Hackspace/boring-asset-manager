@@ -71,7 +71,7 @@ describe('CategoryPage', () => {
     api();
     render(CategoryPage, { params: { id: 'power' } });
     const tabs = await screen.findByRole('navigation', { name: 'Parts of this category' });
-    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['About', 'Fields', 'Stock and lending', 'Icon', 'Counts in', 'Catalog', 'Attachments', 'Comments']);
+    expect(within(tabs).getAllByRole('link').map((a) => a.textContent?.trim())).toEqual(['About', 'Fields', 'Stock and lending', 'Icon', 'Counts in', 'Review', 'Catalog', 'Attachments', 'Comments']);
     expect(within(tabs).getByRole('link', { name: 'About' }).getAttribute('aria-current')).toBe('page');
     expect(within(tabs).getByRole('link', { name: 'Fields' }).getAttribute('href')).toBe('/?tab=fields');
     expect(screen.queryByRole('table')).toBeNull();

@@ -80,6 +80,9 @@ A table has 1 to 30 columns, each a `heading` and a `binding`.
   `reference`, `start_date`, `end_date`, `cost`, `currency` and `billing`, the contract filtered
   by when the filter names one, and otherwise the one in force covering it longest (see
   [Contracts](contracts.md#reports-and-labels)).
+- An asset's review (see [Review states](review.md)) binds as on labels: `{{asset.review_state}}`,
+  `{{asset.review_due}}`, and when it was last confirmed and by whom, `{{asset.confirmed_at}}` and
+  `{{asset.confirmed_by}}`, blank where its categories do not use review states.
 - Followed links (see [Following links](data-model.md#following-links)) are counted by
   `{{asset.needs}}` and `{{asset.needed_by}}`, the assets one hop away, and `{{asset.needs_all}}`
   and `{{asset.needed_by_all}}`, those within 10 hops. A table sorted by

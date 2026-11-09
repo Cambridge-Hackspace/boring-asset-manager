@@ -9,6 +9,11 @@ var Uncovered = map[string]string{}
 
 // Refused lists the API routes deliberately out of reach over MCP, and why.
 var Refused = map[string]string{
+	// Review states (docs/review.md#assistants): an assistant proposes,
+	// and a person decides.
+	"POST /api/v1/assets/{id}/proposal/accept":     "accepting an assistant's changes is a person's decision, in the web app",
+	"POST /api/v1/assets/{id}/proposal/reject":     "rejecting an assistant's changes is a person's decision, in the web app",
+	"PUT /api/v1/settings/review":                  "whether assistants' changes land as drafts is not for an assistant to turn off; an admin sets it in the web app",
 	"GET /api/v1/oauth/clients/{id}":               "the consent page's, where a person signed in approves an assistant; never an assistant's own",
 	"POST /api/v1/oauth/authorize":                 "the consent page's, where a person signed in approves an assistant; never an assistant's own",
 	"POST /api/v1/auth/login":                      "signing in with a password; an assistant signs in by OAuth (#44) or presents a token",

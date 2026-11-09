@@ -20,6 +20,7 @@ type searchIn struct {
 	Loan        string `json:"loan,omitempty" jsonschema:"open for assets lent out, overdue for those past due"`
 	Icon        string `json:"icon,omitempty" jsonschema:"only assets with this icon as their own, by name, such as one in icons_overview's missing_icons"`
 	VendorID    string `json:"vendor_id,omitempty" jsonschema:"only assets bought from this vendor (list_vendors gives their IDs)"`
+	Review      string `json:"review,omitempty" jsonschema:"in categories using review states: draft, confirmed or verified; due or overdue for review; or proposed, with an assistant's changes waiting"`
 	RunningLow  bool   `json:"running_low,omitempty" jsonschema:"only assets flagged running low, themselves or by a category"`
 	Archived    bool   `json:"archived,omitempty" jsonschema:"list archived assets instead of active ones"`
 	Favorite    bool   `json:"favorite,omitempty" jsonschema:"only assets the person you act for has starred"`
@@ -38,7 +39,7 @@ type searchOut struct {
 func (in searchIn) query() string {
 	q := url.Values{}
 	for k, v := range map[string]string{"search": in.Search, "category_id": in.CategoryID, "condition": in.Condition, "loan": in.Loan, "icon": in.Icon, "vendor_id": in.VendorID,
-		"person": in.Person, "person_field": in.PersonField} {
+		"person": in.Person, "person_field": in.PersonField, "review": in.Review} {
 		if v != "" {
 			q.Set(k, v)
 		}
@@ -118,7 +119,7 @@ func findingTools() []tool {
 	return []tool{
 		define(&mcp.Tool{
 			Name: "search_assets",
-			Description: "Find assets: by words in their name, codes or the place they are in, by category, condition, loan or stock. " +
+			Description: "Find assets: by words in their name, codes or the place they are in, by category, condition, loan, stock or review state. " +
 				"Each comes with its codes, where it is, its condition, stock and loan. Use get_asset for everything about one.",
 			Annotations: readOnly("Search assets"),
 		}, []string{"GET /api/v1/assets"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in searchIn) (reply[searchOut], error) {

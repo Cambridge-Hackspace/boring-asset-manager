@@ -60,6 +60,12 @@ const (
 	// PermPeopleAdd adds people without accounts, to name in person fields
 	// (docs/data-model.md#person-fields). users.manage includes it.
 	PermPeopleAdd = "people.add"
+	// PermAssetsConfirm moves an asset from draft to confirmed
+	// (docs/review.md), in the scopes held, and files new ones as confirmed.
+	PermAssetsConfirm = "assets.confirm"
+	// PermAssetsVerify moves a confirmed asset to verified, or back to
+	// draft with a note saying why, in the scopes held.
+	PermAssetsVerify = "assets.verify"
 )
 
 var (
@@ -95,6 +101,8 @@ func AllPermissions() []string {
 		PermCommentsModerate,
 		PermPurchasesRead,
 		PermPeopleAdd,
+		PermAssetsConfirm,
+		PermAssetsVerify,
 	}
 }
 
@@ -157,7 +165,7 @@ const ScopeSeparator = ":"
 const DefaultScope = "default"
 
 // scopable are the permissions a role may hold in some scopes only: those
-// acting on assets, seeing what they cost, running flows, which act on
+// acting on assets, reviewing them, seeing what they cost, running flows, which act on
 // them, managing vendors, which are in scopes as assets are, and writing
 // and moderating comments, in the scopes of what they are on.
 var scopable = map[string]bool{
@@ -173,6 +181,8 @@ var scopable = map[string]bool{
 	PermCommentsWrite:    true,
 	PermCommentsModerate: true,
 	PermPurchasesRead:    true,
+	PermAssetsConfirm:    true,
+	PermAssetsVerify:     true,
 }
 
 // Scopable reports whether perm may be held in some scopes only.

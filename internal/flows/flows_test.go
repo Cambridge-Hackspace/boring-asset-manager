@@ -256,19 +256,19 @@ func TestCheckFindsWhatStopsAFlow(t *testing.T) {
 		}},
 		Step{ID: "long_only", Kind: KindConfirm, Text: "{owner}: {name}", When: long},
 		Step{ID: "set", Kind: KindSetFields, Fields: []FieldValue{{Field: "owner", Value: "{owner}"}, {Field: "until", Value: "{leave_until}"}, {Field: "wood", Value: "{kind_of_wood}"}}, Photo: "{photo}"},
-		Step{ID: "file", Kind: KindCreate, Name: "{owner}: {name}", Location: &Location{Mode: PlaceScan}},
+		Step{ID: "file", Kind: KindCreate, Name: "{owner}: {name}", Location: &Location{Mode: PlaceScan}, Confirm: true},
 		Step{ID: "label", Kind: KindLabel, Label: &Label{Mode: LabelPrint, Destination: "pool:q1", TemplateID: "tpl"}},
 		Step{ID: "set_2", Kind: KindSetFields, Fields: []FieldValue{{Field: "length", Value: "{boards}"}, {Field: "wood", Value: "pine"}}},
 		Step{ID: "change", Kind: KindChange, Changes: []Change{
 			{Kind: ChangeCondition, Condition: "needs_maintenance", Note: "left by {owner}"},
 			{Kind: ChangePlace, AssetID: "shelf"}, {Kind: ChangeCategory, CategoryID: "other"}, {Kind: ChangeHook, Hook: "identify"},
-			{Kind: ChangeBorrow}, {Kind: ChangeReturn}, {Kind: ChangeArchive},
+			{Kind: ChangeBorrow}, {Kind: ChangeReturn}, {Kind: ChangeConfirm}, {Kind: ChangeArchive},
 		}},
 	)
 	if got := problems(full); len(got) != 0 {
 		t.Errorf("a full flow: %v", got)
 	}
-	want := []string{rbac.PermAssetsBorrow, rbac.PermAssetsHook, rbac.PermAssetsDelete, rbac.PermAssetsReport, rbac.PermAssetsWrite, rbac.PermLabelsPrint}
+	want := []string{rbac.PermAssetsBorrow, rbac.PermAssetsConfirm, rbac.PermAssetsHook, rbac.PermAssetsDelete, rbac.PermAssetsReport, rbac.PermAssetsWrite, rbac.PermLabelsPrint}
 	if got := full.Permissions(); !reflect.DeepEqual(got, sorted(want)) {
 		t.Errorf("permissions: %v", got)
 	}

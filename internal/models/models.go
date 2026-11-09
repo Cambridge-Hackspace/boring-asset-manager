@@ -176,10 +176,14 @@ type Category struct {
 	// those whose members count in it (docs/stock-and-lending.md#pools):
 	// only for totals, filters and reports, never for scopes, fields or
 	// templates.
-	Implies    []string  `json:"implies"`
-	IncludedBy []string  `json:"included_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	Implies    []string `json:"implies"`
+	IncludedBy []string `json:"included_by"`
+	// Review is its own review settings, and EffectiveReview those in
+	// effect, with what it takes from above (docs/review.md).
+	Review          CategoryReview `json:"review"`
+	EffectiveReview ReviewRules    `json:"effective_review"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
 }
 
 // Event kinds (docs/stock-and-lending.md).
@@ -309,6 +313,13 @@ const (
 	EventOrderCanceled = "purchase_order.canceled"
 	EventOrderOrdered  = "purchase_order.ordered"
 	EventOrderReceived = "purchase_order.received"
+	// EventAssetReviewChanged records an asset's review state moving
+	// (docs/review.md), with the Review and any Note; it is for history.
+	// EventAssetReviewDue records once that an asset's review falls due,
+	// with the date as DueAt, and again for each new date. Channels can
+	// subscribe to it.
+	EventAssetReviewChanged = "asset.review_changed"
+	EventAssetReviewDue     = "asset.review_due"
 )
 
 // HistoryOnly reports whether events of this kind are kept only for an
@@ -318,7 +329,7 @@ func HistoryOnly(kind string) bool {
 	case EventQuantityChanged, EventAssetCreated, EventAssetEdited, EventAssetArchived, EventAssetRestored,
 		EventAssetCheckedOut, EventAssetCheckedIn, EventAssetLabelPrinted, EventCategoryIconChanged, EventCategoryEdited, EventAuthRoleKept,
 		EventVendorCreated, EventVendorEdited, EventCommentEdited, EventCommentDeleted, EventContractCreated, EventContractEdited,
-		EventOrderCreated, EventOrderEdited, EventOrderCanceled:
+		EventOrderCreated, EventOrderEdited, EventOrderCanceled, EventAssetReviewChanged:
 		return true
 	}
 	return false
@@ -416,6 +427,8 @@ type EventPayload struct {
 	// OrderLines are what a purchase_order.ordered event ordered, or a
 	// purchase_order.received event received.
 	OrderLines []EventOrderLine `json:"order_lines,omitempty"`
+	// Review is an asset's review state moving.
+	Review *EventReview `json:"review,omitempty"`
 }
 
 // EventOrder is a purchase order, as an event names it
@@ -852,6 +865,9 @@ type AssetWithDetails struct {
 	// the places their stock is kept: set by the API, with the assets the
 	// requester may see.
 	Pools []AssetPool `json:"pools,omitempty"`
+	// Review is its review state (docs/review.md): nil while none of its
+	// categories uses review states.
+	Review *AssetReview `json:"review"`
 	// People are the people its person fields name, by user ID
 	// (docs/data-model.md#person-fields); HiddenPeople are, by field key,
 	// how many people a field names that the API does not show the

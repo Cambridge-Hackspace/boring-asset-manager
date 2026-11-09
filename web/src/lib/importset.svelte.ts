@@ -20,6 +20,8 @@ export class ImportEntry {
   checkedWith = $state('');
   /** Removing links no row states, when the file has a links column. */
   removeLinks = $state(false);
+  /** Confirming the assets it adds, where their categories use review states. */
+  confirm = $state(false);
   /** Started from the mapping last used for these headers, not the suggested one. */
   remembered = $state(false);
   busy = $state(false);
@@ -112,7 +114,7 @@ export class ImportEntry {
     this.busy = true;
     this.error = '';
     try {
-      this.result = await request<ImportResult>('POST', '/assets/import', importForm(this.file, this.mapping, this.hasLinks && this.removeLinks, this.sheet));
+      this.result = await request<ImportResult>('POST', '/assets/import', importForm(this.file, this.mapping, this.hasLinks && this.removeLinks, this.sheet, this.confirm));
       rememberMapping(userId, this.headers, this.mapping);
       return true;
     } catch (err) {

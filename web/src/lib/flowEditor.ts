@@ -23,10 +23,10 @@ export const kindHelp: Record<StepKind, string> = {
   form: 'Asks questions of its own; later steps use the answers.',
   set_fields: 'Sets fields from answers or other values: on the new asset before Create, or the one found or filed after.',
   find: 'Finds something already here: by its code, by search, or from a list.',
-  create: 'Files a new asset in the chosen category, with the fields set before it.',
+  create: 'Files a new asset in the chosen category, with the fields set before it, as a draft or confirmed where review states are on.',
   link: 'Links it to other assets: ones they find, or ones you name, such as the kit it belongs to.',
   label: 'Prints its label, queues it, or shows it on screen.',
-  change: 'Archives it, sets its condition, lends or returns it, moves it to a place or another category, or triggers a hook.',
+  change: 'Archives it, sets its condition, lends or returns it, moves it to a place or another category, triggers a hook, or confirms it where review states are on.',
   confirm: 'Shows what will happen, and asks to go ahead.',
   done: 'Says what was done, with Start again for the next person.',
 };
