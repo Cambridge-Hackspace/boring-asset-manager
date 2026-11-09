@@ -127,6 +127,27 @@
       "empty_when_skipped": {
         "second": ["size"]
       }
+    },
+    {
+      "name": "find something, then link it, by a link the runner finds for and one the flow names",
+      "fields": [{ "key": "owner", "label": "Owner", "validation_type": "text" }],
+      "definition": {
+        "version": 2,
+        "category_ids": ["tools"],
+        "steps": [
+          { "id": "find", "kind": "find", "find_by": ["list"] },
+          { "id": "link", "kind": "link", "relation_type": "contains", "find": { "find_by": ["list"] } },
+          { "id": "link_2", "kind": "link", "relation_type": "contains", "assets": ["kit"], "when": { "value": "owner", "op": "set" } },
+          { "id": "done", "kind": "done", "title": "Added" }
+        ]
+      },
+      "available": {
+        "find": ["today", "now", "user", "flow", "category", "category_id"],
+        "link": ["today", "now", "user", "flow", "category", "category_id", "asset", "asset_id", "code", "owner"],
+        "link_2": ["today", "now", "user", "flow", "category", "category_id", "asset", "asset_id", "code", "owner", "linked"],
+        "done": ["today", "now", "user", "flow", "category", "category_id", "asset", "asset_id", "code", "owner", "linked"]
+      },
+      "empty_when_skipped": {}
     }
   ]
 }

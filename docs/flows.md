@@ -28,6 +28,10 @@ could do:
 | Borrow to oneself, or return | `assets.borrow` |
 | Trigger a hook | `assets.hook` |
 | Find | `assets.read`, and `assets.scan` to find by scanning |
+| Link | `assets.write`; and, to find what to link to, `assets.read`, and `assets.scan` to find by scanning |
+
+A Link step also needs its creator to hold `assets.read` in the scopes of each category it finds in,
+`assets.write` in those of the category it files into, and `assets.write` on each asset it names.
 
 ## Running a flow
 
@@ -57,7 +61,7 @@ A run moves one step at a time, and each answer names the step it answers. A ste
 skipped nor answered twice. Two answers at once do the step's work once.
 
 Steps that ask nothing are done as soon as they are reached. These are Set fields, Label, Change, a
-fixed category, and Create without a scanned place.
+fixed category, Create without a scanned place, and Link to assets the flow names.
 
 A step that fails, such as on an asset the runner may not change, leaves the run on it, to try
 again. What it had done before failing is not done twice.
@@ -86,13 +90,16 @@ Moving the date on clears it, so it is announced again if the new date passes to
 
 ## Starter flows
 
-Two ready-made starter flows are there to adjust:
+Three ready-made starter flows are there to adjust:
 
 - **Leave something**: Choose category → Form → Set fields → Create → Label → Done. Its form asks
   what it is, as `{name}`, and for each field the categories record. Its Set fields step sets each
   field from its answer, and is left out when the categories record none. With only one category,
   there is nothing to choose, so it starts with its Form.
 - **Collect it**: Find → Confirm → Change (archive) → Done.
+- **Add to a kit**: Find → Link → Done. Its Link links what was found to one other asset, found by
+  scan, search or list in any category, by the link type that puts things in places ("contained
+  in"), and is required. Its Done says `{asset} is in {linked}.`
 
 ## Building a flow
 
@@ -167,6 +174,7 @@ templates, such as `{owner}: {what}`, and in defaults.
 | Each question's key | A form, with its answer. |
 | Each field's key | A Set fields step, for each field it sets. |
 | `{asset}`, `{asset_id}`, `{code}`, and the asset's field values | Finding or making an asset. |
+| `{linked}` | A Link step: the names of what it linked the asset to, joined by commas. |
 
 A value not set, such as by a step that was skipped, is empty.
 
@@ -251,6 +259,34 @@ Optionally it narrows to:
 Files a new asset in the chosen category, with the fields Set fields steps gave it, named from a
 template (`name`). Optionally it puts the asset in a place, fixed or scanned (`location`).
 
+#### Link (`link`)
+
+Links the asset found or filed to other assets, such as the kit a tool belongs to, or what a
+machine needs to run. Its settings:
+
+- `relation_type`: the link type, by ID.
+- `outgoing`: which way it reads. Set, the asset is the link's from end, read by the type's name
+  ("contains"); otherwise its far end, read by the inverse ("contained in"). A type that reads the
+  same both ways ignores it.
+- What it links to, one of:
+  - `find`: the runner finds them, as Find finds: `find_by` (scan, search, list), among the active
+    assets in `categories` or below them (in any category when it names none) that the runner may
+    read and change, optionally narrowed by `filed_by` and `match`.
+  - `assets`: asset IDs the flow names. The step then asks nothing.
+- `repeat`: link any number, with **Add another** and **Done**, rather than one.
+- `required`: one must be linked; otherwise it can be skipped.
+- `allow_create` and `create_category`: the runner may file something new to link to, with only a
+  name, in that category.
+
+Each link is made through the links endpoint, as the runner, so it keeps every rule links keep: no
+linking an asset to itself, no link twice, nothing archived, and no loop of a single type. A refused
+link leaves the run on the step, saying why, as `"<name>: <reason>"`. Tried again, what the step had
+linked, or filed, is not linked or filed twice.
+
+A link of a single type, such as "contains", moves what it holds out of where it was, as linking
+does anywhere. The step says so: before, "Linking it moves it out of Kit 3"; after, "Moved Drill out
+of Kit 3."
+
 #### Label (`label`)
 
 Prints the asset's label to a printer or pool (`print`), adds it to the print queue (`queue`), or
@@ -271,7 +307,8 @@ fields is a Set fields step's job.
 
 #### Confirm and Done (`confirm`, `done`)
 
-`confirm` shows what will happen, including Set fields' values. `done`, last, shows what did.
+`confirm` shows what will happen, including Set fields' values and each link a Link to named
+assets will make, with what it moves. `done`, last, shows what did.
 
 ### Example
 
@@ -319,7 +356,13 @@ When a flow is saved:
 - A fixed value in Set fields must suit its field: a date a date, a number a number, a choice one of
   the field's choices.
 - A question's default must suit its question.
-- The creator must hold every permission the steps use.
+- A Link's relation type must exist; it links to what the runner finds or to assets it names, not
+  both; the categories it finds in, and the one it files into, must exist; and a field it matches
+  by must be one those categories record.
+- The category a Link files something new into must require no fields, since it files with a name
+  and nothing else.
+- The creator must hold every permission the steps use, and, for a Link, may read where it finds,
+  write where it files, and change each asset it names.
 
 Required fields must also be set before each Create. Consider each category a Create may file
 into: those its Choose category step offers, the one it fixes, or the flow's only category. For a
@@ -406,7 +449,10 @@ may start from that asset.
 The `prompt` is what the current step asks or shows:
 
 - asks: the categories offered; the form's questions, with their defaults rendered; the ways to
-  find, and, by list or search, up to 200 assets to pick from; a place to scan;
+  find, and, by list or search, up to 200 assets to pick from; a place to scan; for a Link, also
+  how the link reads (`relation`), what it has `linked` so far, whether it may `repeat` and is
+  `required`, the category it may file into (`create_in`), and what linking `moves` the asset out
+  of;
 - shows: what Confirm says will happen; what the run did.
 
 ### Progress
@@ -433,6 +479,7 @@ its answer:
 | `answers` | A form, by its questions' keys. |
 | `asset_id`, or a scanned `code` | Find. |
 | `place_code` | A scanned place. |
+| `asset_ids`, scanned `codes`, or `create: {"name"}`; and `done` | Link. Linking any number, each answer links and stays on the step until `done`; `done` alone moves on, or skips a Link not required. |
 | nothing | Trying a step that failed again. |
 
 An answer refused, by the flow or by the endpoint behind a step, is answered with its status, the
@@ -455,7 +502,9 @@ The flow tools are `list_flows`, `flow_starters`, `save_flow`, `delete_flow` and
 - `list_flows` lists flows, reads a flow, lists those an asset starts, and lists what is overdue.
 - `save_flow` changes only what is given. A version 1 definition is refused, as the API refuses it.
 - `run_flow`, for a person, starts a run (optionally `from_asset_id`), reads it, answers it, and
-  gives it up. A form is answered by its questions' keys, which a form step's summary names.
+  gives it up. A form is answered by its questions' keys, which a form step's summary names. A Link
+  is answered with `asset_ids` or `codes`, `create`, and `done`, as the API takes them.
+- `save_flow` takes Link steps as the API does.
 - A photo question cannot be answered with a photo over MCP.
 
 ## Storage

@@ -195,4 +195,68 @@ describe('FlowRunPage', () => {
     expect(sent[0]!.body).toEqual({ asset_id: 'a1' });
     expect(location.search).toBe('');
   });
+
+  it('links to one thing after another, with Add another and Done, or something new (#264)', async () => {
+    const link = (linked: { id: string; name: string }[]): Prompt => ({
+      step: 'link',
+      kind: 'link',
+      title: 'Which kit?',
+      relation: 'contained in',
+      find_by: ['list'],
+      repeat: true,
+      required: true,
+      create_in: 'Kits',
+      moves: 'Kit 0',
+      linked: linked.map((l) => ({ ...l, categories: [] })),
+      assets: [
+        { id: 'k1', name: 'Kit 1', categories: ['Kits'] },
+        { id: 'k2', name: 'Kit 2', categories: ['Kits'] },
+      ].filter((a) => !linked.some((l) => l.id === a.id)),
+    });
+    const { sent } = fakeApi({
+      'POST /flows/kit/runs': () => ({ status: 201, body: view(1, link([])) }),
+      'POST /flows/kit/runs/r1': (body) => {
+        const b = body as { create?: { name: string }; asset_id?: string; done?: boolean };
+        if (b.done) return view(2, { step: 'done', kind: 'done', title: 'Added', done: [{ step: 'link', kind: 'link', said: 'Linked Board: contained in Kit 1.' }] });
+        if (b.create) return view(1, link([{ id: 'k1', name: 'Kit 1' }, { id: 'k9', name: b.create.name }]));
+        return view(1, link([{ id: 'k1', name: 'Kit 1' }]));
+      },
+    });
+    render(FlowRunPage, { params: { slug: 'kit' } });
+    await screen.findByRole('heading', { name: 'Which kit?' });
+    expect(screen.getByText('Linking it moves it out of Kit 0.')).toBeTruthy();
+    // Required, it offers no skipping; nothing linked, there is no Done.
+    expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: /Kit 1/ }));
+
+    // Linked, it says so, and asks whether to add another or be done.
+    const linked = await screen.findByRole('list', { name: 'Linked so far' });
+    expect(linked.textContent).toContain('contained in Kit 1');
+    expect(sent.at(-1)!.body).toEqual({ step: 'link', asset_id: 'k1' });
+    expect(screen.queryByRole('button', { name: /Kit 2/ })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Add another' }));
+
+    // Another: something not listed, added by its name.
+    await fireEvent.input(screen.getByLabelText('Not listed? Add it to Kits'), { target: { value: 'Kit 9' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add it' }));
+    await vi.waitFor(() => expect(within(screen.getByRole('list', { name: 'Linked so far' })).getAllByRole('listitem')).toHaveLength(2));
+    expect(sent.at(-1)!.body).toEqual({ step: 'link', create: { name: 'Kit 9' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await screen.findByRole('heading', { name: 'Added' });
+    expect(sent.at(-1)!.body).toEqual({ step: 'link', done: true });
+  });
+
+  it('lets a Link that is not required be skipped', async () => {
+    const { sent } = fakeApi({
+      'POST /flows/kit/runs': () => ({ status: 201, body: view(1, { step: 'link', kind: 'link', title: 'Which kit?', relation: 'needs', find_by: ['scan'] }) }),
+      'POST /flows/kit/runs/r1': () => view(2, { step: 'done', kind: 'done', title: 'Added' }),
+    });
+    render(FlowRunPage, { params: { slug: 'kit' } });
+    await screen.findByRole('heading', { name: 'Which kit?' });
+    expect(screen.getByLabelText('Its code')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    await screen.findByRole('heading', { name: 'Added' });
+    expect(sent.at(-1)!.body).toEqual({ step: 'link', done: true });
+  });
 });

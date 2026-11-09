@@ -174,7 +174,7 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 	byKey := map[string]models.Field{}
 	c := flows.Catalog{
 		Flows: map[string]bool{}, Categories: map[string]bool{}, DateFields: map[string]bool{}, Fields: map[string]bool{}, Templates: map[string]bool{},
-		Destinations: map[string]bool{}, Hooks: map[string]bool{},
+		Destinations: map[string]bool{}, Hooks: map[string]bool{}, RelationTypes: map[string]flows.RelationType{},
 		Names: map[string]string{}, Labels: map[string]string{}, Required: map[string][]string{},
 		Asset: func(id string) bool {
 			a, err := s.GetAssetByID(id)
@@ -186,6 +186,44 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 				return nil
 			}
 			return fieldspkg.ValidateFieldValue(&f, value)
+		},
+		// What a Link step finds among, and files into (#264), may be any
+		// category, not only the flow's.
+		FieldsIn: func(ids []string) map[string]bool {
+			out := map[string]bool{}
+			if len(ids) == 0 {
+				all, err := s.ListFields()
+				if err != nil {
+					return out
+				}
+				for _, f := range all {
+					out[f.Key] = true
+				}
+				return out
+			}
+			for _, id := range ids {
+				effective, err := s.EffectiveFieldsForAsset([]string{id})
+				if err != nil {
+					continue
+				}
+				for _, f := range effective {
+					out[f.Field.Key] = true
+				}
+			}
+			return out
+		},
+		RequiredIn: func(id string) []string {
+			effective, err := s.EffectiveFieldsForAsset([]string{id})
+			if err != nil {
+				return nil
+			}
+			var out []string
+			for _, f := range effective {
+				if f.IsRequired {
+					out = append(out, f.Field.Label)
+				}
+			}
+			return out
 		},
 	}
 	all, err := s.ListFlows()
@@ -251,6 +289,13 @@ func (s *Store) FlowCatalog(categoryIDs []string) (flows.Catalog, error) {
 	for _, a := range hooks {
 		c.Hooks[a.Key] = true
 	}
+	types, err := s.ListRelationTypes()
+	if err != nil {
+		return c, err
+	}
+	for _, t := range types {
+		c.RelationTypes[t.ID] = flows.RelationType{Single: t.IsSingle, Symmetric: t.IsSymmetric}
+	}
 	return c, nil
 }
 
@@ -299,6 +344,12 @@ type FlowRunState struct {
 	// Answered counts the steps the person has answered that ask something,
 	// for "step 2 of 3" (#166).
 	Answered int `json:"answered,omitempty"`
+	// Linked lists, by Link step, what it has linked the asset to, so a
+	// step tried again links only what is left (#264); Made holds, by Link
+	// step, what it filed to link to and has yet to link, so trying again
+	// does not file it twice.
+	Linked map[string][]models.FlowLinked `json:"linked,omitempty"`
+	Made   map[string]models.FlowLinked   `json:"made,omitempty"`
 }
 
 // CreateFlowRun starts a run of a flow by a user.
@@ -339,6 +390,7 @@ func (s *Store) GetFlowRun(id string) (*models.FlowRun, error) {
 		return nil, fmt.Errorf("reading run %s: %w", id, err)
 	}
 	r.Step, r.Values, r.Done, r.Finished, r.Fields, r.Progress, r.Answered, r.Photos = st.Step, st.Values, st.Done, st.Finished, st.Fields, st.Progress, st.Answered, st.Photos
+	r.Linked, r.Made = st.Linked, st.Made
 	if r.Done == nil {
 		r.Done = []models.FlowDone{}
 	}

@@ -353,7 +353,7 @@ describe('FlowEditor', () => {
     expect(button.getAttribute('aria-expanded')).toBe('true');
     const menu = screen.getByRole('menu', { name: 'Add a step' });
     const items = within(menu).getAllByRole('menuitem');
-    const kinds = ['choose_category', 'form', 'set_fields', 'find', 'create', 'label', 'change', 'confirm'] as const;
+    const kinds = ['choose_category', 'form', 'set_fields', 'find', 'create', 'link', 'label', 'change', 'confirm'] as const;
     expect(items.map((i) => document.getElementById(i.getAttribute('aria-labelledby')!)!.textContent)).toEqual(kinds.map((k) => kindLabels[k]));
     expect(items.map((i) => document.getElementById(i.getAttribute('aria-describedby')!)!.textContent)).toEqual(kinds.map((k) => kindHelp[k]));
     expect(within(menu).getByRole('menuitem', { name: 'Set fields' }).textContent).toContain('on the new asset before Create');
@@ -363,11 +363,11 @@ describe('FlowEditor', () => {
     await fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(items[1]);
     await fireEvent.keyDown(document.activeElement!, { key: 'End' });
-    expect(document.activeElement).toBe(items[7]);
+    expect(document.activeElement).toBe(items[8]);
     await fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(items[0]);
     await fireEvent.keyDown(document.activeElement!, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(items[7]);
+    expect(document.activeElement).toBe(items[8]);
     await fireEvent.keyDown(document.activeElement!, { key: 'Home' });
     expect(document.activeElement).toBe(items[0]);
     await fireEvent.keyDown(document.activeElement!, { key: 'l' });
@@ -466,5 +466,82 @@ describe('FlowEditor', () => {
     render(FlowEditor, { params: { slug: 'leave' } });
     expect((await screen.findByText('Saved Leave something.')).getAttribute('role')).toBe('status');
     expect(location.search).toBe('');
+  });
+
+  it('edits a Link step: how it links, where it finds, how many, something new, or assets named (#264)', async () => {
+    const f: Flow = {
+      ...flow,
+      definition: {
+        version: 2,
+        category_ids: ['short'],
+        steps: [
+          { id: 'find', kind: 'find', title: 'Which board?', find_by: ['list'] },
+          { id: 'link', kind: 'link', title: 'Which kit?', required: true, find: { find_by: ['scan', 'search', 'list'] } },
+          { id: 'done', kind: 'done', title: 'Added', text: '{linked}' },
+        ],
+      },
+    };
+    const { sent } = fakeApi({
+      'GET /categories': () => ({
+        categories: [
+          { id: 'short', name: 'Short boards', color_hex: '' },
+          { id: 'kits', name: 'Kits', color_hex: '' },
+        ],
+      }),
+      'GET /flows': () => ({ flows: [f] }),
+      'GET /flows/leave': () => ({ flow: f }),
+      'GET /categories/short/fields': () => ({ fields: [] }),
+      'GET /fields': () => ({ fields: [{ id: 'n', key: 'kit_number', label: 'Kit number', validation_type: 'text' }] }),
+      'GET /relation-types': () => ({
+        relation_types: [
+          { id: 'contains', name: 'contains', inverse_name: 'contained in', is_symmetric: false, is_single: true, is_location: true, is_followed: false },
+          { id: 'with', name: 'used with', inverse_name: 'used with', is_symmetric: true, is_single: false, is_location: false, is_followed: false },
+        ],
+      }),
+      'GET /assets': () => ({ assets: [{ asset: { id: 'k1', name: 'Kit 1' }, categories: [{ id: 'kits', name: 'Kits' }], location: [] }] }),
+      'PUT /flows/leave': () => ({ flow: f }),
+    });
+    render(FlowEditor, { params: { slug: 'leave' } });
+    await fireEvent.click(await screen.findByRole('button', { name: '2. Link: Which kit?' }));
+    expect(screen.getByText('Preview · step 2 of 2')).toBeTruthy();
+
+    // Each kind of link either way round, and one that reads the same both ways once.
+    const how = screen.getByLabelText('How it links') as HTMLSelectElement;
+    expect([...how.options].map((o) => o.textContent)).toEqual(['Choose…', 'contained in…', 'contains…', 'used with…']);
+    await fireEvent.change(how, { target: { value: 'contains:out' } });
+    expect(screen.getByText(/Its page will say “contains” and the other's name\. Each thing is linked this way to one other only/)).toBeTruthy();
+    await fireEvent.click(screen.getByLabelText('Any number, with Add another and Done'));
+    await fireEvent.click(screen.getByLabelText('Not listed? They can add it'));
+    await fireEvent.change(screen.getByLabelText('In'), { target: { value: 'kits' } });
+    await fireEvent.change(screen.getByLabelText('Only where a field is'), { target: { value: 'kit_number' } });
+    const preview = screen.getByRole('figure', { name: 'Preview, as a phone shows it' });
+    expect(preview.textContent).toContain('Not listed? Add it to Kits');
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT')).toHaveLength(1));
+    let body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
+    expect(body.definition.steps[1]).toEqual({
+      id: 'link',
+      kind: 'link',
+      title: 'Which kit?',
+      relation_type: 'contains',
+      outgoing: true,
+      required: true,
+      repeat: true,
+      allow_create: true,
+      create_category: 'kits',
+      find: { find_by: ['scan', 'search', 'list'], match: { field: 'kit_number', value: '' } },
+    });
+
+    // Or assets named here, asking nothing.
+    await fireEvent.click(screen.getByLabelText('Assets you choose, every time: nothing is asked'));
+    expect(screen.getByText('Preview · asks nothing, so a run does it and moves on')).toBeTruthy();
+    await fireEvent.input(screen.getByLabelText('Add an asset'), { target: { value: 'Kit' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Find' }));
+    await fireEvent.click(await screen.findByRole('button', { name: /Add Kit 1/ }));
+    expect(within(screen.getByRole('list', { name: 'The assets it links to' })).getByText('Kit 1')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    await vi.waitFor(() => expect(sent.filter((r) => r.method === 'PUT')).toHaveLength(2));
+    body = sent.filter((r) => r.method === 'PUT')[1]!.body as { definition: Flow['definition'] };
+    expect(body.definition.steps[1]).toEqual({ id: 'link', kind: 'link', title: 'Which kit?', relation_type: 'contains', outgoing: true, assets: ['k1'] });
   });
 });

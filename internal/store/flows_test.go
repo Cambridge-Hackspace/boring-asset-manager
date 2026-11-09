@@ -314,7 +314,7 @@ func TestTheScanTemplateOffersFlows(t *testing.T) {
 // fields make it.
 func starter(t *testing.T, st *Store, which int, ids ...string) flows.Definition {
 	t.Helper()
-	all, err := flows.Starters(ids, st.FlowFields)
+	all, err := flows.Starters(ids, st.FlowFields, "")
 	if err != nil {
 		t.Fatal(err)
 	}

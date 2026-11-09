@@ -30,7 +30,7 @@ func TestManagingFlowsThroughTheAPI(t *testing.T) {
 		Starters []flows.Starter `json:"starters"`
 	}
 	_ = json.Unmarshal([]byte(expect("starters", admin, http.MethodGet, "/api/v1/flow-starters?category_ids="+w.short.ID+","+w.long.ID, "", http.StatusOK)), &starters)
-	if len(starters.Starters) != 2 || starters.Starters[0].Definition.CategoryIDs[1] != w.long.ID {
+	if len(starters.Starters) != 3 || starters.Starters[0].Definition.CategoryIDs[1] != w.long.ID {
 		t.Fatalf("starters: %+v", starters)
 	}
 	expect("starters, as a member", sam, http.MethodGet, "/api/v1/flow-starters", "", http.StatusForbidden)
@@ -204,7 +204,7 @@ func TestFlowsOverMCP(t *testing.T) {
 	var out map[string]any
 	structured(t, callTool(t, admin, "flow_starters", map[string]any{"category_ids": []string{w.short.ID}}), &out)
 	starters, _ := out["starters"].([]any)
-	if len(starters) != 2 {
+	if len(starters) != 3 {
 		t.Fatalf("starters: %v", out)
 	}
 	def := starters[0].(map[string]any)["definition"]

@@ -62,7 +62,7 @@ What is chosen brings what it needs:
 | An icon | What it `extends`, and the library files it `insert`s, `badge`s, takes `axes` from or sets text in, which are read from the sources |
 | A label template | Its images, the fields it binds, and the icons it draws by name |
 | A report or scan template | The fields it shows or groups by, and the categories it looks in |
-| A flow | Its categories, label templates, hooks, the fields it asks or sets, and the flow whose filings it finds |
+| A flow | Its categories, label templates, hooks, the fields it asks or sets, the flow whose filings it finds, and, for a Link step, the link type it links by and the categories it finds in and files into |
 | Assets | Their categories, the icons they draw as their own, the link types of their links, their purchase details, the vendors they were bought from, and those that sell them, with their catalog entries |
 
 A category whose parent is not in the package keeps what it inherits as its own: its parent's
@@ -77,6 +77,7 @@ Some things a choice needs stay behind, and are listed with why:
 - The printers and pools a flow prints to, which are this instance's own. Once imported, a flow
   that printed adds its labels to the print queue instead.
 - The places a flow puts things, which are this instance's assets.
+- The assets a flow's Link step names, which are this instance's assets too.
 
 A package never holds:
 
@@ -217,6 +218,8 @@ A flow is changed as it comes in where it must be:
 - What it printed goes to the print queue.
 - A place it named that did not come is asked for.
 - A flow that moved things to such a place is turned off.
+- A Link step drops the assets it named that did not come; with none left, or with the link type it
+  links by skipped, the flow is turned off.
 
 ### Permissions to import
 

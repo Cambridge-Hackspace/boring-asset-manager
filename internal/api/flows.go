@@ -151,7 +151,21 @@ func (s *Server) handleFlowStarters(w http.ResponseWriter, r *http.Request) {
 			ids = append(ids, id)
 		}
 	}
-	starters, err := flows.Starters(ids, s.store.FlowFields)
+	// Add to a kit links by the type that puts things in places, which
+	// holds them, if there is one.
+	types, err := s.store.ListRelationTypes()
+	if err != nil {
+		writeServerError(w, err, "make the starters")
+		return
+	}
+	holds := ""
+	for _, t := range types {
+		if t.IsLocation {
+			holds = t.ID
+			break
+		}
+	}
+	starters, err := flows.Starters(ids, s.store.FlowFields, holds)
 	if err != nil {
 		writeServerError(w, err, "make the starters")
 		return
@@ -308,6 +322,17 @@ type FlowPrompt struct {
 	Assets []FlowAsset `json:"assets,omitempty"`
 	// Create, when it asks where the asset was put.
 	AskPlace bool `json:"ask_place,omitempty"`
+	// Link (#264), with FindBy and Assets as Find has them: how the link
+	// reads from the asset ("contained in"); what it has linked so far;
+	// whether it links any number, must link one, and may file something
+	// new to link to, in CreateIn, a category's name; and, for a link of a
+	// single type that moves the asset, out of what (Moves).
+	Relation string      `json:"relation,omitempty"`
+	Linked   []FlowAsset `json:"linked,omitempty"`
+	Repeat   bool        `json:"repeat,omitempty"`
+	Required bool        `json:"required,omitempty"`
+	CreateIn string      `json:"create_in,omitempty"`
+	Moves    string      `json:"moves,omitempty"`
 	// Confirm: what the steps after it will do.
 	Coming []string `json:"coming,omitempty"`
 	// Done: what the run did.
@@ -412,6 +437,16 @@ func (f *flowRunner) prompt(run *models.FlowRun, search string) (FlowPrompt, err
 		}
 	case flows.KindCreate:
 		p.AskPlace = step.Location != nil && step.Location.Mode == flows.PlaceScan
+	case flows.KindLink:
+		if step.Find == nil {
+			// Linking to what the flow names, left by a failure: answering
+			// it tries again.
+			p.Coming = f.coming(run)
+			break
+		}
+		if err := f.linkPrompt(&p, step, run, asset, search); err != nil {
+			return p, err
+		}
 	case flows.KindConfirm:
 		p.Coming = f.coming(run)
 	case flows.KindDone:
@@ -459,7 +494,103 @@ func (f *flowRunner) coming(run *models.FlowRun) []string {
 			for _, c := range s.Changes[run.Progress[s.ID]:] {
 				out = append(out, describeChange(c, v))
 			}
+		case flows.KindLink:
+			out = append(out, f.describeLink(s, run)...)
 		}
+	}
+	return out
+}
+
+// linkPrompt fills in what a Link step the runner finds for asks (#264):
+// how the link reads, what it has linked so far, the ways to find and, by
+// list or search, what it may link to.
+func (f *flowRunner) linkPrompt(p *FlowPrompt, step *flows.Step, run *models.FlowRun, asset *models.AssetWithDetails, search string) error {
+	t, err := f.relationType(step)
+	if err != nil {
+		// Saying why is the answer's to do; the prompt shows what it can.
+		t = &models.RelationType{}
+	}
+	p.Relation = t.InverseName
+	if step.Outgoing || t.IsSymmetric {
+		p.Relation = t.Name
+	}
+	p.FindBy, p.Repeat, p.Required = step.Find.FindBy, step.Repeat, step.Required
+	if step.AllowCreate {
+		fc, err := f.s.flowCategories()
+		if err != nil {
+			return err
+		}
+		p.CreateIn = fc.name(step.CreateCategory)
+	}
+	for _, l := range run.Linked[step.ID] {
+		p.Linked = append(p.Linked, FlowAsset{ID: l.ID, Name: l.Name, Categories: []string{}})
+	}
+	// Linking the asset by a single type, at its far end, moves it out of
+	// what holds it now.
+	if asset != nil && t.IsSingle && !step.Outgoing && !t.IsSymmetric {
+		for _, l := range asset.Links {
+			if l.TypeID == t.ID && !l.Outgoing {
+				p.Moves = l.Asset.Name
+			}
+		}
+	}
+	listed := false
+	for _, by := range step.Find.FindBy {
+		listed = listed || by == flows.FindList || (by == flows.FindSearch && search != "")
+	}
+	if !listed {
+		return nil
+	}
+	found, err := f.linkCandidates(step, run.Values, search)
+	if err != nil {
+		return err
+	}
+	linked := map[string]bool{}
+	for _, l := range run.Linked[step.ID] {
+		linked[l.ID] = true
+	}
+	for i := range found {
+		if len(p.Assets) == maxFlowAssets {
+			break
+		}
+		if !linked[found[i].Asset.ID] {
+			p.Assets = append(p.Assets, flowAsset(&found[i]))
+		}
+	}
+	return nil
+}
+
+// describeLink says what a Link step to assets the flow names will link,
+// each in a line, of those it has yet to: "Link Drill: contained in Kit
+// 3.", and, for a link of a single type, what that moves out of where.
+func (f *flowRunner) describeLink(s *flows.Step, run *models.FlowRun) []string {
+	t, err := f.relationType(s)
+	if err != nil {
+		return nil
+	}
+	this, err := f.s.store.GetAssetByID(run.Values[flows.ValueAssetID])
+	if err != nil {
+		return nil
+	}
+	label := t.InverseName
+	if s.Outgoing || t.IsSymmetric {
+		label = t.Name
+	}
+	done := map[string]bool{}
+	for _, l := range run.Linked[s.ID] {
+		done[l.ID] = true
+	}
+	var out []string
+	for _, id := range s.Assets {
+		that, err := f.s.store.GetAssetByID(id)
+		if err != nil || done[id] {
+			continue
+		}
+		line := fmt.Sprintf("Link %s: %s %s.", this.Asset.Name, label, that.Asset.Name)
+		if who, from := moving(t, s.Outgoing, this, that); who != "" {
+			line += fmt.Sprintf(" This moves %s out of %s.", who, from)
+		}
+		out = append(out, line)
 	}
 	return out
 }

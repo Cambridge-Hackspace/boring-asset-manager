@@ -11,15 +11,18 @@ import (
 )
 
 var catalog = Catalog{
-	Categories:   map[string]bool{"short": true, "long": true, "other": true},
+	Categories:   map[string]bool{"short": true, "long": true, "other": true, "kits": true, "boxes": true},
 	Fields:       map[string]bool{"owner": true, "until": true, "length": true, "wood": true},
 	DateFields:   map[string]bool{"until": true},
 	Templates:    map[string]bool{"tpl": true},
 	Destinations: map[string]bool{"printer:p1": true, "pool:q1": true},
 	Hooks:        map[string]bool{"identify": true},
-	Asset:        func(id string) bool { return id == "shelf" },
-	Names:        map[string]string{"short": "Short boards", "long": "Long boards"},
-	Labels:       map[string]string{"owner": "Owner", "until": "Until", "length": "Length", "wood": "Wood"},
+	// Kits are a category of their own, recording a kit number; tool
+	// boxes require a box number.
+	RelationTypes: map[string]RelationType{"contains": {Single: true}, "used_with": {Symmetric: true}},
+	Asset:         func(id string) bool { return id == "shelf" || id == "kit_3" },
+	Names:         map[string]string{"short": "Short boards", "long": "Long boards", "kits": "Kits", "boxes": "Tool boxes"},
+	Labels:        map[string]string{"owner": "Owner", "until": "Until", "length": "Length", "wood": "Wood"},
 	// Both kinds of board require an owner; long boards, a date too.
 	Required: map[string][]string{"short": {"owner"}, "long": {"owner", "until"}},
 	Suits: func(field, value string) error {
@@ -32,6 +35,18 @@ var catalog = Catalog{
 			if value != "oak" && value != "pine" {
 				return errors.New("not one of its choices")
 			}
+		}
+		return nil
+	},
+	FieldsIn: func(ids []string) map[string]bool {
+		if len(ids) == 1 && ids[0] == "kits" {
+			return map[string]bool{"kit_number": true}
+		}
+		return map[string]bool{"owner": true, "until": true, "kit_number": true}
+	},
+	RequiredIn: func(id string) []string {
+		if id == "boxes" {
+			return []string{"Box number"}
 		}
 		return nil
 	},
@@ -62,7 +77,7 @@ func problems(d Definition) []string {
 
 func TestStartersPassTheirOwnChecks(t *testing.T) {
 	for _, cats := range [][]string{{"short", "long"}, {"short"}} {
-		starters, err := Starters(cats, boardFields)
+		starters, err := Starters(cats, boardFields, "contains")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +92,7 @@ func TestStartersPassTheirOwnChecks(t *testing.T) {
 	}
 	// Leave something: Choose category, Form, Set fields, Create, Label,
 	// Done; with one category there is nothing to choose.
-	starters, _ := Starters([]string{"short", "long"}, boardFields)
+	starters, _ := Starters([]string{"short", "long"}, boardFields, "contains")
 	var kinds []string
 	for _, s := range starters[0].Definition.Steps {
 		kinds = append(kinds, s.Kind)
@@ -88,13 +103,26 @@ func TestStartersPassTheirOwnChecks(t *testing.T) {
 	if s := starters[0].Definition.Steps; s[3].Name != "{name}" || s[1].Questions[0].Key != "name" || s[1].Questions[0].Label != "What is it?" {
 		t.Errorf("leave something asks %+v and files %q", s[1].Questions, s[3].Name)
 	}
-	one, _ := Starters([]string{"short"}, boardFields)
+	one, _ := Starters([]string{"short"}, boardFields, "contains")
 	if k := one[0].Definition.Steps[0].Kind; k != KindForm {
 		t.Errorf("leave, one category, starts with %s", k)
 	}
 	// Collect it is as it was.
 	if s := one[1].Definition.Steps; len(s) != 4 || s[2].Changes[0].Kind != ChangeArchive {
 		t.Errorf("collect it: %+v", s)
+	}
+	// Add to a kit: Find, Link by the type given, and Done, naming what it
+	// linked (#264).
+	kit := one[2]
+	kinds = nil
+	for _, s := range kit.Definition.Steps {
+		kinds = append(kinds, s.Kind)
+	}
+	if want := []string{KindFind, KindLink, KindDone}; kit.Key != "kit" || !reflect.DeepEqual(kinds, want) {
+		t.Errorf("add to a kit: %s %v", kit.Key, kinds)
+	}
+	if l := kit.Definition.Steps[1]; l.RelationType != "contains" || l.Find == nil || !l.Required || l.Repeat || !strings.Contains(kit.Definition.Steps[2].Text, "{linked}") {
+		t.Errorf("add to a kit links %+v", l)
 	}
 }
 
@@ -142,6 +170,30 @@ func TestCheckFindsWhatStopsAFlow(t *testing.T) {
 		{"an unknown change", base(find, Step{ID: "x", Kind: KindChange, Changes: []Change{{Kind: "burn"}}}), `"burn" is not a change`},
 		{"a change setting fields", base(find, Step{ID: "x", Kind: KindChange, Changes: []Change{{Kind: "fields"}}}), "a Set fields step does"},
 		{"an unknown hook", base(find, Step{ID: "x", Kind: KindChange, Changes: []Change{{Kind: ChangeHook, Hook: "dance"}}}), `no hook has the key "dance"`},
+
+		// Link (#264).
+		{"a link before an asset", base(Step{ID: "l", Kind: KindLink, RelationType: "contains", Assets: []string{"kit_3"}}), "it needs an asset"},
+		{"a link of no type", base(find, Step{ID: "l", Kind: KindLink, Assets: []string{"kit_3"}}), "choose the kind of link it makes"},
+		{"a link of a type there is not", base(find, Step{ID: "l", Kind: KindLink, RelationType: "powers", Assets: []string{"kit_3"}}), `no relation type has the ID "powers"`},
+		{"a link to nothing", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains"}), "it needs something to link to"},
+		{"a link both found and named", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Assets: []string{"kit_3"}, Find: &LinkFind{FindBy: []string{FindList}}}), "not both"},
+		{"a link to an asset there is not", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Assets: []string{"gone"}}), "an asset it links to is not one"},
+		{"a link found by nothing", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Find: &LinkFind{}}), "a way to find"},
+		{"a link found by smell", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Find: &LinkFind{FindBy: []string{"smell"}}}), `not "smell"`},
+		{"a link found in a category there is not", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Find: &LinkFind{FindBy: []string{FindList}, Categories: []string{"gone"}}}), `a category that does not exist: "gone"`},
+		{"a link among what no flow filed", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Find: &LinkFind{FindBy: []string{FindList}, FiledBy: "gone"}}), `no flow has the ID "gone"`},
+		{"a link matching a field its categories do not record", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains",
+			Find: &LinkFind{FindBy: []string{FindList}, Categories: []string{"kits"}, Match: &Match{Field: "owner", Value: "{user}"}}}), `no field the categories it finds in record has the key "owner"`},
+		{"a link matching a later value", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains",
+			Find: &LinkFind{FindBy: []string{FindList}, Categories: []string{"kits"}, Match: &Match{Field: "kit_number", Value: "{what}"}}}, form), "names {what}, which no earlier step sets"},
+		{"filing something new into no category", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Find: &LinkFind{FindBy: []string{FindList}}, AllowCreate: true}), "choose the category something new it files goes in"},
+		{"filing something new into a category there is not", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Find: &LinkFind{FindBy: []string{FindList}}, AllowCreate: true, CreateCategory: "gone"}), "does not exist"},
+		{"filing something new where fields are required", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Find: &LinkFind{FindBy: []string{FindList}}, AllowCreate: true, CreateCategory: "boxes"}),
+			"Tool boxes requires Box number, which something new it files, with only a name, would not have"},
+		{"filing something new to link to what the flow names", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Assets: []string{"kit_3"}, AllowCreate: true, CreateCategory: "kits"}), "only a Link that lets the runner find"},
+		{"naming what is linked before it is", base(find, Step{ID: "c", Kind: KindConfirm, Text: "In {linked}?"}, Step{ID: "l", Kind: KindLink, RelationType: "contains", Assets: []string{"kit_3"}}), "names {linked}, which no earlier step sets"},
+		{"any number, each moving it out of the last", base(find, Step{ID: "l", Kind: KindLink, RelationType: "contains", Repeat: true, Find: &LinkFind{FindBy: []string{FindList}}}), "so it links to one thing only"},
+		{"a question named as what is linked", base(Step{ID: "f", Kind: KindForm, Questions: []Question{{Key: "linked", Label: "Linked?"}}}), "has the name of a value"},
 
 		// Set fields.
 		{"an unknown field", base(find, Step{ID: "s", Kind: KindSetFields, Fields: []FieldValue{{Field: "colour", Value: "red"}}}), `"colour"`},
@@ -228,6 +280,35 @@ func TestCheckFindsWhatStopsAFlow(t *testing.T) {
 	// Setting fields asks nothing.
 	if s := (Step{Kind: KindSetFields}); s.Asks() || !s.Auto() {
 		t.Error("Set fields asks something")
+	}
+
+	// Links, found by the runner or named by the flow, either way, and
+	// one filing something new where nothing is required, pass; what they
+	// link is a value later steps name.
+	links := base(find,
+		Step{ID: "link", Kind: KindLink, RelationType: "used_with", Repeat: true, Required: true, AllowCreate: true, CreateCategory: "kits",
+			Find: &LinkFind{FindBy: []string{FindScan, FindSearch, FindList}, Categories: []string{"kits"}, Match: &Match{Field: "kit_number", Value: "{code}"}}},
+		Step{ID: "link_2", Kind: KindLink, RelationType: "contains", Outgoing: true, Assets: []string{"kit_3"}},
+		Step{ID: "confirm", Kind: KindConfirm, Text: "{asset} goes in {linked}."},
+	)
+	if got := problems(links); len(got) != 0 {
+		t.Errorf("links: %v", got)
+	}
+	want = []string{rbac.PermAssetsRead, rbac.PermAssetsScan, rbac.PermAssetsWrite}
+	if got := links.Permissions(); !reflect.DeepEqual(got, sorted(want)) {
+		t.Errorf("links' permissions: %v", got)
+	}
+	// Linking to what the flow names asks nothing; finding what to link
+	// to asks.
+	if s := links.Steps[1]; !s.Asks() || s.Auto() {
+		t.Error("a Link the runner finds for asks nothing")
+	}
+	if s := links.Steps[2]; s.Asks() || !s.Auto() {
+		t.Error("a Link to what the flow names asks something")
+	}
+	named := Definition{Steps: []Step{{Kind: KindLink, Assets: []string{"kit_3"}}}}
+	if p := named.Permissions(); !reflect.DeepEqual(p, []string{rbac.PermAssetsWrite}) {
+		t.Errorf("a named link's permissions: %v", p)
 	}
 }
 
