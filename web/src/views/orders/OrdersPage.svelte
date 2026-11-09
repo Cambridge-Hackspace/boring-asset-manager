@@ -116,7 +116,7 @@
       <tbody>
         {#each orders as o (o.id)}
           <tr class="border-b border-zinc-200 dark:border-zinc-800">
-            <td class="pr-4"><a class="inline-flex min-h-11 items-center font-mono font-medium underline" href="/orders/{encodeURIComponent(o.id)}">{o.reference}</a></td>
+            <td class="pr-4"><a class="inline-flex min-h-11 min-w-11 items-center font-mono font-medium underline" href="/orders/{encodeURIComponent(o.id)}">{o.reference}</a></td>
             <td class="pr-4">{o.vendor_name}</td>
             <td class="pr-4">{stateLabel(o.state)}</td>
             <td class="pr-4">{o.ordered_on}</td>

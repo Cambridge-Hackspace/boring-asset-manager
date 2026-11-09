@@ -107,8 +107,8 @@
       <ul class="text-sm">
         {#each onOrder as l, i (i)}
           <li class="flex min-h-11 flex-wrap items-center gap-x-2">
-            <a class="underline" href={href(l)}>{l.name}</a>
-            {#if l.order}<a class="underline" href="/orders/{encodeURIComponent(l.order.id)}">{onOrderText(l.order)}</a>{/if}
+            <a class="inline-flex min-h-11 items-center underline" href={href(l)}>{l.name}</a>
+            {#if l.order}<a class="inline-flex min-h-11 items-center underline" href="/orders/{encodeURIComponent(l.order.id)}">{onOrderText(l.order)}</a>{/if}
           </li>
         {/each}
       </ul>
