@@ -109,7 +109,7 @@ func as(t *testing.T, srv *Server, userID string) *http.Request {
 // something; 1, Collect it.
 func (w *woodShop) starter(t *testing.T, which int, ids ...string) flows.Definition {
 	t.Helper()
-	all, err := flows.Starters(ids, w.srv.store.FlowFields)
+	all, err := flows.Starters(ids, w.srv.store.FlowFields, "")
 	if err != nil {
 		t.Fatal(err)
 	}

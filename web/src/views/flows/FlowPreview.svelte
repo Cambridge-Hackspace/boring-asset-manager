@@ -1,12 +1,26 @@
 <script lang="ts">
   // A step as a phone shows it, beside the editor (docs/flows.md): drawn here
   // from its settings, with sample answers where a run would have its own.
-  import type { Category } from '../../lib/models';
+  import type { Category, RelationType } from '../../lib/models';
   import { optionLabel, type Progress, type Step } from '../../lib/flows';
   import RunProgress from '../../components/RunProgress.svelte';
   import { kindLabels } from '../../lib/flowEditor';
 
-  let { step, flowName, categories, progress = null }: { step: Step | null; flowName: string; categories: Category[]; progress?: Progress | null } = $props();
+  let {
+    step,
+    flowName,
+    categories,
+    progress = null,
+    allCategories = [],
+    relationTypes = [],
+  }: { step: Step | null; flowName: string; categories: Category[]; progress?: Progress | null; allCategories?: Category[]; relationTypes?: RelationType[] } = $props();
+
+  // A Link step reads from the asset, as its page reads a link.
+  const relation = $derived.by(() => {
+    const t = relationTypes.find((r) => r.id === step?.relation_type);
+    if (!t) return 'linked to';
+    return step?.outgoing || t.is_symmetric ? t.name : t.inverse_name;
+  });
 
   const offered = $derived(step?.kind === 'choose_category' && step.categories?.length ? categories.filter((c) => step!.categories!.includes(c.id)) : categories);
 </script>
@@ -52,6 +66,25 @@
         {#if step.find_by?.includes('list')}<div class="flow-choice">Something here</div><div class="flow-choice">Something else</div>{/if}
       {:else if step.kind === 'create'}
         {#if step.location?.mode === 'scan'}<div><span class="label">Scan where you put it</span><div class="flow-input"></div></div>{:else}<p class="text-sm text-zinc-600 dark:text-zinc-400">Files it as {step.name || '…'}, asking nothing.</p>{/if}
+      {:else if step.kind === 'link'}
+        {#if step.find}
+          {#if step.find.find_by.includes('scan')}<div><span class="label">Its code</span><div class="flow-input"></div></div>{/if}
+          {#if step.find.find_by.includes('search')}<div class="flow-input text-zinc-500">Search by name</div>{/if}
+          {#if step.find.find_by.includes('list')}<div class="flow-choice">Something to link to</div><div class="flow-choice">Something else</div>{/if}
+          {#if step.allow_create}
+            <div>
+              <span class="label">Not listed? Add it{step.create_category ? ` to ${allCategories.find((c) => c.id === step!.create_category)?.name ?? ''}` : ''}</span>
+              <div class="flow-input text-zinc-500">Its name</div>
+            </div>
+          {/if}
+          {#if step.repeat}
+            <p class="text-sm text-zinc-600 dark:text-zinc-400">Then Add another, or Done.</p>
+          {:else if !step.required}
+            <div class="flow-button-secondary">Skip</div>
+          {/if}
+        {:else}
+          <p class="text-sm text-zinc-600 dark:text-zinc-400">Links it, {relation} what you chose, asking nothing.</p>
+        {/if}
       {:else if step.kind === 'label' || step.kind === 'change' || step.kind === 'set_fields'}
         <p class="text-sm text-zinc-600 dark:text-zinc-400">Done as soon as it is reached; nothing is asked.</p>
       {:else if step.kind === 'confirm'}

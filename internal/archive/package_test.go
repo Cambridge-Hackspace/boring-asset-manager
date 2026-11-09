@@ -155,6 +155,8 @@ func seedPackaged(t *testing.T, st *store.Store, blobs filestore.Blobs) packaged
 	p.flow = flow(t, st, "lend-a-tool", flows.Definition{Version: flows.Version, CategoryIDs: []string{p.tools.ID}, Steps: []flows.Step{
 		{ID: "label", Kind: flows.KindLabel, Label: &flows.Label{Mode: flows.LabelPrint, Destination: "printer:" + uuid.NewString(), TemplateID: p.flowLabel}},
 		{ID: "change", Kind: flows.KindChange, Changes: []flows.Change{{Kind: flows.ChangeHook, Hook: "open"}}},
+		{ID: "link", Kind: flows.KindLink, RelationType: p.stores.ID, Outgoing: true, AllowCreate: true, CreateCategory: p.drills.ID,
+			Find: &flows.LinkFind{FindBy: []string{flows.FindList}, Categories: []string{p.drills.ID}, Match: &flows.Match{Field: "serial", Value: "{serial}"}}},
 	}}, p.user.ID)
 	p.kitchenFlow = flow(t, st, "wash-up", flows.Definition{Version: flows.Version, CategoryIDs: []string{p.kitchen.ID}}, p.user.ID)
 

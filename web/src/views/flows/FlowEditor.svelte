@@ -6,7 +6,7 @@
   import { ApiError, request } from '../../lib/api';
   import { messageOf } from '../../lib/errors';
   import { navigate } from '../../lib/router.svelte';
-  import type { AssetHook, Category, EffectiveField, Field, Printer, PrinterPool, TemplateSummary } from '../../lib/models';
+  import type { AssetHook, Category, EffectiveField, Field, Printer, PrinterPool, RelationType, TemplateSummary } from '../../lib/models';
   import { definitionVersion, type Definition, type Flow, type FlowProblem, type Starter, type StepKind } from '../../lib/flows';
   import {
     addStep,
@@ -51,6 +51,10 @@
   let templates = $state<{ id: string; name: string }[]>([]);
   let destinations = $state<{ value: string; label: string }[]>([]);
   let hooks = $state<{ key: string; label: string }[]>([]);
+  // A Link step may link to anything: every field to match by, and the
+  // kinds of link.
+  let allFields = $state<Field[]>([]);
+  let relationTypes = $state<RelationType[]>([]);
   let fields = $state<Field[]>([]);
   // The fields each category records, own and inherited, and those it
   // requires, for Set fields to choose from and to check.
@@ -81,12 +85,16 @@
       allCategories = cats;
       flows = list;
       // Extras: the editor works without them, offering less.
-      const [tpls, printers, pools, hooked] = await Promise.all([
+      const [tpls, printers, pools, hooked, everyField, types] = await Promise.all([
         request<{ templates: TemplateSummary[] }>('GET', '/templates').then((r) => r.templates ?? [], () => []),
         request<{ printers: Printer[] }>('GET', '/printers').then((r) => r.printers ?? [], () => []),
         request<{ pools: PrinterPool[] }>('GET', '/printer-pools').then((r) => r.pools ?? [], () => []),
         request<{ hooks: AssetHook[] }>('GET', '/hooks').then((r) => r.hooks ?? [], () => []),
+        request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? [], () => []),
+        request<{ relation_types: RelationType[] }>('GET', '/relation-types').then((r) => r.relation_types ?? [], () => []),
       ]);
+      allFields = everyField;
+      relationTypes = types;
       templates = tpls.map((t) => ({ id: t.id, name: t.name }));
       destinations = [...printers.map((p) => ({ value: `printer:${p.id}`, label: p.name })), ...pools.map((p) => ({ value: `pool:${p.id}`, label: `${p.name} (pool)` }))];
       hooks = hooked.map((a) => ({ key: a.key, label: a.label }));
@@ -247,6 +255,7 @@
               <select id="flow-starter" class="input" bind:value={starterKey}>
                 <option value="leave">Leave something</option>
                 <option value="collect">Collect it</option>
+                <option value="kit">Add to a kit</option>
               </select>
             </div>
             <button type="button" class="btn-secondary" disabled={!def.category_ids.length} onclick={useStarter}>Use this starter</button>
@@ -304,6 +313,9 @@
                       {destinations}
                       {templates}
                       {hooks}
+                      {allCategories}
+                      {allFields}
+                      {relationTypes}
                     />
                   {/key}
                   {#if step.kind !== 'done'}
@@ -334,7 +346,7 @@
         Preview ·
         {#if shownProgress}step {shownProgress.step} of {shownProgress.of}{:else if def.steps[selected]?.kind === 'done'}the end{:else}asks nothing, so a run does it and moves on{/if}
       </p>
-      <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} progress={shownProgress} />
+      <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} progress={shownProgress} {allCategories} {relationTypes} />
     </aside>
   </form>
 {/if}

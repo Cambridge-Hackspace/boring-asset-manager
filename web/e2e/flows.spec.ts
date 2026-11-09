@@ -200,3 +200,83 @@ test('flows: scanning what was left offers Collect it, which starts with it foun
   await page.getByRole('button', { name: 'Yes, go ahead' }).click();
   await expect(page.getByText(`Archived ${name}.`)).toBeVisible();
 });
+
+test('flows: add a tool to a kit, moving it on to one not listed yet, then link it to several things, with Add another and Done (#264)', async ({
+  signedIn: page,
+  api,
+}) => {
+  const { category: tools } = await api.call('POST', '/categories', { name: unique('Tools'), color_hex: '#b45309' });
+  const kitsName = unique('Kits');
+  const { category: kits } = await api.call('POST', '/categories', { name: kitsName, color_hex: '#4338ca' });
+  const drill = unique('Drill');
+  const kitA = unique('Kit A');
+  const kitB = unique('Kit B');
+  const kitC = unique('Kit C');
+  await api.call('POST', '/assets', { name: drill, category_ids: [tools.id] });
+  await api.call('POST', '/assets', { name: kitA, category_ids: [kits.id] });
+  await api.call('POST', '/assets', { name: kitB, category_ids: [kits.id] });
+
+  // Add to a kit, finding kits among the kits, and adding one not listed.
+  const { starters } = await api.call('GET', `/flow-starters?category_ids=${tools.id}`);
+  const kit = starters[2].definition;
+  expect(kit.steps.map((s: { kind: string }) => s.kind)).toEqual(['find', 'link', 'done']);
+  kit.steps[0].find_by = ['list'];
+  Object.assign(kit.steps[1], { find: { find_by: ['list'], categories: [kits.id] }, allow_create: true, create_category: kits.id });
+  const kitSlug = unique('kit').toLowerCase();
+  await api.call('POST', '/flows', { slug: kitSlug, name: 'Add to a kit', definition: kit });
+
+  await page.goto(`/f/${kitSlug}`);
+  await expect(page.getByRole('heading', { name: 'What are you adding?' })).toBeVisible();
+  await page.getByRole('button', { name: drill }).click();
+  await expect(page.getByRole('heading', { name: 'Which kit does it go in?' })).toBeFocused();
+  await expect(page.getByText(/· Step 2 of 2$/)).toBeVisible();
+  // Required, it cannot be skipped.
+  await expect(page.getByRole('button', { name: 'Skip' })).toHaveCount(0);
+  await audit(page, 'linking');
+  await page.getByRole('button', { name: kitA }).click();
+  await expect(page.getByRole('heading', { name: 'Added' })).toBeVisible();
+  await expect(page.getByText(`${drill} is in ${kitA}.`)).toBeVisible();
+  await expect(page.getByText(`Linked ${drill}: contained in ${kitA}.`)).toBeVisible();
+
+  // Again, into a kit not listed yet: it moves out of the first, and says so.
+  await page.getByRole('button', { name: 'Start again' }).click();
+  await page.getByRole('button', { name: drill }).click();
+  await expect(page.getByText(`Linking it moves it out of ${kitA}.`)).toBeVisible();
+  await page.getByLabel(`Not listed? Add it to ${kitsName}`).fill(kitC);
+  await page.getByRole('button', { name: 'Add it' }).click();
+  await expect(page.getByText(`Filed ${kitC} in ${kitsName}.`)).toBeVisible();
+  await expect(page.getByText(`Linked ${drill}: contained in ${kitC}. Moved ${drill} out of ${kitA}.`)).toBeVisible();
+  const { assets } = await api.call('GET', `/assets?search=${encodeURIComponent(drill)}`);
+  const { asset } = await api.call('GET', `/assets/${assets[0].asset.id}`);
+  expect(asset.location.map((p: { name: string }) => p.name)).toContain(kitC);
+
+  // Depends on any number of things: Add another, then Done.
+  const { relation_types: types } = await api.call('GET', '/relation-types');
+  const dependsOn = types.find((t: { name: string }) => t.name === 'depends on');
+  const needsSlug = unique('needs').toLowerCase();
+  await api.call('POST', '/flows', {
+    slug: needsSlug,
+    name: 'What it needs',
+    definition: {
+      version: 2,
+      category_ids: [tools.id],
+      steps: [
+        { id: 'find', kind: 'find', title: 'Which tool?', find_by: ['list'] },
+        { id: 'link', kind: 'link', title: 'What does it need?', relation_type: dependsOn.id, outgoing: true, repeat: true, find: { find_by: ['list'], categories: [kits.id] } },
+        { id: 'done', kind: 'done', title: 'Linked', text: '{asset} needs {linked}.' },
+      ],
+    },
+  });
+  await page.goto(`/f/${needsSlug}`);
+  await page.getByRole('button', { name: drill }).click();
+  await expect(page.getByRole('heading', { name: 'What does it need?' })).toBeVisible();
+  await page.getByRole('button', { name: kitA }).click();
+  const linked = page.getByRole('list', { name: 'Linked so far' });
+  await expect(linked).toContainText(`depends on ${kitA}`);
+  await audit(page, 'linking another');
+  await page.getByRole('button', { name: 'Add another' }).click();
+  await page.getByRole('button', { name: kitB }).click();
+  await expect(linked.getByRole('listitem')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByText(`${drill} needs ${kitA}, ${kitB}.`)).toBeVisible();
+});

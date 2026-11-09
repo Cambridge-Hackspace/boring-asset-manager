@@ -11,6 +11,7 @@ export const kindLabels: Record<StepKind, string> = {
   set_fields: 'Set fields',
   find: 'Find',
   create: 'Create',
+  link: 'Link',
   label: 'Label',
   change: 'Change',
   confirm: 'Confirm',
@@ -23,6 +24,7 @@ export const kindHelp: Record<StepKind, string> = {
   set_fields: 'Sets fields from answers or other values: on the new asset before Create, or the one found or filed after.',
   find: 'Finds something already here: by its code, by search, or from a list.',
   create: 'Files a new asset in the chosen category, with the fields set before it.',
+  link: 'Links it to other assets: ones they find, or ones you name, such as the kit it belongs to.',
   label: 'Prints its label, queues it, or shows it on screen.',
   change: 'Archives it, sets its condition, lends or returns it, moves it to a place or another category, or triggers a hook.',
   confirm: 'Shows what will happen, and asks to go ahead.',
@@ -45,6 +47,8 @@ export function asks(step: Step): boolean {
       return !step.fixed;
     case 'create':
       return step.location?.mode === 'scan';
+    case 'link':
+      return !!step.find;
     default:
       return true;
   }
@@ -62,7 +66,7 @@ export function previewProgress(steps: readonly Step[], i: number): Progress | n
 }
 
 /** The kinds an editor offers to add, in order: Done is always last, and comes with the flow. */
-export const addableKinds: StepKind[] = ['choose_category', 'form', 'set_fields', 'find', 'create', 'label', 'change', 'confirm'];
+export const addableKinds: StepKind[] = ['choose_category', 'form', 'set_fields', 'find', 'create', 'link', 'label', 'change', 'confirm'];
 
 const stepID = /^[a-z][a-z0-9_]{0,31}$/;
 const questionKey = /^[a-z][a-z0-9_]{0,63}$/;
@@ -74,6 +78,7 @@ const stepBases: Record<StepKind, string> = {
   set_fields: 'set',
   find: 'find',
   create: 'file',
+  link: 'link',
   label: 'label',
   change: 'change',
   confirm: 'confirm',
@@ -123,6 +128,8 @@ export function newStep(kind: StepKind, steps: readonly Step[]): Step {
       return { id, kind, title: 'Which is it?', find_by: ['scan', 'search', 'list'] };
     case 'create':
       return { id, kind, name: '{name}' };
+    case 'link':
+      return { id, kind, title: 'What does it go with?', required: true, find: { find_by: ['scan', 'search', 'list'] } };
     case 'label':
       return { id, kind, label: { mode: 'show' } };
     case 'change':
@@ -330,6 +337,9 @@ export function valuesBefore(
         // The asset found or filed brings its field values.
         for (const f of fields) put(f.key, f.label, from, fieldInput(f), s.when);
         break;
+      case 'link':
+        put('linked', 'What it linked to', from, { kind: 'text' }, s.when);
+        break;
     }
   }
   return [...out.values()].map(({ maybe: _, ...v }) => v);
@@ -496,6 +506,18 @@ export function checkFlow(d: Definition, catalog?: FlowCatalog): FlowProblem[] {
           if (c.kind === 'hook' && !c.hook) bad('Choose the hook to trigger.');
         }
         break;
+      case 'link':
+        if (!asset) bad('It needs something found or made in an earlier step.');
+        if (!s.relation_type) bad('Choose how it links.');
+        if (s.find && s.assets?.length) bad('It links to what they find, or to assets you name, not both.');
+        if (!s.find && !s.assets?.length) bad('Choose what it links to: what they find, or assets you name.');
+        if (s.find && !s.find.find_by.length) bad('Choose at least one way to find: scan, search or list.');
+        for (const ref of references(s.find?.match?.value)) {
+          if (!set.has(ref) && !(fieldsKnown && byKey.has(ref))) bad(`Its match names {${ref}}, which no earlier step sets.`);
+        }
+        if (s.allow_create && !s.create_category) bad('Choose the category something new goes in.');
+        set.add('linked');
+        break;
       case 'done':
         if (i !== d.steps.length - 1) bad('Done is the last step.');
         break;
@@ -520,7 +542,7 @@ export function stepsUsing(steps: readonly Step[], key: string): Step[] {
   return steps.filter(
     (s) =>
       s.when?.value === key ||
-      [s.title, s.text, s.name, s.photo, s.match?.value].some((t) => names(t, key)) ||
+      [s.title, s.text, s.name, s.photo, s.match?.value, s.find?.match?.value].some((t) => names(t, key)) ||
       (s.fields ?? []).some((f) => names(f.value, key)) ||
       (s.questions ?? []).some((q) => names(q.default, key)) ||
       (s.changes ?? []).some((c) => names(c.note, key)),

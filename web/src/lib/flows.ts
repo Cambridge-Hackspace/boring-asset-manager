@@ -7,7 +7,7 @@ import { scanTarget } from './scan';
 /** The version of the definition this interface reads and writes (#174). */
 export const definitionVersion = 2;
 
-export type StepKind = 'choose_category' | 'form' | 'set_fields' | 'find' | 'create' | 'label' | 'change' | 'confirm' | 'done';
+export type StepKind = 'choose_category' | 'form' | 'set_fields' | 'find' | 'create' | 'link' | 'label' | 'change' | 'confirm' | 'done';
 
 export interface Condition {
   value: string;
@@ -68,6 +68,18 @@ export interface Change {
   hook?: string;
 }
 
+/**
+ * How a Link step finds what to link to, as Find finds: by scan, search or
+ * list, among the assets in categories or below them (in any, when none),
+ * narrowed to what a flow filed and where a field matches.
+ */
+export interface LinkFind {
+  find_by: ('scan' | 'search' | 'list')[];
+  categories?: string[];
+  filed_by?: string;
+  match?: { field: string; value: string } | null;
+}
+
 export interface Step {
   id: string;
   kind: StepKind;
@@ -87,6 +99,20 @@ export interface Step {
   location?: { mode: 'fixed' | 'scan'; asset_id?: string } | null;
   label?: FlowLabel | null;
   changes?: Change[];
+  /**
+   * Link (#264): the relation type, and which way it reads (outgoing: by
+   * its name, from the asset; else by its inverse); what it links to, found
+   * by the runner or named here (assets); any number or one; whether one is
+   * required; and whether the runner may file something new, in a category.
+   */
+  relation_type?: string;
+  outgoing?: boolean;
+  find?: LinkFind | null;
+  assets?: string[];
+  repeat?: boolean;
+  required?: boolean;
+  allow_create?: boolean;
+  create_category?: string;
 }
 
 export interface Definition {
@@ -154,6 +180,14 @@ export interface Prompt {
   find_by?: ('scan' | 'search' | 'list')[];
   assets?: FlowAsset[];
   ask_place?: boolean;
+  /** Link: how it reads from the asset, what it has linked so far, how many, and what it may file into. */
+  relation?: string;
+  linked?: FlowAsset[];
+  repeat?: boolean;
+  required?: boolean;
+  create_in?: string;
+  /** Link: what linking moves the asset out of, for a type that holds it in one place. */
+  moves?: string;
   coming?: string[];
   done?: FlowDone[];
   asset?: FlowAsset;
@@ -203,6 +237,11 @@ export interface Answer {
   asset_id?: string;
   code?: string;
   place_code?: string;
+  /** Link: what to link to, chosen or scanned; something new to file and link to; and done, to move on. */
+  asset_ids?: string[];
+  codes?: string[];
+  create?: { name: string };
+  done?: boolean;
 }
 
 /**

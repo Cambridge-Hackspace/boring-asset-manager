@@ -397,3 +397,55 @@ describe('valuesBefore', () => {
     expect(unknownNames('{name}', got)).toEqual([]);
   });
 });
+
+// A Link step links what was found or filed to other assets (#264).
+describe('Link', () => {
+  const find: Step = { id: 'find', kind: 'find', find_by: ['list'] };
+  const flowOf = (...steps: Step[]): Definition => ({ version: 2, category_ids: ['short'], steps: [...steps, { id: 'done', kind: 'done', text: '{linked}' }] });
+
+  it('is offered after Create, and says what it does', () => {
+    expect(addableKinds.slice(addableKinds.indexOf('create'), addableKinds.indexOf('create') + 2)).toEqual(['create', 'link']);
+    expect(kindHelp.link).toMatch(/^Links it to other assets/);
+  });
+
+  it('starts finding with every way, required, one at a time', () => {
+    const s = newStep('link', []);
+    expect(s).toMatchObject({ id: 'link', kind: 'link', required: true, find: { find_by: ['scan', 'search', 'list'] } });
+    expect(s.repeat).toBeUndefined();
+    expect(newStepID('link', [s])).toBe('link_2');
+  });
+
+  it('asks when the runner finds what to link to, and not when the flow names it', () => {
+    expect(asks({ id: 'l', kind: 'link', find: { find_by: ['list'] } })).toBe(true);
+    expect(asks({ id: 'l', kind: 'link', assets: ['kit'] })).toBe(false);
+  });
+
+  it('passes when whole, and sets {linked} for the steps after it', () => {
+    const d = flowOf(find, { id: 'link', kind: 'link', relation_type: 'contains', find: { find_by: ['list'], match: { field: 'kit', value: '{code}' } } });
+    expect(checkFlow(d)).toEqual([]);
+    expect(valuesBefore(d, 2).find((v) => v.key === 'linked')).toMatchObject({ label: 'What it linked to', from: 'Link' });
+    expect(valuesBefore(d, 1).map((v) => v.key)).not.toContain('linked');
+  });
+
+  it('says what it is missing, as the server does', () => {
+    const d = flowOf(
+      { id: 'early', kind: 'link', relation_type: 'contains', assets: ['kit'] },
+      find,
+      { id: 'none', kind: 'link' },
+      { id: 'both', kind: 'link', relation_type: 'contains', assets: ['kit'], find: { find_by: [] } },
+      { id: 'new', kind: 'link', relation_type: 'contains', find: { find_by: ['list'], match: { field: 'kit', value: '{later}' } }, allow_create: true },
+    );
+    expect(problemsOf(checkFlow(d), 'early')).toEqual(['It needs something found or made in an earlier step.']);
+    expect(problemsOf(checkFlow(d), 'none')).toEqual(['Choose how it links.', 'Choose what it links to: what they find, or assets you name.']);
+    expect(problemsOf(checkFlow(d), 'both')).toEqual([
+      'It links to what they find, or to assets you name, not both.',
+      'Choose at least one way to find: scan, search or list.',
+    ]);
+    expect(problemsOf(checkFlow(d), 'new')).toEqual(['Its match names {later}, which no earlier step sets.', 'Choose the category something new goes in.']);
+  });
+
+  it('counts as using a value its match names', () => {
+    const link: Step = { id: 'link', kind: 'link', find: { find_by: ['list'], match: { field: 'owner', value: '{who}' } } };
+    expect(stepsUsing([link], 'who')).toEqual([link]);
+  });
+});
