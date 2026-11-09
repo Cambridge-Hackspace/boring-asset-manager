@@ -46,6 +46,7 @@ Each type of question has its own control:
 - number or date: a number or date box
 - yes or no: **Yes** and **No** to choose
 - choice: the options to choose, as a list when there are more than eight
+- people: a name to type, offering the people the runner may choose, as the asset form does
 - photo: a photo to take or choose
 
 The page shows progress, such as "step 2 of 3". See [Progress](#progress).
@@ -214,6 +215,9 @@ Asks its own `questions`, in order. Each question has:
   - `yes_no`, answered `yes` or `no`
   - `choice`: one of the `options` it lists, each `{"value", "label"}`, shown as its value when it
     has no label
+  - `person`, answered with people's user IDs, separated by commas, for a person field
+    ([Person fields](data-model.md#person-fields)); setting the field checks each is someone the
+    runner may choose
   - `photo`
 
 A photo question's answer is the name of the file chosen. The photo itself stays on the page that

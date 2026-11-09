@@ -174,6 +174,9 @@ func (s *Store) importRow(tx *sql.Tx, id string, row ImportRow, now time.Time) (
 				return nil, fmt.Errorf("setting field: %w", err)
 			}
 		}
+		if err := s.syncFieldPeopleTx(tx, id, fieldID, row.FieldValues[fieldID]); err != nil {
+			return nil, err
+		}
 	}
 	if row.Purchase != nil {
 		had, err := s.purchaseTx(tx, id)

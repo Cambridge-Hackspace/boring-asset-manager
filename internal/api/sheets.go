@@ -135,7 +135,7 @@ func (s *Server) drawSheet(r *http.Request, d *render.Document, a *models.AssetW
 	}
 	add("Codes", strings.Join(codes, "; "))
 	for _, f := range a.EffectiveFields {
-		add(f.Field.Label, a.FieldValues[f.Field.Key])
+		add(f.Field.Label, a.FieldText(f.Field.Key))
 	}
 	// Where it came from, as far as the request may see.
 	p := a.Purchase

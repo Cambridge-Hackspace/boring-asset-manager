@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/flows"
@@ -33,6 +34,11 @@ type User struct {
 	// MentionEmails is whether they are emailed when a comment mentions
 	// them (docs/comments.md#mentions). It is on until they turn it off.
 	MentionEmails bool `json:"mention_emails"`
+	// CanSignIn is false for a person without an account
+	// (docs/data-model.md#person-fields): a name to put in fields, with no
+	// password, no identity and no roles, until they first sign in through
+	// an identity provider that links by verified email.
+	CanSignIn bool `json:"can_sign_in"`
 }
 
 // Role represents a defined RBAC role.
@@ -120,6 +126,15 @@ type Field struct {
 type SelectOptions struct {
 	Choices []SelectChoice `json:"choices"`
 	Default *string        `json:"default,omitempty"`
+}
+
+// PersonOptions are the options of a "person" field
+// (docs/data-model.md#person-fields): whether it names several people,
+// and whether its names show to anyone who can read the asset, the public
+// role included, rather than only to those with assets.track.
+type PersonOptions struct {
+	Multiple bool `json:"multiple,omitempty"`
+	Public   bool `json:"public,omitempty"`
 }
 
 // SelectChoice defines an individual dropdown item in SelectOptions.
@@ -760,6 +775,19 @@ type AssetFieldValue struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// FieldPerson is a person a person field names
+// (docs/data-model.md#person-fields), as asset pages show them: by name,
+// never by email.
+type FieldPerson struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Inactive is set for someone deactivated or archived: the fields
+	// naming them stay set.
+	Inactive bool `json:"inactive,omitempty"`
+	// NoAccount is set for a person without an account.
+	NoAccount bool `json:"no_account,omitempty"`
+}
+
 // AssetGeneratorKey stores compact/custom codes mapped to generator types.
 type AssetGeneratorKey struct {
 	AssetID       string `json:"asset_id"`
@@ -824,6 +852,55 @@ type AssetWithDetails struct {
 	// the places their stock is kept: set by the API, with the assets the
 	// requester may see.
 	Pools []AssetPool `json:"pools,omitempty"`
+	// People are the people its person fields name, by user ID
+	// (docs/data-model.md#person-fields); HiddenPeople are, by field key,
+	// how many people a field names that the API does not show the
+	// requester, who sees that someone is set, but not who.
+	People       map[string]FieldPerson `json:"people,omitempty"`
+	HiddenPeople map[string]int         `json:"hidden_people,omitempty"`
+	// PersonFields are the keys of its person fields that have a value,
+	// each with whether it is public: its names show to anyone who can
+	// read it.
+	PersonFields map[string]bool `json:"-"`
+}
+
+// FieldText is a field's value as a person reads it: a person field's
+// names, those not shown as "someone", and any other field's value.
+func (a *AssetWithDetails) FieldText(key string) string {
+	if _, ok := a.PersonFields[key]; !ok {
+		return a.FieldValues[key]
+	}
+	var names []string
+	for _, id := range strings.Split(a.FieldValues[key], ",") {
+		if p, ok := a.People[strings.TrimSpace(id)]; ok {
+			names = append(names, p.Name)
+		}
+	}
+	if a.HiddenPeople[key] > 0 {
+		names = append(names, "someone")
+	}
+	return strings.Join(names, ", ")
+}
+
+// PublicFieldText is FieldText as anyone who can read the asset may see
+// it: a person field's names only when it is public.
+func (a *AssetWithDetails) PublicFieldText(key string) string {
+	if public, ok := a.PersonFields[key]; ok && !public {
+		return ""
+	}
+	return a.FieldText(key)
+}
+
+// FieldTexts are its fields' values as FieldText reads them, by key.
+func (a *AssetWithDetails) FieldTexts() map[string]string {
+	out := make(map[string]string, len(a.FieldValues))
+	for k := range a.FieldValues {
+		out[k] = a.FieldText(k)
+	}
+	for k := range a.HiddenPeople {
+		out[k] = a.FieldText(k)
+	}
+	return out
 }
 
 // CountsIn is a category an asset counts in through a link, and the

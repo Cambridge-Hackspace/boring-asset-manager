@@ -98,6 +98,12 @@ func (s *Store) resolveFieldValues(fieldMap map[string]models.EffectiveField, va
 			// show the message beside it.
 			return nil, fmt.Errorf("field %q (%s): %w", f.Label, f.Key, err)
 		}
+		if f.ValidationType == fields.TypePerson {
+			val = fields.PersonValue(fields.PersonIDs(val))
+			if err := s.checkPeopleExist(f, val); err != nil {
+				return nil, err
+			}
+		}
 		resolved[f.ID] = val
 	}
 	return resolved, nil
@@ -280,6 +286,9 @@ func (s *Store) insertAsset(tx *sql.Tx, assetID, name string, now time.Time, cat
 		if err != nil {
 			return fmt.Errorf("inserting field value: %w", err)
 		}
+		if err := s.syncFieldPeopleTx(tx, assetID, fieldID, val); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -361,7 +370,7 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 
 	// Field values
 	fvQuery := `
-		SELECT f.field_key, afv.value
+		SELECT f.field_key, f.validation_type, f.options, afv.value
 		FROM asset_field_values afv
 		JOIN fields f ON afv.field_id = f.id
 		WHERE afv.asset_id = ?
@@ -373,12 +382,34 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 	defer fvRows.Close()
 
 	fieldValues := make(map[string]string)
+	var personFields map[string]bool
+	var personIDs []string
 	for fvRows.Next() {
-		var key, val string
-		if err := fvRows.Scan(&key, &val); err != nil {
+		var key, kind, val string
+		var options sql.NullString
+		if err := fvRows.Scan(&key, &kind, &options, &val); err != nil {
 			return nil, err
 		}
 		fieldValues[key] = val
+		if kind == fields.TypePerson {
+			if personFields == nil {
+				personFields = map[string]bool{}
+			}
+			f := models.Field{ValidationType: kind}
+			if options.Valid && options.String != "" {
+				f.Options = []byte(options.String)
+			}
+			personFields[key] = fields.PersonOptionsOf(&f).Public
+			personIDs = append(personIDs, fields.PersonIDs(val)...)
+		}
+	}
+	if err := fvRows.Err(); err != nil {
+		return nil, err
+	}
+	fvRows.Close()
+	people, err := ctx.fieldPeople(s, personIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	// Effective fields
@@ -404,6 +435,8 @@ func (s *Store) readAsset(id string, ctx *assetContext) (*models.AssetWithDetail
 		GeneratorKeys:   generatorKeys,
 		FieldValues:     fieldValues,
 		EffectiveFields: effectiveFields,
+		People:          people,
+		PersonFields:    personFields,
 	}
 	if err := s.loanDetails(details, ctx); err != nil {
 		return nil, err
@@ -482,6 +515,11 @@ type AssetFilter struct {
 	Within string
 	// VendorID is a vendor's ID: the assets bought from it.
 	VendorID string
+	// Person is a user's ID: the assets with a person field naming them,
+	// the field keyed PersonField when that is set
+	// (docs/data-model.md#person-fields).
+	Person      string
+	PersonField string
 }
 
 // FilterAssets lists the assets a filter matches: active ones newest first,
@@ -504,6 +542,15 @@ func (s *Store) FilterAssets(f AssetFilter) ([]models.AssetWithDetails, error) {
 	if f.Icon != "" {
 		whereClauses = append(whereClauses, "(a.icon_name = ? OR a.label_icon_name = ?)")
 		args = append(args, f.Icon, f.Icon)
+	}
+	if f.Person != "" {
+		clause := "a.id IN (SELECT afp.asset_id FROM asset_field_people afp JOIN fields pf ON pf.id = afp.field_id WHERE afp.user_id = ?"
+		args = append(args, f.Person)
+		if f.PersonField != "" {
+			clause += " AND pf.field_key = ?"
+			args = append(args, f.PersonField)
+		}
+		whereClauses = append(whereClauses, clause+")")
 	}
 	if f.Within != "" {
 		whereClauses = append(whereClauses, `a.id IN (SELECT l.to_asset_id FROM asset_links l
@@ -842,6 +889,9 @@ func (s *Store) updateAssetTx(tx *sql.Tx, id, name string, now time.Time, cats [
 			if err != nil {
 				return err
 			}
+		}
+		if err := s.syncFieldPeopleTx(tx, id, fieldID, val); err != nil {
+			return err
 		}
 	}
 

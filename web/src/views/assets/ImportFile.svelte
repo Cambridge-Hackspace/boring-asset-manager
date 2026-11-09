@@ -1,6 +1,8 @@
 <script lang="ts">
   import { IGNORE, describeLinkChange, describeProblem, duplicateTargets, linkCounts, summarize, type TargetOption } from '../../lib/importing';
   import type { ImportEntry } from '../../lib/importset.svelte';
+  import { request } from '../../lib/api';
+  import { messageOf } from '../../lib/errors';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
 
   let {
@@ -32,6 +34,24 @@
   const plan = $derived(entry.plan);
   const headingId = $derived(`import-file-${entry.id}`);
   const several = $derived(count > 1);
+
+  // Adding the names matching no one as people without accounts
+  // (docs/csv.md), then checking again.
+  let adding = $state(false);
+  let addError = $state('');
+  async function addPeople() {
+    if (!plan?.new_people?.length) return;
+    adding = true;
+    addError = '';
+    try {
+      for (const name of plan.new_people) await request('POST', '/people', { name });
+      await entry.preview(true, userId);
+    } catch (err) {
+      addError = messageOf(err);
+    } finally {
+      adding = false;
+    }
+  }
 </script>
 
 <section class={several ? 'card mb-4' : 'mb-4'} aria-labelledby={headingId}>
@@ -128,7 +148,20 @@
       </button>
     {:else}
       <p class="mb-2 text-sm" role="status">{summarize(plan)}</p>
-      {#if plan.unknown_categories.length}
+      {#if plan.new_people?.length}
+        <div class="mb-2 text-sm">
+          <p>No one is named {plan.new_people.map((n) => `“${n}”`).join(', ')}.</p>
+          {#if plan.can_add_people}
+            <button type="button" class="btn-secondary mt-1" onclick={addPeople} disabled={disabled || adding}>
+              {adding ? 'Adding…' : `Add ${plan.new_people.length === 1 ? 'them' : `these ${plan.new_people.length}`} as people without accounts`}
+            </button>
+          {:else}
+            <p class="text-zinc-600 dark:text-zinc-400">Fix the file, or ask someone who may add people to add them.</p>
+          {/if}
+          <ErrorMessage error={addError} />
+        </div>
+      {/if}
+            {#if plan.unknown_categories.length}
         <p class="error-text mb-2">
           These categories do not exist yet; create them first, or fix the file: {plan.unknown_categories.join(', ')}.
         </p>

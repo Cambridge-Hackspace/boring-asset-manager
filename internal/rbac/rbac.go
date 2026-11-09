@@ -57,6 +57,9 @@ const (
 	// PermPurchasesRead sees what an asset cost: its price, currency, order
 	// number and invoice (docs/data-model.md#purchases), in the scopes held.
 	PermPurchasesRead = "purchases.read"
+	// PermPeopleAdd adds people without accounts, to name in person fields
+	// (docs/data-model.md#person-fields). users.manage includes it.
+	PermPeopleAdd = "people.add"
 )
 
 var (
@@ -91,6 +94,7 @@ func AllPermissions() []string {
 		PermCommentsWrite,
 		PermCommentsModerate,
 		PermPurchasesRead,
+		PermPeopleAdd,
 	}
 }
 

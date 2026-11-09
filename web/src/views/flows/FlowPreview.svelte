@@ -51,6 +51,8 @@
               {#each q.options ?? [] as o, j (j)}<div class="flow-choice">{optionLabel(o) || 'A choice'}</div>{/each}
             {:else if q.type === 'photo'}
               <div class="flow-input text-zinc-500">Take a photo, or choose one</div>
+            {:else if q.type === 'person'}
+              <div class="flow-input text-zinc-500">Type a name…</div>
             {:else if q.type === 'long_text'}
               <div class="flow-input h-24"></div>
             {:else}

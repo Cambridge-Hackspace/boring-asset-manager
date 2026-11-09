@@ -58,6 +58,14 @@ func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, 
 		return nil, err
 	}
 	assets = searched(assets, f.Search)
+	// A report naming "me" finds whoever runs it in its person fields;
+	// one run by no one, no one.
+	if f.Person == reports.PersonMe {
+		f.Person = "-"
+		if u := CurrentUser(r.Context()); u != nil {
+			f.Person = u.ID
+		}
+	}
 	categories, err := s.store.ListCategories()
 	if err != nil {
 		return nil, err

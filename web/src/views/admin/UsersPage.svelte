@@ -49,6 +49,39 @@
   let newPassword = $state('');
   let newRoles = $state<RoleAssignment[]>([]);
 
+  // Someone as this page names them: by email, or by name for a person
+  // without an account who has none.
+  const who = (u: UserWithRoles) => u.email || u.name || 'Unnamed user';
+  // Adding a person without an account (docs/data-model.md#person-fields),
+  // and merging one into another person.
+  let addingPerson = $state(false);
+  let personName = $state('');
+  let personEmail = $state('');
+  let merging = $state<string | null>(null);
+  let mergeInto = $state('');
+
+  async function addPerson(event: SubmitEvent) {
+    event.preventDefault();
+    const name = personName.trim();
+    await act(async () => {
+      await request('POST', '/people', { name, email: personEmail });
+      addingPerson = false;
+      personName = personEmail = '';
+    }, `${name} added. They cannot sign in until they join through a provider or are given a password.`);
+  }
+
+  function merge(event: SubmitEvent, u: UserWithRoles) {
+    event.preventDefault();
+    const into = users.find((x) => x.id === mergeInto);
+    if (!into) return;
+    let changed = 0;
+    void act(async () => {
+      changed = (await request<{ assets: number }>('POST', `/users/${encodeURIComponent(u.id)}/merge`, { into: into.id })).assets;
+      merging = null;
+      mergeInto = '';
+    }, () => `${who(u)} merged into ${who(into)}: ${changed} asset${changed === 1 ? '' : 's'} changed.`);
+  }
+
   const roleName = (id: string) => roles.find((r) => r.id === id)?.name ?? id;
   const scopeName = (id: string) => scopes.find((s) => s.id === id)?.name ?? id;
   const described = (a: RoleAssignment) => describeAssignment(roleName(a.role_id), a.scope_ids.map(scopeName));
@@ -78,11 +111,11 @@
       : msg;
   }
 
-  async function act(action: () => Promise<unknown>, done: string) {
+  async function act(action: () => Promise<unknown>, done: string | (() => string)) {
     error = status = '';
     try {
       await action();
-      status = done;
+      status = typeof done === 'function' ? done() : done;
       await load();
     } catch (err) {
       error = explain(err);
@@ -114,7 +147,7 @@
     void act(async () => {
       await request('PUT', `/users/${encodeURIComponent(u.id)}/name`, { name: nameDraft });
       if (renaming === u.id) renaming = null;
-    }, nameDraft.trim() ? `${u.email} is now shown as ${nameDraft.trim()}.` : `${u.email} is shown by email.`);
+    }, nameDraft.trim() ? `${who(u)} is now shown as ${nameDraft.trim()}.` : `${who(u)} is shown by email.`);
   }
 
   function savePassword(event: SubmitEvent, u: UserWithRoles) {
@@ -123,7 +156,7 @@
       await request('PUT', `/users/${encodeURIComponent(u.id)}/password`, { password: passwordDraft });
       settingPassword = null;
       passwordDraft = '';
-    }, `Password set for ${u.email}. They are signed out everywhere; give them the new one.`);
+    }, `Password set for ${who(u)}. They are signed out everywhere; give them the new one.`);
   }
 
   function startRoles(u: UserWithRoles) {
@@ -132,13 +165,38 @@
   }
 </script>
 
-<PageHeader title="Users" lede="The people who can sign in, and the roles that decide what each may do.">
+<PageHeader title="Users" lede="The people who can sign in, those without accounts whom fields name, and the roles that decide what each may do.">
   {#snippet actions()}
+    {#if !addingPerson}<button type="button" class="btn-secondary" onclick={() => (addingPerson = true)}>Add person without account</button>{/if}
     {#if !creating}<button type="button" class="btn-primary" onclick={() => (creating = true)}>New user</button>{/if}
   {/snippet}
 </PageHeader>
 <ErrorMessage {error} />
 {#if status}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
+
+{#if addingPerson}
+  <form class="card mb-4 max-w-2xl space-y-4" onsubmit={addPerson}>
+    <h2 class="text-lg font-semibold">Add a person without an account</h2>
+    <p class="text-sm text-zinc-600 dark:text-zinc-400">
+      A name to choose in person fields. They cannot sign in: when they first sign in through a provider that links by verified email, they join
+      this person, and their fields are already theirs.
+    </p>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <label class="label" for="person-name">Name</label>
+        <input id="person-name" class="input" required maxlength="255" autocomplete="off" bind:value={personName} />
+      </div>
+      <div>
+        <label class="label" for="person-email">Email (optional)</label>
+        <input id="person-email" class="input" type="email" autocomplete="off" bind:value={personEmail} />
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="btn-primary">Add person</button>
+      <button type="button" class="btn-secondary" onclick={() => (addingPerson = false)}>Cancel</button>
+    </div>
+  </form>
+{/if}
 
 {#if creating}
   <form class="card mb-4 max-w-2xl space-y-4" onsubmit={create}>
@@ -200,7 +258,7 @@
             <td class="py-2 pr-4">
               {#if renaming === u.id}
                 <form class="flex flex-wrap gap-2" onsubmit={(event) => saveName(event, u)}>
-                  <label class="sr-only" for="name-{u.id}">Name for {u.email}</label>
+                  <label class="sr-only" for="name-{u.id}">Name for {who(u)}</label>
                   <input id="name-{u.id}" class="input w-48" required maxlength="255" bind:value={nameDraft} />
                   <button type="submit" class="btn-primary">Save name</button>
                   <button type="button" class="btn-secondary" onclick={() => (renaming = null)}>Cancel</button>
@@ -209,9 +267,12 @@
                 {u.name || '—'}
               {/if}
             </td>
-            <td class="py-2 pr-4 font-medium">{u.email}{#if u.id === session.user?.id}{' '}<span class="text-xs text-zinc-600 dark:text-zinc-400">(you)</span>{/if}</td>
+            <td class="py-2 pr-4 font-medium">{u.email || '—'}{#if u.id === session.user?.id}{' '}<span class="text-xs text-zinc-600 dark:text-zinc-400">(you)</span>{/if}</td>
             <td class="py-2 pr-4">
               {u.is_active ? 'Active' : 'Disabled'}
+              {#if u.can_sign_in === false}
+                <span class="block text-xs text-zinc-600 dark:text-zinc-400">No account: cannot sign in</span>
+              {/if}
               {#if u.sign_in_delayed_until}
                 <span class="block text-xs text-amber-900 dark:text-amber-200">Wrong passwords: signing in waits until {new Date(u.sign_in_delayed_until).toLocaleTimeString()}</span>
               {/if}
@@ -221,9 +282,9 @@
             </td>
             <td class="py-2 pr-4">
               {#if editingRoles === u.id}
-                <RolePicker id="roles-{u.id}" legend="Roles for {u.email}" {roles} {scopes} bind:value={roleDraft} />
+                <RolePicker id="roles-{u.id}" legend="Roles for {who(u)}" {roles} {scopes} bind:value={roleDraft} />
                 <div class="flex gap-2 pt-1">
-                  <button type="button" class="btn-secondary" onclick={() => act(async () => { await request('PUT', `/users/${encodeURIComponent(u.id)}/roles`, { roles: roleDraft }); if (editingRoles === u.id) editingRoles = null; }, `Roles updated for ${u.email}.`)}>Save roles</button>
+                  <button type="button" class="btn-secondary" onclick={() => act(async () => { await request('PUT', `/users/${encodeURIComponent(u.id)}/roles`, { roles: roleDraft }); if (editingRoles === u.id) editingRoles = null; }, `Roles updated for ${who(u)}.`)}>Save roles</button>
                   <button type="button" class="btn-secondary" onclick={() => (editingRoles = null)}>Cancel</button>
                 </div>
               {:else}
@@ -233,59 +294,73 @@
             <td class="py-2 text-right">
               <span class="inline-flex flex-wrap justify-end gap-2">
                 {#if renaming !== u.id}
-                  <button type="button" class="btn-secondary" aria-label="Rename {u.email}" onclick={() => startRename(u)}>Rename</button>
+                  <button type="button" class="btn-secondary" aria-label="Rename {who(u)}" onclick={() => startRename(u)}>Rename</button>
                 {/if}
-                {#if editingRoles !== u.id}
-                  <button type="button" class="btn-secondary" aria-label="Change roles for {u.email}" onclick={() => startRoles(u)}>Change roles</button>
+                {#if editingRoles !== u.id && u.can_sign_in !== false}
+                  <button type="button" class="btn-secondary" aria-label="Change roles for {who(u)}" onclick={() => startRoles(u)}>Change roles</button>
+                {/if}
+                {#if u.can_sign_in === false && merging !== u.id}
+                  <button type="button" class="btn-secondary" aria-label="Merge {who(u)} into someone" onclick={() => { merging = u.id; mergeInto = ''; }}>Merge into…</button>
                 {/if}
                 {#if settingPassword !== u.id && passwordsOn}
-                  <button type="button" class="btn-secondary" aria-label="Set password for {u.email}" onclick={() => { settingPassword = u.id; passwordDraft = ''; }}>Set password</button>
+                  <button type="button" class="btn-secondary" aria-label="Set password for {who(u)}" onclick={() => { settingPassword = u.id; passwordDraft = ''; }}>Set password</button>
                 {/if}
                 {#if showingIdentities !== u.id}
-                  <button type="button" class="btn-secondary" aria-label="Identities of {u.email}" onclick={() => (showingIdentities = u.id)}>Identities</button>
+                  <button type="button" class="btn-secondary" aria-label="Identities of {who(u)}" onclick={() => (showingIdentities = u.id)}>Identities</button>
                 {/if}
-                {#if u.is_active}
+                {#if u.is_active && u.email}
                   <button
                     type="button"
                     class="btn-secondary"
-                    aria-label="Send {u.email} an invitation"
-                    onclick={() => act(() => request('POST', `/users/${encodeURIComponent(u.id)}/invite`), `Invitation sent to ${u.email}.`)}>Send invitation</button>
+                    aria-label="Send {who(u)} an invitation"
+                    onclick={() => act(() => request('POST', `/users/${encodeURIComponent(u.id)}/invite`), `Invitation sent to ${who(u)}.`)}>Send invitation</button>
                 {/if}
                 {#if u.sign_in_delayed_until}
                   <button
                     type="button"
                     class="btn-secondary"
-                    aria-label="Clear sign-in delay for {u.email}"
-                    onclick={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}/sign-in-delay`), `${u.email} can sign in again at once.`)}
+                    aria-label="Clear sign-in delay for {who(u)}"
+                    onclick={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}/sign-in-delay`), `${who(u)} can sign in again at once.`)}
                   >Clear sign-in delay</button>
                 {/if}
                 {#if u.two_factor}
                   <ConfirmButton
                     label="Remove second factors"
-                    question="Remove the second factors of {u.email}? They will be signed out everywhere, and sign in with their password alone until they set one up again. Do this only for someone who has lost theirs, and is who they say."
-                    onconfirm={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}/factors`), `${u.email} signs in with their password alone now.`)}
+                    question="Remove the second factors of {who(u)}? They will be signed out everywhere, and sign in with their password alone until they set one up again. Do this only for someone who has lost theirs, and is who they say."
+                    onconfirm={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}/factors`), `${who(u)} signs in with their password alone now.`)}
                   />
                 {/if}
                 <button
                   type="button"
                   class="btn-secondary"
-                  aria-label="{u.is_active ? 'Disable' : 'Enable'} {u.email}"
-                  onclick={() => act(() => request('PATCH', `/users/${encodeURIComponent(u.id)}/status`, { is_active: !u.is_active }), `${u.email} ${u.is_active ? 'disabled' : 'enabled'}.`)}
+                  aria-label="{u.is_active ? 'Disable' : 'Enable'} {who(u)}"
+                  onclick={() => act(() => request('PATCH', `/users/${encodeURIComponent(u.id)}/status`, { is_active: !u.is_active }), `${who(u)} ${u.is_active ? 'disabled' : 'enabled'}.`)}
                 >
                   {u.is_active ? 'Disable' : 'Enable'}
                 </button>
                 <ConfirmButton
                   label="Archive"
-                  question="Archive {u.email}? They will be signed out and cannot sign in again."
-                  onconfirm={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}`), `${u.email} archived.`)}
+                  question="Archive {who(u)}? They will be signed out and cannot sign in again."
+                  onconfirm={() => act(() => request('DELETE', `/users/${encodeURIComponent(u.id)}`), `${who(u)} archived.`)}
                 />
               </span>
               {#if showingIdentities === u.id}
-                <UserIdentities userId={u.id} email={u.email} onclose={() => (showingIdentities = null)} />
+                <UserIdentities userId={u.id} email={who(u)} onclose={() => (showingIdentities = null)} />
+              {/if}
+              {#if merging === u.id}
+                <form class="mt-2 flex flex-wrap justify-end gap-2" onsubmit={(event) => merge(event, u)}>
+                  <label class="sr-only" for="merge-{u.id}">Merge {who(u)} into</label>
+                  <select id="merge-{u.id}" class="input w-56" required bind:value={mergeInto}>
+                    <option value="">Merge into…</option>
+                    {#each users.filter((x) => x.id !== u.id) as x (x.id)}<option value={x.id}>{x.name || x.email}{x.email && x.name ? ` (${x.email})` : ''}</option>{/each}
+                  </select>
+                  <button type="submit" class="btn-primary">Merge</button>
+                  <button type="button" class="btn-secondary" onclick={() => (merging = null)}>Cancel</button>
+                </form>
               {/if}
               {#if settingPassword === u.id}
                 <form class="mt-2 flex flex-wrap justify-end gap-2" onsubmit={(event) => savePassword(event, u)}>
-                  <label class="sr-only" for="password-{u.id}">New password for {u.email}</label>
+                  <label class="sr-only" for="password-{u.id}">New password for {who(u)}</label>
                   <input id="password-{u.id}" class="input w-48" type="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="8-72 characters" bind:value={passwordDraft} />
                   <button type="submit" class="btn-primary">Save password</button>
                   <button type="button" class="btn-secondary" onclick={() => (settingPassword = null)}>Cancel</button>

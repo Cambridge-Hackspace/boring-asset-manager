@@ -358,7 +358,7 @@ func (s *Store) CreateAdminUser(email, password string) (*models.User, error) {
 	err = s.TxQueryRow(tx, "SELECT id FROM users WHERE email = ?", normalized).Scan(&existingID)
 	if err == nil {
 		// Update existing user password and activate
-		_, err = s.TxExec(tx, "UPDATE users SET password_hash = ?, is_active = ?, updated_at = ? WHERE id = ?", hash, true, now, existingID)
+		_, err = s.TxExec(tx, "UPDATE users SET password_hash = ?, is_active = ?, can_sign_in = ?, updated_at = ? WHERE id = ?", hash, true, true, now, existingID)
 		if err != nil {
 			return nil, fmt.Errorf("updating existing admin user: %w", err)
 		}

@@ -54,6 +54,31 @@ describe('AssetForm', () => {
     });
   });
 
+  it('chooses people for a person field with no value yet, sending their user IDs', async () => {
+    const keeper: EffectiveField = {
+      field: { id: 'keeper', key: 'keeper', label: 'Keeper', validation_type: 'person', options: { multiple: true } as EffectiveField['field']['options'], created_at: '', updated_at: '' },
+      is_required: false,
+    };
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories: [cat('tools', 'Tools')] }),
+      'GET /generators': () => ({ generators }),
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'POST /categories/effective-fields': () => ({ fields: [keeper] }),
+      'GET /people/choices': () => ({ people: [{ id: 'u1', name: 'Ada' }], can_add: false }),
+      'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' } } } }),
+    });
+    render(AssetForm, { params: {} });
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Lathe' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Tools' }));
+    const picker = await screen.findByRole('combobox', { name: 'Keeper' });
+    await fireEvent.focus(picker);
+    await fireEvent.input(picker, { target: { value: 'ad' } });
+    await fireEvent.mouseDown(await screen.findByRole('option', { name: 'Ada' }));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+    expect((sent.find((r) => r.method === 'POST' && r.path === '/assets')!.body as { field_values: unknown }).field_values).toEqual({ keeper: 'u1' });
+  });
+
   it('fills a new asset in from one it is like, links it as that one is, and leaves out what is unticked', async () => {
     navigate('/assets/new?like=spool');
     const rel = (id: string, name: string, inverse: string, over = {}) => ({

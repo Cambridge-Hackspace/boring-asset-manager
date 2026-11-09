@@ -95,7 +95,9 @@ A package never holds:
 - this instance's settings.
 
 Who made a flow, and who did what in an asset's history, are left out (`created_by`,
-`actor_user_id`, and the `actor` and `borrower` of events). Drafts are not packaged.
+`actor_user_id`, and the `actor` and `borrower` of events). So are the values of person fields,
+and their changes in history ([Person fields](data-model.md#person-fields)): they name people,
+whom a package never holds. Drafts are not packaged.
 
 ### Permissions to export
 
@@ -190,7 +192,8 @@ The rows go in in one transaction. Files are stored as they are read, before the
 commits, and removed if it does not.
 
 Each asset's history records that it was created by an import, by whoever imported it. It keeps
-what the archive's history held, without who did what.
+what the archive's history held, without who did what. An archive's person fields keep only the
+people this instance has, so one from another instance names no one.
 
 A check's `fingerprint` is passed to the import. The import is refused if it would now do
 something else.
