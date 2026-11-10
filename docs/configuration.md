@@ -69,6 +69,14 @@ bluetooth = []
 # Environment: BAM_MCP_ENABLED (true or false).
 enabled = true
 
+[assistant]
+# The assistant beside the page (docs/assistant.md) is set up under Admin, Assistant.
+# Any of its settings given here takes the place of Admin's, which shows it as set
+# here: enabled, provider ("anthropic" or "openai"), endpoint, model, api_key, name,
+# max_tokens, max_steps, max_tools, person_messages, person_tokens,
+# instance_messages, instance_tokens and keep_days. Left out, each is Admin's.
+# Environment: BAM_ASSISTANT_<SETTING>, such as BAM_ASSISTANT_API_KEY.
+
 [attachments]
 # Files attached to assets and categories (docs/data-model.md#attachments): the
 # largest, in megabytes, and how many one asset or category may have. Images
@@ -233,6 +241,7 @@ Several settings can also be given in the environment:
 | `printers.devices` | `BAM_PRINTERS_DEVICES`, comma-separated |
 | `printers.bluetooth` | `BAM_PRINTERS_BLUETOOTH`, comma-separated |
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
+| `assistant.*` | `BAM_ASSISTANT_ENABLED` (`true` or `false`), `BAM_ASSISTANT_PROVIDER`, `BAM_ASSISTANT_ENDPOINT`, `BAM_ASSISTANT_MODEL`, `BAM_ASSISTANT_API_KEY`, `BAM_ASSISTANT_NAME`, `BAM_ASSISTANT_MAX_TOKENS`, `BAM_ASSISTANT_MAX_STEPS`, `BAM_ASSISTANT_MAX_TOOLS`, `BAM_ASSISTANT_PERSON_MESSAGES`, `BAM_ASSISTANT_PERSON_TOKENS`, `BAM_ASSISTANT_INSTANCE_MESSAGES`, `BAM_ASSISTANT_INSTANCE_TOKENS`, `BAM_ASSISTANT_KEEP_DAYS` (see [The assistant](assistant.md#in-the-configuration)) |
 | `relay.bonemesh`, `relay.websocket` | `BAM_RELAY_BONEMESH`, `BAM_RELAY_WEBSOCKET` (`true` or `false`) |
 | `relay.bonemesh_port` | `BAM_RELAY_BONEMESH_PORT` |
 | `attachments.max_file_mb`, `attachments.max_per_object` | `BAM_ATTACHMENTS_MAX_FILE_MB`, `BAM_ATTACHMENTS_MAX_PER_OBJECT` |

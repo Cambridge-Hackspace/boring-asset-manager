@@ -29,7 +29,8 @@ export type Permission =
   | 'purchases.read'
   | 'people.add'
   | 'assets.confirm'
-  | 'assets.verify';
+  | 'assets.verify'
+  | 'assistant.use';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;

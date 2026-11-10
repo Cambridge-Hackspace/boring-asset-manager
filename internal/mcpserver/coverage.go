@@ -9,6 +9,25 @@ var Uncovered = map[string]string{}
 
 // Refused lists the API routes deliberately out of reach over MCP, and why.
 var Refused = map[string]string{
+	// The assistant beside the page (docs/assistant.md) is BAM!'s own, in
+	// the web app, as the person signed in; an assistant reaching BAM! over
+	// MCP is another, and neither sets the other up nor reads a person's
+	// conversations.
+	"GET /api/v1/settings/assistant":                     "the assistant panel's provider and limits, set by an admin in the web app; an assistant does not set up another",
+	"PUT /api/v1/settings/assistant":                     "the assistant panel's provider, key and limits, set by an admin in the web app, who is told first what it sends where",
+	"GET /api/v1/assistant":                              "whether the assistant panel is on for a person signed in to the web app",
+	"GET /api/v1/assistant/guides":                       "guides start conversations with the assistant panel in the web app; over MCP, flows and prompts do what they do",
+	"POST /api/v1/assistant/guides":                      "guides for the assistant panel are written by an admin in the web app",
+	"GET /api/v1/assistant/guides/{slug}":                "guides start conversations with the assistant panel in the web app; over MCP, flows and prompts do what they do",
+	"PUT /api/v1/assistant/guides/{slug}":                "guides for the assistant panel are written by an admin in the web app",
+	"DELETE /api/v1/assistant/guides/{slug}":             "guides for the assistant panel are written by an admin in the web app",
+	"GET /api/v1/assistant/guides/{slug}/qr.svg":         "the picture on a guide's printed poster, for people to scan",
+	"GET /api/v1/assistant/conversations":                "a person's conversations with the assistant panel are theirs alone, read in the web app",
+	"POST /api/v1/assistant/conversations":               "conversations with the assistant panel are a person's own, in the web app",
+	"GET /api/v1/assistant/conversations/{id}":           "a person's conversations with the assistant panel are theirs alone, read in the web app",
+	"DELETE /api/v1/assistant/conversations/{id}":        "a person's conversations with the assistant panel are theirs alone, deleted in the web app",
+	"POST /api/v1/assistant/conversations/{id}/messages": "talking with the assistant panel is a person's own, in the web app; an assistant over MCP uses the tools itself",
+	"POST /api/v1/assistant/conversations/{id}/confirm":  "confirming the assistant panel's changes is the person's decision, in the web app",
 	// Review states (docs/review.md#assistants): an assistant proposes,
 	// and a person decides.
 	"POST /api/v1/assets/{id}/proposal/accept":     "accepting an assistant's changes is a person's decision, in the web app",

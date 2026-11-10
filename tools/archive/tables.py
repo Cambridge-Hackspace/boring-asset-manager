@@ -65,14 +65,16 @@ ORDER = [
     ('asset_purchases', 'KindAssets'), ('warranty_notices', 'KindAssets'), ('asset_proposals', 'KindAssets'), ('contract_assets', 'KindAssets'), ('asset_catalog_entries', 'KindAssets'),
     ('purchase_orders', 'KindAssets'), ('purchase_order_lines', 'KindAssets'), ('purchase_order_attachments', 'KindAssets'),
     ('events', 'KindAssets'),
-    ('flows', 'KindFlows'), ('flow_filings', 'KindFlows'), ('flow_filing_comments', 'KindFlows'),
+    ('flows', 'KindFlows'), ('flow_filings', 'KindFlows'), ('flow_filing_comments', 'KindFlows'), ('assistant_guides', 'KindFlows'),
     ('settings', 'KindSettings'), ('label_stock', 'KindSettings'), ('printers', 'KindSettings'), ('printer_pools', 'KindSettings'),
     ('printer_pool_members', 'KindSettings'), ('notification_channels', 'KindSettings'), ('spool_jobs', 'KindSettings'),
     ('spool_batches', 'KindSettings'), ('spool_job_members', 'KindSettings'), ('spool_entries', 'KindSettings'),
     ('auth_providers', 'KindSettings'), ('auth_provider_rules', 'KindSettings'), ('relays', 'KindSettings'),
     ('incoming_hooks', 'KindSettings'), ('incoming_hook_roles', 'KindSettings'), ('incoming_hook_role_scopes', 'KindSettings'),
+    ('assistant_settings', 'KindSettings'),
     ('sessions', 'KindAuth'), ('user_factors', 'KindAuth'), ('user_identities', 'KindAuth'), ('oauth_clients', 'KindAuth'), ('oauth_codes', 'KindAuth'), ('api_tokens', 'KindAuth'),
     ('api_token_roles', 'KindAuth'), ('api_token_role_scopes', 'KindAuth'), ('relay_mesh', 'KindAuth'),
+    ('assistant_conversations', 'KindConversations'), ('assistant_messages', 'KindConversations'),
 ]
 JSON = {
     'fields': {'options'}, 'events': {'payload'}, 'reports': {'spec'}, 'templates': {'layout_json'},
@@ -82,10 +84,13 @@ JSON = {
     'auth_providers': {'settings', 'default_role_ids', 'allowed_domains', 'allowed_groups', 'mfa_amr', 'mfa_acr'}, 'auth_provider_rules': {'scope_ids'},
     'relays': {'allowlist'},
     'incoming_hooks': {'settings'},
+    'assistant_guides': {'category_ids', 'link_type_ids', 'questions'}, 'assistant_conversations': {'progress'},
+    'assistant_messages': {'content', 'context', 'raw'},
 }
 SECRET = {'users': ['password_hash', 'totp_secret'], 'notification_channels': ['options'], 'auth_providers': ['secrets'],
           'relays': ['code_hash', 'credential_hash'],
-          'incoming_hooks': ['secret_hash', 'sealed_secret']}
+          'incoming_hooks': ['secret_hash', 'sealed_secret'],
+          'assistant_settings': ['api_key']}
 # Grants are written by permission key, which is the same on every
 # instance; permission IDs are not.
 BY_KEY = {'role_permissions', 'role_permission_scopes'}
@@ -99,6 +104,8 @@ COMMENT = {
                'restored relay pairs again with a new code.'],
     'relay_mesh': ["The mesh root's and the main node's private keys are sealed with the",
                    "configuration's key, as second factors' secrets are."],
+    'assistant_settings': ["The provider's key is kept in auth/, as notification channels' secrets are."],
+    'assistant_conversations': ["Each person's own: written only when asked for (docs/backups.md)."],
     'incoming_hooks': ["Incoming hooks' secrets: a bearer secret's hash, or a signing secret sealed",
                        "with the configuration's key. Restored without them, a hook refuses until given a new one."],
 }

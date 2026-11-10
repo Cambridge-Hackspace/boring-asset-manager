@@ -18,6 +18,10 @@ setting existed.
 Turned off, `/api/v1/mcp` answers `404`, and `GET /api/v1/info` says `"mcp": false`. OAuth is
 turned off with MCP.
 
+[The assistant beside the page](assistant.md), BAM!'s own in the web app, uses these same tools in
+process, as the person signed in, and is turned on apart from MCP: `[mcp] enabled` does not touch it.
+Its changes are recorded through it by the name an admin gives it, `BAM! assistant` by default.
+
 ## Connecting an assistant
 
 ### Over HTTP

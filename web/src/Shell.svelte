@@ -10,6 +10,8 @@
   import { session, signInPath } from './lib/session.svelte';
   import { routes } from './routes';
   import logo from './assets/bam.png';
+  import AssistantPanel from './components/AssistantPanel.svelte';
+  import { panel } from './lib/assistant.svelte';
 
   // A workspace, such as the template editor, has the whole window below
   // the header, rather than a column of the page: the header's height
@@ -57,6 +59,16 @@
   const banner = 'border-b-2 border-zinc-900 bg-highlight px-4 py-2 text-center text-sm text-zinc-900 print:hidden dark:border-zinc-600';
   const bannerLink = 'inline-flex min-h-11 items-center underline';
 
+  // Whether the assistant is on, and theirs to use, is asked once signed in.
+  $effect(() => {
+    if (session.user) void panel.load();
+  });
+  const assistantOpen = $derived(panel.available && panel.open);
+  function toggleAssistant() {
+    if (panel.open) panel.hide();
+    else panel.show();
+  }
+
   // Move focus to the page after navigating, so screen readers announce it.
   let first = true;
   $effect(() => {
@@ -77,9 +89,20 @@
 <header bind:offsetHeight={headerHeight} class="border-b-2 border-zinc-900 bg-zinc-50 print:hidden dark:border-zinc-600 dark:bg-zinc-950">
   <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2">
     <a href="/" class="inline-flex min-h-11 items-center rounded"><img src={logo} alt="BAM!" width="72" height="45" /></a>
+    {#if panel.available}
+      <button
+        type="button"
+        class="btn-secondary ml-auto sm:hidden"
+        aria-expanded={assistantOpen}
+        aria-controls="assistant-panel"
+        onclick={toggleAssistant}
+      >
+        Assistant
+      </button>
+    {/if}
     <button
       type="button"
-      class="btn-secondary ml-auto sm:hidden"
+      class="btn-secondary sm:hidden {panel.available ? '' : 'ml-auto'}"
       bind:this={menuButton}
       aria-expanded={menuOpen}
       aria-controls="phone-menu"
@@ -99,6 +122,9 @@
       {/each}
     </nav>
     <div class="hidden items-center gap-1 text-sm sm:flex">
+      {#if panel.available}
+        <button type="button" class="btn-secondary" aria-expanded={assistantOpen} aria-controls="assistant-panel" onclick={toggleAssistant}>Assistant</button>
+      {/if}
       <a href="/help/{helpFor(router.path)}" class="{itemClass} text-zinc-600 dark:text-zinc-400">Help</a>
       {#if session.user}
         <a href="/account" class="{itemClass} text-zinc-600 dark:text-zinc-400">{displayName(session.user)}</a>
@@ -167,8 +193,15 @@
     <a class={bannerLink} href="/shopping#waiting">Decide what to do</a>
   </p>
 {/if}
-<main id="main" tabindex="-1" bind:this={main} class={workspace ? 'outline-none md:relative md:h-(--workspace-height) md:overflow-hidden' : 'mx-auto max-w-7xl px-4 py-6 outline-none'}
-  style:--workspace-height={workspace ? `calc(100dvh - ${headerHeight}px)` : undefined}
->
-  {@render children()}
-</main>
+<div class={assistantOpen ? 'md:flex md:items-start' : ''}>
+  <main
+    id="main"
+    tabindex="-1"
+    bind:this={main}
+    class="{workspace ? 'outline-none md:relative md:h-(--workspace-height) md:overflow-hidden' : 'mx-auto max-w-7xl px-4 py-6 outline-none'} {assistantOpen ? 'min-w-0 md:flex-1' : ''}"
+    style:--workspace-height={workspace ? `calc(100dvh - ${headerHeight}px)` : undefined}
+  >
+    {@render children()}
+  </main>
+  {#if assistantOpen}<AssistantPanel />{/if}
+</div>

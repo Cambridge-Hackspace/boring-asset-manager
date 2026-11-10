@@ -32,7 +32,7 @@ Available Commands:
                 --bonemesh=false or --websocket=false turns a transport off)
   serve         Start the HTTP daemon
   backup        Write an archive of the instance, files included (requires --to; --split <size>, --without-secrets,
-                --without-documents);
+                --without-documents, --with-conversations);
                 a --to ending in .db copies a SQLite database instead, and exits 3 for other databases
   storage sweep Remove uploaded files no row names, older than a day, and list rows whose file is missing (--dry-run removes nothing)
   storage copy  Copy every uploaded file to the store another config file's [storage] names, checking each (requires --to)
@@ -169,6 +169,7 @@ func main() {
 		from := cmd.String("from", "", "Backup to restore (restore)")
 		withoutSecrets := cmd.Bool("without-secrets", false, "Leave authentication out: password hashes, sessions, tokens, OAuth and notification channels' secrets (backup)")
 		withoutDocuments := cmd.Bool("without-documents", false, "Leave out attachments that are not images: documents and other files (backup)")
+		withConversations := cmd.Bool("with-conversations", false, "Hold people's conversations with the assistant too, which backups leave out unless asked (backup)")
 		split := cmd.String("split", "", "Write the archive in parts of at most this size, such as 4GiB (backup)")
 		only := cmd.String("only", "", "Restore only these kinds of information, such as assets,catalog (restore)")
 		check := cmd.Bool("check", false, "Check the archive and say what restoring it would do, changing nothing (restore)")
@@ -179,7 +180,7 @@ func main() {
 
 		var err error
 		if command == "backup" {
-			opts := cli.BackupOptions{WithoutSecrets: *withoutSecrets, WithoutDocuments: *withoutDocuments}
+			opts := cli.BackupOptions{WithoutSecrets: *withoutSecrets, WithoutDocuments: *withoutDocuments, WithConversations: *withConversations}
 			if *split != "" {
 				opts.Split, err = cli.ParseSize(*split)
 			}
