@@ -15,6 +15,10 @@
   import ScanResult from '../components/ScanResult.svelte';
   import PoolsSection from '../components/PoolsSection.svelte';
   import SignInToSee from '../components/SignInToSee.svelte';
+  import OfflineAssetCard from '../components/OfflineAssetCard.svelte';
+  import { isOffline } from '../lib/install/app.svelte';
+  import { findByCode, type OfflineAsset } from '../lib/offline/copy';
+  import { offline } from '../lib/offline/offline.svelte';
 
   // /scan/:code: what scanning an asset's code shows (docs/scanning.md), with the
   // quick actions its template offers that the viewer may take now. Signed
@@ -40,13 +44,30 @@
 
   const path = $derived(scan ? `/assets/${encodeURIComponent(scan.asset.id)}` : '');
 
+  // With no connection, the asset as the offline copy has it
+  // (docs/installing.md#offline).
+  let kept = $state<OfflineAsset | null>(null);
+
+  async function fromCopy(): Promise<boolean> {
+    await offline.load();
+    kept = offline.copy ? findByCode(offline.copy, code) : null;
+    if (kept) document.title = `${kept.name} · BAM!`;
+    return !!offline.copy;
+  }
+
   async function load() {
     try {
+      if (session.offline && (await fromCopy())) {
+        if (!kept) error = 'Nothing in the copy kept on this device has that code.';
+        return;
+      }
       scan = await request<Scan>('GET', `/scan/${encodeURIComponent(code)}`);
+      kept = null;
       document.title = `${scan.asset.name} · BAM!`;
     } catch (err) {
       scan = null;
       error = messageOf(err);
+      if (isOffline(err) && (await fromCopy())) error = kept ? '' : "You're offline, and nothing in the copy kept on this device has that code.";
     } finally {
       loading = false;
     }
@@ -93,6 +114,8 @@
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Looking it up…</p>
+{:else if kept}
+  <OfflineAssetCard asset={kept} />
 {:else if scan}
   <h1 class="mb-4 flex items-center gap-3 text-3xl font-bold"><AssetIcon icon={scan.asset.icon} height={44} />{scan.asset.name}</h1>
   {#if status}<p class="mb-3 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}

@@ -38,6 +38,7 @@ export function helpFor(path: string): string {
     [/^\/(scan|scan-templates)(\/|$)/, 'scanning'],
     [/^\/installed-app$/, 'install'],
     [/^\/shopping$/, 'stock'],
+    [/^\/offline$/, 'install'],
     [/^\/(flows|f)(\/|$)/, 'flows'],
     [/^\/reports/, 'reports'],
     [/^\/loans/, 'loans'],

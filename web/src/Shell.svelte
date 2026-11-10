@@ -5,6 +5,8 @@
   import { helpFor } from './lib/help';
   import { currentGroup, isCurrent, navSections } from './lib/nav';
   import { installedApp } from './lib/install/app.svelte';
+  import { ago } from './lib/offline/copy';
+  import { offline } from './lib/offline/offline.svelte';
   import { session, signInPath } from './lib/session.svelte';
   import { routes } from './routes';
   import logo from './assets/bam.png';
@@ -44,6 +46,17 @@
       menuButton?.focus();
     }
   }
+  // Signing out removes what this device kept for them, changes not yet
+  // sent too: it asks first when there are some (docs/installing.md#offline).
+  function signOut() {
+    const n = offline.queue.length;
+    if (n && !window.confirm(`${n === 1 ? 'A change' : `${n} changes`} made offline ${n === 1 ? 'is' : 'are'} not yet recorded, and signing out removes ${n === 1 ? 'it' : 'them'}. Sign out anyway?`)) return;
+    void session.signOut();
+  }
+
+  const banner = 'border-b-2 border-zinc-900 bg-highlight px-4 py-2 text-center text-sm text-zinc-900 print:hidden dark:border-zinc-600';
+  const bannerLink = 'inline-flex min-h-11 items-center underline';
+
   // Move focus to the page after navigating, so screen readers announce it.
   let first = true;
   $effect(() => {
@@ -89,7 +102,7 @@
       <a href="/help/{helpFor(router.path)}" class="{itemClass} text-zinc-600 dark:text-zinc-400">Help</a>
       {#if session.user}
         <a href="/account" class="{itemClass} text-zinc-600 dark:text-zinc-400">{displayName(session.user)}</a>
-        <button type="button" class="btn-secondary" onclick={() => session.signOut()}>Sign out</button>
+        <button type="button" class="btn-secondary" onclick={signOut}>Sign out</button>
       {:else}
         <a class="btn-secondary" href={signInPath(router.path + router.search)}>Sign in</a>
       {/if}
@@ -119,7 +132,7 @@
         <a href="/help/{helpFor(router.path)}" class="btn-secondary">Help</a>
         {#if session.user}
           <a href="/account" class="btn-secondary">Your account</a>
-          <button type="button" class="btn-secondary" onclick={() => session.signOut()}>Sign out</button>
+          <button type="button" class="btn-secondary" onclick={signOut}>Sign out</button>
         {:else}
           <a class="btn-primary" href={signInPath(router.path + router.search)}>Sign in</a>
         {/if}
@@ -136,9 +149,23 @@
     </nav>
   {/if}
 </header>
-{#if !installedApp.online}
+{#if session.offline && offline.copy}
+  <!-- opened from the copy (docs/installing.md#offline) -->
+  <p role="status" class={banner}>
+    You're offline, using the copy from {ago(offline.copy.made_at)}:
+    <a class={bannerLink} href="/scan">Scan</a> · <a class={bannerLink} href="/offline">Find</a> · <a class={bannerLink} href="/shopping">Shopping list</a>
+  </p>
+{:else if !installedApp.online}
   <!-- what is open stays; what is opened next may not load (docs/installing.md#offline) -->
-  <p role="status" class="border-b-2 border-zinc-900 bg-highlight px-4 py-2 text-center text-sm text-zinc-900 print:hidden dark:border-zinc-600">You're offline. Pages opened now may not load until the connection is back.</p>
+  <p role="status" class={banner}>
+    You're offline. Pages opened now may not load until the connection is back{#if offline.copy}; <a class={bannerLink} href="/offline">the copy on this device</a> still works{/if}.
+  </p>
+{/if}
+{#if offline.held.length}
+  <p role="alert" class={banner}>
+    {offline.held.length === 1 ? 'A change' : `${offline.held.length} changes`} made offline could not be recorded as {offline.held.length === 1 ? 'it was' : 'they were'}.
+    <a class={bannerLink} href="/shopping#waiting">Decide what to do</a>
+  </p>
 {/if}
 <main id="main" tabindex="-1" bind:this={main} class={workspace ? 'outline-none md:relative md:h-(--workspace-height) md:overflow-hidden' : 'mx-auto max-w-7xl px-4 py-6 outline-none'}
   style:--workspace-height={workspace ? `calc(100dvh - ${headerHeight}px)` : undefined}

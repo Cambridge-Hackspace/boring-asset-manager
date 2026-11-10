@@ -509,6 +509,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handleFunc("GET /api/v1/settings/app", s.handleAppSettings)
 	handle("PUT /api/v1/settings/app", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetAppSettings)))
 	handle("POST /api/v1/settings/app/icon", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUploadAppIcon)))
+	// Using it offline (docs/installing.md#offline): the copy a person's app
+	// keeps, the shopping list, and how the copies are kept.
+	handle("GET /api/v1/offline", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleOfflineCopy)))
+	handle("GET /api/v1/shopping", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleShoppingList)))
+	handle("GET /api/v1/settings/offline", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleOfflineSettings)))
+	handle("PUT /api/v1/settings/offline", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetOfflineSettings)))
 	handle("GET /api/v1/assets/export.xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssetsXLSX)))
 	handle("POST /api/v1/assets/import/preview", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImportPreview)))
 	handle("POST /api/v1/assets/import", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImport)))

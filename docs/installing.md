@@ -434,9 +434,9 @@ which Chrome does about once a day; iOS keeps what it was installed with.
 
 ### Shortcuts
 
-Pressing and holding the icon offers **Scan** (`/scan`), **Shopping list** (`/shopping`) and
-**Loans** (`/loans`). The shopping list opens the **Running low** report until it has a page of its
-own (#214).
+Pressing and holding the icon offers **Scan** (`/scan`), **Shopping list** (`/shopping`, see
+[Stock](stock-and-lending.md#the-shopping-list)) and **Loans** (`/loans`). Scan and the shopping
+list work offline too.
 
 ### Offline
 
@@ -445,11 +445,104 @@ editor's WebAssembly, which it keeps once the editor first opens. Every page of 
 the shell at once, with or without a signal. Paths the server answers itself, the API among them,
 are left to the network.
 
-So an installed BAM! opens offline, and, as what it shows comes from the server, says it is
-offline, with **Try again**, rather than showing the browser's error. It tries again by itself
-when the connection is back. A page already open says so too when the connection drops. Assets,
-stock and loans are not kept for use offline; that is #214's, as a cache of its own beside the
-shell's.
+So an installed BAM! opens offline. With [a copy](#the-offline-copy) kept, it opens from that;
+without one, it says it is offline, with **Try again**, rather than showing the browser's error,
+and tries again by itself when the connection is back. A page already open says so too when the
+connection drops.
+
+### The offline copy
+
+The installed app keeps a copy of what its person can see (#214), so that in a basement storeroom
+or on a supply run they can still:
+
+- **scan** a label, or type its code, and see the asset's scan page from the copy: its name, codes,
+  categories, where it is, how many there are, its condition, its loan and its review state. The
+  page says it is from the copy, made when, and that it may be out of date;
+- **find** things in it, on the **Offline copy** page (`/offline`), by every word of a search over
+  their names, codes, categories and places;
+- **shop**, from [the shopping list](stock-and-lending.md#the-shopping-list), checking things off
+  as bought, and use stock, from the scan page. These are kept on the device and sent when the app
+  is next open and online ([below](#changes-made-offline)).
+
+Opened offline, the app shows these pages, and Help, with a banner saying it runs from the copy
+and since when. Other pages say they need a connection, and point to these.
+
+#### What it holds
+
+Only what the person can read, as the API would show them, when it was made:
+
+- each asset: its name, the codes on its labels, its categories, where it is (only the places they
+  can read), its stock, its condition if not ok, its review state, whether they may use and
+  restock it, and its loan. Who has it on loan is named only with `assets.track`, or to the
+  borrower, as everywhere else. Person fields ([Data model](data-model.md#person-fields)) are not
+  kept at all;
+- the categories those assets are in, by their paths;
+- the shopping list, as `GET /api/v1/shopping` gives it to them;
+- with **Keep thumbnails of photos too** chosen, each asset's first photo's thumbnail, in a cache of
+  its own (`bam-offline-thumbs`).
+
+It is made by `GET /api/v1/offline` (`assets.read`, signed in), and kept in IndexedDB with whom it
+is for. Each refresh replaces it whole, so what someone can no longer see leaves the device at the
+next one. The app asks the browser to keep it (`navigator.storage.persist()`), which iOS may still
+not do.
+
+**Size:** 3,000 assets, each with a code, a category, a place three levels deep, half of them with
+stock and all with a photo, make about 880 KB of JSON (about 290 bytes each), and about 50 KB
+gzipped over the wire (`TestOfflineCopySize` in `internal/api`). Thumbnails add what the photos'
+thumbnails weigh.
+
+#### When it is kept, refreshed and cleared
+
+- **Kept** on a device only by choice: the installed app keeps one unless its person turns
+  **Keep a copy on this device** off on the **Offline copy** page; a browser tab, only if they turn
+  it on, so a shared computer keeps nothing. These choices, and **Keep thumbnails of photos too**
+  (off by default), are the person's, on that device.
+- **Refreshed** when the app opens or is shown again and its copy is older than the instance's
+  interval, while it stays open, and with **Refresh now**.
+- **Cleared:**
+  - on signing out, with any changes not yet sent (the app asks first when there are some);
+  - when the server says nobody is signed in any more (a session that ended): the copy goes, and
+    the person's unsent changes wait for them to sign in again;
+  - when someone else signs in on the device: the copy, and the changes of whoever had it;
+  - when a refresh is refused because the person may no longer read assets, or copies are turned
+    off: the copy and their unsent changes;
+  - when they turn **Keep a copy on this device** off.
+
+#### Settings
+
+Under **Admin › Installed app**, or `PUT /api/v1/settings/offline` (`settings.manage`; `GET` with
+`assets.read`). MCP has `get_offline_settings` and `set_offline_settings`.
+
+| Setting | Default | |
+| :--- | :--- | :--- |
+| `enabled` | `true` | Whether apps keep copies at all. Turned off, each copy is cleared at its next refresh. |
+| `refresh_minutes` | `60` | How often an open app refreshes its copy, from 5 minutes to a week. |
+| `thumbnails` | `true` | Whether people may keep thumbnails in their copy. |
+
+#### Changes made offline
+
+**Restocks** checked off the shopping list, and **stock used** from the scan page, are kept on the
+device and sent, in the order they were made, when the app is next open and online. Background
+Sync is Chrome's alone, so nothing is sent while the app is closed. Online, they are sent at once,
+the same way.
+
+- **A restock** is sent with `unless_restocked_since`, the time the copy, or the list, it was made
+  from was read ([Stock](stock-and-lending.md#restocking-from-a-copy)). If someone restocked the
+  thing since, it is refused, and the app shows the conflict: what was added and when, by whom to
+  those who track it, and how many there are now. The person chooses **Record mine too**, for
+  another purchase, or **Drop mine**. Nothing is added up for them.
+- **Stock used** is relative, so uses by several people add up as they should. Using more than is
+  left is refused, and shown.
+- **A change refused outright,** as when the person can no longer change the asset, is shown with
+  **Try again** and **Drop it**.
+
+Until then, the scan page and the list show what is waiting beside each quantity, and a banner on
+every page says when a change needs a decision.
+
+**Lending and returning are not kept offline.** Whether something can be lent depends on whether
+someone else has it now, which a copy cannot know. Two people lending the last ladder offline
+cannot both be right, and putting it right means finding one of them, so these need a
+connection.
 
 ### Updates
 

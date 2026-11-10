@@ -234,7 +234,20 @@ to `sw.js` at the root of the build, given the build's files to keep and a name 
 What it answers and how is `src/lib/install/shell.ts`, which the unit tests read, and whose list of
 the server's own paths `internal/api`'s tests check against the server's routes. The Playwright
 specs block service workers, so that `page.route` sees every request, except `install.spec.ts`,
-which tests the worker itself.
+which tests the worker itself, and `offline.spec.ts`.
+
+The offline copy (#214, [Installing](installing.md#the-offline-copy)) is the page's, not the
+worker's, which still leaves the API to the network. `src/lib/offline/` holds it:
+
+- `copy.ts`: its shape, and the plain functions that read it: a code to its asset, the search, and
+  the shopping list's groups;
+- `queue.ts`: changes waiting to be sent, and how each answer settles them;
+- `storage.ts`: IndexedDB and the thumbnails' cache, or memory, for the unit tests and for browsers
+  without IndexedDB;
+- `offline.svelte.ts`: when the copy is kept, refreshed and cleared.
+
+Opened with no connection, `App.svelte` takes who is signed in from the copy (`session.offline`),
+and opens only the routes marked `offline`.
 
 ### Findings: an installed web app beside a native one
 
@@ -250,13 +263,13 @@ These were checked against what each platform documents, as of late 2026, not ye
 - **Signing in on iOS.** An app added to the home screen keeps its own cookies and storage, apart
   from Safari's, so people sign in again in it. On Android it shares Chrome's.
 - **Background sync.** Background Sync and Periodic Background Sync are Chrome's alone; iOS has
-  neither. Offline changes (#214) must be sent when the app is next open and online, not in the
+  neither. Offline changes (#214) are sent when the app is next open and online, not in the
   background.
 - **Storage.** The Cache API and IndexedDB are kept per origin, within a share of the disk.
   Safari removes a site's script-written storage after seven days without a visit in the browser,
   but an app on the home screen is spared that while it is used. `navigator.storage.persist()`
-  asks for storage that is not evicted under pressure; #214 should ask for it, and keep its data
-  small, since iOS can still remove it.
+  asks for storage that is not evicted under pressure; the offline copy asks for it, and
+  stays small, since iOS can still remove it.
 - **Notifications.** Web Push reaches installed web apps on iOS 16.4 and later, once the person
   allows it from a tap inside the app, and Chrome on Android in or out of the app. It needs VAPID
   keys, a subscription per device, and the server sending encrypted messages (RFC 8291) to each

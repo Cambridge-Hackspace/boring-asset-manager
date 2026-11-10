@@ -128,6 +128,20 @@ Receiving a [purchase order](purchase-orders.md#receiving) restocks what it brin
 and makes the assets of what is counted by items, recording each change with the trigger
 `purchase_order`.
 
+#### Restocking from a copy
+
+A restock made from something read earlier, such as the [offline copy](installing.md#the-offline-copy)
+or the [shopping list](#the-shopping-list), may count a purchase someone else has recorded since.
+`{"adjust": n, "unless_restocked_since": "<time>"}`, with a positive `adjust`, refuses the restock
+if the asset was restocked at or after that time, taken to the second:
+
+- **What counts:** any rise of its quantity (a restock, a count set higher, a purchase order
+  received), but for stock [moved](#moving-stock) in from another place. Using some is no
+  conflict.
+- **The answer:** `409`, changing nothing, with `restocked`, those restocks' events, oldest
+  first, naming who made them only to those with `assets.track`, and `asset`, as it is now.
+- **Recording it anyway:** sending it again without `unless_restocked_since`.
+
 #### Thresholds
 
 Thresholds and the flag follow [the same rule](#how-the-flag-works) as categories. Dropping below
@@ -142,6 +156,30 @@ quantity, threshold and unit, and who caused it. Channels can subscribe to them.
 
 Every change of a quantity also records `asset.quantity_changed`, with how much it moved, for the
 asset's history. Channels cannot subscribe to it.
+
+## The shopping list
+
+**Shopping list** (`/shopping`, and the installed app's shortcut) lists what is running low, of what
+the person can see, grouped by category: `GET /api/v1/shopping` (`assets.read`), or MCP's
+`shopping_list`.
+
+- **What is on it:** assets counted by quantity that are flagged running low, listed under their
+  first category, and consumable categories flagged running low, in a scope the person reads, listed
+  under themselves. Pools are categories like any other, and a bin held off by its pool's total
+  ([Quiet bins](#quiet-bins)) is not flagged, so is not listed.
+- **For each:** its level and threshold (a category's over the assets the person can see), where an
+  asset is, its preferred [catalog entry](vendors.md) (vendor, part number, pack and link, and the
+  price only with `purchases.read` for that vendor), and the open
+  [purchase order](purchase-orders.md) it is already on.
+- **Checking one off:** an asset, with `stock.record` in its scopes, is checked off with how many
+  were bought, which starts as enough to bring it back to its threshold, in whole packs of its
+  preferred entry. That restocks it, refused if someone restocked it after the list was read
+  ([above](#restocking-from-a-copy)), as it is from the offline copy, where the restock waits for a
+  connection. A category counted by items is bought as new assets, so it links to adding one.
+- **Ordering instead:** with `vendors.manage`, **Start orders** starts draft purchase orders from
+  the same list ([Purchase orders](purchase-orders.md#starting-from-the-running-low-list)).
+
+The seeded **Running low** report stays as it was, for the same list as a report.
 
 ## Pools
 

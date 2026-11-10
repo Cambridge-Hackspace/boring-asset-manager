@@ -3,6 +3,7 @@
 import { ApiError, request, setUnauthorizedHandler } from './api';
 import type { Me, Permission, PermissionKey, User } from './models';
 import type { PasskeyAssertion } from './passkeys';
+import { offline } from './offline/offline.svelte';
 import { navigate, router } from './router.svelte';
 import { appearance } from './theme.svelte';
 
@@ -17,6 +18,12 @@ class Session {
   factorSetup = $state(false);
   /** False until the first /auth/me answer, so the app does not flash sign-in. */
   loaded = $state(false);
+  /**
+   * Opened with no connection, from the offline copy: who is signed in is
+   * as the copy was made for, and only pages that work from it open
+   * (docs/installing.md#offline).
+   */
+  offline = $state(false);
 
   /** Holds the permission in every scope, or in at least one: enough to show what it opens. */
   can(permission: Permission): boolean {
@@ -39,6 +46,7 @@ class Session {
   async load(): Promise<void> {
     try {
       this.set(await request<Me>('GET', '/auth/me'));
+      this.offline = false;
     } catch (err) {
       if (!(err instanceof ApiError) || err.status !== 401) throw err;
       this.clear();
@@ -72,11 +80,26 @@ class Session {
     try {
       await request('POST', '/auth/logout');
     } finally {
+      // What the app kept for them goes with them, changes not yet sent
+      // too: the sign-out button says so first.
+      await offline.clear(true);
       this.clear();
       navigate('/sign-in');
       // Signed out, the public role still holds: public pages stay open.
       void this.load().catch(() => {});
     }
+  }
+
+  /** Who the offline copy was made for, opened with no connection. */
+  adoptOffline(me: Me): void {
+    this.set(me);
+    this.offline = true;
+    this.loaded = true;
+  }
+
+  /** Who is signed in, as /auth/me gave it. */
+  get me(): Me {
+    return { user: this.user, permissions: this.permissions, roles: this.roles, role_scopes: this.roleScopes };
   }
 
   private set(me: Me): void {
@@ -103,6 +126,9 @@ export const session = new Session();
 // A 401 on any request means the session ended: sign in again and come back.
 setUnauthorizedHandler(() => {
   const wasSignedIn = session.user !== null;
+  // The session ended: the copy goes, and their waiting changes wait for
+  // them to sign in again.
+  void offline.clear(false);
   session.user = null;
   session.permissions = [];
   if (wasSignedIn && router.path !== '/sign-in') {

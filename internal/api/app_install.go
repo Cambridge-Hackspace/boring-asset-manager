@@ -183,9 +183,8 @@ func (s *Server) handleUploadAppIcon(w http.ResponseWriter, r *http.Request) {
 	s.handleAppSettings(w, r)
 }
 
-// Shortcuts are what a long press on the installed app's icon offers. The
-// shopping list's address is the app's own; it opens the Running low report
-// until the shopping list (#214) has a page of its own there.
+// Shortcuts are what a long press on the installed app's icon offers. Each
+// is a page of the app's own; Scan and the shopping list work offline too.
 var appShortcuts = []struct{ Name, URL string }{
 	{"Scan", "/scan"},
 	{"Shopping list", "/shopping"},

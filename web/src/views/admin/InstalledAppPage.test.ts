@@ -15,6 +15,8 @@ const settings: AppSettings = {
   instance_name: 'Cambridge Hackspace',
 };
 
+const offlineDefaults = { enabled: true, refresh_minutes: 60, thumbnails: true };
+
 beforeEach(() => {
   session.permissions = ['settings.manage', 'assets.read'];
 });
@@ -29,6 +31,8 @@ describe('InstalledAppPage', () => {
       'GET /settings/app': () => settings,
       'GET /images': () => ({ images: [{ id: 'img-1', filename: 'logo.png', content_type: 'image/png', width_px: 512, height_px: 512 }] }),
       'PUT /settings/app': (body) => ({ ...settings, ...(body as object) }),
+      'GET /settings/offline': () => offlineDefaults,
+      'PUT /settings/offline': (body) => body,
     });
     render(InstalledAppPage, { params: {} });
     const name = (await screen.findByLabelText('Name')) as HTMLInputElement;
@@ -39,8 +43,13 @@ describe('InstalledAppPage', () => {
     await fireEvent.input(screen.getByLabelText('Short name'), { target: { value: 'Stores' } });
     await fireEvent.change(screen.getByLabelText('Drawn from'), { target: { value: 'img-1' } });
     await fireEvent.input(screen.getByLabelText('Bar above the app, light'), { target: { value: '#d41920' } });
+    // How often copies refresh, and whether thumbnails are kept, are the instance's to choose.
+    expect((screen.getByLabelText('Keep copies for use offline') as HTMLInputElement).checked).toBe(true);
+    await fireEvent.input(screen.getByLabelText('Refresh each copy every (minutes)'), { target: { value: '15' } });
+    await fireEvent.click(screen.getByLabelText('Let people keep thumbnails of photos in their copy'));
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await screen.findByText(/Saved/);
+    expect(sent.find((r) => r.method === 'PUT' && r.path === '/settings/offline')?.body).toEqual({ enabled: true, refresh_minutes: 15, thumbnails: false });
     expect(sent.find((r) => r.method === 'PUT')?.body).toEqual({
       name: '',
       short_name: 'Stores',
@@ -52,7 +61,11 @@ describe('InstalledAppPage', () => {
   });
 
   it("puts BAM!'s colors back", async () => {
-    fakeApi({ 'GET /settings/app': () => ({ ...settings, theme_color: '#000000', background_color: '#123456' }), 'GET /images': () => ({ images: [] }) });
+    fakeApi({
+      'GET /settings/app': () => ({ ...settings, theme_color: '#000000', background_color: '#123456' }),
+      'GET /settings/offline': () => offlineDefaults,
+      'GET /images': () => ({ images: [] }),
+    });
     render(InstalledAppPage, { params: {} });
     const light = (await screen.findByLabelText('Bar above the app, light')) as HTMLInputElement;
     expect(light.value).toBe('#000000');

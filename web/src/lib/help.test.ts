@@ -29,6 +29,7 @@ describe('help', () => {
     expect(helpFor('/relays')).toBe('relays');
     expect(helpFor('/installed-app')).toBe('install');
     expect(helpFor('/shopping')).toBe('stock');
+    expect(helpFor('/offline')).toBe('install');
     expect(helpFor('/')).toBe('start');
   });
 

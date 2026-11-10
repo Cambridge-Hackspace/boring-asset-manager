@@ -206,7 +206,54 @@ func documentTools() []tool {
 				return say(out, "Saved: name %q, short name %q; theme %v, dark %v, background %v; icon image %q.",
 					out["name"], out["short_name"], out["theme_color"], out["theme_color_dark"], out["background_color"], out["icon_image_id"])
 			}),
+		simple(&mcp.Tool{Name: "get_offline_settings", Description: "How installed apps keep a copy of what each person can see, to use offline " +
+			"(docs/installing.md#offline): whether they keep one at all, how often an open app refreshes it, in minutes, and whether people may keep thumbnails in it.",
+			Annotations: readOnly("Offline settings")}, "GET /api/v1/settings/offline", []string{rbac.PermAssetsRead},
+			func(none) (request, error) { return request{path: "/api/v1/settings/offline"}, nil },
+			func(_ none, out map[string]any) string {
+				return fmt.Sprintf("Copies kept: %v; refreshed every %v minutes; thumbnails allowed: %v.", out["enabled"], out["refresh_minutes"], out["thumbnails"])
+			}),
+		define(&mcp.Tool{Name: "set_offline_settings", Description: "Change how installed apps keep their offline copies. Give only what changes: " +
+			"enabled (false clears every copy when its app next refreshes), refresh_minutes (5 to 10080), and thumbnails.",
+			Annotations: changes("Set offline settings", true)}, []string{"PUT /api/v1/settings/offline"}, []string{rbac.PermSettingsManage},
+			func(ctx context.Context, e *env, in offlineSettingsIn) (reply[map[string]any], error) {
+				body := map[string]any{}
+				if err := e.call(ctx, http.MethodGet, "/api/v1/settings/offline", nil, &body); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				if in.Enabled != nil {
+					body["enabled"] = *in.Enabled
+				}
+				if in.RefreshMinutes != nil {
+					body["refresh_minutes"] = *in.RefreshMinutes
+				}
+				if in.Thumbnails != nil {
+					body["thumbnails"] = *in.Thumbnails
+				}
+				out := map[string]any{}
+				if err := e.call(ctx, http.MethodPut, "/api/v1/settings/offline", body, &out); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				return say(out, "Saved: copies kept: %v; refreshed every %v minutes; thumbnails allowed: %v.", out["enabled"], out["refresh_minutes"], out["thumbnails"])
+			}),
+		simple(&mcp.Tool{Name: "shopping_list", Description: "What is running low, of what you can see, to buy (docs/stock-and-lending.md#the-shopping-list): " +
+			"assets counted by quantity and consumable categories, each grouped by category, with its level and threshold, where it is, " +
+			"its preferred vendor and part number, and the open order it is already on. Restock with record_stock.",
+			Annotations: readOnly("Shopping list")}, "GET /api/v1/shopping", []string{rbac.PermAssetsRead},
+			func(none) (request, error) { return request{path: "/api/v1/shopping"}, nil },
+			func(_ none, out map[string]any) string {
+				items, _ := out["items"].([]any)
+				return fmt.Sprintf("%d things running low.", len(items))
+			}),
 	}
+}
+
+// offlineSettingsIn changes the offline copies' settings; one left out
+// stays as it is.
+type offlineSettingsIn struct {
+	Enabled        *bool `json:"enabled,omitempty" jsonschema:"whether installed apps keep a copy to use offline"`
+	RefreshMinutes *int  `json:"refresh_minutes,omitempty" jsonschema:"how often an open app refreshes its copy, from 5 to 10080 minutes"`
+	Thumbnails     *bool `json:"thumbnails,omitempty" jsonschema:"whether people may keep their assets' thumbnails in their copy"`
 }
 
 // appSettingsIn changes the installed app's settings; one left out stays as
