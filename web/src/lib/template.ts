@@ -1,11 +1,13 @@
 // Label templates as the editor works on them (docs/labels.md), and the pure
 // geometry the editor applies to them.
 
+import type { Ink } from './inks';
+
 export type Units = 'mm' | 'in';
 export type ElementType = 'text' | 'generator' | 'static_image' | 'shape' | 'icon';
 export type ShapeKind = 'rectangle' | 'ellipse' | 'line' | 'polygon' | 'path';
-/** Labels print black and white; white paints over what is beneath it. */
-export type Paint = 'black' | 'white' | 'none';
+/** An ink (docs/labels.md#inks), or none; white paints over what is beneath it. */
+export type Paint = Ink | 'none';
 /** How an element of an adaptive template follows the label; absent is scale. */
 export type Anchor = 'scale' | 'start' | 'end' | 'both' | 'center';
 
@@ -79,7 +81,7 @@ export interface TemplateElement {
   locked?: boolean;
   /** What its layer is called, when named: a plain string in the template's JSON. */
   name?: string;
-  // shape, and fill for text too (black, or white reversed out of black)
+  // shape, and fill for text and codes too: an ink, such as white for text reversed out of black
   shape?: ShapeKind;
   /** A rectangle's corners, in the template's units. */
   corner_radius?: number;

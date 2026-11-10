@@ -5,6 +5,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
 
 // Geometry is what a printer as configured offers a label: its resolution,
@@ -31,8 +33,19 @@ type Geometry struct {
 	// ReachAlongMM is how much of a die-cut label's length is printed,
 	// centered; 0 means all of it.
 	ReachAlongMM float64
+	// Palette is the inks the printer as configured prints in
+	// (docs/labels.md#inks); empty is black and white.
+	Palette labels.Palette
 	// Warnings are about the printer as configured, whatever the label.
 	Warnings []string
+}
+
+// Inks is the printer's palette: black and white when it declares none.
+func (g Geometry) Inks() labels.Palette {
+	if g.Palette.Valid() {
+		return g.Palette
+	}
+	return labels.PaletteBW
 }
 
 // DieCut reports whether the roll holds pre-cut labels.
@@ -72,6 +85,8 @@ type Fit struct {
 	// Outside and NearEdge index the label's content that reaches outside
 	// Printable, or within EdgeMM of the label's edges.
 	Outside, NearEdge []int
+	// Palette is the inks the printer prints the labels in.
+	Palette labels.Palette
 }
 
 // SizeTolerance absorbs rounding when matching template sizes to labels, in
@@ -124,8 +139,11 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 		if len(reasons) > 0 {
 			return Fit{}, doesNotFit(reasons)
 		}
-		f := Fit{Rotate: rotate, Warnings: append([]string{}, g.Warnings...)}
+		f := Fit{Rotate: rotate, Warnings: append([]string{}, g.Warnings...), Palette: g.Inks()}
 		checkContent(&f, g, label, across, along)
+		if missing := g.Inks().Missing(label.Inks); len(missing) > 0 {
+			f.Warnings = append(f.Warnings, InksWarning(g.Inks(), missing))
+		}
 		return f, nil
 	}
 	fed := ""
@@ -146,6 +164,15 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 	}
 	return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm, but the roll loaded, %s, needs one side to be %s mm",
 		mm(label.WidthMM), mm(label.HeightMM), g.Roll, mm(g.WidthMM))))
+}
+
+// InksWarning says that the inks missing from a palette print black.
+func InksWarning(p labels.Palette, missing []string) string {
+	verb := "prints"
+	if len(missing) > 1 {
+		verb = "print"
+	}
+	return fmt.Sprintf("The printer prints only %s, so %s %s black.", p.Describe(), labels.JoinAnd(missing), verb)
 }
 
 // doesNotFit is an error wrapping ErrDoesNotFit that gives its reasons.

@@ -10,7 +10,7 @@ import type { FromWorker, PreviewData, ToWorker } from './protocol';
 
 export type { PreviewData } from './protocol';
 
-/** One drawn label: its dots, as a thermal printer prints them, RGBA. */
+/** One drawn label: its dots, as the printer or display prints them, in its inks, RGBA. */
 export interface Frame {
   width: number;
   height: number;
@@ -37,6 +37,7 @@ interface Request {
   data: string;
   placeholders: boolean;
   hidden: number[];
+  palette: string;
   resolve: (frame: Frame | null) => void;
 }
 
@@ -67,8 +68,10 @@ export class LiveRenderer {
    * comes is dropped (resolving null); frames are never answered out of
    * order, so a frame is always newer than any shown before it. Null too
    * once the renderer has failed: the caller falls back to the server.
+   * It is drawn in a palette's inks (docs/labels.md#inks), or, with none,
+   * in the fewest that hold the template's own.
    */
-  async render(doc: TemplateDoc, data: PreviewData, hidden: number[] = []): Promise<Frame | null> {
+  async render(doc: TemplateDoc, data: PreviewData, hidden: number[] = [], palette = ''): Promise<Frame | null> {
     if (this.state === 'failed') return null;
     const seq = ++this.asked;
     const ids = [...new Set(doc.elements.flatMap((e) => (e.type === 'static_image' && e.image_id ? [e.image_id] : [])))];
@@ -77,7 +80,7 @@ export class LiveRenderer {
     if (seq < this.queued || this.failed()) return null;
     this.queued = seq;
     return new Promise((resolve) => {
-      const req: Request = { seq, template: JSON.stringify(doc), data: JSON.stringify(data.data), placeholders: data.placeholders, hidden, resolve };
+      const req: Request = { seq, template: JSON.stringify(doc), data: JSON.stringify(data.data), placeholders: data.placeholders, hidden, palette, resolve };
       if (this.state === 'ready' && !this.drawing) {
         this.post(req);
       } else {
@@ -123,7 +126,7 @@ export class LiveRenderer {
 
   private post(req: Request) {
     this.drawing = req;
-    this.port.postMessage({ type: 'render', seq: req.seq, template: req.template, data: req.data, placeholders: req.placeholders, hidden: req.hidden });
+    this.port.postMessage({ type: 'render', seq: req.seq, template: req.template, data: req.data, placeholders: req.placeholders, hidden: req.hidden, palette: req.palette });
   }
 
   private receive(msg: FromWorker) {

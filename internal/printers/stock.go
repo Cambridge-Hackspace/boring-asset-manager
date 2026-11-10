@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
 
 // Stock is a roll of labels known by its size alone, kept in the database
@@ -73,6 +75,20 @@ type CustomStockInfo struct {
 // Loaded describes the roll a printer has loaded: its custom stock, or the
 // driver's built-in roll it names. It is nil when neither is known.
 func Loaded(driver string, s Settings) *MediaInfo {
+	// what the printer prints in, with this roll in this model
+	var palette labels.Palette
+	if g, err := GeometryOf(driver, s); err == nil && g.Inks() != labels.PaletteBW {
+		palette = g.Inks()
+	}
+	m := loaded(driver, s)
+	if m != nil {
+		m.Palette = palette
+	}
+	return m
+}
+
+// loaded is the roll Media names, as the driver lists it.
+func loaded(driver string, s Settings) *MediaInfo {
 	if s.Stock != nil {
 		return &MediaInfo{ID: s.Stock.ID, Name: s.Stock.Name, WidthMM: s.Stock.WidthMM, LengthMM: s.Stock.LengthMM, DieCut: s.Stock.DieCut(), Custom: true}
 	}

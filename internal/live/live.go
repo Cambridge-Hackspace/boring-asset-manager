@@ -101,9 +101,12 @@ func (r *Renderer) LoadImage(id string) (image.Image, error) {
 type Result struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
-	// Pixels are RGBA, four bytes a dot, row by row: black or white, as a
-	// thermal printer prints them, images dithered.
-	Pixels      []byte               `json:"-"`
+	// Pixels are RGBA, four bytes a dot, row by row: each in one of the
+	// palette's inks, as a printer or display with them prints them,
+	// images dithered.
+	Pixels []byte `json:"-"`
+	// Palette is the palette it was drawn in.
+	Palette     labels.Palette       `json:"palette"`
 	Description *preview.Description `json:"description,omitempty"`
 	Problems    []labels.Problem     `json:"problems,omitempty"`
 }
@@ -122,6 +125,14 @@ type Result struct {
 // template that prints mirrored or turned is edited as it is read once it
 // is on.
 func (r *Renderer) Render(templateJSON, dataJSON []byte, placeholders bool, hidden ...int) Result {
+	return r.RenderIn("", templateJSON, dataJSON, placeholders, hidden...)
+}
+
+// RenderIn is Render in a palette's inks, as a printer or display with them
+// prints the label (docs/labels.md#inks): an ink it lacks drawn black,
+// images dithered into it. With no palette, or one that is not, it is
+// drawn in the fewest inks that hold every ink the template uses.
+func (r *Renderer) RenderIn(palette labels.Palette, templateJSON, dataJSON []byte, placeholders bool, hidden ...int) Result {
 	doc, err := preview.WithDefaults(templateJSON)
 	if err != nil {
 		return problem("", "template must be a JSON object")
@@ -167,18 +178,22 @@ func (r *Renderer) Render(templateJSON, dataJSON []byte, placeholders bool, hidd
 			return problem("", err.Error())
 		}
 	}
-	gray := drawn.Raster(true)
-	b := gray.Bounds()
+	if !palette.Valid() {
+		palette = labels.PaletteFor(t.Inks())
+	}
+	dots := drawn.RasterInks(palette)
+	inks := palette.Colors()
+	b := dots.Bounds()
 	pixels := make([]byte, 0, b.Dx()*b.Dy()*4)
 	for y := b.Min.Y; y < b.Max.Y; y++ {
-		row := gray.Pix[(y-b.Min.Y)*gray.Stride:]
+		row := dots.Pix[(y-b.Min.Y)*dots.Stride:]
 		for x := 0; x < b.Dx(); x++ {
-			v := row[x]
-			pixels = append(pixels, v, v, v, 0xff)
+			c := inks[row[x]]
+			pixels = append(pixels, c.R, c.G, c.B, 0xff)
 		}
 	}
 	d := preview.Describe(t, data, scene)
-	return Result{Width: b.Dx(), Height: b.Dy(), Pixels: pixels, Description: &d}
+	return Result{Width: b.Dx(), Height: b.Dy(), Pixels: pixels, Palette: palette, Description: &d}
 }
 
 func problem(path, message string) Result {

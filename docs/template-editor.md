@@ -313,6 +313,12 @@ The label is previewed with placeholder data or a chosen asset.
 Units, size and DPI can be set directly, or taken from a printer. Choosing a printer applies its
 loaded media's size and its DPI. The fit check runs as the user edits.
 
+The label is drawn in the [inks](labels.md#inks) of the printer chosen, as it will print there:
+an ink it lacks in black, images dithered into its palette. The element panel offers only its
+inks, and keeps an element's own when the printer lacks it, titled as printing black there. With
+no printer chosen, the label is drawn in the fewest inks that hold the template's, and every ink
+is offered. The live renderer takes the palette as `render`'s fifth argument.
+
 Exports and test prints come straight from the editor.
 
 ## Saving

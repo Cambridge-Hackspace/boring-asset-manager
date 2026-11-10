@@ -62,7 +62,8 @@ func svgImage(bw *bufio.Writer, pi *PlacedImage) error {
 	return nil
 }
 
-// svgColor is a paint's color.
+// svgColor is a paint's color: an ink's own, as designed, whatever
+// device it is printed on.
 func svgColor(p Paint) string {
 	switch p {
 	case White:
@@ -70,7 +71,8 @@ func svgColor(p Paint) string {
 	case Black:
 		return "#000"
 	}
-	return fmt.Sprintf("#%02x%02x%02x", p.Level(), p.Level(), p.Level())
+	c := p.Color()
+	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
 }
 
 // svgPath writes a filled path.

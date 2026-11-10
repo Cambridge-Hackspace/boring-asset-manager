@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
 
 const tag = `{"units":"mm","width":20,"height":10,"dpi":300,"layering":"list","elements":[
@@ -90,9 +92,11 @@ func TestParityFixture(t *testing.T) {
 		Data     json.RawMessage   `json:"data"`
 		Images   map[string]string `json:"images"`
 		Icons    json.RawMessage   `json:"icons"`
+		Palette  labels.Palette    `json:"palette"`
 		Width    int               `json:"width"`
 		Height   int               `json:"height"`
 		SHA256   string            `json:"sha256"`
+		Colors   bool              `json:"colors"`
 	}
 	if err := json.Unmarshal(raw, &cases); err != nil {
 		t.Fatal(err)
@@ -116,14 +120,18 @@ func TestParityFixture(t *testing.T) {
 				t.Fatalf("%s: %v", c.Name, err)
 			}
 		}
-		res := r.Render(c.Template, c.Data, false)
+		res := r.RenderIn(c.Palette, c.Template, c.Data, false)
 		if len(res.Problems) > 0 {
 			t.Errorf("%s: %+v", c.Name, res.Problems)
 			continue
 		}
 		h := sha256.New()
 		for i := 0; i < len(res.Pixels); i += 4 {
-			h.Write(res.Pixels[i : i+1])
+			if c.Colors {
+				h.Write(res.Pixels[i : i+3])
+			} else {
+				h.Write(res.Pixels[i : i+1])
+			}
 		}
 		if res.Width != c.Width || res.Height != c.Height || hex.EncodeToString(h.Sum(nil)) != c.SHA256 {
 			t.Errorf("%s: drawn differently from the server", c.Name)
@@ -151,5 +159,27 @@ func TestRenderHidden(t *testing.T) {
 	}
 	if d := hidden.Description; d == nil || len(d.Elements) != 1 || d.Elements[0].Value != "[room]" || d.Elements[0].DrawnFontSize != 10 {
 		t.Errorf("hidden, still described: %+v", hidden.Description)
+	}
+}
+
+// TestRenderInInks draws in the inks asked for, an ink missing in black,
+// and in the template's own when none are asked for.
+func TestRenderInInks(t *testing.T) {
+	red := strings.Replace(tag, `"font_size":10,`, `"font_size":10,"fill":"red",`, 1)
+	r := New()
+	inks := func(res Result) map[[3]byte]int {
+		seen := map[[3]byte]int{}
+		for i := 0; i < len(res.Pixels); i += 4 {
+			seen[[3]byte(res.Pixels[i:i+3])]++
+		}
+		return seen
+	}
+	own := r.Render([]byte(red), []byte(sample), true)
+	if own.Palette != labels.PaletteBWR || inks(own)[[3]byte{0xCC, 0, 0}] == 0 {
+		t.Errorf("in its own inks, %s: %v", own.Palette, inks(own))
+	}
+	bw := r.RenderIn(labels.PaletteBW, []byte(red), []byte(sample), true)
+	if bw.Palette != labels.PaletteBW || inks(bw)[[3]byte{0, 0, 0}] != inks(own)[[3]byte{0xCC, 0, 0}] || len(inks(bw)) != 2 {
+		t.Errorf("in black and white, red drawn black: %v", inks(bw))
 	}
 }

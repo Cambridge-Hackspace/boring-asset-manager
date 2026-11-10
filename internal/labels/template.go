@@ -54,8 +54,8 @@ const (
 // iconName is an icon's name, as the server checks it.
 var iconName = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$`)
 
-// Shapes, and the paints they are drawn in. Labels print black and white;
-// white paints over whatever is beneath it.
+// Shapes, and the paints they are drawn in: an ink (inks.go), or none.
+// White paints over whatever is beneath it.
 const (
 	ShapeRectangle = "rectangle"
 	ShapeEllipse   = "ellipse"
@@ -326,8 +326,8 @@ type Element struct {
 	// not scan from the side the label is read from.
 	Mirror string `json:"mirror,omitempty"`
 
-	// shape, and Fill for text too: what it is, how it is drawn, and its
-	// paint. A rectangle may
+	// shape, and Fill for text and codes too: what it is, how it is drawn,
+	// and its paint, an ink. A rectangle may
 	// round its corners; a line runs from its box's top left to its bottom
 	// right, or from its bottom left to its top right when flipped; a
 	// polygon's points are fractions of its box across and down, closed
@@ -677,8 +677,14 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 
 	switch e.Type {
 	case ElementGenerator:
+		// A code takes a fill: the ink its modules are drawn in.
+		codeFill := e.Fill
+		delete(shapeProps, "fill")
 		unset(textProps)
 		unset(shapeProps)
+		if codeFill != "" && (!ValidInk(codeFill) || codeFill == InkWhite) {
+			v.add(at("fill"), "must be an ink other than white: "+inkList(false))
+		}
 		unset(iconProps)
 		unset(map[string]bool{"image_id": e.ImageID != ""})
 		g, err := generators.Lookup(e.GeneratorType)
@@ -708,14 +714,15 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 
 	case ElementText:
 		unset(generatorProps)
-		// Text takes a fill: black, or white for text reversed out of black.
+		// Text takes a fill: an ink, such as white for text reversed out of
+		// black.
 		textFill := e.Fill
 		delete(shapeProps, "fill")
 		unset(shapeProps)
 		unset(iconProps)
 		unset(map[string]bool{"image_id": e.ImageID != ""})
-		if textFill != "" && textFill != PaintBlack && textFill != PaintWhite {
-			v.add(at("fill"), `must be "black" or "white"`)
+		if textFill != "" && !ValidInk(textFill) {
+			v.add(at("fill"), "must be an ink: "+inkList(true))
 		}
 		if !(e.FontSize > 0 && e.FontSize <= MaxFontSize) {
 			v.add(at("font_size"), fmt.Sprintf("must be greater than 0 and at most %g points", MaxFontSize))
@@ -794,12 +801,12 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 // to it, and its paint, which must draw something.
 func validateShape(v *validator, path string, e *Element) {
 	at := func(prop string) string { return path + "." + prop }
-	paints := map[string]bool{PaintBlack: true, PaintWhite: true, PaintNone: true}
-	if !paints[e.Stroke] {
-		v.add(at("stroke"), `must be "black", "white" or "none"`)
+	paint := func(name string) bool { return name == PaintNone || ValidInk(name) }
+	if !paint(e.Stroke) {
+		v.add(at("stroke"), "must be an ink or \"none\": "+inkList(true))
 	}
-	if !paints[e.Fill] {
-		v.add(at("fill"), `must be "black", "white" or "none"`)
+	if !paint(e.Fill) {
+		v.add(at("fill"), "must be an ink or \"none\": "+inkList(true))
 	}
 	if e.Stroke == PaintNone && e.Fill == PaintNone {
 		v.add(at("stroke"), "draws nothing with fill none: give it a stroke or a fill")
@@ -1034,4 +1041,15 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// inkList lists the inks, quoted, for messages, white among them or not.
+func inkList(white bool) string {
+	var quoted []string
+	for _, ink := range Inks {
+		if white || ink != InkWhite {
+			quoted = append(quoted, `"`+ink+`"`)
+		}
+	}
+	return strings.Join(quoted, ", ")
 }

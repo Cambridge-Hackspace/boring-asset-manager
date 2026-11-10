@@ -37,6 +37,9 @@ type Media struct {
 	// infoWidth is the width sent in the print information command when it
 	// is not the nominal width: Brother's 103 mm rolls are sent as 104.
 	infoWidth int
+	// TwoColor is set for a roll that prints red as well as black, as
+	// DK-22251 does on the models that print in two colors.
+	TwoColor bool
 }
 
 // DieCut reports whether the roll holds pre-cut labels.
@@ -144,6 +147,7 @@ func init() {
 	newer := lineQL710 | lineQL800 | lineQL1100 | lineQL1115
 	wide := lineQL1050 | lineQL1100 | lineQL1115
 	dk103 := func(m Media) Media { m.infoWidth = 104; return m }
+	red := func(m Media) Media { m.TwoColor = true; return m }
 	for _, m := range []Media{
 		continuous("dk-22214", "DK-22214 12 mm continuous", 12, 106, r{29, 74, 74}, everyQL),
 		continuous("dk-22210", "DK-22210 29 mm continuous", 29, 306, r{6, 50, 50}, everyQL),
@@ -151,6 +155,9 @@ func init() {
 		continuous("dk-22223", "DK-22223 50 mm continuous", 50, 554, r{12, 56, 56}, everyQL),
 		continuous("dk-n55224", "DK-N55224 54 mm continuous", 54, 590, r{0, 44, 44}, everyQL),
 		continuous("dk-22205", "DK-22205 62 mm continuous", 62, 696, r{12, 56, 56}, everyQL),
+		// Black and red on white: the QL-800 series reference, sections
+		// 2.3.2 and 2.3.5, gives it 62 mm continuous tape's figures.
+		red(continuous("dk-22251", "DK-22251 62 mm continuous, black and red", 62, 696, r{12, none, none}, lineQL800)),
 		continuous("dk-22243", "DK-22243 102 mm continuous", 102, 1164, r{none, 56, 56}, wide),
 		dk103(continuous("dk-22246", "DK-22246 103 mm continuous", 103, 1200, r{none, none, 38}, lineQL1100)),
 

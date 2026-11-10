@@ -136,10 +136,10 @@ func bar(a, b Point, width float64) contour {
 	return polygonContour([]Point{{a.X + ox, a.Y + oy}, {b.X + ox, b.Y + oy}, {b.X - ox, b.Y - oy}, {a.X - ox, a.Y - oy}}, true)
 }
 
-// paintOf is the paint a shape names.
+// paintOf is the paint an ink names; black for none named.
 func paintOf(name string) Paint {
-	if name == labels.PaintWhite {
-		return White
+	if p, ok := inkPaints[name]; ok {
+		return p
 	}
 	return Black
 }

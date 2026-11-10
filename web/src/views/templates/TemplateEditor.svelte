@@ -242,6 +242,8 @@
     // renderer still says how they were laid out, as typing needs their size.
     const hidden = [...editor.hidden, ...(editor.editingText !== null ? [editor.editingText] : [])];
     const data = liveData;
+    // In the inks of the printer chosen.
+    const palette = editor.palette ?? '';
     void iconsGiven;
     if (loading || liveState !== 'ready' || !data || !live) return;
     const all = template.elements.map((_, i) => i);
@@ -252,7 +254,7 @@
       noteSizes(shown, (f.description?.elements ?? []) as { index: number; drawn_font_size?: number }[]);
     };
     // Frames come in the order they were asked for, so each is shown.
-    void live.render(template, data, hidden).then((f) => {
+    void live.render(template, data, hidden, palette).then((f) => {
       if (!f || liveState !== 'ready') return;
       previewProblems = f.problems;
       if (!f.problems.length) {
@@ -269,7 +271,7 @@
       const shown = all.filter((i) => !faulty.has(i));
       const rest = { ...template, elements: shown.map((i) => template.elements[i]!) };
       const restHidden = hidden.flatMap((i) => (shown.includes(i) ? [shown.indexOf(i)] : []));
-      void live?.render(rest, data, restHidden).then((g) => {
+      void live?.render(rest, data, restHidden, palette).then((g) => {
         if (g && !g.problems.length && liveState === 'ready' && round === liveRound) show(g, shown);
       });
     });

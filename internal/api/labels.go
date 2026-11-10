@@ -327,13 +327,17 @@ func (s *Server) layoutAssetData(r *http.Request, t *labels.Template, assetID st
 	return scene, data, nil, err
 }
 
-// writeLabel renders one scene in format: svg, png (grayscale, or 1-bit when
-// mono) or pdf.
-func writeLabel(w io.Writer, scene *render.Scene, format string, mono bool) error {
+// writeLabel renders one scene in format: svg, png (grayscale, or color for
+// a label in inks besides black and white; 1-bit when mono, or in a
+// palette's inks given one) or pdf.
+func writeLabel(w io.Writer, scene *render.Scene, format string, mono bool, palette labels.Palette) error {
 	switch format {
 	case "svg":
 		return render.WriteSVG(w, scene)
 	case "png":
+		if palette != "" {
+			return render.WriteInksPNG(w, scene, palette)
+		}
 		return render.WritePNG(w, scene, mono)
 	default:
 		return render.WritePDF(w, scene)
@@ -348,7 +352,7 @@ func setDownloadHeaders(w http.ResponseWriter, contentType, filename, dispositio
 }
 
 // handleAssetLabel renders one asset's label:
-// GET /api/v1/assets/{id}/label?template_id=…&format=svg|png|pdf[&mono=true]
+// GET /api/v1/assets/{id}/label?template_id=…&format=svg|png|pdf[&mono=true][&palette=bwr]
 func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	format := q.Get("format")
@@ -361,6 +365,10 @@ func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mono := q.Get("mono") == "true" || q.Get("mono") == "1"
+	palette := labels.Palette(q.Get("palette"))
+	if !validPalette(w, palette) {
+		return
+	}
 	t, ok := s.loadTemplateFor(w, q.Get("template_id"))
 	if !ok {
 		return
@@ -382,7 +390,7 @@ func (s *Server) handleAssetLabel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buf bytes.Buffer
-	if err := writeLabel(&buf, scene, format, mono); err != nil {
+	if err := writeLabel(&buf, scene, format, mono, palette); err != nil {
 		writeServerError(w, err, "render label")
 		return
 	}
@@ -420,6 +428,23 @@ type PreviewRequest struct {
 	// out: its box and what it prints.
 	Format string `json:"format,omitempty"`
 	Mono   bool   `json:"mono,omitempty"`
+	// Palette draws a png in a printer's or display's inks
+	// (docs/labels.md#inks), dot for dot as it prints them.
+	Palette labels.Palette `json:"palette,omitempty"`
+}
+
+// validPalette checks a palette asked for, writing the error response when
+// it is not one; empty is none asked for.
+func validPalette(w http.ResponseWriter, p labels.Palette) bool {
+	if p == "" || p.Valid() {
+		return true
+	}
+	names := make([]string, len(labels.Palettes))
+	for i, p := range labels.Palettes {
+		names[i] = string(p)
+	}
+	writeJSONError(w, http.StatusBadRequest, "palette must be one of "+strings.Join(names, ", "))
+	return false
 }
 
 // The preview's description, shared with the editor's live renderer.
@@ -504,6 +529,9 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, `format must be "svg", "png" or "json"`)
 		return
 	}
+	if !validPalette(w, req.Palette) {
+		return
+	}
 	doc, err := withPreviewDefaults(req.Template)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "template must be a JSON object")
@@ -546,7 +574,7 @@ func (s *Server) handlePreviewTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buf bytes.Buffer
-	if err := writeLabel(&buf, scene, req.Format, req.Mono); err != nil {
+	if err := writeLabel(&buf, scene, req.Format, req.Mono, req.Palette); err != nil {
 		writeServerError(w, err, "render preview")
 		return
 	}

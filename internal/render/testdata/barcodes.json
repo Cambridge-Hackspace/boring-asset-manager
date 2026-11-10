@@ -1,5 +1,17 @@
 [
  {
+  "file": "colors.png",
+  "payloads": [
+   "BAM-QR-0042"
+  ]
+ },
+ {
+  "file": "colors.mono.png",
+  "payloads": [
+   "BAM-QR-0042"
+  ]
+ },
+ {
   "file": "fit.png",
   "payloads": []
  },

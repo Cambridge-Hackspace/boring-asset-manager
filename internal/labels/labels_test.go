@@ -503,7 +503,7 @@ func TestShapes(t *testing.T) {
 	}{
 		{shape(`"shape":"star"`), []string{"elements[0].shape"}},
 		{shape(`"shape":"ellipse","stroke":"none"`), []string{"elements[0].stroke"}},
-		{shape(`"shape":"ellipse","fill":"red","stroke_width":-1`), []string{"elements[0].fill", "elements[0].stroke_width"}},
+		{shape(`"shape":"ellipse","fill":"purple","stroke_width":-1`), []string{"elements[0].fill", "elements[0].stroke_width"}},
 		{shape(`"shape":"rectangle","corner_radius":6,"flip":true`), []string{"elements[0].corner_radius", "elements[0].flip"}},
 		{shape(`"shape":"line","fill":"black","points":[[0,0],[1,1]]`), []string{"elements[0].fill", "elements[0].points"}},
 		{`{"type":"shape","shape":"line","x":0,"y":0,"width":0,"height":0}`, []string{"elements[0].width"}},
