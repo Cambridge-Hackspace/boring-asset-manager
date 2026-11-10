@@ -51,6 +51,10 @@ type Model struct {
 	// SmallRoundFeed: the model needs a 35-dot margin on 12 mm round
 	// labels, where other die-cut labels take none.
 	SmallRoundFeed bool
+	// TwoColor: the model prints red as well as black on a roll that takes
+	// both, by expanded mode's bit 0 and two raster lines for each line of
+	// the label ("w" 01 for black, "w" 02 for red).
+	TwoColor bool
 
 	// MinLines and MaxLines bound continuous labels, in raster lines.
 	// CutMinLines, when set, is the shortest label the cutter cuts.
@@ -131,8 +135,10 @@ func init() {
 	// QL-810W and QL-820NWB have always been sent 200 and held to 295, and
 	// the QL-800 is kept with them. The QL-800 alone takes no compression
 	// (section 4, "Select compression mode").
-	add(with(full, func(m *Model) { m.lines = lineQL800 }), "QL-810W", "QL-820NWB")
-	add(with(full, func(m *Model) { m.lines, m.Compression = lineQL800, false }), "QL-800")
+	// The series prints in black and red on DK-22251 (sections 2.1 and 4,
+	// "Expanded mode" and "Raster graphics transfer").
+	add(with(full, func(m *Model) { m.lines, m.TwoColor = lineQL800, true }), "QL-810W", "QL-820NWB")
+	add(with(full, func(m *Model) { m.lines, m.Compression, m.TwoColor = lineQL800, false, true }), "QL-800")
 
 	// QL-1100 series reference, version 1.00: sections 2.1, 2.3.3, 2.3.4.
 	ql1100 := with(full, func(m *Model) {
@@ -294,3 +300,7 @@ func (mo Model) Layout(m Media) (Layout, error) {
 func (l Layout) Prepare(label *image.Gray, p Placement) *image.Gray {
 	return prepare(label, p, l.PrintableDots, l.PrintableLines)
 }
+
+// TwoColor reports whether the layout prints red as well as black: a model
+// that prints both, with a roll that takes both.
+func (l Layout) TwoColor() bool { return l.Model.TwoColor && l.Media.TwoColor }

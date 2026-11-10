@@ -15,6 +15,7 @@ interface Bamlive {
     data: string,
     placeholders: boolean,
     hidden: string,
+    palette: string,
   ): { width: number; height: number; pixels: Uint8ClampedArray; description: string | null; problems: string | null };
 }
 
@@ -75,7 +76,7 @@ scope.onmessage = async (event) => {
   // on this one: the editor falls back to the server's previews.
   let out: ReturnType<Bamlive['render']>;
   try {
-    out = live.render(msg.template, msg.data, msg.placeholders, JSON.stringify(msg.hidden));
+    out = live.render(msg.template, msg.data, msg.placeholders, JSON.stringify(msg.hidden), msg.palette ?? '');
   } catch (err) {
     scope.postMessage({ type: 'failed', message: err instanceof Error ? err.message : String(err) });
     scope.onmessage = null;

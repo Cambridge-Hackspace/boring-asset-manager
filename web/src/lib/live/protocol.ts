@@ -6,7 +6,8 @@ export type ToWorker =
   | { type: 'image'; id: string; bytes: ArrayBuffer }
   /** The icons labels draw (docs/icons.md), as the renderer's setIcons takes them. */
   | { type: 'icons'; json: string }
-  | { type: 'render'; seq: number; template: string; data: string; placeholders: boolean; hidden: number[] };
+  /** palette: the inks to draw in (docs/labels.md#inks); empty for the template's own. */
+  | { type: 'render'; seq: number; template: string; data: string; placeholders: boolean; hidden: number[]; palette: string };
 
 export type FromWorker =
   | { type: 'ready'; fonts?: Record<string, ArrayBuffer> }

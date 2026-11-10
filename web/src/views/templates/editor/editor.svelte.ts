@@ -122,6 +122,14 @@ export class Editor {
   /** Everything but the canvas hidden (Tab). */
   canvasOnly = $state(false);
 
+  /**
+   * The inks of the printer or display designed for (docs/labels.md#inks):
+   * the label is drawn in them and the element panel offers them. Null
+   * with none chosen: drawn in the fewest inks that hold the template's
+   * own, with every ink offered.
+   */
+  palette = $state<string | null>(null);
+
   // The view: zoom and where the label is in the viewport (docs/labels.md).
   view = $state<View>({ scale: 4, x: 24, y: 24 });
   /** The viewport's size, in CSS pixels. */

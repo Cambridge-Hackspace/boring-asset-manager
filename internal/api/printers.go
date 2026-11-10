@@ -8,6 +8,7 @@ import (
 	"image"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
@@ -270,14 +271,11 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rendered := make([]*image.Gray, 0, len(scenes)*req.Copies)
+	rendered := newLabelJob(plan)
 	for _, scene := range scenes {
-		img := scene.Raster(true)
-		for c := 0; c < req.Copies; c++ {
-			rendered = append(rendered, img)
-		}
+		rendered.add(scene, req.Copies)
 	}
-	job, err := plan.Encode(rendered)
+	job, err := rendered.encode()
 	if err != nil {
 		writeServerError(w, err, "encode print job")
 		return
@@ -300,7 +298,7 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"printer_id": p.ID,
-		"labels":     len(rendered),
+		"labels":     rendered.len(),
 		"bytes":      len(job),
 		"warnings":   nonNil(warnings),
 	})
@@ -313,7 +311,7 @@ func labelSpec(t *labels.Template) printers.LabelSpec {
 	if t.Units == labels.UnitsIn {
 		mm = 25.4
 	}
-	label := printers.LabelSpec{WidthMM: t.Width * mm, HeightMM: t.Height * mm, DPI: t.DPI, Feed: t.Feed}
+	label := printers.LabelSpec{WidthMM: t.Width * mm, HeightMM: t.Height * mm, DPI: t.DPI, Feed: t.Feed, Inks: t.Inks()}
 	for _, e := range t.Elements {
 		x, y, w, h := e.Bounds()
 		label.Content = append(label.Content, printers.RectMM{X: x * mm, Y: y * mm, Width: w * mm, Height: h * mm})
@@ -331,6 +329,9 @@ type FitRequest struct {
 	// Feed is which way the labels go through the printer when they fit
 	// either way; empty or "auto" is as fits.
 	Feed string `json:"feed,omitempty"`
+	// Inks are the inks the labels draw in, for a warning when the
+	// printer lacks one.
+	Inks []string `json:"inks,omitempty"`
 }
 
 // handlePrinterFit runs a printer's fit check without printing, for the
@@ -349,7 +350,13 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, `feed must be "auto", "across" or "along"`)
 		return
 	}
-	label := printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI, Content: req.Content, Feed: req.Feed}
+	for _, ink := range req.Inks {
+		if !labels.ValidInk(ink) {
+			writeJSONError(w, http.StatusBadRequest, "inks must name inks: "+strings.Join(labels.Inks, ", "))
+			return
+		}
+	}
+	label := printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI, Content: req.Content, Feed: req.Feed, Inks: req.Inks}
 	_, fit, err := printers.PlanLabel(p.Driver, store.PrinterSettings(p), label)
 	switch {
 	case errors.Is(err, printers.ErrDoesNotFit):
@@ -362,7 +369,7 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 		if fit.Rotate {
 			feed = labels.FeedAlong
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "warnings": nonNil(fit.Warnings), "feed": feed,
+		writeJSON(w, http.StatusOK, map[string]any{"fits": true, "warnings": nonNil(fit.Warnings), "feed": feed, "palette": fit.Palette,
 			"printable": fit.Printable, "edge_mm": fit.EdgeMM, "outside": nonNilInts(fit.Outside), "near_edge": nonNilInts(fit.NearEdge)})
 	}
 }
@@ -428,7 +435,9 @@ func (s *Server) handleTestPrint(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "render the test print")
 		return
 	}
-	job, err := plan.Encode([]*image.Gray{scene.Raster(true)})
+	one := newLabelJob(plan)
+	one.add(scene, 1)
+	job, err := one.encode()
 	if err != nil {
 		writeServerError(w, err, "encode the test print")
 		return
@@ -444,6 +453,50 @@ func (s *Server) handleTestPrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"printer_id": p.ID, "labels": 1, "bytes": len(job), "warnings": nonNil(warnings)})
+}
+
+// labelJob gathers a print job's labels as its plan takes them: drawn in
+// the printer's inks when it prints more than black and white
+// (docs/labels.md#inks), 1-bit otherwise.
+type labelJob struct {
+	plan  printers.Plan
+	inks  printers.InkPlan
+	gray  []*image.Gray
+	color []*image.Paletted
+}
+
+func newLabelJob(plan printers.Plan) *labelJob {
+	j := &labelJob{plan: plan}
+	if p, ok := plan.(printers.InkPlan); ok && p.Palette() != labels.PaletteBW {
+		j.inks = p
+	}
+	return j
+}
+
+// add draws a label, to print copies of.
+func (j *labelJob) add(scene *render.Scene, copies int) {
+	if j.inks != nil {
+		img := scene.RasterInks(j.inks.Palette())
+		for range copies {
+			j.color = append(j.color, img)
+		}
+		return
+	}
+	img := scene.Raster(true)
+	for range copies {
+		j.gray = append(j.gray, img)
+	}
+}
+
+// len is how many labels it prints.
+func (j *labelJob) len() int { return len(j.gray) + len(j.color) }
+
+// encode is the print job.
+func (j *labelJob) encode() ([]byte, error) {
+	if j.inks != nil {
+		return j.inks.EncodeInks(j.color)
+	}
+	return j.plan.Encode(j.gray)
 }
 
 // nonNil is list, or an empty one, so it is written as [] rather than null.

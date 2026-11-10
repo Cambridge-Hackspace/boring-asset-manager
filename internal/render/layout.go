@@ -265,7 +265,7 @@ func (s *Scene) placeSymbol(e *labels.Element, payload string, box image.Rectang
 		}
 	}
 	if len(rects) > 0 {
-		s.Items = append(s.Items, Item{Rects: rects})
+		s.Items = append(s.Items, Item{Rects: rects, Paint: paintOf(e.Fill)})
 	}
 
 	placed := CodePlacement{Module: module, Padding: margin}

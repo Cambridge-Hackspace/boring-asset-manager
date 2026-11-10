@@ -40,7 +40,7 @@ describe('the live renderer’s worker', () => {
 
     await import('./worker');
     await vi.waitFor(() => expect(posted.map((m) => m.type)).toEqual(['ready']));
-    const render = (seq: number) => scope.onmessage!({ data: { type: 'render', seq, template: '{}', data: '{}', placeholders: true, hidden: [] } });
+    const render = (seq: number) => scope.onmessage!({ data: { type: 'render', seq, template: '{}', data: '{}', placeholders: true, hidden: [], palette: '' } });
 
     await render(1);
     expect(posted.map((m) => m.type)).toEqual(['ready', 'frame']);

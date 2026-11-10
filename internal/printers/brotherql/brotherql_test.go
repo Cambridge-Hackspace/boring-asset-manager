@@ -87,7 +87,7 @@ func TestPinTablesFillTheHead(t *testing.T) {
 			"dk-22214": 585, "dk-22210": 408, "dk-22225": 295, "dk-22223": 154, "dk-n55224": 130, "dk-22205": 12,
 			"dk-11204": 555, "dk-11203": 555, "dk-11221": 442, "brother-29x42": 408, "dk-11201": 408,
 			"dk-11208": 295, "brother-39x48": 289, "brother-52x29": 142, "brother-54x29": 59, "brother-60x86": 24,
-			"brother-62x29": 12, "brother-62x60": 12, "brother-62x75": 12, "dk-11202": 12,
+			"brother-62x29": 12, "brother-62x60": 12, "brother-62x75": 12, "dk-11202": 12, "dk-22251": 12,
 			"dk-11219": 513, "dk-11218": 442, "dk-11207": 51,
 		},
 		// QL-500 to QL-1060N reference, section 3.2.5.
@@ -485,8 +485,9 @@ func TestEncodeJobGoldens(t *testing.T) {
 			t.Errorf("%s: stream starts % X", id, stream[195:215])
 		}
 	}
-	if n != 23 {
-		t.Errorf("the QL-810W takes %d rolls, not the 23 it always has", n)
+	// The 23 it always has, and DK-22251 in red and black.
+	if n != 24 {
+		t.Errorf("the QL-810W takes %d rolls, not 24", n)
 	}
 }
 
@@ -655,4 +656,100 @@ func TestEncodeJobWithoutCutting(t *testing.T) {
 	if c, _ := DecodeJob(cut); !c[0].AutoCut {
 		t.Error("cut job decoded without auto-cut")
 	}
+}
+
+// TestTwoColorJob prints black and red on DK-22251 in the QL-800 series,
+// each line of the label as a line of black and a line of red, red only
+// where black is not; and in black alone on any other roll or model.
+func TestTwoColorJob(t *testing.T) {
+	red, _ := LookupMedia("dk-22251")
+	for _, c := range []struct {
+		model string
+		takes bool
+	}{{"QL-800", true}, {"QL-810W", true}, {"QL-820NWB", true}, {"QL-700", false}, {"QL-1100", false}} {
+		if err := model(t, c.model).Takes(red); (err == nil) != c.takes {
+			t.Errorf("%s takes DK-22251: %v", c.model, err)
+		}
+	}
+	for _, name := range []string{"QL-800", "QL-810W"} {
+		mo := model(t, name)
+		l, err := mo.Layout(red)
+		if err != nil || !l.TwoColor() {
+			t.Fatalf("%s: %v, two colors %v", name, err, l.TwoColor())
+		}
+		black := image.NewGray(image.Rect(0, 0, l.PrintableDots, 300))
+		reds := image.NewGray(black.Rect)
+		for i := range black.Pix {
+			black.Pix[i], reds.Pix[i] = 0xFF, 0xFF
+		}
+		for y := 0; y < 300; y++ {
+			for x := 0; x < 100; x++ {
+				black.Pix[y*black.Stride+x] = 0  // black at the left
+				reds.Pix[y*reds.Stride+x+50] = 0 // red overlapping it, then alone
+			}
+		}
+		job, err := EncodeTwoColorJob(l, []*image.Gray{black}, []*image.Gray{reds}, JobOptions{Cut: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pages, err := mo.DecodeJob(job)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		p := pages[0]
+		if len(pages) != 1 || !p.TwoColor || len(p.Lines) != 300 || len(p.RedLines) != 300 || !p.AutoCut {
+			t.Fatalf("%s: %d pages, two colors %v, %d and %d lines", name, len(pages), p.TwoColor, len(p.Lines), len(p.RedLines))
+		}
+		gotBlack := l.PageImage(p)
+		gotRed := l.PageImage(Page{Lines: p.RedLines})
+		for x := 0; x < l.PrintableDots; x++ {
+			wantBlack, wantRed := x < 100, x >= 100 && x < 150
+			if (gotBlack.Pix[x] == 0) != wantBlack || (gotRed.Pix[x] == 0) != wantRed {
+				t.Fatalf("%s: dot %d black %v red %v", name, x, gotBlack.Pix[x] == 0, gotRed.Pix[x] == 0)
+			}
+		}
+		// A label in black alone is still sent in two colors, red blank.
+		job, err = EncodeJob(l, []*image.Gray{black}, JobOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pages, err := mo.DecodeJob(job); err != nil || !pages[0].TwoColor || len(pages[0].RedLines) != 300 {
+			t.Errorf("%s: black alone on DK-22251: %v", name, err)
+		}
+	}
+	// On black-and-white tape the series prints black alone.
+	l, err := model(t, "QL-810W").Layout(mustMedia(t, "dk-22205"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := image.NewGray(image.Rect(0, 0, l.PrintableDots, 300))
+	if _, err := EncodeTwoColorJob(l, []*image.Gray{page}, []*image.Gray{page}, JobOptions{}); err == nil {
+		t.Error("two colors on black-and-white tape")
+	}
+	job, err := EncodeJob(l, []*image.Gray{page}, JobOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pages, err := DecodeJob(job); err != nil || pages[0].TwoColor {
+		t.Errorf("black-and-white tape sent in two colors: %v", err)
+	}
+	// A model that prints in black alone refuses two-color streams.
+	two, _ := model(t, "QL-810W").Layout(red)
+	job, err = EncodeTwoColorJob(two, []*image.Gray{page}, []*image.Gray{page}, JobOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ql710 := model(t, "QL-710W")
+	if _, err := ql710.DecodeJob(job); err == nil || !strings.Contains(err.Error(), "two-color") {
+		t.Errorf("the QL-710W took a two-color job: %v", err)
+	}
+}
+
+func mustMedia(t *testing.T, id string) Media {
+	t.Helper()
+	m, ok := LookupMedia(id)
+	if !ok {
+		t.Fatalf("no roll %s", id)
+	}
+	return m
 }

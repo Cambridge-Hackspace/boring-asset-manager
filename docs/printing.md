@@ -69,6 +69,8 @@ A fit can also carry **warnings**, which never stop printing:
   1.5 mm of Brother tape.
 - Content is within 1 mm of a die-cut label's edge, and may be cut off as labels shift.
 - Custom stock is loaded on a DYMO 550, 5XL or Wireless, which print only on labels they identify.
+- The template draws in an [ink](labels.md#inks) the printer lacks, which prints black: "The
+  printer prints only black and white, so red prints black."
 
 Printing answers with the warnings too. So do the spool (`fit_warnings`, by template and
 destination) and printing from it.
@@ -79,13 +81,16 @@ destination) and printing from it.
 
 - the template's size and DPI;
 - optionally its elements' boxes in millimeters (`content`);
-- optionally its `feed`.
+- optionally its `feed`;
+- optionally the [inks](labels.md#inks) it draws in (`inks`), for a warning of any the printer
+  lacks.
 
 It answers `fits`, with `warnings` or why not. When it fits, it also answers with:
 
 | Field | Meaning |
 |---|---|
 | `feed` | Which way the label goes through the printer: `across` or `along` |
+| `palette` | The inks the printer prints in: `bw`, or more (see [Inks](labels.md#inks)) |
 | `printable` | The part of the label the printer prints, in the template's millimeters |
 | `edge_mm` | How near a die-cut label's edge content may be cut off |
 | `outside` | Which of the boxes reach outside what the printer prints |
@@ -205,7 +210,17 @@ that not every model takes, the models that do (`models`). The printer form offe
 those.
 
 Rolls are named by their DK part number where Brother sells them under one; the references name
-none. Two-color black/red media (DK-22251) is out of scope.
+none.
+
+**Red and black.** The QL-800, QL-810W and QL-820NWB print red as well as black on DK-22251, 62 mm
+continuous tape. With it loaded, the printer's palette is `bwr` (see [Inks](labels.md#inks)):
+red prints red, and any other ink but white prints black. Only those models take the roll. The
+drivers endpoint gives each model's palette (`model_palette`) and the roll's (`palette`). A
+printer's `loaded` roll gives the palette it prints in.
+
+Each line of the label is sent twice, as the QL-800 series reference describes: once for black
+(`w` 01) and once for red (`w` 02), with expanded mode's two-color bit set. Red prints only where
+black does not. Labels in black alone are sent the same way, with nothing in red.
 
 **Fit and margins.** Before any asset is laid out, the fit check requires the template to suit the
 loaded media, at 300 DPI. Continuous labels can be as long as:
@@ -227,7 +242,8 @@ around its center:
 
 Keep elements clear of those margins.
 
-**Encoding.** Each label is rendered 1-bit at 300 DPI and encoded as a raster stream. The stream
+**Encoding.** Each label is rendered 1-bit at 300 DPI (in black, white and red on DK-22251) and
+encoded as a raster stream. The stream
 is: invalidate, initialize, then per label:
 
 1. raster mode;

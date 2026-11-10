@@ -548,6 +548,12 @@ export interface DriverMedia {
   custom?: boolean;
   /** The models that take the roll, when not all of the driver's do. */
   models?: string[];
+  /**
+   * The inks it prints in (docs/labels.md#inks), when more than black and
+   * white: in the driver's list, on the models that print them; as a
+   * printer's loaded roll, in that printer.
+   */
+  palette?: string;
 }
 
 /** What changing a printer would leave without a printer, said before it is saved. */
@@ -588,6 +594,8 @@ export interface DriverInfo {
   driver: string;
   models: string[];
   model_dpi?: Record<string, number>;
+  /** The most inks each model prints in, for those that print more than black and white. */
+  model_palette?: Record<string, string>;
   media: DriverMedia[];
   /** Set when the driver takes custom stock too. */
   custom_stock?: CustomStockInfo;

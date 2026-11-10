@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"image"
+	"image/color"
 	"io"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
@@ -802,4 +805,93 @@ func planWith(d Driver, s Settings, label LabelSpec) (Plan, error) {
 		return nil, err
 	}
 	return d.Plan(s, f)
+}
+
+// TestBrotherRedAndBlack prints labels drawn in black, white and red on
+// DK-22251 in a QL-800 series printer, which declares those inks for it.
+func TestBrotherRedAndBlack(t *testing.T) {
+	d, err := Lookup(DriverBrotherQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := d.Info()
+	if info.ModelPalette["QL-810W"] != labels.PaletteBWR || info.ModelPalette["QL-700"] != "" {
+		t.Errorf("model palettes %v", info.ModelPalette)
+	}
+	for _, m := range info.Media {
+		if (m.ID == "dk-22251") != (m.Palette == labels.PaletteBWR) {
+			t.Errorf("%s: palette %q", m.ID, m.Palette)
+		}
+	}
+	settings := Settings{Model: "QL-810W", Media: "dk-22251"}
+	if l := Loaded(DriverBrotherQL, settings); l == nil || l.Palette != labels.PaletteBWR {
+		t.Errorf("loaded %+v", l)
+	}
+	if l := Loaded(DriverBrotherQL, Settings{Model: "QL-810W", Media: "dk-22205"}); l == nil || l.Palette != "" {
+		t.Errorf("black-and-white tape loaded %+v", l)
+	}
+	spec := LabelSpec{WidthMM: 62, HeightMM: 30, DPI: 300, Inks: []string{labels.InkBlack, labels.InkRed, labels.InkYellow}}
+	plan, fit, err := PlanLabel(DriverBrotherQL, settings, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fit.Palette != labels.PaletteBWR || !slices.Contains(fit.Warnings, "The printer prints only black, white and red, so yellow prints black.") {
+		t.Errorf("fit %+v", fit)
+	}
+	inks, ok := plan.(InkPlan)
+	if !ok || inks.Palette() != labels.PaletteBWR {
+		t.Fatalf("plan %T", plan)
+	}
+	// 62 × 30 mm at 300 DPI: black on the left, red on the right.
+	pal := color.Palette{}
+	for _, c := range labels.PaletteBWR.Colors() {
+		pal = append(pal, c)
+	}
+	label := image.NewPaletted(image.Rect(0, 0, 732, 354), pal)
+	for y := 0; y < 354; y++ {
+		for x := 0; x < 732; x++ {
+			switch {
+			case x < 300:
+				label.Pix[y*label.Stride+x] = 0
+			case x < 600:
+				label.Pix[y*label.Stride+x] = 2
+			default:
+				label.Pix[y*label.Stride+x] = 1
+			}
+		}
+	}
+	job, err := inks.EncodeInks([]*image.Paletted{label})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pages, err := brotherql.DecodeJob(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pages[0].TwoColor || len(pages[0].RedLines) != 354 {
+		t.Fatalf("decoded %+v", pages[0].TwoColor)
+	}
+	m, _ := brotherql.LookupMedia("dk-22251")
+	black, red := brotherql.PageImage(m, pages[0]), brotherql.PageImage(m, brotherql.Page{Lines: pages[0].RedLines})
+	// The page is the middle 696 dots of the label's 732.
+	for _, c := range []struct {
+		x          int
+		black, red bool
+	}{{0, true, false}, {281, true, false}, {282, false, true}, {581, false, true}, {582, false, false}} {
+		if (black.Pix[c.x] == 0) != c.black || (red.Pix[c.x] == 0) != c.red {
+			t.Errorf("dot %d: black %v red %v", c.x, black.Pix[c.x] == 0, red.Pix[c.x] == 0)
+		}
+	}
+
+	// On black-and-white tape there is nothing to warn of but the inks.
+	plan, fit, err = PlanLabel(DriverBrotherQL, Settings{Model: "QL-810W", Media: "dk-22205"}, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fit.Palette != labels.PaletteBW || !slices.Contains(fit.Warnings, "The printer prints only black and white, so red and yellow print black.") {
+		t.Errorf("fit %+v", fit)
+	}
+	if p, ok := plan.(InkPlan); !ok || p.Palette() != labels.PaletteBW {
+		t.Errorf("plan on black-and-white tape %T", plan)
+	}
 }

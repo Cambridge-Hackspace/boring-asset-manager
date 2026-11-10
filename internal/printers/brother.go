@@ -8,6 +8,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 )
 
@@ -53,6 +54,12 @@ func (d brotherDriver) Info() DriverInfo {
 	for _, n := range names {
 		m, _ := brotherql.LookupModel(n)
 		info.ModelDPI[n] = m.DPI
+		if m.TwoColor {
+			if info.ModelPalette == nil {
+				info.ModelPalette = map[string]labels.Palette{}
+			}
+			info.ModelPalette[n] = labels.PaletteBWR
+		}
 	}
 	if d.series == brotherql.SeriesQL {
 		info.Options = []OptionInfo{{
@@ -79,6 +86,9 @@ func (d brotherDriver) Info() DriverInfo {
 	for _, id := range brotherql.SeriesMediaIDs(d.series) {
 		m, _ := brotherql.LookupSeriesMedia(d.series, id)
 		mi := MediaInfo{ID: m.ID, Name: m.Name, WidthMM: m.WidthMM, LengthMM: m.LengthMM, DieCut: m.DieCut()}
+		if m.TwoColor {
+			mi.Palette = labels.PaletteBWR
+		}
 		for _, n := range names {
 			if mo, _ := brotherql.LookupModel(n); mo.Takes(m) == nil {
 				mi.Models = append(mi.Models, n)
@@ -179,6 +189,9 @@ func (d brotherDriver) Geometry(s Settings) (Geometry, error) {
 	if l.Media.DieCut() {
 		g.ReachAlongMM = mo.MM(l.PrintableLines)
 	}
+	if l.TwoColor() {
+		g.Palette = labels.PaletteBWR
+	}
 	return g, nil
 }
 
@@ -194,6 +207,60 @@ type brotherPlan struct {
 	layout    brotherql.Layout
 	placement brotherql.Placement
 	opts      brotherql.JobOptions
+}
+
+// Palette is black and white, and red on a roll that takes it in a model
+// that prints it.
+func (p brotherPlan) Palette() labels.Palette {
+	if p.layout.TwoColor() {
+		return labels.PaletteBWR
+	}
+	return labels.PaletteBW
+}
+
+// EncodeInks encodes labels drawn in the plan's palette: in two colors, red
+// as red; in black and white, anything but white as black.
+func (p brotherPlan) EncodeInks(images []*image.Paletted) ([]byte, error) {
+	type pages struct{ black, red *image.Gray }
+	prepared := map[*image.Paletted]pages{}
+	black := make([]*image.Gray, len(images))
+	red := make([]*image.Gray, len(images))
+	for i, label := range images {
+		got, ok := prepared[label]
+		if !ok {
+			b, r := splitInks(label)
+			got = pages{p.layout.Prepare(b, p.placement), p.layout.Prepare(r, p.placement)}
+			prepared[label] = got
+		}
+		black[i], red[i] = got.black, got.red
+	}
+	if !p.layout.TwoColor() {
+		return brotherql.EncodeJob(p.layout, black, p.opts)
+	}
+	return brotherql.EncodeTwoColorJob(p.layout, black, red, p.opts)
+}
+
+// splitInks splits a label drawn in inks into black, dark wherever an ink
+// but white and red is, and red, dark wherever red is.
+func splitInks(label *image.Paletted) (black, red *image.Gray) {
+	b := label.Bounds()
+	black, red = image.NewGray(b), image.NewGray(b)
+	for i := range black.Pix {
+		black.Pix[i], red.Pix[i] = 0xFF, 0xFF
+	}
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			c := label.Palette[label.Pix[y*label.Stride+x]]
+			switch c {
+			case labels.InkColor(labels.InkWhite):
+			case labels.InkColor(labels.InkRed):
+				red.Pix[y*red.Stride+x] = 0
+			default:
+				black.Pix[y*black.Stride+x] = 0
+			}
+		}
+	}
+	return black, red
 }
 
 func (p brotherPlan) Encode(labels []*image.Gray) ([]byte, error) {

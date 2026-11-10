@@ -16,22 +16,113 @@ import (
 // mono mode every pixel is pure black or white, ready for a thermal print
 // head: text is thresholded at 50% coverage and images are dithered. Barcode
 // modules are whole dots in both modes, so they are never anti-aliased.
+// Every ink but white is drawn black, as a printer of black alone prints
+// it (RasterInks draws in more).
 func (s *Scene) Raster(mono bool) *image.Gray {
+	return s.draw(1, mono, Paint.gray, nil)[0]
+}
+
+// RasterColor draws the scene as Raster does, anti-aliased, but in its
+// inks' own colors: a preview of a label as designed.
+func (s *Scene) RasterColor() *image.RGBA {
+	planes := s.draw(3, false, Paint.Color, nil)
+	out := image.NewRGBA(planes[0].Rect)
+	for i := range planes[0].Pix {
+		out.Pix[4*i], out.Pix[4*i+1], out.Pix[4*i+2], out.Pix[4*i+3] = planes[0].Pix[i], planes[1].Pix[i], planes[2].Pix[i], 0xFF
+	}
+	return out
+}
+
+// RasterInks draws the scene dot for dot in a palette's inks, as a printer
+// or display with those inks shows it (docs/labels.md#inks): each dot one
+// of them, indexed in the palette's order. Paths are thresholded at 50%
+// coverage, as in mono mode; an ink the palette lacks is drawn black; and
+// images are dithered into the palette, Floyd–Steinberg, to the nearest
+// ink. In black and white it is Raster in mono mode, dot for dot.
+func (s *Scene) RasterInks(p labels.Palette) *image.Paletted {
+	if !p.Valid() {
+		p = labels.PaletteBW
+	}
+	inks := p.Colors()
+	palette := make(color.Palette, len(inks))
+	index := make(map[color.RGBA]uint8, len(inks))
+	for i, c := range inks {
+		palette[i] = c
+		index[c] = uint8(i)
+	}
+	out := image.NewPaletted(image.Rect(0, 0, s.Width, s.Height), palette)
+	if p == labels.PaletteBW {
+		// Black is the first ink, white the second.
+		for i, v := range s.Raster(true).Pix {
+			if v != 0 {
+				out.Pix[i] = 1
+			}
+		}
+		return out
+	}
+	planes := s.draw(3, true, func(q Paint) color.RGBA { return q.In(p).Color() }, inks)
+	for i := range out.Pix {
+		c := color.RGBA{planes[0].Pix[i], planes[1].Pix[i], planes[2].Pix[i], 0xFF}
+		k, ok := index[c]
+		if !ok {
+			// a gray, in a document: the nearest ink
+			k = uint8(nearestInk(inks, [3]int{int(c.R), int(c.G), int(c.B)}))
+		}
+		out.Pix[i] = k
+	}
+	return out
+}
+
+// UsesInks reports whether the scene draws in an ink besides black and
+// white.
+func (s *Scene) UsesInks() bool {
+	for _, it := range s.Items {
+		if it.Paint != Black && it.Paint != White && it.Paint.Ink() != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// gray is a paint as Raster draws it: its level, in each channel.
+func (p Paint) gray() color.RGBA {
+	l := p.Level()
+	return color.RGBA{l, l, l, 0xFF}
+}
+
+// draw draws the scene on n planes, white to begin with: one of gray, or
+// three of red, green and blue, each paint in each plane as colorOf has
+// it. Given inks, images are dithered into them as they are drawn; in one
+// plane, in mono mode, into black and white.
+func (s *Scene) draw(n int, mono bool, colorOf func(Paint) color.RGBA, inks []color.RGBA) []*image.Gray {
 	s = s.outlined()
 	bounds := image.Rect(0, 0, s.Width, s.Height)
-	img := image.NewGray(bounds)
-	for i := range img.Pix {
-		img.Pix[i] = 0xFF
+	planes := make([]*image.Gray, n)
+	for k := range planes {
+		planes[k] = image.NewGray(bounds)
+		for i := range planes[k].Pix {
+			planes[k].Pix[i] = 0xFF
+		}
+	}
+	levels := func(p Paint) []uint8 {
+		c := colorOf(p)
+		return []uint8{c.R, c.G, c.B}[:n]
 	}
 
 	for i := 0; i < len(s.Items); {
 		it := &s.Items[i]
 		switch {
 		case it.Image != nil:
-			drawImage(img, *it.Image, mono)
+			if n == 1 {
+				drawImage(planes[0], *it.Image, mono)
+			} else {
+				drawColorImage(planes, *it.Image, inks)
+			}
 			i++
 		case it.Rects != nil:
-			fillRects(img, it.Rects, it.Paint)
+			for k, v := range levels(it.Paint) {
+				fillRects(planes[k], it.Rects, v)
+			}
 			i++
 		default:
 			// Paths next to each other in one paint are filled together, so
@@ -41,16 +132,18 @@ func (s *Scene) Raster(mono bool) *image.Gray {
 			for !it.EvenOdd && j < len(s.Items) && s.Items[j].isPath() && s.Items[j].Paint == it.Paint && !s.Items[j].EvenOdd {
 				j++
 			}
-			fillPaths(img, s.Items[i:j], mono, it.Paint)
+			coverage := cover(bounds, s.Items[i:j])
+			for k, v := range levels(it.Paint) {
+				blend(planes[k], coverage, mono, v)
+			}
 			i = j
 		}
 	}
-	return img
+	return planes
 }
 
-// fillPaths fills the items' paths in paint.
-func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
-	bounds := img.Bounds()
+// cover is the coverage of the items' paths, filled together.
+func cover(bounds image.Rectangle, items []Item) *image.Alpha {
 	coverage := image.NewAlpha(bounds)
 	if len(items) == 1 && items[0].EvenOdd {
 		evenOdd(coverage, items[0].Path)
@@ -61,7 +154,13 @@ func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 		}
 		fill(coverage, paths)
 	}
-	ink := paint.Level()
+	return coverage
+}
+
+// blend paints a level over img where coverage covers it: in mono mode
+// wherever it covers at least half a dot, otherwise blended over what is
+// beneath by coverage.
+func blend(img *image.Gray, coverage *image.Alpha, mono bool, ink uint8) {
 	for i, a := range coverage.Pix {
 		switch {
 		case a == 0:
@@ -69,12 +168,7 @@ func fillPaths(img *image.Gray, items []Item, mono bool, paint Paint) {
 			if a >= 0x80 {
 				img.Pix[i] = ink
 			}
-		case paint == White:
-			img.Pix[i] += uint8((0xFF - uint32(img.Pix[i])) * uint32(a) / 0xFF)
-		case paint == Black:
-			img.Pix[i] = uint8(uint32(img.Pix[i]) * uint32(0xFF-a) / 0xFF)
 		default:
-			// A shade, blended over what is beneath by coverage.
 			img.Pix[i] = uint8((uint32(img.Pix[i])*uint32(0xFF-a) + uint32(ink)*uint32(a)) / 0xFF)
 		}
 	}
@@ -105,9 +199,8 @@ func evenOdd(coverage *image.Alpha, p Path) {
 	}
 }
 
-// fillRects fills whole-dot rectangles in paint.
-func fillRects(img *image.Gray, rects []Rect, paint Paint) {
-	v := paint.Level()
+// fillRects fills whole-dot rectangles with a level.
+func fillRects(img *image.Gray, rects []Rect, v uint8) {
 	for _, r := range rects {
 		rect := image.Rect(r.X, r.Y, r.X+r.W, r.Y+r.H).Intersect(img.Bounds())
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {
@@ -267,8 +360,13 @@ func dither(img *image.Gray) {
 }
 
 // WritePNG encodes the scene as an 8-bit grayscale PNG, or a 1-bit PNG in
-// mono mode.
+// mono mode. A scene in inks besides black and white is an 8-bit color PNG
+// of them as designed, except in mono mode, which is as a printer of black
+// alone prints it.
 func WritePNG(w io.Writer, s *Scene, mono bool) error {
+	if !mono && s.UsesInks() {
+		return png.Encode(w, s.RasterColor())
+	}
 	img := s.Raster(mono)
 	if !mono {
 		return png.Encode(w, img)
@@ -280,6 +378,91 @@ func WritePNG(w io.Writer, s *Scene, mono bool) error {
 		}
 	}
 	return png.Encode(w, bw)
+}
+
+// WriteInksPNG encodes the scene as an indexed PNG in a palette's inks, as
+// RasterInks draws it.
+func WriteInksPNG(w io.Writer, s *Scene, p labels.Palette) error {
+	return png.Encode(w, s.RasterInks(p))
+}
+
+// channel is one channel of an image, red, green or blue by c, as a gray
+// image of the same alpha.
+type channel struct {
+	image.Image
+	c int
+}
+
+func (ch channel) ColorModel() color.Model { return color.RGBA64Model }
+
+func (ch channel) At(x, y int) color.Color {
+	r, g, b, a := ch.Image.At(x, y).RGBA()
+	v := uint16([3]uint32{r, g, b}[ch.c])
+	return color.RGBA64{v, v, v, uint16(a)}
+}
+
+// drawColorImage draws an image on planes of red, green and blue, each as
+// drawImage draws one channel of it in gray, over what is already drawn.
+// Given inks, the dots it covers are then dithered into them.
+func drawColorImage(planes []*image.Gray, pi PlacedImage, inks []color.RGBA) {
+	for k, plane := range planes {
+		one := pi
+		one.Image = channel{pi.Image, k}
+		drawImage(plane, one, false)
+	}
+	if inks == nil {
+		return
+	}
+	area := image.Rect(pi.X, pi.Y, pi.X+pi.W, pi.Y+pi.H).Intersect(planes[0].Bounds())
+	if pi.Rotation != 0 {
+		area = turnedArea(pi, planes[0].Bounds())
+	}
+	ditherInks(planes, area, inks)
+}
+
+// ditherInks reduces the dots in r of planes of red, green and blue to
+// inks with Floyd–Steinberg error diffusion: each the ink nearest it, by
+// the sum of the squares of the differences in each channel, the first
+// listed where two are as near.
+func ditherInks(planes []*image.Gray, r image.Rectangle, inks []color.RGBA) {
+	w, h := r.Dx(), r.Dy()
+	if w <= 0 || h <= 0 {
+		return
+	}
+	errs := make([][3]int, (w+2)*(h+1))
+	at := func(x, y int) *[3]int { return &errs[y*(w+2)+x+1] }
+	stride := planes[0].Stride
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			off := (r.Min.Y+y)*stride + r.Min.X + x
+			var want [3]int
+			for k := range want {
+				want[k] = int(planes[k].Pix[off]) + at(x, y)[k]
+			}
+			ink := inks[nearestInk(inks, want)]
+			got := [3]int{int(ink.R), int(ink.G), int(ink.B)}
+			for k := range want {
+				planes[k].Pix[off] = uint8(got[k])
+				diff := want[k] - got[k]
+				at(x+1, y)[k] += diff * 7 / 16
+				at(x-1, y+1)[k] += diff * 3 / 16
+				at(x, y+1)[k] += diff * 5 / 16
+				at(x+1, y+1)[k] += diff * 1 / 16
+			}
+		}
+	}
+}
+
+// nearestInk is the index of the ink nearest a color.
+func nearestInk(inks []color.RGBA, c [3]int) int {
+	best, least := 0, -1
+	for i, ink := range inks {
+		dr, dg, db := c[0]-int(ink.R), c[1]-int(ink.G), c[2]-int(ink.B)
+		if d := dr*dr + dg*dg + db*db; least < 0 || d < least {
+			best, least = i, d
+		}
+	}
+	return best
 }
 
 // drawTurnedImage draws an image turned by pi.Rotation about (pi.Cx, pi.Cy):
@@ -295,16 +478,7 @@ func drawTurnedImage(dst *image.Gray, pi PlacedImage, mono bool) {
 	draw.CatmullRom.Scale(scaled, scaled.Bounds(), pi.Image, pi.Image.Bounds(), draw.Src, nil)
 
 	sin, cos := labels.SinCos(pi.Rotation)
-	turned := func(x, y float64) (float64, float64) {
-		dx, dy := x-pi.Cx, y-pi.Cy
-		return pi.Cx + dx*cos - dy*sin, pi.Cy + dx*sin + dy*cos
-	}
-	minX, minY, maxX, maxY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
-	for _, c := range [][2]float64{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
-		x, y := turned(float64(pi.X)+c[0]*float64(pi.W), float64(pi.Y)+c[1]*float64(pi.H))
-		minX, minY, maxX, maxY = math.Min(minX, x), math.Min(minY, y), math.Max(maxX, x), math.Max(maxY, y)
-	}
-	area := image.Rect(int(math.Floor(minX)), int(math.Floor(minY)), int(math.Ceil(maxX)), int(math.Ceil(maxY))).Intersect(dst.Bounds())
+	area := turnedArea(pi, dst.Bounds())
 	if area.Empty() {
 		return
 	}
@@ -351,4 +525,23 @@ func drawTurnedImage(dst *image.Gray, pi PlacedImage, mono bool) {
 func unturn(pi PlacedImage, sin, cos, x, y float64) (float64, float64) {
 	dx, dy := x-pi.Cx, y-pi.Cy
 	return pi.Cx + dx*cos + dy*sin, pi.Cy - dx*sin + dy*cos
+}
+
+// turnedArea is the dots of bounds an image turned by its rotation may
+// cover: the box around its turned corners.
+func turnedArea(pi PlacedImage, bounds image.Rectangle) image.Rectangle {
+	if pi.W <= 0 || pi.H <= 0 {
+		return image.Rectangle{}
+	}
+	sin, cos := labels.SinCos(pi.Rotation)
+	turned := func(x, y float64) (float64, float64) {
+		dx, dy := x-pi.Cx, y-pi.Cy
+		return pi.Cx + dx*cos - dy*sin, pi.Cy + dx*sin + dy*cos
+	}
+	minX, minY, maxX, maxY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, c := range [][2]float64{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
+		x, y := turned(float64(pi.X)+c[0]*float64(pi.W), float64(pi.Y)+c[1]*float64(pi.H))
+		minX, minY, maxX, maxY = math.Min(minX, x), math.Min(minY, y), math.Max(maxX, x), math.Max(maxY, y)
+	}
+	return image.Rect(int(math.Floor(minX)), int(math.Floor(minY)), int(math.Ceil(maxX)), int(math.Ceil(maxY))).Intersect(bounds)
 }

@@ -98,6 +98,10 @@ func (pw *pdfWriter) writePage(s *Scene) (int, error) {
 				content.WriteString("1 g\n")
 			case Black:
 				content.WriteString("0 g\n")
+			case Red, Yellow, Green, Blue, Orange:
+				// An ink as designed, in its own color.
+				c := p.Color()
+				fmt.Fprintf(&content, "%s %s %s rg\n", fine(float64(c.R)/0xFF), fine(float64(c.G)/0xFF), fine(float64(c.B)/0xFF))
 			default:
 				fmt.Fprintf(&content, "%s g\n", fine(float64(p.Level())/0xFF))
 			}

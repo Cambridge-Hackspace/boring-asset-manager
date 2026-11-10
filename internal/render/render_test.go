@@ -309,7 +309,7 @@ func renderAll(t *testing.T, s *Scene) map[string][]byte {
 // go test ./internal/render -update, inspect the files, and run
 // tools/goldens/verify_renders.py to confirm the barcodes still scan.
 func TestGoldens(t *testing.T) {
-	images := memImages{logoID: testLogo(), arrowID: testArrow()}
+	images := goldenImages()
 	type manifestEntry struct {
 		File     string   `json:"file"`
 		Payloads []string `json:"payloads"`
@@ -317,7 +317,7 @@ func TestGoldens(t *testing.T) {
 	}
 	var manifest []manifestEntry
 
-	for _, name := range []string{"fit", "image_inches", "imported", "layers", "margins", "micro_code128", "mirrored", "mirrored_turned", "pen", "print_turned", "qr45", "qr_label", "shapes", "turned", "icon"} {
+	for _, name := range []string{"colors", "fit", "image_inches", "imported", "layers", "margins", "micro_code128", "mirrored", "mirrored_turned", "pen", "print_turned", "qr45", "qr_label", "shapes", "turned", "icon"} {
 		s, err := Layout(mustTemplate(t, goldenTemplates[name]), testData, images)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)

@@ -5,6 +5,7 @@
   import type { DriverInfo, Printer } from '../../../lib/models';
   import { session } from '../../../lib/session.svelte';
   import { bounds, describeElement, fromMM, resizeLabel, toMM, type Feed, type PrintArea, type TemplateDoc } from '../../../lib/template';
+  import { inkName, paletteInks, templateInks } from '../../../lib/inks';
   import ErrorMessage from '../../../components/ErrorMessage.svelte';
   import FitWarnings from '../../../components/FitWarnings.svelte';
   import { useEditor } from './editor.svelte';
@@ -108,6 +109,7 @@
       height_mm: mm(snapshot.height),
       dpi: snapshot.dpi,
       ...(snapshot.feed ? { feed: snapshot.feed } : {}),
+      inks: templateInks(snapshot),
       content: snapshot.elements.map(bounds).map((b) => ({ x: mm(b.x), y: mm(b.y), width: mm(b.width), height: mm(b.height) })),
     });
   }
@@ -132,6 +134,12 @@
   }
 
   const chosenPrinter = $derived(printers.find((p) => p.id === printerId));
+
+  // The label is drawn in the inks the printer chosen prints in, and its
+  // elements offered them; with none chosen, in the template's own.
+  $effect(() => {
+    editor.palette = chosenPrinter ? (chosenPrinter.loaded?.palette ?? 'bw') : null;
+  });
   const canTest = $derived(session.can('labels.print'));
 
   /** The chosen printer's media and resolution. */
@@ -201,6 +209,11 @@
 
   const named = (indices: number[] | undefined) =>
     (indices ?? []).filter((i) => doc.elements[i]).map((i) => describeElement(doc.elements[i]!, i)).join(', ');
+  /** The inks a palette has, in words: "black and white", "black, white and red". */
+  const inksText = (palette: string | null) => {
+    const names = paletteInks(palette).map((i) => inkName(i).toLowerCase());
+    return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? '');
+  };
   const fedText = (f: FitAnswer) => (f.feed && doc.sizing !== 'adaptive' ? ` Fed with its width ${f.feed} the roll.` : '');
 </script>
 
@@ -215,6 +228,7 @@
     </label>
     {#if printerMedia}
       <p class="text-xs text-zinc-600 dark:text-zinc-400">Loaded: {printerMedia.media.name}{printerMedia.dpi ? `, ${printerMedia.dpi} DPI` : ''}.</p>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">Prints in {inksText(editor.palette)}.</p>
     {/if}
     <div class="flex flex-wrap gap-1">
       <button type="button" class="btn-sm" disabled={!printerMedia} onclick={() => sizeFromPrinter()}>Use its label size</button>

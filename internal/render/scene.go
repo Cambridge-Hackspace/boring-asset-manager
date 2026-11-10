@@ -10,7 +10,10 @@ package render
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"math"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
 
 // Scene is a laid-out label, measured in dots at DPI.
@@ -51,9 +54,9 @@ type Item struct {
 	EvenOdd bool
 }
 
-// Paint is black, or white, which paints over what is beneath it, or, in
-// documents (docs/reports.md#pdf), a shade of gray. A label is only ever
-// black and white.
+// Paint is black, or white, which paints over what is beneath it, or
+// another of a label's inks (docs/labels.md#inks), or, in documents
+// (docs/reports.md#pdf), a shade of gray.
 type Paint uint8
 
 const (
@@ -64,9 +67,51 @@ const (
 	Gray75
 	Gray50
 	Gray25
+	// The inks besides black and white.
+	Red
+	Yellow
+	Green
+	Blue
+	Orange
 )
 
-// Level is how light a paint is, from 0, black, to 255, white.
+// inkPaints are the paints of inks, by name.
+var inkPaints = map[string]Paint{
+	labels.InkBlack: Black, labels.InkWhite: White, labels.InkRed: Red, labels.InkYellow: Yellow,
+	labels.InkGreen: Green, labels.InkBlue: Blue, labels.InkOrange: Orange,
+}
+
+// Ink is the ink a paint is, or "" for a gray.
+func (p Paint) Ink() string {
+	for name, paint := range inkPaints {
+		if paint == p {
+			return name
+		}
+	}
+	return ""
+}
+
+// Color is the color a paint is shown in: its ink's, or its gray.
+func (p Paint) Color() color.RGBA {
+	if ink := p.Ink(); ink != "" {
+		return labels.InkColor(ink)
+	}
+	l := p.Level()
+	return color.RGBA{l, l, l, 0xFF}
+}
+
+// In is the paint as a device with the palette draws it: an ink it lacks
+// is drawn black, and grays stay as they are.
+func (p Paint) In(palette labels.Palette) Paint {
+	if ink := p.Ink(); ink != "" && !palette.Has(ink) {
+		return Black
+	}
+	return p
+}
+
+// Level is how light a paint is, from 0, black, to 255, white. In gray,
+// every ink but white is drawn black, as a device of black and white
+// draws it.
 func (p Paint) Level() uint8 {
 	switch p {
 	case White:

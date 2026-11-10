@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"image"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/ir"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/isolex/svg"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 )
 
 // liveCase is one label the editor's live renderer (internal/live, compiled
@@ -27,18 +29,47 @@ type liveCase struct {
 	Images   map[string]string `json:"images"` // id -> PNG, base64
 	// Icons are what the live renderer's setIcons takes, for a template
 	// that draws icons.
-	Icons  json.RawMessage `json:"icons,omitempty"`
-	Width  int             `json:"width"`
-	Height int             `json:"height"`
-	// SHA256 is of the dots, one byte each (0 black, 255 white), row by row.
+	Icons json.RawMessage `json:"icons,omitempty"`
+	// Palette is the inks it is drawn in (docs/labels.md#inks); absent,
+	// the fewest that hold the template's own.
+	Palette labels.Palette `json:"palette,omitempty"`
+	Width   int            `json:"width"`
+	Height  int            `json:"height"`
+	// SHA256 is of the dots, row by row: in black and white, one byte each
+	// (0 black, 255 white); with Colors, three, the red, green and blue of
+	// the ink each is drawn in.
 	SHA256 string `json:"sha256"`
+	Colors bool   `json:"colors,omitempty"`
+}
+
+// inkPalettes are the palettes the golden in color is drawn in, besides its
+// own.
+var inkPalettes = []labels.Palette{labels.PaletteBW, labels.PaletteBWR, labels.PaletteBWY, labels.PaletteBWRY, labels.PaletteBWRYGB}
+
+// dotsHash is a liveCase's hash of the dots drawn in a palette.
+func dotsHash(img *image.Paletted, p labels.Palette) (string, bool) {
+	h := sha256.New()
+	b := img.Bounds()
+	colors := p != labels.PaletteBW
+	inks := p.Colors()
+	for y := 0; y < b.Dy(); y++ {
+		for _, v := range img.Pix[y*img.Stride : y*img.Stride+b.Dx()] {
+			c := inks[v]
+			if colors {
+				h.Write([]byte{c.R, c.G, c.B})
+			} else {
+				h.Write([]byte{c.R})
+			}
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), colors
 }
 
 // TestLiveParityFixture keeps testdata/live_parity.json, which the web
 // interface's tests render with the WebAssembly build and compare, up to
 // date with every golden template: rewrite it with -update.
 func TestLiveParityFixture(t *testing.T) {
-	images := memImages{logoID: testLogo(), arrowID: testArrow()}
+	images := goldenImages()
 	encoded := map[string]string{}
 	for id, img := range images {
 		var buf bytes.Buffer
@@ -67,12 +98,6 @@ func TestLiveParityFixture(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		gray := s.Raster(true)
-		b := gray.Bounds()
-		h := sha256.New()
-		for y := 0; y < b.Dy(); y++ {
-			h.Write(gray.Pix[y*gray.Stride : y*gray.Stride+b.Dx()])
-		}
 		// The images the template places, by ID.
 		used := map[string]string{}
 		for id := range images {
@@ -80,12 +105,28 @@ func TestLiveParityFixture(t *testing.T) {
 				used[id] = encoded[id]
 			}
 		}
-		c := liveCase{Name: name, Template: json.RawMessage(goldenTemplates[name]), Data: data,
-			Images: used, Width: b.Dx(), Height: b.Dy(), SHA256: hex.EncodeToString(h.Sum(nil))}
-		if bytes.Contains([]byte(goldenTemplates[name]), []byte(`"type":"icon"`)) {
-			c.Icons = liveIcons(t)
+		// In its own inks, and the golden in color in others' too.
+		palettes := []labels.Palette{""}
+		if name == "colors" {
+			palettes = append(palettes, inkPalettes...)
 		}
-		cases = append(cases, c)
+		for _, p := range palettes {
+			drawnIn := p
+			if p == "" {
+				drawnIn = labels.PaletteFor(tpl.Inks())
+			}
+			dots := s.RasterInks(drawnIn)
+			sum, colors := dotsHash(dots, drawnIn)
+			c := liveCase{Name: name, Template: json.RawMessage(goldenTemplates[name]), Data: data, Palette: p,
+				Images: used, Width: dots.Bounds().Dx(), Height: dots.Bounds().Dy(), SHA256: sum, Colors: colors}
+			if p != "" {
+				c.Name = name + " in " + string(p)
+			}
+			if bytes.Contains([]byte(goldenTemplates[name]), []byte(`"type":"icon"`)) {
+				c.Icons = liveIcons(t)
+			}
+			cases = append(cases, c)
+		}
 	}
 	got, err := json.MarshalIndent(cases, "", " ")
 	if err != nil {

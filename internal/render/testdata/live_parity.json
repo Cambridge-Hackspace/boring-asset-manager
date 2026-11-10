@@ -1,5 +1,951 @@
 [
  {
+  "name": "colors",
+  "template": {
+   "id": "colors",
+   "name": "Colors",
+   "units": "mm",
+   "width": 60,
+   "height": 30,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "static_image",
+     "x": 1,
+     "y": 1,
+     "width": 20,
+     "height": 14,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "static_image",
+     "x": 3,
+     "y": 17,
+     "width": 16,
+     "height": 10,
+     "rotation": 20,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 23,
+     "y": 1,
+     "width": 14,
+     "height": 14,
+     "fill": "blue",
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 1,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "red",
+     "content_binding": "RED"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 8,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "yellow",
+     "content_binding": "YELLOW"
+    },
+    {
+     "type": "shape",
+     "shape": "rectangle",
+     "x": 23,
+     "y": 17,
+     "width": 16,
+     "height": 12,
+     "stroke": "orange",
+     "stroke_width": 0.8,
+     "fill": "green"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 41,
+     "y": 16,
+     "width": 18,
+     "height": 13,
+     "stroke": "none",
+     "fill": "red"
+    },
+    {
+     "type": "text",
+     "x": 42,
+     "y": 19,
+     "width": 16,
+     "height": 7,
+     "font_size": 11,
+     "align": "center",
+     "fill": "white",
+     "content_binding": "BAM"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
+   },
+   "links": {
+    "needs": "",
+    "needs_all": "",
+    "needed_by": "",
+    "needed_by_all": ""
+   },
+   "review": {
+    "state": "",
+    "due": "",
+    "confirmed_at": "",
+    "confirmed_by": ""
+   }
+  },
+  "images": {
+   "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAABqUlEQVR4nOyXQU7sMBBEa5FrfH3OwVE4CmfhLhwFkFixYcPKzsQokB53Onb1eILEMPJIFnHwe7jsAokBlU96RMINMI9n5PGinmVAFh7Hf/XsCxwaTFAMEB6Q4gggfo/5yzw9LGNaRhIASb2VVacLHBpMsAnwcY8UxDCPkB81nix43IasahMQGkywCvB+hxQntd4c4Ligguc9yEy+2yZwaDDBMcDb7bJ5ewSxnH/aBJC37QKHBhN8BXj9hxRSwTDTIefXeN48sN7GeQJCgwmGJyBF5w7rFyiffQKHBhMMEYbWR7BYxkL+aRPgfIFDgwmGaPegDeYANZ43/zMCQoMJhiB07Q4Du0D9488XODSYoFfoMit0KDdAUMHzHvYJHBpMUK6Q3Nhi0VOrAPYLHBpM0Ct0ORVKhlYWPRVFPUC7wKHBBLlCOv4JDZjWDdgtIDSY4IorNK4bMBpFPUC7wKHBBFdeocJ/hLKkfgPtAocGE/AKmQPUinqAdoFDgwn+foU2N1A4BpvdHOBugUODCba/A5ZWfwW1oh6gXeDQYIJeoV6hXqFeod+t0OcAFlJgM9RC34IAAAAASUVORK5CYII="
+  },
+  "width": 709,
+  "height": 354,
+  "sha256": "d86a6438795b956a1a3a1f83b314a7711ae47eaa8b508d9691e9684f14f87eb2",
+  "colors": true
+ },
+ {
+  "name": "colors in bw",
+  "template": {
+   "id": "colors",
+   "name": "Colors",
+   "units": "mm",
+   "width": 60,
+   "height": 30,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "static_image",
+     "x": 1,
+     "y": 1,
+     "width": 20,
+     "height": 14,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "static_image",
+     "x": 3,
+     "y": 17,
+     "width": 16,
+     "height": 10,
+     "rotation": 20,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 23,
+     "y": 1,
+     "width": 14,
+     "height": 14,
+     "fill": "blue",
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 1,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "red",
+     "content_binding": "RED"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 8,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "yellow",
+     "content_binding": "YELLOW"
+    },
+    {
+     "type": "shape",
+     "shape": "rectangle",
+     "x": 23,
+     "y": 17,
+     "width": 16,
+     "height": 12,
+     "stroke": "orange",
+     "stroke_width": 0.8,
+     "fill": "green"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 41,
+     "y": 16,
+     "width": 18,
+     "height": 13,
+     "stroke": "none",
+     "fill": "red"
+    },
+    {
+     "type": "text",
+     "x": 42,
+     "y": 19,
+     "width": 16,
+     "height": 7,
+     "font_size": 11,
+     "align": "center",
+     "fill": "white",
+     "content_binding": "BAM"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
+   },
+   "links": {
+    "needs": "",
+    "needs_all": "",
+    "needed_by": "",
+    "needed_by_all": ""
+   },
+   "review": {
+    "state": "",
+    "due": "",
+    "confirmed_at": "",
+    "confirmed_by": ""
+   }
+  },
+  "images": {
+   "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAABqUlEQVR4nOyXQU7sMBBEa5FrfH3OwVE4CmfhLhwFkFixYcPKzsQokB53Onb1eILEMPJIFnHwe7jsAokBlU96RMINMI9n5PGinmVAFh7Hf/XsCxwaTFAMEB6Q4gggfo/5yzw9LGNaRhIASb2VVacLHBpMsAnwcY8UxDCPkB81nix43IasahMQGkywCvB+hxQntd4c4Ligguc9yEy+2yZwaDDBMcDb7bJ5ewSxnH/aBJC37QKHBhN8BXj9hxRSwTDTIefXeN48sN7GeQJCgwmGJyBF5w7rFyiffQKHBhMMEYbWR7BYxkL+aRPgfIFDgwmGaPegDeYANZ43/zMCQoMJhiB07Q4Du0D9488XODSYoFfoMit0KDdAUMHzHvYJHBpMUK6Q3Nhi0VOrAPYLHBpM0Ct0ORVKhlYWPRVFPUC7wKHBBLlCOv4JDZjWDdgtIDSY4IorNK4bMBpFPUC7wKHBBFdeocJ/hLKkfgPtAocGE/AKmQPUinqAdoFDgwn+foU2N1A4BpvdHOBugUODCba/A5ZWfwW1oh6gXeDQYIJeoV6hXqFeod+t0OcAFlJgM9RC34IAAAAASUVORK5CYII="
+  },
+  "palette": "bw",
+  "width": 709,
+  "height": 354,
+  "sha256": "5bfd4326ff47509097c8ce3cb84d68b7630ce40606a58f49b5bc0900405d66c8"
+ },
+ {
+  "name": "colors in bwr",
+  "template": {
+   "id": "colors",
+   "name": "Colors",
+   "units": "mm",
+   "width": 60,
+   "height": 30,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "static_image",
+     "x": 1,
+     "y": 1,
+     "width": 20,
+     "height": 14,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "static_image",
+     "x": 3,
+     "y": 17,
+     "width": 16,
+     "height": 10,
+     "rotation": 20,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 23,
+     "y": 1,
+     "width": 14,
+     "height": 14,
+     "fill": "blue",
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 1,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "red",
+     "content_binding": "RED"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 8,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "yellow",
+     "content_binding": "YELLOW"
+    },
+    {
+     "type": "shape",
+     "shape": "rectangle",
+     "x": 23,
+     "y": 17,
+     "width": 16,
+     "height": 12,
+     "stroke": "orange",
+     "stroke_width": 0.8,
+     "fill": "green"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 41,
+     "y": 16,
+     "width": 18,
+     "height": 13,
+     "stroke": "none",
+     "fill": "red"
+    },
+    {
+     "type": "text",
+     "x": 42,
+     "y": 19,
+     "width": 16,
+     "height": 7,
+     "font_size": 11,
+     "align": "center",
+     "fill": "white",
+     "content_binding": "BAM"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
+   },
+   "links": {
+    "needs": "",
+    "needs_all": "",
+    "needed_by": "",
+    "needed_by_all": ""
+   },
+   "review": {
+    "state": "",
+    "due": "",
+    "confirmed_at": "",
+    "confirmed_by": ""
+   }
+  },
+  "images": {
+   "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAABqUlEQVR4nOyXQU7sMBBEa5FrfH3OwVE4CmfhLhwFkFixYcPKzsQokB53Onb1eILEMPJIFnHwe7jsAokBlU96RMINMI9n5PGinmVAFh7Hf/XsCxwaTFAMEB6Q4gggfo/5yzw9LGNaRhIASb2VVacLHBpMsAnwcY8UxDCPkB81nix43IasahMQGkywCvB+hxQntd4c4Ligguc9yEy+2yZwaDDBMcDb7bJ5ewSxnH/aBJC37QKHBhN8BXj9hxRSwTDTIefXeN48sN7GeQJCgwmGJyBF5w7rFyiffQKHBhMMEYbWR7BYxkL+aRPgfIFDgwmGaPegDeYANZ43/zMCQoMJhiB07Q4Du0D9488XODSYoFfoMit0KDdAUMHzHvYJHBpMUK6Q3Nhi0VOrAPYLHBpM0Ct0ORVKhlYWPRVFPUC7wKHBBLlCOv4JDZjWDdgtIDSY4IorNK4bMBpFPUC7wKHBBFdeocJ/hLKkfgPtAocGE/AKmQPUinqAdoFDgwn+foU2N1A4BpvdHOBugUODCba/A5ZWfwW1oh6gXeDQYIJeoV6hXqFeod+t0OcAFlJgM9RC34IAAAAASUVORK5CYII="
+  },
+  "palette": "bwr",
+  "width": 709,
+  "height": 354,
+  "sha256": "19dec1b1ad601eacec398d3a04076c40ba0aec0aa826a39cca7b5bbbbad2c3be",
+  "colors": true
+ },
+ {
+  "name": "colors in bwy",
+  "template": {
+   "id": "colors",
+   "name": "Colors",
+   "units": "mm",
+   "width": 60,
+   "height": 30,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "static_image",
+     "x": 1,
+     "y": 1,
+     "width": 20,
+     "height": 14,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "static_image",
+     "x": 3,
+     "y": 17,
+     "width": 16,
+     "height": 10,
+     "rotation": 20,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 23,
+     "y": 1,
+     "width": 14,
+     "height": 14,
+     "fill": "blue",
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 1,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "red",
+     "content_binding": "RED"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 8,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "yellow",
+     "content_binding": "YELLOW"
+    },
+    {
+     "type": "shape",
+     "shape": "rectangle",
+     "x": 23,
+     "y": 17,
+     "width": 16,
+     "height": 12,
+     "stroke": "orange",
+     "stroke_width": 0.8,
+     "fill": "green"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 41,
+     "y": 16,
+     "width": 18,
+     "height": 13,
+     "stroke": "none",
+     "fill": "red"
+    },
+    {
+     "type": "text",
+     "x": 42,
+     "y": 19,
+     "width": 16,
+     "height": 7,
+     "font_size": 11,
+     "align": "center",
+     "fill": "white",
+     "content_binding": "BAM"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
+   },
+   "links": {
+    "needs": "",
+    "needs_all": "",
+    "needed_by": "",
+    "needed_by_all": ""
+   },
+   "review": {
+    "state": "",
+    "due": "",
+    "confirmed_at": "",
+    "confirmed_by": ""
+   }
+  },
+  "images": {
+   "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAABqUlEQVR4nOyXQU7sMBBEa5FrfH3OwVE4CmfhLhwFkFixYcPKzsQokB53Onb1eILEMPJIFnHwe7jsAokBlU96RMINMI9n5PGinmVAFh7Hf/XsCxwaTFAMEB6Q4gggfo/5yzw9LGNaRhIASb2VVacLHBpMsAnwcY8UxDCPkB81nix43IasahMQGkywCvB+hxQntd4c4Ligguc9yEy+2yZwaDDBMcDb7bJ5ewSxnH/aBJC37QKHBhN8BXj9hxRSwTDTIefXeN48sN7GeQJCgwmGJyBF5w7rFyiffQKHBhMMEYbWR7BYxkL+aRPgfIFDgwmGaPegDeYANZ43/zMCQoMJhiB07Q4Du0D9488XODSYoFfoMit0KDdAUMHzHvYJHBpMUK6Q3Nhi0VOrAPYLHBpM0Ct0ORVKhlYWPRVFPUC7wKHBBLlCOv4JDZjWDdgtIDSY4IorNK4bMBpFPUC7wKHBBFdeocJ/hLKkfgPtAocGE/AKmQPUinqAdoFDgwn+foU2N1A4BpvdHOBugUODCba/A5ZWfwW1oh6gXeDQYIJeoV6hXqFeod+t0OcAFlJgM9RC34IAAAAASUVORK5CYII="
+  },
+  "palette": "bwy",
+  "width": 709,
+  "height": 354,
+  "sha256": "c733f9776e174b9e051783470c5102b7d6cc7d3824054666cf2710c36623db78",
+  "colors": true
+ },
+ {
+  "name": "colors in bwry",
+  "template": {
+   "id": "colors",
+   "name": "Colors",
+   "units": "mm",
+   "width": 60,
+   "height": 30,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "static_image",
+     "x": 1,
+     "y": 1,
+     "width": 20,
+     "height": 14,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "static_image",
+     "x": 3,
+     "y": 17,
+     "width": 16,
+     "height": 10,
+     "rotation": 20,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 23,
+     "y": 1,
+     "width": 14,
+     "height": 14,
+     "fill": "blue",
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 1,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "red",
+     "content_binding": "RED"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 8,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "yellow",
+     "content_binding": "YELLOW"
+    },
+    {
+     "type": "shape",
+     "shape": "rectangle",
+     "x": 23,
+     "y": 17,
+     "width": 16,
+     "height": 12,
+     "stroke": "orange",
+     "stroke_width": 0.8,
+     "fill": "green"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 41,
+     "y": 16,
+     "width": 18,
+     "height": 13,
+     "stroke": "none",
+     "fill": "red"
+    },
+    {
+     "type": "text",
+     "x": 42,
+     "y": 19,
+     "width": 16,
+     "height": 7,
+     "font_size": 11,
+     "align": "center",
+     "fill": "white",
+     "content_binding": "BAM"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
+   },
+   "links": {
+    "needs": "",
+    "needs_all": "",
+    "needed_by": "",
+    "needed_by_all": ""
+   },
+   "review": {
+    "state": "",
+    "due": "",
+    "confirmed_at": "",
+    "confirmed_by": ""
+   }
+  },
+  "images": {
+   "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAABqUlEQVR4nOyXQU7sMBBEa5FrfH3OwVE4CmfhLhwFkFixYcPKzsQokB53Onb1eILEMPJIFnHwe7jsAokBlU96RMINMI9n5PGinmVAFh7Hf/XsCxwaTFAMEB6Q4gggfo/5yzw9LGNaRhIASb2VVacLHBpMsAnwcY8UxDCPkB81nix43IasahMQGkywCvB+hxQntd4c4Ligguc9yEy+2yZwaDDBMcDb7bJ5ewSxnH/aBJC37QKHBhN8BXj9hxRSwTDTIefXeN48sN7GeQJCgwmGJyBF5w7rFyiffQKHBhMMEYbWR7BYxkL+aRPgfIFDgwmGaPegDeYANZ43/zMCQoMJhiB07Q4Du0D9488XODSYoFfoMit0KDdAUMHzHvYJHBpMUK6Q3Nhi0VOrAPYLHBpM0Ct0ORVKhlYWPRVFPUC7wKHBBLlCOv4JDZjWDdgtIDSY4IorNK4bMBpFPUC7wKHBBFdeocJ/hLKkfgPtAocGE/AKmQPUinqAdoFDgwn+foU2N1A4BpvdHOBugUODCba/A5ZWfwW1oh6gXeDQYIJeoV6hXqFeod+t0OcAFlJgM9RC34IAAAAASUVORK5CYII="
+  },
+  "palette": "bwry",
+  "width": 709,
+  "height": 354,
+  "sha256": "2501fa9d82729f6a4480c9299a86e16513a31680aa16dbc6ee37a7e392df24de",
+  "colors": true
+ },
+ {
+  "name": "colors in bwrygb",
+  "template": {
+   "id": "colors",
+   "name": "Colors",
+   "units": "mm",
+   "width": 60,
+   "height": 30,
+   "dpi": 300,
+   "layering": "list",
+   "elements": [
+    {
+     "type": "static_image",
+     "x": 1,
+     "y": 1,
+     "width": 20,
+     "height": 14,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "static_image",
+     "x": 3,
+     "y": 17,
+     "width": 16,
+     "height": 10,
+     "rotation": 20,
+     "image_id": "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f"
+    },
+    {
+     "type": "generator",
+     "generator_type": "qr",
+     "x": 23,
+     "y": 1,
+     "width": 14,
+     "height": 14,
+     "fill": "blue",
+     "content_binding": "{{asset.code.qr}}"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 1,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "red",
+     "content_binding": "RED"
+    },
+    {
+     "type": "text",
+     "x": 38,
+     "y": 8,
+     "width": 21,
+     "height": 6,
+     "font_size": 12,
+     "font_weight": "bold",
+     "fill": "yellow",
+     "content_binding": "YELLOW"
+    },
+    {
+     "type": "shape",
+     "shape": "rectangle",
+     "x": 23,
+     "y": 17,
+     "width": 16,
+     "height": 12,
+     "stroke": "orange",
+     "stroke_width": 0.8,
+     "fill": "green"
+    },
+    {
+     "type": "shape",
+     "shape": "ellipse",
+     "x": 41,
+     "y": 16,
+     "width": 18,
+     "height": 13,
+     "stroke": "none",
+     "fill": "red"
+    },
+    {
+     "type": "text",
+     "x": 42,
+     "y": 19,
+     "width": 16,
+     "height": 7,
+     "font_size": 11,
+     "align": "center",
+     "fill": "white",
+     "content_binding": "BAM"
+    }
+   ]
+  },
+  "data": {
+   "asset_id": "2f1e3c4d-5b6a-4789-8abc-def012345678",
+   "asset_name": "Bench Drill Press",
+   "base_url": "https://bam.example/",
+   "codes": {
+    "code128": "TOOL-0042",
+    "micro_qr": "BAM-0042",
+    "qr": "BAM-QR-0042"
+   },
+   "fields": {
+    "location": "Workshop shelf B3",
+    "notes": "Keep the chuck key on the magnetic strip next to the machine at all times"
+   },
+   "categories": "",
+   "location": "",
+   "condition": "",
+   "quantity": "",
+   "unit": "",
+   "borrower": "",
+   "due": "",
+   "icon": "switch-poe",
+   "icon_color": "#b45309",
+   "purchase": {
+    "vendor": "",
+    "order_date": "",
+    "received_date": "",
+    "price": "",
+    "currency": "",
+    "order_number": "",
+    "warranty_end": ""
+   },
+   "contract": {
+    "name": "",
+    "kind": "",
+    "vendor": "",
+    "reference": "",
+    "start_date": "",
+    "end_date": "",
+    "cost": "",
+    "currency": "",
+    "billing": ""
+   },
+   "links": {
+    "needs": "",
+    "needs_all": "",
+    "needed_by": "",
+    "needed_by_all": ""
+   },
+   "review": {
+    "state": "",
+    "due": "",
+    "confirmed_at": "",
+    "confirmed_by": ""
+   }
+  },
+  "images": {
+   "5d1f0e3c-8a7b-4c6d-9e2f-3a4b5c6d7e8f": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAgCAYAAABU1PscAAABqUlEQVR4nOyXQU7sMBBEa5FrfH3OwVE4CmfhLhwFkFixYcPKzsQokB53Onb1eILEMPJIFnHwe7jsAokBlU96RMINMI9n5PGinmVAFh7Hf/XsCxwaTFAMEB6Q4gggfo/5yzw9LGNaRhIASb2VVacLHBpMsAnwcY8UxDCPkB81nix43IasahMQGkywCvB+hxQntd4c4Ligguc9yEy+2yZwaDDBMcDb7bJ5ewSxnH/aBJC37QKHBhN8BXj9hxRSwTDTIefXeN48sN7GeQJCgwmGJyBF5w7rFyiffQKHBhMMEYbWR7BYxkL+aRPgfIFDgwmGaPegDeYANZ43/zMCQoMJhiB07Q4Du0D9488XODSYoFfoMit0KDdAUMHzHvYJHBpMUK6Q3Nhi0VOrAPYLHBpM0Ct0ORVKhlYWPRVFPUC7wKHBBLlCOv4JDZjWDdgtIDSY4IorNK4bMBpFPUC7wKHBBFdeocJ/hLKkfgPtAocGE/AKmQPUinqAdoFDgwn+foU2N1A4BpvdHOBugUODCba/A5ZWfwW1oh6gXeDQYIJeoV6hXqFeod+t0OcAFlJgM9RC34IAAAAASUVORK5CYII="
+  },
+  "palette": "bwrygb",
+  "width": 709,
+  "height": 354,
+  "sha256": "6371d8bf603c8ff2f5b0429a2fa65a66e3dea2906f071a989b4160d7217d09c8",
+  "colors": true
+ },
+ {
   "name": "fit",
   "template": {
    "id": "fit",

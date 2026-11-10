@@ -502,12 +502,13 @@ describe('TemplateEditor', () => {
     expect(await screen.findByText('Fits QL, with 1 warning.', {}, { timeout: 2000 })).toBeTruthy();
     expect(value('#tpl-printer')).toBe('p1');
     expect(screen.getByText('In the shaded area, which it does not print: Text 1: {{asset.name}}.')).toBeTruthy();
+    expect(screen.getByText('Prints in black and white.')).toBeTruthy();
     expect(screen.getByText('Loaded: DK-11201 29 × 90 mm die-cut.')).toBeTruthy();
     // Four strips around what it prints, and the element reaching into them outlined.
     expect(container.querySelectorAll('.unprinted')).toHaveLength(4);
     expect(canvasElement(/^Text 1/).classList.contains('warned')).toBe(true);
     const fit = sent.find((r) => r.path === '/printers/p1/fit')!;
-    expect(fit.body).toEqual({ width_mm: 90, height_mm: 29, dpi: 300, content: [{ x: 10, y: 5, width: 40, height: 10 }] });
+    expect(fit.body).toEqual({ width_mm: 90, height_mm: 29, dpi: 300, inks: ['black'], content: [{ x: 10, y: 5, width: 40, height: 10 }] });
 
     // The shading can be put away, and that is remembered.
     await fireEvent.click(screen.getByRole('checkbox', { name: 'Shade what it does not print' }));
