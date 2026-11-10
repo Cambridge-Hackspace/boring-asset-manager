@@ -55,6 +55,7 @@ export function helpFor(path: string): string {
     [/^\/relays/, 'relays'],
     [/^\/(users|roles|tokens)/, 'people'],
     [/^\/oauth/, 'assistants'],
+    [/^\/(assistant-settings|assistant|g)(\/|$)/, 'assistants'],
     [/^\/account/, 'account'],
   ];
   return rules.find(([re]) => re.test(path))?.[1] ?? 'start';

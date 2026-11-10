@@ -39,10 +39,15 @@ const (
 	// OAuth, and notification channels' secrets. Only the CLI writes or
 	// reads it (#117, "Authentication secrets").
 	KindAuth Kind = "auth"
+	// KindConversations is each person's conversations with the assistant
+	// (docs/assistant.md), which no one else reads: written only when
+	// named, or when Kinds is nil and Conversations is set, and never
+	// merged.
+	KindConversations Kind = "conversations"
 )
 
 // Kinds lists the kinds of information, in the order they are described.
-var Kinds = []Kind{KindAssets, KindCatalog, KindLabels, KindReports, KindIcons, KindFlows, KindPeople, KindSettings, KindAuth}
+var Kinds = []Kind{KindAssets, KindCatalog, KindLabels, KindReports, KindIcons, KindFlows, KindPeople, KindSettings, KindAuth, KindConversations}
 
 // ColType is how a column's values are written.
 type ColType int
@@ -123,6 +128,7 @@ var Excluded = map[string]string{
 	"account_links":           "links emailed to people about their accounts, which lapse within a week and work once",
 	"relay_holds":             "which server holds each relay now, gone when the servers stop",
 	"relay_mail":              "messages servers pass each other for relays, dropped within minutes",
+	"assistant_usage":         "the day's count of each person's use of the assistant, against its limits, forgotten after a week",
 }
 
 // Header is header.json, the first member: what the archive is, before

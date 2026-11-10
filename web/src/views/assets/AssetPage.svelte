@@ -36,11 +36,16 @@
   import GraphView from '../../components/GraphView.svelte';
   import TabLinks from '../../components/TabLinks.svelte';
   import { currentTab } from '../../lib/tabs';
+  import { panel } from '../../lib/assistant.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const id = untrack(() => params.id ?? '');
 
   let asset = $state<AssetWithDetails | null>(null);
+  // The assistant beside the page is told which asset this is, by name.
+  $effect(() => {
+    if (asset) panel.setPage({ kind: 'asset', id: asset.asset.id, label: asset.asset.name });
+  });
   let generators = $state<GeneratorInfo[]>([]);
   let history = $state<AssetEvent[]>([]);
   let olderHistory = $state(false);

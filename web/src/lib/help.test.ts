@@ -16,6 +16,8 @@ describe('help', () => {
     expect(helpFor('/assets/import')).toBe('import');
     expect(helpFor('/assets/graph')).toBe('links');
     expect(helpFor('/oauth/consent')).toBe('assistants');
+    expect(helpFor('/assistant-settings')).toBe('assistants');
+    expect(helpFor('/g/workshop')).toBe('assistants');
     expect(helpFor('/assets/x/edit')).toBe('assets');
     expect(helpFor('/f/leave')).toBe('flows');
     expect(helpFor('/flows/leave/edit')).toBe('flows');

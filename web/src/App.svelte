@@ -3,6 +3,7 @@
   import { interceptLinks, matchRoute, navigate, router } from './lib/router.svelte';
   import { session, signInPath } from './lib/session.svelte';
   import { movedTo, routes } from './routes';
+  import { isForm, panel } from './lib/assistant.svelte';
   import Shell from './Shell.svelte';
   import Footer from './components/Footer.svelte';
   import IconPaletteStyle from './components/IconPaletteStyle.svelte';
@@ -53,6 +54,22 @@
     if (session.offline || !navigator.onLine) return;
     void offlineCopy.sync(session.can('assets.read') ? session.me : { user: null, permissions: [] });
   }
+
+  panel.routes = routes;
+
+  // The page reads itself again after the assistant changes something
+  // (docs/assistant.md), unless it is a form someone may be typing in: that
+  // says so instead.
+  let seen = $state(0);
+  let formPath = $state('');
+  const pageVersion = $derived(isForm(router.path) ? seen : panel.version);
+  $effect(() => {
+    if (router.path !== formPath) {
+      formPath = router.path;
+      seen = panel.version;
+    }
+  });
+  const staleForm = $derived(isForm(router.path) && panel.version !== seen);
 
   onMount(() => {
     load();
@@ -137,7 +154,10 @@
     {:else if session.offline && !match.route.offline}
       <NeedsConnection />
     {:else}
-      {#key router.path}
+      {#if staleForm}
+        <p class="notice mb-4 text-sm" role="status">The assistant changed things; reload to see them.</p>
+      {/if}
+      {#key `${router.path}#${pageVersion}`}
         <match.route.component params={match.params} />
       {/key}
     {/if}

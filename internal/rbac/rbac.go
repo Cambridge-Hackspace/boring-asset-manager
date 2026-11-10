@@ -66,6 +66,10 @@ const (
 	// PermAssetsVerify moves a confirmed asset to verified, or back to
 	// draft with a note saying why, in the scopes held.
 	PermAssetsVerify = "assets.verify"
+	// PermAssistantUse shows the assistant beside the page (docs/assistant.md),
+	// which acts as its person with their own permissions. It is not
+	// scopable.
+	PermAssistantUse = "assistant.use"
 )
 
 var (
@@ -103,6 +107,7 @@ func AllPermissions() []string {
 		PermPeopleAdd,
 		PermAssetsConfirm,
 		PermAssetsVerify,
+		PermAssistantUse,
 	}
 }
 

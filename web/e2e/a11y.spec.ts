@@ -107,7 +107,7 @@ test('keyboard only: a section opens its first page, with a row of its pages', a
   // The section is marked, and its row lists its pages with this one current.
   await expect(admin).toHaveAttribute('aria-current', 'true');
   const row = page.getByRole('navigation', { name: 'Admin' });
-  await expect(row.getByRole('link')).toHaveText(['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Incoming hooks', 'Sign-in', 'Backups', 'Installed app', 'Import & export']);
+  await expect(row.getByRole('link')).toHaveText(['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Incoming hooks', 'Sign-in', 'Assistant', 'Backups', 'Installed app', 'Import & export']);
   await expect(row.getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
 
   // Its links take Tab in order, and lead to their pages.
@@ -133,7 +133,7 @@ test('the home page lists the same pages, in the same groups', async ({ signedIn
   for (const [group, links] of [
     ['Catalog', ['Categories', 'Vendors', 'Contracts', 'Orders', 'Fields', 'Link types', 'Hooks', 'Icons']],
     ['Labels', ['Templates', 'Images', 'Printers']],
-    ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Incoming hooks', 'Sign-in', 'Backups', 'Installed app', 'Import & export']],
+    ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Incoming hooks', 'Sign-in', 'Assistant', 'Backups', 'Installed app', 'Import & export']],
   ] as const) {
     const section = main.getByRole('region', { name: group });
     await expect(section.getByRole('link')).toHaveText([...links]);

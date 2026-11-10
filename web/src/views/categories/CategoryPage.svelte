@@ -23,6 +23,7 @@
   import CatalogPanel from '../../components/CatalogPanel.svelte';
   import CategoryReviewSection from '../../components/CategoryReviewSection.svelte';
   import { categoryPath, linkChoices } from '../../lib/pools';
+  import { panel } from '../../lib/assistant.svelte';
 
   // /categories/new and /categories/:id
   let { params }: { params: Record<string, string> } = $props();
@@ -122,6 +123,10 @@
   let newRequired = $state(false);
 
   const category = $derived(categories.find((c) => c.id === id));
+  // The assistant beside the page is told which category this is, by name.
+  $effect(() => {
+    if (category) panel.setPage({ kind: 'category', id: category.id, label: category.name });
+  });
   const isSystem = id === UNCATEGORIZED;
   // Counts files attached while commenting, which the Attachments tab shows anew.
   let attachedByComments = $state(0);

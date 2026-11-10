@@ -361,6 +361,8 @@ func mergedKinds(c *Checked, opts ImportOptions) ([]Kind, []string, error) {
 			warnings = append(warnings, "Authentication is never merged into an instance in use, and is left out: bam restore restores it.")
 		case k == KindPeople:
 			warnings = append(warnings, "People and roles are an instance's own, and are not merged: restore the backup, or replace with it, to bring them.")
+		case k == KindConversations:
+			warnings = append(warnings, "Conversations with the assistant are each person's own, and are never merged: restore the backup to bring them.")
 		case k == KindSettings:
 			warnings = append(warnings, "Settings, printers, label stock and notification channels are an instance's own, and are not merged.")
 		case opts.Kinds == nil || hasKind(opts.Kinds, k):

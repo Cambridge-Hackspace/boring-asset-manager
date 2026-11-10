@@ -8,6 +8,7 @@
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import PageHeader from '../components/PageHeader.svelte';
   import AssistantsSection from './AssistantsSection.svelte';
+  import ConversationsSection from './ConversationsSection.svelte';
   import IdentitiesSection from './IdentitiesSection.svelte';
   import TwoFactorSection from './TwoFactorSection.svelte';
 
@@ -124,6 +125,7 @@
     </section>
 
     <AssistantsSection />
+    <ConversationsSection />
   </div>
 
   <div class="space-y-6">

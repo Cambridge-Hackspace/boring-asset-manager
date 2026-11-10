@@ -338,7 +338,7 @@ func TestABackupHoldsEveryRowAndFile(t *testing.T) {
 	blobs := filestore.NewLocal(t.TempDir())
 	s := seed(t, st, blobs)
 	var parts memParts
-	sum, err := Write(context.Background(), st, blobs, parts.open, Options{BamVersion: "v9.9.9", Secrets: true, Now: time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)})
+	sum, err := Write(context.Background(), st, blobs, parts.open, Options{BamVersion: "v9.9.9", Secrets: true, Conversations: true, Now: time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +439,7 @@ func TestAWebBackupHoldsNoSecrets(t *testing.T) {
 		}
 	}
 	for _, table := range Tables {
-		if _, ok := r.manifest.Tables[table.Name]; ok == (table.Kind == KindAuth) {
+		if _, ok := r.manifest.Tables[table.Name]; ok == (table.Kind == KindAuth || table.Kind == KindConversations) {
 			t.Errorf("%s: in the manifest %v", table.Name, ok)
 		}
 	}
