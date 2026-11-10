@@ -38,10 +38,12 @@ import NotificationsPage from './views/admin/NotificationsPage.svelte';
 import RelaysPage from './views/admin/RelaysPage.svelte';
 import SignInPage from './views/admin/SignInPage.svelte';
 import BackupsPage from './views/admin/BackupsPage.svelte';
+import InstalledAppPage from './views/admin/InstalledAppPage.svelte';
 import PackagesPage from './views/packages/PackagesPage.svelte';
 import AccountPage from './views/AccountPage.svelte';
 import OAuthConsentPage from './views/OAuthConsentPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
+import ShoppingListPage from './views/ShoppingListPage.svelte';
 import SpoolPage from './views/SpoolPage.svelte';
 import ScanPage from './views/ScanPage.svelte';
 import ScanLookupPage from './views/ScanLookupPage.svelte';
@@ -87,6 +89,8 @@ export const routes: Route[] = [
   { pattern: '/flows/:slug/poster', component: FlowPosterPage, title: 'Flow poster', permissions: ['flows.manage', 'flows.run'] },
   { pattern: '/f/:slug', component: FlowRunPage, title: 'Flow', permissions: ['flows.run'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
+  // The installed app's Shopping list shortcut (docs/installing.md#shortcuts).
+  { pattern: '/shopping', component: ShoppingListPage, title: 'Shopping list', permissions: ['assets.read'] },
   { pattern: '/spool', component: SpoolPage, title: 'Print queue', permissions: ['labels.print'], nav: 'Print queue' },
   { pattern: '/reports', component: ReportsPage, title: 'Reports', permissions: ['assets.read'], nav: 'Reports' },
   { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports.manage'] },
@@ -124,6 +128,7 @@ export const routes: Route[] = [
   { pattern: '/incoming-hooks', component: IncomingHooksPage, title: 'Incoming hooks', permissions: ['settings.manage'], nav: 'Incoming hooks', group: 'Admin' },
   { pattern: '/sign-in-settings', component: SignInPage, title: 'Sign-in', permissions: ['settings.manage'], nav: 'Sign-in', group: 'Admin' },
   { pattern: '/backups', component: BackupsPage, title: 'Backups', permissions: ['settings.manage'], nav: 'Backups', group: 'Admin' },
+  { pattern: '/installed-app', component: InstalledAppPage, title: 'Installed app', permissions: ['settings.manage'], nav: 'Installed app', group: 'Admin' },
   { pattern: '/packages', component: PackagesPage, title: 'Import & export', permissions: ['settings.manage'], nav: 'Import & export', group: 'Admin' },
   { pattern: '/account', component: AccountPage, title: 'Your account' },
   { pattern: '/oauth/consent', component: OAuthConsentPage, title: 'Connect an assistant' },

@@ -25,6 +25,10 @@ const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'wasm-unsaf
 	"img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
 	"base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
+// serviceWorker is the service worker's file, at the root of the build, so that
+// its scope is the whole app (docs/installing.md#on-a-phone).
+const serviceWorker = "sw.js"
+
 // Handler serves the embedded application.
 func Handler() http.Handler {
 	static, err := fs.Sub(embedded, "static")
@@ -75,6 +79,12 @@ func newHandler(fsys fs.FS) http.Handler {
 				}
 			} else {
 				h.Set("Cache-Control", "no-cache")
+			}
+			if name == serviceWorker {
+				// The service worker (web/sw.js) keeps the app's shell for
+				// the whole app, from the root, and is checked for a new
+				// release on every visit, so is never cached itself.
+				h.Set("Service-Worker-Allowed", "/")
 			}
 			http.ServeFileFS(w, r, app, name)
 		case path.Ext(name) != "" && name != "index.html":

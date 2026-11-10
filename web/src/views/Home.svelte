@@ -18,6 +18,7 @@
   import ConditionBadge from '../components/ConditionBadge.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import SetupChecklist from '../components/SetupChecklist.svelte';
+  import InstallApp from '../components/InstallApp.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -159,6 +160,7 @@
     </form>
   {/if}
 
+  <InstallApp />
   {#if favoritesRead || low || attention.length || due.length || reviewLines.length}
     <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
       {#if favoritesRead}

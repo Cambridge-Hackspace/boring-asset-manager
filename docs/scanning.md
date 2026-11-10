@@ -35,7 +35,10 @@ takes a code:
 
 - typed or pasted,
 - typed by a USB scanner, or
-- read by the camera, where the browser has the Barcode Detection API.
+- read by the camera, where the browser has the Barcode Detection API: Chrome on Android, in the
+  browser or installed (see [Installing](installing.md#on-a-phone)). Safari on iOS has none, in
+  the browser or installed; there, type the code, or open the label with the Camera app, which
+  opens its scan link in Safari.
 
 It then opens that code's scan page. A scan link, or an asset's address from any of the server's
 addresses, opens that page too. The home page has a box for it as well.

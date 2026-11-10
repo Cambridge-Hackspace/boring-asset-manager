@@ -61,6 +61,7 @@ type Server struct {
 	incoming   *incomingLimiter
 	live       *liveHub
 	sample     sampleCache
+	appIcons   appIconCache
 	httpServer *http.Server
 	// routes are every API route, for the test that MCP reaches each (#33).
 	routes []string
@@ -503,6 +504,11 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/settings/loan-reminders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetLoanReminderSettings)))
 	handle("GET /api/v1/settings/review", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleReviewSettings)))
 	handle("PUT /api/v1/settings/review", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetReviewSettings)))
+	// The installed app (docs/installing.md#on-a-phone): its settings, read by
+	// anyone, as its manifest is.
+	handleFunc("GET /api/v1/settings/app", s.handleAppSettings)
+	handle("PUT /api/v1/settings/app", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetAppSettings)))
+	handle("POST /api/v1/settings/app/icon", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUploadAppIcon)))
 	handle("GET /api/v1/assets/export.xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssetsXLSX)))
 	handle("POST /api/v1/assets/import/preview", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImportPreview)))
 	handle("POST /api/v1/assets/import", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImport)))
@@ -668,6 +674,11 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		mux.Handle(method+" /api/v1/mcp", mcp)
 	}
 
+	// The web app manifest and its icons, for installing BAM! on a phone:
+	// files of the web interface, not API routes, though drawn from the
+	// settings.
+	mux.HandleFunc("GET /manifest.webmanifest", s.handleManifest)
+	mux.HandleFunc("GET /app-icons/{file}", s.handleAppIcon)
 	mux.Handle("GET /", webui.Handler())
 
 	// Wrap root handler with session extraction middleware
