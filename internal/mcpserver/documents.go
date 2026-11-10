@@ -171,5 +171,51 @@ func documentTools() []tool {
 			}, out map[string]any) string {
 				return fmt.Sprintf("Saved: %v, on %v pages.", out["instance_name"], out["page_size"])
 			}),
+		simple(&mcp.Tool{Name: "get_app_settings", Description: "How BAM! looks installed on a phone or computer (docs/installing.md#on-a-phone): " +
+			"its name and short name (empty follows the instance's name), the colors of the bar above it in light and dark, " +
+			"the background its icon and opening screen show, and the library image its icon is drawn from (empty for BAM!'s own).",
+			Annotations: readOnly("Installed app settings")}, "GET /api/v1/settings/app", nil,
+			func(none) (request, error) { return request{path: "/api/v1/settings/app"}, nil },
+			func(_ none, out map[string]any) string {
+				return fmt.Sprintf("Name %q (instance %q), short name %q; theme %v, dark %v, background %v; icon image %q.",
+					out["name"], out["instance_name"], out["short_name"], out["theme_color"], out["theme_color_dark"], out["background_color"], out["icon_image_id"])
+			}),
+		define(&mcp.Tool{Name: "set_app_settings", Description: "Change how BAM! looks installed on a phone or computer. Give only what changes: " +
+			"name and short_name (empty to follow the instance's name), theme_color, theme_color_dark and background_color as #rrggbb, " +
+			"and icon_image_id, an image in the library (upload_image adds one), or empty for BAM!'s own icon.",
+			Annotations: changes("Set installed app settings", true)}, []string{"PUT /api/v1/settings/app"}, []string{rbac.PermSettingsManage},
+			func(ctx context.Context, e *env, in appSettingsIn) (reply[map[string]any], error) {
+				var cur map[string]any
+				if err := e.call(ctx, http.MethodGet, "/api/v1/settings/app", nil, &cur); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				body := map[string]any{}
+				for _, k := range []string{"name", "short_name", "theme_color", "theme_color_dark", "background_color", "icon_image_id"} {
+					body[k] = cur[k]
+				}
+				for k, v := range map[string]*string{"name": in.Name, "short_name": in.ShortName, "theme_color": in.ThemeColor,
+					"theme_color_dark": in.ThemeColorDark, "background_color": in.BackgroundColor, "icon_image_id": in.IconImageID} {
+					if v != nil {
+						body[k] = *v
+					}
+				}
+				out := map[string]any{}
+				if err := e.call(ctx, http.MethodPut, "/api/v1/settings/app", body, &out); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				return say(out, "Saved: name %q, short name %q; theme %v, dark %v, background %v; icon image %q.",
+					out["name"], out["short_name"], out["theme_color"], out["theme_color_dark"], out["background_color"], out["icon_image_id"])
+			}),
 	}
+}
+
+// appSettingsIn changes the installed app's settings; one left out stays as
+// it is.
+type appSettingsIn struct {
+	Name            *string `json:"name,omitempty" jsonschema:"the app's name; empty follows the instance's name"`
+	ShortName       *string `json:"short_name,omitempty" jsonschema:"the name under its icon, about 12 characters; empty follows the name"`
+	ThemeColor      *string `json:"theme_color,omitempty" jsonschema:"the bar above the app in light mode, as #rrggbb"`
+	ThemeColorDark  *string `json:"theme_color_dark,omitempty" jsonschema:"the bar above the app in dark mode, as #rrggbb"`
+	BackgroundColor *string `json:"background_color,omitempty" jsonschema:"behind the icon's logo and on the opening screen, as #rrggbb"`
+	IconImageID     *string `json:"icon_image_id,omitempty" jsonschema:"a library image to draw the icon from; empty for BAM!'s own"`
 }

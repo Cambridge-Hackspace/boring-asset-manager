@@ -148,13 +148,16 @@ reaper therefore never need Node.
 
 ### Serving
 
-`/api/*`, `/healthz` and `/readyz` are served by the API. Every other `GET` serves a file from the
-build or, for client-side routes, `index.html`.
+`/api/*`, `/healthz` and `/readyz` are served by the API, as are `/manifest.webmanifest` and the
+icons under `/app-icons/`, which are drawn from the installed app's settings. Every other `GET`
+serves a file from the build or, for client-side routes, `index.html`.
 
 - Hashed assets are cached as immutable.
 - Hashed assets are sent Brotli- or gzip-compressed to browsers that accept it, from the copies
   the build wrote.
-- `index.html` is never cached.
+- `index.html` is never cached by the browser. The service worker keeps it, with the rest of the
+  release's shell, until a new release takes over ([Installing](installing.md#offline)).
+- `/sw.js`, the service worker, is never cached, and claims the whole app as its scope.
 
 Every page carries a strict Content Security Policy:
 
@@ -220,6 +223,50 @@ On touch screens the template editor's handles are larger, and its keyboard help
 help for touch. Small buttons beside text are at least 32 px tall.
 
 The phone browser tests check that no page scrolls sideways at 390 px.
+
+## Installing on a phone
+
+BAM! installs from the instance as a web app (#213): a manifest, icons drawn from its settings, and
+a service worker that keeps the shell. [Installing](installing.md#on-a-phone) describes it.
+
+The worker is `src/sw/worker.ts`. `vite.config.ts` builds it after the app, as a classic script,
+to `sw.js` at the root of the build, given the build's files to keep and a name drawn from them.
+What it answers and how is `src/lib/install/shell.ts`, which the unit tests read, and whose list of
+the server's own paths `internal/api`'s tests check against the server's routes. The Playwright
+specs block service workers, so that `page.route` sees every request, except `install.spec.ts`,
+which tests the worker itself.
+
+### Findings: an installed web app beside a native one
+
+These were checked against what each platform documents, as of late 2026, not yet on phones.
+
+- **Camera scanning.** `getUserMedia` works in an installed app's window on Android and on iOS
+  (since iOS 13.4), so the Scan page can show the camera in both. Reading the code is the gap:
+  Chrome on Android has the Barcode Detection API, which the Scan page uses, and Safari on iOS has
+  none, in the browser or installed. On iOS the camera needs a decoder of BAM!'s own, in script or
+  WebAssembly, to scan inside the app. Until then iOS users type the code, or scan with the Camera
+  app, which opens the label's link in Safari rather than in the installed app. On Android, links
+  within the app's scope open in the installed app.
+- **Signing in on iOS.** An app added to the home screen keeps its own cookies and storage, apart
+  from Safari's, so people sign in again in it. On Android it shares Chrome's.
+- **Background sync.** Background Sync and Periodic Background Sync are Chrome's alone; iOS has
+  neither. Offline changes (#214) must be sent when the app is next open and online, not in the
+  background.
+- **Storage.** The Cache API and IndexedDB are kept per origin, within a share of the disk.
+  Safari removes a site's script-written storage after seven days without a visit in the browser,
+  but an app on the home screen is spared that while it is used. `navigator.storage.persist()`
+  asks for storage that is not evicted under pressure; #214 should ask for it, and keep its data
+  small, since iOS can still remove it.
+- **Notifications.** Web Push reaches installed web apps on iOS 16.4 and later, once the person
+  allows it from a tap inside the app, and Chrome on Android in or out of the app. It needs VAPID
+  keys, a subscription per device, and the server sending encrypted messages (RFC 8291) to each
+  browser's push service, which the worker shows. That fits a **notifier driver**
+  ([Notifications](notifications.md)): a channel that sends to the devices of the people
+  subscribed. Safari's Declarative Web Push shows a notification without the worker.
+- **What else differs.** iOS offers no install prompt (hence Share › Add to Home Screen), no Web
+  Bluetooth and no Web NFC, which Chrome on Android has. BAM!'s Bluetooth printers are the
+  server's to reach, so that costs nothing yet; reading NFC tags would be Android's alone.
+  App badges work on both. Nothing is in the app stores (#215).
 
 ## Accessibility
 

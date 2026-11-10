@@ -15,6 +15,9 @@ export default defineConfig({
     // and browsers take them only at a domain, not an IP address.
     baseURL: process.env.BAM_URL ?? 'http://localhost:8080',
     viewport: { width: 1400, height: 1000 },
+    // The service worker answers the app's own files from its cache, past
+    // page.route; install.spec.ts, which tests it, lets it run.
+    serviceWorkers: 'block',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
