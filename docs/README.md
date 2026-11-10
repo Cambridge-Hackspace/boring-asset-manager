@@ -4,7 +4,7 @@ These pages describe how BAM! works, for people running it and for people workin
 
 ## Running BAM!
 
-- [Installing](installing.md): as a service on Linux, FreeBSD or Windows, behind a reverse proxy, releases and updating.
+- [Installing](installing.md): as a service on Linux, FreeBSD or Windows, behind a reverse proxy, releases and updating; and on a phone, as an app.
 - [Configuration](configuration.md): the configuration file, environment variables, where uploaded files are kept, and the `bam` commands.
 - [Backups and archives](backups.md): backing up, restoring, replacing an instance in use, and moving between databases.
 - [Packages](packages.md): sharing part of an instance with another, and icon sets.

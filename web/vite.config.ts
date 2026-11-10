@@ -1,10 +1,11 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
-import { searchForWorkspaceRoot, type Plugin } from 'vite';
+import { build, searchForWorkspaceRoot, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
+import { buildName, shellFiles } from './src/lib/install/shell';
 
 const outDir = '../internal/webui/static/app';
 
@@ -31,8 +32,42 @@ function precompress(): Plugin {
   };
 }
 
+// files lists every file under dir, as paths relative to it.
+function files(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile())
+    .map((e) => relative(dir, join(e.parentPath, e.name)));
+}
+
+// serviceWorker builds src/sw/worker.ts to sw.js at the root of the build,
+// which internal/webui serves with the whole app as its scope, told the
+// build's shell to keep and named after it (docs/installing.md#on-a-phone).
+// It is built as a classic script, as every browser that installs web apps
+// runs one, after the app, whose files it lists.
+function serviceWorker(): Plugin {
+  return {
+    name: 'bam-service-worker',
+    apply: 'build',
+    async closeBundle() {
+      const shell = shellFiles(files(outDir));
+      const name = buildName(readFileSync(join(outDir, 'index.html'), 'utf8'), shell);
+      await build({
+        configFile: false,
+        logLevel: 'warn',
+        define: { __BAM_BUILD__: JSON.stringify(name), __BAM_SHELL__: JSON.stringify(shell) },
+        build: {
+          outDir,
+          emptyOutDir: false,
+          copyPublicDir: false,
+          lib: { entry: 'src/sw/worker.ts', formats: ['iife'], name: 'bamServiceWorker', fileName: () => 'sw.js' },
+        },
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [tailwindcss(), svelte(), precompress()],
+  plugins: [tailwindcss(), svelte(), precompress(), serviceWorker()],
   build: {
     // Embedded into the Go binary by internal/webui.
     outDir,

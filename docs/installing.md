@@ -376,6 +376,90 @@ Such a copy holds no uploaded files. Label images and asset photos live under
 `storage.local_path`, or in a bucket (see [Configuration](configuration.md)). An archive (see
 [Backups](backups.md)) holds both, from any database.
 
+## On a phone
+
+BAM! installs on a phone, a tablet or a computer from the instance itself, as an app of its own:
+an icon on the home screen, a window without the browser's bar, and pages that open at once. There
+is no separate app to build, sign or publish (#212); the binary serves everything installing needs.
+
+- **On Android,** Chrome offers **Install app** in its menu, and the home page shows an
+  **Install** button when the browser allows it.
+- **On an iPhone or iPad,** no browser offers to install; **Share › Add to Home Screen** in Safari
+  does it. The home page says so when opened there.
+
+Browsers install only from HTTPS (or `localhost`), so the instance must be served over HTTPS, as
+[the reverse proxy](#the-reverse-proxy) does.
+
+### What the server serves for it
+
+- **`/manifest.webmanifest`,** the web app manifest: the app's name, its icons, its colors,
+  `display: standalone`, the home page as where it starts, and its shortcuts. It is drawn from the
+  settings below on every request.
+- **`/app-icons/`,** the icons the manifest lists: 192 and 512 px, each whole and maskable (the
+  logo kept to the middle, for launchers that cut icons to a circle or squircle), and the 180 px
+  `apple-touch-icon` iOS reads instead. Each is the logo centered on the background color. They
+  are drawn when first asked for and kept in memory, and their addresses change with the logo or
+  color, so phones fetch them again.
+- **`/sw.js`,** the service worker, from the root so that its scope is the whole app, sent with
+  `Cache-Control: no-cache` and `Service-Worker-Allowed: /`.
+
+Anyone may fetch the manifest and icons, signed in or not: a phone does before anyone signs in.
+The Content Security Policy is unchanged; the worker, the manifest and the icons are all the
+app's own (`default-src 'self'`).
+
+### Settings
+
+Under **Admin › Installed app** (`settings.manage`), or `PUT /api/v1/settings/app`:
+
+| Setting | Default | |
+| :--- | :--- | :--- |
+| `name` | the instance's name, as on PDFs | Empty follows the instance's name. |
+| `short_name` | the name | Under the icon, where about 12 characters fit. |
+| `theme_color` | `#faf7f0`, BAM!'s paper | The bar above the app in light mode. |
+| `theme_color_dark` | `#0b0b0a`, BAM!'s ink | The bar above the app in dark mode. |
+| `background_color` | `#faf7f0` | Behind the icon's logo, and on the screen shown as the app opens. |
+| `icon_image_id` | none: BAM!'s logo | An image in the [image library](labels.md) to draw the icon from. |
+
+`GET /api/v1/settings/app` reads them, with `instance_name` beside them, and needs no sign-in, as
+the manifest does not. `POST /api/v1/settings/app/icon`, a multipart form with the image in
+`file`, adds a PNG or JPEG logo to the image library and makes it the icon. The image stays in the
+library while it is the icon: deleting it is refused until another is chosen. MCP has
+`get_app_settings` and `set_app_settings`.
+
+The manifest has one theme color, the light one. The page names both, each for its color scheme,
+and once the person chooses Light or Dark in the footer, that one.
+
+Phones that installed the app read a changed name or icon when they next check the manifest,
+which Chrome does about once a day; iOS keeps what it was installed with.
+
+### Shortcuts
+
+Pressing and holding the icon offers **Scan** (`/scan`), **Shopping list** (`/shopping`) and
+**Loans** (`/loans`). The shopping list opens the **Running low** report until it has a page of its
+own (#214).
+
+### Offline
+
+The service worker keeps the app's shell: `index.html` and the files the build made, but the
+editor's WebAssembly, which it keeps once the editor first opens. Every page of the app opens from
+the shell at once, with or without a signal. Paths the server answers itself, the API among them,
+are left to the network.
+
+So an installed BAM! opens offline, and, as what it shows comes from the server, says it is
+offline, with **Try again**, rather than showing the browser's error. It tries again by itself
+when the connection is back. A page already open says so too when the connection drops. Assets,
+stock and loans are not kept for use offline; that is #214's, as a cache of its own beside the
+shell's.
+
+### Updates
+
+The worker is named after its release's files, so a new release is a new worker. Browsers check
+for one when the app opens, and the app checks again whenever it is shown and every hour, since an
+installed app may stay open for days. A new release's shell is fetched in the background, and
+**Reload to update** appears at the bottom of the window; the release takes over only when it is
+chosen, so nobody loses what they were doing. Releases of the server alone, with the same web
+interface, need no reload.
+
 ## Testing the packaging
 
 ### The systemd service

@@ -270,6 +270,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/tokens', 'API tokens'],
     ['/sign-in-settings', 'Sign-in'],
     ['/backups', 'Backups'],
+    ['/installed-app', 'Installed app'],
     ['/packages', 'Import & export'],
     ['/loans', 'Loans'],
     ['/flows', 'Flows'],

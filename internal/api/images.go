@@ -82,43 +82,51 @@ func (s *Server) handleGetImageContent(w http.ResponseWriter, r *http.Request) {
 
 // handleUploadImage accepts a multipart form with the image in the "file" part.
 func (s *Server) handleUploadImage(w http.ResponseWriter, r *http.Request) {
+	if img, ok := s.saveUploadedImage(w, r); ok {
+		writeJSON(w, http.StatusCreated, map[string]any{"image": img})
+	}
+}
+
+// saveUploadedImage adds the image in a multipart form's "file" field to
+// the library, or answers why it cannot and reports false.
+func (s *Server) saveUploadedImage(w http.ResponseWriter, r *http.Request) (*models.Image, bool) {
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Images are limited to %d bytes", MaxImageBytes))
-			return
+			return nil, false
 		}
 		writeJSONError(w, http.StatusBadRequest, `Expected a multipart form with the image in a "file" field`)
-		return
+		return nil, false
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(io.LimitReader(file, MaxImageBytes+1))
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "Failed to read the uploaded file")
-		return
+		return nil, false
 	}
 	if len(data) > MaxImageBytes {
 		writeJSONError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Images are limited to %d bytes", MaxImageBytes))
-		return
+		return nil, false
 	}
 
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	contentType, supported := imageContentTypes[format]
 	if err != nil || !supported {
 		writeJSONError(w, http.StatusBadRequest, "Only PNG and JPEG images are supported")
-		return
+		return nil, false
 	}
 	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > MaxImagePixels || cfg.Height > MaxImagePixels {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Images must be at most %d×%d pixels", MaxImagePixels, MaxImagePixels))
-		return
+		return nil, false
 	}
 	// A full decode catches truncated or corrupt files now rather than at
 	// render time.
 	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "The image could not be decoded")
-		return
+		return nil, false
 	}
 
 	sum := sha256.Sum256(data)
@@ -134,19 +142,30 @@ func (s *Server) handleUploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.images.Save(r.Context(), img.ID, data); err != nil {
 		writeServerError(w, err, "store the image")
-		return
+		return nil, false
 	}
 	if err := s.store.CreateImage(img); err != nil {
 		_ = s.images.Remove(r.Context(), img.ID)
 		writeServerError(w, err, "record the image")
-		return
+		return nil, false
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"image": img})
+	return img, true
 }
 
 func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	err := s.store.DeleteImage(id)
+	// The installed app's icon (docs/installing.md#on-a-phone) is drawn
+	// from its image, so it stays while it is that.
+	icon, err := s.store.Setting(AppIconSetting, "")
+	if err != nil {
+		writeServerError(w, err, "read the app's settings")
+		return
+	}
+	if icon != "" && icon == id {
+		writeJSONError(w, http.StatusConflict, "Image is the installed app's icon; choose another icon first")
+		return
+	}
+	err = s.store.DeleteImage(id)
 	var inUse *store.ImageInUseError
 	switch {
 	case errors.Is(err, store.ErrImageNotFound):

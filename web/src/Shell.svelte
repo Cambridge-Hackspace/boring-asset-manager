@@ -4,6 +4,7 @@
   import { displayName } from './lib/people';
   import { helpFor } from './lib/help';
   import { currentGroup, isCurrent, navSections } from './lib/nav';
+  import { installedApp } from './lib/install/app.svelte';
   import { session, signInPath } from './lib/session.svelte';
   import { routes } from './routes';
   import logo from './assets/bam.png';
@@ -135,6 +136,10 @@
     </nav>
   {/if}
 </header>
+{#if !installedApp.online}
+  <!-- what is open stays; what is opened next may not load (docs/installing.md#offline) -->
+  <p role="status" class="border-b-2 border-zinc-900 bg-highlight px-4 py-2 text-center text-sm text-zinc-900 print:hidden dark:border-zinc-600">You're offline. Pages opened now may not load until the connection is back.</p>
+{/if}
 <main id="main" tabindex="-1" bind:this={main} class={workspace ? 'outline-none md:relative md:h-(--workspace-height) md:overflow-hidden' : 'mx-auto max-w-7xl px-4 py-6 outline-none'}
   style:--workspace-height={workspace ? `calc(100dvh - ${headerHeight}px)` : undefined}
 >

@@ -140,3 +140,21 @@ func TestServesPrecompressedAssets(t *testing.T) {
 		t.Errorf("GET /index.html.br: %d", rec.Code)
 	}
 }
+
+// TestServesTheServiceWorkerFromTheRoot serves the service worker where its
+// scope is the whole app, as script, never cached, under the same Content
+// Security Policy as every page (docs/installing.md#on-a-phone).
+func TestServesTheServiceWorkerFromTheRoot(t *testing.T) {
+	fsys := builtApp()
+	fsys["app/sw.js"] = &fstest.MapFile{Data: []byte("self.addEventListener('fetch', () => {})")}
+	rec := get(t, newHandler(fsys), http.MethodGet, "/sw.js")
+	hdr := rec.Header()
+	if rec.Code != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "text/javascript") || hdr.Get("Cache-Control") != "no-cache" ||
+		hdr.Get("Service-Worker-Allowed") != "/" || hdr.Get("Content-Security-Policy") != contentSecurityPolicy {
+		t.Errorf("GET /sw.js: %d %v", rec.Code, hdr)
+	}
+	// Nothing else claims a scope.
+	if got := get(t, newHandler(fsys), http.MethodGet, "/favicon.svg").Header().Get("Service-Worker-Allowed"); got != "" {
+		t.Errorf("favicon with Service-Worker-Allowed %q", got)
+	}
+}

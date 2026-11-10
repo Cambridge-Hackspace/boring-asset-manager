@@ -134,6 +134,7 @@ const ErrFactorSetupRequired = "A role you hold requires two-factor sign-in. Set
 var factorSetupRoutes = map[string]bool{
 	"GET /api/v1/auth/me":                          true,
 	"GET /api/v1/info":                             true,
+	"GET /api/v1/settings/app":                     true,
 	"GET /api/v1/auth/me/factors":                  true,
 	"POST /api/v1/auth/me/factors/totp":            true,
 	"POST /api/v1/auth/me/factors/totp/confirm":    true,
@@ -337,7 +338,7 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 			limit = incomingBodyLimit
 		} else if r.Method == http.MethodPost {
 			switch r.URL.Path {
-			case "/api/v1/images":
+			case "/api/v1/images", "/api/v1/settings/app/icon":
 				limit = imageUploadLimit
 			case "/api/v1/exports":
 				limit = exportBodyLimit
