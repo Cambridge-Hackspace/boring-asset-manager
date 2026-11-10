@@ -50,6 +50,9 @@ func (c Caller) mayAll(perms []string) bool {
 
 // describe names the caller in a sentence.
 func (c Caller) describe() string {
+	if c.Kind == "person" && c.Token == "" {
+		return fmt.Sprintf("%q, in the assistant panel of BAM!'s web app", c.Name)
+	}
 	if c.Kind == "person" {
 		return fmt.Sprintf("%q, through their personal token %q", c.Name, c.Token)
 	}

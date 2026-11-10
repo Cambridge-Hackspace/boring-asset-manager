@@ -108,7 +108,7 @@ Changing a category's settings, or moving it in the tree, works out every asset'
 
 ## Assistants
 
-Changes made through an assistant, over MCP, as [history records them](mcp.md), can land as drafts,
+Changes made through an assistant, over MCP, as [history records them](mcp.md), or by [the assistant beside the page](assistant.md), can land as drafts,
 whatever the person could otherwise do. This is how an assistant proposes and a person decides. It is
 on by default, and turned off per instance under **Admin → Notifications**, in **Review** (`assistant_drafts`). It applies
 only to assets whose categories use review states; elsewhere an assistant's changes are taken as
@@ -135,6 +135,8 @@ whether the asset is new, the state it had before, and whether they can be undon
   the state it had: its name, categories, fields, codes, stock settings, icons, purchase details and
   links. Its attachments and quantity stay as they are, and links to assets archived since are not
   put back. A code another asset has taken since refuses the rejection (`409`).
+
+The asset page offers **Accept**, **Accept and confirm**, **Edit**, which opens the asset to edit, and **Reject**. The assistant beside the page asks before any change that would not land as a draft, so nothing it does elsewhere changes without the person confirming it.
 
 A person editing an asset with changes waiting accepts them, since they are taking the record as
 their own. Both decisions are recorded in the asset's history as `asset.review_changed`.

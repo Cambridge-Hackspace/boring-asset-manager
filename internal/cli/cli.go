@@ -315,6 +315,8 @@ func Serve(configPath string) error {
 	go server.RunSweep(workerCtx)
 	// Remove archives uploaded and left unused for a day.
 	go server.RunUploads(workerCtx)
+	// Delete conversations with the assistant past the time they are kept.
+	go server.RunAssistant(workerCtx)
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)
@@ -464,10 +466,11 @@ func Backup(configPath, dest string, opts BackupOptions) error {
 		return os.OpenFile(name+".partial", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	}
 	sum, err := archive.Write(context.Background(), st, blobs, open, archive.Options{
-		BamVersion:  api.Version,
-		Secrets:     !opts.WithoutSecrets,
-		Split:       opts.Split,
-		NoDocuments: opts.WithoutDocuments,
+		BamVersion:    api.Version,
+		Secrets:       !opts.WithoutSecrets,
+		Conversations: opts.WithConversations,
+		Split:         opts.Split,
+		NoDocuments:   opts.WithoutDocuments,
 	})
 	if err != nil {
 		for _, name := range names {
@@ -507,6 +510,9 @@ type BackupOptions struct {
 	WithoutDocuments bool
 	// Split is the most bytes a part may hold; 0 writes one archive.
 	Split int64
+	// WithConversations holds people's conversations with the assistant,
+	// which are left out unless asked for.
+	WithConversations bool
 }
 
 // PartName is where part n of a backup to dest is written: dest itself,

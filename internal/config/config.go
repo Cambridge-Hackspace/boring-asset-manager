@@ -47,6 +47,9 @@ type Config struct {
 	// Contracts says when contracts ending are announced
 	// (docs/contracts.md).
 	Contracts ContractsConfig `toml:"contracts"`
+	// Assistant sets the assistant beside the page, in place of Admin
+	// (docs/assistant.md).
+	Assistant AssistantConfig `toml:"assistant"`
 }
 
 // UpdatesConfig is whether BAM! asks, once a day, whether a newer release
@@ -564,6 +567,9 @@ func applyEnvOverrides(cfg *Config) error {
 		}
 		cfg.Auth.TestProtocol = on
 	}
+	if err := assistantEnv(&cfg.Assistant); err != nil {
+		return err
+	}
 	// The providers replace those in the file, whole.
 	if v := os.Getenv("BAM_AUTH_PROVIDERS"); v != "" {
 		var providers []ProviderConfig
@@ -614,6 +620,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.Email.validate(); err != nil {
 		return err
+	}
+	if p := c.Assistant.Provider; p != "" && p != "anthropic" && p != "openai" {
+		return fmt.Errorf("assistant.provider must be \"anthropic\" or \"openai\", not %q", p)
 	}
 	if _, err := c.Auth.Key(); err != nil {
 		return err
@@ -748,4 +757,69 @@ func ParseProxies(proxies []string) ([]netip.Prefix, error) {
 		out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
 	}
 	return out, nil
+}
+
+// AssistantConfig sets the assistant beside the page (docs/assistant.md)
+// here rather than under Admin, for instances provisioned by a script: each
+// setting given takes the place of Admin's, which shows it as set here.
+// Left out, each is Admin's to set.
+type AssistantConfig struct {
+	Enabled  *bool  `toml:"enabled,omitempty"`
+	Provider string `toml:"provider,omitempty"`
+	Endpoint string `toml:"endpoint,omitempty"`
+	Model    string `toml:"model,omitempty"`
+	// APIKey is the provider's key; it is never shown or returned.
+	APIKey           string `toml:"api_key,omitempty"`
+	Name             string `toml:"name,omitempty"`
+	MaxTokens        *int   `toml:"max_tokens,omitempty"`
+	MaxSteps         *int   `toml:"max_steps,omitempty"`
+	MaxTools         *int   `toml:"max_tools,omitempty"`
+	PersonMessages   *int   `toml:"person_messages,omitempty"`
+	PersonTokens     *int64 `toml:"person_tokens,omitempty"`
+	InstanceMessages *int   `toml:"instance_messages,omitempty"`
+	InstanceTokens   *int64 `toml:"instance_tokens,omitempty"`
+	KeepDays         *int   `toml:"keep_days,omitempty"`
+}
+
+// assistantEnv reads BAM_ASSISTANT_* into the assistant's settings.
+func assistantEnv(a *AssistantConfig) error {
+	if v := os.Getenv("BAM_ASSISTANT_ENABLED"); v != "" {
+		on, err := parseSwitch(v)
+		if err != nil {
+			return fmt.Errorf("BAM_ASSISTANT_ENABLED: %w", err)
+		}
+		a.Enabled = &on
+	}
+	for env, field := range map[string]*string{
+		"BAM_ASSISTANT_PROVIDER": &a.Provider, "BAM_ASSISTANT_ENDPOINT": &a.Endpoint, "BAM_ASSISTANT_MODEL": &a.Model,
+		"BAM_ASSISTANT_API_KEY": &a.APIKey, "BAM_ASSISTANT_NAME": &a.Name,
+	} {
+		if v := os.Getenv(env); v != "" {
+			*field = v
+		}
+	}
+	for env, field := range map[string]**int{
+		"BAM_ASSISTANT_MAX_TOKENS": &a.MaxTokens, "BAM_ASSISTANT_MAX_STEPS": &a.MaxSteps, "BAM_ASSISTANT_MAX_TOOLS": &a.MaxTools,
+		"BAM_ASSISTANT_PERSON_MESSAGES": &a.PersonMessages, "BAM_ASSISTANT_INSTANCE_MESSAGES": &a.InstanceMessages, "BAM_ASSISTANT_KEEP_DAYS": &a.KeepDays,
+	} {
+		if v := os.Getenv(env); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return fmt.Errorf("%s: %q is not a number", env, v)
+			}
+			*field = &n
+		}
+	}
+	for env, field := range map[string]**int64{
+		"BAM_ASSISTANT_PERSON_TOKENS": &a.PersonTokens, "BAM_ASSISTANT_INSTANCE_TOKENS": &a.InstanceTokens,
+	} {
+		if v := os.Getenv(env); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				return fmt.Errorf("%s: %q is not a number", env, v)
+			}
+			*field = &n
+		}
+	}
+	return nil
 }

@@ -190,6 +190,9 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     lines: [{ catalog_entry_id: (await (await request.get(`/api/v1/catalog?asset_id=${screws.asset.asset.id}`)).json()).entries[0].id, quantity: 2 }, { description: 'Delivery', quantity: 1, unit_price: '5' }],
   });
   await post(`/purchase-orders/${order.order.id}/place`, { ordered_on: '2025-12-20' });
+  // A guide for the assistant (docs/assistant.md), for its page and poster.
+  const guideSlug = unique('a11y-guide').toLowerCase();
+  await post('/assistant/guides', { slug: guideSlug, name: unique('Record the shop'), purpose: 'Walk through what is here.', enabled: true, questions: ['What is here?'] });
   const { entries } = await (await request.get('/api/v1/spool')).json();
   const screwsLabel = entries.find((e: { asset_id: string }) => e.asset_id === screws.asset.asset.id);
   await request.post('/api/v1/spool/download', { data: { entry_ids: [screwsLabel.id], format: 'pdf' } });
@@ -269,6 +272,9 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/roles', 'Roles'],
     ['/tokens', 'API tokens'],
     ['/sign-in-settings', 'Sign-in'],
+    ['/assistant-settings', 'Assistant'],
+    [`/g/${guideSlug}`, ''],
+    [`/assistant/guides/${guideSlug}/poster`, ''],
     ['/backups', 'Backups'],
     ['/installed-app', 'Installed app'],
     ['/packages', 'Import & export'],

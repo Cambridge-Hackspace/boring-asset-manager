@@ -204,6 +204,9 @@ var Tables = []Table{
 	{Name: "flow_filing_comments", Kind: KindFlows, Since: 69, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"flow_id", Text}, {"asset_id", Text}, {"body", Text}, {"author_id", Text}, {"created_at", Time}, {"edited_at", Time}, {"deleted_at", Time}, {"deleted_by", Text}},
 	},
+	{Name: "assistant_guides", Kind: KindFlows, Since: 81, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"slug", Text}, {"name", Text}, {"purpose", Text}, {"category_ids", JSON}, {"link_type_ids", JSON}, {"questions", JSON}, {"enabled", Bool}, {"created_by", Text}, {"created_at", Time}, {"updated_at", Time}},
+	},
 	{Name: "settings", Kind: KindSettings, Since: 1, Key: []string{"setting_key"},
 		Columns: []Column{{"setting_key", Text}, {"value", Text}, {"updated_at", Time}},
 	},
@@ -262,6 +265,11 @@ var Tables = []Table{
 	{Name: "incoming_hook_role_scopes", Kind: KindSettings, Since: 66, Key: []string{"hook_id", "role_id", "scope_id"},
 		Columns: []Column{{"hook_id", Text}, {"role_id", Text}, {"scope_id", Text}},
 	},
+	// The provider's key is kept in auth/, as notification channels' secrets are.
+	{Name: "assistant_settings", Kind: KindSettings, Since: 81, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"enabled", Bool}, {"provider", Text}, {"endpoint", Text}, {"model", Text}, {"api_key", Text}, {"name", Text}, {"max_tokens", Int}, {"max_steps", Int}, {"max_tools", Int}, {"person_messages", Int}, {"person_tokens", Int}, {"instance_messages", Int}, {"instance_tokens", Int}, {"keep_days", Int}, {"acknowledged_by", Text}, {"acknowledged_at", Time}, {"updated_by", Text}, {"updated_at", Time}},
+		Secret:  []string{"api_key"},
+	},
 	{Name: "sessions", Kind: KindAuth, Since: 1, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"user_id", Text}, {"expires_at", Time}, {"created_at", Time}, {"factor_setup", Bool}},
 	},
@@ -292,5 +300,12 @@ var Tables = []Table{
 	// configuration's key, as second factors' secrets are.
 	{Name: "relay_mesh", Kind: KindAuth, Since: 63, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"mesh", Text}, {"root_public", Text}, {"root_private", Text}, {"main_public", Text}, {"main_private", Text}, {"created_at", Time}},
+	},
+	// Each person's own: written only when asked for (docs/backups.md).
+	{Name: "assistant_conversations", Kind: KindConversations, Since: 81, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"user_id", Text}, {"title", Text}, {"guide_id", Text}, {"progress", JSON}, {"pending_call", Text}, {"created_at", Time}, {"updated_at", Time}},
+	},
+	{Name: "assistant_messages", Kind: KindConversations, Since: 81, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"conversation_id", Text}, {"seq", Int}, {"role", Text}, {"content", JSON}, {"context", JSON}, {"raw", JSON}, {"raw_provider", Text}, {"tokens", Int}, {"created_at", Time}},
 	},
 }

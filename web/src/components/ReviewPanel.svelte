@@ -75,6 +75,7 @@
           {#if mayConfirm}
             <button type="button" class="btn-secondary" disabled={busy} onclick={() => act('POST', `${path}/proposal/accept`, { confirm: true }, 'Accepted and confirmed.')}>Accept and confirm</button>
           {/if}
+          <a class="btn-secondary" href="{path}/edit">Edit</a>
           {#if proposal.undoable && (!proposal.new || session.canOn(asset.scopes, 'assets.delete'))}
             <button type="button" class="btn-secondary" disabled={busy} onclick={() => ((writing = 'reject'), (note = ''))}>Reject…</button>
           {/if}

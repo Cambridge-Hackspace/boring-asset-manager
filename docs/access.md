@@ -622,6 +622,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `settings.manage` | Managing settings. | No |
 | `users.manage` | Managing users, roles, scopes and API tokens. It includes `people.add`. | No |
 | `people.add` | Adding people without accounts, to name in person fields (see [Person fields](data-model.md#person-fields)). | No |
+| `assistant.use` | Seeing the assistant beside the page, and talking with it, which acts as the person with their own permissions, once an admin turns it on (see [The assistant beside the page](assistant.md)). | No |
 
 ### Scopes
 
@@ -1019,6 +1020,7 @@ is an RFC 3339 time, or `null` for never.
 | `070` | Grants `purchases.read` to every role that reads assets, in the scopes it reads them in, since reading showed prices until then. |
 | `078` | Grants `people.add` to every role that manages users, which includes it. |
 | `079` | Grants `assets.confirm` to every role that writes assets, in the scopes it writes them in, so what it adds is taken as true as before until a category uses review states. `assets.verify` goes to the admin role only. |
+| `081` | Adds `assistant.use`, which goes to the admin role only. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

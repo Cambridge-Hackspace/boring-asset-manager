@@ -41,6 +41,9 @@ type Options struct {
 	Kinds []Kind
 	// Secrets writes authentication when Kinds is nil.
 	Secrets bool
+	// Conversations writes people's conversations with the assistant when
+	// Kinds is nil.
+	Conversations bool
 	// Split, when more than 0, is the most bytes a part may hold: the rows
 	// go in the first part, with the files that fit, and the rest of the
 	// files in parts after it. A part holding a single file larger than
@@ -282,7 +285,7 @@ func Write(ctx context.Context, st *store.Store, blobs filestore.Blobs, open fun
 func chosenKinds(opts Options) []Kind {
 	var out []Kind
 	for _, k := range Kinds {
-		if opts.Kinds == nil && (k != KindAuth || opts.Secrets) || hasKind(opts.Kinds, k) {
+		if opts.Kinds == nil && (k != KindAuth || opts.Secrets) && (k != KindConversations || opts.Conversations) || hasKind(opts.Kinds, k) {
 			out = append(out, k)
 		}
 	}

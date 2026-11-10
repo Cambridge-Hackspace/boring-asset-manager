@@ -68,6 +68,7 @@ Authentication is:
 - relays' codes and credentials, as their hashes (`relays.code_hash` and `relays.credential_hash`),
   and the mesh root (`relay_mesh`), whose private keys are sealed with the configuration's key (see
   [Relays](relays.md#the-mesh-root)). Restored without them, each relay pairs again with a new code;
+- the assistant's provider key (`assistant_settings.api_key`; see [The assistant](assistant.md#the-model));
 - incoming hooks' secrets (`incoming_hooks.secret_hash` and `sealed_secret`): a bearer secret's
   hash, or a signing secret sealed with the configuration's key. Restored without them, an incoming
   hook refuses every request until it is given a new secret (see
@@ -84,6 +85,13 @@ but cannot be used: signing in says so, and an admin removes them for the person
 Only the command line writes authentication, and `--without-secrets` leaves it out. A backup from
 the web never holds it. Keep an archive that holds it as carefully as the database.
 
+## Conversations
+
+People's conversations with [the assistant beside the page](assistant.md) are theirs alone, which no
+one else reads in the app, admins included. A backup leaves them out unless asked for, as
+authentication is: `bam backup --with-conversations` holds them, as the `conversations` kind. A backup from the web never holds them. They are never merged into an instance
+in use; a restore or a replace brings them when the archive holds them and they are chosen.
+
 ## Kinds of information
 
 An archive holds these kinds of information, and a restore chooses among them. Each kind has a key
@@ -97,9 +105,10 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | Icons | `icons` | `icon_palette`, `icon_settings`, `icon_library`, `category_icons`, `icon_revisions`, `icon_param_bindings`, `icon_text_bindings` |
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites`, `comment_mentions` |
 | Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_field_people`, whom person fields name, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, `asset_purchases`, where they came from, the `warranty_notices` recorded for them, `asset_proposals`, the changes from assistants waiting on them, `contract_assets`, the contracts covering them, `asset_catalog_entries`, what vendors sell of each, `purchase_orders`, `purchase_order_lines` and `purchase_order_attachments` and their files, the purchase orders bringing them, `asset_comments` and `loan_comments`, and their history, `events`, contracts' and purchase orders' among it |
-| Flows | `flows` | `flows`, `flow_filings`, `flow_filing_comments` |
-| Settings | `settings` | `settings` (how purchase orders' numbers are shown among them), `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes` |
+| Flows | `flows` | `flows`, `flow_filings`, `flow_filing_comments`, and the assistant's `assistant_guides` |
+| Settings | `settings` | `settings` (how purchase orders' numbers are shown among them), `label_stock`, `printers`, `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes`, and the assistant's `assistant_settings`, its key in `auth/` |
 | Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, `relay_mesh`, and the secret columns described under [Authentication](#authentication) |
+| Conversations | `conversations` | `assistant_conversations`, `assistant_messages`: each person's conversations with [the assistant beside the page](assistant.md), written only when asked for (see [Conversations](#conversations)) |
 
 The tables are listed, and restored, in that order: each after the tables its rows name.
 
@@ -128,6 +137,7 @@ These tables are left out, because they are not information or are made again:
 | `incoming_deliveries` | Delivery IDs of signed requests to incoming hooks, kept until their timestamps are too old to be taken anyway. |
 | `provider_sign_ins` | Sign-ins sent to an identity provider and not back yet, which lapse in ten minutes. |
 | `relay_holds`, `relay_mail` | Which server holds each relay now, and the messages servers pass each other for relays, which are dropped within minutes (see [Relays](relays.md#several-servers)). |
+| `assistant_usage` | Each person's use of the assistant a day, counted against its limits and forgotten after a week. |
 
 `internal/archive/tables.go` lists the tables, their kinds, columns and keys, and, as `Since`, the
 migration from which every schema has had each table. `tools/archive/tables.py` writes it from a

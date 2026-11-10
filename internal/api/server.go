@@ -84,6 +84,9 @@ type Server struct {
 	// relayPoke has RunRelays look at the mesh root and the relays at
 	// once, as after the root is made or rotated.
 	relayPoke chan struct{}
+	// turns lets one turn at a time run in each conversation with the
+	// assistant (docs/assistant.md).
+	turns turnLocks
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -515,6 +518,29 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/shopping", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleShoppingList)))
 	handle("GET /api/v1/settings/offline", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleOfflineSettings)))
 	handle("PUT /api/v1/settings/offline", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetOfflineSettings)))
+	// The assistant beside the page (docs/assistant.md): settings.manage
+	// sets it up and writes its guides; assistant.use talks with it, as a
+	// person signed in. Conversations are each person's own.
+	handle("GET /api/v1/settings/assistant", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleAssistantSettings)))
+	handle("PUT /api/v1/settings/assistant", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetAssistantSettings)))
+	handle("GET /api/v1/assistant", RequirePerson(http.HandlerFunc(s.handleAssistantStatus)))
+	seeGuides := RequireAnyPermission(rbac.PermAssistantUse, rbac.PermSettingsManage)
+	manageGuides := RequirePermission(rbac.PermSettingsManage)
+	handle("GET /api/v1/assistant/guides", seeGuides(http.HandlerFunc(s.handleListGuides)))
+	handle("POST /api/v1/assistant/guides", manageGuides(http.HandlerFunc(s.handleSaveGuide)))
+	handle("GET /api/v1/assistant/guides/{slug}", seeGuides(http.HandlerFunc(s.handleGetGuide)))
+	handle("PUT /api/v1/assistant/guides/{slug}", manageGuides(http.HandlerFunc(s.handleSaveGuide)))
+	handle("DELETE /api/v1/assistant/guides/{slug}", manageGuides(http.HandlerFunc(s.handleDeleteGuide)))
+	handle("GET /api/v1/assistant/guides/{slug}/qr.svg", seeGuides(http.HandlerFunc(s.handleGuideQR)))
+	useAssistant := func(h http.HandlerFunc) http.Handler {
+		return RequirePerson(RequirePermission(rbac.PermAssistantUse)(h))
+	}
+	handle("GET /api/v1/assistant/conversations", RequirePerson(http.HandlerFunc(s.handleListConversations)))
+	handle("POST /api/v1/assistant/conversations", useAssistant(s.handleStartConversation))
+	handle("GET /api/v1/assistant/conversations/{id}", RequirePerson(http.HandlerFunc(s.handleGetConversation)))
+	handle("DELETE /api/v1/assistant/conversations/{id}", RequirePerson(http.HandlerFunc(s.handleDeleteConversation)))
+	handle("POST /api/v1/assistant/conversations/{id}/messages", useAssistant(s.handleSendMessage))
+	handle("POST /api/v1/assistant/conversations/{id}/confirm", useAssistant(s.handleConfirmCall))
 	handle("GET /api/v1/assets/export.xlsx", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleExportAssetsXLSX)))
 	handle("POST /api/v1/assets/import/preview", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImportPreview)))
 	handle("POST /api/v1/assets/import", RequirePermission(rbac.PermAssetsWrite)(http.HandlerFunc(s.handleImport)))

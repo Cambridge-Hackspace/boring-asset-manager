@@ -31,6 +31,7 @@ These pages describe how BAM! works, for people running it and for people workin
 - [Reports](reports.md): saved views of assets, as tables and charts.
 - [CSV and Excel import and export](csv.md).
 - [MCP server](mcp.md): connecting AI assistants, their tools and sign-in.
+- [The assistant beside the page](assistant.md): BAM!'s own assistant in the web app, using its tools as the person signed in, its guides, providers and limits.
 
 ## Working on BAM!
 

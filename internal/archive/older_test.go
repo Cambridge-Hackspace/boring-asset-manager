@@ -257,7 +257,7 @@ func TestAnArchiveLackingATableItsSchemaHadIsRefused(t *testing.T) {
 	src := setupStore(t)
 	blobs := filestore.NewLocal(t.TempDir())
 	richSeed(t, src, blobs)
-	now := backup(t, src, blobs, Options{Secrets: true})
+	now := backup(t, src, blobs, Options{Secrets: true, Conversations: true})
 	for _, v := range append(olderVersions(), migrations.Latest()) {
 		b := now
 		if v < migrations.Latest() {

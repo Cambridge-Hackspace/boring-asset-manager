@@ -303,6 +303,10 @@ func (s *Store) DeleteUser(userID string) error {
 		if _, err := s.TxExec(tx, "DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
 			return fmt.Errorf("deleting user sessions: %w", err)
 		}
+		// Their conversations with the assistant are theirs alone.
+		if err := deleteConversationsTx(s, tx, "user_id = ?", userID); err != nil {
+			return err
+		}
 		return revokePersonalTokens(s, tx, userID, now)
 	})
 }

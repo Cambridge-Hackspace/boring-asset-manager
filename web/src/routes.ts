@@ -56,6 +56,9 @@ import FlowsPage from './views/flows/FlowsPage.svelte';
 import FlowRunPage from './views/flows/FlowRunPage.svelte';
 import FlowEditor from './views/flows/FlowEditor.svelte';
 import FlowPosterPage from './views/flows/FlowPosterPage.svelte';
+import AssistantPage from './views/admin/AssistantPage.svelte';
+import GuidePage from './views/assistant/GuidePage.svelte';
+import GuidePosterPage from './views/assistant/GuidePosterPage.svelte';
 
 export interface Route {
   pattern: string;
@@ -132,6 +135,9 @@ export const routes: Route[] = [
   { pattern: '/relays', component: RelaysPage, title: 'Relays', permissions: ['settings.manage'], nav: 'Relays', group: 'Admin' },
   { pattern: '/incoming-hooks', component: IncomingHooksPage, title: 'Incoming hooks', permissions: ['settings.manage'], nav: 'Incoming hooks', group: 'Admin' },
   { pattern: '/sign-in-settings', component: SignInPage, title: 'Sign-in', permissions: ['settings.manage'], nav: 'Sign-in', group: 'Admin' },
+  { pattern: '/assistant-settings', component: AssistantPage, title: 'Assistant', permissions: ['settings.manage'], nav: 'Assistant', group: 'Admin' },
+  { pattern: '/assistant/guides/:slug/poster', component: GuidePosterPage, title: 'Guide poster', permissions: ['settings.manage', 'assistant.use'] },
+  { pattern: '/g/:slug', component: GuidePage, title: 'Guide', permissions: ['assistant.use', 'settings.manage'] },
   { pattern: '/backups', component: BackupsPage, title: 'Backups', permissions: ['settings.manage'], nav: 'Backups', group: 'Admin' },
   { pattern: '/installed-app', component: InstalledAppPage, title: 'Installed app', permissions: ['settings.manage'], nav: 'Installed app', group: 'Admin' },
   { pattern: '/packages', component: PackagesPage, title: 'Import & export', permissions: ['settings.manage'], nav: 'Import & export', group: 'Admin' },

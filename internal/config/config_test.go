@@ -480,3 +480,39 @@ func TestRelayAllowlistSetting(t *testing.T) {
 		t.Fatalf("from the environment: %v %+v", err, cfg)
 	}
 }
+
+// TestAssistantSettings reads the assistant's settings from the file and
+// the environment, each left unset when not given, so Admin's stand.
+func TestAssistantSettings(t *testing.T) {
+	dir := t.TempDir()
+	load := func(toml string) (*Config, error) {
+		path := filepath.Join(dir, "config.toml")
+		if err := os.WriteFile(path, []byte(toml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+	cfg, err := load("")
+	if a := cfg.Assistant; err != nil || a.Enabled != nil || a.Provider != "" || a.KeepDays != nil || a.APIKey != "" {
+		t.Fatalf("unset: %v %+v", err, a)
+	}
+	cfg, err = load("[assistant]\nprovider = \"openai\"\nendpoint = \"http://llm.local/v1\"\nkeep_days = 7\nperson_tokens = 5000000000\n")
+	if a := cfg.Assistant; err != nil || a.Provider != "openai" || a.Endpoint != "http://llm.local/v1" || *a.KeepDays != 7 || *a.PersonTokens != 5000000000 {
+		t.Errorf("from the file: %v %+v", err, a)
+	}
+	t.Setenv("BAM_ASSISTANT_ENABLED", "on")
+	t.Setenv("BAM_ASSISTANT_API_KEY", "sk-env")
+	t.Setenv("BAM_ASSISTANT_MAX_STEPS", "9")
+	cfg, err = load("")
+	if a := cfg.Assistant; err != nil || !*a.Enabled || a.APIKey != "sk-env" || *a.MaxSteps != 9 {
+		t.Errorf("from the environment: %v %+v", err, a)
+	}
+	t.Setenv("BAM_ASSISTANT_MAX_STEPS", "many")
+	if _, err := load(""); err == nil {
+		t.Error("BAM_ASSISTANT_MAX_STEPS=many was taken")
+	}
+	t.Setenv("BAM_ASSISTANT_MAX_STEPS", "")
+	if _, err := load("[assistant]\nprovider = \"other\"\n"); err == nil {
+		t.Error("an unknown provider was taken")
+	}
+}
