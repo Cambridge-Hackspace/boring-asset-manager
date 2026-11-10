@@ -44,6 +44,7 @@ import AccountPage from './views/AccountPage.svelte';
 import OAuthConsentPage from './views/OAuthConsentPage.svelte';
 import LoansPage from './views/LoansPage.svelte';
 import ShoppingListPage from './views/ShoppingListPage.svelte';
+import OfflineCopyPage from './views/OfflineCopyPage.svelte';
 import SpoolPage from './views/SpoolPage.svelte';
 import ScanPage from './views/ScanPage.svelte';
 import ScanLookupPage from './views/ScanLookupPage.svelte';
@@ -70,6 +71,8 @@ export interface Route {
   public?: boolean;
   /** A workspace, such as the template editor: the whole window below the header, and no footer. */
   workspace?: boolean;
+  /** It works from the offline copy, opened with no connection (docs/installing.md#offline). */
+  offline?: boolean;
 }
 
 export const routes: Route[] = [
@@ -79,8 +82,8 @@ export const routes: Route[] = [
   { pattern: '/assets/import', component: ImportPage, title: 'Import assets', permissions: ['assets.write'] },
   { pattern: '/assets/graph', component: GraphPage, title: 'Graph', permissions: ['assets.read'] },
   { pattern: '/assets/:id', component: AssetPage, title: 'Asset', permissions: ['assets.read'], public: true },
-  { pattern: '/scan', component: ScanLookupPage, title: 'Scan', permissions: ['assets.scan'], nav: 'Scan', public: true },
-  { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true },
+  { pattern: '/scan', component: ScanLookupPage, title: 'Scan', permissions: ['assets.scan'], nav: 'Scan', public: true, offline: true },
+  { pattern: '/scan/:code', component: ScanPage, title: 'Scan', permissions: ['assets.scan'], public: true, offline: true },
   { pattern: '/assets/:id/scene', component: ScenePage, title: 'Scene', permissions: ['assets.read'], public: true },
   { pattern: '/assets/:id/edit', component: AssetForm, title: 'Edit asset', permissions: ['assets.write'] },
   { pattern: '/flows', component: FlowsPage, title: 'Flows', permissions: ['flows.run', 'flows.manage'], nav: 'Flows' },
@@ -90,7 +93,9 @@ export const routes: Route[] = [
   { pattern: '/f/:slug', component: FlowRunPage, title: 'Flow', permissions: ['flows.run'] },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
   // The installed app's Shopping list shortcut (docs/installing.md#shortcuts).
-  { pattern: '/shopping', component: ShoppingListPage, title: 'Shopping list', permissions: ['assets.read'] },
+  { pattern: '/shopping', component: ShoppingListPage, title: 'Shopping list', permissions: ['assets.read'], offline: true },
+  // The copy kept to use offline: finding things in it, and keeping it.
+  { pattern: '/offline', component: OfflineCopyPage, title: 'Offline copy', permissions: ['assets.read'], offline: true },
   { pattern: '/spool', component: SpoolPage, title: 'Print queue', permissions: ['labels.print'], nav: 'Print queue' },
   { pattern: '/reports', component: ReportsPage, title: 'Reports', permissions: ['assets.read'], nav: 'Reports' },
   { pattern: '/reports/new', component: ReportEditor, title: 'New report', permissions: ['reports.manage'] },
@@ -133,8 +138,8 @@ export const routes: Route[] = [
   { pattern: '/account', component: AccountPage, title: 'Your account' },
   { pattern: '/oauth/consent', component: OAuthConsentPage, title: 'Connect an assistant' },
   // Help is for everyone, signed in or not (docs/architecture.md).
-  { pattern: '/help', component: HelpPage, title: 'Help', public: true },
-  { pattern: '/help/:topic', component: HelpPage, title: 'Help', public: true },
+  { pattern: '/help', component: HelpPage, title: 'Help', public: true, offline: true },
+  { pattern: '/help/:topic', component: HelpPage, title: 'Help', public: true, offline: true },
 ];
 
 // Pages that moved, from the address they had to the one they have: only

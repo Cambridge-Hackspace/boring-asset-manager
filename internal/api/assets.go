@@ -104,6 +104,19 @@ func (r UpdateAssetRequest) iconUpdate() (*store.IconUpdate, error) {
 type QuantityRequest struct {
 	Adjust *int `json:"adjust"`
 	Set    *int `json:"set"`
+	// UnlessRestockedSince, with a positive adjust, refuses the restock
+	// when the asset was restocked at or after that time, as a restock
+	// recorded offline is sent (docs/stock-and-lending.md#restocking-from-a-copy).
+	UnlessRestockedSince *time.Time `json:"unless_restocked_since"`
+}
+
+// RestockConflict is a restock refused because the asset was restocked
+// since: those restocks, with who made them only for those who track the
+// asset, and the asset as it is now.
+type RestockConflict struct {
+	Error     string                   `json:"error"`
+	Restocked []models.Event           `json:"restocked"`
+	Asset     *models.AssetWithDetails `json:"asset"`
 }
 
 // historyPage is how many events one page of
@@ -496,11 +509,36 @@ func (s *Server) handleAdjustQuantity(w http.ResponseWriter, r *http.Request) {
 	if req.Adjust != nil {
 		delta = *req.Adjust
 	}
-	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermStockRecord); !ok {
+	if req.UnlessRestockedSince != nil && delta < 1 {
+		writeJSONError(w, http.StatusBadRequest, "unless_restocked_since goes with a restock: a positive adjust")
 		return
 	}
-	asset, err := s.actingStore(r).AdjustQuantity(r.PathValue("id"), delta, req.Set)
+	before, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermStockRecord)
+	if !ok {
+		return
+	}
+	var (
+		asset     *models.AssetWithDetails
+		restocked []models.Event
+		err       error
+	)
+	if req.UnlessRestockedSince != nil {
+		asset, restocked, err = s.actingStore(r).RestockUnlessRestocked(r.PathValue("id"), delta, *req.UnlessRestockedSince)
+	} else {
+		asset, err = s.actingStore(r).AdjustQuantity(r.PathValue("id"), delta, req.Set)
+	}
 	switch {
+	case errors.Is(err, store.ErrRestockedSince):
+		track := Allows(r.Context(), rbac.PermAssetsTrack, before.Scopes)
+		for i := range restocked {
+			restocked[i] = redactEvent(restocked[i], track)
+		}
+		now, err := s.store.GetAssetByID(r.PathValue("id"))
+		if err != nil {
+			writeServerError(w, err, "read the asset")
+			return
+		}
+		writeJSON(w, http.StatusConflict, RestockConflict{Error: "Restocked since then; record this restock too only if it is another", Restocked: restocked, Asset: s.shown(r, now)})
 	case errors.Is(err, store.ErrAssetNotFound):
 		writeJSONError(w, http.StatusNotFound, "Asset not found")
 	case errors.Is(err, store.ErrNotEnoughStock):

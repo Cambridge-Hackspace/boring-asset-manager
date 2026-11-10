@@ -9,6 +9,7 @@
   import UpdatePrompt from './components/UpdatePrompt.svelte';
   import { iconset } from './lib/iconset.svelte';
   import { applyThemeColor, installedApp, isOffline } from './lib/install/app.svelte';
+  import { offline as offlineCopy } from './lib/offline/offline.svelte';
   import { appearance } from './lib/theme.svelte';
   import AccountLinkPage, { accountLinkPaths } from './views/AccountLinkPage.svelte';
   import FactorSetupPage from './views/FactorSetupPage.svelte';
@@ -16,6 +17,7 @@
   import NotFound from './views/NotFound.svelte';
   import Forbidden from './views/Forbidden.svelte';
   import OfflinePage from './views/OfflinePage.svelte';
+  import NeedsConnection from './views/NeedsConnection.svelte';
 
   let loadError = $state('');
   // Opened with no connection, as an installed app can be: its shell is
@@ -31,21 +33,42 @@
     started = false;
     session
       .load()
-      .catch((err) => {
+      .then(() => sync())
+      .catch(async (err) => {
         offline = isOffline(err);
-        loadError = err instanceof Error ? err.message : String(err);
+        // With a copy kept here, the app opens from it (docs/installing.md#offline).
+        const me = offline ? await offlineCopy.goOffline() : null;
+        if (me) session.adoptOffline(me);
+        else loadError = err instanceof Error ? err.message : String(err);
       })
       .finally(() => (started = true));
   }
 
+  // Online and signed in: the waiting changes go, and the copy is refreshed
+  // when it is due, or cleared when it is no longer the person's.
+  function sync() {
+    offlineCopy.standalone = installedApp.standalone;
+    // Someone who reads no assets has no copy kept for them, as nobody
+    // signed in has none.
+    if (session.offline || !navigator.onLine) return;
+    void offlineCopy.sync(session.can('assets.read') ? session.me : { user: null, permissions: [] });
+  }
+
   onMount(() => {
     load();
-    // Back online, it opens without being asked.
-    const online = () => offline && load();
+    // Back online, it opens without being asked, and from the copy, goes
+    // back to the server.
+    const online = () => (offline || session.offline ? load() : sync());
     window.addEventListener('online', online);
+    const shown = () => document.visibilityState === 'visible' && sync();
+    document.addEventListener('visibilitychange', shown);
+    // Each minute, whether the copy is due a refresh.
+    const timer = window.setInterval(() => session.user && sync(), 60_000);
     const stop = interceptLinks(document.body);
     return () => {
       window.removeEventListener('online', online);
+      document.removeEventListener('visibilitychange', shown);
+      window.clearInterval(timer);
       stop();
     };
   });
@@ -90,6 +113,7 @@
 </script>
 
 {#if loadError && offline}
+  <!-- nothing kept here to open from -->
   <OfflinePage onretry={load} />
 {:else if loadError}
   <main class="mx-auto max-w-md p-8">
@@ -110,6 +134,8 @@
       <NotFound />
     {:else if !allowed}
       <Forbidden route={match.route} />
+    {:else if session.offline && !match.route.offline}
+      <NeedsConnection />
     {:else}
       {#key router.path}
         <match.route.component params={match.params} />

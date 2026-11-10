@@ -4,8 +4,10 @@
 // once, with or without a signal, and fetches a new release's in the
 // background, which takes over when the person chooses Reload to update.
 //
-// It leaves the API to the network: assets, stock and loans are not kept
-// here. Offline data (#214) is to be a cache of its own beside the shell's.
+// It leaves the API to the network. What the app keeps to use offline
+// (#214) is the page's, not the worker's: the copy and the changes waiting
+// to be sent in IndexedDB, and thumbnails in a cache of their own,
+// bam-offline-thumbs, which activate leaves alone (src/lib/offline).
 
 import { cachePrefix, handling } from '../lib/install/shell';
 
