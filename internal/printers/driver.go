@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
 )
@@ -37,6 +38,9 @@ type LabelSpec struct {
 	// either way: "across" its width across the roll, "along" its width
 	// along it, or empty or "auto" for as fits, not turned when that fits.
 	Feed string
+	// Inks are the inks the label draws in, for a warning when the printer
+	// lacks one (labels.Template.Inks).
+	Inks []string
 }
 
 // PlanLabel checks labels against a printer and plans printing them: the
@@ -66,6 +70,17 @@ type Plan interface {
 	Encode(labels []*image.Gray) ([]byte, error)
 }
 
+// InkPlan is a Plan for a printer with inks besides black and white
+// (docs/labels.md#inks), which takes labels rendered in them as well.
+type InkPlan interface {
+	Plan
+	// Palette is the inks the printer prints in.
+	Palette() labels.Palette
+	// EncodeInks turns labels, rendered in the palette's inks at the
+	// planned size and DPI, each dot an index into it, into one print job.
+	EncodeInks(labels []*image.Paletted) ([]byte, error)
+}
+
 // ErrDoesNotFit is wrapped when a template cannot print on the loaded media.
 var ErrDoesNotFit = errors.New("template does not fit the printer's media")
 
@@ -75,7 +90,11 @@ type DriverInfo struct {
 	Models []string `json:"models"`
 	// ModelDPI is each model's print resolution, which templates must use.
 	ModelDPI map[string]int `json:"model_dpi"`
-	Media    []MediaInfo    `json:"media"`
+	// ModelPalette is the most inks each model prints in, for the models
+	// that print more than black and white (docs/labels.md#inks). A roll
+	// may hold it to fewer.
+	ModelPalette map[string]labels.Palette `json:"model_palette,omitempty"`
+	Media        []MediaInfo               `json:"media"`
 	// CustomStock is set when the driver takes custom stock as well.
 	CustomStock *CustomStockInfo `json:"custom_stock,omitempty"`
 	Options     []OptionInfo     `json:"options,omitempty"`
@@ -96,6 +115,9 @@ type MediaInfo struct {
 	// Models lists the models that take the roll, when not all of the
 	// driver's do.
 	Models []string `json:"models,omitempty"`
+	// Palette is the inks the roll takes, when more than black and white,
+	// on models that print them.
+	Palette labels.Palette `json:"palette,omitempty"`
 }
 
 // OptionInfo describes one driver option.

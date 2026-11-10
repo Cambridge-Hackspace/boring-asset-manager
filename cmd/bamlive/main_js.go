@@ -7,11 +7,12 @@
 //	addImage(id, bytes)                        -> null, or an error message
 //	hasImage(id)                               -> whether it was added
 //	setIcons(icons)                            -> null, or an error message
-//	render(template, data, placeholders, hidden) -> {width, height, pixels, description, problems}
+//	render(template, data, placeholders, hidden, palette) -> {width, height, pixels, palette, description, problems}
 //	font(family, weight)                       -> the font labels are printed in, as TTF bytes
 //
-// where template, data and icons (live.Icons) are JSON strings, pixels a Uint8ClampedArray of
-// RGBA dots, and description and problems JSON strings (or null).
+// where template, data and icons (live.Icons) are JSON strings, palette the inks to draw
+// in (labels.Palette; empty for the template's own), pixels a Uint8ClampedArray of RGBA
+// dots, and description and problems JSON strings (or null).
 //
 // tools/web/build.sh builds it into the web interface.
 package main
@@ -20,6 +21,7 @@ import (
 	"encoding/json"
 	"syscall/js"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/live"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/gomono"
@@ -62,10 +64,16 @@ func main() {
 		if len(args) > 3 && args[3].Type() == js.TypeString {
 			_ = json.Unmarshal([]byte(args[3].String()), &hidden)
 		}
-		res := r.Render([]byte(args[0].String()), []byte(args[1].String()), args[2].Bool(), hidden...)
+		// The inks to draw in: a printer's or display's palette.
+		palette := ""
+		if len(args) > 4 && args[4].Type() == js.TypeString {
+			palette = args[4].String()
+		}
+		res := r.RenderIn(labels.Palette(palette), []byte(args[0].String()), []byte(args[1].String()), args[2].Bool(), hidden...)
 		out := js.Global().Get("Object").New()
 		out.Set("width", res.Width)
 		out.Set("height", res.Height)
+		out.Set("palette", string(res.Palette))
 		pixels := js.Global().Get("Uint8ClampedArray").New(len(res.Pixels))
 		js.CopyBytesToJS(pixels, res.Pixels)
 		out.Set("pixels", pixels)

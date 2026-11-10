@@ -264,6 +264,7 @@ A `generator` element draws a barcode or matrix code.
 | `margin_unit` | `modules` (the default), growing with the code, or `length`, in the template's units whatever the code holds |
 | `align` | `left`, `center` or `right`; centered by default |
 | `vertical_align` | `top`, `middle` or `bottom`; centered by default |
+| `fill` | The [ink](#inks) its modules are drawn in: `black` (the default), or any but `white` |
 | `quiet_zone` | From before margins (below) |
 
 A side left out of `margin` takes the standard quiet zone: QR 4 modules, Micro QR 2, Code 128 10
@@ -290,7 +291,7 @@ scans, but the preview warns of it.
 | `min_font_size` | Default 6 |
 | `max_font_size` | With `fit: "fill"`; absent: 200 pt |
 | `fit` | `"shrink"` (the default) or `"fill"` |
-| `fill` | `black` (the default) or `white`, for text reversed out of a black shape |
+| `fill` | An [ink](#inks): `black` (the default), or `white` for text reversed out of a dark shape |
 
 Lines break at newlines, and between words when wrapping. The block is centered vertically in
 its box.
@@ -376,9 +377,9 @@ A `shape` element's `shape` is one of:
 
 | Property | Values |
 |---|---|
-| `stroke` | `black` (the default), `white` or `none` |
+| `stroke` | An [ink](#inks), `black` by default, or `none` |
 | `stroke_width` | In the template's units; 0.25 mm by default |
-| `fill` | `black`, `white` or `none` (the default); a line or open polygon has no fill |
+| `fill` | An [ink](#inks), or `none` (the default); a line or open polygon has no fill |
 
 The fill is drawn, then the stroke. A rectangle's or ellipse's stroke lies inside its box; a
 line's or polygon's is centered on it. A stroke thinner than one dot is drawn one dot wide, and
@@ -409,7 +410,7 @@ What is converted:
 - Its paint comes from `fill`, `stroke`, `stroke-width`, `fill-rule` and the opacities, as
   attributes or inline styles, inherited down groups.
 - Colors become black or white by how light they look, and paint mostly see-through becomes
-  none.
+  none. Inks other than black and white are chosen in the editor once it is imported.
 - Gradients and patterns are drawn in their fallback color, or black.
 
 What is left out and listed: text (which needs the artwork's fonts), images, scripts, links to
@@ -417,6 +418,41 @@ other files, `use` elements, style sheets, filters, masks and clipping.
 
 The file is read as XML with no document type or entities, nested at most 64 deep, with at most
 10,000 elements.
+
+## Inks
+
+Text, shapes and codes are drawn in inks: `black`, `white`, `red`, `yellow`, `green`, `blue` and
+`orange`. They are named, not any color, so a template means the same on every printer and
+display. White paints over whatever is beneath it.
+
+Each printer's driver declares the inks it prints in, as a palette:
+
+| Palette | Inks | Such as |
+|---|---|---|
+| `bw` | black and white | most label printers |
+| `bwr` | black, white and red | Brother's QL-800 series on DK-22251; red e-paper |
+| `bwy` | black, white and yellow | yellow e-paper |
+| `bwry` | black, white, red and yellow | four-color e-paper |
+| `bwrygb` | black, white, red, yellow, green and blue | six-color e-paper (Spectra 6) |
+| `bwrygbo` | the six, and orange | seven-color e-paper (ACeP) |
+
+A label is drawn dot for dot in its printer's inks:
+
+- **An ink the printer lacks prints black.** The fit check warns of it: "The printer prints only
+  black and white, so red prints black."
+- **Images and icons are dithered into the palette**, Floyd–Steinberg, to the nearest ink in red,
+  green and blue. A label on a black-and-white printer is dithered in gray, exactly as it always
+  has been.
+- **Codes keep their modules whole dots.** Light inks, such as yellow, may not scan.
+
+The template editor draws the label in the inks of the printer chosen, and offers only those for
+each element, with an element's own ink kept when the printer lacks it. With no printer chosen it
+draws the label in the fewest inks that hold the template's, and offers every ink. SVG and PDF
+are drawn in each ink's own color, whatever the printer. A PNG preview of a label in color is in
+color, and in a printer's inks with `palette` (see [Output formats](#output-formats)).
+
+The colors inks are shown in, and dithered towards, are: black `#000000`, white `#ffffff`, red
+`#cc0000`, yellow `#ffd200`, green `#008c3c`, blue `#0046c8` and orange `#ff8000`.
 
 ## Fixed and adaptive templates
 
@@ -566,7 +602,7 @@ and owning all three keeps output deterministic for golden tests.
 | Format | Use and behavior |
 |---|---|
 | SVG | The interchange format for the frontend editor preview. Adjacent dark modules merge into rectangles; text is glyph outlines. |
-| PNG | Rendered at the template's DPI, as 8-bit grayscale for previews or 1-bit black and white for printing. In 1-bit output, text is thresholded at 50% coverage and images are Floyd–Steinberg dithered. Barcode modules are never anti-aliased. |
+| PNG | Rendered at the template's DPI, as 8-bit grayscale for previews (color, for a label in [inks](#inks) besides black and white) or 1-bit black and white for printing, every other ink black. With `palette` (`?palette=bwr` on an asset's label, `"palette"` in a preview), it is an indexed PNG in that palette's inks, as a printer with them prints it. In 1-bit and palette output, text is thresholded at 50% coverage and images are Floyd–Steinberg dithered. Barcode modules are never anti-aliased. |
 | PDF | One page per label, sized exactly to the label, with vector barcodes and text, and images embedded as Flate-compressed bitmaps. Output is byte-for-byte deterministic: no timestamps or random document IDs. |
 
 Batch exports produce a multi-page PDF or a ZIP of PNGs named by asset ID (see

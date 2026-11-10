@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"image"
 	"log"
 	"net/http"
 	"sync"
@@ -196,7 +195,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 
 	out := store.SpoolOutcome{Printer: p.Name, Problems: map[string]string{}, Moves: map[string]string{}}
 	images := s.newLabelImages(ctx)
-	var rendered []*image.Gray
+	rendered := newLabelJob(plan)
 	for _, e := range b.Entries {
 		scene, problem, err := s.layoutAsset(r, t, e.AssetID, images)
 		if err != nil {
@@ -216,17 +215,14 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 			}
 			continue
 		}
-		img := scene.Raster(true)
-		for c := 0; c < e.Copies; c++ {
-			rendered = append(rendered, img)
-		}
+		rendered.add(scene, e.Copies)
 		out.Printed = append(out.Printed, e.ID)
 	}
-	if len(rendered) == 0 {
+	if rendered.len() == 0 {
 		out.Printed, out.Failure = nil, "None of these labels could be produced"
 		return out
 	}
-	job, err := plan.Encode(rendered)
+	job, err := rendered.encode()
 	if err != nil {
 		return store.SpoolOutcome{Failure: "The print job could not be made: " + err.Error(), Problems: out.Problems}
 	}

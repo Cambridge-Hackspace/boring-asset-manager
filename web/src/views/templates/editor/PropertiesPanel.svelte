@@ -25,6 +25,7 @@
   import Icon from './Icon.svelte';
   import NumberField from './NumberField.svelte';
   import Swatches from './Swatches.svelte';
+  import { inkName, offeredInks, paletteInks, type Ink } from '../../../lib/inks';
   import { parseLength } from './transform';
 
   // What is selected, and its settings: with one element, all of them, each
@@ -70,11 +71,11 @@
     update(next);
   }
 
-  const paints: [Paint, string][] = [
-    ['black', 'Black'],
-    ['white', 'White'],
-    ['none', 'None'],
-  ];
+  // The inks offered: the printer's, and the one an element has if the
+  // printer lacks it, said to print black there; every ink with none chosen.
+  const inkTitle = (ink: Ink) => (editor.palette && !paletteInks(editor.palette).includes(ink) ? `${inkName(ink)} (prints black here)` : inkName(ink));
+  const inks = (current: string | undefined, white = true): [Ink, string][] => offeredInks(editor.palette, current, white).map((i) => [i, inkTitle(i)]);
+  const paints = (current: string | undefined): [Paint, string][] => [...inks(current), ['none', 'None']];
   function setStroke(paint: Paint) {
     if (!e) return;
     let next = withProp(e, 'stroke', paint);
@@ -191,7 +192,7 @@
             <option value="right">Right</option>
           </select>
         </label>
-        <Swatches label="Color" name={id('color')} value={e.fill === 'white' ? 'white' : 'black'} options={paints.slice(0, 2)} onchange={(v) => update(withProp(e, 'fill', v === 'white' ? 'white' : undefined))} />
+        <Swatches label="Color" name={id('color')} value={e.fill ?? 'black'} options={inks(e.fill)} onchange={(v) => update(withProp(e, 'fill', v === 'black' ? undefined : v))} />
         <label class="flex items-center gap-1 text-xs" for={id('fit')}>
           <span class="text-zinc-600 dark:text-zinc-400">Fit</span>
           <select
@@ -220,6 +221,7 @@
             {#each generators as g (g.type)}<option value={g.type}>{g.name}</option>{/each}
           </select>
         </label>
+        <Swatches label="Color" name={id('code-color')} value={e.fill ?? 'black'} options={inks(e.fill, false)} onchange={(v) => update(withProp(e, 'fill', v === 'black' ? undefined : v))} />
         <!-- Padding, as Figma's and the CSS box model's: the space kept clear inside the code's box. -->
         <fieldset class="space-y-1">
           <legend class="flex w-full items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
@@ -324,12 +326,12 @@
     {:else if e.type === 'shape'}
       {@const fillable = e.shape !== 'line' && !(e.shape === 'polygon' && e.closed === false)}
       <div class={row}>
-        <Swatches label="Stroke" name={id('stroke')} value={e.stroke ?? 'black'} options={paints} onchange={setStroke} />
+        <Swatches label="Stroke" name={id('stroke')} value={e.stroke ?? 'black'} options={paints(e.stroke)} onchange={setStroke} />
         {#if e.stroke !== 'none'}
           <NumberField id={id('stroke-width')} label="Width" title="Stroke width" value={e.stroke_width} min={0} unit={doc.units} onchange={(n) => update(withProp(e, 'stroke_width', n || undefined))} />
         {/if}
         {#if fillable}
-          <Swatches label="Fill" name={id('fill')} value={e.fill ?? 'none'} options={paints} onchange={(v) => update(withProp(e, 'fill', v))} />
+          <Swatches label="Fill" name={id('fill')} value={e.fill ?? 'none'} options={paints(e.fill)} onchange={(v) => update(withProp(e, 'fill', v))} />
         {/if}
         {#if e.shape === 'rectangle'}
           <NumberField id={id('radius')} label="Corners" title="Corner radius" value={e.corner_radius ?? 0} min={0} unit={doc.units} onchange={(n) => update(withProp(e, 'corner_radius', n || undefined))} />

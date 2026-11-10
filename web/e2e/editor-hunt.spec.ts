@@ -494,6 +494,30 @@ test.describe('pointer and keyboard', () => {
     await expect.poll(() => ink(page)).toBeGreaterThan(50);
   });
 
+  test('37b: text in red is drawn red, with no printer to hold it to black and white', async ({ signedIn: page }) => {
+    // Printers other specs set up are not chosen: none holds it to their inks.
+    const drivers = page.waitForResponse((r) => r.url().includes('/api/v1/printers/drivers'));
+    await withText(page);
+    await drivers;
+    const printer = page.locator('#tpl-printer');
+    if (await printer.count()) await printer.selectOption('');
+    const colors = panels(page).getByRole('radiogroup', { name: 'Color' });
+    for (const ink of ['Black', 'White', 'Red', 'Yellow', 'Green', 'Blue', 'Orange']) await expect(colors.getByRole('radio', { name: ink })).toHaveCount(1);
+    await colors.locator('label[title="Red"]').click();
+    await expect(colors.getByRole('radio', { name: 'Red' })).toBeChecked();
+    const red = () =>
+      labelImage(page)
+        .locator('canvas')
+        .evaluate((c: HTMLCanvasElement) => {
+          const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+          let n = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i]! > 150 && d[i + 1]! < 60 && d[i + 2]! < 60) n++;
+          return n;
+        });
+    await expect.poll(red).toBeGreaterThan(50);
+    await expect.poll(() => ink(page)).toBe(0);
+  });
+
   test('39: a layer renamed keeps the name on Enter, and Escape takes it back', async ({ signedIn: page }) => {
     await withText(page);
     const layers = panels(page).getByRole('list', { name: 'Layers' });

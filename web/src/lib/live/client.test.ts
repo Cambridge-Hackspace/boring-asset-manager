@@ -35,6 +35,19 @@ const data = { data: { asset_name: 'Sample' }, placeholders: true };
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('LiveRenderer', () => {
+  it("asks for the inks of the printer chosen, or the template's own", async () => {
+    const w = fakePort();
+    const live = new LiveRenderer(w.port, async () => new ArrayBuffer(0));
+    w.send({ type: 'ready' });
+    const first = live.render(doc(1), data, [], 'bwr');
+    await flush();
+    w.answer(w.renders()[0]!.seq);
+    await first;
+    void live.render(doc(2), data);
+    await flush();
+    expect(w.renders().map((r) => r.palette)).toEqual(['bwr', '']);
+  });
+
   it('draws only the newest of what was asked while it loaded', async () => {
     const w = fakePort();
     const live = new LiveRenderer(w.port, async () => new ArrayBuffer(0));

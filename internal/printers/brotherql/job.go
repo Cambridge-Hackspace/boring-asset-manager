@@ -18,6 +18,7 @@ var (
 	cmdMargin       = []byte{0x1B, 'i', 'd'}
 	cmdCompressTIFF = []byte{'M', 0x02}
 	cmdRasterLine   = byte('g')
+	cmdColorLine    = byte('w')  // a raster line of one color, in two-color printing
 	cmdPrint        = byte(0x0C) // print, more pages follow
 	cmdPrintAndFeed = byte(0x1A) // print the last page
 )
@@ -28,6 +29,12 @@ const (
 
 	autoCut  = 0x40 // various mode
 	cutAtEnd = 0x08 // expanded mode
+	twoColor = 0x01 // expanded mode
+
+	// The colors of a two-color raster line: black, printed with high
+	// energy, and red, with low.
+	colorBlack = 0x01
+	colorRed   = 0x02
 )
 
 // JobOptions are the per-printer choices that change the command stream.
@@ -50,11 +57,33 @@ func (mo Model) bytesPerLine() int { return mo.Pins / 8 }
 // raster lines and a print command, leaving out what the model does not
 // take. Uncompressed raster lines span the whole head, as the references
 // give their length.
+//
+// On a layout that prints two colors (Layout.TwoColor), every page is sent
+// in two colors, with nothing in red; EncodeTwoColorJob sends red too.
 func EncodeJob(l Layout, pages []*image.Gray, opts JobOptions) ([]byte, error) {
+	return encodeJob(l, pages, nil, opts)
+}
+
+// EncodeTwoColorJob is EncodeJob for a layout that prints two colors: each
+// page as black, dark wherever black prints, and red, dark wherever red
+// prints, both prepared for the layout. Where both are dark, black prints.
+func EncodeTwoColorJob(l Layout, black, red []*image.Gray, opts JobOptions) ([]byte, error) {
+	if !l.TwoColor() {
+		return nil, fmt.Errorf("brotherql: the %s prints only black on %s", l.Model.Name, l.Media.Name)
+	}
+	if len(red) != len(black) {
+		return nil, fmt.Errorf("brotherql: %d pages in black and %d in red", len(black), len(red))
+	}
+	return encodeJob(l, black, red, opts)
+}
+
+// encodeJob encodes pages, and in two colors, their red.
+func encodeJob(l Layout, pages, red []*image.Gray, opts JobOptions) ([]byte, error) {
 	mo, m := l.Model, l.Media
 	if len(pages) == 0 {
 		return nil, fmt.Errorf("brotherql: a job needs at least one page")
 	}
+	colors := l.TwoColor()
 	if opts.Cut && !mo.Cutter {
 		return nil, fmt.Errorf("brotherql: the %s has no cutter", mo.Name)
 	}
@@ -79,6 +108,13 @@ func EncodeJob(l Layout, pages []*image.Gray, opts JobOptions) ([]byte, error) {
 		}
 		if m.DieCut() && b.Dy() != l.PrintableLines {
 			return nil, fmt.Errorf("brotherql: page %d has %d lines, %s labels have %d", i, b.Dy(), m.Name, l.PrintableLines)
+		}
+		var redPage *image.Gray
+		if red != nil {
+			redPage = red[i]
+			if redPage.Bounds().Size() != b.Size() {
+				return nil, fmt.Errorf("brotherql: page %d is %v in black and %v in red", i, b.Size(), redPage.Bounds().Size())
+			}
 		}
 
 		if mo.ModeSwitch {
@@ -107,11 +143,14 @@ func EncodeJob(l Layout, pages []*image.Gray, opts JobOptions) ([]byte, error) {
 		}
 		if mo.Expanded {
 			buf.Write(cmdExpandedMode)
+			var mode byte
 			if opts.Cut {
-				buf.WriteByte(cutAtEnd)
-			} else {
-				buf.WriteByte(0)
+				mode |= cutAtEnd
 			}
+			if colors {
+				mode |= twoColor
+			}
+			buf.WriteByte(mode)
 		}
 		buf.Write(cmdMargin)
 		_ = binary.Write(&buf, binary.LittleEndian, uint16(l.FeedDots))
@@ -120,16 +159,26 @@ func EncodeJob(l Layout, pages []*image.Gray, opts JobOptions) ([]byte, error) {
 		}
 
 		line := make([]byte, mo.bytesPerLine())
-		for y := b.Min.Y; y < b.Max.Y; y++ {
-			l.packLine(line, page, y)
+		send := func(command, color byte) {
 			data := line
 			if mo.Compression {
 				data = packBits(line)
 			}
-			buf.WriteByte(cmdRasterLine)
-			buf.WriteByte(0x00)
+			buf.WriteByte(command)
+			buf.WriteByte(color)
 			buf.WriteByte(byte(len(data)))
 			buf.Write(data)
+		}
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			l.packLine(line, page, y)
+			if !colors {
+				send(cmdRasterLine, 0x00)
+				continue
+			}
+			send(cmdColorLine, colorBlack)
+			// Red where black does not print.
+			l.packRedLine(line, page, redPage, y)
+			send(cmdColorLine, colorRed)
 		}
 
 		if i == len(pages)-1 {
@@ -158,6 +207,26 @@ func (l Layout) packLine(line []byte, page *image.Gray, y int) {
 	}
 }
 
+// packRedLine fills line with one raster row of red: dark in red where
+// black, on page, is not.
+func (l Layout) packRedLine(line []byte, page, red *image.Gray, y int) {
+	for i := range line {
+		line[i] = 0
+	}
+	if red == nil {
+		return
+	}
+	row := page.Pix[(y-page.Rect.Min.Y)*page.Stride:]
+	reds := red.Pix[(y-red.Rect.Min.Y)*red.Stride:]
+	for x := 0; x < l.PrintableDots; x++ {
+		if reds[x] >= 0x80 || row[x] < 0x80 {
+			continue
+		}
+		pin := l.RightMarginDots + (l.PrintableDots - 1 - x)
+		line[pin/8] |= 0x80 >> uint(pin%8)
+	}
+}
+
 // Page is one label recovered from a command stream by DecodeJob.
 type Page struct {
 	MediaType byte
@@ -169,8 +238,13 @@ type Page struct {
 	AutoCut bool
 	// FeedDots is the margin the page asked for.
 	FeedDots int
-	// Lines holds each raster line, uncompressed.
+	// Lines holds each raster line, uncompressed: in two colors, those of
+	// black.
 	Lines [][]byte
+	// TwoColor reports whether the page is printed in two colors, and
+	// RedLines then holds each raster line of red.
+	TwoColor bool
+	RedLines [][]byte
 	// Last reports whether the page ended the job.
 	Last bool
 }
@@ -254,8 +328,18 @@ func (mo Model) DecodeJob(stream []byte) ([]Page, error) {
 			if !mo.Expanded {
 				return nil, unsupported("expanded mode")
 			}
-			if _, err := take(4); err != nil {
+			cmd, err := take(4)
+			if err != nil {
 				return nil, err
+			}
+			if cmd[3]&twoColor != 0 {
+				if !mo.TwoColor {
+					return nil, unsupported("two-color printing")
+				}
+				if cur == nil {
+					return nil, fmt.Errorf("brotherql: mode setting before print information")
+				}
+				cur.TwoColor = true
 			}
 		case bytes.HasPrefix(s, cmdMargin):
 			cmd, err := take(5)
@@ -272,6 +356,35 @@ func (mo Model) DecodeJob(stream []byte) ([]Page, error) {
 			}
 			s = s[len(cmdCompressTIFF):]
 			compressed = true
+		case s[0] == cmdColorLine:
+			hdr, err := take(3)
+			if err != nil {
+				return nil, err
+			}
+			if cur == nil || !cur.TwoColor {
+				return nil, fmt.Errorf("brotherql: a two-color raster line outside two-color printing")
+			}
+			data, err := take(int(hdr[2]))
+			if err != nil {
+				return nil, err
+			}
+			line := data
+			if compressed {
+				if line, err = unpackBits(data); err != nil {
+					return nil, err
+				}
+			}
+			if len(line) != mo.bytesPerLine() {
+				return nil, fmt.Errorf("brotherql: raster line of %d bytes", len(line))
+			}
+			switch hdr[1] {
+			case colorBlack:
+				cur.Lines = append(cur.Lines, line)
+			case colorRed:
+				cur.RedLines = append(cur.RedLines, line)
+			default:
+				return nil, fmt.Errorf("brotherql: raster line of color 0x%02X", hdr[1])
+			}
 		case s[0] == cmdRasterLine:
 			hdr, err := take(3)
 			if err != nil {
@@ -292,7 +405,7 @@ func (mo Model) DecodeJob(stream []byte) ([]Page, error) {
 			}
 			cur.Lines = append(cur.Lines, line)
 		case s[0] == cmdPrint || s[0] == cmdPrintAndFeed:
-			if cur == nil || uint32(len(cur.Lines)) != expectLines {
+			if cur == nil || uint32(len(cur.Lines)) != expectLines || cur.TwoColor && uint32(len(cur.RedLines)) != expectLines {
 				return nil, fmt.Errorf("brotherql: page ended after an unexpected number of lines")
 			}
 			cur.Last = s[0] == cmdPrintAndFeed
