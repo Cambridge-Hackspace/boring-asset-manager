@@ -3,6 +3,7 @@
   import { messageOf } from '../lib/errors';
   import type { PublicProviders, User } from '../lib/models';
   import { describeAssignment, describeHeld } from '../lib/permissions';
+  import { offline } from '../lib/offline/offline.svelte';
   import { session } from '../lib/session.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import PageHeader from '../components/PageHeader.svelte';
@@ -176,6 +177,16 @@
       <ErrorMessage error={emailError} />
       {#if emailStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{emailStatus}</p>{/if}
     </section>
+
+    {#if session.can('assets.read')}
+      <section class="card space-y-2" aria-labelledby="offline-heading">
+        <h2 id="offline-heading" class="text-lg font-semibold">Offline</h2>
+        <p class="text-sm">
+          {offline.copy ? 'This device keeps a copy of what you can see, to use with no signal.' : 'This device keeps no copy to use with no signal.'}
+          <a class="inline-flex min-h-11 items-center underline" href="/offline">The offline copy</a>
+        </p>
+      </section>
+    {/if}
 
     {#if passwordsOn}
     <form class="card space-y-4" onsubmit={change}>

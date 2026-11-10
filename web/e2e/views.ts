@@ -273,6 +273,8 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/installed-app', 'Installed app'],
     ['/packages', 'Import & export'],
     ['/loans', 'Loans'],
+    ['/shopping', 'Shopping list'],
+    ['/offline', 'Offline copy'],
     ['/flows', 'Flows'],
     ['/flows/new', 'New flow'],
     [`/flows/${flowSlug}/edit`, ''],

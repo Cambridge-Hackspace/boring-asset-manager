@@ -366,6 +366,8 @@ Reading needs `assets.read`; changing needs `reports.manage`. See [Reports](repo
 | `get_review_settings` | `settings.manage` | Whether assistants' changes land as drafts, and how many days before a review date it is due ([Review states](review.md#review-dates)). Changing them is refused over MCP. |
 | `get_document_settings`, `set_document_settings` | `assets.read`, and `settings.manage` to set | The instance's name on PDFs, and their page size. |
 | `get_app_settings`, `set_app_settings` | none, and `settings.manage` to set | How BAM! looks installed on a phone: its name, colors and icon ([Installing](installing.md#on-a-phone)). What is not given is kept. |
+| `get_offline_settings`, `set_offline_settings` | `assets.read`, and `settings.manage` to set | Whether installed apps keep a copy to use offline, how often they refresh it, and whether thumbnails may be kept ([Installing](installing.md#offline)). What is not given is kept. |
+| `shopping_list` | `assets.read` | What is running low, of what you can see, grouped by category, with its preferred vendor and any open order it is on ([Stock](stock-and-lending.md#the-shopping-list)). |
 | `preview_report` | `reports.manage` | A spec unsaved; or a scan template for an asset. |
 | `save_report` | `reports.manage` | Its name or spec; what is not given is kept. |
 | `delete_report` | `reports.manage` | |

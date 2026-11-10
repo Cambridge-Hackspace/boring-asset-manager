@@ -43,6 +43,7 @@ var Refused = map[string]string{
 	"POST /api/v1/auth/me/factors/passkey":           "a passkey is registered by its person, in their browser, signed in (#191)",
 	"POST /api/v1/auth/me/factors/passkey/confirm":   "a passkey is registered by its person, in their browser, signed in (#191)",
 	"POST /api/v1/auth/me/factors/passkey/challenge": "a passkey answers in its person's browser, to confirm it is them (#191)",
+	"GET /api/v1/offline":                            "the copy an installed app keeps on a phone to use offline (docs/installing.md#offline); list_assets and shopping_list give the same, live",
 	"POST /api/v1/settings/app/icon":                 "a logo uploaded from a person's browser (docs/installing.md#on-a-phone); upload_image adds one to the library, and set_app_settings makes it the icon",
 	"DELETE /api/v1/auth/me/factors/{id}":            "removing a second factor takes its person's password and a current factor; reset_user_factors removes someone's",
 	"POST /api/v1/auth/me/factors/recovery":          "recovery codes are shown once to their person, signed in, and new ones take a current factor (#190)",

@@ -6,7 +6,11 @@ Some assets are counted rather than single things: screws, filament, cable ties.
 - A **low stock threshold** flags the asset as *running low* when it drops below it. **Mark running low** flags it by hand, and **Mark restocked** clears the flag.
 - A category can be **consumable**: it is flagged running low when too few of its assets are left, or, with a unit, when their stock adds up to too little, such as spools of filament by weight.
 
-Everything used and restocked is kept in the asset's history, and the **Running low** report makes a shopping list.
+Everything used and restocked is kept in the asset's history.
+
+## The shopping list
+
+**Shopping list**, the installed app's shortcut, lists what is running low by category, with where it is and where to buy it: the preferred vendor, part number and pack, and the order it is already on. Type how many you bought and check it off to restock it. It works with no signal too, from the phone's offline copy; if someone restocked the same thing meanwhile, it asks whether yours was another purchase before adding it. A category counted by its assets is bought as new assets, so it links to adding one. With **Start orders**, those who order from vendors start purchase orders from the same list.
 
 ## Stock kept in several places
 

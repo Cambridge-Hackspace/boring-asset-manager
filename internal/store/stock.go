@@ -233,6 +233,28 @@ func (s *Store) recordQuantityTx(tx *sql.Tx, id string, was *models.AssetStock, 
 // is negative, restocking positive), or to *set. Using more than there is
 // fails with ErrNotEnoughStock and changes nothing.
 func (s *Store) AdjustQuantity(id string, delta int, set *int) (*models.AssetWithDetails, error) {
+	a, _, err := s.adjustQuantity(id, delta, set, nil)
+	return a, err
+}
+
+// ErrRestockedSince is a restock refused because the asset was restocked
+// after the time it was to be checked against: someone else may have
+// recorded the same purchase (docs/stock-and-lending.md#restocking-from-a-copy).
+var ErrRestockedSince = errors.New("restocked since")
+
+// RestockUnlessRestocked restocks an asset by amount, unless it was
+// restocked at or after since, as an offline copy made then would not know
+// (docs/installing.md#offline): then it changes nothing, and returns
+// ErrRestockedSince with those restocks, oldest first. A restock is any
+// rise of its quantity but stock moved in from another place. since is
+// taken to the second, so a restock in the same second counts: a conflict
+// shown that was none costs a person a tap, and one missed a double count.
+func (s *Store) RestockUnlessRestocked(id string, amount int, since time.Time) (*models.AssetWithDetails, []models.Event, error) {
+	return s.adjustQuantity(id, amount, nil, &since)
+}
+
+func (s *Store) adjustQuantity(id string, delta int, set *int, unlessSince *time.Time) (*models.AssetWithDetails, []models.Event, error) {
+	var restocks []models.Event
 	err := s.withInventory(func(ic *inventoryChange) error {
 		was, err := s.readStockTx(ic.tx, id)
 		if err != nil {
@@ -240,6 +262,14 @@ func (s *Store) AdjustQuantity(id string, delta int, set *int) (*models.AssetWit
 		}
 		if was == nil {
 			return ErrNotStocked
+		}
+		if unlessSince != nil {
+			if restocks, err = s.restocksSinceTx(ic.tx, id, *unlessSince); err != nil {
+				return err
+			}
+			if len(restocks) > 0 {
+				return ErrRestockedSince
+			}
 		}
 		quantity := was.Quantity
 		switch {
@@ -261,10 +291,36 @@ func (s *Store) AdjustQuantity(id string, delta int, set *int) (*models.AssetWit
 		}
 		return s.recordQuantityTx(ic.tx, id, was, quantity)
 	})
-	if err != nil {
-		return nil, err
+	if errors.Is(err, ErrRestockedSince) {
+		return nil, restocks, err
 	}
-	return s.GetAssetByID(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	a, err := s.GetAssetByID(id)
+	return a, nil, err
+}
+
+// restocksSinceTx lists an asset's restocks recorded at or after since, to
+// the second, oldest first: rises of its quantity, but for stock moved in.
+func (s *Store) restocksSinceTx(tx *sql.Tx, id string, since time.Time) ([]models.Event, error) {
+	rows, err := s.TxQuery(tx, "SELECT "+eventColumns+" FROM events WHERE asset_id = ? AND kind = ? AND created_at >= ? ORDER BY created_at, id",
+		id, models.EventQuantityChanged, dbTime(since.Truncate(time.Second)))
+	if err != nil {
+		return nil, fmt.Errorf("reading restocks: %w", err)
+	}
+	defer rows.Close()
+	out := []models.Event{}
+	for rows.Next() {
+		e, err := scanEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		if c := e.Payload.Change; c != nil && *c > 0 && e.Payload.Move == nil {
+			out = append(out, e)
+		}
+	}
+	return out, rows.Err()
 }
 
 // SetAssetRunningLow flags or clears an asset by hand. It reports whether

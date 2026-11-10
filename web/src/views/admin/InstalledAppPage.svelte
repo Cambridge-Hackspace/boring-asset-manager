@@ -9,6 +9,7 @@
   import { messageOf } from '../../lib/errors';
   import { installedApp, type AppSettings } from '../../lib/install/app.svelte';
   import type { ImageInfo } from '../../lib/models';
+  import type { OfflineSettings } from '../../lib/offline/copy';
   import { session } from '../../lib/session.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PageHeader from '../../components/PageHeader.svelte';
@@ -30,6 +31,15 @@
   let error = $state('');
   let status = $state('');
   let busy = $state(false);
+  // The offline copies (docs/installing.md#offline).
+  let offlineOn = $state(true);
+  let refreshMinutes = $state(60);
+  let thumbnails = $state(true);
+
+  function takeOffline(o: OfflineSettings) {
+    [offlineOn, refreshMinutes, thumbnails] = [o.enabled, o.refresh_minutes, o.thumbnails];
+  }
+
   // Changes with the icon, so the preview is drawn again.
   let drawn = $state(0);
 
@@ -47,6 +57,7 @@
   onMount(async () => {
     try {
       take(await request<AppSettings>('GET', '/settings/app'));
+      takeOffline(await request<OfflineSettings>('GET', '/settings/offline'));
       if (session.can('assets.read')) images = (await request<{ images: ImageInfo[] }>('GET', '/images')).images ?? [];
       loaded = true;
     } catch (err) {
@@ -69,6 +80,7 @@
           icon_image_id: icon,
         }),
       );
+      takeOffline(await request<OfflineSettings>('PUT', '/settings/offline', { enabled: offlineOn, refresh_minutes: refreshMinutes, thumbnails }));
       status = 'Saved. Phones that installed it update their icon and name when they next check, which may take a day.';
     } catch (err) {
       error = messageOf(err);
@@ -103,7 +115,7 @@
   }
 </script>
 
-<PageHeader title="Installed app" lede="People install BAM! on a phone or computer from the browser, as an app of its own. This is its name, icon and colors there." />
+<PageHeader title="Installed app" lede="People install BAM! on a phone or computer from the browser, as an app of its own. This is its name, icon and colors there, and what it keeps to use offline." />
 
 <ErrorMessage {error} />
 {#if loaded}
@@ -185,6 +197,27 @@
         </div>
       </div>
       <button type="button" class="btn-secondary" onclick={resetColors}>BAM!'s colors</button>
+    </section>
+
+    <section class="card space-y-3" aria-labelledby="app-offline-heading">
+      <h2 id="app-offline-heading" class="text-lg font-semibold">Offline</h2>
+      <p class="text-sm">
+        The installed app keeps a copy of what each person can see, so that scanning, finding things and the shopping list work with no signal. It
+        holds only what they can see, and is removed when they sign out or lose access.
+      </p>
+      <label class="flex min-h-11 items-center gap-2">
+        <input type="checkbox" bind:checked={offlineOn} />
+        Keep copies for use offline
+      </label>
+      <div>
+        <label class="label" for="app-offline-refresh">Refresh each copy every (minutes)</label>
+        <input id="app-offline-refresh" class="input w-28" type="number" min="5" max="10080" step="1" required bind:value={refreshMinutes} aria-describedby="app-offline-refresh-hint" />
+        <p id="app-offline-refresh-hint" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">While the app is open and online. From 5 minutes to a week.</p>
+      </div>
+      <label class="flex min-h-11 items-center gap-2">
+        <input type="checkbox" bind:checked={thumbnails} />
+        Let people keep thumbnails of photos in their copy
+      </label>
     </section>
 
     <div class="flex flex-wrap items-center gap-3">
