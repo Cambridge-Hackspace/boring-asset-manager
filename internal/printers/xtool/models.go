@@ -48,6 +48,10 @@ type Model struct {
 	// Firmware is the firmware BAM! knows for it on this protocol; any
 	// other is refused unless the printer allows it.
 	Firmware []FirmwareRange
+	// Camera is how its camera over the bed is asked for a photo: by name
+	// over WS-V2, by stream over REST V1; empty where PROTOCOL.md gives no
+	// way to.
+	Camera string
 }
 
 // Model IDs.
@@ -73,14 +77,17 @@ func Models() []Model {
 		{ID: ModelF1, Protocol: WSV2, WorkWidthMM: 115, WorkHeightMM: 115, StartButton: true, Frames: true,
 			Firmware: []FirmwareRange{{Line: firmwareF1, Min: thresholdF1}}},
 		{ID: ModelF1Ultra, Protocol: WSV2, WorkWidthMM: 220, WorkHeightMM: 220, MirrorX: true, StartButton: true, Frames: true,
-			Firmware: []FirmwareRange{{Line: firmwareF1Ultra, Min: thresholdF1Ultra}}},
+			Firmware: []FirmwareRange{{Line: firmwareF1Ultra, Min: thresholdF1Ultra}}, Camera: "main"},
+		// PROTOCOL.md names the overview camera's stream 0 for the F1, the
+		// F1 Ultra and the P2 on REST V1, and no snapshot route for the F1
+		// on WS-V2, or for the M1.
 		{ID: ModelF1V1, Protocol: RESTV1, Dialect: DialectProcessing, WorkWidthMM: 115, WorkHeightMM: 115,
-			Firmware: []FirmwareRange{{Line: firmwareF1, Below: thresholdF1}}},
+			Firmware: []FirmwareRange{{Line: firmwareF1, Below: thresholdF1}}, Camera: "0"},
 		{ID: ModelF1UltraV1, Protocol: RESTV1, Dialect: DialectProcessing, WorkWidthMM: 220, WorkHeightMM: 220, MirrorX: true,
-			Firmware: []FirmwareRange{{Line: firmwareF1Ultra, Below: thresholdF1Ultra}}},
+			Firmware: []FirmwareRange{{Line: firmwareF1Ultra, Below: thresholdF1Ultra}}, Camera: "0"},
 		// xTool has not published the P2's or the M1's firmware lines, so
 		// no firmware is known for them: each must be allowed.
-		{ID: ModelP2V1, Protocol: RESTV1, Dialect: DialectProcessing, WorkWidthMM: 600, WorkHeightMM: 305},
+		{ID: ModelP2V1, Protocol: RESTV1, Dialect: DialectProcessing, WorkWidthMM: 600, WorkHeightMM: 305, Camera: "0"},
 		{ID: ModelM1V1, Protocol: RESTV1, Dialect: DialectCNC, WorkWidthMM: 385, WorkHeightMM: 300},
 	}
 }

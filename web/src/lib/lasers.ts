@@ -1,7 +1,8 @@
 // Lasers (docs/printing.md#lasers): one-shot printers, which engrave a label
 // onto a workpiece. What the Lasers page works out from what the API gives.
 
-import type { DriverInfo, LaserJobState, Material, OneShotModel, Printer, TemplateSummary } from './models';
+import type { DriverInfo, LaserCalibration, LaserJobState, LaserPlacement, MarkLayout, Material, OneShotModel, Printer, RectMM, TemplateSummary } from './models';
+import type { Corner } from './template';
 
 /** The printers that are lasers, each with its model as its driver describes it. */
 export function lasersOf(printers: Printer[], drivers: DriverInfo[]): { printer: Printer; model: OneShotModel }[] {
@@ -92,4 +93,54 @@ export function materialID(name: string): string {
       .slice(0, 64)
       .replace(/-+$/, '') || 'material'
   );
+}
+
+/** Where the label went on its workpiece, turned with it; jobs recorded before pieces turned give only label. */
+export function placedOf(p: LaserPlacement): RectMM {
+  return p.placed && p.placed.width > 0 ? p.placed : p.label;
+}
+
+/** The SVG transform turning a workpiece, and what is on it, as it lies on the bed: clockwise about its center. */
+export function turnOf(p: LaserPlacement): string {
+  const a = p.angle_deg ?? 0;
+  if (!a) return '';
+  const w = p.workpiece;
+  return `rotate(${a} ${w.x + w.width / 2} ${w.y + w.height / 2})`;
+}
+
+/** A corner of the workpiece as people say it. */
+export function cornerName(c: Corner | '' | undefined): string {
+  switch (c) {
+    case 'top_left':
+      return 'top left corner';
+    case 'top_right':
+      return 'top right corner';
+    case 'bottom_left':
+      return 'bottom left corner';
+    case 'bottom_right':
+      return 'bottom right corner';
+  }
+  return 'center';
+}
+
+/** Where the calibration marks' scrap goes, in a sentence. */
+export function scrapText(l: MarkLayout): string {
+  const [x, y, w, h] = l.scrap.map(round1);
+  return `Lay light scrap at least ${w} × ${h} mm with its top left corner ${x} mm from the left of the work area and ${y} mm from its top`;
+}
+
+/** A calibration in a sentence: its height, how many marks fitted, and how closely. */
+export function calibrationText(c: LaserCalibration | null): string {
+  if (!c) return 'Not calibrated: engrave the marks, then find them.';
+  const when = new Date(c.created_at).toLocaleString();
+  return `Calibrated ${when} for a surface ${c.z_mm} mm above the bed, from ${c.marks} marks fitting within ${c.rms_mm} mm (${c.max_mm} mm at worst).`;
+}
+
+/** Whether a height is near enough a calibration's to place by its camera. */
+export function heightFits(c: LaserCalibration | null, z: number, tolerance: number): boolean {
+  return !!c && Math.abs(z - c.z_mm) <= tolerance + 1e-9;
+}
+
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
 }

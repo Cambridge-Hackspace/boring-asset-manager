@@ -22,7 +22,10 @@ import (
 type REST struct {
 	Base    string
 	Dialect string
-	Client  *http.Client
+	// CameraBase is where its camera answers, such as
+	// http://192.0.2.7:8329; empty for none.
+	CameraBase string
+	Client     *http.Client
 }
 
 // restTimeout bounds a request other than an upload.

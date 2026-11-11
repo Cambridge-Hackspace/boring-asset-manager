@@ -158,6 +158,15 @@ A print can mirror one job without changing the template, as with `feed`. `mirro
 `none` to print a mirrored template the right way round. `save_template` sets `print_mirror`
 (`none` to clear it) and `print_rotation`.
 
+### On a laser's workpiece
+
+`workpiece_anchor` says where a laser puts the label on its workpiece
+([Placing the label](printing.md#placing-the-label)): `corner` is `center` (as when it is absent),
+`top_left`, `top_right`, `bottom_left` or `bottom_right`, and `inset_mm` how far in from both of
+that corner's sides, from 0 to 1000 mm, for a corner only. The label turns with the workpiece.
+Every other printer ignores it. In the editor it is *On the workpiece*, beside a laser chosen as the
+printer.
+
 ### Editor-only properties
 
 Some properties are for the editor alone. None of them changes what prints.

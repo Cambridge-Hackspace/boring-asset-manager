@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
@@ -92,10 +93,20 @@ type LaserJobRequest struct {
 		HeightMM float64 `json:"height_mm"`
 		XMM      float64 `json:"x_mm"`
 		YMM      float64 `json:"y_mm"`
+		// AngleDeg is how far it is turned clockwise about its center.
+		AngleDeg float64 `json:"angle_deg,omitempty"`
+		// ZMM is its surface's height above the bed.
+		ZMM *float64 `json:"z_mm,omitempty"`
 	} `json:"workpiece"`
+	// Camera says the camera measured the workpiece: its calibration must
+	// be good at the workpiece's z_mm, or calibrating again is asked for.
+	Camera bool `json:"camera,omitempty"`
 	// LabelAt is where the label's top left corner goes on the workpiece,
-	// from its top left corner; left out, the label is centered on it.
+	// from its top left corner; left out, the label goes by Anchor.
 	LabelAt *printers.PointMM `json:"label_at,omitempty"`
+	// Anchor puts the label in a corner of the workpiece or centers it;
+	// left out, as the template's workpiece_anchor says, or centered.
+	Anchor *labels.WorkpieceAnchor `json:"anchor,omitempty"`
 }
 
 // laserJobAnswer is a laser job as the API gives it: its history, and while
@@ -227,6 +238,23 @@ func (s *Server) handlePrepareLaserJob(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var z float64
+	if req.Workpiece.ZMM != nil || req.Camera {
+		if z, ok = zOf(w, req.Workpiece.ZMM); !ok {
+			return
+		}
+	}
+	if req.Camera {
+		// Placed by the camera, it is only where the camera says at the
+		// height it was calibrated at.
+		if !model.Camera {
+			writeJSONError(w, http.StatusConflict, p.Name+" has no camera BAM! can use")
+			return
+		}
+		if _, ok := s.calibrationAt(w, p, z); !ok {
+			return
+		}
+	}
 	material, err := s.store.Material(p.ID, req.Material)
 	if writeLaserError(w, err, "read the material") {
 		return
@@ -234,6 +262,17 @@ func (s *Server) handlePrepareLaserJob(w http.ResponseWriter, r *http.Request) {
 	t, ok := s.loadTemplateFor(w, req.TemplateID)
 	if !ok {
 		return
+	}
+	anchor := labels.WorkpieceAnchor{}
+	switch {
+	case req.Anchor != nil:
+		anchor = *req.Anchor
+		if !labels.ValidCorner(anchor.Corner) || !(anchor.InsetMM >= 0 && anchor.InsetMM <= labels.MaxInsetMM) {
+			writeJSONError(w, http.StatusBadRequest, `anchor: corner must be "center", "top_left", "top_right", "bottom_left" or "bottom_right", and inset_mm from 0 to 1000`)
+			return
+		}
+	case t.WorkpieceAnchor != nil:
+		anchor = *t.WorkpieceAnchor
 	}
 	spec := labelSpec(t)
 	if _, err := printers.FitLabel(printers.OneShotGeometry(model, p.Name), spec); err != nil {
@@ -277,7 +316,9 @@ func (s *Server) handlePrepareLaserJob(w http.ResponseWriter, r *http.Request) {
 	in := printers.JobInput{
 		Material:     material.Material,
 		Workpiece:    printers.RectMM{X: req.Workpiece.XMM, Y: req.Workpiece.YMM, Width: req.Workpiece.WidthMM, Height: req.Workpiece.HeightMM},
+		AngleDeg:     req.Workpiece.AngleDeg,
 		LabelAt:      req.LabelAt,
+		Anchor:       anchor,
 		LabelWidthMM: spec.WidthMM, LabelHeightMM: spec.HeightMM,
 		Engrave: scene.Raster(true),
 	}
@@ -308,7 +349,8 @@ func (s *Server) handlePrepareLaserJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rec := models.LaserJob{PrinterID: &p.ID, PrinterName: p.Name, TemplateID: &t.ID, TemplateName: t.Name, AssetName: assetName,
-		Material: material.Material, Placement: models.LaserPlacement{Workpiece: job.Workpiece, Label: job.Label, Mirror: job.Mirror, Cuts: len(job.Cuts)}}
+		Material: material.Material, Placement: models.LaserPlacement{Workpiece: job.Workpiece, AngleDeg: job.AngleDeg, Placed: job.Placed, Label: job.Label,
+			Mirror: job.Mirror, Cuts: len(job.Cuts), Camera: req.Camera, ZMM: z}}
 	if req.AssetID != "" {
 		rec.AssetID = &req.AssetID
 	}

@@ -841,10 +841,16 @@ func labelTools() []tool {
 				if err := need(in.PrinterID, "printer_id"); err != nil {
 					return request{}, err
 				}
-				body := map[string]any{"template_id": in.TemplateID, "asset_id": in.AssetID, "material": in.Material,
-					"workpiece": map[string]any{"width_mm": in.WidthMM, "height_mm": in.HeightMM, "x_mm": in.XMM, "y_mm": in.YMM}}
+				workpiece := map[string]any{"width_mm": in.WidthMM, "height_mm": in.HeightMM, "x_mm": in.XMM, "y_mm": in.YMM, "angle_deg": in.AngleDeg}
+				if in.ZMM != nil {
+					workpiece["z_mm"] = *in.ZMM
+				}
+				body := map[string]any{"template_id": in.TemplateID, "asset_id": in.AssetID, "material": in.Material, "workpiece": workpiece, "camera": in.Camera}
 				if in.LabelAt != nil {
 					body["label_at"] = in.LabelAt
+				}
+				if in.Anchor != nil {
+					body["anchor"] = in.Anchor
 				}
 				return request{path: pathOf("/api/v1/printers/{id}/jobs", in.PrinterID), body: body}, nil
 			},
@@ -872,6 +878,25 @@ func labelTools() []tool {
 				return request{path: pathOf("/api/v1/printers/{id}/status", in.ID)}, need(in.ID, "id")
 			},
 			func(idIn, map[string]any) string { return "The laser's status." }),
+		simple(&mcp.Tool{Name: "get_laser_calibration", Description: "Whether a laser has a camera, and its calibration: the height above the bed it was made at (z_mm), how many marks it fitted and how closely (rms_mm, max_mm), " +
+			"where the calibration marks go, and the instance's limits (max_error_mm, height_tolerance_mm). Calibrating is done by a person at the machine.",
+			Annotations: readOnly("Laser camera calibration")}, "GET /api/v1/printers/{id}/calibration", printing,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/printers/{id}/calibration", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string {
+				if out["calibration"] == nil {
+					return "Not calibrated."
+				}
+				return "The calibration."
+			}),
+		simple(&mcp.Tool{Name: "measure_laser_workpiece", Description: "Photograph a laser's bed with its camera and measure the workpiece on it: its size, where its top left corner lies before it is turned, and how far it is turned (angle_deg, clockwise), " +
+			"ready for prepare_laser_job with camera true and the same z_mm. Nothing on the machine moves. Refused (recalibrate) when the camera is not calibrated at that height.",
+			Annotations: changes("Measure a laser workpiece", false)}, "POST /api/v1/printers/{id}/camera/measure", printing,
+			func(in laserMeasureIn) (request, error) {
+				return request{path: pathOf("/api/v1/printers/{id}/camera/measure", in.ID), body: map[string]any{"z_mm": in.ZMM}}, need(in.ID, "id")
+			},
+			func(laserMeasureIn, map[string]any) string { return "Measured the workpiece." }),
 		simple(&mcp.Tool{Name: "list_label_stock", Description: "The custom rolls printers can be loaded with: width, label length and gap, in mm.",
 			Annotations: readOnly("List label stock")}, "GET /api/v1/label-stock", seePrinters,
 			func(none) (request, error) { return request{path: "/api/v1/label-stock"}, nil },
@@ -1029,15 +1054,25 @@ type laserMaterialIn struct {
 
 // laserJobIn prepares a laser job.
 type laserJobIn struct {
-	PrinterID  string            `json:"printer_id"`
-	TemplateID string            `json:"template_id"`
-	AssetID    string            `json:"asset_id,omitempty" jsonschema:"whose label; none for the template's placeholders"`
-	Material   string            `json:"material" jsonschema:"a material's ID, from list_laser_materials"`
-	WidthMM    float64           `json:"width_mm" jsonschema:"the workpiece's width"`
-	HeightMM   float64           `json:"height_mm" jsonschema:"the workpiece's height"`
-	XMM        float64           `json:"x_mm,omitempty" jsonschema:"where the workpiece's top left corner lies, from the work area's"`
-	YMM        float64           `json:"y_mm,omitempty"`
-	LabelAt    *printers.PointMM `json:"label_at,omitempty" jsonschema:"where the label's top left corner goes on the workpiece, in mm from its top left corner; left out, it is centered"`
+	PrinterID  string                  `json:"printer_id"`
+	TemplateID string                  `json:"template_id"`
+	AssetID    string                  `json:"asset_id,omitempty" jsonschema:"whose label; none for the template's placeholders"`
+	Material   string                  `json:"material" jsonschema:"a material's ID, from list_laser_materials"`
+	WidthMM    float64                 `json:"width_mm" jsonschema:"the workpiece's width"`
+	HeightMM   float64                 `json:"height_mm" jsonschema:"the workpiece's height"`
+	XMM        float64                 `json:"x_mm,omitempty" jsonschema:"where the workpiece's top left corner lies, from the work area's"`
+	YMM        float64                 `json:"y_mm,omitempty"`
+	LabelAt    *printers.PointMM       `json:"label_at,omitempty" jsonschema:"where the label's top left corner goes on the workpiece, in mm from its top left corner; left out, it goes by anchor"`
+	AngleDeg   float64                 `json:"angle_deg,omitempty" jsonschema:"how far the workpiece is turned clockwise about its center, in degrees, as measure_laser_workpiece says"`
+	ZMM        *float64                `json:"z_mm,omitempty" jsonschema:"the workpiece's surface's height above the bed, in mm"`
+	Camera     bool                    `json:"camera,omitempty" jsonschema:"the workpiece was measured by measure_laser_workpiece: its calibration must be good at z_mm"`
+	Anchor     *labels.WorkpieceAnchor `json:"anchor,omitempty" jsonschema:"where the label goes when label_at is left out: corner center, top_left, top_right, bottom_left or bottom_right, inset_mm in from a corner's sides; left out, as the template says, or centered"`
+}
+
+// laserMeasureIn measures a laser's workpiece.
+type laserMeasureIn struct {
+	ID  string  `json:"id"`
+	ZMM float64 `json:"z_mm" jsonschema:"the workpiece's surface's height above the bed, in mm, as the camera was calibrated at"`
 }
 
 // laserJobRef names one of a laser's jobs.

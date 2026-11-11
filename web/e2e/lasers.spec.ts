@@ -52,7 +52,7 @@ test('lasers: add a laser, tune a material, and engrave an asset’s tag from it
   await page.getByLabel('Height', { exact: true }).fill('30');
   await page.getByLabel('From the left').fill('10');
   await page.getByLabel('From the top').fill('10');
-  await page.getByRole('button', { name: 'Prepare' }).click();
+  await page.getByRole('button', { name: 'Prepare', exact: true }).click();
   await expect(page.getByTestId('job-state')).toHaveText('Prepared, not started.');
   await expect(page.getByRole('img', { name: /Where the label goes/ })).toBeVisible();
   await expect(page.getByText('cutting 1 outline')).toBeVisible();
@@ -68,4 +68,60 @@ test('lasers: add a laser, tune a material, and engrave an asset’s tag from it
   // The asset's history says it was engraved, and on what.
   await page.goto(`/assets/${asset.asset.id}`);
   await expect(page.getByText(`Engraved its label on Birch plywood, 3 mm with ${name}`)).toBeVisible();
+});
+
+test('lasers: calibrate the camera, measure a workpiece, and confirm the plan over the photo', async ({ signedIn: page, api }) => {
+  const { template } = await api.call('POST', '/templates', {
+    name: unique('Bin tag'),
+    units: 'mm',
+    width: 50,
+    height: 20,
+    dpi: 300,
+    elements: [{ type: 'text', x: 4, y: 4, width: 42, height: 12, font_size: 14, content_binding: '{{asset.name}}' }],
+  });
+  const name = unique('Camera laser');
+  const { printer } = await api.call('POST', '/printers', {
+    name,
+    driver: 'test-laser',
+    model: 'panel',
+    connection: { type: 'tcp', address: unique('camera').toLowerCase().replace(/[^a-z0-9]/g, '') + '.test' },
+  });
+
+  await goTo(page, 'Lasers');
+  await page.getByLabel('Laser', { exact: true }).selectOption(printer.id);
+  await expect(page.getByTestId('calibration')).toHaveText(/^Not calibrated/);
+
+  // The marks are a job like any other, started at the machine.
+  await page.getByRole('button', { name: 'Prepare the marks' }).click();
+  await expect(page.getByRole('heading', { name: 'Calibration marks' })).toBeVisible();
+  await page.getByRole('button', { name: 'Start', exact: true }).click();
+  await expect(page.getByTestId('job-state')).toHaveText('Done.', { timeout: 15_000 });
+
+  // Found at the scrap's height.
+  await page.locator('#calibration-z').fill('3');
+  await page.getByRole('button', { name: 'Find the marks' }).click();
+  await expect(page.getByTestId('calibration')).toContainText('for a surface 3 mm above the bed, from 9 marks');
+
+  // The workpiece, wherever it lies, measured by the camera.
+  await page.getByLabel('Template', { exact: true }).selectOption(template.id);
+  await page.locator('#wp-z').fill('3');
+  await page.getByRole('button', { name: 'Measure with the camera' }).click();
+  await expect(page.getByText(/^Measured: /)).toBeVisible();
+  await expect(page.getByLabel('Turned (°)')).not.toHaveValue('0');
+  await page.getByLabel('Label on the workpiece', { exact: true }).selectOption('top_left');
+  await page.getByLabel('In from its sides (mm)').fill('3');
+  await page.getByRole('button', { name: 'Prepare', exact: true }).click();
+  await expect(page.getByRole('img', { name: /over the camera’s photo/ })).toBeVisible();
+
+  // Framing waits for the plan to be confirmed over the photo.
+  const frame = page.getByRole('button', { name: 'Frame' });
+  await expect(frame).toBeDisabled();
+  await page.getByLabel('The plan sits on the workpiece in the photo').check();
+  await frame.click();
+  await expect(page.getByText('The machine is tracing the outline with its pointer.')).toBeVisible();
+
+  // At another height, the camera asks to be calibrated again.
+  await page.locator('#wp-z').fill('9');
+  await page.getByRole('button', { name: 'Measure with the camera' }).click();
+  await expect(page.getByText(/calibrate again at this height/)).toBeVisible();
 });

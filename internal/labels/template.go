@@ -19,6 +19,34 @@ import (
 	"github.com/google/uuid"
 )
 
+// WorkpieceAnchor is where a laser puts a label on its workpiece: centered,
+// or in a corner, InsetMM in from both its sides.
+type WorkpieceAnchor struct {
+	Corner  string  `json:"corner"`
+	InsetMM float64 `json:"inset_mm,omitempty"`
+}
+
+// Corners a label is anchored to on a workpiece.
+const (
+	CornerCenter      = "center"
+	CornerTopLeft     = "top_left"
+	CornerTopRight    = "top_right"
+	CornerBottomLeft  = "bottom_left"
+	CornerBottomRight = "bottom_right"
+	// MaxInsetMM bounds an anchor's inset.
+	MaxInsetMM = 1000
+)
+
+// ValidCorner reports whether a corner is one of the corners, center, or
+// empty for centered.
+func ValidCorner(c string) bool {
+	switch c {
+	case "", CornerCenter, CornerTopLeft, CornerTopRight, CornerBottomLeft, CornerBottomRight:
+		return true
+	}
+	return false
+}
+
 // Units of template geometry.
 const (
 	UnitsMM = "mm"
@@ -230,6 +258,10 @@ type Template struct {
 	// Grid is the editor's grid; absent, the editor's own of half a
 	// millimeter or a fiftieth of an inch, not drawn. It never prints.
 	Grid *Grid `json:"grid,omitempty"`
+	// WorkpieceAnchor is where a laser puts the label on a workpiece
+	// (docs/printing.md#placing-the-label); absent, centered. Every other
+	// printer ignores it.
+	WorkpieceAnchor *WorkpieceAnchor `json:"workpiece_anchor,omitempty"`
 	// Elements are drawn in this order: the first at the back.
 	Elements  []Element `json:"elements"`
 	CreatedAt time.Time `json:"created_at"`
@@ -517,6 +549,16 @@ func (t *Template) Validate() error {
 	}
 	if math.IsNaN(t.PrintRotation) || t.PrintRotation < 0 || t.PrintRotation >= 360 {
 		v.add("print_rotation", "must be at least 0 degrees and less than 360")
+	}
+	if a := t.WorkpieceAnchor; a != nil {
+		if !ValidCorner(a.Corner) {
+			v.add("workpiece_anchor.corner", `must be "center", "top_left", "top_right", "bottom_left" or "bottom_right"`)
+		}
+		if !(a.InsetMM >= 0 && a.InsetMM <= MaxInsetMM) {
+			v.add("workpiece_anchor.inset_mm", fmt.Sprintf("must be from 0 to %d mm", MaxInsetMM))
+		} else if a.InsetMM > 0 && (a.Corner == CornerCenter || a.Corner == "") {
+			v.add("workpiece_anchor.inset_mm", "applies only to a corner")
+		}
 	}
 	if t.Turnable && !t.Adaptive() {
 		v.add("turnable", "applies only to adaptive templates")

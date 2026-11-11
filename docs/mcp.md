@@ -360,12 +360,17 @@ and never starts one:
 | :--- | :--- | :--- |
 | `list_laser_materials` | `labels.print` or `settings.manage` or `templates.manage` | A laser's materials, with their engraving and cutting settings, and which are the driver's presets. |
 | `save_laser_material`, `delete_laser_material` | `settings.manage` | Tunes a preset, or saves one of the printer's own; deleting a tuned preset puts it back as the driver has it. |
-| `prepare_laser_job` | `labels.print` | Prepares a job: an asset's label, a material, and the workpiece's size and place on the bed. Nothing reaches the machine. |
+| `prepare_laser_job` | `labels.print` | Prepares a job: an asset's label, a material, and the workpiece's size, place, turn and height on the bed, and where the label goes on it. Nothing reaches the machine. |
 | `list_laser_jobs`, `get_laser_job`, `get_laser_status` | `labels.print` | A laser's history, one job, and what it is doing now, its interlocks among it. |
+| `get_laser_calibration` | `labels.print` | Whether a laser has a camera, its calibration (the height it was made at, and how closely the marks fit), where the marks go, and the instance's limits. |
+| `measure_laser_workpiece` | `labels.print` | Photographs the bed and measures the workpiece on it, ready for `prepare_laser_job` with `camera` set; refused, asking for calibrating again, at a height the camera was not calibrated at. Nothing on the machine moves. |
 
 Framing, starting, pausing and cancelling a laser's job are not tools, whatever the assistant's
 person holds: a laser starts fires and blinds people, so they are for a person at the machine, in the
-web app. Neither is the engraving's preview image.
+web app. Neither is the engraving's preview image. Calibrating a laser's camera is not a tool either
+([Camera alignment](printing.md#camera-alignment)): the person at the machine lays the scrap,
+engraves the marks and calibrates with the scrap still in place; nor are forgetting a calibration,
+the photo seen from above, or the cameras' limits, which an admin sets in the web app.
 
 The print queue needs `labels.print`:
 
