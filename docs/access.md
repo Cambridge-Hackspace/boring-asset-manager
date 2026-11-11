@@ -837,7 +837,8 @@ token is made. As with a session token, only its SHA-256 hash is stored.
 ### Rules for tokens
 
 - Only a signed-in session makes tokens, so that a token, or an assistant led astray by what it
-  read, cannot leave itself a way back in.
+  read, cannot leave itself a way back in. For the same reason, only a signed-in session makes,
+  changes or renews an incoming hook (see [Hooks](hooks.md#who-saves-one)).
 - One holding `users.manage` lists and revokes tokens, as it lists live connections.
 - No token can use the password or logout endpoints, which answer it `403`. Only a personal token
   can use the rest of the account's endpoints (`/api/v1/auth/me`, `name`, `theme`).

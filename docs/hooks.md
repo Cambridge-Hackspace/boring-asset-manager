@@ -247,7 +247,8 @@ button on a cabinet, a Home Assistant automation, a form on another site, or a s
 weight. Where a [hook](#hooks) tells devices that something is happening, an incoming hook lets a
 device, or anything else that can send an HTTP request, make something happen.
 
-`settings.manage` makes them, on the **Incoming hooks** page or through `/api/v1/incoming`.
+`settings.manage` makes them, on the **Incoming hooks** page or through `/api/v1/incoming`, from a
+signed-in session (see [below](#who-saves-one)).
 
 ### What an incoming hook has
 
@@ -296,6 +297,13 @@ person.
 An incoming hook can do no more than whoever saves it. Saving one is refused (`403`), naming what is
 missing, when its roles grant a permission the person saving it does not hold wherever the hook
 would hold it.
+
+### Who saves one
+
+An incoming hook is a standing credential that acts with roles, so only a person signed in makes
+one, changes one, or gives it a new secret. With an API token, a personal token too, or over MCP,
+saving one is refused (`403`), so that a script, or an assistant led astray by what it read, cannot
+leave itself a way back in. Tokens still list, read and delete them.
 
 ### Secrets
 
@@ -490,8 +498,8 @@ A package written before migration `049` is imported the same way. The tables ke
 | `GET /api/v1/tokens/connections` | `users.manage` | Each token's open connections |
 | `GET /api/v1/incoming` | `settings.manage` | List incoming hooks, each with its `url` |
 | `GET /api/v1/incoming/{id}` | `settings.manage` | Read an incoming hook |
-| `POST /api/v1/incoming` | `settings.manage` | Make an incoming hook, with `name`, `enabled`, `auth`, `action`, `hook`, `flow_id`, `fields`, `asset`, `rate_limit` and `roles`; answers its `secret`, once |
-| `PUT /api/v1/incoming/{id}` | `settings.manage` | Change an incoming hook, given whole; `new_secret` replaces its secret, answered once |
+| `POST /api/v1/incoming` | `settings.manage`, from a signed-in session | Make an incoming hook, with `name`, `enabled`, `auth`, `action`, `hook`, `flow_id`, `fields`, `asset`, `rate_limit` and `roles`; answers its `secret`, once |
+| `PUT /api/v1/incoming/{id}` | `settings.manage`, from a signed-in session | Change an incoming hook, given whole; `new_secret` replaces its secret, answered once |
 | `DELETE /api/v1/incoming/{id}` | `settings.manage` | Delete an incoming hook |
 | `POST /api/v1/incoming/{id}` | The hook's secret | Send a request to an incoming hook (see [above](#incoming-hooks)) |
 
