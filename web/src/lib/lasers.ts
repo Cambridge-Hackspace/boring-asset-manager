@@ -62,6 +62,12 @@ export function interlockName(name: string): string {
       return 'Flame detection';
     case 'exhaust':
       return 'Exhaust';
+    case 'drawer':
+      return 'Drawer';
+    case 'machine':
+      return 'Machine';
+    case 'firmware':
+      return 'Firmware';
   }
   return name;
 }

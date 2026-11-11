@@ -63,6 +63,13 @@ const (
 	InterlockSafetyKey = "safety_key"
 	InterlockFlame     = "flame"
 	InterlockExhaust   = "exhaust"
+	InterlockDrawer    = "drawer"
+	// InterlockMachine is the machine's own state: an error, its emergency
+	// stop, or something it is busy with that is not a job.
+	InterlockMachine = "machine"
+	// InterlockFirmware is not a switch on the machine but checked as one:
+	// that its firmware is one the driver knows (docs/printing.md#xtool).
+	InterlockFirmware = "firmware"
 )
 
 // Material is what a workpiece is made of, and how a printer engraves and
@@ -103,10 +110,11 @@ type CutSetting struct {
 
 // Bounds of a material's settings.
 const (
-	MinLPI     = 50
-	MaxLPI     = 1270
-	MaxPasses  = 50
-	MaxSpeedMM = 2000
+	MinLPI    = 50
+	MaxLPI    = 1270
+	MaxPasses = 50
+	// MaxSpeedMM is a galvo laser's: they move far faster than a gantry.
+	MaxSpeedMM = 10000
 	// MaxMaterials bounds how many materials a printer has.
 	MaxMaterials = 100
 )
@@ -297,6 +305,12 @@ func InterlockName(name string) string {
 		return "Flame detection"
 	case InterlockExhaust:
 		return "The exhaust"
+	case InterlockDrawer:
+		return "The drawer"
+	case InterlockMachine:
+		return "The machine"
+	case InterlockFirmware:
+		return "The firmware"
 	}
 	return name
 }

@@ -35,5 +35,7 @@ describe('lasers', () => {
     expect(underWay('paused')).toBe(true);
     expect(underWay('prepared')).toBe(false);
     expect(interlockName('safety_key')).toBe('Safety key');
+    expect(interlockName('firmware')).toBe('Firmware');
+    expect(interlockName('drawer')).toBe('Drawer');
   });
 });

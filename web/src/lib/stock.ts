@@ -51,6 +51,7 @@ const driverNames: Record<string, string> = {
   openepaperlink: 'OpenEPaperLink tag',
   trmnl: 'TRMNL',
   'test-laser': 'Test laser (simulated)',
+  xtool: 'xTool',
 };
 
 /** A printer driver as people know it: "Brother QL" rather than brother_ql. */
@@ -59,12 +60,14 @@ export function driverName(driver: string): string {
 }
 
 const optionLabels: Record<string, string> = {
+  allow_unknown_firmware: 'Allow firmware BAM! does not know for this model',
   calibrate: 'Calibrate before each job',
   chain: 'Chain labels, saving tape between jobs',
   compress: 'Compress labels',
   cut: 'Cut after each label',
   cut_after: 'Cut the tape off',
   density: 'Darkness',
+  flame_hold_minutes: 'Refuse to start after a flame for (minutes)',
   half_cut: 'Half cut between labels',
   margin_mm: 'Margin before and after each label (mm)',
   media_type: 'Media type',
