@@ -33,6 +33,9 @@ type Geometry struct {
 	// ReachAlongMM is how much of a die-cut label's length is printed,
 	// centered; 0 means all of it.
 	ReachAlongMM float64
+	// Screen is set for a display (display.go): the "roll" is its screen,
+	// of WidthMM × LengthMM, which nothing feeds through or cuts.
+	Screen bool
 	// Palette is the inks the printer as configured prints in
 	// (docs/labels.md#inks); empty is black and white.
 	Palette labels.Palette
@@ -154,6 +157,14 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 	default:
 		fed = " fed with its width across the roll"
 	}
+	if g.Screen {
+		turned := ""
+		if fed != "" {
+			turned = " as it is turned"
+		}
+		return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm%s, but the screen, %s, is %s × %s mm",
+			mm(label.WidthMM), mm(label.HeightMM), turned, g.Roll, mm(g.WidthMM), mm(g.LengthMM))))
+	}
 	if g.DieCut() {
 		return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm%s, but the roll loaded, %s, takes %s × %s mm",
 			mm(label.WidthMM), mm(label.HeightMM), fed, g.Roll, mm(g.WidthMM), mm(g.LengthMM))))
@@ -210,7 +221,9 @@ func checkContent(f *Fit, g Geometry, label LabelSpec, across, along float64) {
 	if f.Rotate {
 		f.Printable = RectMM{X: alongFrom, Y: acrossFrom, Width: alongTo - alongFrom, Height: acrossTo - acrossFrom}
 	}
-	if g.DieCut() {
+	// A screen's edges do not move as die-cut labels do.
+	cut := g.DieCut() && !g.Screen
+	if cut {
 		f.EdgeMM = DriftMM
 	}
 
@@ -224,7 +237,7 @@ func checkContent(f *Fit, g Geometry, label LabelSpec, across, along float64) {
 			f.Outside = append(f.Outside, i)
 			continue
 		}
-		if g.DieCut() && (a0 < DriftMM-eps || a1 > across-DriftMM+eps || l0 < DriftMM-eps || l1 > along-DriftMM+eps) {
+		if cut && (a0 < DriftMM-eps || a1 > across-DriftMM+eps || l0 < DriftMM-eps || l1 > along-DriftMM+eps) {
 			f.NearEdge = append(f.NearEdge, i)
 		}
 	}

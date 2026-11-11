@@ -22,8 +22,9 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Seven drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`, `tspl`,
-`zpl` and `epl2`. Option values are listed by the drivers endpoint, and unknown options are
+Seven printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`,
+`tspl`, `zpl` and `epl2`; and three for e-paper displays, which are printers too: `display`,
+`openepaperlink` and `trmnl` (see [Displays](#displays)). Option values are listed by the drivers endpoint, and unknown options are
 refused.
 
 ### Who can do what
@@ -657,6 +658,7 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 | `ipp` | `ipp://host[:port]/path`, or `ipps`, `http`, `https` | A queue on CUPS or another IPP server, such as a USB printer shared from another machine. The job is sent as `application/octet-stream`, so the queue must be raw (CUPS: `lpadmin -m raw`; CUPS 2.x still supports raw queues though it marks them deprecated). CUPS can also forward a raw queue to a Windows shared printer through its `smb://` backend. |
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
 | `ble` | The printer's Bluetooth address, such as `7C:2F:80:A1:B2:C3`, then optionally `?service=…&write=…&notify=…&ack=…` | A Bluetooth LE printer in range of the BAM server, on Linux. The address must match a pattern in the server's `[printers] bluetooth` setting, which is empty by default. See [Bluetooth](#bluetooth). |
+| `openepaperlink`, `pull`, `webhook` | See [Displays](#connections) | E-paper displays only. |
 
 A connection may also name a relay, as `"relay": "front-desk"`: BAM! run beside the printer on its
 own network, for a BAM! hosted elsewhere. The address is then on the relay's network, and the
@@ -956,6 +958,140 @@ copies they had.
 Printing records `asset.label_printed` in each asset's history. A download names no printer and
 sets `download`.
 
+## Displays
+
+An e-paper display is a printer whose driver drives displays. It has a model, which is its panel,
+and the panel is its media: a "label" of the screen's size, at the panel's resolution, in its inks.
+The fit check, the template editor, printing, the spool and the Printed list treat it as they treat
+a printer loaded with die-cut labels of that size, so a label template shows on a display with
+nothing new to learn. Nothing here has been tried on real hardware yet.
+
+- **Printing an asset's label to a display** renders the template and sends the image to the
+  display (push), or keeps it for the display to fetch (pull). A display shows one label at a time:
+  of several printed at once, the last.
+- **Each display remembers what it shows:** the template, the asset, and who showed it, as whom its
+  refreshes are laid out. A test print is shown but not remembered.
+- **Sizes.** A panel's size in millimeters is its pixels at its resolution, so a template of the
+  screen's size, as the editor makes it from the display's screen, renders to its exact pixels. A
+  label smaller than the screen is centered on white; a larger one is cut to it. A template whose
+  height is the screen's width is turned 90° counterclockwise, as on a roll, and `feed` chooses as
+  it does there. A screen's edges do not shift, so no content is warned of as near the edge.
+- **Inks.** Each model declares its panel's inks ([Inks](labels.md#inks)), and labels are drawn in
+  them; a template's ink the panel lacks shows black, with a warning.
+- **Options**, for every display driver: `rotate_180`, for a display mounted upside down; for those
+  that pull, `refresh_seconds` (60 to 86400), how long it waits before asking again; and where the
+  driver makes more than one, `format`.
+
+### Display drivers
+
+| Driver | Models | Connections | Image |
+|---|---|---|---|
+| `display` | Panels by size: 1.54-inch 152 × 152, 2.13-inch 250 × 122, 2.9-inch 296 × 128, 4.2-inch 400 × 300 and 7.5-inch 800 × 480, each black and white or with red; 4.2-inch with red and yellow; 5.65-inch 600 × 448 in seven colors (ACeP); and 7.3-inch 800 × 480 Spectra 6 | `pull`, `webhook` | PNG (default) or BMP |
+| `openepaperlink` | OpenEPaperLink tags: 1.54-inch 152 × 152, 2.6-inch 296 × 152, 2.9-inch 296 × 128, 4.2-inch 400 × 300 and 7.4-inch 640 × 384, with red | `openepaperlink` | JPEG |
+| `trmnl` | TRMNL (`og`, 800 × 480) and TRMNL X (`x`, 1872 × 1404), in black and white | `pull`, by its MAC address | PNG (default) or BMP |
+
+Each model's resolution is its panel's, near enough: its diagonal in pixels over its diagonal in
+inches. PNGs are paletted, a bit a dot for black and white; BMPs are uncompressed with a palette, a
+bit a dot for black and white and four for more inks, bottom up, as microcontroller libraries and
+TRMNL read them. JPEGs are baseline at the highest quality, in gray for black and white.
+
+### Connections
+
+| Type | Address | How it reaches the display |
+|---|---|---|
+| `openepaperlink` | The access point, `host`, `host:port` or `http(s)://host[:port]`, then `?tag=` and the tag's MAC address, 6 or 8 bytes, such as `192.168.1.50?tag=0000021E3D6F1234` | Push: uploaded to the access point (below). It may go through a [relay](relays.md), whose allowlist lists the access point's URL. |
+| `pull` | None; for a `trmnl` display, its MAC address | Pull: kept for the display to fetch with its own token (below). |
+| `webhook` | A webhook [notification channel](notifications.md)'s ID | Push: posted through the channel (below). The channel must be a webhook, and on. |
+
+A display driver takes only its own connections, and a printer's driver none of these. `pull` and
+`webhook` are the server's own, never through a relay.
+
+### OpenEPaperLink
+
+[OpenEPaperLink](https://github.com/OpenEPaperLink/OpenEPaperLink) is open firmware for second-hand
+electronic shelf labels, with an ESP32 access point. Following its wiki, BAM! posts each image to
+the access point's `/imgupload` as `multipart/form-data`: `mac`, the tag's 8-byte MAC address;
+`dither`, `0`, as the image is drawn in the tag's inks already; and `file`, the image, a baseline
+JPEG of the tag's exact size. The access point answers `200` when it has it, and sends it to the tag
+when the tag next checks in, typically within a minute. When it answers `409`, busy, the upload is
+tried again after its `Retry-After`, at most 10 seconds, five times in all; any other answer fails
+the job with what it said.
+
+Go's JPEG encoder subsamples color, where the wiki recommends 4:4:4, so the edges of red may blur by
+a dot until this is checked on a tag.
+
+### Pulling
+
+A display that pulls fetches `{base_url}/api/v1/displays/{id}/image` with one of its own tokens.
+
+- **Tokens.** An admin (`settings.manage`) makes them under **Admin › Displays**, or with `POST
+  /api/v1/displays/{id}/tokens` and `{"name"}`; the secret, starting `bamd_`, is shown once, with
+  the URL. Only its SHA-256 is kept, as an API token's is. A token reaches its own display's image
+  and nothing else: it is no API token, and another display's image refuses it with `403`.
+  Revoking one (`DELETE /api/v1/displays/{id}/tokens/{token}`) stops it at once.
+- **Presenting one:** as `?token=`, which suits displays that fetch a plain URL, such as ESPHome's
+  `online_image`; as `Authorization: Bearer`; or as `Access-Token`. A URL with its token in it is a
+  secret: whoever has it sees what the display shows.
+- **The image** is in the display's resolution and inks, in its format. One shown nothing yet is
+  white.
+- **Caching.** The answer carries an `ETag`, which changes only when the image does: asked with
+  `If-None-Match`, an unchanged image is `304` and not sent again.
+- **Refresh.** The answer's `Refresh` header is the seconds to wait before asking again: the
+  display's `refresh_seconds`, or the instance's default (below).
+- Those who may see printers can fetch it too, signed in, to see what the display shows.
+
+### TRMNL
+
+The `trmnl` driver answers TRMNL's "bring your own server" API, as TRMNL documents it, in front of
+the pull URL. Point the device at BAM!'s address as its server, and add it as a printer with the
+`trmnl` driver, a `pull` connection, and its MAC address as the address.
+
+- `GET /api/setup`, with the device's MAC address as `ID`: a device set up in BAM! with no token yet
+  is given one, as `api_key`, with `friendly_id` and `image_url`. One already set up is refused
+  (`409`) until its tokens are revoked, so that knowing a MAC address is not enough to take a
+  device's key; one BAM! does not know is `404`. The body's `status` repeats the code, as TRMNL's
+  firmware reads it.
+- `GET /api/display`, with the key as `Access-Token` (or `ACCESS_TOKEN`): `status` `0`, the
+  `image_url` to show, a `filename` that changes only when the image does, `refresh_rate` in
+  seconds, `special_function` `none`, and no firmware update. An `ID` that is not the device the
+  key is for is refused.
+- `POST /api/log`: taken, `204`, and not kept.
+
+TRMNL's devices take PNG, or a 1-bit BMP of exactly 800 × 480; an OG's image must be at most 90,000
+bytes, which a label in black and white is far below. The fields BAM! answers are those TRMNL's
+documentation lists; firmware that asks for more, such as a playlist, is not served it.
+
+### Webhook
+
+A `webhook` connection posts the image through a webhook channel: the image itself as the body, with
+its media type (`image/png` or `image/bmp`), the channel's own headers, `BAM-Event: display.image`,
+`BAM-Display` the display's ID, and `BAM-Delivery` and `BAM-Timestamp`, signed in `BAM-Signature`
+when the channel has a secret, as its events are ([Notifications](notifications.md)). A body
+template is for events, and is not used. Any answer but 2xx fails the job.
+
+### Keeping displays current
+
+When the asset a display shows changes, or something it is in does, a hook can refresh the display
+([Hooks](hooks.md#actions)): its `refresh_displays` action, with an event trigger on the changes
+that matter, such as `asset.edited`, `asset.quantity_changed` or `asset.checked_out`, offered on the
+categories of the assets shown and of their containers.
+
+- **A refresh** lays the display's template out again for its asset, as whoever last showed it, and
+  sends it through the spool as a job, so retries, history and each printer's turn hold. A refresh
+  whose person can no longer print fails, as their jobs would.
+- **Bursts.** E-paper is slow, and some tags limit refreshes, so a refresh waits for the rest of a
+  burst: asked for again before it is due, it is not asked for twice. It is due the instance's
+  refresh window after the first ask, 30 seconds unless changed. Each is claimed in the database,
+  so servers sharing it refresh once.
+- **By hand:** `POST /api/v1/displays/{id}/refresh` (`labels.print`) refreshes a display now.
+
+**The instance's settings** (`GET` and `PUT /api/v1/settings/displays`, set with `settings.manage`):
+
+| Setting | Default | Range |
+|---|---|---|
+| `refresh_window_seconds` | 30 | 0 to 3600 |
+| `pull_refresh_seconds` | 900 | 60 to 86400 |
+
 ## Printer pools
 
 A printer pool is a set of printers loaded alike that share print jobs. Pools are managed with the
@@ -1008,6 +1144,17 @@ Deleting a printer takes it out of its pools.
 | `/api/v1/printer-pools` | `settings.manage`; listed to those who may see printers | Printer pools |
 | `GET /api/v1/templates` | `assets.read` | Includes `suits`, to those who may see printers |
 
+### Display API
+
+| Method and route | Permission | Purpose |
+|---|---|---|
+| `GET /api/v1/displays`, `GET /api/v1/displays/{id}` | `labels.print`, `settings.manage` or `templates.manage` | Displays, what each `shown`: its template, asset, when and by whom, a refresh due, when it last fetched its image; and for one that pulls, its `pull_url` and `refresh_seconds` |
+| `POST /api/v1/displays/{id}/refresh` | `labels.print` | Refresh it now, through the spool; `409` when it has been shown no asset's label |
+| `GET`, `POST /api/v1/displays/{id}/tokens`, `DELETE /api/v1/displays/{id}/tokens/{token}` | `settings.manage` | Its tokens; making one answers its `secret` and `url`, once |
+| `GET /api/v1/displays/{id}/image` | Its own token, or those who may see printers | Its image, with `ETag` and `Refresh` |
+| `GET`, `PUT /api/v1/settings/displays` | Those who may see printers; `settings.manage` to set | The refresh window and default pull interval |
+| `GET /api/setup`, `GET /api/display`, `POST /api/log` | A TRMNL, by its MAC address and token | [TRMNL](#trmnl)'s API |
+
 ### Labels API
 
 | Method and route | Permission | Purpose |
@@ -1044,6 +1191,7 @@ Every spool route needs `labels.print`.
 | `025` | Printer pools |
 | `028`, `029` | Custom label stock; `029` widens `printers.media` to hold its ID |
 | `030` | A category's list of label templates (before it, one template) |
+| `082` | Displays: what each shows, its pull image and refresh due (`displays`), its tokens (`display_tokens`), and hooks' actions |
 
 Printers are stored in the `printers` table with a name, driver, model, connection, the media
 currently loaded, and driver `options` as a JSON object.
@@ -1070,3 +1218,8 @@ type Plan interface {
 The print endpoint only renders labels, asks the printer's driver to plan and encode them, and
 hands the job to a `Transport` for the printer's connection (see [Delivery](#delivery)). Adding a
 printer family means registering a driver; the API does not change.
+
+A display's driver is a `DisplayDriver` too: it names the connections its displays take, and its
+plans encode the last label as the image file the display shows (`display.go`). The server itself
+delivers to `pull` and `webhook` connections, keeping the image or posting it, and the `Transport`
+the rest.

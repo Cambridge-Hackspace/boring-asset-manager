@@ -82,7 +82,7 @@
   <div class="grid grid-cols-2 gap-x-2 gap-y-1">
     <NumberField id="tpl-width" label="Width" value={doc.width} min={0} unit={doc.units} onchange={(n) => setSize('width', n)} />
     <NumberField id="tpl-height" label="Height" value={doc.height} min={0} unit={doc.units} onchange={(n) => setSize('height', n)} />
-    <NumberField id="tpl-dpi" label="DPI" title="Dots per inch: the printer's resolution" value={doc.dpi} min={150} max={600} step={1} onchange={(n) => setSize('dpi', n)} />
+    <NumberField id="tpl-dpi" label="DPI" title="Dots per inch: the printer's resolution" value={doc.dpi} min={72} max={600} step={1} onchange={(n) => setSize('dpi', n)} />
     <label class="flex items-center gap-1 text-xs" for="tpl-units">
       <span class="text-zinc-600 dark:text-zinc-400">Units</span>
       <select id="tpl-units" class="input-sm" value={doc.units} onchange={(e) => change(convertUnits(doc, e.currentTarget.value as Units))}>

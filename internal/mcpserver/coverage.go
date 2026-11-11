@@ -91,6 +91,15 @@ var Refused = map[string]string{
 	"GET /api/v1/flows/{slug}/qr.svg":                "the picture on a flow's printed poster; over MCP, a flow is reached at /f/<slug>, and run with run_flow",
 	"POST /api/v1/markdown":                          "the comment editor's preview, in a browser; the comments list_comments and add_comment answer carry their HTML",
 	"POST /api/v1/incoming/{id}":                     "an incoming hook's address, for a sender outside BAM! holding its secret; an assistant does what it does with the tools themselves",
+
+	// Displays (docs/printing.md#displays): what a display itself asks, by
+	// its own token, and the tokens' secrets.
+	"POST /api/v1/displays/{id}/tokens": "a display's token is a secret that lets whoever holds it see what the display shows; an admin makes one in the web app, where it is shown once",
+	"GET /api/v1/displays/{id}/image":   "the image a display fetches with its own token; get_display says what it shows, and preview_template draws a label",
+	"GET /api/setup":                    "TRMNL's API, for a TRMNL device setting itself up by its MAC address",
+	"GET /api/display":                  "TRMNL's API, for a TRMNL device asking what to show, with its own token",
+	"POST /api/log":                     "TRMNL's API, for a TRMNL device's logs, which BAM! does not keep",
+
 	// Archives move between a person's own computer and the server;
 	// replacing an instance stays with a signed-in person, as making tokens
 	// does (#43, #117).

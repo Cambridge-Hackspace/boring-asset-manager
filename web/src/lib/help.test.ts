@@ -4,7 +4,7 @@ import { routes } from '../routes';
 
 describe('help', () => {
   it('has every topic, titled, in order', () => {
-    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'contracts', 'orders', 'review', 'comments', 'icons', 'links', 'import', 'labels', 'spool', 'scanning', 'install', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants']);
+    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'contracts', 'orders', 'review', 'comments', 'icons', 'links', 'import', 'labels', 'spool', 'displays', 'scanning', 'install', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants']);
     for (const t of helpTopics) expect(t.title, t.slug).not.toBe('');
   });
 
@@ -24,6 +24,7 @@ describe('help', () => {
     expect(helpFor('/scan/BIN-A3')).toBe('scanning');
     expect(helpFor('/roles')).toBe('people');
     expect(helpFor('/spool')).toBe('spool');
+    expect(helpFor('/displays')).toBe('displays');
     expect(helpFor('/hooks')).toBe('hooks');
     expect(helpFor('/vendors/x')).toBe('vendors');
     expect(helpFor('/contracts/x')).toBe('contracts');

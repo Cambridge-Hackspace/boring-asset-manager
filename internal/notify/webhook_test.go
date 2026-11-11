@@ -114,6 +114,39 @@ func TestWebhookPostsSignedJSON(t *testing.T) {
 	}
 }
 
+func TestWebhookPostsADisplaysImageSigned(t *testing.T) {
+	r := newReceiver(t)
+	// A body template is for events: the image goes as it is.
+	opts := map[string]string{"url": "http://frames.example/in", "secret": "s3cret", "headers": "X-Frame: shelf", "body": `{"text": "x"}`, "allow_private_networks": "true"}
+	img := []byte("\x89PNG\r\n\x1a\nimage")
+	if err := webhookTo(r).SendImage(context.Background(), opts, img, "image/png", "p1", "d2"); err != nil {
+		t.Fatal(err)
+	}
+	req, body := r.got[0], r.raw[0]
+	if string(body) != string(img) {
+		t.Fatalf("body %q", body)
+	}
+	for name, want := range map[string]string{
+		"Content-Type": "image/png", "Bam-Event": DisplayImageEvent, "Bam-Display": "p1", "Bam-Delivery": "d2", "X-Frame": "shelf",
+		"Bam-Signature": Signature("s3cret", "1762100000", img),
+	} {
+		if got := req.Header.Get(name); got != want {
+			t.Errorf("%s: %q, want %q", name, got, want)
+		}
+	}
+	// A channel cannot set BAM-Display itself.
+	if err := (Webhook{}).Validate(map[string]string{"url": "https://frames.example/in", "headers": "BAM-Display: other"}); err == nil {
+		t.Error("a channel set BAM-Display")
+	}
+	// A receiver refusing it fails the push, saying so.
+	r.mu.Lock()
+	r.status = http.StatusUnsupportedMediaType
+	r.mu.Unlock()
+	if err := webhookTo(r).SendImage(context.Background(), opts, img, "image/png", "p1", "d3"); err == nil || !strings.Contains(err.Error(), "415") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestWebhookBodyTemplate(t *testing.T) {
 	r := newReceiver(t)
 	opts := map[string]string{"url": "https://hooks.example/", "allow_private_networks": "true",

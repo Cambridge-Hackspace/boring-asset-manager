@@ -73,6 +73,9 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   // Custom stock loaded in a Rollo, for the printers page's stock.
   const bins = await post('/label-stock', { name: unique('A11y bins'), width_mm: 60, length_mm: 40, gap_mm: 3 });
   await post('/printers', { name: unique('A11y Rollo'), driver: 'tspl', model: 'Rollo X1038', media: bins.stock.id, connection: { type: 'tcp', address: '127.0.0.1:9' } });
+  // An e-paper display that pulls, with a token, for the displays page.
+  const a11yDisplay = await post('/printers', { name: unique('A11y shelf'), driver: 'display', model: '2.9in-296x128-bwr', media: '2.9in-296x128-bwr', connection: { type: 'pull' } });
+  await post(`/displays/${a11yDisplay.printer.id}/tokens`, { name: 'Shelf frame' });
   // One waiting for the QL with its name where the QL does not print, so
   // the spool shows a warning.
   const edge = await post('/templates', {
@@ -265,6 +268,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/icons?tab=states', 'Icons'],
     ['/icons?tab=settings', 'Icons'],
     ['/printers', 'Printers'],
+    ['/displays', 'Displays'],
     ['/notifications', 'Notifications'],
     ['/relays', 'Relays'],
     ['/incoming-hooks', 'Incoming hooks'],

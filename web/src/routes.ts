@@ -26,6 +26,7 @@ import TemplatesPage from './views/templates/TemplatesPage.svelte';
 import TemplateEditor from './views/templates/TemplateEditor.svelte';
 import ImagesPage from './views/admin/ImagesPage.svelte';
 import PrintersPage from './views/admin/PrintersPage.svelte';
+import DisplaysPage from './views/admin/DisplaysPage.svelte';
 import UsersPage from './views/admin/UsersPage.svelte';
 import RolesPage from './views/admin/RolesPage.svelte';
 import TokensPage from './views/admin/TokensPage.svelte';
@@ -128,6 +129,7 @@ export const routes: Route[] = [
   { pattern: '/templates/:id/edit', component: TemplateEditor, title: 'Edit template', permissions: ['templates.manage'], workspace: true },
   { pattern: '/images', component: ImagesPage, title: 'Images', permissions: ['templates.manage'], nav: 'Images', group: 'Labels' },
   { pattern: '/printers', component: PrintersPage, title: 'Printers', permissions: ['settings.manage', 'labels.print'], nav: 'Printers', group: 'Labels' },
+  { pattern: '/displays', component: DisplaysPage, title: 'Displays', permissions: ['settings.manage', 'labels.print'], nav: 'Displays', group: 'Labels' },
   { pattern: '/users', component: UsersPage, title: 'Users', permissions: ['users.manage'], nav: 'Users', group: 'Admin' },
   { pattern: '/roles', component: RolesPage, title: 'Roles', permissions: ['users.manage'], nav: 'Roles', group: 'Admin' },
   { pattern: '/tokens', component: TokensPage, title: 'API tokens', permissions: ['users.manage'], nav: 'API tokens', group: 'Admin' },

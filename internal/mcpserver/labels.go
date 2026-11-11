@@ -686,8 +686,8 @@ func labelTools() []tool {
 				Name       *string        `json:"name,omitempty"`
 				Driver     *string        `json:"driver,omitempty" jsonschema:"from list_printer_drivers"`
 				Model      *string        `json:"model,omitempty"`
-				Connection map[string]any `json:"connection,omitempty" jsonschema:"how it is reached, such as {\"type\": \"tcp\", \"address\": \"10.0.0.5:9100\"}; the type is tcp, device, ipp, windows or ble (a Bluetooth LE printer's address, such as 7C:2F:80:A1:B2:C3)"`
-				Media      *string        `json:"media,omitempty" jsonschema:"the roll loaded: one of the driver's, or label stock by ID"`
+				Connection map[string]any `json:"connection,omitempty" jsonschema:"how it is reached, such as {\"type\": \"tcp\", \"address\": \"10.0.0.5:9100\"}; the type is tcp, device, ipp, windows or ble (a Bluetooth LE printer's address, such as 7C:2F:80:A1:B2:C3), and for displays openepaperlink (the access point and tag, such as 192.168.1.50?tag=0000021E3D6F1234), pull (no address, or a TRMNL's MAC address) or webhook (a webhook channel's ID)"`
+				Media      *string        `json:"media,omitempty" jsonschema:"the roll loaded: one of the driver's, or label stock by ID; a display's is its own screen, named as its model is"`
 				Options    map[string]any `json:"options,omitempty"`
 				Confirm    bool           `json:"confirm,omitempty" jsonschema:"save a change even though it affects labels waiting"`
 			}) (reply[map[string]any], error) {
@@ -743,6 +743,65 @@ func labelTools() []tool {
 				return request{path: pathOf("/api/v1/printers/{id}", in.ID)}, need(in.ID, "id")
 			},
 			func(idIn, map[string]any) string { return "Deleted the printer." }),
+		// Displays (docs/printing.md#displays): printers whose driver drives
+		// e-paper displays.
+		simple(&mcp.Tool{Name: "list_displays", Description: "The e-paper displays, which are printers whose driver drives displays: how each is reached, the template and asset it shows and since when, " +
+			"a refresh waiting, and for one that pulls, the URL it fetches its image from and how often.",
+			Annotations: readOnly("List displays")}, "GET /api/v1/displays", seePrinters,
+			func(none) (request, error) { return request{path: "/api/v1/displays"}, nil },
+			func(_ none, out map[string]any) string { return fmt.Sprintf("%d displays.", count(out, "displays")) }),
+		simple(&mcp.Tool{Name: "get_display", Description: "One e-paper display, and what it shows.", Annotations: readOnly("Get a display")}, "GET /api/v1/displays/{id}", seePrinters,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/displays/{id}", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string { return fmt.Sprintf("%q.", nameOf(out, "display")) }),
+		simple(&mcp.Tool{Name: "refresh_display", Description: "Show an e-paper display its asset's label again now, laid out afresh, through the print queue. To show it another asset, print that asset's label to it with print_labels.",
+			Annotations: changes("Refresh a display", true)}, "POST /api/v1/displays/{id}/refresh", printing,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/displays/{id}/refresh", in.ID)}, need(in.ID, "id")
+			},
+			func(idIn, map[string]any) string { return "The display will be refreshed through the print queue." }),
+		simple(&mcp.Tool{Name: "list_display_tokens", Description: "The tokens a display that pulls fetches its image with: each one's name, when it was made and last used. Their secrets are shown only when made, in the web app.",
+			Annotations: readOnly("List display tokens")}, "GET /api/v1/displays/{id}/tokens", settings,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/displays/{id}/tokens", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string { return fmt.Sprintf("%d tokens.", count(out, "tokens")) }),
+		simple(&mcp.Tool{Name: "revoke_display_token", Description: "Revoke one of a display's tokens: the display can no longer fetch its image with it.",
+			Annotations: destroys("Revoke a display token", true)}, "DELETE /api/v1/displays/{id}/tokens/{token}", settings,
+			func(in displayTokenIn) (request, error) {
+				if err := need(in.DisplayID, "display_id"); err != nil {
+					return request{}, err
+				}
+				return request{path: pathOf("/api/v1/displays/{id}/tokens/{token}", in.DisplayID, in.TokenID)}, need(in.TokenID, "token_id")
+			},
+			func(displayTokenIn, map[string]any) string { return "Revoked the token." }),
+		simple(&mcp.Tool{Name: "get_display_settings", Description: "How displays are kept current (docs/printing.md#displays): refresh_window_seconds, how long a refresh waits for the rest of a burst of changes, " +
+			"and pull_refresh_seconds, how long a display that pulls waits before asking again when its own options do not say.",
+			Annotations: readOnly("Display settings")}, "GET /api/v1/settings/displays", seePrinters,
+			func(none) (request, error) { return request{path: "/api/v1/settings/displays"}, nil },
+			func(_ none, out map[string]any) string {
+				return fmt.Sprintf("Refreshes wait %v seconds for a burst; displays that pull ask every %v seconds.", out["refresh_window_seconds"], out["pull_refresh_seconds"])
+			}),
+		define(&mcp.Tool{Name: "set_display_settings", Description: "Change how displays are kept current. Give only what changes: refresh_window_seconds (0 to 3600) and pull_refresh_seconds (60 to 86400).",
+			Annotations: changes("Set display settings", true)}, []string{"PUT /api/v1/settings/displays"}, settings,
+			func(ctx context.Context, e *env, in displaySettingsIn) (reply[map[string]any], error) {
+				body := map[string]any{}
+				if err := e.call(ctx, http.MethodGet, "/api/v1/settings/displays", nil, &body); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				if in.RefreshWindowSeconds != nil {
+					body["refresh_window_seconds"] = *in.RefreshWindowSeconds
+				}
+				if in.PullRefreshSeconds != nil {
+					body["pull_refresh_seconds"] = *in.PullRefreshSeconds
+				}
+				out := map[string]any{}
+				if err := e.call(ctx, http.MethodPut, "/api/v1/settings/displays", body, &out); err != nil {
+					return reply[map[string]any]{}, err
+				}
+				return say(out, "Saved: refreshes wait %v seconds for a burst; displays that pull ask every %v seconds.", out["refresh_window_seconds"], out["pull_refresh_seconds"])
+			}),
 		simple(&mcp.Tool{Name: "list_label_stock", Description: "The custom rolls printers can be loaded with: width, label length and gap, in mm.",
 			Annotations: readOnly("List label stock")}, "GET /api/v1/label-stock", seePrinters,
 			func(none) (request, error) { return request{path: "/api/v1/label-stock"}, nil },
@@ -868,4 +927,17 @@ func (e *env) assetIDs(ctx context.Context, refs []string) ([]string, error) {
 		ids = append(ids, id)
 	}
 	return ids, nil
+}
+
+// displayTokenIn names one of a display's tokens.
+type displayTokenIn struct {
+	DisplayID string `json:"display_id"`
+	TokenID   string `json:"token_id"`
+}
+
+// displaySettingsIn changes the display settings; one left out stays as
+// it is.
+type displaySettingsIn struct {
+	RefreshWindowSeconds *int `json:"refresh_window_seconds,omitempty" jsonschema:"how long a refresh waits for the rest of a burst of changes, 0 to 3600 seconds"`
+	PullRefreshSeconds   *int `json:"pull_refresh_seconds,omitempty" jsonschema:"how long a display that pulls waits before asking again, 60 to 86400 seconds, unless its own options say"`
 }
