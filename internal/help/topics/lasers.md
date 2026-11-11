@@ -8,7 +8,7 @@ Lasers start fires and can blind people, so a person at the machine always start
 
 - On a machine with its own start button, BAM! sends the job ready, and you press the button.
 - Otherwise you press **Start** in BAM!, which needs the **lasers.run** permission.
-- BAM! checks the machine's lid, safety key, flame sensor and exhaust first, where it reports them, and won't start while any reports a problem.
+- BAM! checks the machine's lid, safety key, drawer, flame sensor and exhaust first, where it reports them, and won't start while any reports a problem. On an xTool it also checks that the machine's firmware is one BAM! knows for its model, unless your admin has allowed it.
 - Nothing else starts a laser: not an assistant, a flow, a hook or a script without **lasers.run**. An assistant can prepare a job for you.
 - The print queue never sends anything to a laser.
 - Stay with the machine while it runs. **Pause** and **Cancel** are always there, for anyone who may print.

@@ -122,7 +122,7 @@
       <fieldset class="grid gap-3 sm:grid-cols-4">
         <legend class="label">Engraving</legend>
         <div><label class="label" for="engrave-power">Power (%)</label><input id="engrave-power" class="input" type="number" min="0.1" max="100" step="0.1" required bind:value={editing.power} /></div>
-        <div><label class="label" for="engrave-speed">Speed (mm/s)</label><input id="engrave-speed" class="input" type="number" min="0.1" max="2000" step="0.1" required bind:value={editing.speed} /></div>
+        <div><label class="label" for="engrave-speed">Speed (mm/s)</label><input id="engrave-speed" class="input" type="number" min="0.1" max="10000" step="0.1" required bind:value={editing.speed} /></div>
         <div><label class="label" for="engrave-passes">Passes</label><input id="engrave-passes" class="input" type="number" min="1" max="50" step="1" required bind:value={editing.passes} /></div>
         <div><label class="label" for="engrave-lpi">Lines an inch</label><input id="engrave-lpi" class="input" type="number" min="50" max="1270" step="1" required bind:value={editing.lpi} /></div>
       </fieldset>
@@ -131,7 +131,7 @@
         <fieldset class="grid gap-3 sm:grid-cols-3">
           <legend class="label">Cutting</legend>
           <div><label class="label" for="cut-power">Power (%)</label><input id="cut-power" class="input" type="number" min="0.1" max="100" step="0.1" required bind:value={editing.cutPower} /></div>
-          <div><label class="label" for="cut-speed">Speed (mm/s)</label><input id="cut-speed" class="input" type="number" min="0.1" max="2000" step="0.1" required bind:value={editing.cutSpeed} /></div>
+          <div><label class="label" for="cut-speed">Speed (mm/s)</label><input id="cut-speed" class="input" type="number" min="0.1" max="10000" step="0.1" required bind:value={editing.cutSpeed} /></div>
           <div><label class="label" for="cut-passes">Passes</label><input id="cut-passes" class="input" type="number" min="1" max="50" step="1" required bind:value={editing.cutPasses} /></div>
         </fieldset>
       {/if}

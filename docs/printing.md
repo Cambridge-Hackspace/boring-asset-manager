@@ -1129,14 +1129,124 @@ A laser's driver reports each model's **work area** (how far the head reaches ac
 bed), its **materials**, whether it starts jobs with **its own button**, whether it can **frame** a
 job, and which **interlocks** it reports. `GET /api/v1/printers/drivers` gives them, as `one_shot`.
 
-The drivers for real machines come next: xTool, then GRBL diode lasers and Ruida CO2 controllers.
-For tests there is `test-laser`, a simulated laser offered only where `[printers] test_laser` is
+`xtool` drives xTool lasers (see [xTool](#xtool)); GRBL diode lasers and Ruida CO2 controllers come
+next. For tests there is `test-laser`, a simulated laser offered only where `[printers] test_laser` is
 on (`BAM_PRINTERS_TEST_LASER`, see [Configuration](configuration.md)). It takes a `tcp` connection
 it never dials, engraves nothing, and finishes a job a few seconds after starting it. Its models
 are `button` (115 × 115 mm, started with its button) and `panel` (200 × 150 mm, started by BAM!),
 and both frame and report every interlock.
 
 A laser has no media, and is reached by this server, never through a relay.
+
+### xTool
+
+The `xtool` driver drives xTool lasers over their own network protocols. **Nothing in it has run on
+a real machine yet:** it is written from the published description of the protocols below and
+tested against simulated machines. A first run on a real F1 Ultra, with its firmware version and
+what happened, is still to be recorded here; until then, treat every xTool as untried, and stay
+with it.
+
+xTool's machines speak one of two protocols, chosen by their firmware, not their model: older
+firmware speaks **REST V1** (HTTP on port 8080), and newer firmware **WS-V2** (TLS WebSockets on
+port 28900). A model in BAM! names both the machine and its protocol, so choose it by the firmware
+version the machine shows:
+
+| Model | Protocol | Work area | Starts with | Frames | Firmware BAM! knows |
+|---|---|---|---|---|---|
+| `F1` | WS-V2 | 115 × 115 mm | its button | yes | 40.51.020.04 and later on 40.51 |
+| `F1 Ultra` | WS-V2 | 220 × 220 mm | its button | yes | 40.52.016.05 and later on 40.52 |
+| `F1 (V1 firmware)` | REST V1 | 115 × 115 mm | BAM!'s *Start* | no | before 40.51.020.04 on 40.51 |
+| `F1 Ultra (V1 firmware)` | REST V1 | 220 × 220 mm | BAM!'s *Start* | no | before 40.52.016.05 on 40.52 |
+| `P2 (V1 firmware)` | REST V1 | 600 × 305 mm | BAM!'s *Start* | no | none |
+| `M1 (V1 firmware)` | REST V1 | 385 × 300 mm | BAM!'s *Start* | no | none |
+
+The firmware BAM! knows is where the protocol description places each protocol: xTool's release
+notes give the first WS-V2 firmware for the F1 (40.51.020.04) and the F1 Ultra (40.52.016.05), and
+the first two numbers of a version name the model's line. One F1 Ultra is reported running
+40.52.016.2020.01 over WS-V2. xTool has not published the P2's or the M1's lines, so no firmware is
+known for them. **Known** means documented, not tested: no firmware has been tried with BAM!.
+The models' material presets are starting points to try on scrap, not xTool's own figures.
+
+The connection is `tcp`, with the machine's address or hostname. A port, when given, replaces the
+protocol's standard one, for a machine behind a port forward. BAM! does not discover machines on
+the network; give the address.
+
+#### Firmware it does not know
+
+A protocol mismatch on a laser is a safety problem, not just a failed job, so BAM! checks the
+machine's firmware every time it reads its status, and refuses to frame, start or resume while it
+is not one BAM! knows for the printer's model: the F1 Ultra's firmware on a printer set up as an
+F1, V1 firmware on a WS-V2 model, or a line BAM! has not heard of. It shows as the **firmware**
+interlock, saying which version it found and which it knows. An admin may allow it on that printer
+alone, with the option `allow_unknown_firmware`, after checking the machine themselves; the laser's
+page then says the firmware is allowed rather than known. Pausing and cancelling are never refused.
+
+#### Interlocks
+
+BAM! asks the machine for these as it starts a job, and while one runs:
+
+- **The lid** (`gap`; on is closed), **the safety key** (`machine_lock`; on is in) and **the
+  drawer** (`drawer`; on is in), on either protocol. One the machine says it has not got is left
+  out; one that cannot be read refuses starting.
+- **Flame detection,** on WS-V2: the machine pushes a flame alarm, and BAM! refuses to start for
+  five minutes after it (the option `flame_hold_minutes`), since the machine does not say when one
+  is out. Only alarms pushed while BAM! is connected are seen. REST V1 has no documented way to
+  read them.
+- **The machine:** an error, its emergency stop, or its updating firmware, measuring, homing or
+  starting up, all refuse starting, as does a state BAM! does not know; an error while a job runs
+  fails the job.
+- **The firmware,** as above.
+
+The exhaust and air assist are not in these models' documented status, so BAM! does not check
+them. One F1 Ultra was reported reading its lid the other way round from the description (off
+when closed); if a laser shows its lid open when it is closed, do not use it with BAM!, and report
+it.
+
+#### What BAM! sends
+
+Only the job, its frame, and start, pause and stop. **Never** a firmware update, and never the
+machine's own safety settings: its limit, tilt and movement switches, its lid, drawer and key
+checks, or its flame detection's sensitivity. Those stay as the machine and its owner set them.
+
+**The job** is G-code: absolute millimeters on the bed, feed in millimeters a minute, power as `S`
+from 0 to 1000 with the laser in dynamic mode (`M4`), every move with the laser off at `S0`, and
+`S0` at the end. The engraving goes row by row, back and forth, burning each run of dots at the
+material's power and speed, once a pass; then each cut outline, once a pass. Every point is checked
+against the work area before anything is sent. The F1 Ultra's X runs right to left as you face it
+(as reported from a real one), so its jobs are turned around for it; the F1's is taken to run left
+to right. xTool Studio adds machine-specific codes whose meanings are not published (such as which
+laser to use, on a machine with two); BAM! sends none of them, so the machine uses its defaults.
+
+**Framing** traces the job's outline at 100 mm a second with the laser at `S0`, sent as a frame
+file and started, so the machine shows it with its pointer.
+
+**Over WS-V2** a job is sent as a file (`tmp.gcode`, a frame as `tmpFrame.gcode`) on the file
+channel, checked by its MD5, and loaded without starting; on the F1 and F1 Ultra the person starts
+it with the machine's button. Pause, resume and cancel are the machine's `pause`, `start` and
+`stop`. BAM! keeps one connection to each machine, pings it every three seconds, and closes it
+after two minutes unused. The machine's certificate is its own, signed by no one, so it is not
+checked: keep lasers on a network you trust. **Over REST V1** a job is uploaded, and started by
+BAM!'s *Start*, for someone holding `lasers.run`.
+
+#### Not yet done
+
+- **The S1 and the D1 family,** which speak protocols of their own.
+- **The P2 and M1 on WS-V2 firmware,** and the rest of xTool's range (the F1 Lite, the F2 family,
+  the M1 Ultra, P2S, P3 and MetalFab).
+- **Discovering machines** over UDP, and the camera, which places labels later.
+
+What could be checked only against the description, and so is the first thing to watch on a real
+machine: the G-code dialect (the power scale, feed units and `M4`); the F1's axis direction;
+whether a job loaded over WS-V2 starts with the button, and whether a frame starts with `start`;
+the WS-V2 upload's handshake (the file channel opened first, the machine asking for each window,
+the data sent without a CRC, and the transfer finished after the last byte); progress as a
+percentage; and, over REST V1, the upload's form and the paths for the peripherals and job control.
+
+The protocols are as [ha-xtool](https://github.com/thecodingdad/ha-xtool)'s
+[`docs/PROTOCOL.md`](https://github.com/thecodingdad/ha-xtool/blob/main/docs/PROTOCOL.md) (MIT, by
+thecodingdad) describes them; the F1 Ultra's quirks are as
+[cv_alignment_f1_ultra](https://github.com/Will-Morr/cv_alignment_f1_ultra) reports them. No code
+was taken from either.
 
 ### Materials
 
