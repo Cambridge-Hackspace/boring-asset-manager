@@ -381,6 +381,7 @@ A `shape` element's `shape` is one of:
 | `stroke` | An [ink](#inks), `black` by default, or `none` |
 | `stroke_width` | In the template's units; 0.25 mm by default |
 | `fill` | An [ink](#inks), or `none` (the default); a line or open polygon has no fill |
+| `cut` | `true` marks it a cut outline: a laser cuts along its edge, after engraving the rest, and does not engrave it; every other printer draws it as designed (see [Lasers](printing.md#lasers)) |
 
 The fill is drawn, then the stroke. A rectangle's or ellipse's stroke lies inside its box; a
 line's or polygon's is centered on it. A stroke thinner than one dot is drawn one dot wide, and

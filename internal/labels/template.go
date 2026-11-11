@@ -345,6 +345,10 @@ type Element struct {
 	// imported artwork has; filled by FillRule, nonzero unless evenodd.
 	D        string `json:"d,omitempty"`
 	FillRule string `json:"fill_rule,omitempty"`
+	// Cut marks a shape as an outline a laser cuts along, after engraving
+	// the rest (docs/printing.md#lasers), rather than engraves. Every other
+	// printer draws it as it is designed.
+	Cut bool `json:"cut,omitempty"`
 }
 
 // Parse decodes a template document, rejecting unknown properties, applies
@@ -663,6 +667,7 @@ func (t *Template) validateElement(v *validator, path string, e *Element, canvas
 		"fill":          e.Fill != "",
 		"d":             e.D != "",
 		"fill_rule":     e.FillRule != "",
+		"cut":           e.Cut,
 	}
 	iconProps := map[string]bool{"icon": e.Icon != "", "shading": e.Shading != "", "state": e.State, "rendition": e.Rendition != ""}
 	textProps := map[string]bool{

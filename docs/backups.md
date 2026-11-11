@@ -108,7 +108,7 @@ An archive holds these kinds of information, and a restore chooses among them. E
 | People and roles | `people` | `roles`, `role_permissions`, `role_permission_scopes`, `users`, `user_roles`, `user_role_scopes`, `user_favorites`, `comment_mentions` |
 | Assets | `assets` | `assets`, `asset_categories`, `asset_field_values`, `asset_field_people`, whom person fields name, `asset_generator_keys`, `asset_links`, `asset_placements`, `asset_loans`, the `loan_reminders` sent for them, `asset_attachments` (photos among them) and their files, `asset_purchases`, where they came from, the `warranty_notices` recorded for them, `asset_proposals`, the changes from assistants waiting on them, `contract_assets`, the contracts covering them, `asset_catalog_entries`, what vendors sell of each, `purchase_orders`, `purchase_order_lines` and `purchase_order_attachments` and their files, the purchase orders bringing them, `asset_comments` and `loan_comments`, and their history, `events`, contracts' and purchase orders' among it |
 | Flows | `flows` | `flows`, `flow_filings`, `flow_filing_comments`, and the assistant's `assistant_guides` |
-| Settings | `settings` | `settings` (how purchase orders' numbers are shown among them), `label_stock`, `printers`, `displays` (what each shows, and the image one that pulls fetches), `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes`, and the assistant's `assistant_settings`, its key in `auth/` |
+| Settings | `settings` | `settings` (how purchase orders' numbers are shown among them), `label_stock`, `printers`, `displays` (what each shows, and the image one that pulls fetches), `laser_materials` (lasers' materials as tuned), `laser_jobs` (lasers' history), `printer_pools`, `printer_pool_members`, `notification_channels`, `spool_jobs`, `spool_batches`, `spool_job_members`, `spool_entries`, `auth_providers`, `auth_provider_rules`, `relays`, `incoming_hooks`, `incoming_hook_roles`, `incoming_hook_role_scopes`, and the assistant's `assistant_settings`, its key in `auth/` |
 | Authentication | `auth` | `sessions`, `user_factors`, `user_identities`, `oauth_clients`, `oauth_codes`, `api_tokens`, `api_token_roles`, `api_token_role_scopes`, `relay_mesh`, `display_tokens`, and the secret columns described under [Authentication](#authentication) |
 | Conversations | `conversations` | `assistant_conversations`, `assistant_messages`: each person's conversations with [the assistant beside the page](assistant.md), written only when asked for (see [Conversations](#conversations)) |
 
@@ -231,6 +231,7 @@ table has none of it, and restores and imports with no such rows:
 | `078` | `asset_field_people` |
 | `079` | `asset_proposals` |
 | `082` | `displays`, `display_tokens` |
+| `083` | `laser_materials`, `laser_jobs` |
 
 Its rows also lack the columns added since. A restore leaves those to the migrations, as they left
 them in the database it was written from. An import leaves them to the columns' defaults.

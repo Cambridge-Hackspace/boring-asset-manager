@@ -353,6 +353,20 @@ Making a display's token is not a tool: its secret lets whoever holds it see wha
 so an admin makes one in the web app, where it is shown once. Nor are the display's own requests: its
 image, fetched with its token, and TRMNL's API.
 
+Lasers are printers too ([Lasers](printing.md#lasers)). An assistant prepares a job and watches it,
+and never starts one:
+
+| Tool | Permission | What it does |
+| :--- | :--- | :--- |
+| `list_laser_materials` | `labels.print` or `settings.manage` or `templates.manage` | A laser's materials, with their engraving and cutting settings, and which are the driver's presets. |
+| `save_laser_material`, `delete_laser_material` | `settings.manage` | Tunes a preset, or saves one of the printer's own; deleting a tuned preset puts it back as the driver has it. |
+| `prepare_laser_job` | `labels.print` | Prepares a job: an asset's label, a material, and the workpiece's size and place on the bed. Nothing reaches the machine. |
+| `list_laser_jobs`, `get_laser_job`, `get_laser_status` | `labels.print` | A laser's history, one job, and what it is doing now, its interlocks among it. |
+
+Framing, starting, pausing and cancelling a laser's job are not tools, whatever the assistant's
+person holds: a laser starts fires and blinds people, so they are for a person at the machine, in the
+web app. Neither is the engraving's preview image.
+
 The print queue needs `labels.print`:
 
 | Tool | Permission | What it does |

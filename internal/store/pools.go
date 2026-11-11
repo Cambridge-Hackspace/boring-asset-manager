@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/google/uuid"
 )
 
@@ -148,12 +149,18 @@ func (s *Store) savePool(id string, in PoolInput) (*models.PrinterPool, error) {
 		return nil, ErrPoolNameExists
 	}
 	for _, m := range in.Members {
-		var n int
-		if err := s.TxQueryRow(tx, "SELECT COUNT(*) FROM printers WHERE id = ?", m.PrinterID).Scan(&n); err != nil {
+		var name, driver string
+		err := s.TxQueryRow(tx, "SELECT name, driver FROM printers WHERE id = ?", m.PrinterID).Scan(&name, &driver)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPrinterNotFound
+		}
+		if err != nil {
 			return nil, fmt.Errorf("finding the printer: %w", err)
 		}
-		if n == 0 {
-			return nil, ErrPrinterNotFound
+		// A laser makes one piece a job, started by a person at it
+		// (docs/printing.md#lasers), never a share of a batch.
+		if printers.IsOneShot(driver) {
+			return nil, fmt.Errorf("%w: %s is a laser, which makes one piece a job and is never in a pool", ErrInvalidPool, name)
 		}
 	}
 	now := dbTime(time.Now())

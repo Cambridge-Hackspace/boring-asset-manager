@@ -178,6 +178,9 @@ type PrintersConfig struct {
 	// "7C:2F:80:*", of the printers ble connections may reach. Empty means
 	// none: Bluetooth LE printers are reached only where they are allowed.
 	Bluetooth []string `toml:"bluetooth"`
+	// TestLaser offers the test laser, a simulated one-shot printer that
+	// engraves nothing (docs/printing.md#lasers), for automated tests only.
+	TestLaser bool `toml:"test_laser,omitempty"`
 }
 
 // RelayConfig turns the relay bus's transports on or off
@@ -559,6 +562,13 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	if v := os.Getenv("BAM_UPDATES_URL"); v != "" {
 		cfg.Updates.URL = v
+	}
+	if v := os.Getenv("BAM_PRINTERS_TEST_LASER"); v != "" {
+		on, err := parseSwitch(v)
+		if err != nil {
+			return fmt.Errorf("BAM_PRINTERS_TEST_LASER: %w", err)
+		}
+		cfg.Printers.TestLaser = on
 	}
 	if v := os.Getenv("BAM_AUTH_TEST_PROTOCOL"); v != "" {
 		on, err := parseSwitch(v)

@@ -347,6 +347,9 @@
             /> Closed
           </label>
         {/if}
+        <label class="flex items-center gap-1 text-xs" title="A laser cuts along this shape's edge after engraving, rather than engraving it; other printers draw it as it is">
+          <input type="checkbox" checked={!!e.cut} onchange={(ev) => update(withProp(e, 'cut', ev.currentTarget.checked || undefined))} /> Cut
+        </label>
       </div>
       {#if e.stroke === 'none' && (e.fill ?? 'none') === 'none'}
         <p class="error-text text-xs" role="alert">With no stroke and no fill, it draws nothing.</p>

@@ -10,7 +10,7 @@ import (
 // domainTables are the tables behind everything but signing in, children
 // before parents so each can be dropped while foreign keys are enforced.
 var domainTables = []string{
-	"notification_deliveries", "action_replies", "live_connections", "events", "notification_channels", "spool_entries", "spool_batches", "spool_job_members", "spool_jobs", "printer_pool_members", "printer_pools", "display_tokens", "displays",
+	"notification_deliveries", "action_replies", "live_connections", "events", "notification_channels", "spool_entries", "spool_batches", "spool_job_members", "spool_jobs", "printer_pool_members", "printer_pools", "display_tokens", "displays", "laser_jobs", "laser_materials",
 	"flow_filing_comments", "flow_filings", "flow_runs", "flows",
 	"icon_param_bindings", "icon_text_bindings", "icon_revisions", "category_icons", "icon_library", "icon_palette", "icon_settings", "icon_build",
 	"purchase_order_attachments", "purchase_order_lines", "purchase_orders",
