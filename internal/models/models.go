@@ -1296,12 +1296,47 @@ type LaserJob struct {
 // its label went on it, in millimeters from the work area's top left
 // corner.
 type LaserPlacement struct {
+	// Workpiece is where it lay before it was turned AngleDeg clockwise
+	// about its center; Placed is the label on it, turned with it; Label
+	// is the part of the bed the engraving covers.
 	Workpiece printers.RectMM `json:"workpiece"`
+	AngleDeg  float64         `json:"angle_deg,omitempty"`
+	Placed    printers.RectMM `json:"placed"`
 	Label     printers.RectMM `json:"label"`
 	// Mirror is set when it was engraved from the back.
 	Mirror bool `json:"mirror"`
 	// Cuts is how many outlines it cut.
 	Cuts int `json:"cuts"`
+	// Camera is set when the camera measured the workpiece, at ZMM above
+	// the bed (docs/printing.md#camera-alignment); Calibration when the job
+	// engraved calibration marks rather than a label.
+	Camera      bool    `json:"camera,omitempty"`
+	ZMM         float64 `json:"z_mm,omitempty"`
+	Calibration bool    `json:"calibration,omitempty"`
+}
+
+// LaserCalibration is a laser's camera fitted to its bed, at a height
+// (docs/printing.md#camera-alignment).
+type LaserCalibration struct {
+	PrinterID string `json:"printer_id"`
+	// Model is the printer's model it was made for; another's is not
+	// used.
+	Model string `json:"model"`
+	// Homography maps a pixel of a photo ImageWidth × ImageHeight to
+	// millimeters on the bed.
+	Homography  [9]float64 `json:"homography"`
+	ImageWidth  int        `json:"image_width"`
+	ImageHeight int        `json:"image_height"`
+	// ZMM is how high the surface it was made on stood above the bed.
+	ZMM float64 `json:"z_mm"`
+	// Marks is how many marks were fitted; RMSMM and MaxMM how far, in
+	// mm, they landed from where they were engraved.
+	Marks             int       `json:"marks"`
+	RMSMM             float64   `json:"rms_mm"`
+	MaxMM             float64   `json:"max_mm"`
+	CalibratedBy      string    `json:"calibrated_by,omitempty"`
+	CalibratedByToken bool      `json:"calibrated_by_token,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 // LabelStock is custom stock as stored: its size, and the printers that

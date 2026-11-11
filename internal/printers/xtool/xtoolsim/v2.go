@@ -9,6 +9,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -41,6 +42,11 @@ type V2 struct {
 	// FileDelay is how long a new file channel takes to be taken, as a
 	// busy machine's may: an upload can be announced before then.
 	FileDelay time.Duration
+	// Photos are what its camera, "main", sends, in turn, the last again
+	// and again; none answers code 10. FillLights are the fill light's
+	// levels it was set to.
+	Photos     [][]byte
+	FillLights []int
 
 	files map[string][]byte
 	// finished is the file last sent whole, which the next upload
@@ -54,6 +60,11 @@ type V2 struct {
 	sessions map[string]*v2Conns
 	uploads  map[int]*v2Upload
 	wake     chan struct{}
+	// snaps are photos taken and not yet fetched, by file name;
+	// downloads those being fetched, by channel.
+	snaps     map[string][]byte
+	downloads map[int][]byte
+	shots     int
 }
 
 type v2Conns struct {
@@ -77,6 +88,7 @@ func NewV2(firmware string) *V2 {
 		Firmware: firmware, Mode: "P_IDLE", Peripherals: map[string]string{"gap": "on", "machine_lock": "on", "drawer": "on"},
 		PacketSize: 1024, Window: 4096,
 		files: map[string][]byte{}, sessions: map[string]*v2Conns{}, uploads: map[int]*v2Upload{}, wake: make(chan struct{}),
+		snaps: map[string][]byte{}, downloads: map[int][]byte{},
 	}
 	s.Server = httptest.NewTLSServer(http.HandlerFunc(s.serve))
 	return s
@@ -283,6 +295,7 @@ func (s *V2) serve(w http.ResponseWriter, r *http.Request) {
 				parity = s.request(c, id, f.Payload, parity)
 			case function == "file_stream" && f.Protocol == xtool.ProtocolFileTransfer:
 				s.fileData(c, f.Payload)
+				s.fileRequest(c, conn, f.Payload)
 			}
 		}
 	}
@@ -377,11 +390,65 @@ func (s *V2) request(c *v2Conns, session string, payload []byte, parity bool) bo
 		s.mu.Unlock()
 		answer(0, "ok", map[string]any{"packetsize": packet})
 		go s.ask(session, byte(d.Channel))
+	case "GET /v1/camera/snap":
+		if str(params, "name") != "main" || len(s.Photos) == 0 {
+			s.mu.Unlock()
+			answer(10, "device not support", nil)
+			return parity
+		}
+		photo := s.Photos[min(s.shots, len(s.Photos)-1)]
+		s.shots++
+		name := fmt.Sprintf("6f1c2e00-0000-4000-8000-%012d", s.shots)
+		s.snaps[name] = photo
+		s.mu.Unlock()
+		answer(0, "ok", map[string]any{"filename": name})
+	case "PUT /v1/filetransfer/download":
+		var d struct {
+			FileType   int    `json:"filetype"`
+			FileName   string `json:"filename"`
+			Channel    int    `json:"channel"`
+			PacketSize int    `json:"packetsize"`
+		}
+		_ = json.Unmarshal(req.Data, &d)
+		photo, ok := s.snaps[d.FileName]
+		if d.FileType != 5 || !ok || d.Channel < 1 || d.Channel > 255 {
+			s.mu.Unlock()
+			answer(1, "no such file", nil)
+			return parity
+		}
+		delete(s.snaps, d.FileName)
+		s.downloads[d.Channel] = photo
+		sum := md5.Sum(photo)
+		packet := min(s.PacketSize, d.PacketSize)
+		s.mu.Unlock()
+		answer(0, "ok", map[string]any{"filesize": len(photo), "digesttype": 1, "digestdata": hex.EncodeToString(sum[:]), "packetsize": packet})
+	case "PUT /v1/peripheral/param":
+		var d struct {
+			Action string `json:"action"`
+			Value  int    `json:"value"`
+		}
+		_ = json.Unmarshal(req.Data, &d)
+		ok := str(params, "type") == "fill_light" && d.Action == "set_bri"
+		if ok {
+			s.FillLights = append(s.FillLights, d.Value)
+		}
+		s.mu.Unlock()
+		if !ok {
+			answer(10, "device not support", nil)
+			return parity
+		}
+		answer(0, "ok", map[string]any{})
 	case "PUT /v1/filetransfer/finish":
 		var d struct {
 			Channel int `json:"channel"`
 		}
 		_ = json.Unmarshal(req.Data, &d)
+		if _, ok := s.downloads[d.Channel]; ok {
+			delete(s.downloads, d.Channel)
+			s.mu.Unlock()
+			answer(0, "ok", map[string]any{})
+			return parity
+		}
 		// Data still on its way over the file channel is waited for.
 		for wait := time.Now().Add(2 * time.Second); s.uploads[d.Channel] != nil && s.uploads[d.Channel].got < s.uploads[d.Channel].size && time.Now().Before(wait); {
 			s.mu.Unlock()
@@ -521,5 +588,26 @@ func (s *V2) fileData(c *v2Conns, payload []byte) {
 	s.mu.Unlock()
 	if more {
 		s.ask(session, p.Channel)
+	}
+}
+
+// fileRequest answers a client's request for a window of a file it is
+// fetching, a packet at a time, on the file channel it came on.
+func (s *V2) fileRequest(c *v2Conns, conn *websocket.Conn, payload []byte) {
+	p, err := xtool.DecodeFilePacket(payload)
+	if err != nil || p.Op != xtool.FileRequest {
+		return
+	}
+	s.mu.Lock()
+	content, ok := s.downloads[int(p.Channel)]
+	packet := s.PacketSize
+	s.mu.Unlock()
+	if !ok || p.Offset < 0 || p.Offset >= int64(len(content)) {
+		return
+	}
+	end := min(p.Offset+int64(p.Window), int64(len(content)))
+	for at := p.Offset; at < end; at += int64(packet) {
+		chunk := content[at:min(at+int64(packet), end)]
+		c.send(conn, xtool.ProtocolFileTransfer, xtool.EncodeFilePacket(xtool.FilePacket{Op: xtool.FileData, Channel: p.Channel, Offset: at, Data: chunk}), true)
 	}
 }

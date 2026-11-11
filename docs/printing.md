@@ -1134,7 +1134,9 @@ next. For tests there is `test-laser`, a simulated laser offered only where `[pr
 on (`BAM_PRINTERS_TEST_LASER`, see [Configuration](configuration.md)). It takes a `tcp` connection
 it never dials, engraves nothing, and finishes a job a few seconds after starting it. Its models
 are `button` (115 × 115 mm, started with its button) and `panel` (200 × 150 mm, started by BAM!),
-and both frame and report every interlock.
+and both frame and report every interlock. The `panel` has a camera, which shows synthetic photos
+of its bed: the calibration marks in the first photo after engraving them, and a workpiece, a
+little turned, in every other (see [Camera alignment](#camera-alignment)).
 
 A laser has no media, and is reached by this server, never through a relay.
 
@@ -1233,14 +1235,29 @@ BAM!'s *Start*, for someone holding `lasers.run`.
 - **The S1 and the D1 family,** which speak protocols of their own.
 - **The P2 and M1 on WS-V2 firmware,** and the rest of xTool's range (the F1 Lite, the F2 family,
   the M1 Ultra, P2S, P3 and MetalFab).
-- **Discovering machines** over UDP, and the camera, which places labels later.
+- **Discovering machines** over UDP.
+
+**The camera** ([Camera alignment](#camera-alignment)) is asked for a photo only, which moves
+nothing. On the F1 Ultra over WS-V2 it is the camera named `main`: BAM! asks for a snapshot on the
+instruction channel, which answers with a file name, and fetches the photo over the file channel
+as a file of type 5, a window at a time, checked by its MD5. Over REST V1, on the F1, the F1 Ultra
+and the P2, it is the overview camera, stream `0`, a JPEG from port 8329 (the option `camera_port`,
+for a machine behind a port forward). PROTOCOL.md gives no snapshot for the F1 on WS-V2 or the M1,
+so they have none in BAM!. Before each photo BAM! sets the fill light (the option `fill_light`, in
+percent, full by default, `0` to leave it alone), since the F1 Ultra turns it off after a job; a
+machine refusing it is photographed anyway. A black frame, as the F1 Ultra sends for a while after
+autofocus, is taken again up to four times, a second and a half apart. Photos of different sizes of
+the same view are scaled to the calibration's.
 
 What could be checked only against the description, and so is the first thing to watch on a real
 machine: the G-code dialect (the power scale, feed units and `M4`); the F1's axis direction;
 whether a job loaded over WS-V2 starts with the button, and whether a frame starts with `start`;
 the WS-V2 upload's handshake (the file channel opened first, the machine asking for each window,
 the data sent without a CRC, and the transfer finished after the last byte); progress as a
-percentage; and, over REST V1, the upload's form and the paths for the peripherals and job control.
+percentage; over REST V1, the upload's form and the paths for the peripherals and job control; and
+the camera: the WS-V2 download, which BAM! makes as the mirror of an upload (asked for with
+`/v1/filetransfer/download`, this side asking for each window), the fill light's request on either
+protocol, and whether the REST V1 stream `0` looks down on the bed.
 
 The protocols are as [ha-xtool](https://github.com/thecodingdad/ha-xtool)'s
 [`docs/PROTOCOL.md`](https://github.com/thecodingdad/ha-xtool/blob/main/docs/PROTOCOL.md) (MIT, by
@@ -1278,10 +1295,12 @@ it to the driver's settings. A laser has at most 100 materials.
 ### Preparing a job
 
 A job names the template, the asset (or none, for the template's placeholders), the material, and
-the **workpiece**: its width and height, and where its top left corner lies on the bed, in
-millimeters from the work area's top left corner. The label is centered on the workpiece, unless
-the job says where its top left corner goes on it. The label must fit on the workpiece, and the
-workpiece in the work area.
+the **workpiece**: its width and height, where its top left corner lies on the bed, in millimeters
+from the work area's top left corner, and how far it is turned clockwise about its center, as the
+camera measures it. The label goes where the template's **workpiece anchor** puts it (see
+[Placing the label](#placing-the-label)), unless the job names another anchor, or says where the
+label's top left corner goes on it. The label must fit on the workpiece, and the workpiece, turned,
+in the work area.
 
 Preparing renders the label and holds it ready; nothing reaches the machine. A laser holds one
 prepared job at a time: preparing another discards the one before. The prepared job lives on the
@@ -1289,7 +1308,9 @@ server that prepared it, so after a restart, or on another server sharing the da
 prepared again.
 
 **The preview** draws the work area, the workpiece on it, the label in its place and the cut
-outlines, so the person can check where it goes before anything moves.
+outlines, so the person can check where it goes before anything moves. For a workpiece the camera
+measured, it draws them over the camera's photo of the bed, and Frame and Start wait until the
+person ticks that the plan sits on the workpiece.
 
 **Framing**, where the machine supports it, has it trace the job's outline with its low-power
 pointer, so the person can check the placement on the real piece. Framing is for a person at the
@@ -1304,6 +1325,72 @@ how the job is going every second until it ends, and takes it as failed if the m
 answered for ten minutes. A job's states are `prepared`, `ready` (waiting for the button),
 `running`, `paused`, `done`, `cancelled`, `failed`, and `discarded` (prepared, never started, and
 replaced).
+
+### Camera alignment
+
+A laser with a camera places the label on a workpiece wherever it was put on the bed, as
+[cv_alignment_f1_ultra](https://github.com/Will-Morr/cv_alignment_f1_ultra) showed on an F1 Ultra.
+A driver says which of its models have a camera (`camera` in `GET /api/v1/printers/drivers`); see
+[xTool](#xtool) for theirs. Photographing the bed is all BAM! asks of the camera, and it moves
+nothing: the marks are engraved by a job like any other, framed and started by a person at the
+machine.
+
+BAM! finds only what it needs, in Go, without a vision library: a fixed set of dark marks on light
+scrap, and a light rectangular workpiece against a darker bed. It does not model the lens, so a
+camera that bends the picture much fits loosely, and is refused (below). Light scrap and workpieces
+on a dark bed suit it; a shiny or light bed, a dark workpiece, or strong shadows do not.
+
+#### Calibrating
+
+1. **The marks.** *Prepare the marks* on the laser's camera section prepares a job engraving nine
+   dots, three across and three down, spanning most of the work area's width, the top left one
+   larger; it says where to lay the scrap. Lay light scrap (plywood or card) there, choose its
+   material, and frame and start the job as any other: the safety model is the same.
+2. **Finding them.** With the scrap still in place, give the height of its surface above the bed and
+   *Find the marks*. BAM! photographs the bed, finds the dots, tells which is which by the larger
+   one and the longer side, and fits a homography from the photo's pixels to millimeters on the bed
+   (the direct linear transform, normalized, in the least-squares sense over every dot found). It
+   needs six of the nine.
+3. **Its error.** BAM! reports how far the dots, mapped, land from where they were engraved: the
+   root mean square and the worst. A calibration whose RMS error is more than the **largest
+   calibration error** (0.5 mm unless an admin changes it) is refused, and the one before kept.
+
+A calibration is good only at the height it was made: a camera on the head sees the bed differently
+as the surface rises (cv_alignment found a 15 mm change moved corners by up to 49 pixels). It is
+kept with its height, one for each laser, and a workpiece whose surface is more than the **height
+tolerance** (1 mm unless an admin changes it) higher or lower asks for calibrating again, both
+measuring it and preparing a job placed by the camera. A calibration made as another model is not
+used. *Forget the calibration* removes it. Calibrations are settings in a backup.
+
+An admin (`settings.manage`) sets the largest calibration error and the height tolerance for every
+laser, on the Lasers page.
+
+#### Placing the label
+
+**Measuring.** *Measure with the camera*, with the workpiece's surface height, photographs the bed,
+finds the largest light patch on it within the work area, and measures the smallest rectangle around
+it: its size, where its top left corner lies before it is turned, and how far it is turned, from
+-45° to 45°. A rectangle looks the same turned a quarter or a half turn, so the label reads along
+whichever side lies nearer across the bed, the right way up as the bed is: lay the piece that way.
+These fill the workpiece in, and the job is placed by the camera.
+
+**The anchor.** A template's **workpiece anchor** (`workpiece_anchor` in its JSON, *On the
+workpiece* beside the printer in the editor) puts the label at the workpiece's center, or in a
+corner, a number of millimeters in from both its sides; the Lasers page can choose another for one
+job. The label turns with the workpiece: its engraving is turned within the square around it, and
+its cut outlines with it.
+
+**Confirming.** The preview draws the plan over the photo seen from straight above the work area,
+and Frame and Start wait until the person ticks that it sits on the workpiece. Framing then traces
+the outline on the real piece.
+
+The photos are held by the server that took them, the latest for each laser, until another is taken
+or the server restarts.
+
+**Untested on a real machine.** The tests run on synthetic photos (in `internal/printers/simcamera`,
+drawn from known scenes: a honeycomb bed, uneven light, noise, a camera at an angle): the marks
+found and fitted, and workpieces measured within a millimeter and a degree. Photos recorded on a
+real laser, with where the piece really lay, are still wanted, to check against.
 
 ## Printer pools
 
@@ -1363,12 +1450,19 @@ Deleting a printer takes it out of its pools.
 |---|---|---|
 | `GET /api/v1/printers/{id}/materials` | `labels.print`, `settings.manage` or `templates.manage` | Its materials: each preset (`preset`, `tuned`) and its own |
 | `PUT`, `DELETE /api/v1/printers/{id}/materials/{material}` | `settings.manage` | Tune a preset or save its own; delete its own, or put a preset back |
-| `POST /api/v1/printers/{id}/jobs` | `labels.print` | Prepare a job: `template_id`, `asset_id`, `material`, `workpiece` (`width_mm`, `height_mm`, `x_mm`, `y_mm`) and `label_at` (`x`, `y`); answers the job, its `cuts` and `outline` on the bed, `warnings` and a `preview` |
+| `POST /api/v1/printers/{id}/jobs` | `labels.print` | Prepare a job: `template_id`, `asset_id`, `material`, `workpiece` (`width_mm`, `height_mm`, `x_mm`, `y_mm`, `angle_deg`, `z_mm`), `camera` (placed by the camera: `409` with `recalibrate` at another height), `anchor` (`corner`, `inset_mm`) or `label_at` (`x`, `y`); answers the job, its `cuts` and `outline` on the bed, `warnings` and a `preview` |
 | `GET /api/v1/printers/{id}/jobs`, `GET /api/v1/printers/{id}/jobs/{job}` | `labels.print` | Its history, newest first, and one job |
 | `GET /api/v1/printers/{id}/jobs/{job}/preview` | `labels.print` | A prepared job's engraving, as a PNG |
 | `POST /api/v1/printers/{id}/jobs/{job}/frame`, `…/start` | `lasers.run`, never over MCP, from a flow or from an incoming hook | Trace its outline; start it, send it ready, or resume it, with the interlocks checked first (`409` with the machine's `status` when they refuse) |
 | `POST /api/v1/printers/{id}/jobs/{job}/pause`, `…/cancel` | `labels.print` or `lasers.run` | Pause it, or cancel it, prepared or under way |
 | `GET /api/v1/printers/{id}/status` | `labels.print` | The machine's `status` (`state`, `progress`, `interlocks`), or why it is `unreachable`; its `model`; and its latest `job` |
+| `GET /api/v1/printers/{id}/calibration` | `labels.print` | Whether it has a `camera`, its `calibration` or null, the marks' `layout` and the scrap they need, and the limits, `max_error_mm` and `height_tolerance_mm` |
+| `POST /api/v1/printers/{id}/calibration/marks` | `labels.print` | Prepare the job engraving the calibration marks, on `material`; framed and started as any job |
+| `POST /api/v1/printers/{id}/calibration` | `labels.print` | Photograph the marks and calibrate at `z_mm`; `422` when they are not found, or fit worse than allowed (with `rms_mm` and `max_mm`) |
+| `DELETE /api/v1/printers/{id}/calibration` | `labels.print` | Forget the calibration |
+| `POST /api/v1/printers/{id}/camera/measure` | `labels.print` | Photograph the bed and measure the `workpiece` at `z_mm` (`width_mm`, `height_mm`, `x_mm`, `y_mm`, `angle_deg`, `center`); `409` with `recalibrate` when the calibration is missing or for another height; `422` when none is found |
+| `GET /api/v1/printers/{id}/camera/view` | `labels.print` | The latest photo, seen from above the work area, as a JPEG |
+| `GET`, `PUT /api/v1/settings/lasers` | `settings.manage` | The cameras' limits: `max_error_mm` and `height_tolerance_mm` |
 
 ### Display API
 

@@ -622,6 +622,8 @@ export interface OneShotModel {
   /** It traces a job's outline with its pointer. */
   frames: boolean;
   interlocks: string[];
+  /** It photographs its bed, so a label can be placed on a workpiece wherever it lies (docs/printing.md#camera-alignment). */
+  camera: boolean;
 }
 
 /** How a laser engraves or cuts a material: power in percent, speed in mm a second. */
@@ -673,7 +675,7 @@ export interface LaserJob {
   asset_id: string | null;
   asset_name?: string;
   material: Material;
-  placement: { workpiece: RectMM; label: RectMM; mirror: boolean; cuts: number };
+  placement: LaserPlacement;
   state: LaserJobState;
   message?: string;
   prepared_by?: string;
@@ -681,6 +683,66 @@ export interface LaserJob {
   created_at: string;
   started_at: string | null;
   ended_at: string | null;
+}
+
+/**
+ * Where a laser job went: the workpiece before it was turned angle_deg clockwise about its center, the label on it
+ * (placed, turned with it), and the part of the bed the engraving covers (label).
+ */
+export interface LaserPlacement {
+  workpiece: RectMM;
+  angle_deg?: number;
+  /** Absent in jobs recorded before pieces turned: label is then where it went. */
+  placed?: RectMM;
+  label: RectMM;
+  mirror: boolean;
+  cuts: number;
+  /** The camera measured the workpiece, its surface z_mm above the bed. */
+  camera?: boolean;
+  z_mm?: number;
+  /** The job engraved calibration marks, not a label. */
+  calibration?: boolean;
+}
+
+/** A laser's camera fitted to its bed (docs/printing.md#camera-alignment). */
+export interface LaserCalibration {
+  printer_id: string;
+  model: string;
+  image_width: number;
+  image_height: number;
+  z_mm: number;
+  marks: number;
+  rms_mm: number;
+  max_mm: number;
+  calibrated_by?: string;
+  created_at: string;
+}
+
+/** Where a laser's calibration marks go: their centers, and the scrap they need as [x, y, width, height]. */
+export interface MarkLayout {
+  marks: { x: number; y: number }[];
+  diameter_mm: number;
+  origin_diameter_mm: number;
+  scrap: [number, number, number, number];
+}
+
+/** A laser's camera, as GET /printers/{id}/calibration gives it, with the instance's limits. */
+export interface LaserCameraState {
+  camera: boolean;
+  calibration: LaserCalibration | null;
+  layout?: MarkLayout;
+  max_error_mm: number;
+  height_tolerance_mm: number;
+}
+
+/** A workpiece as the camera measured it: x_mm and y_mm its top left corner before it is turned angle_deg. */
+export interface MeasuredWorkpiece {
+  width_mm: number;
+  height_mm: number;
+  x_mm: number;
+  y_mm: number;
+  angle_deg: number;
+  center: { x: number; y: number };
 }
 
 /** A laser job as the API answers it: while the server holds it prepared, what it cuts and where. */
@@ -691,6 +753,8 @@ export interface LaserJobAnswer {
   outline?: RectMM;
   warnings?: string[];
   preview?: string;
+  /** For the calibration marks' job: where they go. */
+  layout?: MarkLayout;
 }
 
 export interface Interlock {

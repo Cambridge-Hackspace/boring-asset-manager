@@ -26,6 +26,12 @@ type REST struct {
 	// machine_lock, drawer); one missing answers 404.
 	Peripherals map[string]string
 	Progress    float64
+	// Photos are what its camera's stream 0 sends, in turn, the last again
+	// and again; FillLights the levels its fill light was set to. Its
+	// camera answers on the same port.
+	Photos     [][]byte
+	FillLights []int
+	shots      int
 
 	files   map[string][]byte
 	loaded  bool
@@ -127,6 +133,22 @@ func (s *REST) serve(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"result": "ok"})
 	}
 	switch {
+	case r.URL.Path == "/camera/snap" && q.Get("stream") == "0" && len(s.Photos) > 0:
+		photo := s.Photos[min(s.shots, len(s.Photos)-1)]
+		s.shots++
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write(photo)
+	case r.Method == http.MethodPost && r.URL.Path == "/peripheral/fill_light":
+		var d struct {
+			Action string `json:"action"`
+			Value  int    `json:"value"`
+		}
+		if json.NewDecoder(r.Body).Decode(&d) != nil || d.Action != "set_bri" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		s.FillLights = append(s.FillLights, d.Value)
+		reply(map[string]any{"result": "ok"})
 	case !cnc && r.URL.Path == "/device/machineInfo":
 		wrapped(map[string]any{"deviceName": "Simulated", "firmware": map[string]any{"package_version": s.Firmware}})
 	case cnc && r.URL.Path == "/system" && q.Get("action") == "version_v2":

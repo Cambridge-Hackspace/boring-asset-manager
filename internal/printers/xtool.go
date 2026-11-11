@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/xtool"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/vision"
 )
 
 // DriverXTool drives xTool lasers (docs/printing.md#xtool): the F1 and the
@@ -34,7 +36,28 @@ type xtoolOptions struct {
 	// FlameHoldMinutes is how long starting is refused after the machine
 	// reports a flame.
 	FlameHoldMinutes *int `json:"flame_hold_minutes"`
+	// FillLight is how bright the fill light is set before a photo, in
+	// percent; 0 leaves it as it is.
+	FillLight *int `json:"fill_light"`
+	// CameraPort is the REST V1 camera's port.
+	CameraPort *int `json:"camera_port"`
 }
+
+// xtoolDefaultFillLight is fill_light unless set: full, since the F1 Ultra
+// turns it off after a job, and the marks and the workpiece are found by
+// their light.
+const xtoolDefaultFillLight = 100
+
+// xtoolBlackFrames is how many black frames a photo is taken again after,
+// and xtoolBlackWait how long it waits each time: the F1 Ultra's camera
+// sends black frames for a while after autofocus. A frame is black when
+// its mean brightness, 0 to 255, is below xtoolBlack.
+var (
+	xtoolBlackFrames = 4
+	xtoolBlackWait   = 1500 * time.Millisecond
+)
+
+const xtoolBlack = 8
 
 // xtoolMaxFlameHold bounds flame_hold_minutes: a day at most.
 const xtoolMaxFlameHold = 24 * 60
@@ -83,7 +106,7 @@ func (xtoolDriver) OneShotModels() []OneShotModel {
 	for _, m := range xtool.Models() {
 		out = append(out, OneShotModel{
 			ID: m.ID, WorkWidthMM: m.WorkWidthMM, WorkHeightMM: m.WorkHeightMM, Materials: xtoolMaterials(m),
-			StartButton: m.StartButton, Frames: m.Frames, Interlocks: xtoolInterlocks(m),
+			StartButton: m.StartButton, Frames: m.Frames, Interlocks: xtoolInterlocks(m), Camera: m.Camera != "",
 		})
 	}
 	return out
@@ -101,6 +124,12 @@ func (d xtoolDriver) Info() DriverInfo {
 	}, {
 		Name: "flame_hold_minutes", Type: "int", Default: int(xtool.DefaultFlameHold / time.Minute),
 		Description: fmt.Sprintf("How long, in minutes, BAM! refuses to start after the machine reports a flame (1-%d). The machine does not say when one is out.", xtoolMaxFlameHold),
+	}, {
+		Name: "fill_light", Type: "int", Default: xtoolDefaultFillLight,
+		Description: "How bright, in percent, BAM! sets the fill light before photographing the bed, on a model with a camera; 0 leaves it as it is.",
+	}, {
+		Name: "camera_port", Type: "int", Default: xtool.PortCamera,
+		Description: "The port the camera answers on, over REST V1 firmware.",
 	}}
 	return info
 }
@@ -124,6 +153,12 @@ func (xtoolDriver) settings(s Settings) (xtool.Model, xtoolOptions, error) {
 	}
 	if o.FlameHoldMinutes != nil && (*o.FlameHoldMinutes < 1 || *o.FlameHoldMinutes > xtoolMaxFlameHold) {
 		return m, o, fmt.Errorf("options: flame_hold_minutes must be 1-%d", xtoolMaxFlameHold)
+	}
+	if o.FillLight != nil && (*o.FillLight < 0 || *o.FillLight > 100) {
+		return m, o, errors.New("options: fill_light must be 0-100")
+	}
+	if o.CameraPort != nil && (*o.CameraPort < 1 || *o.CameraPort > 65535) {
+		return m, o, errors.New("options: camera_port must be 1-65535")
 	}
 	return m, o, nil
 }
@@ -179,9 +214,21 @@ func (d xtoolDriver) Machine(c Connection, s Settings) (Machine, error) {
 		if port == DefaultPort {
 			port = xtool.PortRESTV1
 		}
-		dev = &xtool.REST{Base: "http://" + net.JoinHostPort(host, strconv.Itoa(port)), Dialect: m.Dialect}
+		rest := &xtool.REST{Base: "http://" + net.JoinHostPort(host, strconv.Itoa(port)), Dialect: m.Dialect}
+		if m.Camera != "" {
+			cameraPort := xtool.PortCamera
+			if o.CameraPort != nil {
+				cameraPort = *o.CameraPort
+			}
+			rest.CameraBase = "http://" + net.JoinHostPort(host, strconv.Itoa(cameraPort))
+		}
+		dev = rest
 	}
-	return &xtoolMachine{dev: dev, model: m, allowUnknown: o.AllowUnknownFirmware != nil && *o.AllowUnknownFirmware}, nil
+	fill := xtoolDefaultFillLight
+	if o.FillLight != nil {
+		fill = *o.FillLight
+	}
+	return &xtoolMachine{dev: dev, model: m, allowUnknown: o.AllowUnknownFirmware != nil && *o.AllowUnknownFirmware, fillLight: fill}, nil
 }
 
 // xtoolMachine is an xTool laser, as a one-shot printer's Machine.
@@ -189,6 +236,8 @@ type xtoolMachine struct {
 	dev          xtool.Device
 	model        xtool.Model
 	allowUnknown bool
+	// fillLight is the fill light's brightness for a photo, in percent.
+	fillLight int
 }
 
 // firmware checks the machine's firmware: the interlock it is reported as,
@@ -312,4 +361,41 @@ func (x *xtoolMachine) Resume(ctx context.Context) error {
 // Cancel stops the job, whatever the firmware: stopping is never refused.
 func (x *xtoolMachine) Cancel(ctx context.Context) error {
 	return x.dev.Control(ctx, xtool.ActionStop)
+}
+
+// Photo photographs the bed with the model's camera (docs/printing.md#xtool):
+// the fill light set first, as asked, since a model may have turned it off
+// after a job, and a black frame, as the F1 Ultra sends after autofocus,
+// taken again a few times. Nothing on the machine moves.
+func (x *xtoolMachine) Photo(ctx context.Context) ([]byte, error) {
+	cam, ok := x.dev.(xtool.Camera)
+	if x.model.Camera == "" || !ok {
+		return nil, fmt.Errorf("BAM! does not know how to ask the %s for a photo", x.model.ID)
+	}
+	if x.fillLight > 0 {
+		// The light is a help, not a need: a machine refusing it is still
+		// photographed.
+		_ = cam.FillLight(ctx, (x.fillLight*255+50)/100)
+	}
+	for try := 0; ; try++ {
+		photo, err := cam.Snapshot(ctx, x.model.Camera)
+		if err != nil {
+			return nil, err
+		}
+		img, err := vision.Decode(photo)
+		if err != nil {
+			return nil, err
+		}
+		if vision.MeanBrightness(img) >= xtoolBlack {
+			return photo, nil
+		}
+		if try >= xtoolBlackFrames {
+			return nil, fmt.Errorf("the camera sent only black frames, %d of them; is it focusing, or covered?", try+1)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(xtoolBlackWait):
+		}
+	}
 }

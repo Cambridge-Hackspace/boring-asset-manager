@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
@@ -55,6 +56,10 @@ type OneShotModel struct {
 	// Interlocks are those the machine reports, which are checked before
 	// a job starts: InterlockLid and the rest.
 	Interlocks []string `json:"interlocks"`
+	// Camera is set when the machine photographs its bed, so a label can
+	// be placed on a workpiece wherever it lies
+	// (docs/printing.md#camera-alignment); its Machine is then a Camera.
+	Camera bool `json:"camera"`
 }
 
 // Interlocks a machine may report.
@@ -244,6 +249,16 @@ type Machine interface {
 	Cancel(ctx context.Context) error
 }
 
+// Camera is a Machine that photographs its bed: one whose model sets
+// OneShotModel.Camera. It is apart from Machine so that drivers of
+// machines without a camera need nothing for it.
+type Camera interface {
+	// Photo photographs the bed, as a JPEG or PNG. The driver works around
+	// its camera's quirks (docs/printing.md#camera-alignment), such as a
+	// fill light left off or black frames, and never moves the machine.
+	Photo(ctx context.Context) ([]byte, error)
+}
+
 // Machine states.
 const (
 	MachineIdle    = "idle"
@@ -333,11 +348,16 @@ type Polyline struct {
 type Job struct {
 	Model    string
 	Material Material
-	// Workpiece and Label are where the workpiece lies on the bed, and
-	// where the label goes on it, in millimeters from the work area's top
-	// left corner.
+	// Workpiece is where the workpiece lies on the bed, in millimeters
+	// from the work area's top left corner, before it is turned AngleDeg
+	// clockwise about its center; Placed is where the label goes on it,
+	// turned with it.
 	Workpiece RectMM
-	Label     RectMM
+	AngleDeg  float64
+	Placed    RectMM
+	// Label is the part of the bed Engrave covers: Placed, or, turned, the
+	// square around it, Engrave turned within it.
+	Label RectMM
 	// Mirror is set when the material is engraved from the back: the
 	// label is mirrored, left for right, within its place.
 	Mirror bool
@@ -346,6 +366,9 @@ type Job struct {
 	Engrave *image.Gray
 	// Cuts are cut after engraving, on the bed.
 	Cuts []Polyline
+	// Calibration is set for a job engraving a camera's calibration marks
+	// rather than a label (docs/printing.md#calibrating).
+	Calibration bool
 }
 
 // Outline is the part of the bed the job reaches: the label's place, and
@@ -364,11 +387,16 @@ func (j *Job) Outline() RectMM {
 // where it goes.
 type JobInput struct {
 	Material Material
-	// Workpiece is its size and its place on the bed.
+	// Workpiece is its size and its place on the bed, before it is
+	// turned AngleDeg clockwise about its center.
 	Workpiece RectMM
+	AngleDeg  float64
 	// LabelAt is where the label's top left corner goes on the
-	// workpiece, from its top left corner; nil centers it.
+	// workpiece, from its top left corner; nil puts it by Anchor.
 	LabelAt *PointMM
+	// Anchor puts the label in a corner of the workpiece, or centers it,
+	// when LabelAt does not place it.
+	Anchor labels.WorkpieceAnchor
 	// LabelWidthMM and LabelHeightMM are the label's size.
 	LabelWidthMM, LabelHeightMM float64
 	// Engrave is the label drawn 1-bit at the material's lines per inch,
@@ -392,10 +420,18 @@ func MakeJob(model OneShotModel, in JobInput) (*Job, []string, error) {
 	if !(w.Width > 0 && w.Height > 0) {
 		reasons = append(reasons, "the workpiece's width and height must be more than 0 mm")
 	}
-	if w.X < -SizeTolerance || w.Y < -SizeTolerance || w.X+w.Width > model.WorkWidthMM+SizeTolerance || w.Y+w.Height > model.WorkHeightMM+SizeTolerance {
-		reasons = append(reasons, fmt.Sprintf("the workpiece reaches outside the work area, which is %s × %s mm", mm(model.WorkWidthMM), mm(model.WorkHeightMM)))
+	// Turned, it is the square around it that must be within the work
+	// area.
+	reach, turned := w, ""
+	if math.IsNaN(in.AngleDeg) || in.AngleDeg < -180 || in.AngleDeg > 180 {
+		reasons = append(reasons, "the workpiece's angle must be from -180 to 180 degrees")
+	} else if in.AngleDeg != 0 {
+		reach, turned = (Turn{Center: PointMM{X: w.X + w.Width/2, Y: w.Y + w.Height/2}, Deg: in.AngleDeg}).Box(w), ", turned,"
 	}
-	at := PointMM{X: (w.Width - in.LabelWidthMM) / 2, Y: (w.Height - in.LabelHeightMM) / 2}
+	if reach.X < -SizeTolerance || reach.Y < -SizeTolerance || reach.X+reach.Width > model.WorkWidthMM+SizeTolerance || reach.Y+reach.Height > model.WorkHeightMM+SizeTolerance {
+		reasons = append(reasons, fmt.Sprintf("the workpiece%s reaches outside the work area, which is %s × %s mm", turned, mm(model.WorkWidthMM), mm(model.WorkHeightMM)))
+	}
+	at := AnchorAt(in.Anchor, w.Width, w.Height, in.LabelWidthMM, in.LabelHeightMM)
 	if in.LabelAt != nil {
 		at = *in.LabelAt
 	}
@@ -407,14 +443,22 @@ func MakeJob(model OneShotModel, in JobInput) (*Job, []string, error) {
 	if len(reasons) > 0 {
 		return nil, nil, fmt.Errorf("%w: %s", ErrDoesNotFitWorkpiece, strings.Join(reasons, "; "))
 	}
+	placed := RectMM{X: w.X + at.X, Y: w.Y + at.Y, Width: in.LabelWidthMM, Height: in.LabelHeightMM}
+	turn := Turn{Center: PointMM{X: w.X + w.Width/2, Y: w.Y + w.Height/2}, Deg: in.AngleDeg}
 	job := &Job{
-		Model: model.ID, Material: in.Material, Workpiece: w, Mirror: in.Material.FromBack,
-		Label: RectMM{X: w.X + at.X, Y: w.Y + at.Y, Width: in.LabelWidthMM, Height: in.LabelHeightMM},
+		Model: model.ID, Material: in.Material, Workpiece: w, AngleDeg: in.AngleDeg, Mirror: in.Material.FromBack,
+		Placed: placed, Label: placed,
+	}
+	if in.AngleDeg != 0 {
+		job.Label = turn.Box(placed)
 	}
 	if in.Engrave != nil && !blank(in.Engrave) {
 		job.Engrave = in.Engrave
 		if job.Mirror {
 			job.Engrave = mirrorAcross(in.Engrave)
+		}
+		if in.AngleDeg != 0 {
+			job.Engrave, job.Label = turnRaster(job.Engrave, placed, job.Label, turn)
 		}
 	}
 	switch {
@@ -427,7 +471,7 @@ func MakeJob(model OneShotModel, in JobInput) (*Job, []string, error) {
 				if job.Mirror {
 					p.X = in.LabelWidthMM - p.X
 				}
-				out.Points[i] = PointMM{X: job.Label.X + p.X, Y: job.Label.Y + p.Y}
+				out.Points[i] = turn.Apply(PointMM{X: placed.X + p.X, Y: placed.Y + p.Y})
 			}
 			job.Cuts = append(job.Cuts, out)
 		}

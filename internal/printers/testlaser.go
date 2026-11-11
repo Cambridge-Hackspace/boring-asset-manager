@@ -8,13 +8,17 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/simcamera"
 )
 
 // DriverTestLaser is a simulated laser, for tests (docs/printing.md#lasers):
 // it is registered only where a test turns it on ([printers] test_laser),
 // takes a tcp connection it never dials, and engraves nothing. Its machines
 // live in this process, one for each address, and finish a job a few
-// seconds after starting it.
+// seconds after starting it. The panel model has a camera, which shows
+// simcamera's photos: the calibration marks in the first photo after
+// engraving them, and a workpiece in every other.
 const DriverTestLaser = "test-laser"
 
 // The test laser's models: one started with its own button, and one
@@ -54,7 +58,7 @@ func (testLaser) OneShotModels() []OneShotModel {
 	interlocks := []string{InterlockLid, InterlockSafetyKey, InterlockFlame, InterlockExhaust}
 	return []OneShotModel{
 		{ID: TestLaserButton, WorkWidthMM: 115, WorkHeightMM: 115, Materials: testLaserMaterials(), StartButton: true, Frames: true, Interlocks: interlocks},
-		{ID: TestLaserPanel, WorkWidthMM: 200, WorkHeightMM: 150, Materials: testLaserMaterials(), Frames: true, Interlocks: interlocks},
+		{ID: TestLaserPanel, WorkWidthMM: simcamera.WorkWidthMM, WorkHeightMM: simcamera.WorkHeightMM, Materials: testLaserMaterials(), Frames: true, Interlocks: interlocks, Camera: true},
 	}
 }
 
@@ -124,6 +128,11 @@ type SimulatedLaser struct {
 	ran     time.Duration
 	// Jobs are those started, Framed those framed, in order.
 	jobs, framed []*Job
+	// photo is what its camera shows, when a test sets it; marks is set
+	// from starting calibration marks until they are photographed.
+	photo  []byte
+	marks  bool
+	photos int
 }
 
 var (
@@ -157,6 +166,20 @@ func (m *SimulatedLaser) SetDuration(d time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.duration = d
+}
+
+// SetPhoto has the camera show a photo, or simcamera's again when nil.
+func (m *SimulatedLaser) SetPhoto(photo []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.photo = photo
+}
+
+// Photos is how many photos the camera has taken.
+func (m *SimulatedLaser) Photos() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.photos
 }
 
 // PressButton presses the machine's button, starting a job sent ready.
@@ -242,6 +265,7 @@ func (t *testLaserMachine) Start(_ context.Context, job *Job) error {
 	}
 	m.jobs = append(m.jobs, job)
 	m.job = job
+	m.marks = job.Calibration
 	if t.model.StartButton {
 		m.state = MachineReady
 		return nil
@@ -282,4 +306,24 @@ func (t *testLaserMachine) Cancel(context.Context) error {
 		m.state = MachineCancelled
 	}
 	return nil
+}
+
+// Photo shows a test's photo, or the calibration marks just engraved, or
+// a workpiece. Only the models with a camera are a Camera.
+func (t *testLaserMachine) Photo(context.Context) ([]byte, error) {
+	if !t.model.Camera {
+		return nil, fmt.Errorf("the test laser's %s model has no camera", t.model.ID)
+	}
+	m := t.sim
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.photos++
+	switch {
+	case m.photo != nil:
+		return m.photo, nil
+	case m.marks:
+		m.marks = false
+		return simcamera.Photo(simcamera.Calibration), nil
+	}
+	return simcamera.Photo(simcamera.Workpiece), nil
 }
