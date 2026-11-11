@@ -139,6 +139,26 @@ func TestV2FramesWithTheFrameFile(t *testing.T) {
 	waitFor(t, func() bool { st, _ := dev.Status(ctx); return st.State == xtool.StateIdle })
 }
 
+// The file channel of one upload closes as it ends, and the next upload's
+// may be taken only after that upload is announced: the machine must ask
+// for it on the new channel, not the old one.
+func TestV2SendsAFileAfterAnotherToASlowMachine(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	dev, sim := v2Device(t, "40.51.020.04")
+	sim.Set(func(s *xtoolsim.V2) { s.FileDelay = 300 * time.Millisecond })
+	for i, frame := range [][]byte{[]byte("G90\nG0X1Y1S0\n"), []byte("G90\nG0X2Y2S0\n")} {
+		if err := dev.Frame(ctx, frame); err != nil {
+			t.Fatalf("frame %d: %v", i, err)
+		}
+		if got := sim.File("tmpFrame.gcode"); !bytes.Equal(got, frame) {
+			t.Fatalf("frame %d: %q", i, got)
+		}
+		sim.Finish()
+		waitFor(t, func() bool { st, _ := dev.Status(ctx); return st.State == xtool.StateIdle })
+	}
+}
+
 func TestV2ReportsInterlocks(t *testing.T) {
 	ctx := context.Background()
 	dev, sim := v2Device(t, "40.51.020.04")
