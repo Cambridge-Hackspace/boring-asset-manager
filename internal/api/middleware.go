@@ -164,7 +164,9 @@ func Authenticate(st *store.Store) func(http.Handler) http.Handler {
 			// An incoming hook's address authenticates by the hook's own
 			// secret (docs/hooks.md#incoming-hooks): its Authorization is
 			// no API token, and a browser's session counts for nothing.
-			if incomingDelivery(r) {
+			// A display's requests authenticate by its own token
+			// (docs/printing.md#displays), as above.
+			if incomingDelivery(r) || displayRequest(r) {
 				next.ServeHTTP(w, signedOut)
 				return
 			}

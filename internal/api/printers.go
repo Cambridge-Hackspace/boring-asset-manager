@@ -150,12 +150,22 @@ func (s *Server) checkConnection(c printers.Connection) error {
 	if err != nil {
 		return err
 	}
+	if c.Type == printers.ConnWebhook {
+		if _, err := s.webhookChannel(c.Address); err != nil {
+			return fmt.Errorf("%w: connection: %v", printers.ErrInvalidPrinter, err)
+		}
+	}
 	return s.transport.Check(c)
 }
 
 // sendToPrinter delivers a job to a printer, a Bluetooth LE one's
 // connection taking its driver's profile where it sets none.
 func (s *Server) sendToPrinter(ctx context.Context, p *models.Printer, job []byte) error {
+	// A display that pulls, or is pushed through a webhook, is the
+	// server's own to deliver to.
+	if done, err := s.deliverToDisplay(ctx, p, job); done {
+		return err
+	}
 	conn, err := printers.ConnectionFor(p.Driver, p.Connection)
 	if err != nil {
 		return fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
@@ -296,6 +306,8 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	if err := s.actingStore(r).RecordLabelsPrinted(req.AssetIDs, t.Name, p.Name, req.Copies); err != nil {
 		log.Printf("recording labels printed on %s: %v", p.Name, err)
 	}
+	// A display shows the last of them.
+	s.rememberShown(s.actingStore(r), p, req.TemplateID, req.AssetIDs[len(req.AssetIDs)-1])
 	writeJSON(w, http.StatusOK, map[string]any{
 		"printer_id": p.ID,
 		"labels":     rendered.len(),

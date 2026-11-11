@@ -121,7 +121,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	for _, info := range d {
 		by[info.Driver] = info
 	}
-	if len(d) != 7 || len(by) != 7 {
+	if len(d) != 10 || len(by) != 10 {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -181,7 +181,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	}
 	// The drivers that take custom stock say how wide, for every model.
 	for _, info := range d {
-		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch {
+		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch || info.Display != nil {
 			continue
 		}
 		c := info.CustomStock

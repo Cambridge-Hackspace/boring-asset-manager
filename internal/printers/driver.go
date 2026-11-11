@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -101,6 +102,9 @@ type DriverInfo struct {
 	// BLE is the driver's Bluetooth LE profile, the default for a ble
 	// connection, when its printers connect over Bluetooth LE.
 	BLE *BLEProfile `json:"ble,omitempty"`
+	// Display is set for a display driver (display.go): the connections
+	// its displays take and the images it makes.
+	Display *DisplayInfo `json:"display,omitempty"`
 }
 
 // MediaInfo describes a roll for clients choosing what is loaded.
@@ -136,7 +140,8 @@ var (
 )
 
 func init() {
-	for _, d := range []Driver{brotherQL, brotherDriver{brotherql.SeriesTD}, ptouchDriver{}, dymoLabelWriter{}, tsplDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2}} {
+	for _, d := range []Driver{brotherQL, brotherDriver{brotherql.SeriesTD}, ptouchDriver{}, dymoLabelWriter{}, tsplDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2},
+		genericDisplay, oeplDisplay, trmnlDisplay} {
 		if err := Register(d); err != nil {
 			panic(err)
 		}
@@ -184,6 +189,9 @@ func Drivers() []DriverInfo {
 		if b, ok := d.(BLEDriver); ok {
 			p := b.BLE()
 			info.BLE = &p
+		}
+		if dd, ok := d.(displayDriver); ok {
+			info.Display = &DisplayInfo{Connections: dd.Connections(), Formats: slices.Clone(dd.formats)}
 		}
 		infos = append(infos, info)
 	}

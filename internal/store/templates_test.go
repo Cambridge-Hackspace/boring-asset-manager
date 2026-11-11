@@ -149,7 +149,7 @@ func TestInvalidTemplatesAreNotStored(t *testing.T) {
 	defer st.Close()
 
 	tpl := sampleTemplate("bad")
-	tpl.DPI = 72
+	tpl.DPI = 71
 	var ve *labels.ValidationError
 	if _, err := st.CreateTemplate(tpl); !errors.As(err, &ve) {
 		t.Fatalf("expected a validation error, got %v", err)

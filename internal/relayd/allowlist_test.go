@@ -73,6 +73,34 @@ func TestAllowlist(t *testing.T) {
 	}
 }
 
+func TestAllowlistReachesOpenEPaperLinkAccessPointsByTheirURL(t *testing.T) {
+	a, err := ParseAllowlist([]string{"http://192.168.1.50", "http://*.ap.lan/"}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		address string
+		ok      bool
+	}{
+		{"192.168.1.50?tag=0000021E3D6F1234", true},
+		{"http://192.168.1.50?tag=0000021E3D6F1234", true},
+		{"http://192.168.1.51?tag=0000021E3D6F1234", false},
+		{"https://192.168.1.50?tag=0000021E3D6F1234", false},
+		{"http://shelf.ap.lan?tag=0197E5CB3B38", true},
+		{"http://shelf.ap.lan:8080?tag=0197E5CB3B38", false},
+		{"http://ap.example?tag=0197E5CB3B38", false},
+		{"not an address", false},
+	} {
+		conn := printers.Connection{Type: printers.ConnOpenEPaperLink, Address: c.address}
+		if n, err := printers.NormalizeConnection(conn); err == nil {
+			conn = n
+		}
+		if err := a.Allows(conn); (err == nil) != c.ok {
+			t.Errorf("%s: %v, want allowed %v", c.address, err, c.ok)
+		}
+	}
+}
+
 func TestWildcard(t *testing.T) {
 	for _, c := range []struct {
 		pattern, s string

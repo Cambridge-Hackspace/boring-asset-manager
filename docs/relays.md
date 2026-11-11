@@ -47,6 +47,7 @@ allow = [
   "*.lan:*",                   # printers by name, on any port
   "ipp://cups.lan/printers/*", # IPP queues; * matches anything, slashes included
   "windows:Zebra*",            # Windows printers by name
+  "http://192.168.1.50",       # an OpenEPaperLink access point
 ]
 
 [printers]
@@ -57,6 +58,9 @@ bluetooth = ["7C:2F:80:*"]    # Bluetooth LE printers, as on the main node
 - **TCP printers** are `host:port`, or a host alone for port 9100. The host is an address, a CIDR
   range, a name, or a pattern of names such as `*.lan`; the port is a number or `*`. A range matches
   only addresses, and a name is matched as a name, whatever it resolves to.
+- **OpenEPaperLink access points**, for e-paper tags ([Displays](printing.md#openepaperlink)), are
+  their `http://` or `https://` URL, matched against the access point's address with its tag left
+  out; `*` matches anything.
 - **Device paths** are `[printers] devices`, as on the main node.
 - **Bluetooth LE printers** are `[printers] bluetooth`, as on the main node: addresses, or patterns
   of them such as `7C:2F:80:*`. A Bluetooth address under `[relay] allow` is refused, where it would

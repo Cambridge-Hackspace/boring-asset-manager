@@ -26,6 +26,8 @@
   let confirm = $state('');
   // The key the hook had when opened: what devices listen for now.
   let had = $state('');
+  // Whether it refreshes the displays showing the asset (docs/hooks.md#actions).
+  let refreshDisplays = $state(false);
 
   async function load() {
     try {
@@ -44,6 +46,7 @@
     key = had = a?.key ?? '';
     label = a?.label ?? '';
     confirm = a?.confirm ?? '';
+    refreshDisplays = (a?.actions ?? []).includes('refresh_displays');
     triggers = $state.snapshot(a?.triggers ?? [{ type: 'button' }]) as HookTrigger[];
     // Conditions name fields; they are read once, when first needed.
     if (fields.length === 0) void request<{ fields: Field[] }>('GET', '/fields').then((r) => (fields = r.fields ?? []), () => {});
@@ -56,7 +59,7 @@
       error = 'Choose what fires it: a button, events or a schedule.';
       return;
     }
-    const body = { key: key.trim(), label, confirm, triggers };
+    const body = { key: key.trim(), label, confirm, triggers, actions: refreshDisplays ? ['refresh_displays'] : [] };
     try {
       if (editing === 'new') await request('POST', '/hooks', body);
       else await request('PUT', `/hooks/${encodeURIComponent(editing!)}`, body);
@@ -116,6 +119,16 @@
       <input id="hook-confirm" class="input" maxlength="255" placeholder="Light up its drawer?" bind:value={confirm} />
     </div>
     <HookTriggers bind:triggers {fields} />
+    <div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" bind:checked={refreshDisplays} aria-describedby="hook-refresh-help" />
+        Refresh displays
+      </label>
+      <p id="hook-refresh-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+        When it fires, show the e-paper displays showing the asset, or something in it, their label again. A burst of changes is
+        one refresh. It cannot fire on labels printed, which each refresh is.
+      </p>
+    </div>
     <div class="flex gap-2">
       <button type="submit" class="btn-primary">Save hook</button>
       <button type="button" class="btn-secondary" onclick={() => (editing = null)}>Cancel</button>
@@ -135,6 +148,7 @@
           <span class="font-semibold">{a.label}</span> <span class="font-mono text-sm text-zinc-600 dark:text-zinc-400">{a.key}</span>
           {#if a.confirm}<span class="block text-sm text-zinc-600 dark:text-zinc-400">Asks: {a.confirm}</span>{/if}
           <span class="block text-sm text-zinc-600 dark:text-zinc-400">{describeTriggers(a.triggers ?? [{ type: 'button' }])}</span>
+          {#if (a.actions ?? []).includes('refresh_displays')}<span class="block text-sm text-zinc-600 dark:text-zinc-400">Refreshes displays</span>{/if}
         </div>
         <div class="flex gap-2">
           <button type="button" class="btn-secondary" aria-label="Edit {a.label}" onclick={() => edit(a)}>Edit</button>

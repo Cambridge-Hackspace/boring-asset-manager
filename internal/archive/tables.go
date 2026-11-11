@@ -19,7 +19,7 @@ var Tables = []Table{
 		Columns: []Column{{"id", Text}, {"field_key", Text}, {"label", Text}, {"validation_type", Text}, {"options", JSON}, {"created_at", Time}, {"updated_at", Time}},
 	},
 	{Name: "asset_actions", Kind: KindCatalog, Since: 26, Key: []string{"id"},
-		Columns: []Column{{"id", Text}, {"action_key", Text}, {"label", Text}, {"confirm_question", Text}, {"created_at", Time}, {"updated_at", Time}, {"triggers", JSON}},
+		Columns: []Column{{"id", Text}, {"action_key", Text}, {"label", Text}, {"confirm_question", Text}, {"created_at", Time}, {"updated_at", Time}, {"triggers", JSON}, {"actions", JSON}},
 	},
 	{Name: "categories", Kind: KindCatalog, Since: 1, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"name", Text}, {"parent_id", Text}, {"color_hex", Text}, {"is_consumable", Bool}, {"is_running_low", Bool}, {"created_at", Time}, {"updated_at", Time}, {"low_stock_threshold", Int}, {"is_lendable", Bool}, {"stock_unit", Text}, {"scan_template_id", Text}, {"review_enabled", Bool}, {"review_months", Int}, {"review_on_edit", Text}, {"review_self_verify", Bool}},
@@ -216,6 +216,9 @@ var Tables = []Table{
 	{Name: "printers", Kind: KindSettings, Since: 3, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"name", Text}, {"driver", Text}, {"model", Text}, {"connection_type", Text}, {"address", Text}, {"media", Text}, {"options", JSON}, {"created_at", Time}, {"updated_at", Time}, {"relay", Text}},
 	},
+	{Name: "displays", Kind: KindSettings, Since: 82, Key: []string{"printer_id"},
+		Columns: []Column{{"printer_id", Text}, {"template_id", Text}, {"asset_id", Text}, {"shown_by", Text}, {"shown_by_token", Bool}, {"shown_at", Time}, {"image", Text}, {"content_type", Text}, {"etag", Text}, {"fetched_at", Time}, {"refresh_at", Time}},
+	},
 	{Name: "printer_pools", Kind: KindSettings, Since: 25, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"name", Text}, {"batch_size", Int}, {"fixed_shares", Bool}, {"created_at", Time}, {"updated_at", Time}},
 	},
@@ -300,6 +303,12 @@ var Tables = []Table{
 	// configuration's key, as second factors' secrets are.
 	{Name: "relay_mesh", Kind: KindAuth, Since: 63, Key: []string{"id"},
 		Columns: []Column{{"id", Text}, {"mesh", Text}, {"root_public", Text}, {"root_private", Text}, {"main_public", Text}, {"main_private", Text}, {"created_at", Time}},
+	},
+	// Display tokens are kept as hashes, in auth/: a display restored without
+	// them fetches nothing until it is given a new one.
+	{Name: "display_tokens", Kind: KindAuth, Since: 82, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"printer_id", Text}, {"name", Text}, {"token_hash", Text}, {"created_by", Text}, {"created_at", Time}, {"last_used_at", Time}},
+		Secret:  []string{"token_hash"},
 	},
 	// Each person's own: written only when asked for (docs/backups.md).
 	{Name: "assistant_conversations", Kind: KindConversations, Since: 81, Key: []string{"id"},

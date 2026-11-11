@@ -50,11 +50,15 @@ func Validate(name, driver string, conn Connection, settings Settings) error {
 	if p := textcheck.Problem(name, textcheck.MaxName); p != "" {
 		return fmt.Errorf("%w: name %s", ErrInvalidPrinter, p)
 	}
-	if _, err := NormalizeConnection(conn); err != nil {
+	conn, err := NormalizeConnection(conn)
+	if err != nil {
 		return err
 	}
 	d, err := Lookup(driver)
 	if err != nil {
+		return err
+	}
+	if err := checkDisplayConnection(d, conn); err != nil {
 		return err
 	}
 	if conn.Type == ConnBLE {
@@ -188,6 +192,12 @@ func (d *Dispatcher) Send(ctx context.Context, c Connection, job []byte) error {
 		err = spool(c.Address, job)
 	case ConnBLE:
 		err = d.sendBLE(ctx, c.Address, job)
+	case ConnOpenEPaperLink:
+		err = d.sendOEPL(ctx, c.Address, job)
+	case ConnPull, ConnWebhook:
+		// The server keeps a pull display's image, and posts a webhook's
+		// itself, with what only it knows.
+		err = fmt.Errorf("a %s connection is delivered by the server, not a transport", c.Type)
 	default:
 		err = fmt.Errorf("unknown connection type %q", c.Type)
 	}
