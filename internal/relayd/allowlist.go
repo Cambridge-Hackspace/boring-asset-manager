@@ -24,7 +24,9 @@ import (
 //     matches only addresses: a name is matched as a name, whatever it
 //     resolves to.
 //   - an ipp://, ipps://, http:// or https:// URL, for IPP queues, in which
-//   - matches anything, slashes included.
+//   - matches anything, slashes included. An http:// or https:// URL also
+//     allows OpenEPaperLink access points, matched against the access
+//     point's URL, its tag left out.
 //   - windows: and a printer's name, in which * matches anything, for the
 //     Windows spooler.
 //
@@ -188,6 +190,16 @@ func (a *Allowlist) Allows(c printers.Connection) error {
 	case printers.ConnIPP:
 		for _, pattern := range a.urls {
 			if wildcard(strings.ToLower(pattern), strings.ToLower(c.Address)) {
+				return nil
+			}
+		}
+	case printers.ConnOpenEPaperLink:
+		ap, err := printers.ParseOEPLAddress(c.Address)
+		if err != nil {
+			return refuse()
+		}
+		for _, pattern := range a.urls {
+			if p := strings.ToLower(strings.TrimRight(pattern, "/")); wildcard(p, strings.ToLower(ap.Base)) {
 				return nil
 			}
 		}

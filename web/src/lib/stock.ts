@@ -47,6 +47,9 @@ const driverNames: Record<string, string> = {
   tspl: 'TSPL',
   zpl: 'Zebra ZPL',
   epl2: 'Zebra EPL2',
+  display: 'E-paper display',
+  openepaperlink: 'OpenEPaperLink tag',
+  trmnl: 'TRMNL',
 };
 
 /** A printer driver as people know it: "Brother QL" rather than brother_ql. */
@@ -66,6 +69,7 @@ const optionLabels: Record<string, string> = {
   media_type: 'Media type',
   mirror: 'Mirror labels, for clear tape',
   print_mode: 'After each label',
+  refresh_seconds: 'Ask again every (seconds)',
   roll: 'Roll (twin-roll models)',
   rotate_180: 'Turn labels upside down',
   speed: 'Speed (inches per second)',
@@ -77,6 +81,8 @@ const optionValueLabels: Record<string, string> = {
   each_label: 'After each label',
   last_label: 'After the last label',
   peel_off: 'Peel it off',
+  png: 'PNG',
+  bmp: 'BMP',
   tear_off: 'Tear it off',
   transfer: 'Thermal transfer, with a ribbon',
 };

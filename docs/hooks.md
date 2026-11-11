@@ -103,6 +103,18 @@ Every server looks for events and schedules every 10 seconds. Each event, each f
 interval, and each run of a schedule is claimed in the database first, so servers sharing a
 database fire each once.
 
+### Actions
+
+A hook's `actions` are what BAM! itself does when it fires, beside recording its event, however it
+fires: a list, empty by default, and left as it was when a hook is replaced without it.
+
+| Action | Does |
+|---|---|
+| `refresh_displays` | Refreshes the e-paper displays showing the asset, or showing something in it through location links, once for a burst of firings (see [Displays](printing.md#keeping-displays-current)) |
+
+A hook that refreshes displays cannot fire on `asset.label_printed`: each refresh prints a label,
+which would fire it again.
+
 ### Offering hooks on assets
 
 A category offers hooks on its assets, and with `cascades` on, on its subcategories' assets too. Set

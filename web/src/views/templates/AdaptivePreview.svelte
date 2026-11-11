@@ -156,7 +156,7 @@
     </div>
     <div>
       <label class="text-xs" for="adapt-dpi">DPI</label>
-      <input id="adapt-dpi" class="input w-24" type="number" min="150" max="600" step="1" placeholder={String(doc.dpi)} bind:value={dpi} />
+      <input id="adapt-dpi" class="input w-24" type="number" min="72" max="600" step="1" placeholder={String(doc.dpi)} bind:value={dpi} />
     </div>
     <button type="submit" class="btn-secondary">Show this size</button>
   </form>

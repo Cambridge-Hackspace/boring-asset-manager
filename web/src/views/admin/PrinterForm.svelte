@@ -6,6 +6,7 @@
   import { describeChanges, describeStock, driverName, mediaFor, optionLabel, optionValueLabel, stockFor } from '../../lib/stock';
   import { bleAddress, parseBLEAddress } from '../../lib/bluetooth';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
+  import type { Channel } from '../../lib/models';
 
   // Creates a printer, or edits one when printer is given. The form is
   // generated from the drivers' own descriptions.
@@ -24,7 +25,23 @@
     ipp: 'An IPP queue URI, such as ipp://cups.lan/printers/labels. The queue must be raw.',
     windows: 'A Windows printer name or \\\\host\\share. Only when BAM runs on Windows.',
     ble: 'The printer’s Bluetooth address, such as 7C:2F:80:A1:B2:C3. It must be allowed in the server’s [printers] bluetooth setting, and the server needs Bluetooth (BlueZ, on Linux).',
+    openepaperlink: 'The access point, such as 192.168.1.50, then ?tag= and the tag’s MAC address, such as 192.168.1.50?tag=0000021E3D6F1234.',
+    pull: 'The display fetches its image from BAM!, with a token made under Displays.',
+    webhook: 'The webhook channel BAM! posts the image through, set up under Notifications.',
   };
+
+  // Connection types as the form offers them.
+  const connectionNames: Record<PrinterConnection['type'], string> = {
+    tcp: 'Network (most label printers)',
+    device: 'Device on the BAM server',
+    ipp: 'IPP / CUPS queue',
+    windows: 'Windows printer',
+    ble: 'Bluetooth LE',
+    openepaperlink: 'OpenEPaperLink access point',
+    pull: 'The display fetches it',
+    webhook: 'Webhook',
+  };
+  const printerConnections: PrinterConnection['type'][] = ['tcp', 'device', 'ipp', 'windows', 'ble'];
 
   const initial = untrack(() => $state.snapshot(printer));
   let name = $state(initial?.name ?? '');
@@ -58,6 +75,26 @@
   });
 
   const info = $derived(drivers.find((d) => d.driver === driver));
+  // A display's driver takes only its own connections, and a printer's none of those.
+  const connections = $derived(info?.display?.connections ?? printerConnections);
+  $effect(() => {
+    if (!connections.includes(connType)) connType = connections[0] ?? 'tcp';
+  });
+  // A display that pulls has no address, but a TRMNL's is its MAC address.
+  const needsAddress = $derived(connType !== 'pull' || driver === 'trmnl');
+  // The server's own connections never go through a relay.
+  const relayable = $derived(connType !== 'pull' && connType !== 'webhook');
+
+  // Webhook channels, for a display pushed through one; read when first needed.
+  let channels = $state<Channel[] | null>(null);
+  $effect(() => {
+    if (connType !== 'webhook' || channels !== null) return;
+    channels = [];
+    void request<{ channels: Channel[] }>('GET', '/notifiers').then(
+      (r) => (channels = (r.channels ?? []).filter((c) => c.driver === 'webhook')),
+      () => (channels = []),
+    );
+  });
 
   // The model, chosen from every driver's, sets the driver behind it.
   function chooseModel(key: string) {
@@ -98,8 +135,8 @@
     event.preventDefault();
     error = '';
     busy = true;
-    const sentAddress = connType === 'ble' ? bleAddress({ ...initialBLE, ...ble, mac: address }) : address;
-    const body = { name, driver, model, media, connection: { type: connType, address: sentAddress, ...(relay ? { relay } : {}) }, options: optionPayload() };
+    const sentAddress = connType === 'ble' ? bleAddress({ ...initialBLE, ...ble, mac: address }) : needsAddress ? address : '';
+    const body = { name, driver, model, media, connection: { type: connType, address: sentAddress, ...(relay && relayable ? { relay } : {}) }, options: optionPayload() };
     try {
       if (initial) {
         const path = `/printers/${encodeURIComponent(initial.id)}`;
@@ -131,7 +168,7 @@
       <input id="{pid}-name" class="input" required bind:value={name} />
     </div>
     <div>
-      <label class="label" for="{pid}-model">Printer model</label>
+      <label class="label" for="{pid}-model">{info?.display ? 'Display model' : 'Printer model'}</label>
       <select id="{pid}-model" class="input" value="{driver}|{model}" onchange={(e) => chooseModel(e.currentTarget.value)}>
         {#each drivers as d (d.driver)}
           <optgroup label={driverName(d.driver)}>
@@ -141,7 +178,7 @@
       </select>
     </div>
     <div>
-      <label class="label" for="{pid}-media">Roll loaded</label>
+      <label class="label" for="{pid}-media">{info?.display ? 'Screen' : 'Roll loaded'}</label>
       <select id="{pid}-media" class="input" aria-describedby="{pid}-media-help" bind:value={media}>
         {#if customStock.length}
           <optgroup label="Built-in rolls">
@@ -155,8 +192,14 @@
         {/if}
       </select>
       <p id="{pid}-media-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-        The labels in it now: die-cut rolls hold pre-cut labels, continuous ones are cut to length.
-        {#if !info?.custom_stock}
+        {#if info?.display}
+          A display’s screen is a label of its size: templates of that size show on it.
+        {:else}
+          The labels in it now: die-cut rolls hold pre-cut labels, continuous ones are cut to length.
+        {/if}
+        {#if info?.display}
+          <!-- Nothing more to say of a screen. -->
+        {:else if !info?.custom_stock}
           This driver takes only its own rolls.
         {:else if customChosen && info.custom_stock.note}
           {info.custom_stock.note}
@@ -172,19 +215,32 @@
     <div>
       <label class="text-xs" for="{pid}-conn">Type</label>
       <select id="{pid}-conn" class="input" bind:value={connType}>
-        <option value="tcp">Network (most label printers)</option>
-        <option value="device">Device on the BAM server</option>
-        <option value="ipp">IPP / CUPS queue</option>
-        <option value="windows">Windows printer</option>
-        <option value="ble">Bluetooth LE</option>
+        {#each connections as c (c)}<option value={c}>{connectionNames[c]}</option>{/each}
       </select>
     </div>
     <div>
-      <label class="text-xs" for="{pid}-address">Address</label>
-      <input id="{pid}-address" class="input font-mono" required aria-describedby="{pid}-address-help" bind:value={address} />
-      <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-        {relay ? `On ${relay}’s network: the relay’s own allowlist decides whether it may reach it.` : connectionHelp[connType]}
-      </p>
+      {#if connType === 'webhook'}
+        <label class="text-xs" for="{pid}-address">Webhook channel</label>
+        <select id="{pid}-address" class="input" required aria-describedby="{pid}-address-help" bind:value={address}>
+          <option value="" disabled>Choose a channel</option>
+          {#each channels ?? [] as c (c.id)}<option value={c.id}>{c.name}{c.enabled ? '' : ' (off)'}</option>{/each}
+        </select>
+        <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{connectionHelp[connType]}</p>
+      {:else if needsAddress}
+        <label class="text-xs" for="{pid}-address">{connType === 'pull' ? 'MAC address' : 'Address'}</label>
+        <input id="{pid}-address" class="input font-mono" required aria-describedby="{pid}-address-help" bind:value={address} />
+        <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+          {#if relay && relayable}
+            On {relay}’s network: the relay’s own allowlist decides whether it may reach it.
+          {:else if connType === 'pull'}
+            The TRMNL’s MAC address, such as AA:BB:CC:DD:EE:FF, which it gives when it sets itself up.
+          {:else}
+            {connectionHelp[connType]}
+          {/if}
+        </p>
+      {:else}
+        <p class="text-xs text-zinc-600 dark:text-zinc-400" id="{pid}-address-help">{connectionHelp[connType]}</p>
+      {/if}
     </div>
     {#if connType === 'ble'}
       <div class="grid gap-4 sm:col-span-2 sm:grid-cols-3">
@@ -209,7 +265,7 @@
         </p>
       </div>
     {/if}
-    {#if relayChoices.length}
+    {#if relayChoices.length && relayable}
       <div class="sm:col-span-2">
         <label class="text-xs" for="{pid}-relay">Reached through</label>
         <select id="{pid}-relay" class="input" bind:value={relay}>

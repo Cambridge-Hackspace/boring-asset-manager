@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -35,6 +36,9 @@ var hookKeys = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 type HookInput struct {
 	Key, Label, Confirm string
 	Triggers            []models.HookTrigger
+	// Actions are what BAM! does itself when the hook fires, from
+	// models.HookActions.
+	Actions []string
 }
 
 // MaxHookTriggers is the most triggers a hook has.
@@ -52,7 +56,26 @@ func (in *HookInput) check() error {
 	case len(in.Triggers) > MaxHookTriggers:
 		return fmt.Errorf("%w: at most %d triggers", ErrInvalidHook, MaxHookTriggers)
 	}
+	seen := map[string]bool{}
+	for _, a := range in.Actions {
+		if !slices.Contains(models.HookActions, a) {
+			return fmt.Errorf("%w: %q is not an action; a hook's actions are %s", ErrInvalidHook, a, strings.Join(models.HookActions, ", "))
+		}
+		if seen[a] {
+			return fmt.Errorf("%w: %s is listed twice", ErrInvalidHook, a)
+		}
+		seen[a] = true
+	}
 	return nil
+}
+
+// storedActions is how actions are stored: NULL for none.
+func storedActions(actions []string) any {
+	if len(actions) == 0 {
+		return nil
+	}
+	raw, _ := json.Marshal(actions)
+	return string(raw)
 }
 
 // buttonOnly is the triggers of a hook stored without any.
@@ -72,13 +95,19 @@ func storedTriggers(triggers []models.HookTrigger) (any, error) {
 	return string(raw), nil
 }
 
-const hookColumns = "id, action_key, label, confirm_question, triggers, created_at, updated_at"
+const hookColumns = "id, action_key, label, confirm_question, triggers, created_at, updated_at, actions"
 
 func scanHook(row interface{ Scan(...any) error }) (models.AssetHook, error) {
 	var a models.AssetHook
-	var triggers sql.NullString
-	if err := row.Scan(&a.ID, &a.Key, &a.Label, &a.Confirm, &triggers, &a.CreatedAt, &a.UpdatedAt); err != nil {
+	var triggers, actions sql.NullString
+	if err := row.Scan(&a.ID, &a.Key, &a.Label, &a.Confirm, &triggers, &a.CreatedAt, &a.UpdatedAt, &actions); err != nil {
 		return a, err
+	}
+	a.Actions = []string{}
+	if actions.Valid && actions.String != "" {
+		if err := json.Unmarshal([]byte(actions.String), &a.Actions); err != nil {
+			return a, fmt.Errorf("reading hook %s's actions: %w", a.Key, err)
+		}
 	}
 	a.Triggers = buttonOnly()
 	if triggers.Valid && triggers.String != "" {
@@ -138,12 +167,12 @@ func (s *Store) SaveHook(id string, in HookInput) (*models.AssetHook, error) {
 	now := dbTime(time.Now())
 	if id == "" {
 		id = uuid.NewString()
-		if _, err := s.Exec("INSERT INTO asset_actions ("+hookColumns+") VALUES (?, ?, ?, ?, ?, ?, ?)", id, in.Key, in.Label, in.Confirm, triggers, now, now); err != nil {
+		if _, err := s.Exec("INSERT INTO asset_actions ("+hookColumns+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)", id, in.Key, in.Label, in.Confirm, triggers, now, now, storedActions(in.Actions)); err != nil {
 			return nil, fmt.Errorf("saving the hook: %w", err)
 		}
 		return s.GetHook(id)
 	}
-	res, err := s.Exec("UPDATE asset_actions SET action_key = ?, label = ?, confirm_question = ?, triggers = ?, updated_at = ? WHERE id = ?", in.Key, in.Label, in.Confirm, triggers, now, id)
+	res, err := s.Exec("UPDATE asset_actions SET action_key = ?, label = ?, confirm_question = ?, triggers = ?, actions = ?, updated_at = ? WHERE id = ?", in.Key, in.Label, in.Confirm, triggers, storedActions(in.Actions), now, id)
 	if err != nil {
 		return nil, fmt.Errorf("saving the hook: %w", err)
 	}
@@ -323,13 +352,18 @@ func (s *Store) RecordAssetHook(assetID, key string) (string, error) {
 	if offered == nil {
 		return "", ErrHookNotOffered
 	}
-	return s.recordHook(a, offered.Key, offered.Label, models.TriggerManual, models.HookTriggerButton, nil)
+	hook, err := s.GetHook(offered.ID)
+	if err != nil {
+		return "", err
+	}
+	return s.recordHook(a, *hook, models.TriggerManual, models.HookTriggerButton, nil)
 }
 
-// recordHook records an asset.hook event for the hook keyed key, fired on
-// asset a by trigger, with the asset and the containers it is in.
-func (s *Store) recordHook(a *models.AssetWithDetails, key, label, payloadTrigger, trigger string, cause *models.EventCause) (string, error) {
-	hook := &models.EventHook{Key: key, Label: label, Asset: thingOf(a), Location: []models.EventThing{}, Trigger: trigger, Cause: cause}
+// recordHook records an asset.hook event for hook h, fired on asset a by
+// trigger, with the asset and the containers it is in, and takes the
+// hook's actions with it.
+func (s *Store) recordHook(a *models.AssetWithDetails, h models.AssetHook, payloadTrigger, trigger string, cause *models.EventCause) (string, error) {
+	hook := &models.EventHook{Key: h.Key, Label: h.Label, Asset: thingOf(a), Location: []models.EventThing{}, Trigger: trigger, Cause: cause}
 	for _, place := range a.Location {
 		container, err := s.GetAssetByID(place.ID)
 		if errors.Is(err, ErrAssetNotFound) {
@@ -340,6 +374,19 @@ func (s *Store) recordHook(a *models.AssetWithDetails, key, label, payloadTrigge
 		}
 		hook.Location = append(hook.Location, thingOf(container))
 	}
+	// The displays to refresh, and when, read before the transaction:
+	// SQLite has one connection.
+	var refreshing []string
+	var due time.Time
+	if slices.Contains(h.Actions, models.HookActionRefreshDisplays) {
+		var err error
+		if refreshing, err = s.displaysShowing(a.Asset.ID); err != nil {
+			return "", err
+		}
+		if due, err = s.displayRefreshDue(time.Now()); err != nil {
+			return "", err
+		}
+	}
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return "", fmt.Errorf("beginning transaction: %w", err)
@@ -347,6 +394,9 @@ func (s *Store) recordHook(a *models.AssetWithDetails, key, label, payloadTrigge
 	defer tx.Rollback()
 	id, err := s.recordAssetEventID(tx, models.EventAssetHook, a.Asset.ID, models.EventPayload{Trigger: payloadTrigger, Hook: hook})
 	if err != nil {
+		return "", err
+	}
+	if err := s.refreshDisplaysTx(tx, refreshing, due); err != nil {
 		return "", err
 	}
 	return id, tx.Commit()
@@ -379,7 +429,7 @@ func (s *Store) RecordTriggeredHook(assetID string, hook models.AssetHook, trigg
 	if trigger == models.HookTriggerEvent {
 		payloadTrigger = models.TriggerEvent
 	}
-	return s.As("").recordHook(a, hook.Key, hook.Label, payloadTrigger, trigger, cause)
+	return s.As("").recordHook(a, hook, payloadTrigger, trigger, cause)
 }
 
 // ClaimHookEvent claims an event for firing hooks on, so that of several

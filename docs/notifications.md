@@ -241,7 +241,9 @@ reminders ([Stock and lending](stock-and-lending.md#loan-reminders)) and mention
 ## Webhooks
 
 The webhook driver (`webhook`) posts each event to a URL, for anything that takes HTTP: your own
-service, a home automation system, a chat service's incoming webhook, a status board.
+service, a home automation system, a chat service's incoming webhook, a status board. An e-paper
+display can be pushed through one too: its image is posted as the body, signed the same way (see
+[Displays](printing.md#webhook)).
 
 ### Options
 

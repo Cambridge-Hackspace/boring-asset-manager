@@ -44,7 +44,7 @@ describe('HooksPage', () => {
     expect(within(form).getByText('identify')).toBeTruthy();
     await fireEvent.submit(within(form).getByRole('button', { name: 'Save hook' }));
     expect(await screen.findByText('Saved Identify.')).toBeTruthy();
-    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ key: 'identify', label: 'Identify', confirm: '', triggers: button });
+    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ key: 'identify', label: 'Identify', confirm: '', triggers: button, actions: [] });
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Edit Identify' }));
     await fireEvent.input(screen.getByLabelText('Ask first (optional)'), { target: { value: 'Light it up?' } });
@@ -74,7 +74,7 @@ describe('HooksPage', () => {
     await fireEvent.input(within(form).getByLabelText('Label'), { target: { value: 'Light up its drawer' } });
     await fireEvent.submit(within(form).getByRole('button', { name: 'Save hook' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST')).toBe(true));
-    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ key: 'light', label: 'Light up its drawer', confirm: '', triggers: button });
+    expect(sent.find((r) => r.method === 'POST')!.body).toEqual({ key: 'light', label: 'Light up its drawer', confirm: '', triggers: button, actions: [] });
   });
 
   it("keeps a hook's key as its label changes, and warns that devices listen for it", async () => {
@@ -93,7 +93,7 @@ describe('HooksPage', () => {
     expect(within(form).getByRole('note').textContent).toBe('Devices, and flows that trigger it, know this hook as identify: change them too, or they stop hearing it.');
     await fireEvent.submit(within(form).getByRole('button', { name: 'Save hook' }));
     await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
-    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ key: 'identify', label: 'Find it', confirm: '', triggers: button });
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ key: 'identify', label: 'Find it', confirm: '', triggers: button, actions: [] });
   });
 
   it('fires a hook on events and on a schedule as well as, or instead of, a button', async () => {
@@ -137,5 +137,26 @@ describe('HooksPage', () => {
     await fireEvent.submit(within(form).getByRole('button', { name: 'Save hook' }));
     expect((await screen.findByRole('alert')).textContent).toContain('Choose what fires it');
     expect(sent.some((r) => r.method === 'POST')).toBe(false);
+  });
+  it('refreshes displays when it fires, if ticked, and keeps that when edited', async () => {
+    let hooks: AssetHook[] = [{ ...identify, actions: ['refresh_displays'] }];
+    const { sent } = fakeApi({
+      'GET /hooks': () => ({ hooks }),
+      'GET /fields': () => ({ fields: [] }),
+      'PUT /hooks/h1': (b) => {
+        hooks = [{ ...identify, ...(b as object) }];
+        return { hook: hooks[0] };
+      },
+    });
+    render(HooksPage, { params: {} });
+    expect(await screen.findByText('Refreshes displays')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Identify' }));
+    const box = screen.getByLabelText('Refresh displays') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    await fireEvent.click(box);
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save hook' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    expect((sent.find((r) => r.method === 'PUT')!.body as { actions: string[] }).actions).toEqual([]);
+    await vi.waitFor(() => expect(screen.queryByText('Refreshes displays')).toBeNull());
   });
 });

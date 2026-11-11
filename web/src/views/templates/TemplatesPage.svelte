@@ -7,6 +7,10 @@
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import PageHeader from '../../components/PageHeader.svelte';
 
+  // A side to a hundredth of a unit: a display's screen is an odd number
+  // of millimeters, its pixels at its resolution.
+  const size = (v: number) => String(Math.round(v * 100) / 100);
+
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let templates = $state<TemplateSummary[]>([]);
@@ -65,7 +69,7 @@
       {#each templates as t (t.id)}
         <tr class="border-b border-zinc-200 dark:border-zinc-800">
           <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a></td>
-          <td class="py-2 pr-4">{t.width} × {t.height} {t.units}, {t.dpi} DPI</td>
+          <td class="py-2 pr-4">{size(t.width)} × {size(t.height)} {t.units}, {t.dpi} DPI</td>
           {#if suits}
             <td class="py-2 pr-4">
               {#if suits[t.id]?.length}

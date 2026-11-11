@@ -1199,6 +1199,37 @@ type Printer struct {
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
+// Display is what a display shows (docs/printing.md#displays): the
+// template and asset it was last shown, and for one that pulls, its image.
+type Display struct {
+	PrinterID    string     `json:"printer_id"`
+	TemplateID   *string    `json:"template_id"`
+	TemplateName string     `json:"template_name,omitempty"`
+	AssetID      *string    `json:"asset_id"`
+	AssetName    string     `json:"asset_name,omitempty"`
+	ShownAt      *time.Time `json:"shown_at"`
+	// ShownBy is who last showed it something, a user's or an API
+	// token's ID, as whom refreshes lay it out again.
+	ShownBy      string `json:"shown_by,omitempty"`
+	ShownByToken bool   `json:"shown_by_token,omitempty"`
+	// ETag tags its pull image, and FetchedAt is when it last fetched it.
+	ETag      string     `json:"etag,omitempty"`
+	FetchedAt *time.Time `json:"fetched_at"`
+	// RefreshAt is when a refresh asked for is due.
+	RefreshAt *time.Time `json:"refresh_at"`
+}
+
+// DisplayToken is a token a display that pulls fetches its image with. Its
+// secret is shown once, when it is made.
+type DisplayToken struct {
+	ID         string     `json:"id"`
+	PrinterID  string     `json:"printer_id"`
+	Name       string     `json:"name"`
+	CreatedBy  string     `json:"created_by,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at"`
+}
+
 // LabelStock is custom stock as stored: its size, and the printers that
 // have it loaded.
 type LabelStock struct {
@@ -1950,10 +1981,23 @@ type AssetHook struct {
 	Confirm string `json:"confirm"`
 	// Triggers are what fire it: a button people press, events, or a
 	// schedule. A hook saved without any is a button.
-	Triggers  []HookTrigger `json:"triggers"`
-	CreatedAt time.Time     `json:"created_at"`
-	UpdatedAt time.Time     `json:"updated_at"`
+	Triggers []HookTrigger `json:"triggers"`
+	// Actions are what BAM! itself does when it fires, beside recording
+	// its event (docs/hooks.md#actions).
+	Actions   []string  `json:"actions"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// Hook actions (docs/hooks.md#actions).
+const (
+	// HookActionRefreshDisplays refreshes the displays showing the asset
+	// the hook fired on, or showing what is in it.
+	HookActionRefreshDisplays = "refresh_displays"
+)
+
+// HookActions lists the hook actions.
+var HookActions = []string{HookActionRefreshDisplays}
 
 // Hook triggers (docs/hooks.md).
 const (

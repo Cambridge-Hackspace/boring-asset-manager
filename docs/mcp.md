@@ -207,7 +207,7 @@ Reading needs `assets.read`; changing needs `categories.manage`. Deleting is mar
 | `list_link_types` | `assets.read` | |
 | `save_link_type`, `delete_link_type` | `categories.manage` | |
 | `list_hooks` | `assets.read` | |
-| `save_hook`, `delete_hook` | `categories.manage` | `save_hook` takes `triggers`: a button, events or a schedule (see [Hooks](hooks.md#triggers)); left out, they stay as they were. |
+| `save_hook`, `delete_hook` | `categories.manage` | `save_hook` takes `triggers`: a button, events or a schedule (see [Hooks](hooks.md#triggers)), and `actions`, such as `refresh_displays` (see [Actions](hooks.md#actions)); left out, they stay as they were. |
 | `set_category_vendors` | `categories.manage` | The vendors a category is bought from, in order of preference. |
 | `set_category_review` | `categories.manage` | A category's own review settings; each left out takes its parent's. See [Review states](review.md#category-settings). |
 | `set_category_links` | `categories.manage` | The categories a category's members also count in (`implies`), or whose members count in it (`included_by`); each list given replaces that side. See [Pools](stock-and-lending.md#pools). |
@@ -344,6 +344,14 @@ Changing printers, label stock and pools needs `settings.manage`. See [Printing]
 | `delete_printer` | `settings.manage` | |
 | `list_label_stock`, `list_printer_pools`, `get_printer_pool` | `labels.print` or `settings.manage` or `templates.manage` | |
 | `save_label_stock`, `delete_label_stock`, `save_printer_pool`, `delete_printer_pool` | `settings.manage` | |
+| `list_displays`, `get_display` | `labels.print` or `settings.manage` or `templates.manage` | E-paper displays, which are printers ([Displays](printing.md#displays)): what each shows, a refresh waiting, and where one that pulls fetches its image. A display is added with `save_printer`, and shown an asset's label with `print_labels`. |
+| `refresh_display` | `labels.print` | Shows a display its asset's label again, laid out afresh, through the print queue. |
+| `list_display_tokens`, `revoke_display_token` | `settings.manage` | The tokens a display that pulls fetches its image with. |
+| `get_display_settings`, `set_display_settings` | `labels.print` or `settings.manage` or `templates.manage`, and `settings.manage` to set | How long a refresh waits for the rest of a burst of changes, and how often a display that pulls asks again unless its options say. What is not given is kept. |
+
+Making a display's token is not a tool: its secret lets whoever holds it see what the display shows,
+so an admin makes one in the web app, where it is shown once. Nor are the display's own requests: its
+image, fetched with its token, and TRMNL's API.
 
 The print queue needs `labels.print`:
 

@@ -81,6 +81,8 @@ type hookIn struct {
 	Confirm *string `json:"confirm,omitempty" jsonschema:"a question to ask before pressing it; empty for none"`
 	// Triggers replace the hook's when given.
 	Triggers []models.HookTrigger `json:"triggers,omitempty" jsonschema:"what fires it, replacing what did: {type: button}; {type: event, kinds: [asset.checked_out, ...], condition?: {field, equals}, interval_seconds?}; {type: schedule, cron: five fields, time_zone?: IANA name, filter?: a report filter}. Left out, a new hook is a button and a changed one keeps its triggers"`
+	// Actions replace the hook's when given.
+	Actions []string `json:"actions,omitempty" jsonschema:"what BAM! itself does when it fires, replacing what it did: refresh_displays, to refresh the e-paper displays showing the asset or what is in it. A hook that refreshes displays cannot fire on asset.label_printed. Left out, a new hook does nothing itself and a changed one keeps its actions"`
 }
 
 type categoryFieldIn struct {
@@ -449,6 +451,9 @@ func catalogTools() []tool {
 				c := given(map[string]any{"key": in.Key, "label": in.Label, "confirm": in.Confirm})
 				if in.Triggers != nil {
 					c["triggers"] = in.Triggers
+				}
+				if in.Actions != nil {
+					c["actions"] = in.Actions
 				}
 				out := map[string]any{}
 				if in.ID == "" {

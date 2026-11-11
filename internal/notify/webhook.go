@@ -69,7 +69,7 @@ type webhookSettings struct {
 // reserved are headers a channel may not set itself.
 var reserved = map[string]bool{
 	"Host": true, "Content-Length": true, "Content-Type": true, "Transfer-Encoding": true, "Connection": true,
-	"Bam-Event": true, "Bam-Delivery": true, "Bam-Timestamp": true, "Bam-Signature": true,
+	"Bam-Event": true, "Bam-Delivery": true, "Bam-Timestamp": true, "Bam-Signature": true, "Bam-Display": true,
 }
 
 func webhookSettingsOf(options map[string]string) (*webhookSettings, error) {
@@ -194,6 +194,32 @@ func (w Webhook) Send(ctx context.Context, options map[string]string, n Notifica
 	if err != nil {
 		return err
 	}
+	kind := n.Event.Kind
+	if n.Test {
+		kind = "test"
+	}
+	return w.post(ctx, s, body, contentType, map[string]string{"BAM-Event": kind, "BAM-Delivery": n.DeliveryID}, n.Report)
+}
+
+// DisplayImageEvent is what BAM-Event says of a display's image posted
+// through a webhook (docs/printing.md#webhook).
+const DisplayImageEvent = "display.image"
+
+// SendImage posts a display's image through a webhook channel: the image
+// itself as the body, with its media type, signed as events are, BAM-Event
+// display.image and BAM-Display the display's ID. A body template is for
+// events, and is not used.
+func (w Webhook) SendImage(ctx context.Context, options map[string]string, img []byte, contentType, displayID, deliveryID string) error {
+	s, err := webhookSettingsOf(options)
+	if err != nil {
+		return err
+	}
+	return w.post(ctx, s, img, contentType, map[string]string{"BAM-Event": DisplayImageEvent, "BAM-Delivery": deliveryID, "BAM-Display": displayID}, nil)
+}
+
+// post sends a body to the channel's URL with BAM!'s headers, signed when
+// the channel has a secret.
+func (w Webhook) post(ctx context.Context, s *webhookSettings, body []byte, contentType string, bam map[string]string, report func(int, string)) error {
 	addrs, err := w.resolve(ctx, s)
 	if err != nil {
 		return err
@@ -243,14 +269,11 @@ func (w Webhook) Send(ctx context.Context, options map[string]string, n Notifica
 		now = w.Now
 	}
 	ts := strconv.FormatInt(now().Unix(), 10)
-	kind := n.Event.Kind
-	if n.Test {
-		kind = "test"
-	}
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", "BAM!")
-	req.Header.Set("BAM-Event", kind)
-	req.Header.Set("BAM-Delivery", n.DeliveryID)
+	for name, value := range bam {
+		req.Header.Set(name, value)
+	}
 	req.Header.Set("BAM-Timestamp", ts)
 	if s.secret != "" {
 		req.Header.Set("BAM-Signature", Signature(s.secret, ts, body))
@@ -266,8 +289,8 @@ func (w Webhook) Send(ctx context.Context, options map[string]string, n Notifica
 	}
 	defer resp.Body.Close()
 	answer, _ := io.ReadAll(io.LimitReader(resp.Body, responseLimit))
-	if n.Report != nil {
-		n.Report(resp.StatusCode, string(answer))
+	if report != nil {
+		report(resp.StatusCode, string(answer))
 	}
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		return fmt.Errorf("HTTP %d: the URL redirects, which is not followed; give the URL it leads to", resp.StatusCode)

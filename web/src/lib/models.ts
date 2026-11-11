@@ -507,7 +507,8 @@ export interface TemplateSummary {
 }
 
 export interface PrinterConnection {
-  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble';
+  /** openepaperlink, pull and webhook reach e-paper displays only (docs/printing.md#displays). */
+  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble' | 'openepaperlink' | 'pull' | 'webhook';
   /** For ble, the Bluetooth address and any service and characteristics as a query (lib/bluetooth.ts). */
   address: string;
   /** The relay the printer is reached through, if any (docs/relays.md). */
@@ -603,6 +604,52 @@ export interface DriverInfo {
   options?: DriverOption[];
   /** Set when the driver's printers connect over Bluetooth LE: the default service and characteristics. */
   ble?: BLEProfile;
+  /** Set for a driver of e-paper displays: the connections they take, and the images it makes. */
+  display?: { connections: PrinterConnection['type'][]; formats: string[] };
+}
+
+/** What a display shows (docs/printing.md#displays). */
+export interface DisplayShown {
+  printer_id: string;
+  template_id: string | null;
+  template_name?: string;
+  asset_id: string | null;
+  asset_name?: string;
+  shown_at: string | null;
+  shown_by?: string;
+  shown_by_token?: boolean;
+  etag?: string;
+  fetched_at: string | null;
+  refresh_at: string | null;
+}
+
+/** A display, and what it shows. */
+export interface DisplayView {
+  id: string;
+  name: string;
+  driver: string;
+  model: string;
+  connection: PrinterConnection;
+  shown: DisplayShown | null;
+  /** Where a display that pulls fetches its image, with one of its tokens. */
+  pull_url?: string;
+  refresh_seconds?: number;
+}
+
+/** A token a display that pulls fetches its image with. */
+export interface DisplayToken {
+  id: string;
+  printer_id: string;
+  name: string;
+  created_by?: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+/** How displays are kept current, in seconds. */
+export interface DisplaySettings {
+  refresh_window_seconds: number;
+  pull_refresh_seconds: number;
 }
 
 /** How a family of printers takes jobs over Bluetooth LE (docs/printing.md#bluetooth). */
@@ -1351,6 +1398,8 @@ export interface AssetHook {
   confirm: string;
   /** What fires it: a button people press, events, or a schedule (docs/hooks.md). */
   triggers: HookTrigger[];
+  /** What BAM! does itself when it fires, such as refresh_displays (docs/hooks.md#actions). */
+  actions?: string[];
   created_at: string;
   updated_at: string;
 }

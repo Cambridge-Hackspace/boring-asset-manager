@@ -173,7 +173,7 @@ const LayeringList = "list"
 
 // Limits that keep rendering bounded.
 const (
-	MinDPI        = 150
+	MinDPI        = 72
 	MaxDPI        = 600
 	MaxCanvasDots = 10000 // per side, at the template's DPI
 	MaxElements   = 100

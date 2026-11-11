@@ -49,3 +49,5 @@ A template prints on a printer when its size and DPI suit the roll loaded. The t
 The template list shows which printers each template prints on, as their rolls are loaded now. Changing a printer's roll never changes a template: a template that does not suit the new roll waits until one it suits is loaded again. Before saving a new roll, the printer form says which labels waiting in the print queue would no longer fit, which categories' templates no printer would suit, and which pools' printers would no longer be loaded alike.
 
 To gather labels over time and print them together, sorted onto several printers, use the [print queue](/help/spool).
+
+E-paper displays are printers too: a label printed to one shows on its screen until it changes. See [displays](/help/displays).

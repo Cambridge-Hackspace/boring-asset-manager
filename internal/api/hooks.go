@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -27,6 +28,9 @@ type HookRequest struct {
 	Label    string                `json:"label"`
 	Confirm  string                `json:"confirm"`
 	Triggers *[]models.HookTrigger `json:"triggers"`
+	// Actions left out keep a hook's actions when it is replaced, and
+	// give a new one none (docs/hooks.md#actions).
+	Actions *[]string `json:"actions"`
 }
 
 // hookEventKinds are the events about an asset an event trigger can fire
@@ -98,6 +102,21 @@ func (s *Server) checkTriggers(triggers []models.HookTrigger) error {
 	return nil
 }
 
+// checkActions refuses a hook whose actions would fire it again: refreshing
+// a display prints its label, so a hook that refreshes displays does not
+// fire on labels printed.
+func checkActions(triggers []models.HookTrigger, actions []string) error {
+	if !slices.Contains(actions, models.HookActionRefreshDisplays) {
+		return nil
+	}
+	for i, t := range triggers {
+		if t.Type == models.HookTriggerEvent && slices.Contains(t.Kinds, models.EventAssetLabelPrinted) {
+			return fmt.Errorf("trigger %d: a hook that refreshes displays cannot fire on %s, since each refresh prints a label", i+1, models.EventAssetLabelPrinted)
+		}
+	}
+	return nil
+}
+
 // hookConditionField is the condition an event trigger's condition can
 // name besides a field's key: the asset's condition.
 const hookConditionField = "condition"
@@ -163,6 +182,20 @@ func (s *Server) handleSaveHook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in.Triggers = was.Triggers
+	}
+	if req.Actions != nil {
+		in.Actions = *req.Actions
+	} else if id != "" {
+		was, err := s.store.GetHook(id)
+		if err != nil {
+			writeHookError(w, err, "save the hook")
+			return
+		}
+		in.Actions = was.Actions
+	}
+	if err := checkActions(in.Triggers, in.Actions); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	a, err := s.store.SaveHook(id, in)
 	if err != nil {

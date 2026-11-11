@@ -87,7 +87,7 @@ func TestValidateReportsEveryProblemWithItsPath(t *testing.T) {
 		{"bad id", func(t *Template) { t.ID = "Has Spaces" }, []string{"id"}},
 		{"blank name", func(t *Template) { t.Name = "  " }, []string{"name"}},
 		{"units", func(t *Template) { t.Units = "cm" }, []string{"units"}},
-		{"dpi", func(t *Template) { t.DPI = 72 }, []string{"dpi"}},
+		{"dpi", func(t *Template) { t.DPI = 71 }, []string{"dpi"}},
 		{"zero size", func(t *Template) { t.Width, t.Height = 0, -1 }, []string{"height", "width"}},
 		{"huge canvas", func(t *Template) { t.Units, t.Width = UnitsIn, 40 }, []string{"width"}},
 		{"unknown element", func(t *Template) {
@@ -236,7 +236,7 @@ func TestValidationErrorMessage(t *testing.T) {
 	tpl := validTemplate()
 	tpl.DPI = 1
 	err := tpl.Validate()
-	if err == nil || !strings.Contains(err.Error(), "dpi: must be between 150 and 600") {
+	if err == nil || !strings.Contains(err.Error(), "dpi: must be between 72 and 600") {
 		t.Errorf("unexpected message: %v", err)
 	}
 }

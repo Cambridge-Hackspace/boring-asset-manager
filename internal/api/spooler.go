@@ -90,6 +90,8 @@ func (s *Server) spoolRound(ctx context.Context) bool {
 	if _, err := s.store.SweepSpool(time.Now().Add(-spoolStale)); err != nil {
 		log.Printf("sweeping the spool: %v", err)
 	}
+	// Displays due a refresh join the queue (displays.go).
+	s.refreshDueDisplays(time.Now())
 	list, err := s.store.ListPrinters()
 	if err != nil {
 		log.Printf("spooler: listing printers: %v", err)
@@ -196,6 +198,8 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 	out := store.SpoolOutcome{Printer: p.Name, Problems: map[string]string{}, Moves: map[string]string{}}
 	images := s.newLabelImages(ctx)
 	rendered := newLabelJob(plan)
+	// The asset of the last label laid out, which a display shows.
+	var last string
 	for _, e := range b.Entries {
 		scene, problem, err := s.layoutAsset(r, t, e.AssetID, images)
 		if err != nil {
@@ -217,6 +221,7 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 		}
 		rendered.add(scene, e.Copies)
 		out.Printed = append(out.Printed, e.ID)
+		last = e.AssetID
 	}
 	if rendered.len() == 0 {
 		out.Printed, out.Failure = nil, "None of these labels could be produced"
@@ -237,6 +242,11 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 		}
 		return store.SpoolOutcome{Failure: fmt.Sprintf("Could not deliver these to %s: %v", p.Name, err), Problems: out.Problems, HandBack: b.PoolID != ""}
 	}
+	acting := s.store.As(b.CreatedBy)
+	if b.CreatedByToken {
+		acting = s.store.AsToken(b.CreatedBy)
+	}
+	s.rememberShown(acting, p, *b.TemplateID, last)
 	return out
 }
 

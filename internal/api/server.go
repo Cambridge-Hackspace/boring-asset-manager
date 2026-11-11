@@ -660,6 +660,23 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/printer-pools", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSavePool)))
 	handle("PUT /api/v1/printer-pools/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSavePool)))
 	handle("DELETE /api/v1/printer-pools/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePool)))
+	// Displays (docs/printing.md#displays): what each shows, refreshing it,
+	// and the tokens and image of those that pull. A display's image
+	// checks its own token, or else that the caller may see printers.
+	handle("GET /api/v1/displays", canSeePrinters(http.HandlerFunc(s.handleListDisplays)))
+	handle("GET /api/v1/displays/{id}", canSeePrinters(http.HandlerFunc(s.handleGetDisplay)))
+	handle("POST /api/v1/displays/{id}/refresh", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleRefreshDisplay)))
+	handle("GET /api/v1/displays/{id}/tokens", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleListDisplayTokens)))
+	handle("POST /api/v1/displays/{id}/tokens", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleCreateDisplayToken)))
+	handle("DELETE /api/v1/displays/{id}/tokens/{token}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleRevokeDisplayToken)))
+	handleFunc("GET /api/v1/displays/{id}/image", s.handleDisplayImage)
+	handle("GET /api/v1/settings/displays", canSeePrinters(http.HandlerFunc(s.handleDisplaySettings)))
+	handle("PUT /api/v1/settings/displays", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetDisplaySettings)))
+	// TRMNL's "bring your own server" API, for TRMNL displays, each by its
+	// own token (docs/printing.md#trmnl).
+	handleFunc("GET "+trmnlSetupPath, s.handleTRMNLSetup)
+	handleFunc("GET "+trmnlDisplayPath, s.handleTRMNLDisplay)
+	handleFunc("POST "+trmnlLogPath, s.handleTRMNLLog)
 
 	// The spool, a print queue for labels (docs/printing.md)
 	printing := func(h http.HandlerFunc) http.Handler { return RequirePermission(rbac.PermLabelsPrint)(h) }
