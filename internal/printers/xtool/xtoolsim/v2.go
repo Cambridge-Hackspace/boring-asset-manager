@@ -38,6 +38,9 @@ type V2 struct {
 	// PacketSize is the largest file data packet it agrees to, and Window
 	// how much it asks for at once.
 	PacketSize, Window int
+	// FileDelay is how long a new file channel takes to be taken, as a
+	// busy machine's may: an upload can be announced before then.
+	FileDelay time.Duration
 
 	files map[string][]byte
 	// finished is the file last sent whole, which the next upload
@@ -190,16 +193,26 @@ func (s *V2) Push(url, module, typ string, info any) {
 	}
 }
 
-func (c *v2Conns) send(conn *websocket.Conn, protocol byte, payload []byte, noCRC bool) {
+func (c *v2Conns) send(conn *websocket.Conn, protocol byte, payload []byte, noCRC bool) error {
 	frame, err := xtool.EncodeFrame(protocol, payload, noCRC)
 	if err != nil {
-		return
+		return err
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = conn.Write(ctx, websocket.MessageBinary, frame)
+	return conn.Write(ctx, websocket.MessageBinary, frame)
+}
+
+// dropFile forgets a file channel that has closed, unless a newer one has
+// taken its place.
+func (s *V2) dropFile(c *v2Conns, conn *websocket.Conn) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c.file == conn {
+		c.file = nil
+	}
 }
 
 func (s *V2) serve(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +227,12 @@ func (s *V2) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SetReadLimit(32 << 20)
 	defer conn.CloseNow()
+	if function == "file_stream" {
+		s.mu.Lock()
+		delay := s.FileDelay
+		s.mu.Unlock()
+		time.Sleep(delay)
+	}
 	s.mu.Lock()
 	c, ok := s.sessions[id]
 	switch function {
@@ -233,6 +252,7 @@ func (s *V2) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		c.file = conn
+		defer s.dropFile(c, conn)
 		close(s.wake)
 		s.wake = make(chan struct{})
 	default:
@@ -453,13 +473,22 @@ func (s *V2) ask(session string, channel byte) {
 			s.mu.Unlock()
 			return
 		}
-		if c.file != nil {
+		if file := c.file; file != nil {
 			n := min(up.window, up.size-up.asked)
 			at := up.asked
 			up.asked += n
 			s.mu.Unlock()
-			if n > 0 {
-				c.send(c.file, xtool.ProtocolFileTransfer, xtool.EncodeFilePacket(xtool.FilePacket{Op: xtool.FileRequest, Channel: channel, Offset: int64(at), Window: n}), true)
+			if n <= 0 {
+				return
+			}
+			// A channel that closed under it is forgotten, and the
+			// window asked for again on the next one.
+			if err := c.send(file, xtool.ProtocolFileTransfer, xtool.EncodeFilePacket(xtool.FilePacket{Op: xtool.FileRequest, Channel: channel, Offset: int64(at), Window: n}), true); err != nil {
+				s.dropFile(c, file)
+				s.mu.Lock()
+				up.asked = at
+				s.mu.Unlock()
+				continue
 			}
 			return
 		}
