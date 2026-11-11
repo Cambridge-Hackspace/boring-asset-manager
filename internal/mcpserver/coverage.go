@@ -71,6 +71,8 @@ var Refused = map[string]string{
 	"PUT /api/v1/auth/theme":                         "whether the web interface is light or dark for a person, chosen in the browser; an assistant sees no interface (#168)",
 	"POST /api/v1/tokens":                            "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
 	"POST /api/v1/auth/tokens":                       "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
+	"POST /api/v1/incoming":                          "an incoming hook is a standing credential, made from a signed-in session, so a misled assistant cannot leave itself a way back in (#312)",
+	"PUT /api/v1/incoming/{id}":                      "an incoming hook is changed, or given a new secret, from a signed-in session, so a misled assistant cannot leave itself a way back in (#312)",
 	"POST /api/v1/templates/preview-data":            "the data the editor's live renderer draws a label with in the browser; preview_template draws with the same data on the server",
 	"GET /api/v1/events/live":                        "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
 	"GET /auth/saml/{key}/metadata":                  "BAM!'s SAML metadata, for an identity provider to read; Admin shows its address, and save_identity_provider sets the provider up",

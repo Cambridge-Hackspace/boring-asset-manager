@@ -727,12 +727,16 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/spool/jobs/{id}/resend", printing(s.handleResendSpoolJob))
 
 	// Incoming hooks (docs/hooks.md#incoming-hooks): settings.manage makes
-	// them; their addresses take requests from outside, authenticated by
-	// each hook's own secret.
+	// them, from a signed-in session, since each is a standing credential a
+	// token must not mint; their addresses take requests from outside,
+	// authenticated by each hook's own secret.
+	saveIncoming := func(h http.HandlerFunc) http.Handler {
+		return RequireAuth(RequirePermission(rbac.PermSettingsManage)(h))
+	}
 	handle("GET /api/v1/incoming", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleListIncoming)))
-	handle("POST /api/v1/incoming", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSaveIncoming)))
+	handle("POST /api/v1/incoming", saveIncoming(s.handleSaveIncoming))
 	handle("GET /api/v1/incoming/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleGetIncoming)))
-	handle("PUT /api/v1/incoming/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSaveIncoming)))
+	handle("PUT /api/v1/incoming/{id}", saveIncoming(s.handleSaveIncoming))
 	handle("DELETE /api/v1/incoming/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeleteIncoming)))
 	handleFunc("POST /api/v1/incoming/{id}", s.handleIncoming)
 

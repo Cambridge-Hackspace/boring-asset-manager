@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/config"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/mcpserver"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
@@ -575,6 +577,100 @@ func TestManagingIncomingHooks(t *testing.T) {
 	}
 	if rec := doJSON(t, srv, admin, http.MethodDelete, "/api/v1/incoming/"+h.ID, ""); rec.Code != http.StatusNotFound {
 		t.Errorf("deleting again: %d", rec.Code)
+	}
+}
+
+// TestSavingIncomingHooksNeedsASession: an incoming hook is a standing
+// credential, so only a person signed in makes, changes or renews one
+// (#312). Tokens, personal ones too, still list, read and delete them.
+func TestSavingIncomingHooksNeedsASession(t *testing.T) {
+	s := newIncomingShop(t)
+	srv := s.srv
+	admin := sessionCookie(t, srv, s.admin.ID)
+	adminRole, err := srv.store.GetRoleByName(store.AdminRoleName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, apiSecret, err := srv.store.CreateToken("Script", []string{adminRole.ID}, nil, s.admin.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, personalSecret := personalToken(t, srv, admin, "Claude")
+	oak := s.board(t, s.short.ID, "Oak")
+	body := func(extra string) string {
+		return `{"name": "Scale", "action": "quantity", "asset": {"by": "fixed", "asset_id": "` + oak.Asset.ID + `"},
+			"roles": [{"role_id": "` + s.acts.ID + `", "scope_ids": ["` + s.scope.ID + `"]}]` + extra + `}`
+	}
+	rec := doJSON(t, srv, admin, http.MethodPost, "/api/v1/incoming", body(""))
+	var made struct {
+		Hook   IncomingView `json:"incoming_hook"`
+		Secret string       `json:"secret"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &made); err != nil || rec.Code != http.StatusCreated {
+		t.Fatalf("making one signed in: %d %s", rec.Code, rec.Body)
+	}
+	path := "/api/v1/incoming/" + made.Hook.ID
+
+	for name, secret := range map[string]string{"an API token": apiSecret, "a personal token": personalSecret} {
+		for _, r := range []struct{ what, method, path, body string }{
+			{"making one", http.MethodPost, "/api/v1/incoming", body("")},
+			{"changing one", http.MethodPut, path, body(`, "enabled": false`)},
+			{"a new secret", http.MethodPut, path, body(`, "new_secret": true`)},
+		} {
+			rec := withBearer(t, srv, secret, r.method, r.path, r.body)
+			if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "signed-in session") {
+				t.Errorf("%s with %s: %d %s", r.what, name, rec.Code, rec.Body)
+			}
+		}
+		for _, p := range []string{"/api/v1/incoming", path} {
+			if rec := withBearer(t, srv, secret, http.MethodGet, p, ""); rec.Code != http.StatusOK {
+				t.Errorf("reading %s with %s: %d %s", p, name, rec.Code, rec.Body)
+			}
+		}
+	}
+	// Nothing changed: one hook, on, its secret still working.
+	rec = doJSON(t, srv, admin, http.MethodGet, "/api/v1/incoming", "")
+	if strings.Count(rec.Body.String(), `"url"`) != 1 || strings.Contains(rec.Body.String(), `"enabled":false`) {
+		t.Errorf("after the refusals: %s", rec.Body)
+	}
+	accepted(t, "the first secret", sendIncoming(t, srv, made.Hook.ID, `{"adjust": -1}`, bearer(made.Secret)))
+
+	// Signed in, it changes; and a token may delete it.
+	if rec := doJSON(t, srv, admin, http.MethodPut, path, body(`, "new_secret": true`)); rec.Code != http.StatusOK {
+		t.Errorf("a new secret signed in: %d %s", rec.Code, rec.Body)
+	}
+	if rec := withBearer(t, srv, apiSecret, http.MethodDelete, path, ""); rec.Code != http.StatusOK {
+		t.Errorf("deleting with an API token: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// TestMCPCannotSaveIncomingHooks: MCP runs on tokens, so it has no tool
+// that saves an incoming hook, only those that list and delete them (#312).
+func TestMCPCannotSaveIncomingHooks(t *testing.T) {
+	s := newIncomingShop(t)
+	adminRole, err := s.srv.store.GetRoleByName(store.AdminRoleName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, secret, err := s.srv.store.CreateToken("Assistant", []string{adminRole.ID}, nil, s.admin.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := toolNames(t, mcpSession(t, s.srv, secret))
+	for _, name := range []string{"list_incoming_hooks", "delete_incoming_hook"} {
+		if !slices.Contains(names, name) {
+			t.Errorf("no %s", name)
+		}
+	}
+	for _, name := range names {
+		if strings.Contains(name, "incoming") && name != "list_incoming_hooks" && name != "delete_incoming_hook" {
+			t.Errorf("%s saves incoming hooks over MCP", name)
+		}
+	}
+	for _, route := range []string{"POST /api/v1/incoming", "PUT /api/v1/incoming/{id}"} {
+		if tool, ok := mcpserver.Routes()[route]; ok {
+			t.Errorf("%s is reached by %s", route, tool)
+		}
 	}
 }
 
