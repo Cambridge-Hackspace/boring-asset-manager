@@ -14,7 +14,9 @@
   // changes (docs/printing.md), against the printer last used with it or the
   // first that takes it; its label size taken from it; a test label printed
   // there; and which way labels go through it.
-  let { assetId, onfit }: { assetId?: string; onfit: (area: PrintArea | null) => void } = $props();
+  // A laser (docs/printing.md#lasers) is not test printed: the saved
+  // template is engraved from the Lasers page.
+  let { assetId, templateId = '', onfit }: { assetId?: string; templateId?: string; onfit: (area: PrintArea | null) => void } = $props();
 
   const editor = useEditor();
   const doc = $derived(editor.doc);
@@ -134,6 +136,7 @@
   }
 
   const chosenPrinter = $derived(printers.find((p) => p.id === printerId));
+  const chosenLaser = $derived(!!chosenPrinter && !!drivers.find((d) => d.driver === chosenPrinter.driver)?.one_shot);
 
   // The label is drawn in the inks the printer chosen prints in, and its
   // elements offered them; with none chosen, in the template's own.
@@ -233,7 +236,13 @@
     <div class="flex flex-wrap gap-1">
       <button type="button" class="btn-sm" disabled={!printerMedia} onclick={() => sizeFromPrinter()}>Use its label size</button>
       <button type="button" class="btn-sm" disabled={!printerMedia} onclick={() => sizeFromPrinter(true)}>Use it upright</button>
-      {#if canTest}
+      {#if chosenLaser}
+        {#if templateId && session.can('labels.print')}
+          <a class="btn-sm" href="/lasers?template={encodeURIComponent(templateId)}&printer={encodeURIComponent(printerId)}{assetId ? `&asset=${encodeURIComponent(assetId)}` : ''}" title="Engraves the template as last saved">Engrave</a>
+        {:else if !templateId}
+          <span class="text-xs text-zinc-600 dark:text-zinc-400">Save the template to engrave it.</span>
+        {/if}
+      {:else if canTest}
         <button type="button" class="btn-sm" disabled={!printerId || testing || fit?.fits === false} onclick={testPrint} title="Prints one label as it is here, saved or not, {assetId ? 'for the asset being previewed' : 'with placeholder data'}">Test print</button>
       {/if}
     </div>

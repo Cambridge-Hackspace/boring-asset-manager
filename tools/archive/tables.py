@@ -66,7 +66,7 @@ ORDER = [
     ('purchase_orders', 'KindAssets'), ('purchase_order_lines', 'KindAssets'), ('purchase_order_attachments', 'KindAssets'),
     ('events', 'KindAssets'),
     ('flows', 'KindFlows'), ('flow_filings', 'KindFlows'), ('flow_filing_comments', 'KindFlows'), ('assistant_guides', 'KindFlows'),
-    ('settings', 'KindSettings'), ('label_stock', 'KindSettings'), ('printers', 'KindSettings'), ('displays', 'KindSettings'), ('printer_pools', 'KindSettings'),
+    ('settings', 'KindSettings'), ('label_stock', 'KindSettings'), ('printers', 'KindSettings'), ('displays', 'KindSettings'), ('laser_materials', 'KindSettings'), ('laser_jobs', 'KindSettings'), ('printer_pools', 'KindSettings'),
     ('printer_pool_members', 'KindSettings'), ('notification_channels', 'KindSettings'), ('spool_jobs', 'KindSettings'),
     ('spool_batches', 'KindSettings'), ('spool_job_members', 'KindSettings'), ('spool_entries', 'KindSettings'),
     ('auth_providers', 'KindSettings'), ('auth_provider_rules', 'KindSettings'), ('relays', 'KindSettings'),
@@ -78,7 +78,7 @@ ORDER = [
 ]
 JSON = {
     'fields': {'options'}, 'events': {'payload'}, 'reports': {'spec'}, 'templates': {'layout_json'},
-    'printers': {'options'}, 'notification_channels': {'options', 'events'}, 'oauth_clients': {'redirect_uris'},
+    'printers': {'options'}, 'laser_jobs': {'material', 'placement'}, 'notification_channels': {'options', 'events'}, 'oauth_clients': {'redirect_uris'},
     'flows': {'definition'}, 'icon_settings': {'stroke_widths', 'reserved', 'limits', 'states'},
     'category_icons': {'draft_errors'}, 'icon_library': {'draft_errors'}, 'asset_actions': {'triggers', 'actions'},
     'auth_providers': {'settings', 'default_role_ids', 'allowed_domains', 'allowed_groups', 'mfa_amr', 'mfa_acr'}, 'auth_provider_rules': {'scope_ids'},

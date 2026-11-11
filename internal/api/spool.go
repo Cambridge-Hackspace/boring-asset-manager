@@ -96,6 +96,12 @@ func (s *Server) loadSpoolOptions() (*spoolOptions, error) {
 	for i := range printerList {
 		p := &printerList[i]
 		o.printers[p.ID] = p
+		// A laser makes one piece a job, prepared and started by a person
+		// at it (docs/printing.md#lasers): the spool never offers one, and
+		// no template suits it.
+		if printers.IsOneShot(p.Driver) {
+			continue
+		}
 		o.resp.Printers = append(o.resp.Printers, SpoolChoice{ID: p.ID, Name: p.Name})
 	}
 	for i := range templates {

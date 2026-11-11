@@ -82,8 +82,10 @@
   });
   // A display that pulls has no address, but a TRMNL's is its MAC address.
   const needsAddress = $derived(connType !== 'pull' || driver === 'trmnl');
-  // The server's own connections never go through a relay.
-  const relayable = $derived(connType !== 'pull' && connType !== 'webhook');
+  // The server's own connections never go through a relay, and nor does a laser.
+  const relayable = $derived(connType !== 'pull' && connType !== 'webhook' && !info?.one_shot);
+  // A laser's model, with its work area (docs/printing.md#lasers).
+  const laser = $derived(info?.one_shot?.find((m) => m.id === model));
 
   // Webhook channels, for a display pushed through one; read when first needed.
   let channels = $state<Channel[] | null>(null);
@@ -177,6 +179,11 @@
         {/each}
       </select>
     </div>
+    {#if info?.one_shot}
+      <p class="text-sm text-zinc-600 dark:text-zinc-400 sm:self-end">
+        A laser has no roll: each job names its material and workpiece.{laser ? ` Its work area is ${laser.work_width_mm} × ${laser.work_height_mm} mm.` : ''}
+      </p>
+    {:else}
     <div>
       <label class="label" for="{pid}-media">{info?.display ? 'Screen' : 'Roll loaded'}</label>
       <select id="{pid}-media" class="input" aria-describedby="{pid}-media-help" bind:value={media}>
@@ -208,6 +215,7 @@
         {/if}
       </p>
     </div>
+    {/if}
   </div>
 
   <fieldset class="grid gap-4 sm:grid-cols-[auto_1fr]">

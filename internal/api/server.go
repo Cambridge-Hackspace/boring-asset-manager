@@ -56,6 +56,7 @@ type Server struct {
 	// replace it to read what is sent.
 	sendMail func(email.Message)
 	spool    *spooler
+	lasers   *laserState
 	presses  *pressLimiter
 	// incoming keeps each incoming hook to its requests a minute.
 	incoming   *incomingLimiter
@@ -98,6 +99,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		store:      st,
 		mailer:     email.New(cfg.Email),
 		spool:      newSpooler(),
+		lasers:     newLaserState(),
 		presses:    newPressLimiter(),
 		incoming:   newIncomingLimiter(),
 		live:       newLiveHub(),
@@ -112,6 +114,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// Printers may be reached through a relay (docs/relays.md).
 	local := printers.NewDispatcher(cfg.Printers.Devices)
 	local.AllowedBluetooth = cfg.Printers.Bluetooth
+	// The test laser, only where a test turned it on (docs/printing.md#lasers).
+	if cfg.Printers.TestLaser {
+		printers.RegisterTestLaser()
+	}
 	s.transport = &printTransport{s: s, local: local}
 	// The configuration was checked as it loaded, so its key reads.
 	key, _ := cfg.Auth.Key()
@@ -651,6 +657,21 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
 	handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
 	handle("POST /api/v1/printers/{id}/test-print", RequirePermission(rbac.PermLabelsPrint)(RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleTestPrint))))
+	// Lasers, one-shot printers (docs/printing.md#lasers): labels.print
+	// prepares a job; framing and starting it are for a person at the
+	// machine holding lasers.run; anyone who may print stops it.
+	handle("GET /api/v1/printers/{id}/materials", canSeePrinters(http.HandlerFunc(s.handleListMaterials)))
+	handle("PUT /api/v1/printers/{id}/materials/{material}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSaveMaterial)))
+	handle("DELETE /api/v1/printers/{id}/materials/{material}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeleteMaterial)))
+	handle("GET /api/v1/printers/{id}/status", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleLaserStatus)))
+	handle("GET /api/v1/printers/{id}/jobs", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleListLaserJobs)))
+	handle("POST /api/v1/printers/{id}/jobs", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrepareLaserJob)))
+	handle("GET /api/v1/printers/{id}/jobs/{job}", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleGetLaserJob)))
+	handle("GET /api/v1/printers/{id}/jobs/{job}/preview", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleLaserJobPreview)))
+	handle("POST /api/v1/printers/{id}/jobs/{job}/frame", atTheMachine(http.HandlerFunc(s.handleFrameLaserJob)))
+	handle("POST /api/v1/printers/{id}/jobs/{job}/start", atTheMachine(http.HandlerFunc(s.handleStartLaserJob)))
+	handle("POST /api/v1/printers/{id}/jobs/{job}/pause", RequireAnyPermission(rbac.PermLabelsPrint, rbac.PermLasersRun)(http.HandlerFunc(s.handlePauseLaserJob)))
+	handle("POST /api/v1/printers/{id}/jobs/{job}/cancel", RequireAnyPermission(rbac.PermLabelsPrint, rbac.PermLasersRun)(http.HandlerFunc(s.handleCancelLaserJob)))
 	handle("GET /api/v1/label-stock", canSeePrinters(http.HandlerFunc(s.handleListLabelStock)))
 	handle("POST /api/v1/label-stock", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleCreateLabelStock)))
 	handle("PUT /api/v1/label-stock/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUpdateLabelStock)))

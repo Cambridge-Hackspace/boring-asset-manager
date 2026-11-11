@@ -30,7 +30,8 @@ export type Permission =
   | 'people.add'
   | 'assets.confirm'
   | 'assets.verify'
-  | 'assistant.use';
+  | 'assistant.use'
+  | 'lasers.run';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -317,7 +318,7 @@ export interface AssetEvent {
     borrower?: { id: string; email: string; name?: string };
     due_at?: string;
     /** What a label printed event printed: the template and printer as named then, or a download. */
-    label?: { template: string; printer?: string; download?: boolean; copies: number };
+    label?: { template: string; printer?: string; material?: string; download?: boolean; copies: number };
     /** What a hook event triggered, and the asset and the containers it is in. */
     hook?: { key: string; label: string; trigger?: 'button' | 'event' | 'schedule'; cause?: { id: string; kind: string } };
     /** The comment a comment event is about: what it is on, and what it said when written (docs/comments.md). */
@@ -606,6 +607,110 @@ export interface DriverInfo {
   ble?: BLEProfile;
   /** Set for a driver of e-paper displays: the connections they take, and the images it makes. */
   display?: { connections: PrinterConnection['type'][]; formats: string[] };
+  /** Set for a laser's driver (docs/printing.md#lasers): each model's work area, materials and what the machine does itself. */
+  one_shot?: OneShotModel[];
+}
+
+/** One model of a laser (docs/printing.md#lasers). */
+export interface OneShotModel {
+  id: string;
+  work_width_mm: number;
+  work_height_mm: number;
+  materials: Material[];
+  /** It starts a job sent ready with its own button. */
+  start_button: boolean;
+  /** It traces a job's outline with its pointer. */
+  frames: boolean;
+  interlocks: string[];
+}
+
+/** How a laser engraves or cuts a material: power in percent, speed in mm a second. */
+export interface EngraveSetting {
+  power: number;
+  speed: number;
+  passes: number;
+  lpi: number;
+}
+export interface CutSetting {
+  power: number;
+  speed: number;
+  passes: number;
+}
+
+/** A laser's material: a driver's preset, as it is or tuned, or the laser's own. */
+export interface Material {
+  id: string;
+  name: string;
+  engrave: EngraveSetting;
+  cut?: CutSetting | null;
+  from_back?: boolean;
+  preset?: boolean;
+  tuned?: boolean;
+  updated_at?: string | null;
+}
+
+export interface RectMM {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface Polyline {
+  points: { x: number; y: number }[];
+  closed?: boolean;
+}
+
+export type LaserJobState = 'prepared' | 'ready' | 'running' | 'paused' | 'done' | 'cancelled' | 'failed' | 'discarded';
+
+/** A laser's job, as its history keeps it. */
+export interface LaserJob {
+  id: string;
+  printer_id: string | null;
+  printer_name: string;
+  template_id: string | null;
+  template_name: string;
+  asset_id: string | null;
+  asset_name?: string;
+  material: Material;
+  placement: { workpiece: RectMM; label: RectMM; mirror: boolean; cuts: number };
+  state: LaserJobState;
+  message?: string;
+  prepared_by?: string;
+  started_by?: string;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+/** A laser job as the API answers it: while the server holds it prepared, what it cuts and where. */
+export interface LaserJobAnswer {
+  job: LaserJob;
+  held: boolean;
+  cuts?: Polyline[];
+  outline?: RectMM;
+  warnings?: string[];
+  preview?: string;
+}
+
+export interface Interlock {
+  name: string;
+  ok: boolean;
+  message?: string;
+}
+
+export interface MachineStatus {
+  state: string;
+  progress: number;
+  interlocks: Interlock[] | null;
+  message?: string;
+}
+
+export interface LaserStatus {
+  status: MachineStatus | null;
+  unreachable?: string;
+  model: OneShotModel;
+  job: LaserJobAnswer | null;
 }
 
 /** What a display shows (docs/printing.md#displays). */

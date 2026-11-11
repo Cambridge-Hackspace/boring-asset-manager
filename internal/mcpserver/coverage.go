@@ -100,6 +100,14 @@ var Refused = map[string]string{
 	"GET /api/display":                  "TRMNL's API, for a TRMNL device asking what to show, with its own token",
 	"POST /api/log":                     "TRMNL's API, for a TRMNL device's logs, which BAM! does not keep",
 
+	// Lasers (docs/printing.md#lasers): starting one is for a person at the
+	// machine, never an assistant, which prepares a job and watches it.
+	"POST /api/v1/printers/{id}/jobs/{job}/frame":  "framing moves the laser and lights its pointer over the workpiece, for a person at the machine checking the placement; an assistant prepares the job",
+	"POST /api/v1/printers/{id}/jobs/{job}/start":  "a laser starts fires and blinds people, so only a person at the machine starts one, with lasers.run; an assistant prepares the job and never starts it",
+	"POST /api/v1/printers/{id}/jobs/{job}/pause":  "pausing and resuming a laser's job is for the person at the machine watching it",
+	"POST /api/v1/printers/{id}/jobs/{job}/cancel": "cancelling a laser's job is for the person at the machine, who sees why; get_laser_status says how it is going",
+	"GET /api/v1/printers/{id}/jobs/{job}/preview": "the engraving as an image, for the preview in the web app; get_laser_job says where it goes, and preview_template draws the label",
+
 	// Archives move between a person's own computer and the server;
 	// replacing an instance stays with a signed-in person, as making tokens
 	// does (#43, #117).

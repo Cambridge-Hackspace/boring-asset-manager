@@ -369,7 +369,17 @@ func (s *Server) handlePrinterFit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	label := printers.LabelSpec{WidthMM: req.WidthMM, HeightMM: req.HeightMM, DPI: req.DPI, Content: req.Content, Feed: req.Feed, Inks: req.Inks}
-	_, fit, err := printers.PlanLabel(p.Driver, store.PrinterSettings(p), label)
+	var fit printers.Fit
+	var err error
+	if printers.IsOneShot(p.Driver) {
+		// A laser's labels fit its work area (docs/printing.md#lasers).
+		var g printers.Geometry
+		if g, err = printers.GeometryOf(p.Driver, store.PrinterSettings(p)); err == nil {
+			fit, err = printers.FitLabel(g, label)
+		}
+	} else {
+		_, fit, err = printers.PlanLabel(p.Driver, store.PrinterSettings(p), label)
+	}
 	switch {
 	case errors.Is(err, printers.ErrDoesNotFit):
 		writeJSON(w, http.StatusOK, map[string]any{"fits": false, "message": fmt.Sprintf("This template can't print on %s: %s.", p.Name, printers.Why(err)), "warnings": []string{}})

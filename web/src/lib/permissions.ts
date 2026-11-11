@@ -21,6 +21,7 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'comments.moderate', label: 'Moderate comments', description: 'Delete anyone’s comments, in the scopes of what they are on.' },
   { key: 'flows.run', label: 'Run flows', description: 'Run the guided pages that file things into categories or finish with them, in the scopes of their categories.' },
   { key: 'events.read', label: 'Receive events live', description: 'Be sent events as they happen over a live connection, as devices such as a cabinet that lights drawers are.' },
+  { key: 'lasers.run', label: 'Start lasers', description: 'Start a laser’s job, and trace its outline on the workpiece, as the person at the machine. Assistants, flows and hooks never can.' },
   { key: 'assistant.use', label: 'Use the assistant', description: 'Talk with the assistant beside the page, which acts as them, with their own permissions, once an admin turns it on.' },
   { key: 'flows.manage', label: 'Manage flows', description: 'Make and change flows, offering no more than they may do themselves.' },
   { key: 'categories.manage', label: 'Manage categories', description: 'Create and edit categories and fields, and draw their icons.' },

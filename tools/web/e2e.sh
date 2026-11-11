@@ -62,7 +62,8 @@ MSYS_NO_PATHCONV=1 "$CONTAINER" run --rm \
     # test sign-in protocol stands in for identity providers, sending the
     # browser back to the address the specs use (docs/access.md). That is
     # localhost, not 127.0.0.1: browsers take passkeys only at a domain.
-    HTTPS_PROXY=http://127.0.0.1:9 BAM_AUTH_TEST_PROTOCOL=on BAM_SERVER_BASE_URL=http://localhost:8080 \
+    # The test laser, a simulated one, stands in for lasers (docs/printing.md#lasers).
+    HTTPS_PROXY=http://127.0.0.1:9 BAM_AUTH_TEST_PROTOCOL=on BAM_PRINTERS_TEST_LASER=on BAM_SERVER_BASE_URL=http://localhost:8080 \
       "$bin" serve --config c.toml >"$state/server.log" 2>&1 &
     for i in $(seq 1 50); do
       wget -q -O /dev/null http://127.0.0.1:8080/healthz && break

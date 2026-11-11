@@ -121,7 +121,12 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	for _, info := range d {
 		by[info.Driver] = info
 	}
-	if len(d) != 10 || len(by) != 10 {
+	// The test laser is there only once a test has registered it.
+	n := len(d)
+	if _, ok := by[DriverTestLaser]; ok {
+		n--
+	}
+	if n != 10 || len(by) != len(d) {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -179,9 +184,10 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if len(epl2.Options) != 1 || len(epl2.Models) != len(zebra.Models(zebra.EPL2)) || epl2.ModelDPI["Zebra LP 2824"] != 203 {
 		t.Fatalf("EPL2 driver info = %+v", epl2)
 	}
-	// The drivers that take custom stock say how wide, for every model.
+	// The drivers that take custom stock say how wide, for every model; a
+	// laser has no roll.
 	for _, info := range d {
-		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch || info.Display != nil {
+		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch || info.Display != nil || info.OneShot != nil {
 			continue
 		}
 		c := info.CustomStock

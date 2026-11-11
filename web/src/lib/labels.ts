@@ -40,6 +40,8 @@ export interface LabelOptions {
   template_id: string;
   /** Empty for those who cannot print. */
   printers: { id: string; name: string }[];
+  /** The lasers, which engrave a label from the Lasers page rather than print it. */
+  lasers?: { id: string; name: string }[];
   fits: Record<string, Record<string, LabelFit>>;
 }
 

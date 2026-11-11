@@ -240,6 +240,7 @@ Several settings can also be given in the environment:
 | `server.trusted_proxies` | `BAM_SERVER_TRUSTED_PROXIES`, comma-separated |
 | `printers.devices` | `BAM_PRINTERS_DEVICES`, comma-separated |
 | `printers.bluetooth` | `BAM_PRINTERS_BLUETOOTH`, comma-separated |
+| `printers.test_laser` | `BAM_PRINTERS_TEST_LASER` (`true` or `false`): offers a simulated laser that engraves nothing, for automated tests only (see [Lasers](printing.md#lasers)) |
 | `mcp.enabled` | `BAM_MCP_ENABLED` (`true` or `false`) |
 | `assistant.*` | `BAM_ASSISTANT_ENABLED` (`true` or `false`), `BAM_ASSISTANT_PROVIDER`, `BAM_ASSISTANT_ENDPOINT`, `BAM_ASSISTANT_MODEL`, `BAM_ASSISTANT_API_KEY`, `BAM_ASSISTANT_NAME`, `BAM_ASSISTANT_MAX_TOKENS`, `BAM_ASSISTANT_MAX_STEPS`, `BAM_ASSISTANT_MAX_TOOLS`, `BAM_ASSISTANT_PERSON_MESSAGES`, `BAM_ASSISTANT_PERSON_TOKENS`, `BAM_ASSISTANT_INSTANCE_MESSAGES`, `BAM_ASSISTANT_INSTANCE_TOKENS`, `BAM_ASSISTANT_KEEP_DAYS` (see [The assistant](assistant.md#in-the-configuration)) |
 | `relay.bonemesh`, `relay.websocket` | `BAM_RELAY_BONEMESH`, `BAM_RELAY_WEBSOCKET` (`true` or `false`) |

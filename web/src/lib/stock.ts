@@ -50,6 +50,7 @@ const driverNames: Record<string, string> = {
   display: 'E-paper display',
   openepaperlink: 'OpenEPaperLink tag',
   trmnl: 'TRMNL',
+  'test-laser': 'Test laser (simulated)',
 };
 
 /** A printer driver as people know it: "Brother QL" rather than brother_ql. */
