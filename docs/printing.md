@@ -7,7 +7,8 @@ check makes sure the template suits the roll.
 
 Labels can be printed at once, a batch at a time, or gathered over time in the spool (the
 **Print queue** in the web app) and sorted onto templates and printers in bulk. Printer pools
-spread one job across several printers loaded alike.
+spread one job across several printers loaded alike. Lasers engrave a label onto a workpiece, one
+piece at a time, started by a person at the machine (see [Lasers](#lasers)).
 
 For templates, content bindings and output formats, see [Labels](labels.md).
 
@@ -1092,6 +1093,108 @@ categories of the assets shown and of their containers.
 | `refresh_window_seconds` | 30 | 0 to 3600 |
 | `pull_refresh_seconds` | 900 | 60 to 86400 |
 
+## Lasers
+
+A laser engraves labels that last: on tool handles, bin fronts, plywood tags, anodized aluminum or
+acrylic. It is a **one-shot printer**: it makes one piece a job, on whatever someone has put on its
+bed. It has no roll; what it works on is a material and a workpiece, chosen for each job.
+
+### Safety first
+
+Lasers start fires and blind people. BAM! is built around a person being at the machine:
+
+- **Starting needs a person at the machine.** On a machine that starts jobs with its own button,
+  BAM! sends the job ready, and the person presses the button. On one that does not, BAM!'s *Start*
+  must be pressed by someone holding `lasers.run` (see [Access](access.md)).
+- **The machine's interlocks are checked first.** BAM! asks the machine for them as it starts, and
+  refuses while any reports a problem: the lid open, the safety key out, a flame alarm, or the
+  exhaust off, on machines that report them. Resuming a paused job checks them again.
+- **Nothing else starts a laser.** An assistant over MCP, a flow or an incoming hook never starts,
+  frames or resumes one, whatever it holds; an API token does only with `lasers.run`. Hooks have no
+  action that reaches a laser. An assistant may prepare a job, and watch it, but not start it.
+- **The print queue never sends to a laser.** The spool, its pools and its batches never offer one,
+  printing to one is refused, and a laser is never in a pool. A job is prepared and started from an
+  asset's page or the template editor, one at a time.
+- **Every job is in the history:** who prepared it and who started it, the asset and template, the
+  material with its power and speed, where it went on the bed, and how it ended. A job done is in
+  its asset's history as its label engraved, with the material.
+- **Stopping is never harder than starting.** Anyone who may print pauses or cancels a job.
+
+BAM! does not replace the machine's own safety: its emergency stop, its interlocks and its
+manufacturer's instructions come first, and someone stays with the machine while it runs.
+
+### Laser drivers
+
+A laser's driver reports each model's **work area** (how far the head reaches across and down the
+bed), its **materials**, whether it starts jobs with **its own button**, whether it can **frame** a
+job, and which **interlocks** it reports. `GET /api/v1/printers/drivers` gives them, as `one_shot`.
+
+The drivers for real machines come next: xTool, then GRBL diode lasers and Ruida CO2 controllers.
+For tests there is `test-laser`, a simulated laser offered only where `[printers] test_laser` is
+on (`BAM_PRINTERS_TEST_LASER`, see [Configuration](configuration.md)). It takes a `tcp` connection
+it never dials, engraves nothing, and finishes a job a few seconds after starting it. Its models
+are `button` (115 × 115 mm, started with its button) and `panel` (200 × 150 mm, started by BAM!),
+and both frame and report every interlock.
+
+A laser has no media, and is reached by this server, never through a relay.
+
+### Materials
+
+Each material has a name, and its settings:
+
+- **Engraving:** power (a percentage of the laser's), speed (millimeters a second), passes, and
+  lines per inch, which is the resolution the label is drawn at;
+- **Cutting:** power, speed and passes, for a material the laser cuts; without them, a template's
+  cut outline is left uncut, with a warning;
+- **From the back:** for a material engraved through its face, such as clear acrylic. Its jobs are
+  mirrored, left for right, and the person is told to lay the piece face down.
+
+A laser starts with its driver's presets. An admin (`settings.manage`) tunes a preset for that
+laser alone, or adds materials of its own, on the laser's page; putting a tuned preset back returns
+it to the driver's settings. A laser has at most 100 materials.
+
+### Engraving and cutting
+
+- **Engraving** is the label rendered by the same renderer as every printer, 1-bit, at the
+  material's lines per inch, so what engraves is what the editor shows. A template's resolution does
+  not matter to a laser.
+- **Cutting** follows the template's **cut outlines**: shapes marked *Cut* in the editor
+  (`"cut": true`, see [Labels](labels.md)), such as a tag's outline and the hole it hangs by. They
+  are taken from the template as vectors, curves followed within 0.02 mm, and cut after engraving.
+  A laser does not engrave them; every other printer draws them as they are designed.
+- **The fit check** for a laser asks only that the label fit its work area; inks other than black
+  engrave as black does.
+
+### Preparing a job
+
+A job names the template, the asset (or none, for the template's placeholders), the material, and
+the **workpiece**: its width and height, and where its top left corner lies on the bed, in
+millimeters from the work area's top left corner. The label is centered on the workpiece, unless
+the job says where its top left corner goes on it. The label must fit on the workpiece, and the
+workpiece in the work area.
+
+Preparing renders the label and holds it ready; nothing reaches the machine. A laser holds one
+prepared job at a time: preparing another discards the one before. The prepared job lives on the
+server that prepared it, so after a restart, or on another server sharing the database, it is
+prepared again.
+
+**The preview** draws the work area, the workpiece on it, the label in its place and the cut
+outlines, so the person can check where it goes before anything moves.
+
+**Framing**, where the machine supports it, has it trace the job's outline with its low-power
+pointer, so the person can check the placement on the real piece. Framing is for a person at the
+machine, as starting is, and does not check the interlocks: the lid is often open to see.
+
+### Running a job
+
+**Start** checks the interlocks, then sends the job: started at once, or ready for the machine's
+button. While it runs, the laser's page shows its progress, *Pause* and *Cancel*, and the machine's
+state and interlocks as the driver reports them; *Start* resumes a paused job. BAM! asks the machine
+how the job is going every second until it ends, and takes it as failed if the machine has not
+answered for ten minutes. A job's states are `prepared`, `ready` (waiting for the button),
+`running`, `paused`, `done`, `cancelled`, `failed`, and `discarded` (prepared, never started, and
+replaced).
+
 ## Printer pools
 
 A printer pool is a set of printers loaded alike that share print jobs. Pools are managed with the
@@ -1143,6 +1246,19 @@ Deleting a printer takes it out of its pools.
 | `/api/v1/label-stock` | `settings.manage`; listed to those who may see printers | Custom label stock |
 | `/api/v1/printer-pools` | `settings.manage`; listed to those who may see printers | Printer pools |
 | `GET /api/v1/templates` | `assets.read` | Includes `suits`, to those who may see printers |
+
+### Laser API
+
+| Method and route | Permission | Purpose |
+|---|---|---|
+| `GET /api/v1/printers/{id}/materials` | `labels.print`, `settings.manage` or `templates.manage` | Its materials: each preset (`preset`, `tuned`) and its own |
+| `PUT`, `DELETE /api/v1/printers/{id}/materials/{material}` | `settings.manage` | Tune a preset or save its own; delete its own, or put a preset back |
+| `POST /api/v1/printers/{id}/jobs` | `labels.print` | Prepare a job: `template_id`, `asset_id`, `material`, `workpiece` (`width_mm`, `height_mm`, `x_mm`, `y_mm`) and `label_at` (`x`, `y`); answers the job, its `cuts` and `outline` on the bed, `warnings` and a `preview` |
+| `GET /api/v1/printers/{id}/jobs`, `GET /api/v1/printers/{id}/jobs/{job}` | `labels.print` | Its history, newest first, and one job |
+| `GET /api/v1/printers/{id}/jobs/{job}/preview` | `labels.print` | A prepared job's engraving, as a PNG |
+| `POST /api/v1/printers/{id}/jobs/{job}/frame`, `…/start` | `lasers.run`, never over MCP, from a flow or from an incoming hook | Trace its outline; start it, send it ready, or resume it, with the interlocks checked first (`409` with the machine's `status` when they refuse) |
+| `POST /api/v1/printers/{id}/jobs/{job}/pause`, `…/cancel` | `labels.print` or `lasers.run` | Pause it, or cancel it, prepared or under way |
+| `GET /api/v1/printers/{id}/status` | `labels.print` | The machine's `status` (`state`, `progress`, `interlocks`), or why it is `unreachable`; its `model`; and its latest `job` |
 
 ### Display API
 

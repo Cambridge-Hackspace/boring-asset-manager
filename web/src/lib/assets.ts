@@ -242,6 +242,7 @@ export function describeEvent(e: AssetEvent): string {
       const l = p.label;
       if (!l) return 'Label printed';
       const what = l.copies === 1 ? 'its label' : `${l.copies} labels`;
+      if (l.material) return `Engraved its label on ${l.material} with ${l.printer} (${l.template})`;
       return l.download ? `Downloaded ${what} (${l.template})` : `Printed ${what} on ${l.printer} (${l.template})`;
     }
     default:

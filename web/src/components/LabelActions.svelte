@@ -230,6 +230,12 @@
           </ul>
         </details>
       {/if}
+      {#if single && (options?.lasers ?? []).length > 0}
+        <p class="text-sm">
+          <a class="btn-secondary" href="/lasers?asset={encodeURIComponent(single)}&template={encodeURIComponent(templateId)}&printer={encodeURIComponent(options?.lasers?.[0]?.id ?? '')}">Engrave</a>
+          <span class="text-xs text-zinc-600 dark:text-zinc-400">on a laser, one piece at a time</span>
+        </p>
+      {/if}
       {#if spool}
         <p class="flex flex-wrap items-center gap-2">
           <AddToSpool what={() => ({ asset_ids: assetIds, ...(templateId !== options?.template_id ? { template_id: templateId } : {}) })} label="Add to the queue" />

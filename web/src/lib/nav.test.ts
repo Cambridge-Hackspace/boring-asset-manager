@@ -19,7 +19,7 @@ describe('navSections', () => {
     expect(labels(all)).toEqual([
       ['', ['Assets', 'Scan', 'Loans', 'Print queue', 'Reports']],
       ['Catalog', ['Categories', 'Vendors', 'Contracts', 'Orders', 'Fields', 'Link types', 'Hooks', 'Icons']],
-      ['Labels', ['Templates', 'Images', 'Printers', 'Displays']],
+      ['Labels', ['Templates', 'Images', 'Printers', 'Displays', 'Lasers']],
       ['Admin', ['Users', 'Roles', 'API tokens', 'Notifications', 'Relays', 'Incoming hooks', 'Sign-in', 'Assistant', 'Backups', 'Installed app', 'Import & export']],
     ]);
   });
@@ -31,7 +31,7 @@ describe('navSections', () => {
     ]);
     expect(labels(['labels.print'])).toEqual([
       ['', ['Print queue']],
-      ['Labels', ['Printers', 'Displays']],
+      ['Labels', ['Printers', 'Displays', 'Lasers']],
     ]);
     expect(labels([])).toEqual([]);
   });

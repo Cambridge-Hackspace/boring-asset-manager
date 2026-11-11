@@ -70,6 +70,11 @@ const (
 	// which acts as its person with their own permissions. It is not
 	// scopable.
 	PermAssistantUse = "assistant.use"
+	// PermLasersRun starts a laser's job, traces its outline, and resumes
+	// it (docs/printing.md#lasers): BAM!'s Start, for a person at the
+	// machine. An assistant, a flow or an incoming hook never may, whatever
+	// it holds. It is not scopable.
+	PermLasersRun = "lasers.run"
 )
 
 var (
@@ -108,6 +113,7 @@ func AllPermissions() []string {
 		PermAssetsConfirm,
 		PermAssetsVerify,
 		PermAssistantUse,
+		PermLasersRun,
 	}
 }
 

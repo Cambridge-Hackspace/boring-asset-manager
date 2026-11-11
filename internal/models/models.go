@@ -542,6 +542,8 @@ type EventChannel struct {
 type EventLabel struct {
 	Template string `json:"template"`
 	Printer  string `json:"printer,omitempty"`
+	// Material is what a laser engraved it on (docs/printing.md#lasers).
+	Material string `json:"material,omitempty"`
 	Download bool   `json:"download,omitempty"`
 	Copies   int    `json:"copies"`
 }
@@ -1228,6 +1230,78 @@ type DisplayToken struct {
 	CreatedBy  string     `json:"created_by,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
+}
+
+// LaserMaterial is one of a one-shot printer's materials
+// (docs/printing.md#materials): a driver's preset, as the driver has it or
+// as its admin tuned it, or one of the printer's own.
+type LaserMaterial struct {
+	printers.Material
+	// Preset is set for a driver's preset, and Tuned for one changed.
+	Preset    bool       `json:"preset"`
+	Tuned     bool       `json:"tuned"`
+	UpdatedAt *time.Time `json:"updated_at"`
+}
+
+// Laser job states (docs/printing.md#lasers).
+const (
+	LaserJobPrepared = "prepared"
+	// LaserJobReady is a job sent to a machine started with its own
+	// button, waiting for it.
+	LaserJobReady     = "ready"
+	LaserJobRunning   = "running"
+	LaserJobPaused    = "paused"
+	LaserJobDone      = "done"
+	LaserJobCancelled = "cancelled"
+	LaserJobFailed    = "failed"
+	// LaserJobDiscarded is a prepared job never started, whose place
+	// another took.
+	LaserJobDiscarded = "discarded"
+)
+
+// LaserJobEnded reports whether a laser job's state is one it ends in.
+func LaserJobEnded(state string) bool {
+	return state == LaserJobDone || state == LaserJobCancelled || state == LaserJobFailed || state == LaserJobDiscarded
+}
+
+// LaserJob is one of a one-shot printer's jobs, as its history keeps it:
+// who prepared and started it, what it engraved, the material as it used
+// it, and how it ended. The names are as they were when it was prepared.
+type LaserJob struct {
+	ID           string  `json:"id"`
+	PrinterID    *string `json:"printer_id"`
+	PrinterName  string  `json:"printer_name"`
+	TemplateID   *string `json:"template_id"`
+	TemplateName string  `json:"template_name"`
+	AssetID      *string `json:"asset_id"`
+	AssetName    string  `json:"asset_name,omitempty"`
+	// Material is the material with the settings the job used.
+	Material  printers.Material `json:"material"`
+	Placement LaserPlacement    `json:"placement"`
+	State     string            `json:"state"`
+	// Message says why a job failed or was refused, or what the machine
+	// said as it ended.
+	Message string `json:"message,omitempty"`
+	// PreparedBy and StartedBy are a user's or an API token's ID.
+	PreparedBy      string     `json:"prepared_by,omitempty"`
+	PreparedByToken bool       `json:"prepared_by_token,omitempty"`
+	StartedBy       string     `json:"started_by,omitempty"`
+	StartedByToken  bool       `json:"started_by_token,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	StartedAt       *time.Time `json:"started_at"`
+	EndedAt         *time.Time `json:"ended_at"`
+}
+
+// LaserPlacement is where a laser job's workpiece lay on the bed, and where
+// its label went on it, in millimeters from the work area's top left
+// corner.
+type LaserPlacement struct {
+	Workpiece printers.RectMM `json:"workpiece"`
+	Label     printers.RectMM `json:"label"`
+	// Mirror is set when it was engraved from the back.
+	Mirror bool `json:"mirror"`
+	// Cuts is how many outlines it cut.
+	Cuts int `json:"cuts"`
 }
 
 // LabelStock is custom stock as stored: its size, and the printers that

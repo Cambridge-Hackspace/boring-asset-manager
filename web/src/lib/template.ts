@@ -94,6 +94,8 @@ export interface TemplateElement {
   /** Imported artwork's SVG path data, its points fractions of its box. */
   d?: string;
   fill_rule?: 'nonzero' | 'evenodd';
+  /** A shape a laser cuts along after engraving, rather than engraves (docs/printing.md#lasers). */
+  cut?: boolean;
   stroke?: Paint;
   /** In the template's units. */
   stroke_width?: number;

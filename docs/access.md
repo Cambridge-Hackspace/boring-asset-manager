@@ -623,6 +623,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `users.manage` | Managing users, roles, scopes and API tokens. It includes `people.add`. | No |
 | `people.add` | Adding people without accounts, to name in person fields (see [Person fields](data-model.md#person-fields)). | No |
 | `assistant.use` | Seeing the assistant beside the page, and talking with it, which acts as the person with their own permissions, once an admin turns it on (see [The assistant beside the page](assistant.md)). | No |
+| `lasers.run` | Starting a laser's job with BAM!'s *Start*, tracing its outline on the workpiece, and resuming it (see [Lasers](printing.md#lasers)). Preparing a job is `labels.print`, and anyone with it may pause or cancel one. An assistant over MCP, a flow or an incoming hook never starts a laser, whatever it holds, and an API token only with `lasers.run`. | No |
 
 ### Scopes
 
@@ -1021,6 +1022,7 @@ is an RFC 3339 time, or `null` for never.
 | `078` | Grants `people.add` to every role that manages users, which includes it. |
 | `079` | Grants `assets.confirm` to every role that writes assets, in the scopes it writes them in, so what it adds is taken as true as before until a category uses review states. `assets.verify` goes to the admin role only. |
 | `081` | Adds `assistant.use`, which goes to the admin role only. |
+| `083` | Adds `lasers.run`, which goes to the admin role only. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |

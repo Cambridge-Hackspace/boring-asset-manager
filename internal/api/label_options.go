@@ -10,6 +10,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/render"
 )
@@ -60,6 +61,9 @@ type LabelOptionsResponse struct {
 	Templates  []LabelTemplateOption `json:"templates"`
 	TemplateID string                `json:"template_id"`
 	Printers   []SpoolChoice         `json:"printers"`
+	// Lasers are the lasers, which engrave a label one piece at a time
+	// from the Lasers page rather than print it (docs/printing.md#lasers).
+	Lasers []SpoolChoice `json:"lasers"`
 	// Fits maps a template and a printer to how its labels suit it.
 	Fits map[string]map[string]LabelFit `json:"fits"`
 }
@@ -110,7 +114,7 @@ func (s *Server) handleLabelOptions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	resp := LabelOptionsResponse{Templates: []LabelTemplateOption{}, Printers: []SpoolChoice{}, Fits: map[string]map[string]LabelFit{}}
+	resp := LabelOptionsResponse{Templates: []LabelTemplateOption{}, Printers: []SpoolChoice{}, Lasers: []SpoolChoice{}, Fits: map[string]map[string]LabelFit{}}
 	images := s.newLabelImages(r.Context())
 	for _, t := range order {
 		opt := LabelTemplateOption{ID: t.ID, Name: t.Name, Units: t.Units, Width: t.Width, Height: t.Height, DPI: t.DPI,
@@ -133,9 +137,17 @@ func (s *Server) handleLabelOptions(w http.ResponseWriter, r *http.Request) {
 			writeServerError(w, err, "list printers")
 			return
 		}
+		// A laser is not printed to: it is offered apart, to engrave on.
+		printable := list[:0]
 		for i := range list {
+			if printers.IsOneShot(list[i].Driver) {
+				resp.Lasers = append(resp.Lasers, SpoolChoice{ID: list[i].ID, Name: list[i].Name})
+				continue
+			}
+			printable = append(printable, list[i])
 			resp.Printers = append(resp.Printers, SpoolChoice{ID: list[i].ID, Name: list[i].Name})
 		}
+		list = printable
 		for _, t := range order {
 			resp.Fits[t.ID] = map[string]LabelFit{}
 			for i := range list {

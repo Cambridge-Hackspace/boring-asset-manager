@@ -804,7 +804,7 @@
   <LabelPanel problems={labelProblems} frame={drawingLive ? frame : null} {previewURL} />
 {/snippet}
 {#snippet printer()}
-  <PrinterPanel assetId={previewAsset?.id} onfit={(a) => (printArea = a)} />
+  <PrinterPanel assetId={previewAsset?.id} templateId={routeId} onfit={(a) => (printArea = a)} />
 {/snippet}
 {#snippet preview()}
   <PreviewPanel bind:asset={previewAsset} {isNew} {dirty} />

@@ -52,6 +52,9 @@ func PlanLabel(driver string, s Settings, label LabelSpec) (Plan, Fit, error) {
 	if err != nil {
 		return nil, Fit{}, err
 	}
+	if _, ok := d.(OneShotDriver); ok {
+		return nil, Fit{}, errOneShot
+	}
 	g, err := d.Geometry(s)
 	if err != nil {
 		return nil, Fit{}, err
@@ -105,6 +108,9 @@ type DriverInfo struct {
 	// Display is set for a display driver (display.go): the connections
 	// its displays take and the images it makes.
 	Display *DisplayInfo `json:"display,omitempty"`
+	// OneShot is set for a one-shot printer's driver (oneshot.go): each
+	// model's work area, materials and what the machine does itself.
+	OneShot []OneShotModel `json:"one_shot,omitempty"`
 }
 
 // MediaInfo describes a roll for clients choosing what is loaded.
@@ -192,6 +198,9 @@ func Drivers() []DriverInfo {
 		}
 		if dd, ok := d.(displayDriver); ok {
 			info.Display = &DisplayInfo{Connections: dd.Connections(), Formats: slices.Clone(dd.formats)}
+		}
+		if od, ok := d.(OneShotDriver); ok {
+			info.OneShot = od.OneShotModels()
 		}
 		infos = append(infos, info)
 	}

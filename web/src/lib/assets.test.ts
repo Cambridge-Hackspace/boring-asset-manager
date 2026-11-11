@@ -139,6 +139,7 @@ describe('stock', () => {
     expect(printed({ template: 'Shelf', printer: 'Front desk', copies: 1 })).toBe('Printed its label on Front desk (Shelf)');
     expect(printed({ template: 'Shelf', printer: 'Front desk', copies: 3 })).toBe('Printed 3 labels on Front desk (Shelf)');
     expect(printed({ template: 'Tag', download: true, copies: 2 })).toBe('Downloaded 2 labels (Tag)');
+    expect(printed({ template: 'Tag', printer: 'Workshop laser', material: 'Birch plywood, 3 mm', copies: 1 })).toBe('Engraved its label on Birch plywood, 3 mm with Workshop laser (Tag)');
     expect(describeEvent(event('asset.hook', { hook: { key: 'identify', label: 'Identify' } }))).toBe('Identify triggered');
     expect(describeEvent(event('asset.hook', { hook: { key: 'identify', label: 'Identify', trigger: 'event', cause: { id: 'e1', kind: 'asset.checked_out' } } }))).toBe('Identify fired as it was lent');
     expect(describeEvent(event('asset.hook', { hook: { key: 'identify', label: 'Identify', trigger: 'schedule' } }))).toBe('Identify fired on its schedule');

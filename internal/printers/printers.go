@@ -61,6 +61,11 @@ func Validate(name, driver string, conn Connection, settings Settings) error {
 	if err := checkDisplayConnection(d, conn); err != nil {
 		return err
 	}
+	if od, ok := d.(OneShotDriver); ok {
+		if err := checkOneShot(od, conn, settings); err != nil {
+			return err
+		}
+	}
 	if conn.Type == ConnBLE {
 		if _, err := connectionFor(d, conn); err != nil {
 			return err

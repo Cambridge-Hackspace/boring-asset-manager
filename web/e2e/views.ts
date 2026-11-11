@@ -76,6 +76,8 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   // An e-paper display that pulls, with a token, for the displays page.
   const a11yDisplay = await post('/printers', { name: unique('A11y shelf'), driver: 'display', model: '2.9in-296x128-bwr', media: '2.9in-296x128-bwr', connection: { type: 'pull' } });
   await post(`/displays/${a11yDisplay.printer.id}/tokens`, { name: 'Shelf frame' });
+  // A laser, simulated, for the lasers page.
+  await post('/printers', { name: unique('A11y laser'), driver: 'test-laser', model: 'panel', connection: { type: 'tcp', address: 'a11y-laser.test' } });
   // One waiting for the QL with its name where the QL does not print, so
   // the spool shows a warning.
   const edge = await post('/templates', {
@@ -269,6 +271,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/icons?tab=settings', 'Icons'],
     ['/printers', 'Printers'],
     ['/displays', 'Displays'],
+    ['/lasers', 'Lasers'],
     ['/notifications', 'Notifications'],
     ['/relays', 'Relays'],
     ['/incoming-hooks', 'Incoming hooks'],

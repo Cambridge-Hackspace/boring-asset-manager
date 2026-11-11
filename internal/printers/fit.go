@@ -36,6 +36,10 @@ type Geometry struct {
 	// Screen is set for a display (display.go): the "roll" is its screen,
 	// of WidthMM × LengthMM, which nothing feeds through or cuts.
 	Screen bool
+	// OneShot is set for a one-shot printer (oneshot.go): WidthMM ×
+	// LengthMM is its work area, which a label must fit within, at any
+	// resolution, since it is engraved at its material's.
+	OneShot bool
 	// Palette is the inks the printer as configured prints in
 	// (docs/labels.md#inks); empty is black and white.
 	Palette labels.Palette
@@ -109,6 +113,9 @@ const DriftMM = 1.0
 // The label's content, when given, is checked against what the head
 // reaches and against die-cut labels' edges, for warnings.
 func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
+	if g.OneShot {
+		return fitWorkArea(g, label)
+	}
 	// Every reason it does not fit, so they can all be put right at once.
 	var reasons []string
 	if label.DPI != g.DPI {
@@ -175,6 +182,25 @@ func FitLabel(g Geometry, label LabelSpec) (Fit, error) {
 	}
 	return Fit{}, doesNotFit(append(reasons, fmt.Sprintf("it is %s × %s mm, but the roll loaded, %s, needs one side to be %s mm",
 		mm(label.WidthMM), mm(label.HeightMM), g.Roll, mm(g.WidthMM))))
+}
+
+// fitWorkArea checks a label against a one-shot printer's work area: it
+// fits as it is, never turned, and engraves in one shade, so other inks
+// engrave as black does and white not at all.
+func fitWorkArea(g Geometry, label LabelSpec) (Fit, error) {
+	if label.WidthMM > g.WidthMM+SizeTolerance || label.HeightMM > g.LengthMM+SizeTolerance {
+		return Fit{}, doesNotFit([]string{fmt.Sprintf("it is %s × %s mm, larger than %s's work area, %s × %s mm",
+			mm(label.WidthMM), mm(label.HeightMM), g.Prints, mm(g.WidthMM), mm(g.LengthMM))})
+	}
+	f := Fit{Printable: RectMM{Width: label.WidthMM, Height: label.HeightMM}, Palette: labels.PaletteBW}
+	if missing := labels.PaletteBW.Missing(label.Inks); len(missing) > 0 {
+		verb := "engraves"
+		if len(missing) > 1 {
+			verb = "engrave"
+		}
+		f.Warnings = append(f.Warnings, fmt.Sprintf("A laser engraves in one shade, so %s %s as black does.", labels.JoinAnd(missing), verb))
+	}
+	return f, nil
 }
 
 // InksWarning says that the inks missing from a palette print black.

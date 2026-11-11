@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/rbac"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -802,6 +803,75 @@ func labelTools() []tool {
 				}
 				return say(out, "Saved: refreshes wait %v seconds for a burst; displays that pull ask every %v seconds.", out["refresh_window_seconds"], out["pull_refresh_seconds"])
 			}),
+		// Lasers (docs/printing.md#lasers): an assistant prepares a job and
+		// watches it; only a person at the machine frames and starts it.
+		simple(&mcp.Tool{Name: "list_laser_materials", Description: "A laser's materials: for each, how it is engraved (power in percent, speed in mm a second, passes, lines per inch) and cut, whether it is engraved from the back (mirrored), " +
+			"and whether it is the driver's preset (tuned or not) or the printer's own.",
+			Annotations: readOnly("List laser materials")}, "GET /api/v1/printers/{id}/materials", seePrinters,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/printers/{id}/materials", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string { return fmt.Sprintf("%d materials.", count(out, "materials")) }),
+		simple(&mcp.Tool{Name: "save_laser_material", Description: "Tune one of a laser's preset materials, under its ID, or save one of the printer's own. " +
+			"engrave takes power (1-100 percent), speed (mm a second), passes and lpi (lines per inch); cut, left out for a material it does not cut, takes power, speed and passes.",
+			Annotations: changes("Save a laser material", true)}, "PUT /api/v1/printers/{id}/materials/{material}", settings,
+			func(in laserMaterialIn) (request, error) {
+				if err := need(in.PrinterID, "printer_id"); err != nil {
+					return request{}, err
+				}
+				body := map[string]any{"name": in.Name, "engrave": in.Engrave, "cut": in.Cut, "from_back": in.FromBack}
+				return request{path: pathOf("/api/v1/printers/{id}/materials/{material}", in.PrinterID, in.ID), body: body}, need(in.ID, "id")
+			},
+			func(in laserMaterialIn, _ map[string]any) string { return fmt.Sprintf("Saved %s.", in.Name) }),
+		simple(&mcp.Tool{Name: "delete_laser_material", Description: "Delete one of a laser's own materials, or put a tuned preset back as its driver has it.",
+			Annotations: destroys("Delete a laser material", true)}, "DELETE /api/v1/printers/{id}/materials/{material}", settings,
+			func(in laserMaterialRef) (request, error) {
+				if err := need(in.PrinterID, "printer_id"); err != nil {
+					return request{}, err
+				}
+				return request{path: pathOf("/api/v1/printers/{id}/materials/{material}", in.PrinterID, in.ID)}, need(in.ID, "id")
+			},
+			func(laserMaterialRef, map[string]any) string {
+				return "Deleted the material, or put it back as the driver has it."
+			}),
+		simple(&mcp.Tool{Name: "prepare_laser_job", Description: "Prepare a job on a laser: an asset's label (or the template's placeholders), engraved on a material, on a workpiece of a size and place on the bed, " +
+			"with the template's shapes marked cut cut along after. It replaces any job prepared on the laser and not started. Nothing reaches the machine: a person at it frames and starts the job in the web app.",
+			Annotations: changes("Prepare a laser job", false)}, "POST /api/v1/printers/{id}/jobs", printing,
+			func(in laserJobIn) (request, error) {
+				if err := need(in.PrinterID, "printer_id"); err != nil {
+					return request{}, err
+				}
+				body := map[string]any{"template_id": in.TemplateID, "asset_id": in.AssetID, "material": in.Material,
+					"workpiece": map[string]any{"width_mm": in.WidthMM, "height_mm": in.HeightMM, "x_mm": in.XMM, "y_mm": in.YMM}}
+				if in.LabelAt != nil {
+					body["label_at"] = in.LabelAt
+				}
+				return request{path: pathOf("/api/v1/printers/{id}/jobs", in.PrinterID), body: body}, nil
+			},
+			func(laserJobIn, map[string]any) string {
+				return "Prepared the job. A person at the laser frames and starts it."
+			}),
+		simple(&mcp.Tool{Name: "list_laser_jobs", Description: "A laser's jobs, newest first: who prepared and started each, the asset and template, the material and its settings, where it went on the bed, and how it ended.",
+			Annotations: readOnly("List laser jobs")}, "GET /api/v1/printers/{id}/jobs", printing,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/printers/{id}/jobs", in.ID)}, need(in.ID, "id")
+			},
+			func(_ idIn, out map[string]any) string { return fmt.Sprintf("%d jobs.", count(out, "jobs")) }),
+		simple(&mcp.Tool{Name: "get_laser_job", Description: "One of a laser's jobs, and while it is held prepared, its cut outlines and where it goes on the bed.",
+			Annotations: readOnly("Get a laser job")}, "GET /api/v1/printers/{id}/jobs/{job}", printing,
+			func(in laserJobRef) (request, error) {
+				if err := need(in.PrinterID, "printer_id"); err != nil {
+					return request{}, err
+				}
+				return request{path: pathOf("/api/v1/printers/{id}/jobs/{job}", in.PrinterID, in.JobID)}, need(in.JobID, "job_id")
+			},
+			func(laserJobRef, map[string]any) string { return "The job." }),
+		simple(&mcp.Tool{Name: "get_laser_status", Description: "What a laser is doing: its state and progress, its interlocks (lid, safety key, flame, exhaust) as it reports them, and its job under way or prepared.",
+			Annotations: readOnly("Laser status")}, "GET /api/v1/printers/{id}/status", printing,
+			func(in idIn) (request, error) {
+				return request{path: pathOf("/api/v1/printers/{id}/status", in.ID)}, need(in.ID, "id")
+			},
+			func(idIn, map[string]any) string { return "The laser's status." }),
 		simple(&mcp.Tool{Name: "list_label_stock", Description: "The custom rolls printers can be loaded with: width, label length and gap, in mm.",
 			Annotations: readOnly("List label stock")}, "GET /api/v1/label-stock", seePrinters,
 			func(none) (request, error) { return request{path: "/api/v1/label-stock"}, nil },
@@ -940,4 +1010,38 @@ type displayTokenIn struct {
 type displaySettingsIn struct {
 	RefreshWindowSeconds *int `json:"refresh_window_seconds,omitempty" jsonschema:"how long a refresh waits for the rest of a burst of changes, 0 to 3600 seconds"`
 	PullRefreshSeconds   *int `json:"pull_refresh_seconds,omitempty" jsonschema:"how long a display that pulls waits before asking again, 60 to 86400 seconds, unless its own options say"`
+}
+
+// laserMaterialRef names one of a laser's materials.
+type laserMaterialRef struct {
+	PrinterID string `json:"printer_id"`
+	ID        string `json:"id" jsonschema:"the material's ID: a preset's, or lowercase letters, digits and hyphens for one of the printer's own"`
+}
+
+// laserMaterialIn is a laser's material as saved.
+type laserMaterialIn struct {
+	laserMaterialRef
+	Name     string                  `json:"name"`
+	Engrave  printers.EngraveSetting `json:"engrave"`
+	Cut      *printers.CutSetting    `json:"cut,omitempty"`
+	FromBack bool                    `json:"from_back,omitempty" jsonschema:"engraved from the back, as clear acrylic read through its face is: its jobs are mirrored"`
+}
+
+// laserJobIn prepares a laser job.
+type laserJobIn struct {
+	PrinterID  string            `json:"printer_id"`
+	TemplateID string            `json:"template_id"`
+	AssetID    string            `json:"asset_id,omitempty" jsonschema:"whose label; none for the template's placeholders"`
+	Material   string            `json:"material" jsonschema:"a material's ID, from list_laser_materials"`
+	WidthMM    float64           `json:"width_mm" jsonschema:"the workpiece's width"`
+	HeightMM   float64           `json:"height_mm" jsonschema:"the workpiece's height"`
+	XMM        float64           `json:"x_mm,omitempty" jsonschema:"where the workpiece's top left corner lies, from the work area's"`
+	YMM        float64           `json:"y_mm,omitempty"`
+	LabelAt    *printers.PointMM `json:"label_at,omitempty" jsonschema:"where the label's top left corner goes on the workpiece, in mm from its top left corner; left out, it is centered"`
+}
+
+// laserJobRef names one of a laser's jobs.
+type laserJobRef struct {
+	PrinterID string `json:"printer_id"`
+	JobID     string `json:"job_id"`
 }
