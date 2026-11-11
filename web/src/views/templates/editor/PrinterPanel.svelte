@@ -4,7 +4,7 @@
   import { messageOf } from '../../../lib/errors';
   import type { DriverInfo, Printer } from '../../../lib/models';
   import { session } from '../../../lib/session.svelte';
-  import { bounds, describeElement, fromMM, resizeLabel, toMM, type Feed, type PrintArea, type TemplateDoc } from '../../../lib/template';
+  import { bounds, describeElement, fromMM, resizeLabel, toMM, type Corner, type Feed, type PrintArea, type TemplateDoc } from '../../../lib/template';
   import { inkName, paletteInks, templateInks } from '../../../lib/inks';
   import ErrorMessage from '../../../components/ErrorMessage.svelte';
   import FitWarnings from '../../../components/FitWarnings.svelte';
@@ -166,6 +166,14 @@
     editor.apply({ ...(upright ? resizeLabel(doc, short, long) : resizeLabel(doc, long, short)), ...(dpi ? { dpi } : {}) });
   }
 
+  /** Where a laser puts the label on its workpiece: centered (the default, so absent) or in a corner. */
+  function setAnchor(corner: Corner, inset: number) {
+    const next = { ...$state.snapshot(editor.doc) } as TemplateDoc;
+    if (corner === 'center') delete next.workpiece_anchor;
+    else next.workpiece_anchor = { corner, ...(inset > 0 ? { inset_mm: inset } : {}) };
+    editor.apply(next);
+  }
+
   function setFeed(feed: Feed) {
     const next = { ...$state.snapshot(editor.doc), feed: feed === 'auto' ? undefined : feed } as TemplateDoc;
     if (!next.feed) delete next.feed;
@@ -246,6 +254,34 @@
         <button type="button" class="btn-sm" disabled={!printerId || testing || fit?.fits === false} onclick={testPrint} title="Prints one label as it is here, saved or not, {assetId ? 'for the asset being previewed' : 'with placeholder data'}">Test print</button>
       {/if}
     </div>
+    {#if chosenLaser}
+      <div class="flex flex-wrap items-center gap-1 text-xs">
+        <label class="flex items-center gap-1" for="tpl-anchor">
+          <span class="text-zinc-600 dark:text-zinc-400">On the workpiece</span>
+          <select id="tpl-anchor" class="input-sm" value={doc.workpiece_anchor?.corner ?? 'center'} onchange={(e) => setAnchor(e.currentTarget.value as Corner, doc.workpiece_anchor?.inset_mm ?? 0)}>
+            <option value="center">Centered</option>
+            <option value="top_left">Top left corner</option>
+            <option value="top_right">Top right corner</option>
+            <option value="bottom_left">Bottom left corner</option>
+            <option value="bottom_right">Bottom right corner</option>
+          </select>
+        </label>
+        {#if doc.workpiece_anchor}
+          <label class="flex items-center gap-1" for="tpl-anchor-inset">
+            <span class="text-zinc-600 dark:text-zinc-400">In (mm)</span>
+            <input
+              id="tpl-anchor-inset"
+              class="input-sm w-16"
+              type="number"
+              min="0"
+              step="0.5"
+              value={doc.workpiece_anchor.inset_mm ?? 0}
+              onchange={(e) => setAnchor(doc.workpiece_anchor?.corner ?? 'center', Math.max(0, Number(e.currentTarget.value) || 0))}
+            />
+          </label>
+        {/if}
+      </div>
+    {/if}
     <label class="flex items-center gap-1 text-xs" for="tpl-feed">
       <span class="text-zinc-600 dark:text-zinc-400">Feed</span>
       <select id="tpl-feed" class="input-sm" value={doc.feed ?? 'auto'} onchange={(e) => setFeed(e.currentTarget.value as Feed)}>

@@ -18,12 +18,22 @@ Lasers start fires and can blind people, so a person at the machine always start
 From an asset's page, choose **Engrave**; from the template editor, choose **Engrave** on a saved template. On the **Lasers** page:
 
 1. Choose the laser and the material. Each material has its power, speed and resolution; one engraved from the back, such as clear acrylic, is mirrored, so lay it face down.
-2. Give the workpiece's size, and where its top left corner sits on the bed. The label is centered on it unless you place it.
+2. Give the workpiece's size, and where its top left corner sits on the bed, or measure it with the camera (below). The label goes where the template says, centered unless it names a corner, or where you place it.
 3. **Prepare** draws the label, and shows the work area, the workpiece and the label on it. Nothing moves yet.
 4. **Frame** has the machine trace the outline with its pointer, so you can check it on the real piece.
 5. **Start**, or press the machine's button. The page shows the job's progress and the machine's state.
 
 When the job is done, the asset's history says its label was engraved, and on what.
+
+## Placing the label with the camera
+
+A laser with a camera, such as the xTool F1 Ultra, finds the workpiece wherever you put it on the bed.
+
+1. **Calibrate once for each height.** In **Camera** on the **Lasers** page, lay light scrap (plywood or card) where it says, choose its material, and **Prepare the marks**. Frame and start them as any job. Then, with the scrap still in place, give the height of its surface above the bed and **Find the marks**. BAM! refuses a calibration that fits too loosely.
+2. **Measure.** Lay the workpiece on the bed, give its surface's height, and **Measure with the camera**. Its size, place and turn are filled in. The camera sees the bed differently at each height, so BAM! asks you to calibrate again for a piece much higher or lower than the scrap was.
+3. **Check over the photo.** **Prepare** draws the plan over the camera's photo. Tick that it sits on the workpiece before **Frame** and **Start**.
+
+The label goes where the template says on the workpiece: centered, or in a corner, a little in from its edges (set in the template editor, beside the printer, or for one job on the **Lasers** page). It turns with the piece.
 
 ## Cutting
 

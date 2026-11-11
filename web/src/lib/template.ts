@@ -130,7 +130,18 @@ export interface TemplateDoc {
   print_mirror?: Mirror;
   /** Degrees clockwise everything on its labels turns as they print, after any mirroring, for labels put on turned. */
   print_rotation?: number;
+  /** Where a laser puts the label on its workpiece (docs/printing.md#placing-the-label); absent, centered. */
+  workpiece_anchor?: WorkpieceAnchor;
   elements: TemplateElement[];
+}
+
+/** A corner of a workpiece a laser puts the label in, or its center. */
+export type Corner = 'center' | 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+
+/** Where a laser puts a label on a workpiece: centered, or in a corner, inset_mm in from both its sides. */
+export interface WorkpieceAnchor {
+  corner: Corner;
+  inset_mm?: number;
 }
 
 /** Which way something is mirrored: left for right, top for bottom, or both. */

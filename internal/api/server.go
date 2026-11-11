@@ -58,6 +58,8 @@ type Server struct {
 	spool    *spooler
 	lasers   *laserState
 	presses  *pressLimiter
+	// bedPhotos are lasers' latest photos of their beds (laser_camera.go).
+	bedPhotos *laserPhotos
 	// incoming keeps each incoming hook to its requests a minute.
 	incoming   *incomingLimiter
 	live       *liveHub
@@ -100,6 +102,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 		mailer:     email.New(cfg.Email),
 		spool:      newSpooler(),
 		lasers:     newLaserState(),
+		bedPhotos:  &laserPhotos{},
 		presses:    newPressLimiter(),
 		incoming:   newIncomingLimiter(),
 		live:       newLiveHub(),
@@ -513,6 +516,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/settings/loan-reminders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetLoanReminderSettings)))
 	handle("GET /api/v1/settings/review", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleReviewSettings)))
 	handle("PUT /api/v1/settings/review", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetReviewSettings)))
+	handle("GET /api/v1/settings/lasers", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleLaserCameraSettings)))
+	handle("PUT /api/v1/settings/lasers", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetLaserCameraSettings)))
 	// The installed app (docs/installing.md#on-a-phone): its settings, read by
 	// anyone, as its manifest is.
 	handleFunc("GET /api/v1/settings/app", s.handleAppSettings)
@@ -672,6 +677,15 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/printers/{id}/jobs/{job}/start", atTheMachine(http.HandlerFunc(s.handleStartLaserJob)))
 	handle("POST /api/v1/printers/{id}/jobs/{job}/pause", RequireAnyPermission(rbac.PermLabelsPrint, rbac.PermLasersRun)(http.HandlerFunc(s.handlePauseLaserJob)))
 	handle("POST /api/v1/printers/{id}/jobs/{job}/cancel", RequireAnyPermission(rbac.PermLabelsPrint, rbac.PermLasersRun)(http.HandlerFunc(s.handleCancelLaserJob)))
+	// A laser's camera (docs/printing.md#camera-alignment): calibrating it
+	// and measuring a workpiece take photos and nothing else; the marks
+	// are engraved by a job prepared here, framed and started as any is.
+	handle("GET /api/v1/printers/{id}/calibration", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleGetLaserCalibration)))
+	handle("POST /api/v1/printers/{id}/calibration", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleCalibrateLaserCamera)))
+	handle("DELETE /api/v1/printers/{id}/calibration", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleDeleteLaserCalibration)))
+	handle("POST /api/v1/printers/{id}/calibration/marks", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrepareCalibrationMarks)))
+	handle("POST /api/v1/printers/{id}/camera/measure", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleMeasureWorkpiece)))
+	handle("GET /api/v1/printers/{id}/camera/view", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleLaserCameraView)))
 	handle("GET /api/v1/label-stock", canSeePrinters(http.HandlerFunc(s.handleListLabelStock)))
 	handle("POST /api/v1/label-stock", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleCreateLabelStock)))
 	handle("PUT /api/v1/label-stock/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleUpdateLabelStock)))

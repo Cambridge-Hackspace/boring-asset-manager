@@ -107,6 +107,15 @@ var Refused = map[string]string{
 	"POST /api/v1/printers/{id}/jobs/{job}/pause":  "pausing and resuming a laser's job is for the person at the machine watching it",
 	"POST /api/v1/printers/{id}/jobs/{job}/cancel": "cancelling a laser's job is for the person at the machine, who sees why; get_laser_status says how it is going",
 	"GET /api/v1/printers/{id}/jobs/{job}/preview": "the engraving as an image, for the preview in the web app; get_laser_job says where it goes, and preview_template draws the label",
+	// A laser's camera (docs/printing.md#camera-alignment): an assistant
+	// reads the calibration and measures a workpiece; calibrating is the
+	// person's at the machine, who lays the scrap and engraves the marks.
+	"POST /api/v1/printers/{id}/calibration/marks": "the calibration marks are engraved on scrap a person lays on the bed and keeps there to calibrate, so the person at the machine prepares them; an assistant prepares labels",
+	"POST /api/v1/printers/{id}/calibration":       "calibrating photographs the marks a person just engraved, with the scrap still in place, at a height they measured; it is theirs, at the machine",
+	"DELETE /api/v1/printers/{id}/calibration":     "forgetting a camera's calibration stops every label being placed by it until a person at the machine calibrates again",
+	"GET /api/v1/printers/{id}/camera/view":        "the photo seen from above, as an image for the plan to be drawn over in the web app; measure_laser_workpiece says what it shows",
+	"GET /api/v1/settings/lasers":                  "the limits on lasers' cameras are an admin's, in the web app; get_laser_calibration gives those in force",
+	"PUT /api/v1/settings/lasers":                  "how closely a camera must fit, and how far a job's height may stray, keep labels on their workpieces; an admin sets them in the web app",
 
 	// Archives move between a person's own computer and the server;
 	// replacing an instance stays with a signed-in person, as making tokens

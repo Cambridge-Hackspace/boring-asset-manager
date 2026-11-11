@@ -27,12 +27,14 @@ type templateLayout struct {
 	// How it prints: mirrored, and turned.
 	PrintMirror   string  `json:"print_mirror,omitempty"`
 	PrintRotation float64 `json:"print_rotation,omitempty"`
+	// WorkpieceAnchor is where a laser puts the label on a workpiece.
+	WorkpieceAnchor *labels.WorkpieceAnchor `json:"workpiece_anchor,omitempty"`
 }
 
 // layoutOf is what of a template is stored as its layout.
 func layoutOf(t *labels.Template) templateLayout {
 	return templateLayout{Elements: t.Elements, Sizing: t.Sizing, Adapt: t.Adapt, Feed: t.Feed, Turnable: t.Turnable, Guides: t.Guides, Grid: t.Grid,
-		PrintMirror: t.PrintMirror, PrintRotation: t.PrintRotation}
+		PrintMirror: t.PrintMirror, PrintRotation: t.PrintRotation, WorkpieceAnchor: t.WorkpieceAnchor}
 }
 
 // CreateTemplate validates and stores a new template under a new ID; any ID
@@ -156,7 +158,7 @@ func scanTemplate(row rowScanner) (*labels.Template, error) {
 	// Migration 033 put every stored template in list order.
 	t.Elements, t.Sizing, t.Adapt, t.Layering = l.Elements, l.Sizing, l.Adapt, labels.LayeringList
 	t.Feed, t.Turnable, t.Guides, t.Grid = l.Feed, l.Turnable, l.Guides, l.Grid
-	t.PrintMirror, t.PrintRotation = l.PrintMirror, l.PrintRotation
+	t.PrintMirror, t.PrintRotation, t.WorkpieceAnchor = l.PrintMirror, l.PrintRotation, l.WorkpieceAnchor
 	if t.Elements == nil {
 		t.Elements = []labels.Element{}
 	}

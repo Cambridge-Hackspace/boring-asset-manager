@@ -68,6 +68,8 @@ const optionLabels: Record<string, string> = {
   cut_after: 'Cut the tape off',
   density: 'Darkness',
   flame_hold_minutes: 'Refuse to start after a flame for (minutes)',
+  fill_light: 'Fill light for photos (%)',
+  camera_port: 'Camera port (V1 firmware)',
   half_cut: 'Half cut between labels',
   margin_mm: 'Margin before and after each label (mm)',
   media_type: 'Media type',
