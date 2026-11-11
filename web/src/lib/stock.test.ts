@@ -85,5 +85,7 @@ describe('printer words', () => {
     expect(optionLabel('cut_after')).toBe('Cut the tape off');
     expect(optionValueLabel('last_label')).toBe('After the last label');
     expect(optionValueLabel('right_side')).toBe('right side');
+    expect(driverName('xtool')).toBe('xTool');
+    expect(optionLabel('allow_unknown_firmware')).toContain('firmware');
   });
 });
