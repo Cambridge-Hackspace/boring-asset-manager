@@ -33,6 +33,12 @@ const (
 	// characteristics if the driver's are not the ones (ble.go). Addresses
 	// must match the server's printers.bluetooth setting.
 	ConnBLE = "ble"
+	// ConnBrowser is printed to from a browser, over its own Bluetooth
+	// (docs/printing.md#from-a-browser): the server renders the job and
+	// the browser writes it to the printer the person there picks. Its
+	// address is empty, or a query of what of the driver's Bluetooth LE
+	// profile it sets (ble.go).
+	ConnBrowser = "browser"
 	// ConnOpenEPaperLink uploads a display's image to an OpenEPaperLink
 	// access point for one of its tags (display.go): the access point's
 	// host[:port] or http(s)://host[:port], then ?tag= and the tag's MAC
@@ -49,7 +55,7 @@ const (
 
 // ConnectionTypes lists the connection types.
 func ConnectionTypes() []string {
-	return []string{ConnTCP, ConnDevice, ConnIPP, ConnWindows, ConnBLE, ConnOpenEPaperLink, ConnPull, ConnWebhook}
+	return []string{ConnTCP, ConnDevice, ConnIPP, ConnWindows, ConnBLE, ConnBrowser, ConnOpenEPaperLink, ConnPull, ConnWebhook}
 }
 
 // Connection says how BAM reaches a printer.
@@ -86,6 +92,17 @@ func NormalizeConnection(c Connection) (Connection, error) {
 		if c.Relay != "" {
 			return bad("a %s connection is this server's own, never through a relay", c.Type)
 		}
+	}
+	if c.Type == ConnBrowser {
+		if c.Relay != "" {
+			return bad("a browser connection is the browser's own, never through a relay")
+		}
+		a, err := ParseBrowserAddress(c.Address)
+		if err != nil {
+			return bad("%v", err)
+		}
+		c.Address = a.String()
+		return c, nil
 	}
 	if c.Type == ConnPull {
 		if c.Address == "" {

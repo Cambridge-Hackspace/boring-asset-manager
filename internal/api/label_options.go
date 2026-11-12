@@ -145,7 +145,14 @@ func (s *Server) handleLabelOptions(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			printable = append(printable, list[i])
-			resp.Printers = append(resp.Printers, SpoolChoice{ID: list[i].ID, Name: list[i].Name})
+			choice := SpoolChoice{ID: list[i].ID, Name: list[i].Name}
+			if list[i].Connection.Type == printers.ConnBrowser {
+				// A profile that lacks the service or a characteristic is
+				// shown for what it has; printing says what is missing.
+				profile, _ := browserProfile(&list[i])
+				choice.Browser = &profile
+			}
+			resp.Printers = append(resp.Printers, choice)
 		}
 		list = printable
 		for _, t := range order {

@@ -207,6 +207,10 @@ func (d *Dispatcher) Send(ctx context.Context, c Connection, job []byte) error {
 		err = d.sendBLE(ctx, c.Address, job)
 	case ConnOpenEPaperLink:
 		err = d.sendOEPL(ctx, c.Address, job)
+	case ConnBrowser:
+		// Only a browser holding the printer can write to it, while the
+		// person printing waits (docs/printing.md#from-a-browser).
+		err = errors.New("it is printed to from a browser, over the browser's own Bluetooth: print from the label's page in a browser with Web Bluetooth, such as Chrome")
 	case ConnPull, ConnWebhook:
 		// The server keeps a pull display's image, and posts a webhook's
 		// itself, with what only it knows.

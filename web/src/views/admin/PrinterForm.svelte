@@ -26,6 +26,8 @@
     ipp: 'An IPP queue URI, such as ipp://cups.lan/printers/labels. The queue must be raw.',
     windows: 'A Windows printer name or \\\\host\\share. Only when BAM runs on Windows.',
     ble: 'The printer’s Bluetooth address, such as 7C:2F:80:A1:B2:C3. It must be allowed in the server’s [printers] bluetooth setting, and the server needs Bluetooth (BlueZ, on Linux).',
+    browser:
+      'Printed to from a browser with Web Bluetooth, such as Chrome on Android or a computer, over the browser’s own Bluetooth: whoever prints picks the printer then. The server needs no Bluetooth, and the spool cannot print to it.',
     openepaperlink: 'The access point, such as 192.168.1.50, then ?tag= and the tag’s MAC address, such as 192.168.1.50?tag=0000021E3D6F1234.',
     pull: 'The display fetches its image from BAM!, with a token made under Displays.',
     webhook: 'The webhook channel BAM! posts the image through, set up under Notifications.',
@@ -38,11 +40,12 @@
     ipp: 'IPP / CUPS queue',
     windows: 'Windows printer',
     ble: 'Bluetooth LE',
+    browser: 'A browser’s Bluetooth',
     openepaperlink: 'OpenEPaperLink access point',
     pull: 'The display fetches it',
     webhook: 'Webhook',
   };
-  const printerConnections: PrinterConnection['type'][] = ['tcp', 'device', 'ipp', 'windows', 'ble'];
+  const printerConnections: PrinterConnection['type'][] = ['tcp', 'device', 'ipp', 'windows', 'ble', 'browser'];
 
   const initial = untrack(() => $state.snapshot(printer));
   let name = $state(initial?.name ?? '');
@@ -52,10 +55,12 @@
   let connType = $state<PrinterConnection['type']>(initial?.connection.type ?? 'tcp');
   // A Bluetooth LE printer's address is entered in parts: its Bluetooth
   // address, and the service and characteristics where they differ from
-  // the driver's.
-  const initialBLE = parseBLEAddress(initial?.connection.type === 'ble' ? initial.connection.address : '');
-  let address = $state(initial?.connection.type === 'ble' ? initialBLE.mac : (initial?.connection.address ?? ''));
-  let ble = $state({ service: initialBLE.service, write: initialBLE.write, notify: initialBLE.notify });
+  // the driver's. A browser's has no Bluetooth address, and may set how
+  // much one write carries.
+  const bluetoothType = (t: PrinterConnection['type'] | undefined) => t === 'ble' || t === 'browser';
+  const initialBLE = parseBLEAddress(bluetoothType(initial?.connection.type) ? initial!.connection.address : '');
+  let address = $state(bluetoothType(initial?.connection.type) ? initialBLE.mac : (initial?.connection.address ?? ''));
+  let ble = $state({ service: initialBLE.service, write: initialBLE.write, notify: initialBLE.notify, chunk: initialBLE.chunk });
   // The relay the printer is reached through (docs/relays.md); '' is this server.
   let relay = $state(initial?.connection.relay ?? '');
   // The relays offered: those paired, and the one the printer names even if it is not.
@@ -71,7 +76,7 @@
   let affects = $state<string[]>([]);
   // Changing the printer again needs asking again.
   $effect(() => {
-    void [name, driver, model, media, connType, address, relay, ble.service, ble.write, ble.notify];
+    void [name, driver, model, media, connType, address, relay, ble.service, ble.write, ble.notify, ble.chunk];
     affects = [];
   });
 
@@ -82,9 +87,9 @@
     if (!connections.includes(connType)) connType = connections[0] ?? 'tcp';
   });
   // A display that pulls has no address, but a TRMNL's is its MAC address.
-  const needsAddress = $derived(connType !== 'pull' || driver === 'trmnl');
-  // The server's own connections never go through a relay, and nor does a laser.
-  const relayable = $derived(connType !== 'pull' && connType !== 'webhook' && !info?.one_shot);
+  const needsAddress = $derived((connType !== 'pull' || driver === 'trmnl') && connType !== 'browser');
+  // The server's own connections never go through a relay, nor a browser's, nor a laser.
+  const relayable = $derived(connType !== 'pull' && connType !== 'webhook' && connType !== 'browser' && !info?.one_shot);
   // A laser's model, with its work area (docs/printing.md#lasers).
   const laser = $derived(info?.one_shot?.find((m) => m.id === model));
   // Its work area as the options set it, for a driver whose machines come in many sizes.
@@ -140,7 +145,14 @@
     event.preventDefault();
     error = '';
     busy = true;
-    const sentAddress = connType === 'ble' ? bleAddress({ ...initialBLE, ...ble, mac: address }) : needsAddress ? address : '';
+    const sentAddress =
+      connType === 'ble'
+        ? bleAddress({ ...initialBLE, ...ble, mac: address, chunk: '' })
+        : connType === 'browser'
+          ? bleAddress({ ...initialBLE, ...ble, mac: '' })
+          : needsAddress
+            ? address
+            : '';
     const body = { name, driver, model, media, connection: { type: connType, address: sentAddress, ...(relay && relayable ? { relay } : {}) }, options: optionPayload() };
     try {
       if (initial) {
@@ -253,7 +265,7 @@
         <p class="text-xs text-zinc-600 dark:text-zinc-400" id="{pid}-address-help">{connectionHelp[connType]}</p>
       {/if}
     </div>
-    {#if connType === 'ble'}
+    {#if connType === 'ble' || connType === 'browser'}
       <div class="grid gap-4 sm:col-span-2 sm:grid-cols-3">
         <div>
           <label class="text-xs" for="{pid}-ble-service">Service</label>
@@ -267,6 +279,15 @@
           <label class="text-xs" for="{pid}-ble-notify">Notify characteristic</label>
           <input id="{pid}-ble-notify" class="input font-mono" aria-describedby="{pid}-ble-help" placeholder={info?.ble ? (info.ble.notify ?? 'None') : 'Optional'} bind:value={ble.notify} />
         </div>
+        {#if connType === 'browser'}
+          <div>
+            <label class="text-xs" for="{pid}-ble-chunk">Bytes per write</label>
+            <input id="{pid}-ble-chunk" class="input" inputmode="numeric" pattern="[0-9]*" aria-describedby="{pid}-chunk-help" placeholder="20" bind:value={ble.chunk} />
+            <p id="{pid}-chunk-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              A browser cannot learn how much its link to the printer carries, so it writes 20 bytes at a time, which every link takes. Raise it, up to 512, if the printer takes more.
+            </p>
+          </div>
+        {/if}
         <p id="{pid}-ble-help" class="text-xs text-zinc-600 sm:col-span-3 dark:text-zinc-400">
           {#if info?.ble}
             UUIDs, such as fff0 or 0000fff0-0000-1000-8000-00805f9b34fb. Leave them blank for the driver’s own.

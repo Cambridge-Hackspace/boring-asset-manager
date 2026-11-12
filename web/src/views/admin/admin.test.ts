@@ -85,6 +85,27 @@ describe('PrinterForm', () => {
     expect((sent[0]!.body as { connection: object }).connection).toEqual({ type: 'ble', address: '7C:2F:80:A1:B2:C3?service=fff0&write=fff2' });
   });
 
+  it('reaches a printer from a browser’s Bluetooth, with no address of its own and never through a relay', async () => {
+    const { sent } = fakeApi({ 'POST /printers': () => ({ status: 201, body: {} }) });
+    const onsaved = vi.fn();
+    render(PrinterForm, { drivers, relays: ['front-desk'], onsaved, oncancel: () => {} });
+
+    await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Phone Rollo' } });
+    expect(screen.queryByLabelText('Bytes per write')).toBeNull();
+    await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'browser' } });
+    expect(screen.getByText(/whoever prints picks the printer then/)).toBeTruthy();
+    expect(screen.queryByLabelText('Address')).toBeNull();
+    expect(screen.queryByLabelText('Reached through')).toBeNull();
+    expect((screen.getByLabelText('Bytes per write') as HTMLInputElement).placeholder).toBe('20');
+    await fireEvent.input(screen.getByLabelText('Service'), { target: { value: 'fff0' } });
+    await fireEvent.input(screen.getByLabelText('Write characteristic'), { target: { value: 'fff2' } });
+    await fireEvent.input(screen.getByLabelText('Bytes per write'), { target: { value: '180' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create printer' }));
+
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+    expect((sent[0]!.body as { connection: object }).connection).toEqual({ type: 'browser', address: '?service=fff0&write=fff2&chunk=180' });
+  });
+
   it('shows a Bluetooth LE driver’s defaults, and keeps what the printer overrides', async () => {
     const { sent } = fakeApi({
       'POST /printers/p1/changes': () => ({ changes: { stranded: [], categories: [], pools: [] } }),

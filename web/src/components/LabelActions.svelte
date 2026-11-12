@@ -1,5 +1,6 @@
 <script lang="ts">
   import { request, requestDownload } from '../lib/api';
+  import { printFromBrowser, webBluetooth } from '../lib/browserprint';
   import { messageOf } from '../lib/errors';
   import { printersFor, sizeText, type LabelOptions } from '../lib/labels';
   import { session } from '../lib/session.svelte';
@@ -11,7 +12,9 @@
   // Export or print labels for one or more assets. With a single asset it
   // also previews the label and offers direct downloads. Only the printers
   // a template suits are offered, and a template that cannot label an
-  // asset says why before anything is tried (docs/printing.md).
+  // asset says why before anything is tried (docs/printing.md). A printer
+  // printed to from a browser is offered only where this one has Web
+  // Bluetooth, and printed to through it.
   let {
     assetIds,
     templateId: fixedTemplate,
@@ -28,6 +31,8 @@
   let format = $state<'pdf' | 'zip'>('pdf');
   let error = $state('');
   let status = $state('');
+  /** What printing over the browser's Bluetooth is waiting on. */
+  let progress = $state('');
   let printedWarnings = $state<string[]>([]);
   let busy = $state(false);
 
@@ -41,7 +46,8 @@
   const preferred = $derived(templates.filter((t) => t.preferred));
   const others = $derived(templates.filter((t) => !t.preferred));
   const problems = $derived(template?.problems ?? []);
-  const choices = $derived(options && templateId ? printersFor(options, templateId) : []);
+  const bluetooth = webBluetooth() !== null;
+  const choices = $derived((options && templateId ? printersFor(options, templateId) : []).filter((c) => !c.browser || bluetooth));
   const fitting = $derived(choices.filter((c) => c.fit.fits));
   const chosen = $derived(choices.find((c) => c.id === printerId && c.fit.fits));
 
@@ -93,19 +99,22 @@
     error = status = '';
     printedWarnings = [];
     busy = true;
+    const job = { template_id: templateId, asset_ids: assetIds, copies, ...(mirror ? { mirror } : {}) };
     try {
-      const res = await request<{ labels: number; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(printerId)}/print`, {
-        template_id: templateId,
-        asset_ids: assetIds,
-        copies,
-        ...(mirror ? { mirror } : {}),
-      });
-      status = `Sent ${res.labels} label${res.labels === 1 ? '' : 's'} to ${chosen?.name ?? 'the printer'}.`;
-      printedWarnings = res.warnings ?? [];
+      if (chosen?.browser) {
+        const res = await printFromBrowser(printerId, chosen.browser, job, { onstatus: (s) => (progress = s) });
+        status = `Printed ${res.labels} label${res.labels === 1 ? '' : 's'} on ${chosen.name}.`;
+        printedWarnings = res.warnings;
+      } else {
+        const res = await request<{ labels: number; warnings?: string[] }>('POST', `/printers/${encodeURIComponent(printerId)}/print`, job);
+        status = `Sent ${res.labels} label${res.labels === 1 ? '' : 's'} to ${chosen?.name ?? 'the printer'}.`;
+        printedWarnings = res.warnings ?? [];
+      }
     } catch (err) {
       error = messageOf(err);
     } finally {
       busy = false;
+      progress = '';
     }
   }
 </script>
@@ -200,7 +209,7 @@
             <label class="label" for="label-printer">Printer</label>
             <select id="label-printer" class="input" bind:value={printerId}>
               {#each choices as c (c.id)}
-                <option value={c.id} disabled={!c.fit.fits}>{c.name}{c.fit.fits ? '' : ' (does not take this label)'}</option>
+                <option value={c.id} disabled={!c.fit.fits}>{c.name}{c.browser ? ', over this browser’s Bluetooth' : ''}{c.fit.fits ? '' : ' (does not take this label)'}</option>
               {/each}
             </select>
           </div>
@@ -244,6 +253,7 @@
       {/if}
     {/if}
   {/if}
+  {#if progress}<p class="text-sm text-zinc-600 dark:text-zinc-400" role="status">{progress}</p>{/if}
   <ErrorMessage {error} />
   {#if status}
     <p class="text-sm text-green-700 dark:text-green-400" role="status">{status}</p>
