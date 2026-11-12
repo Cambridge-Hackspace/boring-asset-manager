@@ -21,6 +21,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolm"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/epsonlw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/escpos"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/industrial"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/niimbot"
@@ -80,6 +81,16 @@ func TestValidate(t *testing.T) {
 	bad("LabelManager margin short of the cutter", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager PnP", "d1-12", `{"margin_mm":8}`))
 	bad("LabelManager tape type", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager PnP", "d1-12", `{"tape_type":"gold"}`))
 	bad("LabelManager unknown option", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager PnP", "d1-12", `{"mirror":true}`))
+	ok("LabelWorks", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-C410", "lk-12", ""))
+	ok("LabelWorks options", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-PX400", "lk-24",
+		`{"cut_after":"never","density":-5,"margin_mm":0}`))
+	bad("LabelWorks model", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-700", "lk-12", ""))
+	bad("24 mm tape on the LW-C410", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-C410", "lk-24", ""))
+	bad("4 mm tape on the LW-600P", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-4", ""))
+	bad("LabelWorks cut", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-12", `{"cut_after":"half"}`))
+	bad("LabelWorks density", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-12", `{"density":6}`))
+	bad("LabelWorks margin", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-12", `{"margin_mm":128}`))
+	bad("LabelWorks unknown option", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-12", `{"mirror":true}`))
 	ok("TD-2", DriverBrotherTD, "td.lan", 9100, brother("TD-2130N", "rd-51x26", ""))
 	ok("TD-4 with its cutter", DriverBrotherTD, "td.lan", 9100, brother("TD-4420DN", "rd-102x152", `{"cut":true}`))
 	bad("TD model", "P", DriverBrotherTD, "td.lan", 9100, brother("QL-810W", "rd-58", ""))
@@ -163,7 +174,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if _, ok := by[DriverTestLaser]; ok {
 		n--
 	}
-	if n != 20 || len(by) != len(d) {
+	if n != 21 || len(by) != len(d) {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -224,6 +235,22 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 			t.Errorf("12 mm tape is for %v, not every model", m.Models)
 		}
 	}
+	lw := by[DriverEpsonLabelWorks]
+	if len(lw.Media) != len(epsonlw.MediaIDs()) || len(lw.Options) != 3 || lw.CustomStock != nil || len(lw.Options[0].Values) != 3 ||
+		lw.ModelDPI["LW-600P"] != 180 || lw.ModelDPI["LW-C410"] != 180 || len(lw.Models) != 3 {
+		t.Fatalf("Epson LabelWorks driver info = %+v", lw)
+	}
+	for _, m := range lw.Media {
+		if m.ID == "lk-4" && strings.Join(m.Models, ",") != "LW-C410,LW-PX400" {
+			t.Errorf("4 mm tape is for %v", m.Models)
+		}
+		if m.ID == "lk-24" && strings.Join(m.Models, ",") != "LW-600P,LW-PX400" {
+			t.Errorf("24 mm tape is for %v", m.Models)
+		}
+		if m.ID == "lk-12" && m.Models != nil {
+			t.Errorf("12 mm tape is for %v, not every model", m.Models)
+		}
+	}
 	if ts := by[DriverTSPL]; len(ts.Media) != len(tspl.MediaIDs()) || len(ts.Options) != 2 {
 		t.Fatalf("TSPL driver info = %+v", ts)
 	}
@@ -262,7 +289,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	// The drivers that take custom stock say how wide, for every model; a
 	// laser has no roll.
 	for _, info := range d {
-		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch || info.Driver == DriverDymoLabelManager || info.Display != nil || info.OneShot != nil {
+		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch || info.Driver == DriverDymoLabelManager || info.Driver == DriverEpsonLabelWorks || info.Display != nil || info.OneShot != nil {
 			continue
 		}
 		c := info.CustomStock
@@ -320,6 +347,7 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 		{"Brother takes only its rolls", DriverBrotherQL, "QL-810W", stock(62, 0, 0), false},
 		{"P-touch takes only its cassettes", DriverBrotherPTouch, "PT-P750W", stock(12, 0, 0), false},
 		{"LabelManager takes only its cassettes", DriverDymoLabelManager, "LabelManager PnP", stock(12, 0, 0), false},
+		{"LabelWorks takes only its cartridges", DriverEpsonLabelWorks, "LW-PX400", stock(12, 0, 0), false},
 		{"Brother's 4-inch QL takes only its rolls too", DriverBrotherQL, "QL-1100", stock(102, 0, 0), false},
 		{"TD-2 die-cut", DriverBrotherTD, "TD-2020", stock(50, 30, 3), true},
 		{"TD-2 wider than it takes", DriverBrotherTD, "TD-2130N", stock(76, 0, 0), false},
