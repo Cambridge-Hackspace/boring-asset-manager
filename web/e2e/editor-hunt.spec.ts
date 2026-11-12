@@ -89,7 +89,12 @@ async function drag(page: Page, from: [number, number], to: [number, number], st
 }
 
 const middle = (r: Rect): [number, number] => [r.x + r.width / 2, r.y + r.height / 2];
-const box = async (l: Locator) => (await l.boundingBox())!;
+// Measures an element once it is shown: one measured before the editor has
+// drawn it has no box.
+const box = async (l: Locator) => {
+  await expect(l).toBeVisible();
+  return (await l.boundingBox())!;
+};
 
 test.describe('layout and scrolling', () => {
   test('1, 2, 6: the page is the window: nothing to scroll past the editor, however the panels are scrolled or focused', async ({ signedIn: page }) => {
