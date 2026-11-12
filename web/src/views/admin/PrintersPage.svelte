@@ -114,7 +114,10 @@
     }
   }
 
-  const connLabel = (p: Printer) => `${p.connection.type}: ${p.connection.address}${p.connection.relay ? `, through relay ${p.connection.relay}` : ''}`;
+  const connLabel = (p: Printer) =>
+    p.connection.type === 'browser'
+      ? `from a browser, over its Bluetooth${p.connection.address ? `: ${p.connection.address}` : ''}`
+      : `${p.connection.type}: ${p.connection.address}${p.connection.relay ? `, through relay ${p.connection.relay}` : ''}`;
 </script>
 
 <PageHeader title="Printers" lede="The label printers BAM! sends to, the stock loaded in each, and pools that share labels among several.">
@@ -149,7 +152,8 @@
                 <p class="font-mono text-xs text-zinc-600 dark:text-zinc-400">{connLabel(p)}</p>
               </div>
               <div class="flex flex-wrap gap-2">
-                {#if canPrint}<button type="button" class="btn-secondary" onclick={() => startTest(p)}>Test print</button>{/if}
+                <!-- A browser's printer is printed to from an asset's labels, in the browser at it. -->
+                {#if canPrint && p.connection.type !== 'browser'}<button type="button" class="btn-secondary" onclick={() => startTest(p)}>Test print</button>{/if}
                 {#if canManage}
                   <button type="button" class="btn-secondary" aria-label="Edit {p.name}" onclick={() => (editing = p.id)}>Edit</button>
                   <ConfirmButton label="Delete" question="Remove “{p.name}”?" onconfirm={() => remove(p)} />

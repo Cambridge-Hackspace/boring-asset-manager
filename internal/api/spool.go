@@ -41,6 +41,9 @@ type SpoolEntryView struct {
 type SpoolChoice struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// Browser, for a printer printed to from a browser, is how the browser
+	// reaches it over Bluetooth (docs/printing.md#from-a-browser).
+	Browser *printers.BLEProfile `json:"browser,omitempty"`
 }
 
 // SpoolResponse is the spool, with the templates, printers and pools its

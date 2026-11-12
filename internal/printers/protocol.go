@@ -95,18 +95,36 @@ func deviceFor(d Driver, c Connection) (Connection, error) {
 	return c, nil
 }
 
-// conversationPort is a printer's connection as a conversation uses it.
-type conversationPort = niimbot.Port
+// ConversationPort is a printer's connection as a conversation uses it:
+// what is written to the printer, and what it sends back.
+type ConversationPort = niimbot.Port
+
+// conversationPort is the same, as this package names it.
+type conversationPort = ConversationPort
 
 // converse sends a job in a protocol's conversation.
 func (d *Dispatcher) converse(ctx context.Context, protocol string, port conversationPort, job []byte) error {
+	t := niimbot.DefaultTiming
+	t.Timeout = d.WriteTimeout
+	if d.conversationTiming != nil {
+		t = *d.conversationTiming
+	}
+	return converse(ctx, protocol, port, job, t)
+}
+
+// Converse sends a job in a protocol's conversation over a port the
+// caller holds, such as a browser relaying it to the printer over its own
+// Bluetooth (docs/printing.md#from-a-browser). The printer has timeout to
+// answer each command.
+func Converse(ctx context.Context, protocol string, port ConversationPort, job []byte, timeout time.Duration) error {
+	t := niimbot.DefaultTiming
+	t.Timeout = timeout
+	return converse(ctx, protocol, port, job, t)
+}
+
+func converse(ctx context.Context, protocol string, port conversationPort, job []byte, t niimbot.Timing) error {
 	switch protocol {
 	case ProtocolNiimbot:
-		t := niimbot.DefaultTiming
-		t.Timeout = d.WriteTimeout
-		if d.conversationTiming != nil {
-			t = *d.conversationTiming
-		}
 		return niimbot.Converse(ctx, port, job, t)
 	}
 	return fmt.Errorf("unknown protocol %q", protocol)

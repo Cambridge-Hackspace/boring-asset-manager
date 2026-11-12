@@ -75,6 +75,7 @@ var Refused = map[string]string{
 	"PUT /api/v1/incoming/{id}":                      "an incoming hook is changed, or given a new secret, from a signed-in session, so a misled assistant cannot leave itself a way back in (#312)",
 	"POST /api/v1/templates/preview-data":            "the data the editor's live renderer draws a label with in the browser; preview_template draws with the same data on the server",
 	"GET /api/v1/events/live":                        "a WebSocket, for devices; over MCP, subscribe to bam://events, which the server keeps up to date from GET /api/v1/events",
+	"GET /api/v1/printers/{id}/print/browser":        "a WebSocket through which a browser writes a job to a printer beside it, over its own Bluetooth; an assistant holds no Bluetooth to write with",
 	"GET /auth/saml/{key}/metadata":                  "BAM!'s SAML metadata, for an identity provider to read; Admin shows its address, and save_identity_provider sets the provider up",
 	"GET /api/v1/relay/live":                         "a WebSocket, for relays, with a relay's own credential from pairing; never an assistant's",
 	"POST /api/v1/relays/join":                       "a relay pairing with its code, sending its own key from its own machine; add_relay gives the code",

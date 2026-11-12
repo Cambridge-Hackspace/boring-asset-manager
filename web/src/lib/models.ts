@@ -509,8 +509,8 @@ export interface TemplateSummary {
 
 export interface PrinterConnection {
   /** openepaperlink, pull and webhook reach e-paper displays only (docs/printing.md#displays). */
-  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble' | 'openepaperlink' | 'pull' | 'webhook';
-  /** For ble, the Bluetooth address and any service and characteristics as a query (lib/bluetooth.ts). */
+  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble' | 'browser' | 'openepaperlink' | 'pull' | 'webhook';
+  /** For ble, the Bluetooth address and any service and characteristics as a query, and for browser the query alone (lib/bluetooth.ts). */
   address: string;
   /** The relay the printer is reached through, if any (docs/relays.md). */
   relay?: string;

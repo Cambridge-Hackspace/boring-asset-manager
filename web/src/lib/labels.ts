@@ -2,6 +2,7 @@
 // templates that can label them, in order of preference, and how each suits
 // each printer (docs/printing.md).
 
+import type { BrowserProfile } from './browserprint';
 import type { Adapt, Mirror } from './template';
 
 export interface LabelProblem {
@@ -38,15 +39,15 @@ export interface LabelOptions {
   templates: LabelTemplateOption[];
   /** The template to start with. */
   template_id: string;
-  /** Empty for those who cannot print. */
-  printers: { id: string; name: string }[];
+  /** Empty for those who cannot print. A printer printed to from a browser says how the browser reaches it. */
+  printers: { id: string; name: string; browser?: BrowserProfile }[];
   /** The lasers, which engrave a label from the Lasers page rather than print it. */
   lasers?: { id: string; name: string }[];
   fits: Record<string, Record<string, LabelFit>>;
 }
 
 /** Each printer, with how a template's labels suit it. */
-export function printersFor(options: LabelOptions, templateId: string): { id: string; name: string; fit: LabelFit }[] {
+export function printersFor(options: LabelOptions, templateId: string): { id: string; name: string; browser?: BrowserProfile; fit: LabelFit }[] {
   return options.printers.map((p) => ({
     ...p,
     fit: options.fits[templateId]?.[p.id] ?? { fits: false, reason: `It is not known whether ${p.name} takes this label.`, warnings: [] },

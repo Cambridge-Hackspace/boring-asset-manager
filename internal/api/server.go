@@ -661,6 +661,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("POST /api/v1/printers/{id}/changes", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handlePrinterChanges)))
 	handle("DELETE /api/v1/printers/{id}", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleDeletePrinter)))
 	handle("POST /api/v1/printers/{id}/print", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handlePrint)))
+	handle("GET /api/v1/printers/{id}/print/browser", RequirePermission(rbac.PermLabelsPrint)(http.HandlerFunc(s.handleBrowserPrint)))
 	handle("POST /api/v1/printers/{id}/test-print", RequirePermission(rbac.PermLabelsPrint)(RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleTestPrint))))
 	// Lasers, one-shot printers (docs/printing.md#lasers): labels.print
 	// prepares a job; framing and starting it are for a person at the

@@ -220,36 +220,85 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	job, ok := s.preparePrint(w, r, r.PathValue("id"), req)
+	if !ok {
+		return
+	}
+	p := job.printer
+
+	// The printer's turn, so a job from the spool never interleaves. Once
+	// begun, a job is sent whole even if its caller goes: one cut short
+	// prints some labels and loses the rest.
+	turn := s.printerTurn(p.ID)
+	turn.Lock()
+	err := s.sendToPrinter(context.WithoutCancel(r.Context()), p, job.data)
+	turn.Unlock()
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
+		return
+	}
+	s.recordPrinted(r, job)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"printer_id": p.ID,
+		"labels":     job.labels,
+		"bytes":      len(job.data),
+		"warnings":   job.warnings,
+	})
+}
+
+// preparedPrint is a print request's job, rendered for its printer.
+type preparedPrint struct {
+	req      PrintRequest
+	printer  *models.Printer
+	template *labels.Template
+	data     []byte
+	labels   int
+	warnings []string
+}
+
+// recordPrinted records that a job's labels were printed and, on a
+// display, shows the last of them.
+func (s *Server) recordPrinted(r *http.Request, job *preparedPrint) {
+	// The labels are printed whether or not their history records it.
+	if err := s.actingStore(r).RecordLabelsPrinted(job.req.AssetIDs, job.template.Name, job.printer.Name, job.req.Copies); err != nil {
+		log.Printf("recording labels printed on %s: %v", job.printer.Name, err)
+	}
+	s.rememberShown(s.actingStore(r), job.printer, job.req.TemplateID, job.req.AssetIDs[len(job.req.AssetIDs)-1])
+}
+
+// preparePrint checks a print request and renders its job for the printer
+// it names, answering w itself when it cannot.
+func (s *Server) preparePrint(w http.ResponseWriter, r *http.Request, printerID string, req PrintRequest) (*preparedPrint, bool) {
 	if req.Copies == 0 {
 		req.Copies = 1
 	}
 	if req.Copies < 1 || req.Copies > MaxCopies {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("copies must be 1-%d", MaxCopies))
-		return
+		return nil, false
 	}
 	if !labels.ValidFeed(req.Feed) {
 		writeJSONError(w, http.StatusBadRequest, `feed must be "auto", "across" or "along"`)
-		return
+		return nil, false
 	}
 	if req.Mirror != labels.MirrorNone && !labels.ValidMirror(req.Mirror) {
 		writeJSONError(w, http.StatusBadRequest, `mirror must be "across", "down", "both" or "none"`)
-		return
+		return nil, false
 	}
 	if !checkAssetIDs(w, req.AssetIDs) {
-		return
+		return nil, false
 	}
 	if total := len(req.AssetIDs) * req.Copies; total > MaxExportAssets {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("a print job is limited to %d labels (asked for %d)", MaxExportAssets, total))
-		return
+		return nil, false
 	}
 
-	p, ok := s.loadPrinter(w, r.PathValue("id"))
+	p, ok := s.loadPrinter(w, printerID)
 	if !ok {
-		return
+		return nil, false
 	}
 	t, ok := s.loadTemplateFor(w, req.TemplateID)
 	if !ok {
-		return
+		return nil, false
 	}
 	if req.Feed != "" || req.Mirror != "" {
 		this := *t
@@ -269,51 +318,28 @@ func (s *Server) handlePrint(w http.ResponseWriter, r *http.Request) {
 	plan, t, warnings, err := s.planFor(p, t)
 	if errors.Is(err, printers.ErrDoesNotFit) {
 		writeJSONError(w, http.StatusUnprocessableEntity, unfitMessage(t, p, err))
-		return
+		return nil, false
 	}
 	if err != nil {
 		writeServerError(w, err, "plan the print job")
-		return
+		return nil, false
 	}
 
 	takeLonger(w)
 	scenes, ok := s.layoutBatch(w, r, t, req.AssetIDs)
 	if !ok {
-		return
+		return nil, false
 	}
 	rendered := newLabelJob(plan)
 	for _, scene := range scenes {
 		rendered.add(scene, req.Copies)
 	}
-	job, err := rendered.encode()
+	data, err := rendered.encode()
 	if err != nil {
 		writeServerError(w, err, "encode print job")
-		return
+		return nil, false
 	}
-
-	// The printer's turn, so a job from the spool never interleaves. Once
-	// begun, a job is sent whole even if its caller goes: one cut short
-	// prints some labels and loses the rest.
-	turn := s.printerTurn(p.ID)
-	turn.Lock()
-	err = s.sendToPrinter(context.WithoutCancel(r.Context()), p, job)
-	turn.Unlock()
-	if err != nil {
-		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("Could not deliver the job to %s: %v", p.Name, err))
-		return
-	}
-	// The labels are printed whether or not their history records it.
-	if err := s.actingStore(r).RecordLabelsPrinted(req.AssetIDs, t.Name, p.Name, req.Copies); err != nil {
-		log.Printf("recording labels printed on %s: %v", p.Name, err)
-	}
-	// A display shows the last of them.
-	s.rememberShown(s.actingStore(r), p, req.TemplateID, req.AssetIDs[len(req.AssetIDs)-1])
-	writeJSON(w, http.StatusOK, map[string]any{
-		"printer_id": p.ID,
-		"labels":     rendered.len(),
-		"bytes":      len(job),
-		"warnings":   nonNil(warnings),
-	})
+	return &preparedPrint{req: req, printer: p, template: t, data: data, labels: rendered.len(), warnings: nonNil(warnings)}, true
 }
 
 // labelSpec is a template's size in millimeters, with its elements' boxes

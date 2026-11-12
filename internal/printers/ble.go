@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,6 +34,10 @@ type BLEProfile struct {
 	// reads the printer's answers on the notify characteristic
 	// (protocol.go): ProtocolNiimbot.
 	Protocol string `json:"protocol,omitempty"`
+	// Chunk, for a browser connection, is the most bytes one write
+	// carries: a browser cannot learn the link's MTU, so its writes are
+	// as small as every link takes unless the connection says otherwise.
+	Chunk int `json:"chunk,omitempty"`
 }
 
 // BLEDriver is a driver whose printers connect over Bluetooth LE. Its
@@ -54,6 +59,9 @@ type BLEAddress struct {
 	Ack *bool
 	// Protocol is empty when the connection leaves it to the driver.
 	Protocol string
+	// Chunk is 0 when the connection leaves it to the default, and only
+	// a browser connection sets it.
+	Chunk int
 }
 
 var (
@@ -96,19 +104,57 @@ func ParseBLEAddress(s string) (BLEAddress, error) {
 		return BLEAddress{}, errors.New("ble address must be the printer's Bluetooth address, such as 7C:2F:80:A1:B2:C3")
 	}
 	a := BLEAddress{MAC: strings.ToUpper(strings.ReplaceAll(mac, "-", ":"))}
+	err := a.parseQuery(query, false)
+	return a, err
+}
+
+// ParseBrowserAddress reads a browser connection's address: empty, or a
+// query of what a ble connection's may set, and chunk, the most bytes one
+// write carries, such as ?service=fff0&write=fff2&chunk=180. The printer
+// is the one the person at the browser picks, so it has no Bluetooth
+// address.
+func ParseBrowserAddress(s string) (BLEAddress, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return BLEAddress{}, nil
+	}
+	query, ok := strings.CutPrefix(s, "?")
+	if !ok {
+		return BLEAddress{}, errors.New("browser address must be empty, or start with ? and set service=, write=, notify=, ack=, protocol= or chunk=, such as ?service=fff0&write=fff2")
+	}
+	var a BLEAddress
+	err := a.parseQuery(query, true)
+	return a, err
+}
+
+// minChunk is the most one write carries on every link: the least ATT
+// MTU, less the 3 bytes of its header.
+const minChunk = bleMinMTU - 3
+
+// parseQuery reads what of the profile an address sets, and for a
+// browser's, its chunk.
+func (a *BLEAddress) parseQuery(query string, browser bool) error {
+	what := "ble address"
+	keys := "service, write, notify, ack and protocol"
+	if browser {
+		what, keys = "browser address", "service, write, notify, ack, protocol and chunk"
+	}
 	values, err := url.ParseQuery(query)
 	if err != nil {
-		return a, errors.New("ble address: after the Bluetooth address come service=, write=, notify=, ack= and protocol=, joined with &")
+		if browser {
+			return fmt.Errorf("%s: its query sets %s, joined with &", what, keys)
+		}
+		return errors.New("ble address: after the Bluetooth address come service=, write=, notify=, ack= and protocol=, joined with &")
 	}
 	for key, v := range values {
 		if len(v) != 1 {
-			return a, fmt.Errorf("ble address gives %s more than once", key)
+			return fmt.Errorf("%s gives %s more than once", what, key)
 		}
 		switch key {
 		case "service", "write", "notify":
 			uuid, ok := normalizeUUID(v[0])
 			if !ok {
-				return a, fmt.Errorf("ble address: %s must be a UUID, such as 0000fff0-0000-1000-8000-00805f9b34fb or fff0", key)
+				return fmt.Errorf("%s: %s must be a UUID, such as 0000fff0-0000-1000-8000-00805f9b34fb or fff0", what, key)
 			}
 			switch key {
 			case "service":
@@ -121,19 +167,28 @@ func ParseBLEAddress(s string) (BLEAddress, error) {
 		case "ack":
 			on := v[0] == "true"
 			if !on && v[0] != "false" {
-				return a, errors.New("ble address: ack must be true or false")
+				return fmt.Errorf("%s: ack must be true or false", what)
 			}
 			a.Ack = &on
 		case "protocol":
 			if err := checkProtocol(v[0]); err != nil {
-				return a, fmt.Errorf("ble address: %v", err)
+				return fmt.Errorf("%s: %v", what, err)
 			}
 			a.Protocol = v[0]
+		case "chunk":
+			n, err := strconv.Atoi(v[0])
+			if !browser || err != nil || n < minChunk || n > bleMaxWrite {
+				if !browser {
+					return fmt.Errorf("%s: %q is not one of %s", what, key, keys)
+				}
+				return fmt.Errorf("%s: chunk must be %d-%d bytes", what, minChunk, bleMaxWrite)
+			}
+			a.Chunk = n
 		default:
-			return a, fmt.Errorf("ble address: %q is not one of service, write, notify, ack and protocol", key)
+			return fmt.Errorf("%s: %q is not one of %s", what, key, keys)
 		}
 	}
-	return a, nil
+	return nil
 }
 
 // String is the address in canonical form.
@@ -149,6 +204,9 @@ func (a BLEAddress) String() string {
 	}
 	if a.Protocol != "" {
 		q = append(q, "protocol="+a.Protocol)
+	}
+	if a.Chunk != 0 {
+		q = append(q, fmt.Sprintf("chunk=%d", a.Chunk))
 	}
 	if len(q) == 0 {
 		return a.MAC
@@ -175,6 +233,9 @@ func (a BLEAddress) Profile(defaults BLEProfile) BLEProfile {
 	if a.Protocol != "" {
 		p.Protocol = a.Protocol
 	}
+	if a.Chunk != 0 {
+		p.Chunk = a.Chunk
+	}
 	return p
 }
 
@@ -191,12 +252,12 @@ func checkProfile(p BLEProfile) error {
 	return nil
 }
 
-// ConnectionFor is a printer's connection as it is sent on: for ble, its
-// address with the driver's profile filled in where the connection sets
-// none, and for a device, the driver's protocol, so that a relay
+// ConnectionFor is a printer's connection as it is sent on: for ble and
+// browser, its address with the driver's profile filled in where the
+// connection sets none, and for a device, the driver's protocol, so that a relay
 // delivering it needs no drivers. Errors wrap ErrInvalidPrinter.
 func ConnectionFor(driver string, c Connection) (Connection, error) {
-	if c.Type != ConnBLE && c.Type != ConnDevice {
+	if c.Type != ConnBLE && c.Type != ConnDevice && c.Type != ConnBrowser {
 		return c, nil
 	}
 	d, err := Lookup(driver)
@@ -210,7 +271,11 @@ func connectionFor(d Driver, c Connection) (Connection, error) {
 	if c.Type == ConnDevice {
 		return deviceFor(d, c)
 	}
-	a, err := ParseBLEAddress(c.Address)
+	parse := ParseBLEAddress
+	if c.Type == ConnBrowser {
+		parse = ParseBrowserAddress
+	}
+	a, err := parse(c.Address)
 	if err != nil {
 		return c, fmt.Errorf("%w: connection: %v", ErrInvalidPrinter, err)
 	}
@@ -222,12 +287,41 @@ func connectionFor(d Driver, c Connection) (Connection, error) {
 	if err := checkProfile(p); err != nil {
 		return c, fmt.Errorf("%w: connection: %v", ErrInvalidPrinter, err)
 	}
-	full := BLEAddress{MAC: a.MAC, Service: p.Service, Write: p.Write, Notify: p.Notify, Protocol: p.Protocol}
+	full := BLEAddress{MAC: a.MAC, Service: p.Service, Write: p.Write, Notify: p.Notify, Protocol: p.Protocol, Chunk: p.Chunk}
+	if c.Type == ConnBrowser && full.Chunk == 0 {
+		full.Chunk = minChunk
+	}
 	if p.Ack {
 		full.Ack = &p.Ack
 	}
 	c.Address = full.String()
 	return c, nil
+}
+
+// BrowserProfile is how a browser reaches a printer with a browser
+// connection: its driver's profile, with what the connection sets, and the
+// chunk its writes take. It is returned, for what it has, with the error
+// when it lacks the service or a characteristic it needs. Errors wrap
+// ErrInvalidPrinter.
+func BrowserProfile(driver string, c Connection) (BLEProfile, error) {
+	a, err := ParseBrowserAddress(c.Address)
+	if err != nil {
+		return BLEProfile{}, fmt.Errorf("%w: connection: %v", ErrInvalidPrinter, err)
+	}
+	var defaults BLEProfile
+	if d, err := Lookup(driver); err == nil {
+		if b, ok := d.(BLEDriver); ok {
+			defaults = b.BLE()
+		}
+	}
+	p := a.Profile(defaults)
+	if p.Chunk == 0 {
+		p.Chunk = minChunk
+	}
+	if err := checkProfile(p); err != nil {
+		return p, fmt.Errorf("%w: connection: %v", ErrInvalidPrinter, err)
+	}
+	return p, nil
 }
 
 // CheckBluetoothPattern checks a pattern of Bluetooth addresses, as
