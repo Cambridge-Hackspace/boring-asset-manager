@@ -23,11 +23,11 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Fourteen printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`,
-`dymo_labelwriter`, `dymo_labelmanager`, `tspl`, `zpl`, `epl2`, `dpl`, `sbpl`, `ezpl`, `escpos`,
-`phomemo` and `niimbot`; and three for e-paper displays, which are printers too: `display`,
-`openepaperlink` and `trmnl` (see [Displays](#displays)). Option values are listed by the drivers
-endpoint, and unknown options are refused.
+Fifteen printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`,
+`dymo_labelwriter`, `dymo_labelmanager`, `epson_labelworks`, `tspl`, `zpl`, `epl2`, `dpl`, `sbpl`,
+`ezpl`, `escpos`, `phomemo` and `niimbot`; and three for e-paper displays, which are printers too:
+`display`, `openepaperlink` and `trmnl` (see [Displays](#displays)). Option values are listed by the
+drivers endpoint, and unknown options are refused.
 
 ### Who can do what
 
@@ -158,6 +158,7 @@ Drivers take custom stock only where a size is all the printer needs:
 - Brother QL and P-touch printers take only their built-in rolls and cassettes. They identify the
   roll or cassette loaded, and need Brother's figures to place a label on it.
 - DYMO LabelManagers take only D1 tape, whose printable dots on each width are DYMO's.
+- Epson LabelWorks printers take only LK tape, whose printable dots are known only for its widths.
 
 Changing stock checks every printer with it loaded. The change is refused, naming the printer, if
 one would no longer take it. Stock loaded in a printer cannot be deleted (`409`).
@@ -649,6 +650,109 @@ never changes the job). Each also has an HID interface, which BAM! does not use.
 - **The 500TS's USB product** is not known, nor whether it needs switching.
 
 None of this has yet been checked on a real LabelManager.
+
+### `epson_labelworks`
+
+For Epson's LabelWorks tape printers, which print LK tape (sold as LC tape in the Americas):
+
+| Model | Resolution | Capability level | Tape | Connections |
+|---|---|---|---|---|
+| LW-600P | 180 DPI | 1 | 6–24 mm | USB, Bluetooth |
+| LW-PX400 | 180 DPI | 3 | 4–24 mm | USB, Bluetooth |
+| LW-C410 | 180 DPI | 5 | 4–18 mm | Bluetooth |
+
+**Untested.** This driver has not been checked on a real LabelWorks printer. Epson publishes no
+command reference, and its LabelWorks SDK is not used: it is a mobile library whose license forbids
+reverse engineering and binds end users to terms of its own. The protocol was reconstructed, as
+facts only, from these community descriptions, which between them have printed on all three models:
+
+- [tyalie/RE-epson-label-printer](https://github.com/tyalie/RE-epson-label-printer) (MIT): the
+  commands, Epson's capability level for each model, and the cut and density parameters, read from
+  Epson's Android app and printed on an LW-C410 over Bluetooth;
+- [eoleedi/ha-epson-labelworks](https://github.com/eoleedi/ha-epson-labelworks) (MIT): its
+  `docs/PROTOCOL.md`, which says it was written with an AI and not tried on a printer, so it is
+  relied on only where the others agree;
+- [igrbtn/LW700Print](https://github.com/igrbtn/LW700Print) (MIT): the framing, and the 72 dots of
+  12 mm tape, measured on an LW-700 over USB;
+- [hikalium/sr5900p](https://github.com/hikalium/sr5900p) (MIT): the same framing on KING JIM's
+  Epson-built TEPRA PRO SR5900P;
+- [oxplot/nospero](https://github.com/oxplot/nospero) (no license, so read for facts only): the
+  LW-600P over Bluetooth, on RFCOMM channel 1, and the printable dots of each width;
+- [elliotmatson/epson-labelworks-mcp](https://github.com/elliotmatson/epson-labelworks-mcp) (no
+  license, read for facts only): the LW-PX400 over USB on 12 mm tape, confirming the level-3
+  commands, the cut parameters and the bit order.
+
+No code, text or test vectors are taken from any of them, so BAM stays MIT-licensed. The tests are
+worked out from the descriptions.
+
+**Options:**
+
+- **`cut_after`:** `each_label` (default) cuts each label off; `last_label` cuts only after the
+  job's last; `never` leaves the tape uncut.
+- **`density`:** darker above 0 and lighter below, from -5 to 5; default 0. Epson's app offers -3
+  to 3; the command takes -5 to 5.
+- **`margin_mm`** is the tape fed before and after each label, 0–127 mm; default 2. How much the
+  printer feeds of its own, between its head and its cutter, is not known.
+
+**Media.** LK tape, `lk-4` to `lk-24`, with each width's printable dots:
+
+| Tape | Dots |
+|---|---|
+| 4 mm | 22 |
+| 6 mm | 36 |
+| 9 mm | 54 |
+| 12 mm | 72 |
+| 18 mm | 108 |
+| 24 mm | 128 |
+
+**These are provisional.** Only 12 mm's 72 has been measured on a printer, an LW-700. The others are
+the figures nospero and epson-labelworks-mcp use; LW700Print estimates 32, 48 and 112 for 6, 9
+and 18 mm. A printer is refused with a tape its model does not take, and the printer form offers
+each model only those. Custom stock is refused.
+
+**Fit.** Templates use 180 DPI. A template's height is the tape's width (the template is turned, so
+its width runs along the tape). Its other side is the label's length, up to 1,000 mm: no source
+gives Epson's limit, and that is Brother's tape printers'. Only the middle of the tape prints, by
+the printable dots above: 72 of 12 mm tape's 85, for example. The fit check warns of anything
+beyond them.
+
+**Placement.** Each raster line carries only the tape's printable dots, and the printer places it
+on the tape. A label is sent from its left edge, its bottom edge first in each line, as the
+community drivers that printed on the LW-600P and LW-PX400 send it.
+
+**Encoding.** Each label is rendered 1-bit and sent as uncompressed raster lines. Each command is
+`ESC {`, its length (from its letter through its closing brace), its letter and parameters, a
+checksum (the low byte of their sum) and `}`. Each raster line is `ESC .`, `00 00 00 01`, its dots
+(two bytes, little-endian) and its bits. The stream is laid out as Epson's app lays it out:
+
+1. a reset (`!`) and a request for status (`Q`);
+2. the job's setup: a print end (`@`), the signature (`{`), the cut (`C`), the density plus 5 (`D`)
+   and `G`;
+3. then for each label:
+   - a request for status;
+   - its length in lines, margins included (`L`), and the margin (`T`);
+   - on the LW-PX400 (level 3), `H` and the print speed, high (`s`);
+   - the margin's blank lines, its lines, the margin's blank lines, and a form feed;
+4. a print end.
+
+**Connections.**
+
+- **USB,** on the LW-600P and LW-PX400: a printer-class device (USB `04B8:0705`, which the LW-700
+  shares). Use `device` on Linux, such as `/dev/usb/lp0`, or `windows` with Epson's driver
+  installed (BAM! prints `RAW`, so the driver never changes the job).
+- **Bluetooth Classic,** on all three: a serial port, on RFCOMM channel 1 on the LW-600P. Use
+  `device` (`/dev/rfcomm0`) on Linux or `windows`; see [Bluetooth](#bluetooth). The LW-C410 has no
+  USB port.
+
+**Not yet known,** and the first things to watch on a real printer:
+
+- the printable dots of every width but 12 mm;
+- whether a Bluetooth job needs its status read. BAM! asks for status, as Epson's app does, but
+  reads none;
+- several labels in one job. Epson's app ends each page with a form feed, but no source has printed
+  more than one label in a job;
+- whether the LW-C410 cuts by itself;
+- the longest label.
 
 ### `tspl`
 
@@ -1150,8 +1254,8 @@ a later improvement.
 Label makers that connect by Bluetooth use one of two kinds of it, and BAM! reaches each its own
 way. Neither has yet been checked on real hardware.
 
-**Bluetooth Classic** is a serial port (RFCOMM), as Brother's P-touch printers and many older ones
-use. It needs no connection type of its own: once paired, the system presents the printer as a
+**Bluetooth Classic** is a serial port (RFCOMM), as Brother's P-touch printers, Epson's LabelWorks
+and many older ones use. It needs no connection type of its own: once paired, the system presents the printer as a
 serial port, which `device` or `windows` reaches.
 
 - **On Linux,** pair and trust the printer (`bluetoothctl`, then `pair` and `trust` with its
