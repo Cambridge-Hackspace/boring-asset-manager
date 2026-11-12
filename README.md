@@ -81,4 +81,4 @@ For working on it:
 
 ## License
 
-See [LICENSE](LICENSE). The icon compiler, isolex, is by Axonibyte Innovations, LLC, under the Apache License 2.0 (`internal/isolex/NOTICE`). The code reader packaged for browsers without one of their own, such as Safari on iOS, is the `barcode-detector` and `zxing-wasm` npm packages, by Ze-Zheng Wu, under the MIT License, over zxing-cpp, under the Apache License 2.0 (`internal/webui/NOTICE`).
+See [LICENSE](LICENSE). The icon compiler, isolex, is by Axonibyte Innovations, LLC, under the Apache License 2.0 (`internal/isolex/NOTICE`). The code reader packaged for browsers without one of their own, such as Safari on iOS, is the `barcode-detector` and `zxing-wasm` npm packages, by Ze-Zheng Wu, under the MIT License, over zxing-cpp, under the Apache License 2.0, built with Emscripten and musl, under the MIT License (`internal/webui/NOTICE`).

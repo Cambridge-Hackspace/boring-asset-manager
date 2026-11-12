@@ -19,6 +19,13 @@ static/app/assets and served by bam itself (docs/scanning.md).
   copy of which is in LICENSE-zxing-cpp beside this file. zxing-cpp has
   no NOTICE file of its own. The WebAssembly is zxing-cpp at commit
   2c3dcfeffa7878950a58c1703c86774a428b0c91, unmodified by bam.
+- The WebAssembly and its loader are built with Emscripten, and hold its
+  runtime and the musl C library. Emscripten, Copyright (c) 2010-2014
+  Emscripten authors, is offered under the MIT License or the University
+  of Illinois/NCSA Open Source License; bam takes it under the MIT
+  License, a copy of which is in LICENSE-emscripten beside this file.
+  musl, Copyright (c) 2005-2020 Rich Felker, et al., is licensed under
+  the MIT License, a copy of which is in LICENSE-musl beside this file.
 - The WebAssembly also holds stb_image, by Sean Barrett, which is in the
   public domain.
 

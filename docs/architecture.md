@@ -189,8 +189,8 @@ package would fetch it from jsDelivr, which the Content Security Policy refuses.
   (`src/lib/codeReaderPackaged.test.ts`), and `e2e/scan-camera.spec.ts` reads a label of each
   from a fake camera with `BarcodeDetector` removed, failing on any request that leaves the
   instance.
-- The licenses, MIT for both packages and Apache 2.0 for zxing-cpp, are in `internal/webui/`
-  (`NOTICE`).
+- The licenses, MIT for both packages, Apache 2.0 for zxing-cpp, and MIT for the Emscripten
+  runtime and musl built into it, are in `internal/webui/` (`NOTICE`).
 
 ### Signing in and permissions
 
