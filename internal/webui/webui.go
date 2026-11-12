@@ -20,7 +20,8 @@ var embedded embed.FS
 // requests. Images may also be data: and blob: URLs (label previews), and
 // inline style attributes position the template editor's elements.
 // 'wasm-unsafe-eval' lets the app compile its own WebAssembly, the editor's
-// live renderer, and nothing else: it allows no eval of script.
+// live renderer and the packaged code reader, and nothing else: it allows
+// no eval of script.
 const contentSecurityPolicy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
 	"base-uri 'self'; form-action 'self'; frame-ancestors 'none'"

@@ -1,0 +1,25 @@
+The packaged code reader
+https://github.com/Sec-ant/barcode-detector
+https://github.com/Sec-ant/zxing-wasm
+https://github.com/zxing-cpp/zxing-cpp
+
+The web interface this package embeds reads codes with the camera, in
+browsers with no BarcodeDetector of their own, with the barcode-detector
+npm package, over zxing-wasm's build of zxing-cpp as WebAssembly. Both
+are pinned in web/package.json, and the WebAssembly is built into
+static/app/assets and served by bam itself (docs/scanning.md).
+
+- barcode-detector, Copyright (c) 2023 Ze-Zheng Wu, is licensed under the
+  MIT License, a copy of which is in LICENSE-barcode-detector beside this
+  file.
+- zxing-wasm, Copyright (c) 2023 Ze-Zheng Wu, is licensed under the MIT
+  License, a copy of which is in LICENSE-zxing-wasm beside this file.
+- zxing-cpp, Copyright the ZXing authors, Nu-book Inc. and Axel
+  Waggershauser, is licensed under the Apache License, Version 2.0, a
+  copy of which is in LICENSE-zxing-cpp beside this file. zxing-cpp has
+  no NOTICE file of its own. The WebAssembly is zxing-cpp at commit
+  2c3dcfeffa7878950a58c1703c86774a428b0c91, unmodified by bam.
+- The WebAssembly also holds stb_image, by Sean Barrett, which is in the
+  public domain.
+
+bam itself is MIT-licensed (../../LICENSE); the above covers these only.

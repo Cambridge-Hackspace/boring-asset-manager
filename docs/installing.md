@@ -441,7 +441,8 @@ list work offline too.
 ### Offline
 
 The service worker keeps the app's shell: `index.html` and the files the build made, but the
-editor's WebAssembly, which it keeps once the editor first opens. Every page of the app opens from
+WebAssembly: the editor's, which it keeps once the editor first opens, and the code reader's,
+which it keeps once a browser without its own first scans ([Scanning](scanning.md#reading-codes-with-the-camera)). Every page of the app opens from
 the shell at once, with or without a signal. Paths the server answers itself, the API among them,
 are left to the network.
 

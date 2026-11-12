@@ -118,8 +118,9 @@ inheritance and layout.
 The app lives in `web/`. `package.json` pins exact versions, and `package-lock.json` is
 committed.
 
-Dependencies stay few: Svelte, Vite, TypeScript, Tailwind, and the test tools. There is no
-SvelteKit. Routing is a small in-house history router.
+Dependencies stay few: Svelte, Vite, TypeScript, Tailwind, the test tools, and the
+[code reader](#the-code-reader) for browsers without their own. There is no SvelteKit. Routing is
+a small in-house history router.
 
 ### Building
 
@@ -164,10 +165,32 @@ Every page carries a strict Content Security Policy:
 - `default-src 'self'`
 - `data:` and `blob:` images, for previews
 - inline style attributes, for the editor's positioning
-- `'wasm-unsafe-eval'`, so the app may compile its own WebAssembly (it never evaluates script)
+- `'wasm-unsafe-eval'`, so the app may compile its own WebAssembly, the editor's and the code
+  reader's (it never evaluates script)
 - `frame-ancestors 'none'`
 
 Every page also carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin`.
+
+### The code reader
+
+The camera scanner (`src/components/CodeScanner.svelte`) reads codes with the browser's own
+`BarcodeDetector`, where there is one, and otherwise with the `barcode-detector` package's, over
+`zxing-wasm`, which is zxing-cpp built as WebAssembly (#314). Both packages are pinned to exact
+versions in `package.json`. `src/lib/codeReader.ts` chooses between them, and imports
+`src/lib/codeReaderPackaged.ts` only where the browser has none, the first time someone scans.
+
+That module points the package at the build's own copy of `zxing_reader.wasm`, imported with
+`?url`, so the WebAssembly is an asset of the build like the editor's: hashed, compressed,
+embedded and served by the binary, and kept by the service worker once fetched. Left alone, the
+package would fetch it from jsDelivr, which the Content Security Policy refuses.
+
+- The WebAssembly is 0.95 MB, 0.32 MB Brotli-compressed; the script, 43 KB, 15 KB compressed.
+- It reads QR, Micro QR and Code 128. The unit tests read every barcode golden through it
+  (`src/lib/codeReaderPackaged.test.ts`), and `e2e/scan-camera.spec.ts` reads a label of each
+  from a fake camera with `BarcodeDetector` removed, failing on any request that leaves the
+  instance.
+- The licenses, MIT for both packages and Apache 2.0 for zxing-cpp, are in `internal/webui/`
+  (`NOTICE`).
 
 ### Signing in and permissions
 
@@ -254,12 +277,11 @@ and opens only the routes marked `offline`.
 These were checked against what each platform documents, as of late 2026, not yet on phones.
 
 - **Camera scanning.** `getUserMedia` works in an installed app's window on Android and on iOS
-  (since iOS 13.4), so the Scan page can show the camera in both. Reading the code is the gap:
-  Chrome on Android has the Barcode Detection API, which the Scan page uses, and Safari on iOS has
-  none, in the browser or installed. On iOS the camera needs a decoder of BAM!'s own, in script or
-  WebAssembly, to scan inside the app. Until then iOS users type the code, or scan with the Camera
-  app, which opens the label's link in Safari rather than in the installed app. On Android, links
-  within the app's scope open in the installed app.
+  (since iOS 13.4), so the Scan page can show the camera in both. Chrome on Android has the
+  Barcode Detection API, which the Scan page uses. Safari on iOS has none, in the browser or
+  installed, so there the Scan page reads codes with the code reader BAM! packages ([The code reader](#the-code-reader)).
+  The Camera app opens a label's link in Safari rather than in the installed app. On Android,
+  links within the app's scope open in the installed app.
 - **Signing in on iOS.** An app added to the home screen keeps its own cookies and storage, apart
   from Safari's, so people sign in again in it. On Android it shares Chrome's.
 - **Background sync.** Background Sync and Periodic Background Sync are Chrome's alone; iOS has

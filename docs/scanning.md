@@ -35,13 +35,27 @@ takes a code:
 
 - typed or pasted,
 - typed by a USB scanner, or
-- read by the camera, where the browser has the Barcode Detection API: Chrome on Android, in the
-  browser or installed (see [Installing](installing.md#on-a-phone)). Safari on iOS has none, in
-  the browser or installed; there, type the code, or open the label with the Camera app, which
-  opens its scan link in Safari.
+- read by the camera, in any browser that offers one, in the browser or installed (see
+  [Installing](installing.md#on-a-phone)).
 
 It then opens that code's scan page. A scan link, or an asset's address from any of the server's
 addresses, opens that page too. The home page has a box for it as well.
+
+### Reading codes with the camera
+
+The camera reads QR codes, Micro QR codes and Code 128 barcodes.
+
+Where the browser has the Barcode Detection API, as Chrome on Android does, the camera uses it.
+Where it has none, as Safari on iOS has none, BAM! reads codes with its own code reader: zxing-cpp,
+built as WebAssembly, through the `barcode-detector` package. The reader loads the first time
+someone scans in such a browser, so no one else downloads it:
+
+- the reader's script, 43 KB, or 15 KB compressed;
+- its WebAssembly, 0.95 MB, or 0.32 MB as the server sends it, Brotli-compressed.
+
+The instance serves both itself, never a CDN. The installed app keeps them once fetched, so the
+camera reads codes offline after the first scan. A browser with no camera to offer says so, and
+the code is typed instead.
 
 ## Scan templates
 

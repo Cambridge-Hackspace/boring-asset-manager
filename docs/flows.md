@@ -37,7 +37,7 @@ A Link step also needs its creator to hold `assets.read` in the scopes of each c
 
 **Flows** (`/flows`) lists the flows to run. A flow runs at `/f/<slug>`, with large controls, for a
 phone or the shop's tablet. It works with an on-screen keyboard, or a barcode scanner that types,
-and scans with the camera where the browser can read codes.
+and scans with the camera where the browser offers one ([Scanning](scanning.md#reading-codes-with-the-camera)).
 
 Each type of question has its own control:
 
