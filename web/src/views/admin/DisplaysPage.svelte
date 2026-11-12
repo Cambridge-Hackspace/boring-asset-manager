@@ -27,6 +27,8 @@
   let made = $state<{ display: string; name: string; url: string; username?: string; secret: string } | null>(null);
   // paperlesspaper's API key as typed: '' leaves the one set.
   let paperlessKey = $state('');
+  // SoluM's password as typed: '' leaves the one set.
+  let solumPassword = $state('');
   let copied = $state(false);
   let tokenNames = $state<Record<string, string>>({});
 
@@ -66,6 +68,8 @@
         return `Pushed through paperlesspaper’s cloud, to paper ${d.connection.address}`;
       case 'webhook':
         return 'Pushed through a webhook channel';
+      case 'solum':
+        return `Pushed through SoluM’s AIMS, to label ${d.connection.address}`;
       case 'openepaperlink':
         return `Pushed to the access point at ${d.connection.address}${d.connection.relay ? `, through relay ${d.connection.relay}` : ''}`;
     }
@@ -127,20 +131,27 @@
     }
   }
 
-  async function saveSettings(event: SubmitEvent, clearKey = false) {
+  // Saves the settings; clear says which secret to clear instead.
+  async function saveSettings(event: SubmitEvent, clear: '' | 'key' | 'password' = '') {
     event.preventDefault();
     if (!settings) return;
     error = status = '';
     try {
-      const key = clearKey ? '' : paperlessKey.trim();
+      const key = clear === 'key' ? '' : paperlessKey.trim();
+      const password = clear === 'password' ? '' : solumPassword;
       settings = await request<DisplaySettings>('PUT', '/settings/displays', {
         refresh_window_seconds: Number(settings.refresh_window_seconds),
         pull_refresh_seconds: Number(settings.pull_refresh_seconds),
         paperlesspaper_base_url: settings.paperlesspaper_base_url,
-        ...(key || clearKey ? { paperlesspaper_api_key: key } : {}),
+        ...(key || clear === 'key' ? { paperlesspaper_api_key: key } : {}),
+        solum_base_url: settings.solum_base_url,
+        solum_company: settings.solum_company,
+        solum_store: settings.solum_store,
+        solum_username: settings.solum_username,
+        ...(password || clear === 'password' ? { solum_password: password } : {}),
       });
-      paperlessKey = '';
-      status = clearKey ? 'Cleared paperlesspaper’s API key.' : 'Saved the display settings.';
+      paperlessKey = solumPassword = '';
+      status = clear === 'key' ? 'Cleared paperlesspaper’s API key.' : clear === 'password' ? 'Cleared SoluM’s password.' : 'Saved the display settings.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -287,10 +298,48 @@
         </div>
       </div>
     </fieldset>
+    <fieldset class="space-y-4">
+      <legend class="text-sm font-semibold">SoluM’s AIMS</legend>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">For SoluM shelf labels, pushed through your AIMS account: the company and store its labels are in, and who signs in.</p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label class="label" for="solum-base">AIMS address</label>
+          <input id="solum-base" class="input font-mono" type="url" required bind:value={settings.solum_base_url} />
+        </div>
+        <div>
+          <label class="label" for="solum-company">Company code</label>
+          <input id="solum-company" class="input font-mono" maxlength="255" bind:value={settings.solum_company} />
+        </div>
+        <div>
+          <label class="label" for="solum-store">Store code</label>
+          <input id="solum-store" class="input font-mono" maxlength="255" bind:value={settings.solum_store} />
+        </div>
+        <div>
+          <label class="label" for="solum-username">AIMS username</label>
+          <input id="solum-username" class="input" maxlength="255" autocomplete="off" bind:value={settings.solum_username} />
+        </div>
+        <div>
+          <label class="label" for="solum-password">AIMS password</label>
+          <input
+            id="solum-password"
+            class="input"
+            type="password"
+            autocomplete="new-password"
+            aria-describedby="solum-password-help"
+            placeholder={settings.solum_password_set ? 'Set: type a new one to replace it' : 'Not set'}
+            bind:value={solumPassword}
+          />
+          <p id="solum-password-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Kept sealed with the server’s secret key, and never shown again.</p>
+        </div>
+      </div>
+    </fieldset>
     <div class="flex flex-wrap gap-2">
       <button type="submit" class="btn-primary">Save</button>
       {#if settings.paperlesspaper_api_key_set}
-        <button type="button" class="btn-secondary" onclick={(e) => saveSettings(e as unknown as SubmitEvent, true)}>Clear paperlesspaper’s API key</button>
+        <button type="button" class="btn-secondary" onclick={(e) => saveSettings(e as unknown as SubmitEvent, 'key')}>Clear paperlesspaper’s API key</button>
+      {/if}
+      {#if settings.solum_password_set}
+        <button type="button" class="btn-secondary" onclick={(e) => saveSettings(e as unknown as SubmitEvent, 'password')}>Clear SoluM’s password</button>
       {/if}
     </div>
   </form>

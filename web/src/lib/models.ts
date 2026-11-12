@@ -508,8 +508,8 @@ export interface TemplateSummary {
 }
 
 export interface PrinterConnection {
-  /** openepaperlink, pull, webhook and paperlesspaper reach e-paper displays only (docs/printing.md#displays). */
-  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble' | 'browser' | 'openepaperlink' | 'pull' | 'webhook' | 'paperlesspaper';
+  /** openepaperlink, pull, webhook, paperlesspaper and solum reach e-paper displays only (docs/printing.md#displays). */
+  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble' | 'browser' | 'openepaperlink' | 'pull' | 'webhook' | 'paperlesspaper' | 'solum';
   /** For ble, the Bluetooth address and any service and characteristics as a query, and for browser the query alone (lib/bluetooth.ts). */
   address: string;
   /** The relay the printer is reached through, if any (docs/relays.md). */
@@ -824,6 +824,14 @@ export interface DisplaySettings {
   /** Sets its API key, or with '' clears it; never read back. */
   paperlesspaper_api_key?: string;
   paperlesspaper_api_key_set: boolean;
+  /** SoluM's AIMS, for labels pushed through it. */
+  solum_base_url: string;
+  solum_company: string;
+  solum_store: string;
+  solum_username: string;
+  /** Sets its password, or with '' clears it; never read back. */
+  solum_password?: string;
+  solum_password_set: boolean;
 }
 
 /** How a family of printers takes jobs over Bluetooth LE (docs/printing.md#bluetooth). */

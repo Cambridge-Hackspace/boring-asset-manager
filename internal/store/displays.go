@@ -59,6 +59,19 @@ const (
 	PaperlessPaperKeyPurpose  = "displays.paperlesspaper_api_key"
 )
 
+// SoluM's AIMS, for labels pushed through it: its API, empty for the
+// default, the company and store its labels are in, who signs in, and the
+// password, sealed with the configuration's secret key for
+// SolumPasswordPurpose.
+const (
+	SolumBaseSetting     = "displays.solum_base_url"
+	SolumCompanySetting  = "displays.solum_company"
+	SolumStoreSetting    = "displays.solum_store"
+	SolumUsernameSetting = "displays.solum_username"
+	SolumPasswordSetting = "displays.solum_password"
+	SolumPasswordPurpose = "displays.solum_password"
+)
+
 // Their defaults and limits: half a minute, up to an hour, for the window,
 // and a quarter of an hour, as TRMNL's own server answers, for the pull.
 const (

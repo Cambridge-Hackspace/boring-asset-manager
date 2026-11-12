@@ -59,6 +59,7 @@ const driverNames: Record<string, string> = {
   openepaperlink: 'OpenEPaperLink tag',
   trmnl: 'TRMNL',
   paperlesspaper: 'paperlesspaper OpenPaper',
+  solum: 'SoluM shelf label',
   'test-laser': 'Test laser (simulated)',
   xtool: 'xTool',
   grbl: 'GRBL laser',

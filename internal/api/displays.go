@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/notify"
@@ -31,7 +32,8 @@ import (
 // DisplaySettings are the instance's settings for displays: how long a
 // refresh waits for the rest of a burst of changes, and how long a display
 // that pulls waits before asking again when its own options do not say, in
-// seconds; and paperlesspaper's cloud, for displays pushed through it.
+// seconds; paperlesspaper's cloud, for displays pushed through it; and
+// SoluM's AIMS, for labels pushed through it.
 type DisplaySettings struct {
 	RefreshWindowSeconds int `json:"refresh_window_seconds"`
 	PullRefreshSeconds   int `json:"pull_refresh_seconds"`
@@ -41,6 +43,15 @@ type DisplaySettings struct {
 	// never answered, only whether one is set.
 	PaperlessPaperAPIKey    *string `json:"paperlesspaper_api_key,omitempty"`
 	PaperlessPaperAPIKeySet bool    `json:"paperlesspaper_api_key_set"`
+	// SolumBaseURL is AIMS's API, Europe's unless set.
+	SolumBaseURL  string `json:"solum_base_url"`
+	SolumCompany  string `json:"solum_company"`
+	SolumStore    string `json:"solum_store"`
+	SolumUsername string `json:"solum_username"`
+	// SolumPassword sets the password, or with "" clears it; it is never
+	// answered, only whether one is set.
+	SolumPassword    *string `json:"solum_password,omitempty"`
+	SolumPasswordSet bool    `json:"solum_password_set"`
 }
 
 // handleDisplaySettings reads them: GET /api/v1/settings/displays.
@@ -60,7 +71,13 @@ func (s *Server) handleDisplaySettings(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the display settings")
 		return
 	}
-	writeJSON(w, http.StatusOK, DisplaySettings{RefreshWindowSeconds: window, PullRefreshSeconds: pull, PaperlessPaperBaseURL: base, PaperlessPaperAPIKeySet: key != ""})
+	v, err := s.readSolumSettings()
+	if err != nil {
+		writeServerError(w, err, "read the display settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, DisplaySettings{RefreshWindowSeconds: window, PullRefreshSeconds: pull, PaperlessPaperBaseURL: base, PaperlessPaperAPIKeySet: key != "",
+		SolumBaseURL: v[0], SolumCompany: v[1], SolumStore: v[2], SolumUsername: v[3], SolumPasswordSet: v[4] != ""})
 }
 
 // paperlessAccount is paperlesspaper's API and its key, opened.
@@ -82,6 +99,49 @@ func (s *Server) paperlessAccount() (printers.PaperlessPaperAccount, error) {
 
 // paperlessClient makes paperlesspaper's uploads.
 var paperlessClient = &http.Client{Timeout: 60 * time.Second}
+
+// solumSettings are the settings AIMS is reached with, by key, with their
+// defaults.
+var solumSettings = [][2]string{
+	{store.SolumBaseSetting, printers.DefaultSolumBase},
+	{store.SolumCompanySetting, ""},
+	{store.SolumStoreSetting, ""},
+	{store.SolumUsernameSetting, ""},
+	{store.SolumPasswordSetting, ""},
+}
+
+// readSolumSettings reads them, the password still sealed.
+func (s *Server) readSolumSettings() ([]string, error) {
+	out := make([]string, len(solumSettings))
+	for i, kv := range solumSettings {
+		v, err := s.store.Setting(kv[0], kv[1])
+		if err != nil {
+			return nil, err
+		}
+		out[i] = v
+	}
+	return out, nil
+}
+
+// solumAccount is the AIMS account, its password opened.
+func (s *Server) solumAccount() (printers.SolumAccount, error) {
+	v, err := s.readSolumSettings()
+	if err != nil {
+		return printers.SolumAccount{}, err
+	}
+	a := printers.SolumAccount{Base: v[0], Company: v[1], Store: v[2], Username: v[3]}
+	if v[4] != "" {
+		password, err := s.sealer.Open(v[4], store.SolumPasswordPurpose)
+		if err != nil {
+			return a, fmt.Errorf("opening the SoluM password: %v; set it again under Admin › Displays", err)
+		}
+		a.Password = string(password)
+	}
+	return a, nil
+}
+
+// solumClient pushes to AIMS, keeping its token.
+var solumClient = &printers.SolumClient{HTTP: &http.Client{Timeout: 10 * time.Second}}
 
 // handleSetDisplaySettings sets them: PUT /api/v1/settings/displays.
 func (s *Server) handleSetDisplaySettings(w http.ResponseWriter, r *http.Request) {
@@ -119,14 +179,46 @@ func (s *Server) handleSetDisplaySettings(w http.ResponseWriter, r *http.Request
 			}
 		}
 	}
-	for key, value := range map[string]string{store.DisplayRefreshWindowSetting: strconv.Itoa(req.RefreshWindowSeconds), store.DisplayPullRefreshSetting: strconv.Itoa(req.PullRefreshSeconds), store.PaperlessPaperBaseSetting: base} {
-		if err := s.store.SetSetting(key, value); err != nil {
-			writeServerError(w, err, "save the display settings")
+	solumBase := strings.TrimRight(strings.TrimSpace(req.SolumBaseURL), "/")
+	if solumBase == "" {
+		solumBase = printers.DefaultSolumBase
+	}
+	if u, err := url.Parse(solumBase); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		writeJSONError(w, http.StatusBadRequest, "solum_base_url is an http(s) URL, such as "+printers.DefaultSolumBase)
+		return
+	}
+	for name, v := range map[string]string{"solum_company": req.SolumCompany, "solum_store": req.SolumStore, "solum_username": req.SolumUsername} {
+		if len(v) > 255 || strings.IndexFunc(v, unicode.IsControl) >= 0 {
+			writeJSONError(w, http.StatusBadRequest, name+" is at most 255 characters, with no control characters")
 			return
 		}
 	}
+	solumSealed := ""
+	if req.SolumPassword != nil && *req.SolumPassword != "" {
+		if !s.sealer.HasKey() {
+			writeJSONError(w, http.StatusConflict, "Keeping the SoluM password needs an [auth] secret_key in the configuration, to seal it with")
+			return
+		}
+		var err error
+		if solumSealed, err = s.sealer.Seal([]byte(*req.SolumPassword), store.SolumPasswordPurpose); err != nil {
+			writeServerError(w, err, "seal the SoluM password")
+			return
+		}
+	}
+	values := map[string]string{
+		store.DisplayRefreshWindowSetting: strconv.Itoa(req.RefreshWindowSeconds), store.DisplayPullRefreshSetting: strconv.Itoa(req.PullRefreshSeconds),
+		store.PaperlessPaperBaseSetting: base,
+		store.SolumBaseSetting:          solumBase, store.SolumCompanySetting: strings.TrimSpace(req.SolumCompany), store.SolumStoreSetting: strings.TrimSpace(req.SolumStore),
+		store.SolumUsernameSetting: strings.TrimSpace(req.SolumUsername),
+	}
 	if req.PaperlessPaperAPIKey != nil {
-		if err := s.store.SetSetting(store.PaperlessPaperKeySetting, sealed); err != nil {
+		values[store.PaperlessPaperKeySetting] = sealed
+	}
+	if req.SolumPassword != nil {
+		values[store.SolumPasswordSetting] = solumSealed
+	}
+	for key, value := range values {
+		if err := s.store.SetSetting(key, value); err != nil {
 			writeServerError(w, err, "save the display settings")
 			return
 		}
@@ -381,6 +473,19 @@ func (s *Server) deliverToDisplay(ctx context.Context, p *models.Printer, img []
 			return true, fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
 		}
 		if err := printers.PushPaperlessPaper(ctx, paperlessClient, a, p.Connection.Address, img); err != nil {
+			return true, fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
+		}
+		return true, nil
+	case printers.ConnSolum:
+		panel, ok := printers.DisplayPanel(p.Driver, p.Model)
+		if !ok {
+			return true, fmt.Errorf("%w: %s is no SoluM label's model", printers.ErrUnreachable, p.Model)
+		}
+		a, err := s.solumAccount()
+		if err != nil {
+			return true, fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
+		}
+		if err := solumClient.PushSolum(ctx, a, p.Connection.Address, panel, img); err != nil {
 			return true, fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
 		}
 		return true, nil
