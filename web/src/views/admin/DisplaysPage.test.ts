@@ -130,7 +130,7 @@ describe('PrinterForm for displays', () => {
     render(PrinterForm, { drivers: displayDrivers, onsaved, oncancel: () => {} });
 
     const type = screen.getByLabelText('Type') as HTMLSelectElement;
-    expect([...type.options].map((o) => o.value)).toEqual(['tcp', 'device', 'ipp', 'windows', 'ble']);
+    expect([...type.options].map((o) => o.value)).toEqual(['tcp', 'device', 'ipp', 'windows', 'ble', 'browser']);
     await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Shelf' } });
     await fireEvent.change(screen.getByLabelText('Printer model'), { target: { value: 'display|2.9in-296x128' } });
     expect([...(screen.getByLabelText('Type') as HTMLSelectElement).options].map((o) => o.value)).toEqual(['pull', 'webhook']);

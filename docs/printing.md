@@ -1132,6 +1132,7 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 | `ipp` | `ipp://host[:port]/path`, or `ipps`, `http`, `https` | A queue on CUPS or another IPP server, such as a USB printer shared from another machine. The job is sent as `application/octet-stream`, so the queue must be raw (CUPS: `lpadmin -m raw`; CUPS 2.x still supports raw queues though it marks them deprecated). CUPS can also forward a raw queue to a Windows shared printer through its `smb://` backend. |
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
 | `ble` | The printer's Bluetooth address, such as `7C:2F:80:A1:B2:C3`, then optionally `?service=…&write=…&notify=…&ack=…&protocol=…` | A Bluetooth LE printer in range of the BAM server, on Linux. The address must match a pattern in the server's `[printers] bluetooth` setting, which is empty by default. See [Bluetooth](#bluetooth). |
+| `browser` | Empty, or `?service=…&write=…&notify=…&ack=…&protocol=…&chunk=…` | A Bluetooth LE printer beside whoever prints, printed to from their browser over its own Bluetooth, so the server needs none. Never through a relay, and never from the spool. See [From a browser](#from-a-browser). |
 | `openepaperlink`, `pull`, `webhook` | See [Displays](#connections) | E-paper displays only. |
 
 A connection may also name a relay, as `"relay": "front-desk"`: BAM! run beside the printer on its
@@ -1206,6 +1207,42 @@ characteristics the job goes to:
   default, refusing every `ble` connection, as `[printers] devices` refuses every device. On a
   relay, the relay's own `[printers] bluetooth` decides.
 
+### From a browser
+
+A `browser` connection is printed to from a browser with Web Bluetooth, over the browser's own
+Bluetooth: someone with a phone at a label maker prints to it with no relay, and the server needs
+no Bluetooth. Web Bluetooth is in Chrome and Edge, on Android and computers, and only on a secure
+(`https`) page; not in Safari, on any iPhone or iPad, or in Firefox. The print form offers the
+printer only in a browser that has it, and the browser asks which printer to use each time it
+prints. Nothing is allowed in `[printers] bluetooth`: the printer is whichever the person picks.
+
+```json
+{"type": "browser", "address": "?service=fff0&write=fff2"}
+```
+
+- **The profile** is the driver's, with what the address sets over it, as for [`ble`](#bluetooth),
+  and `chunk`, the most bytes one write carries: 20 (every link takes it) to 512, default 20. A
+  browser cannot learn how much its link carries, so raise it for a printer known to take more.
+- **Printing.** The browser asks for the printer first, connects to it, and then opens a WebSocket
+  to `GET /api/v1/printers/{id}/print/browser` (`labels.print`), sending the print request as
+  [printing directly](#printing-directly) takes it. The server renders the job as for any printer
+  and sends it in binary messages, which the browser writes in order, each in chunks, with
+  responses where the characteristic takes no writes without, and waiting for each acknowledgment
+  where the printer gives them. A printer held in conversation, such as a Niimbot, holds it with
+  the server: the browser writes what the server sends and passes back each notification, so the
+  driver runs on the server alone. The server answers `printed`, with the number of labels, once
+  the printer has the job, and records them in the assets' history.
+- **Messages.** As text, the browser sends `print` (with the request's fields), `done` once it
+  has written the whole of a job not held in conversation, or `failed` with a `message` when it
+  cannot write; the server sends `job` (`labels`, `bytes`, `warnings`), `sent` after the last of a
+  job not held in conversation, and last `printed` or `error` with a `message`.
+- **Timeouts.** The browser has 60 seconds to send its request; a printer in conversation, 60
+  seconds to answer each command; and a job not held in conversation, 15 minutes to be written. A
+  browser that goes, or cannot write to the printer, fails the job.
+- **Not from the server.** The spool, hooks and anything else the server prints on its own cannot
+  reach a `browser` printer: they fail with `502`, saying it is printed to from a browser. Nor can
+  the **Test print** on the Printers page; print a test label from an asset's labels instead.
+
 ### Timeouts and errors
 
 - A printer that cannot be reached in 5 seconds (a Bluetooth LE one, 20 seconds) fails the job.
@@ -1229,6 +1266,8 @@ characteristics the job goes to:
 - asset IDs;
 - a copy count (1–20, at most 500 labels in all);
 - optionally a `feed` and a `mirror` to use this time in place of the template's.
+
+A `browser` printer is printed to through the browser instead (see [From a browser](#from-a-browser)).
 
 It checks the template against the printer's media ([the fit check](#the-fit-check)) and streams
 the job to the printer over TCP port 9100. It answers once the printer has the whole job, which for
