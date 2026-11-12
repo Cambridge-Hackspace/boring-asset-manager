@@ -21,6 +21,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/escpos"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/niimbot"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
@@ -127,7 +128,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if _, ok := by[DriverTestLaser]; ok {
 		n--
 	}
-	if n != 15 || len(by) != len(d) {
+	if n != 16 || len(by) != len(d) {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -183,6 +184,9 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	}
 	if p := by[DriverPhomemo]; len(p.Media) != len(escpos.MediaIDs(true)) || len(p.Options) != 3 || len(p.Models) != 9 || p.BLE == nil || p.ModelDPI["D30"] != 203 {
 		t.Fatalf("Phomemo driver info = %+v", p)
+	}
+	if nb := by[DriverNiimbot]; len(nb.Media) != len(niimbot.MediaIDs()) || len(nb.Options) != 2 || len(nb.Models) != len(niimbot.Models()) || nb.BLE == nil {
+		t.Fatalf("Niimbot driver info = %+v", nb)
 	}
 	zpl, epl2 := by[DriverZPL], by[DriverEPL2]
 	if len(zpl.Media) != len(zebra.MediaIDs()) || len(zpl.Options) != 6 || len(zpl.Models) != len(zebra.Models(zebra.ZPL)) || zpl.ModelDPI["Zebra GX430t"] != 300 {

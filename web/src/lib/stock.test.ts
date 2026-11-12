@@ -95,5 +95,8 @@ describe('printer words', () => {
     expect(driverName('phomemo')).toBe('Phomemo');
     expect(optionLabel('head_dots')).toBe('Print head width (dots)');
     expect(optionValueLabel('partial')).toBe('Partly, leaving a tab');
+    expect(driverName('niimbot')).toBe('Niimbot');
+    expect(optionLabel('print_task')).toBe('Print task, for its firmware');
+    expect(optionValueLabel('b21_v1')).toBe('B21, first firmware');
   });
 });

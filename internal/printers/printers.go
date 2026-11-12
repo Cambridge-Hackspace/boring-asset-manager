@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/niimbot"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/textcheck"
 )
 
@@ -111,6 +112,8 @@ type Dispatcher struct {
 	// DialBLE connects to Bluetooth LE printers; nil is the system's:
 	// BlueZ on Linux, and none elsewhere.
 	DialBLE BLEDialer
+	// conversationTiming replaces a conversation's timing in tests.
+	conversationTiming *niimbot.Timing
 
 	mu    sync.Mutex
 	slots map[Connection]chan struct{}
@@ -137,15 +140,16 @@ func NewDispatcher(allowedDevices []string) *Dispatcher {
 func (d *Dispatcher) Check(c Connection) error {
 	switch c.Type {
 	case ConnDevice:
+		name := DevicePath(c.Address)
 		for _, pattern := range d.AllowedDevices {
-			if ok, _ := path.Match(pattern, c.Address); ok {
+			if ok, _ := path.Match(pattern, name); ok {
 				return nil
 			}
 		}
 		if len(d.AllowedDevices) == 0 {
 			return fmt.Errorf("%w: device connections are off; list allowed device paths in the server's [printers] devices setting", ErrInvalidPrinter)
 		}
-		return fmt.Errorf("%w: %s is not among the server's allowed devices (%s)", ErrInvalidPrinter, c.Address, strings.Join(d.AllowedDevices, ", "))
+		return fmt.Errorf("%w: %s is not among the server's allowed devices (%s)", ErrInvalidPrinter, name, strings.Join(d.AllowedDevices, ", "))
 	case ConnWindows:
 		if !spoolerAvailable {
 			return fmt.Errorf("%w: windows connections need BAM to run on Windows", ErrInvalidPrinter)
@@ -157,8 +161,12 @@ func (d *Dispatcher) Check(c Connection) error {
 }
 
 func (d *Dispatcher) slot(c Connection) chan struct{} {
-	if c.Type == ConnBLE {
+	switch c.Type {
+	case ConnBLE:
 		c = bleSlotKey(c)
+	case ConnDevice:
+		// The device, whatever protocol it is named with.
+		c.Address = DevicePath(c.Address)
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -190,7 +198,7 @@ func (d *Dispatcher) Send(ctx context.Context, c Connection, job []byte) error {
 	case ConnTCP:
 		err = d.sendTCP(ctx, c.Address, job)
 	case ConnDevice:
-		err = d.sendDevice(c.Address, job)
+		err = d.sendDevice(ctx, c.Address, job)
 	case ConnIPP:
 		err = d.sendIPP(ctx, c.Address, job)
 	case ConnWindows:
@@ -236,9 +244,17 @@ func (d *Dispatcher) sendTCP(ctx context.Context, addr string, job []byte) error
 	return nil
 }
 
-// sendDevice writes a job to an existing device; it never creates a file.
-func (d *Dispatcher) sendDevice(name string, job []byte) error {
-	f, err := os.OpenFile(name, os.O_WRONLY, 0)
+// sendDevice writes a job to an existing device, or sends it in a
+// conversation when the address names a protocol; it never creates a file.
+func (d *Dispatcher) sendDevice(ctx context.Context, address string, job []byte) error {
+	a, err := ParseDeviceAddress(address)
+	if err != nil {
+		return err
+	}
+	if a.Protocol != "" {
+		return d.converseDevice(ctx, a, job)
+	}
+	f, err := os.OpenFile(a.Path, os.O_WRONLY, 0)
 	if err != nil {
 		return err
 	}

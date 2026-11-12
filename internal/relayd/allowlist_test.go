@@ -38,6 +38,9 @@ func TestAllowlist(t *testing.T) {
 		{printers.Connection{Type: printers.ConnWindows, Address: "DYMO"}, false},
 		{printers.Connection{Type: printers.ConnDevice, Address: "/dev/usb/lp0"}, true},
 		{printers.Connection{Type: printers.ConnDevice, Address: "/etc/passwd"}, false},
+		// A protocol after the path is the same device.
+		{printers.Connection{Type: printers.ConnDevice, Address: "/dev/usb/lp0?protocol=niimbot"}, true},
+		{printers.Connection{Type: printers.ConnDevice, Address: "/etc/passwd?protocol=niimbot"}, false},
 		{printers.Connection{Type: printers.ConnBLE, Address: "7C:2F:80:A1:B2:C3"}, true},
 		{printers.Connection{Type: printers.ConnBLE, Address: "7C:2F:80:A1:B2:C3?service=0000fff0-0000-1000-8000-00805f9b34fb"}, true},
 		{printers.Connection{Type: printers.ConnBLE, Address: "00:11:22:33:44:55"}, false},

@@ -16,7 +16,8 @@ import (
 // characteristics its driver writes to. The job is written to the write
 // characteristic in chunks as large as the link allows, and where the
 // driver wants it, each chunk waits for the printer to acknowledge it with
-// a notification.
+// a notification. A driver whose printers answer each command instead
+// holds a conversation with them (Protocol), which the job is sent in.
 
 // BLEProfile is how a family of printers takes jobs over Bluetooth LE:
 // the service, the characteristic jobs are written to, and the one the
@@ -28,6 +29,10 @@ type BLEProfile struct {
 	// Ack is set when the printer acknowledges each write with a
 	// notification, and the next write must wait for it.
 	Ack bool `json:"ack,omitempty"`
+	// Protocol, when set, is the conversation the job is sent in, which
+	// reads the printer's answers on the notify characteristic
+	// (protocol.go): ProtocolNiimbot.
+	Protocol string `json:"protocol,omitempty"`
 }
 
 // BLEDriver is a driver whose printers connect over Bluetooth LE. Its
@@ -47,6 +52,8 @@ type BLEAddress struct {
 	Notify  string
 	// Ack is nil when the connection leaves it to the driver.
 	Ack *bool
+	// Protocol is empty when the connection leaves it to the driver.
+	Protocol string
 }
 
 var (
@@ -81,7 +88,7 @@ func normalizeUUID(s string) (string, bool) {
 
 // ParseBLEAddress reads a ble connection's address: the printer's
 // Bluetooth address, then optionally, as a query, service, write and
-// notify UUIDs and ack (true or false), such as
+// notify UUIDs, ack (true or false) and protocol, such as
 // 7C:2F:80:A1:B2:C3?service=fff0&write=fff2&notify=fff1.
 func ParseBLEAddress(s string) (BLEAddress, error) {
 	mac, query, _ := strings.Cut(strings.TrimSpace(s), "?")
@@ -91,7 +98,7 @@ func ParseBLEAddress(s string) (BLEAddress, error) {
 	a := BLEAddress{MAC: strings.ToUpper(strings.ReplaceAll(mac, "-", ":"))}
 	values, err := url.ParseQuery(query)
 	if err != nil {
-		return a, errors.New("ble address: after the Bluetooth address come service=, write=, notify= and ack=, joined with &")
+		return a, errors.New("ble address: after the Bluetooth address come service=, write=, notify=, ack= and protocol=, joined with &")
 	}
 	for key, v := range values {
 		if len(v) != 1 {
@@ -117,8 +124,13 @@ func ParseBLEAddress(s string) (BLEAddress, error) {
 				return a, errors.New("ble address: ack must be true or false")
 			}
 			a.Ack = &on
+		case "protocol":
+			if err := checkProtocol(v[0]); err != nil {
+				return a, fmt.Errorf("ble address: %v", err)
+			}
+			a.Protocol = v[0]
 		default:
-			return a, fmt.Errorf("ble address: %q is not one of service, write, notify and ack", key)
+			return a, fmt.Errorf("ble address: %q is not one of service, write, notify, ack and protocol", key)
 		}
 	}
 	return a, nil
@@ -134,6 +146,9 @@ func (a BLEAddress) String() string {
 	}
 	if a.Ack != nil {
 		q = append(q, fmt.Sprintf("ack=%t", *a.Ack))
+	}
+	if a.Protocol != "" {
+		q = append(q, "protocol="+a.Protocol)
 	}
 	if len(q) == 0 {
 		return a.MAC
@@ -157,6 +172,9 @@ func (a BLEAddress) Profile(defaults BLEProfile) BLEProfile {
 	if a.Ack != nil {
 		p.Ack = *a.Ack
 	}
+	if a.Protocol != "" {
+		p.Protocol = a.Protocol
+	}
 	return p
 }
 
@@ -167,16 +185,18 @@ func checkProfile(p BLEProfile) error {
 		return errors.New("ble connection needs the printer's service and write characteristic: its driver gives none, so set them on the connection")
 	case p.Ack && p.Notify == "":
 		return errors.New("ble connection acknowledges writes, so it needs the characteristic the printer notifies on")
+	case p.Protocol != "" && p.Notify == "":
+		return errors.New("ble connection reads the printer's answers, so it needs the characteristic the printer notifies on")
 	}
 	return nil
 }
 
 // ConnectionFor is a printer's connection as it is sent on: for ble, its
 // address with the driver's profile filled in where the connection sets
-// none, so that a relay delivering it needs no drivers. Errors wrap
-// ErrInvalidPrinter.
+// none, and for a device, the driver's protocol, so that a relay
+// delivering it needs no drivers. Errors wrap ErrInvalidPrinter.
 func ConnectionFor(driver string, c Connection) (Connection, error) {
-	if c.Type != ConnBLE {
+	if c.Type != ConnBLE && c.Type != ConnDevice {
 		return c, nil
 	}
 	d, err := Lookup(driver)
@@ -187,6 +207,9 @@ func ConnectionFor(driver string, c Connection) (Connection, error) {
 }
 
 func connectionFor(d Driver, c Connection) (Connection, error) {
+	if c.Type == ConnDevice {
+		return deviceFor(d, c)
+	}
 	a, err := ParseBLEAddress(c.Address)
 	if err != nil {
 		return c, fmt.Errorf("%w: connection: %v", ErrInvalidPrinter, err)
@@ -199,7 +222,7 @@ func connectionFor(d Driver, c Connection) (Connection, error) {
 	if err := checkProfile(p); err != nil {
 		return c, fmt.Errorf("%w: connection: %v", ErrInvalidPrinter, err)
 	}
-	full := BLEAddress{MAC: a.MAC, Service: p.Service, Write: p.Write, Notify: p.Notify}
+	full := BLEAddress{MAC: a.MAC, Service: p.Service, Write: p.Write, Notify: p.Notify, Protocol: p.Protocol}
 	if p.Ack {
 		full.Ack = &p.Ack
 	}
@@ -312,6 +335,12 @@ func (d *Dispatcher) sendBLE(ctx context.Context, address string, job []byte) er
 	defer peripheral.Close()
 
 	notes := peripheral.Notifications()
+	if p.Protocol != "" {
+		if notes == nil {
+			return errors.New("the printer's notify characteristic could not be subscribed to")
+		}
+		return d.converse(ctx, p.Protocol, blePort{peripheral: peripheral, timeout: d.WriteTimeout}, job)
+	}
 	if p.Ack && notes == nil {
 		return errors.New("the printer's notify characteristic could not be subscribed to")
 	}
@@ -358,3 +387,30 @@ func bleSlotKey(c Connection) Connection {
 // LE printer may take: longer than a TCP connection, since the printer may
 // first need to be found.
 const defaultBLEDialTimeout = 20 * time.Second
+
+// blePort is a conversation's port over Bluetooth LE: each packet written
+// in chunks the link allows, and the printer's notifications.
+type blePort struct {
+	peripheral BLEPeripheral
+	timeout    time.Duration
+}
+
+func (b blePort) Write(ctx context.Context, data []byte) error {
+	chunk := min(max(b.peripheral.MTU(), bleMinMTU)-3, bleMaxWrite)
+	for sent := 0; sent < len(data); {
+		n := min(chunk, len(data)-sent)
+		wctx, cancel := context.WithTimeout(ctx, b.timeout)
+		err := b.peripheral.Write(wctx, data[sent:sent+n])
+		cancel()
+		if err != nil {
+			if ctx.Err() == nil && wctx.Err() != nil {
+				return fmt.Errorf("the printer did not take a write within %s", b.timeout)
+			}
+			return err
+		}
+		sent += n
+	}
+	return nil
+}
+
+func (b blePort) Received() <-chan []byte { return b.peripheral.Notifications() }

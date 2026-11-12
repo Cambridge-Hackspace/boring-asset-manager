@@ -44,6 +44,7 @@ const driverNames: Record<string, string> = {
   brother_ptouch: 'Brother P-touch',
   brother_td: 'Brother TD',
   dymo_labelwriter: 'DYMO LabelWriter',
+  niimbot: 'Niimbot',
   tspl: 'TSPL',
   zpl: 'Zebra ZPL',
   epl2: 'Zebra EPL2',
@@ -88,6 +89,7 @@ const optionLabels: Record<string, string> = {
   mirror: 'Mirror labels, for clear tape',
   origin: 'Origin',
   print_mode: 'After each label',
+  print_task: 'Print task, for its firmware',
   refresh_seconds: 'Ask again every (seconds)',
   reply_port: 'Port for its answers',
   roll: 'Roll (twin-roll models)',
@@ -99,7 +101,10 @@ const optionLabels: Record<string, string> = {
 };
 
 const optionValueLabels: Record<string, string> = {
+  b1: 'B1',
+  b21_v1: 'B21, first firmware',
   cutter: 'Cut it',
+  d110: 'D110',
   direct: 'Direct thermal',
   each_label: 'After each label',
   full: 'Fully',

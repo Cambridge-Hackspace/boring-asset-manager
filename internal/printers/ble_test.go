@@ -100,6 +100,8 @@ func TestParseBLEAddress(t *testing.T) {
 		{printerMAC + "?service=E7810A7173AE499D8C15FAA9AEF0C3F2&notify=bef8d6c9-9c21-4c9e-b632-bd58c1009f9f&ack=true",
 			printerMAC + "?service=e7810a71-73ae-499d-8c15-faa9aef0c3f2&notify=bef8d6c9-9c21-4c9e-b632-bd58c1009f9f&ack=true"},
 		{printerMAC + "?ack=false", printerMAC + "?ack=false"},
+		{printerMAC + "?protocol=niimbot&notify=fff1", printerMAC + "?notify=0000fff1-0000-1000-8000-00805f9b34fb&protocol=niimbot"},
+		{printerMAC + "?protocol=zpl", ""},
 		{"7C:2F:80:A1:B2", ""},
 		{"printer.lan", ""},
 		{printerMAC + "?service=fff", ""},
@@ -155,6 +157,9 @@ func TestTheDriverGivesTheBLEProfile(t *testing.T) {
 	}
 	if _, err := connectionFor(tsplDriver{}, Connection{Type: ConnBLE, Address: printerMAC + "?service=fff0&write=fff2&ack=true"}); !errors.Is(err, ErrInvalidPrinter) {
 		t.Errorf("acknowledgments with nothing to notify them: %v", err)
+	}
+	if _, err := connectionFor(tsplDriver{}, Connection{Type: ConnBLE, Address: printerMAC + "?service=fff0&write=fff2&protocol=niimbot"}); !errors.Is(err, ErrInvalidPrinter) {
+		t.Errorf("a conversation with nothing to notify answers: %v", err)
 	}
 	// Validating a printer checks the same.
 	if err := Validate("Bluetooth", "tspl", Connection{Type: ConnBLE, Address: printerMAC}, Settings{}); !errors.Is(err, ErrInvalidPrinter) {

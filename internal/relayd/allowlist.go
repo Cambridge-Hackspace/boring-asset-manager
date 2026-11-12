@@ -211,7 +211,7 @@ func (a *Allowlist) Allows(c printers.Connection) error {
 		}
 	case printers.ConnDevice:
 		for _, pattern := range a.devices {
-			if ok, _ := path.Match(pattern, c.Address); ok {
+			if ok, _ := path.Match(pattern, printers.DevicePath(c.Address)); ok {
 				return nil
 			}
 		}

@@ -43,7 +43,7 @@ one layout engine, not two (see [Template editor](template-editor.md)).
 
 ### Direct printing
 
-Each printer gets its own command stream (Brother QL, TD and P-touch, DYMO LabelWriter, TSPL, ZPL, EPL2, ESC/POS, Phomemo) from a
+Each printer gets its own command stream (Brother QL, TD and P-touch, DYMO LabelWriter, TSPL, ZPL, EPL2, ESC/POS, Phomemo, Niimbot) from a
 pluggable print driver. The stream is sent in one of these ways, with no desktop driver or print
 dialog:
 
@@ -52,6 +52,9 @@ dialog:
 - to a raw IPP/CUPS queue
 - through the Windows spooler
 - to a Bluetooth LE printer, through BlueZ on Linux
+
+A Niimbot answers each command, so its job is sent in a conversation, each command waiting for the
+answer, over Bluetooth LE or a serial device.
 
 ### Barcode and matrix engine
 
