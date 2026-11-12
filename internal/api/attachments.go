@@ -9,6 +9,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +30,9 @@ import (
 // categories.manage to change, and assets.read, as the category itself
 // does, to see; a vendor's follow vendors.manage in its scopes to change,
 // and seeing the vendor to see; and a contract's and a purchase order's
-// follow its vendor's.
+// follow its vendor's. An asset's invoice follows purchases.read for the
+// asset too: without it, the invoice is left out, and refused as though it
+// were not there.
 
 // multipartSlack is the room a multipart form takes beyond its file.
 const multipartSlack = 64 << 10
@@ -69,6 +72,46 @@ type attachmentOwner struct {
 	// who is set when the requester may see who added each attachment:
 	// those who track the asset, as its history shows them.
 	who bool
+	// hidden is an asset's invoice, when the requester may not see it.
+	hidden string
+}
+
+// hiddenInvoice is the attachment named as an asset's invoice, when the
+// request may not see it (purchases.read for the asset); otherwise empty.
+func hiddenInvoice(ctx context.Context, a *models.AssetWithDetails) string {
+	if Allows(ctx, rbac.PermPurchasesRead, a.Scopes) {
+		return ""
+	}
+	return a.Purchase.InvoiceID
+}
+
+// withoutHidden leaves out of attachments the one named hidden.
+func withoutHidden(as []models.Attachment, hidden string) []models.Attachment {
+	if hidden == "" {
+		return as
+	}
+	out := make([]models.Attachment, 0, len(as))
+	for _, a := range as {
+		if a.ID != hidden {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// withHidden is an order of attachments that leaves out the one named
+// hidden, with it put back where it is among have, the IDs in order. An
+// order naming it is refused, as though it were not there.
+func withHidden(order, have []string, hidden string) ([]string, error) {
+	at := slices.Index(have, hidden)
+	if hidden == "" || at < 0 {
+		return order, nil
+	}
+	if slices.Contains(order, hidden) {
+		return nil, store.ErrAttachmentOrder
+	}
+	at = min(at, len(order))
+	return slices.Concat(order[:at:at], []string{hidden}, order[at:]), nil
 }
 
 // ownerFor reads the owner a request is about. An asset is checked with
@@ -87,7 +130,8 @@ func (s *Server) ownerFor(w http.ResponseWriter, r *http.Request, kind string, c
 		if !ok {
 			return nil, false
 		}
-		return &attachmentOwner{kind: kind, id: a.Asset.ID, name: a.Asset.Name, who: Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes)}, true
+		return &attachmentOwner{kind: kind, id: a.Asset.ID, name: a.Asset.Name, who: Allows(r.Context(), rbac.PermAssetsTrack, a.Scopes),
+			hidden: hiddenInvoice(r.Context(), a)}, true
 	case models.OwnerVendor:
 		v, scopes, ok := s.vendorFor(w, r, id, change)
 		if !ok {
@@ -142,24 +186,33 @@ func (s *Server) attachmentLimits() AttachmentLimits {
 }
 
 // shownAttachments are attachments as the requester may see them: who
-// added each only to those who may see it.
+// added each only to those who may see it, and an asset's invoice only to
+// those who may see its price.
 func shownAttachments(o *attachmentOwner, as []models.Attachment) []models.Attachment {
-	out := make([]models.Attachment, len(as))
-	for i, a := range as {
+	out := make([]models.Attachment, 0, len(as))
+	for _, a := range withoutHidden(as, o.hidden) {
 		if !o.who {
 			a.AddedBy, a.AddedByName = "", ""
 		}
-		out[i] = a
+		out = append(out, a)
 	}
 	return out
 }
 
 func (s *Server) writeAttachments(w http.ResponseWriter, status int, o *attachmentOwner, as []models.Attachment, added *models.Attachment) {
 	body := map[string]any{"attachments": shownAttachments(o, as), "limits": s.attachmentLimits()}
-	if added != nil {
-		body["attachment"] = shownAttachments(o, []models.Attachment{*added})[0]
+	if shown := shownAttachments(o, attachmentsOf(added)); len(shown) == 1 {
+		body["attachment"] = shown[0]
 	}
 	writeJSON(w, status, body)
+}
+
+// attachmentsOf is a, alone, or none when it is nil.
+func attachmentsOf(a *models.Attachment) []models.Attachment {
+	if a == nil {
+		return nil
+	}
+	return []models.Attachment{*a}
 }
 
 // handleListAttachments lists an owner's attachments, in order, with the
@@ -305,6 +358,9 @@ func (s *Server) handleGetAttachment(kind string) http.HandlerFunc {
 			return
 		}
 		a, err := s.store.GetAttachment(o.kind, o.id, r.PathValue("attachment_id"))
+		if err == nil && a.ID == o.hidden {
+			err = store.ErrAttachmentNotFound
+		}
 		if err != nil {
 			writeAttachmentError(w, err, "read the attachment")
 			return
@@ -364,6 +420,10 @@ func (s *Server) handleUpdateAttachment(kind string) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
+		if r.PathValue("attachment_id") == o.hidden {
+			writeAttachmentError(w, store.ErrAttachmentNotFound, "change the attachment")
+			return
+		}
 		a, err := s.store.UpdateAttachment(o.kind, o.id, r.PathValue("attachment_id"), req.Name, req.Description)
 		if err != nil {
 			writeAttachmentError(w, err, "change the attachment")
@@ -379,6 +439,10 @@ func (s *Server) handleRemoveAttachment(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		o, ok := s.ownerFor(w, r, kind, true)
 		if !ok {
+			return
+		}
+		if r.PathValue("attachment_id") == o.hidden {
+			writeAttachmentError(w, store.ErrAttachmentNotFound, "remove the attachment")
 			return
 		}
 		removed, err := s.actingStore(r).RemoveAttachment(o.kind, o.id, r.PathValue("attachment_id"))
@@ -411,7 +475,19 @@ func (s *Server) handleReorderAttachments(kind string) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "attachment_ids (a list) is required")
 			return
 		}
-		as, err := s.store.ReorderAttachments(o.kind, o.id, req.AttachmentIDs)
+		order := req.AttachmentIDs
+		if o.hidden != "" {
+			have, err := s.store.ListAttachments(o.kind, o.id)
+			if err != nil {
+				writeServerError(w, err, "list the attachments")
+				return
+			}
+			if order, err = withHidden(order, attachmentIDs(have), o.hidden); err != nil {
+				writeAttachmentError(w, err, "order the attachments")
+				return
+			}
+		}
+		as, err := s.store.ReorderAttachments(o.kind, o.id, order)
 		if err != nil {
 			writeAttachmentError(w, err, "order the attachments")
 			return
@@ -420,8 +496,17 @@ func (s *Server) handleReorderAttachments(kind string) http.HandlerFunc {
 	}
 }
 
-// handleCopyAttachments gives an asset copies of another's attachments,
-// after its own, each with files of its own, so that removing one leaves
+// attachmentIDs are attachments' IDs, in order.
+func attachmentIDs(as []models.Attachment) []string {
+	ids := make([]string, len(as))
+	for i, a := range as {
+		ids[i] = a.ID
+	}
+	return ids
+}
+
+// handleCopyAttachments gives an asset copies of another's attachments
+// (its invoice only when the requester may see it), after its own, each with files of its own, so that removing one leaves
 // the other: POST /api/v1/assets/{id}/attachments/copy with
 // {"from_asset_id": "..."}
 func (s *Server) handleCopyAttachments(w http.ResponseWriter, r *http.Request) {
@@ -445,7 +530,7 @@ func (s *Server) handleCopyAttachments(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "list the attachments")
 		return
 	}
-	copies, ok := s.copyAttachmentFiles(w, r, theirs)
+	copies, ok := s.copyAttachmentFiles(w, r, withoutHidden(theirs, hiddenInvoice(r.Context(), from)))
 	if !ok {
 		return
 	}

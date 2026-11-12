@@ -14,7 +14,8 @@ import (
 
 // The photo routes, from before attachments (docs/data-model.md#attachments),
 // kept as they were: an asset's photos are its image attachments, and each
-// route answers with the asset, as it always did.
+// route answers with the asset, as it always did. An asset's invoice is
+// left out and refused as attachments' routes do, without purchases.read.
 
 // handleUploadPhoto adds a photo to an asset, as an image attachment, from
 // a multipart form with the photo in its "file" part:
@@ -59,11 +60,12 @@ func (s *Server) writeAsset(w http.ResponseWriter, r *http.Request, status int) 
 // handleGetPhoto serves a photo, or with ?size=thumb its thumbnail:
 // GET /api/v1/assets/{id}/photos/{photo_id}
 func (s *Server) handleGetPhoto(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.assetFor(w, r, r.PathValue("id")); !ok {
+	asset, ok := s.assetFor(w, r, r.PathValue("id"))
+	if !ok {
 		return
 	}
 	a, err := s.store.GetAttachment(models.OwnerAsset, r.PathValue("id"), r.PathValue("photo_id"))
-	if errors.Is(err, store.ErrAttachmentNotFound) || err == nil && a.Kind != models.AttachmentImage {
+	if errors.Is(err, store.ErrAttachmentNotFound) || err == nil && (a.Kind != models.AttachmentImage || a.ID == hiddenInvoice(r.Context(), asset)) {
 		err = store.ErrPhotoNotFound
 	}
 	if err != nil {
@@ -75,7 +77,12 @@ func (s *Server) handleGetPhoto(w http.ResponseWriter, r *http.Request) {
 
 // handleRemovePhoto removes a photo: DELETE /api/v1/assets/{id}/photos/{photo_id}
 func (s *Server) handleRemovePhoto(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
+	had, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite)
+	if !ok {
+		return
+	}
+	if r.PathValue("photo_id") == hiddenInvoice(r.Context(), had) {
+		writeAttachmentError(w, store.ErrPhotoNotFound, "remove the photo")
 		return
 	}
 	asset, removed, err := s.actingStore(r).RemovePhoto(r.PathValue("id"), r.PathValue("photo_id"))
@@ -91,7 +98,8 @@ func (s *Server) handleRemovePhoto(w http.ResponseWriter, r *http.Request) {
 // one lists show, among its other attachments, which stay where they are:
 // PUT /api/v1/assets/{id}/photos with {"photo_ids": [...]}
 func (s *Server) handleReorderPhotos(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite); !ok {
+	had, ok := s.assetFor(w, r, r.PathValue("id"), rbac.PermAssetsWrite)
+	if !ok {
 		return
 	}
 	var req struct {
@@ -101,7 +109,19 @@ func (s *Server) handleReorderPhotos(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "photo_ids (a list) is required")
 		return
 	}
-	asset, err := s.store.ReorderPhotos(r.PathValue("id"), req.PhotoIDs)
+	order := req.PhotoIDs
+	if hidden := hiddenInvoice(r.Context(), had); hidden != "" {
+		have := make([]string, len(had.Photos))
+		for i, p := range had.Photos {
+			have[i] = p.ID
+		}
+		var err error
+		if order, err = withHidden(order, have, hidden); err != nil {
+			writeAttachmentError(w, store.ErrPhotoOrder, "order the photos")
+			return
+		}
+	}
+	asset, err := s.store.ReorderPhotos(r.PathValue("id"), order)
 	if err != nil {
 		writeAttachmentError(w, err, "order the photos")
 		return
@@ -134,7 +154,7 @@ func (s *Server) handleCopyPhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var images []models.Attachment
-	for _, a := range theirs {
+	for _, a := range withoutHidden(theirs, hiddenInvoice(r.Context(), from)) {
 		if a.Kind == models.AttachmentImage {
 			images = append(images, a)
 		}

@@ -58,7 +58,8 @@ purchase details, and `price`, `currency` and `order_number` only when some asse
 vendor is written by name, dates as `YYYY-MM-DD`, and the price as a decimal in its currency, such
 as `12.50`. In a workbook, dates are dates and prices numbers, where each reads back as written.
 The price, currency and order number of assets whose prices the exporter may not see are blank
-(see [Seeing prices](access.md#seeing-prices)). The invoice is an attachment, and stays out.
+(see [Seeing prices](access.md#seeing-prices)). The invoice is an attachment, and stays out; the
+asset's attachments leave it out too for those who may not see its price.
 
 On import:
 

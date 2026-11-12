@@ -204,7 +204,8 @@ What comes in is the catalog, labels, reports, icons, flows and assets.
 An asset's purchase details name its vendor as imported, or matched with one here, and its
 invoice among its attachments; a package without its attachments names no invoice. Catalog entries
 come in with their category or asset, naming the vendor as imported or matched. A package made by
-someone without `purchases.read` for a vendor holds its entries without their prices.
+someone without `purchases.read` for a vendor holds its entries without their prices, and one made
+by someone without it for an asset leaves out its invoice, attachment and file too.
 
 People, roles, settings, printers, notification channels and authentication are never merged:
 they are an instance's own. An archive holding authentication is imported without it, with a
