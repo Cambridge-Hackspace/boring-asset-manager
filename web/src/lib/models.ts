@@ -508,8 +508,8 @@ export interface TemplateSummary {
 }
 
 export interface PrinterConnection {
-  /** openepaperlink, pull and webhook reach e-paper displays only (docs/printing.md#displays). */
-  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble' | 'browser' | 'openepaperlink' | 'pull' | 'webhook';
+  /** openepaperlink, pull, webhook and paperlesspaper reach e-paper displays only (docs/printing.md#displays). */
+  type: 'tcp' | 'device' | 'ipp' | 'windows' | 'ble' | 'browser' | 'openepaperlink' | 'pull' | 'webhook' | 'paperlesspaper';
   /** For ble, the Bluetooth address and any service and characteristics as a query, and for browser the query alone (lib/bluetooth.ts). */
   address: string;
   /** The relay the printer is reached through, if any (docs/relays.md). */
@@ -819,6 +819,11 @@ export interface DisplayToken {
 export interface DisplaySettings {
   refresh_window_seconds: number;
   pull_refresh_seconds: number;
+  /** paperlesspaper's API, for frames pushed through its cloud. */
+  paperlesspaper_base_url: string;
+  /** Sets its API key, or with '' clears it; never read back. */
+  paperlesspaper_api_key?: string;
+  paperlesspaper_api_key_set: boolean;
 }
 
 /** How a family of printers takes jobs over Bluetooth LE (docs/printing.md#bluetooth). */

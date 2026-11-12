@@ -31,6 +31,8 @@
     openepaperlink: 'The access point, such as 192.168.1.50, then ?tag= and the tag’s MAC address, such as 192.168.1.50?tag=0000021E3D6F1234.',
     pull: 'The display fetches its image from BAM!, with a token made under Displays.',
     webhook: 'The webhook channel BAM! posts the image through, set up under Notifications.',
+    paperlesspaper:
+      'The paper’s ID, the 24 characters at the end of its address in paperlesspaper’s web app, such as 65a1f0c2e4b3d5a6b7c8d9e0. paperlesspaper’s API key is set under Displays.',
   };
 
   // Connection types as the form offers them.
@@ -44,6 +46,7 @@
     openepaperlink: 'OpenEPaperLink access point',
     pull: 'The display fetches it',
     webhook: 'Webhook',
+    paperlesspaper: 'paperlesspaper’s cloud',
   };
   const printerConnections: PrinterConnection['type'][] = ['tcp', 'device', 'ipp', 'windows', 'ble', 'browser'];
 
@@ -89,7 +92,7 @@
   // A display that pulls has no address, but a TRMNL's is its MAC address.
   const needsAddress = $derived((connType !== 'pull' || driver === 'trmnl') && connType !== 'browser');
   // The server's own connections never go through a relay, nor a browser's, nor a laser.
-  const relayable = $derived(connType !== 'pull' && connType !== 'webhook' && connType !== 'browser' && !info?.one_shot);
+  const relayable = $derived(connType !== 'pull' && connType !== 'webhook' && connType !== 'paperlesspaper' && connType !== 'browser' && !info?.one_shot);
   // A laser's model, with its work area (docs/printing.md#lasers).
   const laser = $derived(info?.one_shot?.find((m) => m.id === model));
   // Its work area as the options set it, for a driver whose machines come in many sizes.
@@ -250,7 +253,7 @@
         </select>
         <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{connectionHelp[connType]}</p>
       {:else if needsAddress}
-        <label class="text-xs" for="{pid}-address">{connType === 'pull' ? 'MAC address' : 'Address'}</label>
+        <label class="text-xs" for="{pid}-address">{connType === 'pull' ? 'MAC address' : connType === 'paperlesspaper' ? 'Paper ID' : 'Address'}</label>
         <input id="{pid}-address" class="input font-mono" required aria-describedby="{pid}-address-help" bind:value={address} />
         <p id="{pid}-address-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
           {#if relay && relayable}

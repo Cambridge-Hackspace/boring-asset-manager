@@ -22,8 +22,11 @@
   let error = $state('');
   let status = $state('');
 
-  // A token just made, shown once: its display, name and address.
-  let made = $state<{ display: string; name: string; url: string } | null>(null);
+  // A token just made, shown once: its display, name and address, and for
+  // an OpenPaper frame, which sends it as a password, the token and user name.
+  let made = $state<{ display: string; name: string; url: string; username?: string; secret: string } | null>(null);
+  // paperlesspaper's API key as typed: '' leaves the one set.
+  let paperlessKey = $state('');
   let copied = $state(false);
   let tokenNames = $state<Record<string, string>>({});
 
@@ -59,6 +62,8 @@
     switch (d.connection.type) {
       case 'pull':
         return d.driver === 'trmnl' ? `Fetches its image, as TRMNL ${d.connection.address}` : 'Fetches its image';
+      case 'paperlesspaper':
+        return `Pushed through paperlesspaper’s cloud, to paper ${d.connection.address}`;
       case 'webhook':
         return 'Pushed through a webhook channel';
       case 'openepaperlink':
@@ -91,8 +96,8 @@
     error = status = '';
     const name = (tokenNames[d.id] ?? '').trim() || d.name;
     try {
-      const r = await request<{ token: DisplayToken; secret: string; url: string }>('POST', `/displays/${encodeURIComponent(d.id)}/tokens`, { name });
-      made = { display: d.name, name: r.token.name, url: r.url };
+      const r = await request<{ token: DisplayToken; secret: string; url: string; username?: string }>('POST', `/displays/${encodeURIComponent(d.id)}/tokens`, { name });
+      made = { display: d.name, name: r.token.name, url: r.url, username: r.username, secret: r.secret };
       copied = false;
       tokenNames[d.id] = '';
       await load();
@@ -115,23 +120,27 @@
   async function copy() {
     if (!made) return;
     try {
-      await navigator.clipboard.writeText(made.url);
+      await navigator.clipboard.writeText(made.username ? made.secret : made.url);
       copied = true;
     } catch {
       error = 'Could not copy; select the address and copy it by hand.';
     }
   }
 
-  async function saveSettings(event: SubmitEvent) {
+  async function saveSettings(event: SubmitEvent, clearKey = false) {
     event.preventDefault();
     if (!settings) return;
     error = status = '';
     try {
+      const key = clearKey ? '' : paperlessKey.trim();
       settings = await request<DisplaySettings>('PUT', '/settings/displays', {
         refresh_window_seconds: Number(settings.refresh_window_seconds),
         pull_refresh_seconds: Number(settings.pull_refresh_seconds),
+        paperlesspaper_base_url: settings.paperlesspaper_base_url,
+        ...(key || clearKey ? { paperlesspaper_api_key: key } : {}),
       });
-      status = 'Saved the display settings.';
+      paperlessKey = '';
+      status = clearKey ? 'Cleared paperlesspaper’s API key.' : 'Saved the display settings.';
     } catch (err) {
       error = messageOf(err);
     }
@@ -151,13 +160,27 @@
 {#if made}
   <section class="card mb-6 max-w-2xl space-y-2 border-amber-400" aria-labelledby="token-heading">
     <h2 id="token-heading" class="text-lg font-semibold">{made.name}, for {made.display}</h2>
-    <p class="text-sm">
-      Give the display this address to fetch its image from. The token in it is shown once: anyone who has it can see what the display shows.
-    </p>
-    <label class="sr-only" for="token-url">The address the display fetches its image from</label>
-    <input id="token-url" class="input font-mono" readonly value={made.url} onfocus={(e) => e.currentTarget.select()} />
+    {#if made.username}
+      <p class="text-sm">
+        In the frame’s settings, give it this address to fetch its image from, with HTTP authentication: user name <code>{made.username}</code>, and
+        this token as the password. The token is shown once: anyone who has it can see what the display shows.
+      </p>
+      <label class="label" for="token-url">Address</label>
+      <input id="token-url" class="input font-mono" readonly value={made.url} onfocus={(e) => e.currentTarget.select()} />
+      {#if made.url.length > 128}
+        <p class="text-sm text-amber-700 dark:text-amber-400">The frame takes an address of at most 128 characters, and this one is {made.url.length}.</p>
+      {/if}
+      <label class="label" for="token-secret">Password</label>
+      <input id="token-secret" class="input font-mono" readonly value={made.secret} onfocus={(e) => e.currentTarget.select()} />
+    {:else}
+      <p class="text-sm">
+        Give the display this address to fetch its image from. The token in it is shown once: anyone who has it can see what the display shows.
+      </p>
+      <label class="sr-only" for="token-url">The address the display fetches its image from</label>
+      <input id="token-url" class="input font-mono" readonly value={made.url} onfocus={(e) => e.currentTarget.select()} />
+    {/if}
     <div class="flex gap-2">
-      <button type="button" class="btn-secondary" onclick={copy}>{copied ? 'Copied' : 'Copy'}</button>
+      <button type="button" class="btn-secondary" onclick={copy}>{copied ? 'Copied' : made.username ? 'Copy the password' : 'Copy'}</button>
       <button type="button" class="btn-secondary" onclick={() => (made = null)}>Done</button>
     </div>
   </section>
@@ -241,6 +264,34 @@
         <p id="pull-refresh-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Unless a display’s own options say otherwise.</p>
       </div>
     </div>
-    <button type="submit" class="btn-primary">Save</button>
+    <fieldset class="space-y-4">
+      <legend class="text-sm font-semibold">paperlesspaper’s cloud</legend>
+      <p class="text-xs text-zinc-600 dark:text-zinc-400">For OpenPaper frames pushed through paperlesspaper’s cloud. Make the API key under your account in paperlesspaper’s web app.</p>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label" for="paperless-base">API address</label>
+          <input id="paperless-base" class="input font-mono" type="url" required bind:value={settings.paperlesspaper_base_url} />
+        </div>
+        <div>
+          <label class="label" for="paperless-key">API key</label>
+          <input
+            id="paperless-key"
+            class="input font-mono"
+            type="password"
+            autocomplete="off"
+            aria-describedby="paperless-key-help"
+            placeholder={settings.paperlesspaper_api_key_set ? 'Set: type a new one to replace it' : 'Not set'}
+            bind:value={paperlessKey}
+          />
+          <p id="paperless-key-help" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Kept sealed with the server’s secret key, and never shown again.</p>
+        </div>
+      </div>
+    </fieldset>
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" class="btn-primary">Save</button>
+      {#if settings.paperlesspaper_api_key_set}
+        <button type="button" class="btn-secondary" onclick={(e) => saveSettings(e as unknown as SubmitEvent, true)}>Clear paperlesspaper’s API key</button>
+      {/if}
+    </div>
   </form>
 {/if}

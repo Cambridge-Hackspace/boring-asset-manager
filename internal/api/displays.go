@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -27,13 +28,19 @@ import (
 // it shows, and as whom, so that hooks can refresh it when the asset
 // changes. Refreshes go through the spool like any job.
 
-// DisplaySettings are the instance's settings for displays, in seconds:
-// how long a refresh waits for the rest of a burst of changes, and how
-// long a display that pulls waits before asking again when its own options
-// do not say.
+// DisplaySettings are the instance's settings for displays: how long a
+// refresh waits for the rest of a burst of changes, and how long a display
+// that pulls waits before asking again when its own options do not say, in
+// seconds; and paperlesspaper's cloud, for displays pushed through it.
 type DisplaySettings struct {
 	RefreshWindowSeconds int `json:"refresh_window_seconds"`
 	PullRefreshSeconds   int `json:"pull_refresh_seconds"`
+	// PaperlessPaperBaseURL is paperlesspaper's API, its own unless set.
+	PaperlessPaperBaseURL string `json:"paperlesspaper_base_url"`
+	// PaperlessPaperAPIKey sets its API key, or with "" clears it; it is
+	// never answered, only whether one is set.
+	PaperlessPaperAPIKey    *string `json:"paperlesspaper_api_key,omitempty"`
+	PaperlessPaperAPIKeySet bool    `json:"paperlesspaper_api_key_set"`
 }
 
 // handleDisplaySettings reads them: GET /api/v1/settings/displays.
@@ -43,8 +50,38 @@ func (s *Server) handleDisplaySettings(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "read the display settings")
 		return
 	}
-	writeJSON(w, http.StatusOK, DisplaySettings{RefreshWindowSeconds: window, PullRefreshSeconds: pull})
+	base, err := s.store.Setting(store.PaperlessPaperBaseSetting, printers.DefaultPaperlessPaperBase)
+	if err != nil {
+		writeServerError(w, err, "read the display settings")
+		return
+	}
+	key, err := s.store.Setting(store.PaperlessPaperKeySetting, "")
+	if err != nil {
+		writeServerError(w, err, "read the display settings")
+		return
+	}
+	writeJSON(w, http.StatusOK, DisplaySettings{RefreshWindowSeconds: window, PullRefreshSeconds: pull, PaperlessPaperBaseURL: base, PaperlessPaperAPIKeySet: key != ""})
 }
+
+// paperlessAccount is paperlesspaper's API and its key, opened.
+func (s *Server) paperlessAccount() (printers.PaperlessPaperAccount, error) {
+	base, err := s.store.Setting(store.PaperlessPaperBaseSetting, printers.DefaultPaperlessPaperBase)
+	if err != nil {
+		return printers.PaperlessPaperAccount{}, err
+	}
+	sealed, err := s.store.Setting(store.PaperlessPaperKeySetting, "")
+	if err != nil || sealed == "" {
+		return printers.PaperlessPaperAccount{Base: base}, err
+	}
+	key, err := s.sealer.Open(sealed, store.PaperlessPaperKeyPurpose)
+	if err != nil {
+		return printers.PaperlessPaperAccount{}, fmt.Errorf("opening paperlesspaper's API key: %v; set it again under Admin › Displays", err)
+	}
+	return printers.PaperlessPaperAccount{Base: base, APIKey: string(key)}, nil
+}
+
+// paperlessClient makes paperlesspaper's uploads.
+var paperlessClient = &http.Client{Timeout: 60 * time.Second}
 
 // handleSetDisplaySettings sets them: PUT /api/v1/settings/displays.
 func (s *Server) handleSetDisplaySettings(w http.ResponseWriter, r *http.Request) {
@@ -60,8 +97,36 @@ func (s *Server) handleSetDisplaySettings(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("pull_refresh_seconds is from %d to %d, a day", printers.MinDisplayRefresh, printers.MaxDisplayRefresh))
 		return
 	}
-	for key, value := range map[string]int{store.DisplayRefreshWindowSetting: req.RefreshWindowSeconds, store.DisplayPullRefreshSetting: req.PullRefreshSeconds} {
-		if err := s.store.SetSetting(key, strconv.Itoa(value)); err != nil {
+	base := strings.TrimRight(strings.TrimSpace(req.PaperlessPaperBaseURL), "/")
+	if base == "" {
+		base = printers.DefaultPaperlessPaperBase
+	}
+	if u, err := url.Parse(base); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		writeJSONError(w, http.StatusBadRequest, "paperlesspaper_base_url is an http(s) URL, such as "+printers.DefaultPaperlessPaperBase)
+		return
+	}
+	sealed := ""
+	if req.PaperlessPaperAPIKey != nil {
+		if key := strings.TrimSpace(*req.PaperlessPaperAPIKey); key != "" {
+			if !s.sealer.HasKey() {
+				writeJSONError(w, http.StatusConflict, "Keeping paperlesspaper's API key needs an [auth] secret_key in the configuration, to seal it with")
+				return
+			}
+			var err error
+			if sealed, err = s.sealer.Seal([]byte(key), store.PaperlessPaperKeyPurpose); err != nil {
+				writeServerError(w, err, "seal paperlesspaper's API key")
+				return
+			}
+		}
+	}
+	for key, value := range map[string]string{store.DisplayRefreshWindowSetting: strconv.Itoa(req.RefreshWindowSeconds), store.DisplayPullRefreshSetting: strconv.Itoa(req.PullRefreshSeconds), store.PaperlessPaperBaseSetting: base} {
+		if err := s.store.SetSetting(key, value); err != nil {
+			writeServerError(w, err, "save the display settings")
+			return
+		}
+	}
+	if req.PaperlessPaperAPIKey != nil {
+		if err := s.store.SetSetting(store.PaperlessPaperKeySetting, sealed); err != nil {
 			writeServerError(w, err, "save the display settings")
 			return
 		}
@@ -310,6 +375,15 @@ func (s *Server) deliverToDisplay(ctx context.Context, p *models.Printer, img []
 			return true, fmt.Errorf("%w: posting to %s: %v", printers.ErrUnreachable, ch.Name, err)
 		}
 		return true, nil
+	case printers.ConnPaperlessPaper:
+		a, err := s.paperlessAccount()
+		if err != nil {
+			return true, fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
+		}
+		if err := printers.PushPaperlessPaper(ctx, paperlessClient, a, p.Connection.Address, img); err != nil {
+			return true, fmt.Errorf("%w: %v", printers.ErrUnreachable, err)
+		}
+		return true, nil
 	}
 	return false, nil
 }
@@ -352,7 +426,8 @@ func (s *Server) rememberShown(acting *store.Store, p *models.Printer, templateI
 
 // displaySecret is the display token a request presents: as ?token=, in
 // an Access-Token header (TRMNL's, which some of its servers spell
-// ACCESS_TOKEN), or as a bearer token that is a display's.
+// ACCESS_TOKEN), as a bearer token that is a display's, or as the password
+// of HTTP Basic, which is all an OpenPaper frame can send.
 func displaySecret(r *http.Request) string {
 	if t := r.URL.Query().Get("token"); t != "" {
 		return t
@@ -363,6 +438,9 @@ func displaySecret(r *http.Request) string {
 		}
 	}
 	if t, ok := bearerToken(r); ok && strings.HasPrefix(t, store.DisplayTokenPrefix) {
+		return t
+	}
+	if _, t, ok := r.BasicAuth(); ok && strings.HasPrefix(t, store.DisplayTokenPrefix) {
 		return t
 	}
 	return ""
@@ -427,8 +505,14 @@ func (s *Server) handleCreateDisplayToken(w http.ResponseWriter, r *http.Request
 		writeServerError(w, err, "make the display token")
 		return
 	}
-	url := s.baseURL(r) + "/api/v1/displays/" + p.ID + "/image?token=" + secret
-	writeJSON(w, http.StatusCreated, map[string]any{"token": t, "secret": secret, "url": url})
+	image := s.baseURL(r) + "/api/v1/displays/" + p.ID + "/image"
+	if p.Driver == printers.DriverPaperlessPaper {
+		// An OpenPaper frame takes an address of at most 128 characters,
+		// and sends the token as Basic's password.
+		writeJSON(w, http.StatusCreated, map[string]any{"token": t, "secret": secret, "url": image, "username": "bam"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"token": t, "secret": secret, "url": image + "?token=" + secret})
 }
 
 // handleRevokeDisplayToken: DELETE /api/v1/displays/{id}/tokens/{token}
@@ -514,6 +598,10 @@ func (s *Server) handleDisplayImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", tag)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Refresh", strconv.Itoa(refresh))
+	if p.Driver == printers.DriverPaperlessPaper {
+		// An OpenPaper frame sleeps for what this says, and reads no Refresh.
+		w.Header().Set("X-OpenPaper-Sleep-Seconds", strconv.Itoa(refresh))
+	}
 	if etagMatches(r.Header.Get("If-None-Match"), tag) {
 		w.WriteHeader(http.StatusNotModified)
 		return

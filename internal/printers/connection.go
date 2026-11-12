@@ -51,11 +51,15 @@ const (
 	// ConnWebhook posts a display's image through a webhook notification
 	// channel: the channel's ID.
 	ConnWebhook = "webhook"
+	// ConnPaperlessPaper uploads a display's image to paperlesspaper's
+	// cloud for one of its papers (paperlesspaper.go): the paper's ID, 24
+	// hexadecimal digits.
+	ConnPaperlessPaper = "paperlesspaper"
 )
 
 // ConnectionTypes lists the connection types.
 func ConnectionTypes() []string {
-	return []string{ConnTCP, ConnDevice, ConnIPP, ConnWindows, ConnBLE, ConnBrowser, ConnOpenEPaperLink, ConnPull, ConnWebhook}
+	return []string{ConnTCP, ConnDevice, ConnIPP, ConnWindows, ConnBLE, ConnBrowser, ConnOpenEPaperLink, ConnPull, ConnWebhook, ConnPaperlessPaper}
 }
 
 // Connection says how BAM reaches a printer.
@@ -88,7 +92,7 @@ func NormalizeConnection(c Connection) (Connection, error) {
 	if c.Relay != "" && (c.Relay == "main" || !relayName.MatchString(c.Relay)) {
 		return bad("relay must name a relay: lowercase letters, digits and hyphens")
 	}
-	if c.Type == ConnPull || c.Type == ConnWebhook {
+	if c.Type == ConnPull || c.Type == ConnWebhook || c.Type == ConnPaperlessPaper {
 		if c.Relay != "" {
 			return bad("a %s connection is this server's own, never through a relay", c.Type)
 		}
@@ -168,6 +172,12 @@ func NormalizeConnection(c Connection) (Connection, error) {
 			return bad("%v", err)
 		}
 		c.Address = a.String()
+	case ConnPaperlessPaper:
+		id := strings.ToLower(c.Address)
+		if !paperID.MatchString(id) {
+			return bad("a paperlesspaper connection's address is the paper's ID, 24 hexadecimal digits, from its address in paperlesspaper's web app")
+		}
+		c.Address = id
 	case ConnWebhook:
 		if len(c.Address) > 64 || strings.ContainsAny(c.Address, " /?#") {
 			return bad("a webhook connection's address is the ID of a webhook notification channel")

@@ -58,6 +58,7 @@ const driverNames: Record<string, string> = {
   display: 'E-paper display',
   openepaperlink: 'OpenEPaperLink tag',
   trmnl: 'TRMNL',
+  paperlesspaper: 'paperlesspaper OpenPaper',
   'test-laser': 'Test laser (simulated)',
   xtool: 'xTool',
   grbl: 'GRBL laser',
