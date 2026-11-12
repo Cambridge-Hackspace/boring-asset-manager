@@ -5,6 +5,7 @@
   import type { DriverInfo, LabelStock, Printer, PrinterChanges, PrinterConnection } from '../../lib/models';
   import { describeChanges, describeStock, driverName, mediaFor, optionLabel, optionValueLabel, stockFor } from '../../lib/stock';
   import { bleAddress, parseBLEAddress } from '../../lib/bluetooth';
+  import { workArea } from '../../lib/lasers';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import type { Channel } from '../../lib/models';
 
@@ -86,6 +87,8 @@
   const relayable = $derived(connType !== 'pull' && connType !== 'webhook' && !info?.one_shot);
   // A laser's model, with its work area (docs/printing.md#lasers).
   const laser = $derived(info?.one_shot?.find((m) => m.id === model));
+  // Its work area as the options set it, for a driver whose machines come in many sizes.
+  const area = $derived(laser ? workArea(laser, { work_width_mm: Number(options.work_width_mm) || undefined, work_height_mm: Number(options.work_height_mm) || undefined }) : null);
 
   // Webhook channels, for a display pushed through one; read when first needed.
   let channels = $state<Channel[] | null>(null);
@@ -181,7 +184,7 @@
     </div>
     {#if info?.one_shot}
       <p class="text-sm text-zinc-600 dark:text-zinc-400 sm:self-end">
-        A laser has no roll: each job names its material and workpiece.{laser ? ` Its work area is ${laser.work_width_mm} × ${laser.work_height_mm} mm.` : ''}
+        A laser has no roll: each job names its material and workpiece.{area ? ` Its work area is ${area.work_width_mm} × ${area.work_height_mm} mm.` : ''}
       </p>
     {:else}
     <div>

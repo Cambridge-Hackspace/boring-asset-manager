@@ -1108,7 +1108,9 @@ Lasers start fires and blind people. BAM! is built around a person being at the 
   must be pressed by someone holding `lasers.run` (see [Access](access.md)).
 - **The machine's interlocks are checked first.** BAM! asks the machine for them as it starts, and
   refuses while any reports a problem: the lid open, the safety key out, a flame alarm, or the
-  exhaust off, on machines that report them. Resuming a paused job checks them again.
+  exhaust off, on machines that report them. Resuming a paused job checks them again. Many
+  machines report few or none: a GRBL laser only its own state, a Ruida none (see
+  [GRBL](#grbl) and [Ruida](#ruida)). On those, the person pressing *Start* is the check.
 - **Nothing else starts a laser.** An assistant over MCP, a flow or an incoming hook never starts,
   frames or resumes one, whatever it holds; an API token does only with `lasers.run`. Hooks have no
   action that reaches a laser. An assistant may prepare a job, and watch it, but not start it.
@@ -1129,16 +1131,21 @@ A laser's driver reports each model's **work area** (how far the head reaches ac
 bed), its **materials**, whether it starts jobs with **its own button**, whether it can **frame** a
 job, and which **interlocks** it reports. `GET /api/v1/printers/drivers` gives them, as `one_shot`.
 
-`xtool` drives xTool lasers (see [xTool](#xtool)); GRBL diode lasers and Ruida CO2 controllers come
-next. For tests there is `test-laser`, a simulated laser offered only where `[printers] test_laser` is
-on (`BAM_PRINTERS_TEST_LASER`, see [Configuration](configuration.md)). It takes a `tcp` connection
-it never dials, engraves nothing, and finishes a job a few seconds after starting it. Its models
+`xtool` drives xTool lasers (see [xTool](#xtool)), `grbl` diode lasers on GRBL controllers (see
+[GRBL](#grbl)), and `ruida` CO2 lasers on Ruida controllers (see [Ruida](#ruida)). For tests there
+is `test-laser`, a simulated laser offered only where `[printers] test_laser` is on
+(`BAM_PRINTERS_TEST_LASER`, see [Configuration](configuration.md)). It takes a `tcp` connection it
+never dials, engraves nothing, and finishes a job a few seconds after starting it. Its models
 are `button` (115 × 115 mm, started with its button) and `panel` (200 × 150 mm, started by BAM!),
 and both frame and report every interlock. The `panel` has a camera, which shows synthetic photos
 of its bed: the calibration marks in the first photo after engraving them, and a workpiece, a
 little turned, in every other (see [Camera alignment](#camera-alignment)).
 
-A laser has no media, and is reached by this server, never through a relay.
+A laser has no media, and is reached by this server, never through a relay. A laser on a USB
+serial port, as GRBL and Ruida controllers are, is a `device` connection: its port, such as
+`/dev/ttyUSB0`, must match `[printers] devices` (see [Delivery](#delivery)), checked each time BAM!
+reaches it. BAM! opens serial ports on Linux only; elsewhere, reach the laser over the network, or
+through a bridge such as `ser2net`. A USB serial device needs group `dialout` on most distributions.
 
 ### xTool
 
@@ -1264,6 +1271,151 @@ The protocols are as [ha-xtool](https://github.com/thecodingdad/ha-xtool)'s
 thecodingdad) describes them; the F1 Ultra's quirks are as
 [cv_alignment_f1_ultra](https://github.com/Will-Morr/cv_alignment_f1_ultra) reports them. No code
 was taken from either.
+
+### GRBL
+
+The `grbl` driver drives diode lasers on controllers running GRBL 1.1, or firmware that speaks as
+it does, such as grblHAL and FluidNC: most of Sculpfun's, Atomstack's and Ortur's, Creality's
+Falcons, Two Trees', and xTool's D1 in GRBL mode. **Nothing in it has run on a real machine yet:**
+it is written from GRBL 1.1's published interface and tested against a simulated controller.
+
+**GRBL reports few interlocks.** It has no lid, flame, exhaust or air assist sensor of its own;
+the only interlock BAM! reads is **the machine**: its alarm, its safety door where one is wired to
+it, its check mode, homing or sleep, each of which refuses starting. Most diode lasers have no
+enclosure at all. BAM!'s *Start*, for someone holding `lasers.run`, at the machine, is the only
+gate, and the person stays with the machine, wearing eye protection for its wavelength.
+
+| Model | Presets for | Work area unless set |
+|---|---|---|
+| `diode-10w` | a 10 W diode | 400 × 400 mm |
+| `diode-20w` | a 20 W diode | 400 × 400 mm |
+| `diode-40w` | a 40 W diode | 400 × 400 mm |
+
+The model chooses the presets only, starting points to try on scrap. Machines come in many sizes,
+so each printer sets its own:
+
+- `work_width_mm` and `work_height_mm`: the work area, across and back to front.
+- `origin`: the corner the machine counts from, as you face it: `bottom_left` (front left, as most
+  diode lasers count) unless set, or `top_left`, `top_right` or `bottom_right`. BAM! sends absolute
+  coordinates from it (`G90`), so the machine's zero must be there: where it homes, or where its
+  origin is set.
+- `baud`: the serial port's speed, 115200 unless set.
+- `rx_buffer`: the controller's receive buffer, 128 bytes (an Arduino's) unless set. grblHAL and
+  FluidNC have larger ones, which their status reports give as `Bf`; a value larger than the
+  controller's loses G-code.
+- `max_power_s`: the `S` of full power; unless set, BAM! reads the controller's `$30`.
+- `frame_power` and `frame_speed`: framing's power, in percent (0 unless set, at most 20), and speed
+  (50 mm a second unless set).
+
+The connection is `device`, the controller's USB serial port, or `tcp`, its address, for a
+controller on the network (FluidNC, an ESP32 board, or `ser2net`), on port 23 unless another is
+given.
+
+**Laser mode.** BAM! drives GRBL only in laser mode (`$32=1`), in which the laser is off whenever
+the head stands still or travels. It reads the controller's settings (`$$`) when it connects and
+before each job, and refuses while `$32` is not 1, saying so. It never changes a setting: set
+`$32=1` yourself, once.
+
+**The job** is G-code: millimeters (`G21`), absolute coordinates (`G90`), the feed in millimeters a
+minute, power as `S` from 0 to `$30` with the laser in dynamic mode (`M4`), every travel at `S0`,
+and `M5` at the end. The engraving goes row by row, back and forth, burning each run of dots, once
+a pass; then each cut outline, once a pass. Every point is checked against the work area before
+anything is sent. BAM! sends no homing, and no move back to the origin.
+
+**Streaming.** GRBL takes G-code into a small receive buffer, and answers `ok` for each line it
+takes off it. BAM! counts the characters it has sent and not had answered, and sends the next line
+only while it fits (character counting), so the buffer stays full and never overflows. The job
+streams in the background once started; its progress is the share of lines answered. BAM! keeps
+one connection to each controller, and closes it after two minutes unused. Opening an Arduino's
+serial port restarts it; BAM! waits for its welcome.
+
+**Status** comes from GRBL's `?` report, asked for every second while a job runs: `Run` is running,
+`Hold` paused, and the job is done once every line is answered and the machine is `Idle`.
+
+**Pause** is GRBL's feed hold (`!`), and *Start* resumes it (`~`). **Cancel** stops sending, holds
+the head to a stop, and then resets the controller (Ctrl-X), which forgets what it had buffered;
+held first, the controller keeps its position and raises no alarm. **A line refused** (`error:N`)
+fails the job, and BAM! holds and resets the controller, since what follows the line would go
+wrong. **An alarm** (`ALARM:N`) fails the job, and refuses starting until it is cleared at the
+machine: BAM! never unlocks (`$X`) or homes a controller. Look the numbers up in your firmware's
+documentation.
+
+**Framing** traces the job's outline at `frame_speed`. At `frame_power` 0, the default, the laser is
+off and the head alone shows the outline; at a low power, in laser mode, it shows a dot, which may
+mark some materials. On a GRBL laser framing refuses, as starting does, while the machine reports a
+problem: GRBL itself does not move in alarm or with its door open.
+
+What could be checked only against the published interface, and so is the first thing to watch on
+a real machine: the axis directions and origin (set `origin`), whether a real controller's buffer
+is as `rx_buffer` says, and how grblHAL and FluidNC differ from GRBL 1.1.
+
+GRBL's interface is as its [wiki](https://github.com/gnea/grbl/wiki) describes it (*Interface*,
+*Laser Mode*, *Commands*). No code was taken from GRBL, which is GPL.
+
+### Ruida
+
+The `ruida` driver drives CO2 lasers on Ruida controllers, such as the RDC6442G and RDC6445G, over
+Ethernet or USB. Ruida does not publish the protocol; BAM! speaks it as community projects describe
+it (below). **Nothing in it has run on a real controller yet:** it is tested against a simulated
+controller, written from the same descriptions.
+
+**BAM! never starts a Ruida.** *Start* (for someone holding `lasers.run`) uploads the job to the
+controller's memory under the name `file_name` (`BAM` unless set), and the job waits there: the
+person at the machine chooses it on the panel, frames it with the panel's *Frame* key, and starts
+it with the panel's *Start*, as with a file sent from LightBurn. BAM! sends no command that starts
+a job, and frames none itself. **BAM! reads none of a Ruida's interlocks:** the controller enforces
+its own water, door and other protections, as it is wired; the panel's *Start* is the gate.
+
+| Model | Presets for | Work area unless set |
+|---|---|---|
+| `co2-40w` | a 40 W tube | 500 × 300 mm |
+| `co2-60w` | a 60 W tube | 600 × 400 mm |
+| `co2-80w` | an 80 W tube | 700 × 500 mm |
+| `co2-100w` | a 100 W tube | 900 × 600 mm |
+
+As for GRBL, the model chooses the presets only, and each printer sets `work_width_mm`,
+`work_height_mm` and `origin`, here `top_right` (back right, where most Ruida machines home) unless
+set. Its other options:
+
+- `file_name`: the name the job is kept under, 1-8 letters and digits.
+- `magic`: the controller's swizzle key, 136 (0x88) unless set, as most controllers take; 17
+  (0x11) for the 634XG, 56 (0x38) for the RDL9635.
+- `reply_port`: the port on this server the controller answers to, over Ethernet: 40200 unless
+  set, as the controller has it; 0 takes any.
+
+The connection is `tcp`, the controller's address, spoken to in UDP on port 50200 unless another
+port is given, or `device`, its USB serial port. Over Ethernet, BAM! listens on port 40200 for the
+controller's answers: allow UDP 40200 in, and run nothing else on the server that does, such as
+LightBurn or RDWorks.
+
+**The job** is in Ruida's own format, as RDWorks and LightBurn save `.rd` files: a header with the
+job's bounds and each part's speed and power, the engraving as one part, each run of dots a cut,
+row by row, back and forth, once a pass; the cut outlines as another, once a pass; and the file's
+sum. Every byte is swizzled. Over Ethernet it goes in packets of at most 1000 bytes, cut between
+commands, each with a checksum, and each answered by the controller: ACK, or NAK when the checksum
+does not match. The first packet is sent again after a NAK or silence, up to three times; a later
+one is not, since the controller is not known to take one twice, and the transfer is abandoned.
+Over USB the file goes as it is, swizzled, with no checksum or answer.
+
+**Status** is the controller's status word, read every second while a job runs: *ready* from
+sending until the controller runs a job, *running* while it does, and *done* when it stops. BAM!
+knows no more of a job: no progress, and not which file the panel ran. **Pause**, *Start* to
+resume, and **Cancel** are the controller's pause, restore and stop. A job cancelled before the
+panel started it stays in the controller's memory: BAM! cannot take it back, so delete it on the
+panel.
+
+What could be checked only against the descriptions, and so is the first thing to watch on a real
+controller: whether the upload's name command (`E8 02 E7 01`) keeps the file, and whether a second
+upload of the same name replaces it; whether the file runs from the panel without the start command
+(`D8 00`) that streamed jobs carry, which BAM! leaves out so that nothing it sends can start a job;
+which status bit is set while a job runs (BAM! reads bit 0, as MeerK40t found on an RDC6442S); the
+header's bounds with the X axis turned around; the axis directions (set `origin`); and USB at all.
+
+The protocol is as [MeerK40t](https://github.com/meerk40t/meerk40t)'s
+[Ruida module](https://github.com/meerk40t/meerk40t/tree/main/meerk40t/ruida) (MIT) and the
+EduTech Wiki's [Ruida](https://edutechwiki.unige.ch/en/Ruida) page describe it, with the name
+command from [ruida-laser](https://github.com/jnweiger/ruida-laser)'s protocol notes. No code was
+taken from any of them.
 
 ### Materials
 

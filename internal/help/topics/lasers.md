@@ -9,6 +9,8 @@ Lasers start fires and can blind people, so a person at the machine always start
 - On a machine with its own start button, BAM! sends the job ready, and you press the button.
 - Otherwise you press **Start** in BAM!, which needs the **lasers.run** permission.
 - BAM! checks the machine's lid, safety key, drawer, flame sensor and exhaust first, where it reports them, and won't start while any reports a problem. On an xTool it also checks that the machine's firmware is one BAM! knows for its model, unless your admin has allowed it.
+- Many lasers report little. A GRBL diode laser reports only its own state, such as an alarm or an open safety door; a Ruida controller reports nothing BAM! reads. On those, you are the check: look before you press **Start**.
+- BAM! never starts a Ruida CO2 laser: **Start** sends the job to the controller, and you choose it on the controller's panel, frame it with the panel's **Frame** key, and start it there.
 - Nothing else starts a laser: not an assistant, a flow, a hook or a script without **lasers.run**. An assistant can prepare a job for you.
 - The print queue never sends anything to a laser.
 - Stay with the machine while it runs. **Pause** and **Cancel** are always there, for anyone who may print.
@@ -20,7 +22,7 @@ From an asset's page, choose **Engrave**; from the template editor, choose **Eng
 1. Choose the laser and the material. Each material has its power, speed and resolution; one engraved from the back, such as clear acrylic, is mirrored, so lay it face down.
 2. Give the workpiece's size, and where its top left corner sits on the bed, or measure it with the camera (below). The label goes where the template says, centered unless it names a corner, or where you place it.
 3. **Prepare** draws the label, and shows the work area, the workpiece and the label on it. Nothing moves yet.
-4. **Frame** has the machine trace the outline with its pointer, so you can check it on the real piece.
+4. **Frame** has the machine trace the outline with its pointer, so you can check it on the real piece. On a GRBL laser the laser is off while it frames, unless your admin has set a low power for it; on a Ruida, frame from its panel.
 5. **Start**, or press the machine's button. The page shows the job's progress and the machine's state.
 
 When the job is done, the asset's history says its label was engraved, and on what.

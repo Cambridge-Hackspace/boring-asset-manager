@@ -187,12 +187,26 @@ func OneShotModelOf(driver string, s Settings) (OneShotModel, error) {
 	if !ok {
 		return OneShotModel{}, fmt.Errorf("%w: %s is not a one-shot printer's driver", ErrInvalidPrinter, driver)
 	}
+	if sized, ok := od.(oneShotSized); ok {
+		m, err := sized.OneShotModelFor(s)
+		if err != nil {
+			return OneShotModel{}, fmt.Errorf("%w: %v", ErrInvalidPrinter, err)
+		}
+		return m, nil
+	}
 	for _, m := range od.OneShotModels() {
 		if m.ID == s.Model {
 			return m, nil
 		}
 	}
 	return OneShotModel{}, fmt.Errorf("%w: %s has no model %q", ErrInvalidPrinter, driver, s.Model)
+}
+
+// oneShotSized is a OneShotDriver whose machines are not all one size: a
+// printer's options set its work area, which OneShotModels gives only a
+// default for.
+type oneShotSized interface {
+	OneShotModelFor(s Settings) (OneShotModel, error)
 }
 
 // MachineFor reaches the machine a one-shot printer names.

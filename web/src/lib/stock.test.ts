@@ -87,5 +87,9 @@ describe('printer words', () => {
     expect(optionValueLabel('right_side')).toBe('right side');
     expect(driverName('xtool')).toBe('xTool');
     expect(optionLabel('allow_unknown_firmware')).toContain('firmware');
+    expect(driverName('grbl')).toBe('GRBL laser');
+    expect(driverName('ruida')).toBe('Ruida laser controller');
+    expect(optionLabel('work_width_mm')).toBe('Work area, across (mm)');
+    expect(optionValueLabel('bottom_left')).toBe('Front left');
   });
 });
