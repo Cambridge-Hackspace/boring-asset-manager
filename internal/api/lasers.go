@@ -434,8 +434,13 @@ func (s *Server) handleLaserStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// machine reaches a laser's machine.
+// machine reaches a laser's machine, through a connection this server may
+// use: a laser's serial port must be among [printers] devices when it is
+// reached, as when it was saved.
 func (s *Server) machine(p *models.Printer) (printers.Machine, error) {
+	if err := s.checkConnection(p.Connection); err != nil {
+		return nil, err
+	}
 	return printers.MachineFor(p.Driver, p.Connection, store.PrinterSettings(p))
 }
 

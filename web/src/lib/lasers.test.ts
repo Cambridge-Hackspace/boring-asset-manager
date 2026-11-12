@@ -14,6 +14,16 @@ describe('lasers', () => {
     expect(found.map((l) => [l.printer.id, l.model.work_width_mm])).toEqual([['laser', 200]]);
   });
 
+  it("takes a laser's work area from its options, where they set one", () => {
+    const drivers = [
+      { driver: 'grbl', models: ['diode-10w'], media: [], one_shot: [{ id: 'diode-10w', work_width_mm: 400, work_height_mm: 400, materials: [], start_button: false, frames: true, interlocks: ['machine'], camera: false }] },
+    ] as DriverInfo[];
+    const sized = { ...printer('d', 'grbl', 'diode-10w'), options: { work_width_mm: 430, origin: 'top_left' } } as Printer;
+    const found = lasersOf([sized], drivers).map((l) => [l.model.work_width_mm, l.model.work_height_mm]);
+    expect(found).toEqual([[430, 400]]);
+    expect(drivers[0]?.one_shot?.[0]?.work_width_mm).toBe(400);
+  });
+
   it('says what a material does, in words', () => {
     expect(describeMaterial({ id: 'b', name: 'Birch', engrave: { power: 30, speed: 150, passes: 1, lpi: 254 }, cut: { power: 100, speed: 8, passes: 2 } })).toBe(
       'Engraves at 30% and 150 mm/s, 1 pass, 254 lines an inch; cuts at 100% and 8 mm/s, 2 passes',

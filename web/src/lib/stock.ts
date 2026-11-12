@@ -52,6 +52,8 @@ const driverNames: Record<string, string> = {
   trmnl: 'TRMNL',
   'test-laser': 'Test laser (simulated)',
   xtool: 'xTool',
+  grbl: 'GRBL laser',
+  ruida: 'Ruida laser controller',
 };
 
 /** A printer driver as people know it: "Brother QL" rather than brother_ql. */
@@ -61,6 +63,7 @@ export function driverName(driver: string): string {
 
 const optionLabels: Record<string, string> = {
   allow_unknown_firmware: 'Allow firmware BAM! does not know for this model',
+  baud: 'Serial speed (baud)',
   calibrate: 'Calibrate before each job',
   chain: 'Chain labels, saving tape between jobs',
   compress: 'Compress labels',
@@ -70,15 +73,25 @@ const optionLabels: Record<string, string> = {
   flame_hold_minutes: 'Refuse to start after a flame for (minutes)',
   fill_light: 'Fill light for photos (%)',
   camera_port: 'Camera port (V1 firmware)',
+  file_name: 'Name on the controller',
+  frame_power: 'Power while framing (%)',
+  frame_speed: 'Framing speed (mm/s)',
   half_cut: 'Half cut between labels',
+  magic: 'Swizzle key',
   margin_mm: 'Margin before and after each label (mm)',
+  max_power_s: 'S value of full power',
   media_type: 'Media type',
   mirror: 'Mirror labels, for clear tape',
+  origin: 'Origin',
   print_mode: 'After each label',
   refresh_seconds: 'Ask again every (seconds)',
+  reply_port: 'Port for its answers',
   roll: 'Roll (twin-roll models)',
   rotate_180: 'Turn labels upside down',
+  rx_buffer: 'Receive buffer (bytes)',
   speed: 'Speed (inches per second)',
+  work_height_mm: 'Work area, back to front (mm)',
+  work_width_mm: 'Work area, across (mm)',
 };
 
 const optionValueLabels: Record<string, string> = {
@@ -89,7 +102,11 @@ const optionValueLabels: Record<string, string> = {
   peel_off: 'Peel it off',
   png: 'PNG',
   bmp: 'BMP',
+  bottom_left: 'Front left',
+  bottom_right: 'Front right',
   tear_off: 'Tear it off',
+  top_left: 'Back left',
+  top_right: 'Back right',
   transfer: 'Thermal transfer, with a ribbon',
 };
 
