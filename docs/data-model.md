@@ -257,7 +257,8 @@ Documents and other files are served with `Content-Disposition: attachment`,
 never runs, even opened directly.
 
 An asset's attachments follow `assets.write` to change, and its read access, scopes and all, to
-see. A category's follow `categories.manage` to change, and `assets.read`, as the category itself
+see. The one named as its invoice also needs `purchases.read` for it (see [Purchases](#purchases)).
+A category's follow `categories.manage` to change, and `assets.read`, as the category itself
 does, to see. A vendor's follow `vendors.manage` in its scopes to change, and seeing the vendor
 to see. Who added each is shown to those who track the asset (`assets.track`), as its
 history shows people. Adding and removing attachments is recorded in their owner's history: an
@@ -344,6 +345,11 @@ warranties can rely on them.
 `purchases.read` for the asset (see [Access](access.md#seeing-prices)). Without it, they are left
 out of its page, the asset list, its history, exports, reports, labels, packages and MCP, and
 answers mark it `"prices_hidden": true`.
+
+**The invoice's attachment** follows the same rule. Without `purchases.read` for the asset, it is
+left out of its attachments and photos, on its page, in the API, MCP and packages, and is answered
+`404` when downloaded, renamed or removed. Ordering the attachments keeps it where it is, and
+copying them leaves it behind. Once it is no longer the invoice, it is an ordinary attachment.
 
 **Changing them** follows `assets.write`, in the asset form or with `purchase` in
 `POST /api/v1/assets` and `PUT /api/v1/assets/{id}`. An object replaces every detail, so one left

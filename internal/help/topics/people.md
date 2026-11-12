@@ -22,7 +22,7 @@ Making someone's account, **Email them an invitation instead** sends them a link
 
 ## Roles
 
-A **role** is a set of permissions, and people hold any number of roles. The **admin** role holds everything. The **public** role is everyone's, signed in or not, and can only look. **See prices** shows what assets cost: without it, a role reads assets with their price, order number and invoice hidden. Every role that read assets was given it where it reads them, so take it away to hide prices.
+A **role** is a set of permissions, and people hold any number of roles. The **admin** role holds everything. The **public** role is everyone's, signed in or not, and can only look. **See prices** shows what assets cost: without it, a role reads assets with their price, order number and invoice hidden, the invoice's file among their attachments too. Every role that read assets was given it where it reads them, so take it away to hide prices.
 
 A role can **require two-factor sign-in**: whoever holds it signs in with a second factor, and someone without one sets one up at their next sign-in before anything else. The admin role requires it, until someone turns that off with **Stop requiring two-factor sign-in**, which is recorded. An identity provider's own second factor counts when it says one was used; each provider says what to do when it does not.
 
