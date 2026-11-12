@@ -33,6 +33,9 @@ const (
 	// DriverTRMNL drives TRMNL displays, which pull through TRMNL's "bring
 	// your own server" API.
 	DriverTRMNL = "trmnl"
+	// DriverPaperlessPaper drives paperlesspaper's OpenPaper frames, which
+	// pull on its offline firmware or are pushed through its cloud.
+	DriverPaperlessPaper = "paperlesspaper"
 )
 
 // Image formats a display takes.
@@ -40,6 +43,9 @@ const (
 	FormatPNG  = "png"
 	FormatBMP  = "bmp"
 	FormatJPEG = "jpeg"
+	// FormatOpenPaper is the 4-bit bitmap an OpenPaper frame shows as it
+	// is: each dot its panel's code for the ink (paperlesspaper.go).
+	FormatOpenPaper = "openpaper"
 )
 
 // Pull refresh intervals a display may be given, in seconds: a minute to
@@ -82,7 +88,7 @@ func IsDisplay(driver string) bool {
 // isDisplayConnection reports whether a connection type reaches only
 // displays.
 func isDisplayConnection(t string) bool {
-	return t == ConnPull || t == ConnWebhook || t == ConnOpenEPaperLink
+	return t == ConnPull || t == ConnWebhook || t == ConnOpenEPaperLink || t == ConnPaperlessPaper
 }
 
 // checkDisplayConnection checks a driver takes a connection: a display
@@ -165,6 +171,12 @@ var (
 		{ID: "og", Name: "TRMNL, 800 × 480", Width: 800, Height: 480, DPI: 125},
 		{ID: "x", Name: "TRMNL X, 1872 × 1404", Width: 1872, Height: 1404, DPI: 227},
 	}
+	// paperlesspaper's frames, in Spectra 6, each as its offline firmware
+	// takes its image: the 7-inch landscape, the 13-inch portrait.
+	paperlessPanels = []Panel{
+		{ID: "epd7", Name: "OpenPaper 7, 800 × 480", Width: 800, Height: 480, DPI: 128, Palette: labels.PaletteBWRYGB},
+		{ID: "openpaper13", Name: "OpenPaper L, 1200 × 1600", Width: 1200, Height: 1600, DPI: 150, Palette: labels.PaletteBWRYGB},
+	}
 )
 
 // displayDriver drives a family of displays, each model a panel.
@@ -181,9 +193,10 @@ type displayDriver struct {
 }
 
 var (
-	genericDisplay = displayDriver{name: DriverDisplay, panels: genericPanels, connections: []string{ConnPull, ConnWebhook}, formats: []string{FormatPNG, FormatBMP}}
-	oeplDisplay    = displayDriver{name: DriverOpenEPaperLink, panels: oeplPanels, connections: []string{ConnOpenEPaperLink}, formats: []string{FormatJPEG}}
-	trmnlDisplay   = displayDriver{name: DriverTRMNL, panels: trmnlPanels, connections: []string{ConnPull}, formats: []string{FormatPNG, FormatBMP}, byMAC: true}
+	genericDisplay   = displayDriver{name: DriverDisplay, panels: genericPanels, connections: []string{ConnPull, ConnWebhook}, formats: []string{FormatPNG, FormatBMP}}
+	oeplDisplay      = displayDriver{name: DriverOpenEPaperLink, panels: oeplPanels, connections: []string{ConnOpenEPaperLink}, formats: []string{FormatJPEG}}
+	trmnlDisplay     = displayDriver{name: DriverTRMNL, panels: trmnlPanels, connections: []string{ConnPull}, formats: []string{FormatPNG, FormatBMP}, byMAC: true}
+	paperlessDisplay = displayDriver{name: DriverPaperlessPaper, panels: paperlessPanels, connections: []string{ConnPull, ConnPaperlessPaper}, formats: []string{FormatOpenPaper}}
 )
 
 // displayOptions are a display driver's options.
@@ -393,6 +406,8 @@ func (p displayPlan) encode(label *image.Paletted) ([]byte, error) {
 		err = writeBMP(&buf, screen, p.panel.DPI)
 	case FormatJPEG:
 		err = writeJPEG(&buf, screen)
+	case FormatOpenPaper:
+		err = writeOpenPaper(&buf, screen)
 	default:
 		err = (&png.Encoder{CompressionLevel: png.BestCompression}).Encode(&buf, screen)
 	}
