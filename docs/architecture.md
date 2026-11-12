@@ -43,7 +43,7 @@ one layout engine, not two (see [Template editor](template-editor.md)).
 
 ### Direct printing
 
-Each printer gets its own command stream (Brother QL, TD and P-touch, DYMO LabelWriter, TSPL, ZPL, EPL2, ESC/POS, Phomemo, Niimbot) from a
+Each printer gets its own command stream (Brother QL, TD and P-touch, DYMO LabelWriter and LabelManager, TSPL, ZPL, EPL2, ESC/POS, Phomemo, Niimbot) from a
 pluggable print driver. The stream is sent in one of these ways, with no desktop driver or print
 dialog:
 

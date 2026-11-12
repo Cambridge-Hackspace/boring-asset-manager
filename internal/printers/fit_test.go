@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolm"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
 )
 
@@ -395,5 +396,106 @@ func TestPTouchPlan(t *testing.T) {
 	p := pages[0]
 	if !f.Rotate || len(pages) != 2 || len(p.Lines) != 283 || p.Various != 0x80 || p.Advanced != 0x0C || p.MarginDots != 28 || p.WidthMM != 12 {
 		t.Errorf("%d pages, the first %+v with %d lines", len(pages), p, len(p.Lines))
+	}
+}
+
+// TestDymoLabelManagerPrintableArea checks the fit check against each tape
+// width's printable height on each model, in dots from DYMO's imageable
+// areas: a label as tall as the tape prints only on its middle dots, and
+// content beyond them is warned of.
+func TestDymoLabelManagerPrintableArea(t *testing.T) {
+	cases := []struct {
+		model, media string
+		width        float64
+		dpi, dots    int
+	}{
+		{"LabelManager PnP", "d1-6", 6, 180, 30},
+		{"LabelManager PnP", "d1-9", 9, 180, 50},
+		{"LabelManager PnP", "d1-12", 12, 180, 58},
+		{"LabelManager 280", "d1-6", 6, 180, 30},
+		{"LabelManager 280", "d1-9", 9, 180, 50},
+		{"LabelManager 280", "d1-12", 12, 180, 58},
+		{"LabelManager 420P", "d1-6", 6, 180, 30},
+		{"LabelManager 420P", "d1-9", 9, 180, 50},
+		{"LabelManager 420P", "d1-12", 12, 180, 72},
+		{"LabelManager 420P", "d1-19", 19, 180, 100},
+		{"LabelManager Wireless PnP", "d1-6", 6, 300, 60},
+		{"LabelManager Wireless PnP", "d1-9", 9, 300, 83},
+		{"LabelManager Wireless PnP", "d1-12", 12, 300, 106},
+		{"LabelManager Wireless PnP", "d1-19", 19, 300, 166},
+		{"LabelManager Wireless PnP", "d1-24", 24, 300, 213},
+		{"LabelManager 500TS", "d1-6", 6, 300, 60},
+		{"LabelManager 500TS", "d1-9", 9, 300, 83},
+		{"LabelManager 500TS", "d1-12", 12, 300, 106},
+		{"LabelManager 500TS", "d1-19", 19, 300, 166},
+		{"LabelManager 500TS", "d1-24", 24, 300, 213},
+	}
+	for _, c := range cases {
+		reach := float64(c.dots) / float64(c.dpi) * 25.4
+		// Landscape, as tape labels are: 60 mm along the tape, turned.
+		label := LabelSpec{WidthMM: 60, HeightMM: c.width, DPI: c.dpi,
+			Content: []RectMM{{X: 5, Y: 0, Width: 10, Height: c.width}, {X: 20, Y: (c.width - reach) / 2, Width: 10, Height: reach}}}
+		_, f, err := PlanLabel(DriverDymoLabelManager, Settings{Model: c.model, Media: c.media}, label)
+		if err != nil {
+			t.Errorf("%s on %s: %v", c.media, c.model, err)
+			continue
+		}
+		if !f.Rotate || math.Abs(f.Printable.Height-reach) > 0.01 || math.Abs(f.Printable.Y-(c.width-reach)/2) > 0.01 {
+			t.Errorf("%s on %s: printable %+v, want %.2f mm across", c.media, c.model, f.Printable, reach)
+		}
+		if !slices.Equal(f.Outside, []int{0}) {
+			t.Errorf("%s on %s: outside %v", c.media, c.model, f.Outside)
+		}
+	}
+	// Tape a model does not take is refused, as is a label longer than
+	// DYMO's tallest page, 12,800 points; a short one is lengthened.
+	for _, c := range []struct {
+		model, media string
+		length       float64
+		fits         bool
+	}{
+		{"LabelManager PnP", "d1-19", 40, false},
+		{"LabelManager 420P", "d1-24", 40, false},
+		{"LabelManager PnP", "d1-12", 2, true},
+		{"LabelManager PnP", "d1-12", 4515, true},
+		{"LabelManager Wireless PnP", "d1-12", 4520, false},
+	} {
+		m, _ := dymolm.LookupMedia(c.media)
+		mo, _ := dymolm.LookupModel(c.model)
+		_, _, err := PlanLabel(DriverDymoLabelManager, Settings{Model: c.model, Media: c.media}, LabelSpec{WidthMM: c.length, HeightMM: m.WidthMM, DPI: mo.DPI})
+		if (err == nil) != c.fits {
+			t.Errorf("%g mm on %s on the %s: %v", c.length, c.media, c.model, err)
+		}
+	}
+}
+
+// TestDymoLabelManagerPlan prints through the registry with the driver's
+// options.
+func TestDymoLabelManagerPlan(t *testing.T) {
+	s := Settings{Model: "LabelManager Wireless PnP", Media: "d1-12", Options: []byte(`{"tape_type":"black_on_yellow","cut_after":"last_label","margin_mm":15}`)}
+	plan, f, err := PlanLabel(DriverDymoLabelManager, s, LabelSpec{WidthMM: 40, HeightMM: 12, DPI: 300})
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := blankLabel(40, 12, 300)
+	stream, err := plan.Encode([]*image.Gray{label, label})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mo, _ := dymolm.LookupModel("LabelManager Wireless PnP")
+	job, err := mo.DecodeJob(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Turned, 40 mm along the tape is 472 lines; 15 mm is 177. Cut once,
+	// at the end, with a cut mark between: margins before and after each,
+	// and the mark. The first margin is fed less the tape between head and
+	// cutter, which is fed at the end.
+	if want := 2*472 + 4*177 + 1; !f.Rotate || job.TapeType != 4 || len(job.Cuts) != 1 || len(job.Lines) != want {
+		t.Errorf("tape type %d, cuts %v, %d lines, want %d", job.TapeType, job.Cuts, len(job.Lines), want)
+	}
+	if _, _, err := PlanLabel(DriverDymoLabelManager, Settings{Model: "LabelManager 420P", Media: "d1-12", Options: []byte(`{"cut_after":"last_label"}`)},
+		LabelSpec{WidthMM: 40, HeightMM: 12, DPI: 180}); err == nil {
+		t.Error("the 420P took cut_after")
 	}
 }

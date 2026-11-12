@@ -86,6 +86,9 @@ describe('printer words', () => {
     expect(optionValueLabel('last_label')).toBe('After the last label');
     expect(optionValueLabel('right_side')).toBe('right side');
     expect(driverName('xtool')).toBe('xTool');
+    expect(driverName('dymo_labelmanager')).toBe('DYMO LabelManager');
+    expect(optionLabel('tape_type')).toBe('Tape colors');
+    expect(optionValueLabel('black_on_white')).toBe('black on white');
     expect(optionLabel('allow_unknown_firmware')).toContain('firmware');
     expect(driverName('grbl')).toBe('GRBL laser');
     expect(driverName('ruida')).toBe('Ruida laser controller');

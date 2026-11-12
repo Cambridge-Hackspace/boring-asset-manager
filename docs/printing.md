@@ -23,8 +23,8 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Seven printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`,
-`tspl`, `zpl` and `epl2`; and three for e-paper displays, which are printers too: `display`,
+Eight printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`,
+`dymo_labelmanager`, `tspl`, `zpl` and `epl2`; and three for e-paper displays, which are printers too: `display`,
 `openepaperlink` and `trmnl` (see [Displays](#displays)). Option values are listed by the drivers endpoint, and unknown options are
 refused.
 
@@ -155,6 +155,7 @@ Drivers take custom stock only where a size is all the printer needs:
   and continuous only on the T02.
 - Brother QL and P-touch printers take only their built-in rolls and cassettes. They identify the
   roll or cassette loaded, and need Brother's figures to place a label on it.
+- DYMO LabelManagers take only D1 tape, whose printable dots on each width are DYMO's.
 
 Changing stock checks every printer with it loaded. The change is refused, naming the printer, if
 one would no longer take it. Stock loaded in a printer cannot be deleted (`409`).
@@ -532,6 +533,120 @@ genuine DYMO labels it can identify, whatever the driver sends.
 **Connections.** The LabelWriter 400 and 450 series and the 4XL have only a USB port, so they use a
 `device`, `ipp`, `windows` or print-server `tcp` connection (see [Delivery](#delivery)). The 550
 Turbo, 5XL and Wireless have network ports.
+
+### `dymo_labelmanager`
+
+For DYMO's LabelManager label makers, which print D1 tape:
+
+| Model | Resolution | Head | Tape | Cutter | Connections |
+|---|---|---|---|---|---|
+| LabelManager PnP | 180 DPI | 64 dots (9 mm) | 6, 9, 12 mm | By hand | USB |
+| LabelManager 280 | 180 DPI | 64 dots | 6, 9, 12 mm | By hand | USB |
+| LabelManager 420P | 180 DPI | 128 dots (18 mm) | 6, 9, 12, 19 mm | By hand | USB |
+| LabelManager 500TS | 300 DPI | 256 dots (21.7 mm) | 6, 9, 12, 19, 24 mm | Automatic | USB |
+| LabelManager Wireless PnP | 300 DPI | 256 dots | 6, 9, 12, 19, 24 mm | Automatic | USB (Wi-Fi: see below) |
+
+The commands are those of DYMO's tape printers, documented in Appendix B of DYMO's *LabelWriter 450
+Series Technical Reference Manual* (2009) for the tape side of the LabelWriter Duo. DYMO has
+published no reference for the LabelManagers themselves. Each model's head, the printable dots on
+each tape, the feed to the cutter, and the 500TS's framing were learned by reading DYMO's
+open-source (GPL) Linux drivers and their PPDs. No code or test data is taken from them, so BAM
+stays MIT-licensed.
+
+Those drivers know the PnP, 420P, 500TS and Wireless PnP, but ship PPDs only for the PnP and
+Wireless PnP. The 420P's printable dots are those of DYMO's PPD for the LabelManager 450, the other
+128-dot head at 180 DPI, and the 500TS is set up as the Wireless PnP, as DYMO's driver sets it up.
+DYMO's drivers do not know the 280. It takes the PnP's tapes, and community drivers drive it as a
+PnP, so it is taken to be one. The Rhino 6000+ is left out: nothing found says what it speaks.
+
+**Options:**
+
+- **`tape_type`:** the tape's colors, which set how hot the head prints: `black_on_white`
+  (default, also for clear tape), `black_on_blue`, `black_on_red`, `black_on_silver`,
+  `black_on_yellow`, `black_on_gold`, `black_on_green`, `black_on_fluorescent_green`,
+  `black_on_fluorescent_red`, `white_on_clear`, `white_on_black`, `blue_on_white` or
+  `red_on_white`, the manual's tape types 0–12.
+- **`cut_after`**, on the 500TS and Wireless PnP only: `each_label` (default) cuts each label off;
+  `last_label` cuts only after the job's last, and prints a cut mark between the others. The other
+  models' cutter is pressed by hand: they print the mark between labels, and feed the last to the
+  cutter.
+- **`margin_mm`** is the tape fed before and after each label. It runs from the distance between
+  the head and the cutter (8.2 mm at 180 DPI, 7.8 mm at 300) to 127 mm; unset is DYMO's, 75 lines
+  at 180 DPI and 125 at 300 (10.6 mm).
+
+**Media.** D1 tape, `d1-6` to `d1-24`, with each width's printable dots on each model, from the
+width of DYMO's imageable area for it:
+
+| Tape | PnP, 280 | 420P | 500TS, Wireless PnP |
+|---|---|---|---|
+| 6 mm | 30 | 30 | 60 |
+| 9 mm | 50 | 50 | 83 |
+| 12 mm | 58 | 72 | 106 |
+| 19 mm | – | 100 | 166 |
+| 24 mm | – | – | 213 |
+
+A printer is refused with a tape its model does not take, and the printer form offers each model
+only those. Custom stock is refused: DYMO gives no figures for other widths.
+
+**Fit.** Templates use the model's resolution, 180 or 300 DPI. A template's height is the tape's
+width (the template is turned, so its width runs along the tape). Its other side is the label's
+length, up to 4,515 mm (12,800 points, the tallest page DYMO's PPDs take). Only the middle of the
+tape prints, by DYMO's printable dots: 58 of 12 mm tape's 85 on the PnP, for example. The fit check
+warns of anything beyond them. A label shorter than the model's shortest (30 lines on the PnP and
+280, 63 on the 420P, 222 at 300 DPI) is lengthened with blank tape after it, as DYMO's driver does.
+
+**Placement.** The printable dots are centered on the head, as DYMO's driver centers them. On the
+500TS, DYMO's driver moves 12 mm tape 2 dots toward the head's last dot and 19 mm tape 4 dots
+toward its first, and so does this one. A label is sent from its left edge, its bottom edge on the
+head's first printable dot: DYMO's PPDs turn landscape pages a quarter turn clockwise, and community
+drivers print the same way.
+
+**Encoding.** Each label is rendered 1-bit and sent as uncompressed lines, since the tape printers
+take no compression. The stream is:
+
+1. a line of NUL bytes and the tape type (`ESC C`);
+2. then for each label:
+   - the margin, less the tape already between the head and the cutter on the first label;
+   - its lines: each trimmed of blank bytes at both ends, with a dot tab (`ESC B`) and bytes per
+     line (`ESC D`) sent only when they change, then `SYN` and the bytes;
+   - blank lines as `SYN`s with 0 bytes per line;
+   - the margin after it;
+   - between labels, the feed to the cutter and a cut (`ESC E`), or a cut mark: a line of `99h`;
+3. the feed to the cutter, and a cut on the models that cut.
+
+The 500TS's stream goes in blocks of up to 4,096 bytes, each after `ESC Y 1` and its length (four
+bytes, big-endian), and ends with `ESC Y 0` and a length of 0, as DYMO's driver frames it.
+
+**Connections.** Each model is a USB printer to BAM!: a `device` connection on Linux, such as
+`/dev/usb/lp0`, or `windows` with DYMO's Windows driver installed (BAM! prints `RAW`, so the driver
+never changes the job). Each also has an HID interface, which BAM! does not use.
+
+- **Mode switch.** The PnP and 280, and by community reports the 420P and Wireless PnP, start as a
+  USB drive holding DYMO's software (USB product `0922:1001` on the PnP, `1005` on the 280, `1003`
+  on the 420P, `1007` on the Wireless PnP). Windows and macOS switch them to a printer when DYMO's
+  driver loads. On Linux, `usb_modeswitch` sends the switch, `ESC Z 1` (`1b5a01`), and the printer
+  comes back as the next product (`0922:1002` on the PnP). If yours stays a drive, a udev rule
+  can run `usb_modeswitch` for it with a configuration such as:
+
+  ```
+  DefaultVendor=0x0922
+  DefaultProduct=0x1001
+  TargetVendor=0x0922
+  TargetProduct=0x1002
+  MessageEndpoint=0x01
+  MessageContent="1b5a01"
+  ```
+
+  The printer is then `/dev/usb/lp0` or the next free number, which needs `/dev/usb/lp*` in
+  `[printers] devices`.
+- **The Wireless PnP over Wi-Fi.** It joins a wireless network through DYMO's setup tool, and DYMO
+  Label software prints to it. What it takes over the network, and on which port, is published
+  nowhere found, and has not been checked. It may be the LabelWriter Wireless's raw port 9100, but
+  that is a guess. Until someone checks, reach it over USB. It does not print over the network
+  while its USB cable is in a computer.
+- **The 500TS's USB product** is not known, nor whether it needs switching.
+
+None of this has yet been checked on a real LabelManager.
 
 ### `tspl`
 
