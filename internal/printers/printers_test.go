@@ -22,6 +22,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolm"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/escpos"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/industrial"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/niimbot"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
@@ -125,6 +126,30 @@ func TestValidate(t *testing.T) {
 	bad("EPL2 model", "P", DriverEPL2, "lp.lan", 9100, brother("Zebra GK420d", "4x6", ""))
 	bad("EPL2 density", "P", DriverEPL2, "lp.lan", 9100, brother("Zebra LP 2844", "4x6", `{"density":16}`))
 	bad("EPL2 unknown option", "P", DriverEPL2, "lp.lan", 9100, brother("Zebra LP 2844", "4x6", `{"darkness":4}`))
+	ok("DPL", DriverDPL, "datamax.lan", 9100, brother("Datamax I-Class 300 DPI", "4x6", ""))
+	ok("DPL options", DriverDPL, "datamax.lan", 9100, brother("Honeywell PM43 203 DPI", "4x2",
+		`{"heat":20,"speed":6,"media_sensor":"mark","image_module":"G"}`))
+	bad("DPL model", "P", DriverDPL, "datamax.lan", 9100, brother("SATO WS408", "4x6", ""))
+	bad("DPL heat", "P", DriverDPL, "datamax.lan", 9100, brother("Datamax E-Class 203 DPI", "4x6", `{"heat":31}`))
+	bad("DPL speed", "P", DriverDPL, "datamax.lan", 9100, brother("Datamax E-Class 203 DPI", "4x6", `{"speed":13}`))
+	bad("DPL sensor", "P", DriverDPL, "datamax.lan", 9100, brother("Datamax E-Class 203 DPI", "4x6", `{"media_sensor":"none"}`))
+	bad("DPL module", "P", DriverDPL, "datamax.lan", 9100, brother("Datamax E-Class 203 DPI", "4x6", `{"image_module":"dram"}`))
+	bad("DPL unknown option", "P", DriverDPL, "datamax.lan", 9100, brother("Datamax E-Class 203 DPI", "4x6", `{"darkness":4}`))
+	ok("SBPL", DriverSBPL, "sato.lan", 9100, brother("SATO CL4NX 305 DPI", "4x6", ""))
+	ok("SBPL options", DriverSBPL, "sato.lan", 9100, brother("SATO CL6NX 203 DPI", "continuous-4",
+		`{"darkness":5,"speed":8,"media_sensor":"none","stx_etx":true}`))
+	bad("SBPL darkness", "P", DriverSBPL, "sato.lan", 9100, brother("SATO WS408", "4x6", `{"darkness":0}`))
+	bad("SBPL speed", "P", DriverSBPL, "sato.lan", 9100, brother("SATO WS408", "4x6", `{"speed":11}`))
+	bad("SBPL sensor", "P", DriverSBPL, "sato.lan", 9100, brother("SATO WS408", "4x6", `{"media_sensor":"continuous"}`))
+	bad("SBPL unknown option", "P", DriverSBPL, "sato.lan", 9100, brother("SATO WS408", "4x6", `{"heat":4}`))
+	ok("EZPL", DriverEZPL, "godex.lan", 9100, brother("Godex G500", "4x6", ""))
+	ok("EZPL options", DriverEZPL, "godex.lan", 9100, brother("Godex RT230", "4x3",
+		`{"darkness":12,"speed":5,"media_type":"transfer","media_sensor":"mark"}`))
+	bad("EZPL model", "P", DriverEZPL, "godex.lan", 9100, brother("Datamax E-Class 203 DPI", "4x6", ""))
+	bad("EZPL darkness", "P", DriverEZPL, "godex.lan", 9100, brother("Godex G500", "4x6", `{"darkness":20}`))
+	bad("EZPL speed", "P", DriverEZPL, "godex.lan", 9100, brother("Godex G500", "4x6", `{"speed":8}`))
+	bad("EZPL media type", "P", DriverEZPL, "godex.lan", 9100, brother("Godex G500", "4x6", `{"media_type":"ribbon"}`))
+	bad("EZPL unknown option", "P", DriverEZPL, "godex.lan", 9100, brother("Godex G500", "4x6", `{"stx_etx":true}`))
 }
 
 func TestDriversDescribeEveryRoll(t *testing.T) {
@@ -138,7 +163,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if _, ok := by[DriverTestLaser]; ok {
 		n--
 	}
-	if n != 17 || len(by) != len(d) {
+	if n != 20 || len(by) != len(d) {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -217,6 +242,22 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	}
 	if len(epl2.Options) != 1 || len(epl2.Models) != len(zebra.Models(zebra.EPL2)) || epl2.ModelDPI["Zebra LP 2824"] != 203 {
 		t.Fatalf("EPL2 driver info = %+v", epl2)
+	}
+	for _, c := range []struct {
+		driver  string
+		lang    industrial.Language
+		options int
+		model   string
+		dpi     int
+	}{
+		{DriverDPL, industrial.DPL, 4, "Datamax I-Class 600 DPI", 600},
+		{DriverSBPL, industrial.SBPL, 4, "SATO CL4NX 305 DPI", 300},
+		{DriverEZPL, industrial.EZPL, 4, "Godex G530", 300},
+	} {
+		info := by[c.driver]
+		if len(info.Media) != len(zebra.MediaIDs()) || len(info.Options) != c.options || len(info.Models) != len(industrial.Models(c.lang)) || info.ModelDPI[c.model] != c.dpi {
+			t.Fatalf("%s driver info = %+v", c.driver, info)
+		}
 	}
 	// The drivers that take custom stock say how wide, for every model; a
 	// laser has no roll.
@@ -302,6 +343,12 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 		{"Phomemo die-cut", DriverPhomemo, "M221", stock(60, 40, 2), true},
 		{"Phomemo tape", DriverPhomemo, "D35", stock(12, 50, 3), true},
 		{"Phomemo continuous tape", DriverPhomemo, "D35", stock(12, 0, 0), false},
+		{"DPL die-cut", DriverDPL, "Datamax M-Class 300 DPI", stock(60, 40, 2.5), true},
+		{"DPL continuous", DriverDPL, "Datamax I-Class 600 DPI", stock(100, 0, 0), true},
+		{"DPL wider than the head", DriverDPL, "Datamax E-Class 203 DPI", stock(120, 40, 3), false},
+		{"SBPL on the 6-inch CL6NX", DriverSBPL, "SATO CL6NX 203 DPI", stock(152, 100, 3), true},
+		{"SBPL 6-inch roll on a 4-inch head", DriverSBPL, "SATO CL4NX 203 DPI", stock(152, 100, 3), false},
+		{"EZPL die-cut", DriverEZPL, "Godex EZ-1300Plus", stock(60, 40, 2.5), true},
 	}
 	for _, c := range cases {
 		d, _ := Lookup(c.driver)
@@ -824,6 +871,43 @@ func TestZebraPlans(t *testing.T) {
 	}
 	if epl, err := zebra.DecodeEPL2(stream); err != nil || len(epl.Labels) != 1 || epl.Labels[0].Width != 406 {
 		t.Errorf("EPL2 job %+v: %v", epl, err)
+	}
+}
+
+func TestIndustrialPlans(t *testing.T) {
+	label := image.NewGray(image.Rect(0, 0, 1219, 812)) // landscape 6 × 4 in, all black
+	plan := func(driver, model string, options string) []byte {
+		t.Helper()
+		d, err := Lookup(driver)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := planWith(d, Settings{Model: model, Media: "4x6", Options: json.RawMessage(options)}, LabelSpec{WidthMM: 152.4, HeightMM: 101.6, DPI: 203})
+		if err != nil {
+			t.Fatal(err)
+		}
+		stream, err := p.Encode([]*image.Gray{label, label, label})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return stream
+	}
+	// Each turned to run along the roll, as three copies of one label: the
+	// 6 in roll is 1,218 dots long, the rendered label 1,219, all of which
+	// DPL and EZPL send.
+	dpl, err := industrial.DecodeDPL(plan(DriverDPL, "Datamax E-Class 203 DPI", `{"heat":22}`))
+	if err != nil || len(dpl.Labels) != 1 || dpl.Labels[0].Copies != 3 || dpl.Labels[0].Image.Rect.Dy() != 1219 || !slices.Contains(dpl.Labels[0].Commands, "H22") {
+		t.Errorf("DPL job %+v: %v", dpl, err)
+	}
+	sbpl, err := industrial.DecodeSBPL(plan(DriverSBPL, "SATO WS408", `{"media_sensor":"gap"}`))
+	if err != nil || len(sbpl.Labels) != 1 || sbpl.Labels[0].Copies != 3 || sbpl.Labels[0].Length != 1218 || sbpl.Labels[0].Width != 812 ||
+		strings.Join(sbpl.Setup, " ") != "IG1" {
+		t.Errorf("SBPL job %+v: %v", sbpl, err)
+	}
+	ezpl, err := industrial.DecodeEZPL(plan(DriverEZPL, "Godex G500", `{"media_type":"direct"}`))
+	if err != nil || len(ezpl.Labels) != 1 || ezpl.Labels[0].Copies != 3 || ezpl.Labels[0].Image.Rect.Dy() != 1219 ||
+		!slices.Contains(ezpl.Labels[0].Setup, "^AD") {
+		t.Errorf("EZPL job %+v: %v", ezpl, err)
 	}
 }
 

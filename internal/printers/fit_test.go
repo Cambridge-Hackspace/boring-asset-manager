@@ -82,6 +82,13 @@ func TestFitLabel(t *testing.T) {
 		{"ZPL 300 DPI template on a 203 DPI printer", DriverZPL, "Zebra GK420d", "4x6", 101.6, 152.4, 300, false, false},
 		{"ZPL continuous", DriverZPL, "Generic ZPL 8 in 203 DPI", "continuous-4", 101.6, 300, 203, false, true},
 		{"EPL2 2-inch head", DriverEPL2, "Zebra LP 2824", "2x1", 50.8, 25.4, 203, false, true},
+
+		{"DPL 4-inch head", DriverDPL, "Datamax I-Class 203 DPI", "4x6", 101.6, 152.4, 203, false, true},
+		{"DPL 600 DPI reaches 2,040 dots", DriverDPL, "Datamax I-Class 600 DPI", "2x1", 50.8, 25.4, 600, false, true},
+		{"SBPL 300 DPI", DriverSBPL, "SATO CL4NX 305 DPI", "4x6", 101.6, 152.4, 300, false, true},
+		{"SBPL 600 DPI continuous too long", DriverSBPL, "SATO CL4NX 609 DPI", "continuous-4", 101.6, 500, 600, false, false},
+		{"EZPL landscape rotates", DriverEZPL, "Godex G500", "4x6", 152.4, 101.6, 203, true, true},
+		{"EZPL 300 DPI template on a 203 DPI printer", DriverEZPL, "Godex RT200", "4x6", 101.6, 152.4, 300, false, false},
 	}
 	for _, c := range cases {
 		_, f, err := PlanLabel(c.driver, Settings{Model: c.model, Media: c.media}, LabelSpec{WidthMM: c.width, HeightMM: c.height, DPI: c.dpi})
