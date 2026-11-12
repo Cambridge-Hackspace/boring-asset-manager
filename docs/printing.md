@@ -25,9 +25,9 @@ Each printer is stored with:
 
 Fifteen printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`,
 `dymo_labelwriter`, `dymo_labelmanager`, `epson_labelworks`, `tspl`, `zpl`, `epl2`, `dpl`, `sbpl`,
-`ezpl`, `escpos`, `phomemo` and `niimbot`; and four for e-paper displays, which are printers too:
-`display`, `openepaperlink`, `trmnl` and `paperlesspaper` (see [Displays](#displays)). Option values
-are listed by the drivers endpoint, and unknown options are refused.
+`ezpl`, `escpos`, `phomemo` and `niimbot`; and five for e-paper displays, which are printers too:
+`display`, `openepaperlink`, `trmnl`, `paperlesspaper` and `solum` (see [Displays](#displays)).
+Option values are listed by the drivers endpoint, and unknown options are refused.
 
 ### Who can do what
 
@@ -1237,7 +1237,7 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
 | `ble` | The printer's Bluetooth address, such as `7C:2F:80:A1:B2:C3`, then optionally `?service=…&write=…&notify=…&ack=…&protocol=…` | A Bluetooth LE printer in range of the BAM server, on Linux. The address must match a pattern in the server's `[printers] bluetooth` setting, which is empty by default. See [Bluetooth](#bluetooth). |
 | `browser` | Empty, or `?service=…&write=…&notify=…&ack=…&protocol=…&chunk=…` | A Bluetooth LE printer beside whoever prints, printed to from their browser over its own Bluetooth, so the server needs none. Never through a relay, and never from the spool. See [From a browser](#from-a-browser). |
-| `openepaperlink`, `pull`, `webhook`, `paperlesspaper` | See [Displays](#connections) | E-paper displays only. |
+| `openepaperlink`, `pull`, `webhook`, `paperlesspaper`, `solum` | See [Displays](#connections) | E-paper displays only. |
 
 A connection may also name a relay, as `"relay": "front-desk"`: BAM! run beside the printer on its
 own network, for a BAM! hosted elsewhere. The address is then on the relay's network, and the
@@ -1613,6 +1613,7 @@ nothing new to learn. Nothing here has been tried on real hardware yet.
 | `openepaperlink` | OpenEPaperLink tags: 1.54-inch 152 × 152, 2.6-inch 296 × 152, 2.9-inch 296 × 128, 4.2-inch 400 × 300 and 7.4-inch 640 × 384, with red | `openepaperlink` | JPEG |
 | `trmnl` | TRMNL (`og`, 800 × 480) and TRMNL X (`x`, 1872 × 1404), in black and white | `pull`, by its MAC address | PNG (default) or BMP |
 | `paperlesspaper` | OpenPaper 7 (`epd7`, 800 × 480) and OpenPaper L (`openpaper13`, 1200 × 1600), in Spectra 6 | `pull`, `paperlesspaper` | OpenPaper's own BMP (below) |
+| `solum` | SoluM's labels by screen: 1.6-inch 152 × 152, 2.2-inch 212 × 104, 2.13-inch 250 × 122, 2.6-inch 296 × 152, 2.9-inch 296 × 128, 4.2-inch 400 × 300, 7.4-inch 640 × 384 and 7.5-inch 800 × 480, each black and white, with red, with yellow, or with both | `solum` | PNG |
 
 Each model's resolution is its panel's, near enough: its diagonal in pixels over its diagonal in
 inches. PNGs are paletted, a bit a dot for black and white; BMPs are uncompressed with a palette, a
@@ -1627,9 +1628,10 @@ TRMNL read them. JPEGs are baseline at the highest quality, in gray for black an
 | `pull` | None; for a `trmnl` display, its MAC address | Pull: kept for the display to fetch with its own token (below). |
 | `webhook` | A webhook [notification channel](notifications.md)'s ID | Push: posted through the channel (below). The channel must be a webhook, and on. |
 | `paperlesspaper` | A paperlesspaper paper's ID, 24 hexadecimal digits | Push: uploaded to paperlesspaper's cloud ([paperlesspaper](#paperlesspaper)). |
+| `solum` | The label's code, from its back, such as `04507B0AC391`, then optionally `?page=` and its page, 1 to 10 | Push: through SoluM's AIMS ([SoluM](#solum)). |
 
 A display driver takes only its own connections, and a printer's driver none of these. `pull`,
-`webhook` and `paperlesspaper` are the server's own, never through a relay.
+`webhook`, `paperlesspaper` and `solum` are the server's own, never through a relay.
 
 ### OpenEPaperLink
 
@@ -1723,6 +1725,37 @@ secret_key`, so setting one needs it, and is never answered: only `paperlesspape
 address defaults to `https://api.paperlesspaper.de/v1`, for a self-hosted install of
 paperlesspaper's API to change.
 
+### SoluM
+
+A `solum` display is one of SoluM's electronic shelf labels, pushed through SoluM's AIMS SaaS, as
+its public documentation describes its "Common API". Its models are labels' screens by size and
+inks; AIMS says each label's, and a push to a label that is not its model's is refused before it is
+sent, saying which it is. These facts are from SoluM's documentation, and have not been tried on a
+label.
+
+- **Signing in:** BAM! asks `POST {base}/common/api/v2/token` for a bearer token with the account's
+  username and password, keeps it, refreshes it with its refresh token when AIMS refuses it, and
+  signs in again when that fails.
+- **Checking the label:** `GET …/common/api/v2/common/labels/type/info?labelCode=` gives its
+  screen's width, height and colors (`BW`, `BWR`, `BWY` or `BWYR`), and its pages.
+- **Pushing:** `POST …/common/api/v2/common/labels/image?company=&store=&cbId=yes`, with the label's
+  code, the image as a base64 PNG in the label's inks, its page as `page` and `frontPage`, and
+  `dithering` off. AIMS refusing it (4xx) fails the job with what it said; failing (5xx), it is
+  tried again, three times in all.
+- **Shown?** BAM! asks the push's history every 2 seconds, for 8: `SUCCESS` is shown, and `FAILED TO
+  TRANSMIT`, its gateway not reaching the label, fails the job. A label still on its way
+  (`PROCESSING`, or `TIMEOUT`, which it retries when it next hears from its gateway) does not, as a
+  print waits for this, and has little time.
+
+The account is the instance's, under **Admin › Displays**, or `solum_base_url`, `solum_company`,
+`solum_store`, `solum_username` and `solum_password` in `PUT /api/v1/settings/displays`. The
+password is sealed with `[auth] secret_key`, so setting one needs it, and is never answered: only
+`solum_password_set`. The address defaults to AIMS in Europe, `https://eu.common.solumesl.com`.
+
+Hanshow, Pricer, VusionGroup, Zkong and Minew publish no API that takes an image BAM! has drawn, so
+they have no driver: a label of theirs that OpenEPaperLink's firmware runs on is an `openepaperlink`
+display.
+
 ### Keeping displays current
 
 When the asset a display shows changes, or something it is in does, a hook can refresh the display
@@ -1747,6 +1780,9 @@ categories of the assets shown and of their containers.
 | `pull_refresh_seconds` | 900 | 60 to 86400 |
 | `paperlesspaper_base_url` | `https://api.paperlesspaper.de/v1` | An http(s) URL |
 | `paperlesspaper_api_key` | Unset | Write-only, sealed; `paperlesspaper_api_key_set` says whether it is set |
+| `solum_base_url` | `https://eu.common.solumesl.com` | An http(s) URL |
+| `solum_company`, `solum_store`, `solum_username` | Unset | At most 255 characters |
+| `solum_password` | Unset | Write-only, sealed; `solum_password_set` says whether it is set |
 
 ## Lasers
 

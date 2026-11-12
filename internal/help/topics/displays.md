@@ -4,12 +4,13 @@ An e-paper display shows a label template the way a printed label does, but it c
 
 ## Adding a display
 
-Under **Admin › Printers**, add a printer and choose a display's model: a panel by its size, an OpenEPaperLink tag, a TRMNL, or one of paperlesspaper's OpenPaper frames. Its screen is its roll, so the editor and the fit check know its size, resolution and inks. Then choose how BAM! reaches it:
+Under **Admin › Printers**, add a printer and choose a display's model: a panel by its size, an OpenEPaperLink tag, a TRMNL, one of paperlesspaper's OpenPaper frames, or a SoluM shelf label. Its screen is its roll, so the editor and the fit check know its size, resolution and inks. Then choose how BAM! reaches it:
 
 - **OpenEPaperLink access point**: BAM! uploads the image to the access point, with the tag's MAC address, and the tag shows it when it next checks in, usually within a minute.
 - **The display fetches it**: BAM! keeps the image, and the display fetches it from its own address with its own token. TRMNL does this, and so do most displays you build yourself, such as ESPHome's.
 - **Webhook**: BAM! posts the image to a webhook channel, set up under **Admin › Notifications**, for something that takes an image.
 - **paperlesspaper's cloud**: for an OpenPaper frame on paperlesspaper's own firmware, BAM! uploads the image to the frame's paper, by the paper's ID from its address in paperlesspaper's web app, and the frame shows it when it next wakes. Your admin sets paperlesspaper's API key under **Admin › Displays**.
+- **SoluM's AIMS**: BAM! pushes the image to a SoluM label, by the code on its back, through your AIMS account, which your admin sets under **Admin › Displays**. Choose the model that is the label's size and inks: BAM! checks, and says if it is not.
 
 ## Showing an asset
 
