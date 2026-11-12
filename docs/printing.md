@@ -151,6 +151,8 @@ Drivers take custom stock only where a size is all the printer needs:
 
 - TSPL printers, Zebras (ZPL and EPL2) and DYMO LabelWriters take it, up to their head's width.
 - Brother TD printers take it, as wide as each model's rolls may be.
+- ESC/POS and Phomemo printers take it, up to their widest roll: die-cut only on Phomemo's D series,
+  and continuous only on the T02.
 - Brother QL and P-touch printers take only their built-in rolls and cassettes. They identify the
   roll or cassette loaded, and need Brother's figures to place a label on it.
 
@@ -648,6 +650,116 @@ generic EPL2 printer at 203 DPI with a 4-inch head.
 4. one `GW` holding the whole label, centered across it (a 0 bit prints a dot);
 5. `P` with the copies.
 
+### `escpos`
+
+For receipt and label printers that take ESC/POS raster images, as most inexpensive 58 mm and
+80 mm thermal printers do. The driver follows Epson's *ESC/POS Command Reference*.
+
+**Models:** generic ESC/POS printers at 203 DPI, for 58 mm paper (a 384-dot, 48 mm head) and for
+80 mm paper (576 dots, 72 mm). Neither has yet been checked on real hardware.
+
+**Options:**
+
+- `head_dots`: the head's width in dots, 8–2048, for a printer whose head is not the usual one for
+  its paper, such as an 80 mm printer of 512 dots; unset is the model's.
+- `cut`: `none`, `partial` (default) or `full`, after each label. A printer without a cutter
+  ignores it.
+- `feed_mm`: 0–100, default 0: paper fed after each label, before it is cut. A cut feeds the label
+  past the cutter itself, so set it for a printer without one, to reach its tear bar.
+
+**Media:** 58 mm and 80 mm paper. Any other roll, such as die-cut labels in a printer that finds
+their gaps itself, is [custom stock](#custom-label-stock), up to the paper's width. Continuous
+labels are 10–1000 mm long. A label wider than the head is printed around its middle.
+
+**Encoding.** `ESC @`, then for each label:
+
+1. the label as `GS v 0` raster images, as wide as the head with the label centered, in bands of at
+   most 255 lines (a 1 bit prints a dot);
+2. `feed_mm` of blank lines;
+3. `GS V 66 0` or `GS V 65 0`, which feed the label to the cutter and cut it partly or fully.
+
+ESC/POS has no copies, so each copy is sent whole.
+
+**Connections.** `tcp` on port 9100 for a networked printer, and `device`, `ipp` or `windows` for
+one on USB (see [Delivery](#delivery)). Over Bluetooth Classic, a printer is a serial port; over
+Bluetooth LE, `ble` with the service and write characteristic the printer takes jobs on, which
+differ by maker (see [Bluetooth](#bluetooth)).
+
+### `phomemo`
+
+For Phomemo's label makers, which take ESC/POS raster images with their own commands around them.
+Phomemo publishes no reference, so the driver follows the community's descriptions. It implements
+the protocol as they describe it, and copies none of their code or text:
+
+- [phomemo-tools](https://github.com/vivier/phomemo-tools) (GPL-3.0): the M series' and M02's
+  commands, the D30's preamble, and their rolls;
+- [phomemo_d30](https://github.com/polskafan/phomemo_d30) (MIT): the D30's preamble and head;
+- [phomemo](https://github.com/Knightro63/phomemo) (MIT): the D series' end, and the M series' media
+  types;
+- [Phomymo](https://github.com/transcriptionstream/phomymo) (no license given, so facts alone):
+  heads, the M220's roll position, the D35 and Q30 as D series, and the Bluetooth LE profile;
+- [pyphomemo](https://github.com/mkuhlmann/pyphomemo) (MIT): the M110's Bluetooth LE profile.
+
+No model has yet been checked on real hardware.
+
+| Model | Head | Rolls | Commands | USB |
+|---|---|---|---|---|
+| M110, M120 | 384 dots (48 mm) | labels, with gaps or continuous, to 50 mm | M series | Yes |
+| M200 | 608 dots (76 mm) | labels, to 80 mm | M series (assumed) | Yes (unconfirmed) |
+| M220 | 576 dots (72 mm), its roll against one end | labels, to 80 mm | M series | Yes |
+| M221 | 576 dots (72 mm) | labels, to 80 mm | M series (assumed) | Yes (unconfirmed) |
+| D30, D35, Q30 | 96 dots (12 mm) | die-cut tape, to 15 mm | D series | – |
+| T02 | 384 dots (48 mm) | 53 mm continuous paper | paper | – |
+
+Every model prints at 203 DPI. The sources disagree on the M200's and M220's heads: these are
+Phomymo's, which prints across their 3-inch rolls.
+
+**Commands.** Each family is sent its own around the `GS v 0` raster images:
+
+- **M series:** before each label, its speed (`ESC N 13 n`), density (`ESC N 4 n`) and media type
+  (`US DC1 n`: `0A` for labels with gaps, `0B` for continuous); the label as one raster image; then
+  `1F F0 05 00 1F F0 03 00`. phomemo-tools describes it for the M110, M120 and M220; the M200 and
+  M221 are assumed to take it as the M220 does.
+- **D series:** before each label, `1F 11 24 00`, captured from Phomemo's app and of unknown
+  meaning, and `ESC @`; the label as one raster image; then `ESC d 0`, which ends it at the next
+  gap.
+- **Paper:** `ESC @`, `ESC a 1` (centered) and `1F 11 02 04`, as captured from the M02's app; each
+  label in raster images of at most 255 lines; then `ESC d 2` twice. The app then asks for the
+  printer's status, which BAM! does not.
+
+Each label is sent as wide as the head, centered on it, or on the M220 against the end of the head
+where its roll sits. A label wider than the head is printed around its middle.
+
+**Orientation.** The D series prints on narrow tape, so its rolls are given as width across the
+tape × length along it: a 12 × 40 mm label is 40 mm along. A template designed landscape, 40 ×
+12 mm, is turned a quarter counterclockwise to print, as the fit check turns a label on any roll.
+Set `rotate_180` if the printer feeds it the other way up.
+
+**Options:**
+
+- `density`: 1–15, default 10; the M series only.
+- `print_speed`: 1 (slowest) to 5, default 5; the M series only.
+- `rotate_180`: default `false`; set it to print labels the other way up.
+
+**Media.**
+
+- The M series: 30 × 20, 40 × 20, 40 × 30, 40 × 60, 50 × 20, 50 × 30, 50 × 50, 50 × 80 and, on the
+  3-inch models, 70 × 80 mm labels, and 50 mm continuous.
+- The D series: 12 × 22, 12 × 30, 12 × 40, 14 × 30, 15 × 30 and 15 × 40 mm tape.
+- The T02: 53 mm paper.
+
+Any other size is [custom stock](#custom-label-stock), up to the model's widest roll: die-cut only
+on the D series, and continuous only on the T02. Labels with black marks (media type `26`) are not
+offered, since custom stock has no marks. Continuous labels are 10–1000 mm long.
+
+**Connections.**
+
+- **Bluetooth LE,** every model: the `ble` connection, whose profile is the driver's: the service
+  `ff00`, written to on `ff02`, with no acknowledgments.
+- **USB,** the M series: a `device` connection, `/dev/usb/lp0` on Linux.
+- **Bluetooth Classic,** where a model offers it, as the D30 and T02 are reported to: paired and
+  bound as `/dev/rfcomm0`, a `device` connection (see [Bluetooth](#bluetooth)).
+
 ## Delivery
 
 Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM reaches it:
@@ -706,8 +818,9 @@ characteristics the job goes to:
   characteristic, notify characteristic, and whether the printer acknowledges writes, listed as
   `ble` by the drivers endpoint. The connection's `service`, `write`, `notify` and `ack` (`true` or
   `false`) override them. UUIDs are written in full, or as 16 or 32 bits of the Bluetooth base
-  UUID (`fff0`). None of the drivers shipped today has a profile of its own, so a `ble` printer
-  gives at least its service and write characteristic, from the printer's documentation.
+  UUID (`fff0`). Of the drivers shipped today, only [`phomemo`](#phomemo) has a profile of its own,
+  so a `ble` printer of any other gives at least its service and write characteristic, from the
+  printer's documentation.
 - **Writing.** The job is written to the write characteristic in chunks the link allows: the ATT
   MTU agreed with the printer, less 3 bytes, so 20 bytes on a link that agreed none, and never more
   than 512. A characteristic that takes writes without response is written that way, and others

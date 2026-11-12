@@ -91,5 +91,9 @@ describe('printer words', () => {
     expect(driverName('ruida')).toBe('Ruida laser controller');
     expect(optionLabel('work_width_mm')).toBe('Work area, across (mm)');
     expect(optionValueLabel('bottom_left')).toBe('Front left');
+    expect(driverName('escpos')).toBe('ESC/POS');
+    expect(driverName('phomemo')).toBe('Phomemo');
+    expect(optionLabel('head_dots')).toBe('Print head width (dots)');
+    expect(optionValueLabel('partial')).toBe('Partly, leaving a tab');
   });
 });
