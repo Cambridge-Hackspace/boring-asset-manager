@@ -287,7 +287,7 @@ func (r *Relay) reach(ctx context.Context, d relay.Destination) error {
 		}
 		conn.Close()
 	case printers.ConnDevice:
-		if _, err := os.Stat(c.Address); err != nil {
+		if _, err := os.Stat(printers.DevicePath(c.Address)); err != nil {
 			return err
 		}
 	}

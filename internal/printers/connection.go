@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,7 +18,9 @@ const (
 	// a network printer, or a print server such as p910nd sharing a USB one.
 	ConnTCP = "tcp"
 	// ConnDevice writes the job to a device on the BAM server, such as
-	// /dev/usb/lp0. Paths must match the server's printers.devices setting.
+	// /dev/usb/lp0, or sends it in a conversation when ?protocol= follows
+	// the path (protocol.go). Paths must match the server's
+	// printers.devices setting.
 	ConnDevice = "device"
 	// ConnIPP submits the job to an IPP queue, such as a raw CUPS queue:
 	// ipp://host[:port]/printers/name (also ipps, http and https).
@@ -119,10 +120,11 @@ func NormalizeConnection(c Connection) (Connection, error) {
 		c.Address = net.JoinHostPort(host, strconv.Itoa(port))
 	case ConnDevice:
 		// Printer devices are Unix paths; on Windows use ConnWindows.
-		if !strings.HasPrefix(c.Address, "/") {
-			return bad("device address must be an absolute path such as /dev/usb/lp0")
+		a, err := ParseDeviceAddress(c.Address)
+		if err != nil {
+			return bad("%v", err)
 		}
-		c.Address = path.Clean(c.Address)
+		c.Address = a.String()
 	case ConnIPP:
 		u, err := url.Parse(c.Address)
 		if err != nil || u.Host == "" || u.User != nil || u.Fragment != "" {

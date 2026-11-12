@@ -451,8 +451,9 @@ instead, since a tube reports the width of a tape. The 3:1 tubes' widths are giv
 The printer's status reply also reports the cassette loaded. Package `ptouch` reads it, checks it
 against the cassette a printer is set up for, and finds the cassette for the fit check
 (`ParseStatus`, `Status.Check`, `Status.LoadedMedia`). Nothing asks for it yet: every connection
-BAM! has today only sends. When a connection that also reads arrives, the fit check can use the
-reported cassette, and printing can be refused before anything is sent.
+BAM! sends to a P-touch only sends. When one that also reads arrives, as the [`niimbot`](#niimbot)
+conversation does, the fit check can use the reported cassette, and printing can be refused before
+anything is sent.
 
 **Encoding.** Each label is rendered 1-bit and sent as raster lines, TIFF-compressed, mirrored
 across the head, as the references' section 2.1 lays out. The stream is:
@@ -760,6 +761,114 @@ offered, since custom stock has no marks. Continuous labels are 10–1000 mm lon
 - **Bluetooth Classic,** where a model offers it, as the D30 and T02 are reported to: paired and
   bound as `/dev/rfcomm0`, a `device` connection (see [Bluetooth](#bluetooth)).
 
+### `niimbot`
+
+For Niimbot's small thermal label printers. Niimbot publishes no reference, so the driver follows
+the community's descriptions of the protocol. It implements the protocol as they describe it, and
+copies none of their code or text:
+
+- [NiimBlue's wiki](https://github.com/MultiMote/niimbot-wiki) (CC BY-SA 4.0): packets, commands,
+  print tasks, model characteristics and RFID tags;
+- [niimbluelib](https://github.com/MultiMote/niimbluelib) (MIT): which print task each model takes,
+  its tested-models list, and how bitmap rows count their dots and repeat;
+- [niimprint](https://github.com/AndBondStyle/niimprint) (MIT): its tested models and connections.
+
+No model has yet been checked on real hardware.
+
+| Model | Head | Rolls | Density | Print task | USB |
+|---|---|---|---|---|---|
+| D11 | 96 dots (12 mm) | D series, to 15 mm | 1–3, default 2 | `d110` | – |
+| D110 | 96 dots (12 mm) | D series, to 15 mm | 1–3, default 2 | `d110` | – |
+| D101 | 192 dots (24 mm) | D series, to 25 mm | 1–3, default 2 | `b1` | – |
+| B18 | 96 dots (12 mm) | B18 tape, to 15 mm | 1–3, default 2 | `b1` (assumed) | – |
+| B1 | 384 dots (48 mm) | B series, to 50 mm | 1–5, default 3 | `b1` | Yes |
+| B21 | 384 dots (48 mm) | B series, to 50 mm | 1–5, default 3 | `b21_v1` | Yes |
+| B3S | 576 dots (72 mm) | B series, to 75 mm | 1–5, default 3 | `b1` (assumed) | Yes |
+| K3 | 640 dots (80 mm) | B series, to 80 mm | 1–5, default 3 | `b1` (assumed) | Yes (unconfirmed) |
+
+Every model prints at 203 DPI. Heads, densities and roll types are those of Niimbot's own hardware
+list, as the wiki gives it.
+
+**Print tasks.** Models, and firmware versions of one model, differ in how a print starts and
+ends. The community names each sequence after a model that uses it:
+
+- `d110`: a 1-byte print start; each page clears the buffer, starts, gives its size as rows and
+  columns and its quantity apart, ends, and waits for the printer's status to count it printed.
+- `b1`: a 7-byte print start giving the number of pages; each page starts and gives its size with
+  its quantity; the status is waited on once, after the last page.
+- `b21_v1`: a 1-byte print start; each page starts and gives its size as rows and columns; print
+  end is asked again until the printer says it has finished.
+
+Where the tested-models list records none (the B18, B3S and K3), `b1` is assumed, as NiimBlue
+assumes it. The D11 with its oldest firmware (protocol version 0) waits for page numbers the
+printer sends unasked instead, which no task here does: it may need its firmware updating. The
+newer `D110M_V4` task, of the D110 M, B21 Pro and B1 Pro, is not one of these models'.
+
+**Options:**
+
+- `density`: the print darkness in the model's range; unset is its default.
+- `print_task`: `d110`, `b1` or `b21_v1`; unset is the model's. Change it only for firmware that
+  prints nothing with the model's own.
+
+**Media.** Niimbot sells many sizes, so the catalog lists common ones:
+
+- the D series (D11, D110, D101): 12 × 22, 12 × 30, 12 × 40, 15 × 30 and 15 × 50 mm;
+- the B18: 14 × 30, 14 × 40 and 14 × 50 mm tape, and 14 mm continuous;
+- the B series and K3: 30 × 15, 40 × 30, 50 × 30 and 50 × 50 mm, and 50 mm continuous on the B21
+  and B3S, the models that take continuous rolls.
+
+Any other size is added as [custom stock](#custom-label-stock), up to the model's widest roll.
+Continuous labels are 10–200 mm long, BAM!'s own bounds: no figure is published. A label wider than
+the head is printed around its middle.
+
+**The loaded roll.** Niimbot's rolls carry an RFID tag, and most firmware prints only on a roll
+whose tag it reads. The printer reports the tag (its barcode, serial, labels used and left, and
+the kind of roll), but not the labels' size, which Niimbot's app looks up online by the barcode.
+So the fit check uses the roll the printer is set up for. Each job asks the printer for the tag
+before anything prints, and is refused if the roll loaded is continuous and the printer is set up
+for labels with gaps, or the other way about. A roll whose tag cannot be read is left to the
+printer.
+
+**Encoding.** Each packet is `55 55`, the command, the length of its data, the data, a checksum
+(the XOR of the command, length and data) and `AA AA`. Connect alone is prefixed with `03`. A job
+is:
+
+1. connect, the roll's RFID tag, the density, the label type (1, gaps, or 3, continuous), and print
+   start;
+2. each label as a page, by the print task, its rows sent as the head's full width with the label
+   centered: a run of identical rows in one packet (up to 255), blank rows as such, and the rest as
+   bitmaps, a dot a bit with the first leftmost, with how many dots each third of the head prints
+   (in total, on the K3's 640 dots and in `b21_v1`);
+3. print end.
+
+**The conversation.** Unlike the other drivers' printers, a Niimbot answers each command, and the
+next must wait for the answer. So its jobs are sent in a conversation rather than as one stream
+(`niimbot.Converse`):
+
+- Each command but the rows waits for its answer. An answer of 0 refuses the job, but for page
+  start, page end and print end, which are asked again every 300 ms until the printer is ready.
+- The status is asked every 300 ms until the printer has printed every page sent so far.
+- Each row is followed by a 10 ms pause, so as not to outrun the printer, as NiimBlue does.
+- A printer that does not answer a command in 60 seconds (the write timeout), or makes no
+  progress printing for as long, fails the job, saying which command it did not answer. So does
+  one that reports an error, such as its cover being open, by name. A job that fails once printing
+  has started is ended, so the printer is ready for the next.
+
+**Connections.**
+
+- **Bluetooth LE,** every model: the `ble` connection, whose profile is the driver's (the service
+  `e7810a71-73ae-499d-8c15-faa9aef0c3f2`, with `bef8d6c9-9c21-4c9e-b632-bd58c1009f9f` to write to
+  and to notify answers on) and holds the conversation (`protocol=niimbot`). The B3S is reported
+  to use other UUIDs: set them on the connection, or use USB. Most of these printers have two
+  Bluetooth addresses sharing their last three bytes: use the Bluetooth LE one.
+- **USB,** the B1, B21, B3S and K3: the printer is a serial port, `/dev/ttyACM0` on Linux, a
+  `device` connection. BAM! sets it raw and holds the conversation over it
+  (`/dev/ttyACM0?protocol=niimbot`, filled in for a `niimbot` printer). The device belongs to group
+  `dialout` on most distributions. BAM! sets it raw on Linux only; elsewhere, set it so first
+  (`stty raw`).
+- **Bluetooth Classic,** where a model offers it: paired and bound as `/dev/rfcomm0`, a `device`
+  connection as for USB.
+
 ## Delivery
 
 Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM reaches it:
@@ -767,10 +876,10 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 | Type | Address | Use |
 |---|---|---|
 | `tcp` | `host` or `host:port` (default 9100) | Network printers, and USB printers shared by a raw print server such as `p910nd`. |
-| `device` | A device path on the BAM server, such as `/dev/usb/lp0` (Linux) or `/dev/ulpt0` (FreeBSD) | A USB printer plugged into the BAM server. The path must match a pattern in the server's `[printers] devices` setting, which is empty by default: otherwise anyone who can manage printers could make BAM write to any file it can open. BAM never creates the file, and needs permission to write the device (on Linux, usually membership of the `lp` group). |
+| `device` | A device path on the BAM server, such as `/dev/usb/lp0` (Linux) or `/dev/ulpt0` (FreeBSD), then optionally `?protocol=niimbot` | A USB printer plugged into the BAM server. The path must match a pattern in the server's `[printers] devices` setting, which is empty by default: otherwise anyone who can manage printers could make BAM write to any file it can open. BAM never creates the file, and needs permission to write the device (on Linux, usually membership of the `lp` group). A protocol sends the job in a conversation with the printer, reading its answers ([`niimbot`](#niimbot)); a driver that needs one fills it in. |
 | `ipp` | `ipp://host[:port]/path`, or `ipps`, `http`, `https` | A queue on CUPS or another IPP server, such as a USB printer shared from another machine. The job is sent as `application/octet-stream`, so the queue must be raw (CUPS: `lpadmin -m raw`; CUPS 2.x still supports raw queues though it marks them deprecated). CUPS can also forward a raw queue to a Windows shared printer through its `smb://` backend. |
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
-| `ble` | The printer's Bluetooth address, such as `7C:2F:80:A1:B2:C3`, then optionally `?service=…&write=…&notify=…&ack=…` | A Bluetooth LE printer in range of the BAM server, on Linux. The address must match a pattern in the server's `[printers] bluetooth` setting, which is empty by default. See [Bluetooth](#bluetooth). |
+| `ble` | The printer's Bluetooth address, such as `7C:2F:80:A1:B2:C3`, then optionally `?service=…&write=…&notify=…&ack=…&protocol=…` | A Bluetooth LE printer in range of the BAM server, on Linux. The address must match a pattern in the server's `[printers] bluetooth` setting, which is empty by default. See [Bluetooth](#bluetooth). |
 | `openepaperlink`, `pull`, `webhook` | See [Displays](#connections) | E-paper displays only. |
 
 A connection may also name a relay, as `"relay": "front-desk"`: BAM! run beside the printer on its
@@ -780,8 +889,9 @@ encodes the job; the relay delivers the bytes. A relay that is offline fails the
 wait in the queue (see [Relays](relays.md#printers-through-a-relay)).
 
 Jobs are sent one at a time per destination, so concurrent requests never interleave their
-streams. A job counts as printed once the destination has accepted the whole stream. Reading back
-printer status is a later improvement.
+streams. A job counts as printed once the destination has accepted the whole stream, or, for a
+printer held in conversation, once it says it has printed it. Reading back other printers' status is
+a later improvement.
 
 ### Bluetooth
 
@@ -815,17 +925,20 @@ characteristics the job goes to:
 ```
 
 - **The profile.** A driver for Bluetooth LE printers gives its own service, write
-  characteristic, notify characteristic, and whether the printer acknowledges writes, listed as
-  `ble` by the drivers endpoint. The connection's `service`, `write`, `notify` and `ack` (`true` or
-  `false`) override them. UUIDs are written in full, or as 16 or 32 bits of the Bluetooth base
-  UUID (`fff0`). Of the drivers shipped today, only [`phomemo`](#phomemo) has a profile of its own,
-  so a `ble` printer of any other gives at least its service and write characteristic, from the
-  printer's documentation.
+  characteristic, notify characteristic, whether the printer acknowledges writes, and the protocol
+  of a printer held in conversation, listed as `ble` by the drivers endpoint. The connection's
+  `service`, `write`, `notify`, `ack` (`true` or `false`) and `protocol` (`niimbot`) override them.
+  UUIDs are written in full, or as 16 or 32 bits of the Bluetooth base UUID (`fff0`). Of the
+  drivers shipped today, only [`phomemo`](#phomemo) and [`niimbot`](#niimbot) have profiles of
+  their own, so a `ble` printer of any other gives at least its service and write characteristic,
+  from the printer's documentation.
 - **Writing.** The job is written to the write characteristic in chunks the link allows: the ATT
   MTU agreed with the printer, less 3 bytes, so 20 bytes on a link that agreed none, and never more
   than 512. A characteristic that takes writes without response is written that way, and others
   with responses. When the printer acknowledges writes, each waits for it to notify once on the
-  notify characteristic before the next is written.
+  notify characteristic before the next is written. With a protocol, the job is sent in a
+  conversation instead, each packet in chunks as above, reading the printer's answers on the notify
+  characteristic.
 - **Timeouts.** A printer that cannot be found and connected to in 20 seconds fails the job, as
   does one that takes 60 seconds to take a write, or to acknowledge it.
 - **The server** reaches Bluetooth LE through BlueZ, over the system D-Bus, so on Linux only, with
@@ -845,7 +958,8 @@ characteristics the job goes to:
 
 - A printer that cannot be reached in 5 seconds (a Bluetooth LE one, 20 seconds) fails the job.
 - A printer that stops taking a job for 60 seconds (over TCP, a device or IPP), or that takes 60
-  seconds to answer once it has the job, fails it.
+  seconds to answer once it has the job, fails it. So does a printer held in conversation that
+  takes 60 seconds to answer a command, or makes no progress printing for as long.
 - A printer takes a job only as fast as it prints it, so there is no limit on a long job that
   keeps moving.
 - A connection the server may not use (a device or Bluetooth printer outside the allowed
