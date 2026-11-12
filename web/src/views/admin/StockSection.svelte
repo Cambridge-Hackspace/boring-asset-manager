@@ -69,7 +69,7 @@
     {/if}
   </div>
   <p class="mb-3 max-w-prose text-sm text-zinc-600 dark:text-zinc-400">
-    Rolls of any size, for printers that take them: TSPL printers such as the Rollo, Zebras, Brother TD printers and DYMO LabelWriters. Brother QL and
+    Rolls of any size, for printers that take them: TSPL printers such as the Rollo, Zebras, ESC/POS and Phomemo printers, Brother TD printers and DYMO LabelWriters. Brother QL and
     P-touch printers take only Brother's own rolls and tape, which are built in.
   </p>
   <ErrorMessage {error} />

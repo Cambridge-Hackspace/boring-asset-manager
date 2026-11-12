@@ -20,6 +20,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/escpos"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/tspl"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
@@ -126,7 +127,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if _, ok := by[DriverTestLaser]; ok {
 		n--
 	}
-	if n != 13 || len(by) != len(d) {
+	if n != 15 || len(by) != len(d) {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -176,6 +177,12 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	}
 	if ts := by[DriverTSPL]; len(ts.Media) != len(tspl.MediaIDs()) || len(ts.Options) != 2 {
 		t.Fatalf("TSPL driver info = %+v", ts)
+	}
+	if e := by[DriverESCPOS]; len(e.Media) != len(escpos.MediaIDs(false)) || len(e.Options) != 3 || len(e.Models) != 2 || e.BLE != nil {
+		t.Fatalf("ESC/POS driver info = %+v", e)
+	}
+	if p := by[DriverPhomemo]; len(p.Media) != len(escpos.MediaIDs(true)) || len(p.Options) != 3 || len(p.Models) != 9 || p.BLE == nil || p.ModelDPI["D30"] != 203 {
+		t.Fatalf("Phomemo driver info = %+v", p)
 	}
 	zpl, epl2 := by[DriverZPL], by[DriverEPL2]
 	if len(zpl.Media) != len(zebra.MediaIDs()) || len(zpl.Options) != 6 || len(zpl.Models) != len(zebra.Models(zebra.ZPL)) || zpl.ModelDPI["Zebra GX430t"] != 300 {
@@ -262,6 +269,11 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 		{"ZPL continuous", DriverZPL, "Zebra ZT411 600 DPI", stock(80, 0, 0), true},
 		{"ZPL wider than the head", DriverZPL, "Zebra ZD410", stock(80, 40, 3), false},
 		{"EPL2 die-cut", DriverEPL2, "Zebra TLP 2844", stock(60, 40, 2.5), true},
+		{"ESC/POS continuous", DriverESCPOS, "Generic ESC/POS 80 mm", stock(76, 0, 0), true},
+		{"ESC/POS wider than its paper", DriverESCPOS, "Generic ESC/POS 58 mm", stock(60, 0, 0), false},
+		{"Phomemo die-cut", DriverPhomemo, "M221", stock(60, 40, 2), true},
+		{"Phomemo tape", DriverPhomemo, "D35", stock(12, 50, 3), true},
+		{"Phomemo continuous tape", DriverPhomemo, "D35", stock(12, 0, 0), false},
 	}
 	for _, c := range cases {
 		d, _ := Lookup(c.driver)
