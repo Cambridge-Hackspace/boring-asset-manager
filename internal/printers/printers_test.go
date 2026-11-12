@@ -126,7 +126,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if _, ok := by[DriverTestLaser]; ok {
 		n--
 	}
-	if n != 11 || len(by) != len(d) {
+	if n != 13 || len(by) != len(d) {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||

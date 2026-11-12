@@ -9,9 +9,15 @@ export function lasersOf(printers: Printer[], drivers: DriverInfo[]): { printer:
   const out: { printer: Printer; model: OneShotModel }[] = [];
   for (const p of printers) {
     const model = drivers.find((d) => d.driver === p.driver)?.one_shot?.find((m) => m.id === p.model);
-    if (model) out.push({ printer: p, model });
+    if (model) out.push({ printer: p, model: { ...model, ...workArea(model, p.options) } });
   }
   return out;
+}
+
+/** A laser's work area: its model's, or the one its options set, for a driver whose machines come in many sizes. */
+export function workArea(model: OneShotModel, options: Record<string, unknown> | null | undefined): { work_width_mm: number; work_height_mm: number } {
+  const side = (v: unknown, fallback: number) => (typeof v === 'number' && v > 0 ? v : fallback);
+  return { work_width_mm: side(options?.work_width_mm, model.work_width_mm), work_height_mm: side(options?.work_height_mm, model.work_height_mm) };
 }
 
 /** A template's size in millimeters. */
