@@ -44,9 +44,10 @@ export const cachePrefix = 'bam-shell-';
 
 /**
  * The files of a build kept on installing it, as addresses: index.html as
- * the root, and every file but the editor's WebAssembly (fetched, and kept,
- * when the editor first opens) and the compressed copies the server sends
- * in their place.
+ * the root, and every file but the WebAssembly (fetched, and kept, when
+ * first wanted: the editor's when the editor first opens, the code reader's
+ * when a browser without its own first scans) and the compressed copies the
+ * server sends in their place.
  */
 export function shellFiles(files: string[]): string[] {
   const kept = files

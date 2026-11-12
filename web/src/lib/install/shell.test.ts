@@ -34,6 +34,7 @@ describe('the service worker', () => {
   it("keeps the build's files, and nothing sent or from elsewhere", () => {
     expect(handling('GET', at('/assets/index-85J0ClI_.js'), origin, 'cors')).toBe('kept');
     expect(handling('GET', at('/assets/bamlive-1.wasm'), origin, 'cors')).toBe('kept');
+    expect(handling('GET', at('/assets/zxing_reader-1.wasm'), origin, 'same-origin')).toBe('kept');
     expect(handling('GET', at('/favicon.svg'), origin, 'no-cors')).toBe('kept');
     expect(handling('POST', at('/assets/x.js'), origin, 'cors')).toBe('network');
     expect(handling('POST', at('/scan/HS-100'), origin, 'navigate')).toBe('network');
@@ -41,7 +42,7 @@ describe('the service worker', () => {
     expect(handling('GET', at('/robots.txt'), origin, 'no-cors')).toBe('network');
   });
 
-  it("keeps a build's shell: the root for index.html, without the editor's WebAssembly or compressed copies", () => {
+  it("keeps a build's shell: the root for index.html, without the WebAssembly or compressed copies", () => {
     expect(
       shellFiles([
         'index.html',
@@ -52,6 +53,8 @@ describe('the service worker', () => {
         'assets/index-1.js.gz',
         'assets/index-2.css',
         'assets/bamlive-3.wasm',
+        'assets/zxing_reader-5.wasm',
+        'assets/zxing_reader-5.wasm.br',
         'assets/font-4.woff2',
       ]),
     ).toEqual(['/', '/assets/font-4.woff2', '/assets/index-1.js', '/assets/index-2.css', '/favicon.svg']);

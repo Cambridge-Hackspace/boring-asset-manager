@@ -1,6 +1,8 @@
 package webui
 
 import (
+	"bytes"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -156,5 +158,39 @@ func TestServesTheServiceWorkerFromTheRoot(t *testing.T) {
 	// Nothing else claims a scope.
 	if got := get(t, newHandler(fsys), http.MethodGet, "/favicon.svg").Header().Get("Service-Worker-Allowed"); got != "" {
 		t.Errorf("favicon with Service-Worker-Allowed %q", got)
+	}
+}
+
+// TestServesTheBuiltCodeReader serves the packaged code reader's
+// WebAssembly (web/src/lib/codeReaderPackaged.ts) from the binary, typed as
+// WebAssembly, whole and compressed, where the app was built into it.
+func TestServesTheBuiltCodeReader(t *testing.T) {
+	static, err := fs.Sub(embedded, "static")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists(static, "app/index.html") {
+		t.Skip("the app is not built (tools/web/build.sh)")
+	}
+	found, err := fs.Glob(static, "app/assets/zxing_reader-*.wasm")
+	if err != nil || len(found) != 1 {
+		t.Fatalf("the code reader's WebAssembly in the build: %v %v", found, err)
+	}
+	target := strings.TrimPrefix(found[0], "app")
+	for _, accept := range []string{"", "gzip", "br"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		if accept != "" {
+			req.Header.Set("Accept-Encoding", accept)
+		}
+		rec := httptest.NewRecorder()
+		Handler().ServeHTTP(rec, req)
+		hdr := rec.Header()
+		if rec.Code != 200 || hdr.Get("Content-Type") != "application/wasm" || hdr.Get("Content-Encoding") != accept ||
+			hdr.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+			t.Errorf("GET %s with %q: %d, type %q, encoding %q", target, accept, rec.Code, hdr.Get("Content-Type"), hdr.Get("Content-Encoding"))
+		}
+		if accept == "" && !bytes.HasPrefix(rec.Body.Bytes(), []byte{0, 'a', 's', 'm'}) {
+			t.Errorf("GET %s is not WebAssembly: % x", target, rec.Body.Bytes()[:min(8, rec.Body.Len())])
+		}
 	}
 }
