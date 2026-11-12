@@ -151,6 +151,21 @@ func TestPackagesCarryPurchases(t *testing.T) {
 		rows[0]["order_number"] != "" || rows[0]["invoice_attachment_id"] != nil || rows[0]["warranty_end"] != "2026-02-01" || rows[0]["vendor_id"] != f.vendor.ID {
 		t.Errorf("without purchases.read: %v", rows)
 	}
+	// Nor the invoice itself, nor its file, while it is the invoice.
+	if got := ids(t, r, "asset_attachments", "id"); len(got) != 0 {
+		t.Errorf("attachments packaged without purchases.read: %v", got)
+	}
+	if _, ok := r.members[FilesDir+"photos/"+f.invoice.ID]; ok {
+		t.Error("the invoice's file packaged without purchases.read")
+	}
+	for _, c := range []struct {
+		may    Reader
+		photos int
+	}{{noPrices, 0}, {nil, 1}} {
+		if plan, err := Resolve(ctx, src, src.DB, sel, c.may); err != nil || plan.Assets == nil || plan.Assets.Photos != c.photos {
+			t.Errorf("planned, %d attachments wanted: %+v %v", c.photos, plan, err)
+		}
+	}
 	// Nor its history's changes to them.
 	r = packageOf(t, src, blobs, Selection{Categories: []string{f.cat.ID}, Assets: &AssetsSelection{History: true}}, noPrices)
 	events := r.rows(t, DataDir+"events/")
@@ -161,5 +176,17 @@ func TestPackagesCarryPurchases(t *testing.T) {
 		if b, _ := json.Marshal(e); strings.Contains(string(b), "12.34") || strings.Contains(string(b), "PO-1") {
 			t.Errorf("a price in the history packaged without purchases.read: %s", b)
 		}
+	}
+
+	// Once it is no longer the invoice, it is an ordinary attachment.
+	if _, err := src.UpdateAssetWithPurchase(f.asset.Asset.ID, "", nil, nil, nil, nil, nil, &store.PurchaseInput{VendorID: f.vendor.ID}); err != nil {
+		t.Fatal(err)
+	}
+	r = packageOf(t, src, blobs, sel, noPrices)
+	if got := ids(t, r, "asset_attachments", "id"); len(got) != 1 || got[0] != f.invoice.ID {
+		t.Errorf("no longer the invoice, packaged without purchases.read: %v", got)
+	}
+	if _, ok := r.members[FilesDir+"photos/"+f.invoice.ID]; !ok {
+		t.Error("no longer the invoice, its file was not packaged")
 	}
 }

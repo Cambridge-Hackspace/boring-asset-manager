@@ -12,7 +12,8 @@ import (
 // Purchases (docs/data-model.md#purchases): where an asset came from. Those
 // who read an asset see its vendor, when they may see the vendor, and its
 // dates; its price, currency, order number and invoice need purchases.read
-// for the asset too. Changing them follows assets.write, but those without
+// for the asset too, and so does the invoice's attachment (attachments.go).
+// Changing them follows assets.write, but those without
 // purchases.read leave what they cannot see as it is, and a vendor they
 // cannot see stays unless they name another.
 
@@ -66,13 +67,16 @@ func (s *Server) purchaseInput(w http.ResponseWriter, r *http.Request, req *Purc
 
 // redactPurchases leaves out of each asset's purchase details what the
 // request may not see: the price, currency, order number and invoice
-// without purchases.read for it, and a vendor it may not see. A failure to
-// read the vendors hides every vendor.
+// without purchases.read for it, the invoice from its photos too, and a
+// vendor it may not see. A failure to read the vendors hides every vendor.
 func (s *Server) redactPurchases(ctx context.Context, assets []models.AssetWithDetails) {
 	var seen map[string]models.Vendor
 	for i := range assets {
 		p := &assets[i].Purchase
 		if !Allows(ctx, rbac.PermPurchasesRead, assets[i].Scopes) {
+			if p.InvoiceID != "" {
+				assets[i].Photos = withoutPhoto(assets[i].Photos, p.InvoiceID)
+			}
 			p.HidePrices()
 		}
 		if p.VendorID == "" {
@@ -88,6 +92,17 @@ func (s *Server) redactPurchases(ctx context.Context, assets []models.AssetWithD
 			p.HideVendor()
 		}
 	}
+}
+
+// withoutPhoto leaves out of photos the one named id.
+func withoutPhoto(photos []models.AssetPhoto, id string) []models.AssetPhoto {
+	out := make([]models.AssetPhoto, 0, len(photos))
+	for _, p := range photos {
+		if p.ID != id {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // redactPriceChanges leaves out of an asset's event the changes to what

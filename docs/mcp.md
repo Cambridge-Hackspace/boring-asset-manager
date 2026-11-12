@@ -154,7 +154,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
 | `create_asset` | `assets.write` | Up to 50, with field values by key, codes or the next free code, the place it is in, stock, and an icon of its own, and `confirm` to file them as confirmed where review states are on; where the instance lands assistants' changes as drafts, they are drafts for a person to accept or reject (see [Review states](review.md#assistants)). A field its categories do not give it is refused before anything is added. A person field's people are given by user ID, email or a name only one person has, separated by `;`, as in `update_asset` and `copy_asset`. |
-| `copy_asset` | `assets.write` | One like another, as `GET /api/v1/assets/{id}/copy` drafts it, with a name, field values, codes and quantity that differ, and its photos, or all its attachments, if asked. |
+| `copy_asset` | `assets.write` | One like another, as `GET /api/v1/assets/{id}/copy` drafts it, with a name, field values, codes and quantity that differ, and its photos, or all its attachments, if asked, its invoice only with `purchases.read`. |
 | `update_asset` | `assets.write` | Only what is given changes: categories and codes are added or removed, fields set or cleared, an icon of its own given or dropped, purchase details set or cleared one at a time; the rest is kept. Without `purchases.read`, its price, order number and invoice stay as they are. |
 | `move_asset` | `assets.write` | |
 | `link_assets` | `assets.write` | By the link type's name, read from either end. |
@@ -176,9 +176,9 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `list_photos` | `assets.read` | As images; thumbnails unless asked. |
 | `add_photo` | `assets.write` | Base64. |
 | `reorder_photos`, `remove_photo` | `assets.write` | |
-| `list_attachments`, `read_attachment` | `assets.read` | An asset's, a category's, a vendor's or a contract's attachments (docs/data-model.md#attachments), named by `asset`, `category_id`, `vendor_id` or `contract_id`; a file is read as an image, as text, or as a file to keep. |
+| `list_attachments`, `read_attachment` | `assets.read` | An asset's, a category's, a vendor's or a contract's attachments (docs/data-model.md#attachments), named by `asset`, `category_id`, `vendor_id` or `contract_id`; a file is read as an image, as text, or as a file to keep. An asset's invoice is left out, and not found, without `purchases.read` for the asset. |
 | `add_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's or a contract's | Base64, with its file's name; its type is checked by its content. |
-| `update_attachment`, `reorder_attachments`, `remove_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's or a contract's | |
+| `update_attachment`, `reorder_attachments`, `remove_attachment` | `assets.write` for an asset's, `categories.manage` for a category's, `vendors.manage` for a vendor's or a contract's | An asset's invoice, without `purchases.read` for the asset, is not found, and `reorder_attachments` leaves it where it is. |
 | `import_assets` | `assets.write` | See below. |
 
 `import_assets` runs a preview first. Then it is called with the same file, mapping and choice of

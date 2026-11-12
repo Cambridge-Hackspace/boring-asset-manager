@@ -22,7 +22,7 @@ You can also start a new asset from where it goes: **Add something inside…** u
 
 An asset's **Purchase** section says where it came from: the **vendor** it was bought from, when it was **ordered** and **received**, its **price** and currency, the **order or invoice number**, when its **warranty ends**, and its **invoice**, one of its attachments. Fill them in under **Purchase** when you add or edit it; every one is optional, and the invoice can be chosen once the file is attached. Duplicating an asset leaves them out: the new one was bought on its own.
 
-Seeing the price, order number and invoice takes **See prices**, which roles that read assets have unless it is taken away; without it, they are hidden, and editing the asset leaves them as they are. Before a warranty ends, a notification channel can tell you (see [Notifications](/help/notifications)).
+Seeing the price, order number and invoice takes **See prices**, which roles that read assets have unless it is taken away; without it, they are hidden, the invoice's file among its attachments too, and editing the asset leaves them as they are. Before a warranty ends, a notification channel can tell you (see [Notifications](/help/notifications)).
 
 ## Contracts
 

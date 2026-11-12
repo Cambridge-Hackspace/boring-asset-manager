@@ -731,10 +731,15 @@ Without `purchases.read` for an asset, in one of its scopes, its price, currency
 invoice are left out of:
 
 - its page and the asset list, which mark it `"prices_hidden": true`;
+- its attachments and photos, which leave out the one named as its invoice, and answer `404` for
+  it when it is downloaded, renamed or removed (see [Purchases](data-model.md#purchases));
 - its history, with any edit that changed nothing else;
 - the CSV and Excel exports, and reports, labels and sheets, whose `{{asset.purchase.price}}`,
   `{{asset.purchase.currency}}` and `{{asset.purchase.order_number}}` are blank;
 - packages, and MCP, which reads through the API.
+
+Backups are not filtered: one holds everything, as making one needs `users.manage` and
+`settings.manage` (see [Backups](backups.md)).
 
 The same permission sees the prices in vendors' catalogs, in one of the vendor's scopes, or anywhere
 for a vendor in none (see [Catalogs](vendors.md#catalogs)). A catalog's price is a list price, not

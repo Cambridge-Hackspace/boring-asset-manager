@@ -164,6 +164,9 @@ type Plan struct {
 	// (purchases.read), and vendorPrices the vendors whose catalog's.
 	prices       map[string]bool
 	vendorPrices map[string]bool
+	// hiddenInvoices are the attachments named as the invoices of assets
+	// whose prices the requester may not see, which are left out.
+	hiddenInvoices map[string]bool
 	// costs are the contracts whose costs the requester may see
 	// (purchases.read in their vendors' scopes).
 	costs map[string]bool
@@ -317,6 +320,11 @@ type resolver struct {
 	// readPrices the assets whose prices the requester may see.
 	assetVendors map[string]string
 	readPrices   map[string]bool
+	// invoices are the attachments named as assets' invoices, by asset,
+	// and hiddenInvoices those of assets whose prices the requester may
+	// not see.
+	invoices       map[string]string
+	hiddenInvoices map[string]bool
 
 	items map[Ref]*Item
 	order []Ref
@@ -971,6 +979,14 @@ func (r *resolver) assets(plan *Plan) error {
 	for _, row := range bought {
 		r.assetVendors[row[0]] = row[1]
 	}
+	invoiced, err := r.strings("SELECT asset_id, invoice_attachment_id FROM asset_purchases WHERE invoice_attachment_id IS NOT NULL")
+	if err != nil {
+		return fmt.Errorf("reading assets' invoices: %w", err)
+	}
+	r.invoices, r.hiddenInvoices = map[string]string{}, map[string]bool{}
+	for _, row := range invoiced {
+		r.invoices[row[0]] = row[1]
+	}
 	sold, err := r.strings("SELECT asset_id, vendor_id FROM asset_catalog_entries ORDER BY vendor_id")
 	if err != nil {
 		return fmt.Errorf("reading what vendors sell: %w", err)
@@ -1007,6 +1023,8 @@ func (r *resolver) assets(plan *Plan) error {
 		}
 		if r.may(rbac.PermPurchasesRead, scopes) {
 			r.readPrices[id] = true
+		} else if inv := r.invoices[id]; inv != "" {
+			r.hiddenInvoices[inv] = true
 		}
 		// the vendor it was bought from
 		if v := r.assetVendors[id]; v != "" {
@@ -1036,7 +1054,7 @@ func (r *resolver) assets(plan *Plan) error {
 			}
 		}
 	}
-	attachmentsOf := "SELECT asset_id FROM asset_attachments"
+	attachmentsOf := "SELECT asset_id, id FROM asset_attachments"
 	if plan.sel.NoDocuments {
 		attachmentsOf += " WHERE kind = 'image'"
 	}
@@ -1045,9 +1063,11 @@ func (r *resolver) assets(plan *Plan) error {
 		query string
 		in    map[string]bool
 		n     *int
+		// skip are rows left out, by their second column
+		skip map[string]bool
 	}{
-		{sel.Photos, attachmentsOf, r.includedAsset, &counts.Photos},
-		{sel.History, "SELECT asset_id FROM events WHERE asset_id IS NOT NULL", r.readEvents, &counts.Events},
+		{sel.Photos, attachmentsOf, r.includedAsset, &counts.Photos, r.hiddenInvoices},
+		{sel.History, "SELECT asset_id FROM events WHERE asset_id IS NOT NULL", r.readEvents, &counts.Events, nil},
 	} {
 		if !c.on {
 			continue
@@ -1057,7 +1077,7 @@ func (r *resolver) assets(plan *Plan) error {
 			return fmt.Errorf("counting what comes with assets: %w", err)
 		}
 		for _, row := range rows {
-			if c.in[row[0]] {
+			if c.in[row[0]] && (len(row) < 2 || !c.skip[row[1]]) {
 				*c.n++
 			}
 		}
@@ -1194,6 +1214,7 @@ func (r *resolver) rowsOf(plan *Plan) {
 	}
 	plan.events = r.readEvents
 	plan.prices = r.readPrices
+	plan.hiddenInvoices = r.hiddenInvoices
 	for _, id := range r.assetIDs {
 		set("assets", id)
 	}
@@ -1311,7 +1332,8 @@ func (p *Plan) packaged(t *Table, vals []any) (bool, error) {
 	case "asset_generator_keys":
 		return asset("asset_id"), nil
 	case "asset_attachments":
-		if p.sel.Assets == nil || !p.sel.Assets.Photos || !asset("asset_id") {
+		// an asset's invoice only to those who may see its price
+		if p.sel.Assets == nil || !p.sel.Assets.Photos || !asset("asset_id") || p.hiddenInvoices[get("id")] {
 			return false, nil
 		}
 		setNull("added_by")

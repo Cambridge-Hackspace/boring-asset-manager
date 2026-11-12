@@ -423,3 +423,141 @@ func TestWarrantyEventsReachChannels(t *testing.T) {
 		t.Errorf("history: %s", h)
 	}
 }
+
+// invoiced gives an asset a photo, a receipt photographed and a manual,
+// in that order, and names the receipt its invoice, answering their IDs.
+func invoiced(t *testing.T, sc purchaseScene, a *models.AssetWithDetails) (photo, receipt, manual string) {
+	t.Helper()
+	path := "/api/v1/assets/" + a.Asset.ID
+	ids := map[string]string{}
+	for _, f := range []struct {
+		name string
+		data []byte
+	}{{"photo.jpg", testJPEG(t, 8, 8)}, {"receipt.jpg", testJPEG(t, 9, 9)}, {"manual.pdf", testPDF}} {
+		rec := attach(t, sc.srv, sc.admin, path+"/attachments", f.name, f.data, nil)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("attaching %s: %d %s", f.name, rec.Code, rec.Body)
+		}
+		ids[f.name] = decodeAttached(t, rec).Attachment.ID
+	}
+	body, _ := json.Marshal(map[string]any{"purchase": map[string]string{"vendor_id": sc.acme.ID, "price": "5", "currency": "GBP", "invoice_attachment_id": ids["receipt.jpg"]}})
+	if rec := doJSON(t, sc.srv, sc.admin, http.MethodPut, path, string(body)); rec.Code != http.StatusOK {
+		t.Fatalf("naming the invoice: %d %s", rec.Code, rec.Body)
+	}
+	return ids["photo.jpg"], ids["receipt.jpg"], ids["manual.pdf"]
+}
+
+// attachmentNames are the names of an asset's attachments, in order, as
+// who sees them.
+func attachmentNames(t *testing.T, srv *Server, who *http.Cookie, assetID string) string {
+	t.Helper()
+	var names []string
+	for _, a := range decodeAttached(t, doJSON(t, srv, who, http.MethodGet, "/api/v1/assets/"+assetID+"/attachments", "")).Attachments {
+		names = append(names, a.Name)
+	}
+	return strings.Join(names, ",")
+}
+
+// TestPurchasesReadHidesTheInvoice: without purchases.read for an asset,
+// the attachment named as its invoice is left out of its attachments and
+// photos, on its page and in the list, and refused as though it were not
+// there: downloading, renaming, removing, ordering and copying it. In the
+// scopes where it is held, and once it is no longer the invoice, it is an
+// ordinary attachment.
+func TestPurchasesReadHidesTheInvoice(t *testing.T) {
+	sc := newPurchaseScene(t)
+	srv := sc.srv
+	photo, receipt, manual := invoiced(t, sc, sc.drill)
+	_, kettleReceipt, _ := invoiced(t, sc, sc.kettle)
+	// Prices in the kitchen only.
+	who := holderOf(t, srv, "cook@hackspace.org", rbac.PermAssetsRead, rbac.PermAssetsWrite, "kitchen:"+rbac.PermPurchasesRead)
+	drill, kettle := "/api/v1/assets/"+sc.drill.Asset.ID, "/api/v1/assets/"+sc.kettle.Asset.ID
+
+	if got := attachmentNames(t, srv, who, sc.drill.Asset.ID); got != "photo.jpg,manual.pdf" {
+		t.Errorf("the drill's attachments: %s", got)
+	}
+	if got := attachmentNames(t, srv, sc.admin, sc.drill.Asset.ID); got != "photo.jpg,receipt.jpg,manual.pdf" {
+		t.Errorf("the drill's attachments, to an admin: %s", got)
+	}
+	if got := attachmentNames(t, srv, who, sc.kettle.Asset.ID); got != "photo.jpg,receipt.jpg,manual.pdf" {
+		t.Errorf("the kettle's attachments: %s", got)
+	}
+	shown := func(photos []models.AssetPhoto) string {
+		var ids []string
+		for _, p := range photos {
+			ids = append(ids, p.ID)
+		}
+		return strings.Join(ids, ",")
+	}
+	if got := shown(decodeAsset(t, doJSON(t, srv, who, http.MethodGet, drill, "")).Photos); got != photo {
+		t.Errorf("the drill's page's photos: %s", got)
+	}
+	if got := shown(decodeAssets(t, doJSON(t, srv, who, http.MethodGet, "/api/v1/assets", ""))["Drill"].Photos); got != photo {
+		t.Errorf("the drill's photos, in the list: %s", got)
+	}
+	if got := decodeAsset(t, doJSON(t, srv, who, http.MethodGet, kettle, "")).Photos; len(got) != 2 {
+		t.Errorf("the kettle's page's photos: %+v", got)
+	}
+
+	for what, req := range map[string]struct{ method, path, body string }{
+		"downloading":           {http.MethodGet, drill + "/attachments/" + receipt, ""},
+		"its thumbnail":         {http.MethodGet, drill + "/attachments/" + receipt + "?size=thumb", ""},
+		"as a photo":            {http.MethodGet, drill + "/photos/" + receipt, ""},
+		"renaming":              {http.MethodPut, drill + "/attachments/" + receipt, `{"name":"Bill"}`},
+		"removing":              {http.MethodDelete, drill + "/attachments/" + receipt, ""},
+		"removing as a photo":   {http.MethodDelete, drill + "/photos/" + receipt, ""},
+		"ordering it":           {http.MethodPut, drill + "/attachments", `{"attachment_ids":["` + receipt + `","` + photo + `","` + manual + `"]}`},
+		"ordering it as photos": {http.MethodPut, drill + "/photos", `{"photo_ids":["` + receipt + `","` + photo + `"]}`},
+	} {
+		want := http.StatusNotFound
+		if strings.HasPrefix(what, "ordering") {
+			want = http.StatusBadRequest
+		}
+		if rec := doJSON(t, srv, who, req.method, req.path, req.body); rec.Code != want {
+			t.Errorf("%s: %d %s", what, rec.Code, rec.Body)
+		}
+	}
+	if rec := doJSON(t, srv, sc.admin, http.MethodGet, drill+"/attachments/"+receipt, ""); rec.Code != http.StatusOK {
+		t.Errorf("downloading, as an admin: %d", rec.Code)
+	}
+	if rec := doJSON(t, srv, who, http.MethodGet, kettle+"/attachments/"+kettleReceipt, ""); rec.Code != http.StatusOK {
+		t.Errorf("downloading the kettle's: %d", rec.Code)
+	}
+
+	// Ordering what they see keeps the invoice where it is.
+	if rec := doJSON(t, srv, who, http.MethodPut, drill+"/attachments", `{"attachment_ids":["`+manual+`","`+photo+`"]}`); rec.Code != http.StatusOK ||
+		strings.Contains(rec.Body.String(), "receipt") {
+		t.Errorf("ordering: %d %s", rec.Code, rec.Body)
+	}
+	if got := attachmentNames(t, srv, sc.admin, sc.drill.Asset.ID); got != "manual.pdf,receipt.jpg,photo.jpg" {
+		t.Errorf("ordered, to an admin: %s", got)
+	}
+	if rec := doJSON(t, srv, who, http.MethodPut, drill+"/photos", `{"photo_ids":["`+photo+`"]}`); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), receipt) {
+		t.Errorf("ordering the photos: %d %s", rec.Code, rec.Body)
+	}
+
+	// Copying the drill's attachments leaves it out.
+	made := decodeAsset(t, doJSON(t, srv, who, http.MethodPost, "/api/v1/assets", `{"name":"Spare drill","category_ids":["`+sc.tools.ID+`"]}`))
+	for _, route := range []string{"/attachments/copy", "/photos/copy"} {
+		if rec := doJSON(t, srv, who, http.MethodPost, "/api/v1/assets/"+made.Asset.ID+route, `{"from_asset_id":"`+sc.drill.Asset.ID+`"}`); rec.Code != http.StatusOK {
+			t.Fatalf("copying, %s: %d %s", route, rec.Code, rec.Body)
+		}
+	}
+	if got := attachmentNames(t, srv, sc.admin, made.Asset.ID); got != "manual.pdf,photo.jpg,photo.jpg" {
+		t.Errorf("copied: %s", got)
+	}
+
+	// Once it is no longer the invoice, it is an ordinary attachment.
+	if rec := doJSON(t, srv, sc.admin, http.MethodPut, drill, `{"purchase":{"vendor_id":"`+sc.acme.ID+`"}}`); rec.Code != http.StatusOK {
+		t.Fatalf("forgetting the invoice: %d %s", rec.Code, rec.Body)
+	}
+	if got := attachmentNames(t, srv, who, sc.drill.Asset.ID); got != "manual.pdf,receipt.jpg,photo.jpg" {
+		t.Errorf("no longer the invoice: %s", got)
+	}
+	if rec := doJSON(t, srv, who, http.MethodGet, drill+"/photos/"+receipt, ""); rec.Code != http.StatusOK {
+		t.Errorf("downloading it, no longer the invoice: %d", rec.Code)
+	}
+	if rec := doJSON(t, srv, who, http.MethodDelete, drill+"/attachments/"+receipt, ""); rec.Code != http.StatusOK {
+		t.Errorf("removing it, no longer the invoice: %d %s", rec.Code, rec.Body)
+	}
+}
