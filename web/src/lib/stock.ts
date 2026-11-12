@@ -43,6 +43,7 @@ const driverNames: Record<string, string> = {
   brother_ql: 'Brother QL',
   brother_ptouch: 'Brother P-touch',
   brother_td: 'Brother TD',
+  dymo_labelmanager: 'DYMO LabelManager',
   dymo_labelwriter: 'DYMO LabelWriter',
   niimbot: 'Niimbot',
   tspl: 'TSPL',
@@ -96,6 +97,7 @@ const optionLabels: Record<string, string> = {
   rotate_180: 'Turn labels upside down',
   rx_buffer: 'Receive buffer (bytes)',
   speed: 'Speed (inches per second)',
+  tape_type: 'Tape colors',
   work_height_mm: 'Work area, back to front (mm)',
   work_width_mm: 'Work area, across (mm)',
 };

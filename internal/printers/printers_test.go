@@ -19,6 +19,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolm"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/escpos"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/niimbot"
@@ -69,6 +70,15 @@ func TestValidate(t *testing.T) {
 	bad("P-touch margin too small", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-12", `{"margin_mm":1}`))
 	bad("P-touch cut", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-12", `{"cut_after":"never"}`))
 	bad("P-touch unknown option", "P", DriverBrotherPTouch, "pt.lan", 9100, brother("PT-P750W", "tze-12", `{"cut":true}`))
+	ok("LabelManager", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager PnP", "d1-12", ""))
+	ok("LabelManager options", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager 500TS", "d1-24",
+		`{"tape_type":"white_on_black","cut_after":"last_label","margin_mm":20}`))
+	bad("LabelManager model", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("PT-P750W", "d1-12", ""))
+	bad("19 mm tape on a 12 mm model", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager 280", "d1-19", ""))
+	bad("cut_after without a cutter", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager 420P", "d1-12", `{"cut_after":"each_label"}`))
+	bad("LabelManager margin short of the cutter", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager PnP", "d1-12", `{"margin_mm":8}`))
+	bad("LabelManager tape type", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager PnP", "d1-12", `{"tape_type":"gold"}`))
+	bad("LabelManager unknown option", "P", DriverDymoLabelManager, "lm.lan", 9100, brother("LabelManager PnP", "d1-12", `{"mirror":true}`))
 	ok("TD-2", DriverBrotherTD, "td.lan", 9100, brother("TD-2130N", "rd-51x26", ""))
 	ok("TD-4 with its cutter", DriverBrotherTD, "td.lan", 9100, brother("TD-4420DN", "rd-102x152", `{"cut":true}`))
 	bad("TD model", "P", DriverBrotherTD, "td.lan", 9100, brother("QL-810W", "rd-58", ""))
@@ -128,7 +138,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if _, ok := by[DriverTestLaser]; ok {
 		n--
 	}
-	if n != 16 || len(by) != len(d) {
+	if n != 17 || len(by) != len(d) {
 		t.Fatalf("Drivers() = %+v", d)
 	}
 	if b := by[DriverBrotherQL]; len(b.Media) != len(brotherql.MediaIDs()) || len(b.Options) != 1 || b.CustomStock != nil ||
@@ -176,6 +186,19 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	if len(dymo.Media) != len(dymolw.MediaIDs()) || len(dymo.Options) != 2 || len(dymo.Options[0].Values) != 4 {
 		t.Fatalf("Dymo driver info = %+v", dymo)
 	}
+	lm := by[DriverDymoLabelManager]
+	if len(lm.Media) != len(dymolm.MediaIDs()) || len(lm.Options) != 3 || lm.CustomStock != nil || len(lm.Options[0].Values) != 13 ||
+		lm.ModelDPI["LabelManager PnP"] != 180 || lm.ModelDPI["LabelManager Wireless PnP"] != 300 || len(lm.Models) != len(dymolm.Models()) {
+		t.Fatalf("DYMO LabelManager driver info = %+v", lm)
+	}
+	for _, m := range lm.Media {
+		if m.ID == "d1-24" && strings.Join(m.Models, ",") != "LabelManager 500TS,LabelManager Wireless PnP" {
+			t.Errorf("24 mm tape is for %v", m.Models)
+		}
+		if m.ID == "d1-12" && m.Models != nil {
+			t.Errorf("12 mm tape is for %v, not every model", m.Models)
+		}
+	}
 	if ts := by[DriverTSPL]; len(ts.Media) != len(tspl.MediaIDs()) || len(ts.Options) != 2 {
 		t.Fatalf("TSPL driver info = %+v", ts)
 	}
@@ -198,7 +221,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 	// The drivers that take custom stock say how wide, for every model; a
 	// laser has no roll.
 	for _, info := range d {
-		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch || info.Display != nil || info.OneShot != nil {
+		if info.Driver == DriverBrotherQL || info.Driver == DriverBrotherPTouch || info.Driver == DriverDymoLabelManager || info.Display != nil || info.OneShot != nil {
 			continue
 		}
 		c := info.CustomStock
@@ -255,6 +278,7 @@ func TestCustomStockOnEachDriver(t *testing.T) {
 	}{
 		{"Brother takes only its rolls", DriverBrotherQL, "QL-810W", stock(62, 0, 0), false},
 		{"P-touch takes only its cassettes", DriverBrotherPTouch, "PT-P750W", stock(12, 0, 0), false},
+		{"LabelManager takes only its cassettes", DriverDymoLabelManager, "LabelManager PnP", stock(12, 0, 0), false},
 		{"Brother's 4-inch QL takes only its rolls too", DriverBrotherQL, "QL-1100", stock(102, 0, 0), false},
 		{"TD-2 die-cut", DriverBrotherTD, "TD-2020", stock(50, 30, 3), true},
 		{"TD-2 wider than it takes", DriverBrotherTD, "TD-2130N", stock(76, 0, 0), false},
