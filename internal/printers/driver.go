@@ -11,6 +11,7 @@ import (
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/brotherql"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/industrial"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/zebra"
 )
 
@@ -147,7 +148,9 @@ var (
 
 func init() {
 	for _, d := range []Driver{brotherQL, brotherDriver{brotherql.SeriesTD}, ptouchDriver{}, dymoLabelWriter{}, dymoLabelManager{}, tsplDriver{}, niimbotDriver{}, zebraDriver{zebra.ZPL}, zebraDriver{zebra.EPL2},
-		escposDriver{}, phomemoDriver{escposDriver{phomemo: true}}, genericDisplay, oeplDisplay, trmnlDisplay} {
+		industrialDriver{industrial.DPL}, industrialDriver{industrial.SBPL}, industrialDriver{industrial.EZPL},
+		escposDriver{}, phomemoDriver{escposDriver{phomemo: true}},
+		genericDisplay, oeplDisplay, trmnlDisplay} {
 		if err := Register(d); err != nil {
 			panic(err)
 		}
