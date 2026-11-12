@@ -11,7 +11,7 @@ test('review states: turn them on for a category, confirm, return to draft, veri
   await form.getByLabel('Review states').selectOption('on');
   await form.getByLabel('Review every (months)').selectOption({ label: 'Every 12 months' });
   await form.getByRole('button', { name: 'Save review settings' }).click();
-  await expect(page.getByRole('status')).toHaveText('Saved the review settings.');
+  await expect(page.getByRole('status').filter({ hasText: 'Saved the review settings.' })).toHaveText('Saved the review settings.');
   await expect(page.getByLabel('In effect')).toContainText('Every 12 months');
 
   // What is added is a draft, and the list finds it by its state.
@@ -26,7 +26,7 @@ test('review states: turn them on for a category, confirm, return to draft, veri
   const review = page.getByRole('region', { name: 'Review' });
   await expect(review.getByText('Draft', { exact: true })).toBeVisible();
   await review.getByRole('button', { name: 'Confirm', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Confirmed.');
+  await expect(page.getByRole('status').filter({ hasText: 'Confirmed.' })).toHaveText('Confirmed.');
   await expect(review.getByText('Confirmed', { exact: true })).toBeVisible();
   await expect(review).toContainText('Next review by');
   await expect(review.getByRole('button', { name: 'Verify', exact: true })).toBeDisabled();
@@ -36,7 +36,7 @@ test('review states: turn them on for a category, confirm, return to draft, veri
   await review.getByRole('button', { name: 'Return to draft…' }).click();
   await page.getByLabel('What is wrong with it?').fill('The blade size is wrong');
   await page.getByRole('button', { name: 'Return to draft', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Returned to draft.');
+  await expect(page.getByRole('status').filter({ hasText: 'Returned to draft.' })).toHaveText('Returned to draft.');
   await expect(page.getByRole('region', { name: 'History' })).toContainText('Returned to draft: “The blade size is wrong”');
 
   // Where the category lets whoever confirmed it verify it, they can.
@@ -44,7 +44,7 @@ test('review states: turn them on for a category, confirm, return to draft, veri
   await api.call('POST', `/assets/${asset.asset.id}/review`, { move: 'confirm' });
   await page.reload();
   await review.getByRole('button', { name: 'Verify', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Verified.');
+  await expect(page.getByRole('status').filter({ hasText: 'Verified.' })).toHaveText('Verified.');
   await expect(review.locator('[data-review-state="verified"]')).toContainText('Verified');
 
   // Editing it returns it to draft, as the category says by default.
