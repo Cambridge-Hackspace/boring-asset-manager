@@ -1,6 +1,7 @@
 package printers
 
 import (
+	"bytes"
 	"errors"
 	"image"
 	"math"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/dymolm"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/epsonlw"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/printers/ptouch"
 )
 
@@ -504,5 +506,97 @@ func TestDymoLabelManagerPlan(t *testing.T) {
 	if _, _, err := PlanLabel(DriverDymoLabelManager, Settings{Model: "LabelManager 420P", Media: "d1-12", Options: []byte(`{"cut_after":"last_label"}`)},
 		LabelSpec{WidthMM: 40, HeightMM: 12, DPI: 180}); err == nil {
 		t.Error("the 420P took cut_after")
+	}
+}
+
+// TestEpsonLabelWorksPrintableArea checks the fit check against each tape
+// width's printable dots on each model: a label as tall as the tape prints
+// only on its middle dots, and content beyond them is warned of.
+func TestEpsonLabelWorksPrintableArea(t *testing.T) {
+	cases := []struct {
+		model, media string
+		width        float64
+		dots         int
+	}{
+		{"LW-600P", "lk-6", 6, 36},
+		{"LW-600P", "lk-9", 9, 54},
+		{"LW-600P", "lk-12", 12, 72},
+		{"LW-600P", "lk-18", 18, 108},
+		{"LW-600P", "lk-24", 24, 128},
+		{"LW-PX400", "lk-4", 4, 22},
+		{"LW-PX400", "lk-6", 6, 36},
+		{"LW-PX400", "lk-9", 9, 54},
+		{"LW-PX400", "lk-12", 12, 72},
+		{"LW-PX400", "lk-18", 18, 108},
+		{"LW-PX400", "lk-24", 24, 128},
+		{"LW-C410", "lk-4", 4, 22},
+		{"LW-C410", "lk-6", 6, 36},
+		{"LW-C410", "lk-9", 9, 54},
+		{"LW-C410", "lk-12", 12, 72},
+		{"LW-C410", "lk-18", 18, 108},
+	}
+	for _, c := range cases {
+		reach := float64(c.dots) / 180 * 25.4
+		// Landscape, as tape labels are: 60 mm along the tape, turned.
+		label := LabelSpec{WidthMM: 60, HeightMM: c.width, DPI: 180,
+			Content: []RectMM{{X: 5, Y: 0, Width: 10, Height: c.width}, {X: 20, Y: (c.width - reach) / 2, Width: 10, Height: reach}}}
+		_, f, err := PlanLabel(DriverEpsonLabelWorks, Settings{Model: c.model, Media: c.media}, label)
+		if err != nil {
+			t.Errorf("%s on the %s: %v", c.media, c.model, err)
+			continue
+		}
+		if !f.Rotate || math.Abs(f.Printable.Height-reach) > 0.01 || math.Abs(f.Printable.Y-(c.width-reach)/2) > 0.01 {
+			t.Errorf("%s on the %s: printable %+v, want %.2f mm across", c.media, c.model, f.Printable, reach)
+		}
+		if !slices.Equal(f.Outside, []int{0}) {
+			t.Errorf("%s on the %s: outside %v", c.media, c.model, f.Outside)
+		}
+	}
+	// Tape a model does not take is refused, as is a label over 1,000 mm.
+	for _, c := range []struct {
+		model, media string
+		length       float64
+		fits         bool
+	}{
+		{"LW-C410", "lk-24", 40, false},
+		{"LW-600P", "lk-4", 40, false},
+		{"LW-600P", "lk-12", 2, true},
+		{"LW-PX400", "lk-12", 1000, true},
+		{"LW-PX400", "lk-12", 1001, false},
+	} {
+		m, _ := epsonlw.LookupMedia(c.media)
+		_, _, err := PlanLabel(DriverEpsonLabelWorks, Settings{Model: c.model, Media: c.media}, LabelSpec{WidthMM: c.length, HeightMM: m.WidthMM, DPI: 180})
+		if (err == nil) != c.fits {
+			t.Errorf("%g mm on %s on the %s: %v", c.length, c.media, c.model, err)
+		}
+	}
+}
+
+// TestEpsonLabelWorksPlan prints through the registry with the driver's
+// options.
+func TestEpsonLabelWorksPlan(t *testing.T) {
+	s := Settings{Model: "LW-PX400", Media: "lk-18", Options: []byte(`{"cut_after":"last_label","density":2,"margin_mm":5}`)}
+	plan, f, err := PlanLabel(DriverEpsonLabelWorks, s, LabelSpec{WidthMM: 40, HeightMM: 18, DPI: 180})
+	if err != nil {
+		t.Fatal(err)
+	}
+	label := blankLabel(40, 18, 180)
+	stream, err := plan.Encode([]*image.Gray{label, label})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mo, _ := epsonlw.LookupModel("LW-PX400")
+	m, _ := epsonlw.LookupMedia("lk-18")
+	l, _ := mo.Layout(m)
+	job, err := l.DecodeJob(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Turned, 40 mm along the tape is 283 lines; 5 mm is 35, before and
+	// after. Cut once, at the end; density 2 is sent as 7.
+	cut, density := job.Setup[4], job.Setup[5]
+	if !f.Rotate || len(job.Pages) != 2 || len(job.Pages[0].Lines) != 283+2*35 ||
+		!bytes.Equal(cut.Params, []byte{1, 0, 1, 1}) || !bytes.Equal(density.Params, []byte{7}) {
+		t.Errorf("%d pages, %d lines, cut % X, density % X", len(job.Pages), len(job.Pages[0].Lines), cut.Params, density.Params)
 	}
 }

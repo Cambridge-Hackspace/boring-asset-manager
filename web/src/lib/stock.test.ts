@@ -85,6 +85,8 @@ describe('printer words', () => {
     expect(optionLabel('cut_after')).toBe('Cut the tape off');
     expect(optionValueLabel('last_label')).toBe('After the last label');
     expect(optionValueLabel('right_side')).toBe('right side');
+    expect(driverName('epson_labelworks')).toBe('Epson LabelWorks');
+    expect(optionValueLabel('never')).toBe('Never');
     expect(driverName('xtool')).toBe('xTool');
     expect(driverName('dymo_labelmanager')).toBe('DYMO LabelManager');
     expect(optionLabel('tape_type')).toBe('Tape colors');
