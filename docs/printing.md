@@ -747,6 +747,20 @@ exports.
 **Connections.** `tcp` on port 9100 for networked Zebras, and `device`, `ipp` or `windows` for one
 on USB (see [Delivery](#delivery)).
 
+**Brady.** Untested on Brady hardware; from Brady's *Supported ZPL II Scripting Commands* (Rev C)
+and its Script Emulator FAQ.
+
+- **Natively:** the i3311, i4311, i5311 and i7500 take ZPL, `^GFA` included.
+- **Through Brady's Script Emulator for ZPL,** a paid box cabled to the printer: the M410, M510,
+  M511, M610, M611, M710, i3300, i5300 and S3700.
+- **Model:** choose the generic 203 DPI model whatever the head. Brady scales a 203 DPI script to its
+  300 and 600 DPI heads.
+- **`calibrate`** has no effect: Brady's printers don't support `~JC`.
+- **Not possible:** the BMP21-PLUS and M210 can't be connected to a computer, and the M211 takes
+  labels only over Bluetooth LE in a format of Brady's own.
+
+Brady's own SDK isn't used: its license forbids reverse engineering and collects data.
+
 ### `epl2`
 
 For the older Zebras that speak EPL2: the LP and TLP 2824 and 2844, which many spaces still have
