@@ -101,5 +101,11 @@ describe('printer words', () => {
     expect(driverName('niimbot')).toBe('Niimbot');
     expect(optionLabel('print_task')).toBe('Print task, for its firmware');
     expect(optionValueLabel('b21_v1')).toBe('B21, first firmware');
+    expect(driverName('dpl')).toBe('Datamax and Honeywell DPL');
+    expect(driverName('sbpl')).toBe('SATO SBPL');
+    expect(driverName('ezpl')).toBe('Godex EZPL');
+    expect(optionLabel('media_sensor')).toBe('Label sensor');
+    expect(optionLabel('heat')).toBe('Heat (darkness)');
+    expect(optionValueLabel('mark')).toBe('By black marks');
   });
 });

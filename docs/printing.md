@@ -23,11 +23,11 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Eleven printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`,
-`dymo_labelmanager`, `tspl`, `zpl`, `epl2`, `escpos`, `phomemo` and `niimbot`; and three for e-paper
-displays, which are printers too: `display`, `openepaperlink` and `trmnl` (see
-[Displays](#displays)). Option values are listed by the drivers endpoint, and unknown options are
-refused.
+Fourteen printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`,
+`dymo_labelwriter`, `dymo_labelmanager`, `tspl`, `zpl`, `epl2`, `dpl`, `sbpl`, `ezpl`, `escpos`,
+`phomemo` and `niimbot`; and three for e-paper displays, which are printers too: `display`,
+`openepaperlink` and `trmnl` (see [Displays](#displays)). Option values are listed by the drivers
+endpoint, and unknown options are refused.
 
 ### Who can do what
 
@@ -150,7 +150,8 @@ clients need not look either up.
 
 Drivers take custom stock only where a size is all the printer needs:
 
-- TSPL printers, Zebras (ZPL and EPL2) and DYMO LabelWriters take it, up to their head's width.
+- TSPL printers, Zebras (ZPL and EPL2), the industrial printers (DPL, SBPL and EZPL) and DYMO
+  LabelWriters take it, up to their head's width.
 - Brother TD printers take it, as wide as each model's rolls may be.
 - ESC/POS and Phomemo printers take it, up to their widest roll: die-cut only on Phomemo's D series,
   and continuous only on the T02.
@@ -984,6 +985,127 @@ next must wait for the answer. So its jobs are sent in a conversation rather tha
   (`stty raw`).
 - **Bluetooth Classic,** where a model offers it: paired and bound as `/dev/rfcomm0`, a `device`
   connection as for USB.
+
+### `dpl`
+
+For Datamax-O'Neil and Honeywell printers in DPL, the Datamax Programming Language: the E-Class,
+M-Class and I-Class, and Honeywell's PM43 set to DPL. Most also emulate ZPL; use [`zpl`](#zpl) for
+one set to it. The driver follows Datamax-O'Neil's *Class Series Programmer's Manual* (part
+88-2341-01).
+
+**Models:**
+
+| Models | Resolution | Head |
+|---|---|---|
+| Datamax E-Class, M-Class and I-Class | 203 DPI | 832 dots (104 mm) |
+| Datamax E-Class, M-Class and I-Class | 300 DPI | 1,248 dots (106 mm) |
+| Datamax I-Class | 600 DPI | 2,496 dots (106 mm), of which 2,040 print |
+| Honeywell PM43 | 203 DPI | 864 dots (108 mm) |
+| Honeywell PM43 | 300 DPI | 1,248 dots (106 mm) |
+| Generic DPL printers | 203, 300 and 600 DPI | as the Datamax models |
+
+A row of a DPL image holds at most 255 bytes, 2,040 dots, so at 600 DPI labels print up to 86 mm
+wide, around the middle of a wider roll. The PM43's 406 DPI head is left out.
+
+**Options:**
+
+- `heat`: the darkness, 0–30 (`H`); unset keeps the printer's own setting.
+- `speed`: 1–12 inches per second, as far as the model goes (`P`); unset keeps the printer's own
+  setting.
+- `media_sensor`: default `gap`; `mark` finds die-cut labels by black marks on the back instead.
+- `image_module`: default `D`, the printer's own memory: the module each label's image is loaded to.
+
+**Media.** As for [`zpl`](#zpl).
+
+**Encoding.** For each distinct label:
+
+1. `<STX>c0000` and `<STX>e` (gaps) or `<STX>r` (marks) for die-cut labels; for continuous media,
+   `<STX>n` and `<STX>c` with the label's length in hundredths of an inch;
+2. `<STX>I`, loading the label as one image named `BAM` in Datamax's 7-bit ASCII format, as wide as
+   the label and centered across it (a 1 bit prints a dot). Rows are sent from the bottom of the
+   label, which DPL counts from, and a row like the one before is sent as a repeat;
+3. `<STX>L`, then `D11`, and `H` and `P` when set;
+4. one image record placing it at the label's origin, `Q` with the copies (at most 9,998: `Q9999`
+   prints without end), and `E`.
+
+Each label's image replaces the last, so only one is kept.
+
+### `sbpl`
+
+For SATO printers in SBPL, SATO's own language: the CL4NX and CL6NX, and the WS4 series. The driver
+follows SATO's *CL4NX/CL6NX Programming Reference*.
+
+**Models:**
+
+| Models | Resolution | Head |
+|---|---|---|
+| SATO CL4NX | 203, 305 or 609 DPI | 832, 1,248 or 2,496 dots (104 mm) |
+| SATO CL6NX | 203 or 305 DPI | 1,216 or 1,984 dots (152 or 165 mm) |
+| SATO WS408 and WS412 (WS4 series, DT and TT) | 203 or 305 DPI | 832 or 1,248 dots (104 mm) |
+| Generic SBPL printers | 203 or 305 DPI | 104 mm |
+
+SATO's 305 and 609 DPI heads are 12 and 24 dots per mm, the same as other makers' 300 and 600 DPI,
+so BAM! treats them as those: one template serves a SATO and a Zebra alike.
+
+**Options:**
+
+- `darkness`: 1–10 (`#F`); unset keeps the printer's own setting.
+- `speed`: 2–10 inches per second, as far as the model goes (`CS`); unset keeps the printer's own
+  setting.
+- `media_sensor`: `gap`, `mark`, or `none` for continuous media (`IG`); unset keeps the printer's
+  own setting. Set `none` for a continuous roll; SATO refuses it in tear-off and dispenser modes.
+- `stx_etx`: default `false`; set it to wrap each job in `STX` and `ETX`, for a printer whose
+  interface protocol expects it.
+
+**Media.** As for [`zpl`](#zpl), except that continuous labels are at most 406 mm (9,600 dots)
+long at 609 DPI.
+
+**Encoding.** The printer keeps `IG`, `CS` and `#F`, so they are sent first, when set, in a block of
+their own. Then, for each distinct label, one block:
+
+1. `<ESC>A`, then `<ESC>A1` with the label's length and width in dots;
+2. the label as graphics, `<ESC>V` and `<ESC>H` (counting from 1) then `<ESC>GB`, binary, centered
+   across the label (a 1 bit prints a dot). A graphic is whole blocks of 8 rows, so the label's last
+   rows are filled out with white, and a long label is sent in bands of 100 blocks;
+3. `<ESC>Q` with the copies, and `<ESC>Z`.
+
+### `ezpl`
+
+For Godex printers in EZPL, Godex's own language: the G500 series, the EZ-1000Plus series and the
+RT200 series. The driver follows Godex's *EZPL Programmer's Manual* (Rev. J).
+
+**Models:**
+
+| Models | Resolution | Head |
+|---|---|---|
+| Godex G500, RT200 | 203 DPI | 864 dots (108 mm) |
+| Godex G530, RT230 | 300 DPI | 1,248 dots (106 mm) |
+| Godex EZ-1100Plus and EZ-1200Plus | 203 DPI | 832 dots (104 mm) |
+| Godex EZ-1300Plus | 300 DPI | 1,248 dots (106 mm) |
+| Generic EZPL printers | 203 or 300 DPI | 104 or 106 mm |
+
+**Options:**
+
+- `darkness`: 0–19 (`^H`); unset keeps the printer's own setting.
+- `speed`: 2–7 inches per second, as far as the model goes (`^S`); unset keeps the printer's own
+  setting.
+- `media_type`: `direct` for direct thermal labels, or `transfer` for thermal transfer with a
+  ribbon (`^A`); unset keeps the printer's own setting.
+- `media_sensor`: default `gap`; `mark` finds die-cut labels by black marks, as wide as the roll's
+  gap.
+
+**Media.** As for [`zpl`](#zpl). EZPL gives sizes in whole millimeters, so a label's length, gap
+and width are rounded to them; the printer finds die-cut labels by their gaps or marks.
+
+**Encoding.** For each distinct label:
+
+1. `^Q`, the label's length and gap, or mark, or `0,0` for continuous media, and `^W`, its width;
+2. `^H`, `^S` and `^A`, when set, and `^P` with the copies;
+3. `^L`, one pattern (`Q`) holding the whole label, binary, centered across it (a 1 bit prints a
+   dot), and `E`.
+
+None of the printer's own fonts or barcode commands are used by any of these three, so output
+matches the SVG and PDF exports. **Connections** are as for [`zpl`](#zpl).
 
 ## Delivery
 
