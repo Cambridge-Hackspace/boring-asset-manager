@@ -50,6 +50,15 @@ const (
 	DisplayPullRefreshSetting   = "displays.pull_refresh_seconds"
 )
 
+// paperlesspaper's cloud, for displays pushed through it: its API, empty
+// for the default, and the API key, sealed with the configuration's secret
+// key for PaperlessPaperKeyPurpose.
+const (
+	PaperlessPaperBaseSetting = "displays.paperlesspaper_base_url"
+	PaperlessPaperKeySetting  = "displays.paperlesspaper_api_key"
+	PaperlessPaperKeyPurpose  = "displays.paperlesspaper_api_key"
+)
+
 // Their defaults and limits: half a minute, up to an hour, for the window,
 // and a quarter of an hour, as TRMNL's own server answers, for the pull.
 const (

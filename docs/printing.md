@@ -25,9 +25,9 @@ Each printer is stored with:
 
 Fifteen printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`,
 `dymo_labelwriter`, `dymo_labelmanager`, `epson_labelworks`, `tspl`, `zpl`, `epl2`, `dpl`, `sbpl`,
-`ezpl`, `escpos`, `phomemo` and `niimbot`; and three for e-paper displays, which are printers too:
-`display`, `openepaperlink` and `trmnl` (see [Displays](#displays)). Option values are listed by the
-drivers endpoint, and unknown options are refused.
+`ezpl`, `escpos`, `phomemo` and `niimbot`; and four for e-paper displays, which are printers too:
+`display`, `openepaperlink`, `trmnl` and `paperlesspaper` (see [Displays](#displays)). Option values
+are listed by the drivers endpoint, and unknown options are refused.
 
 ### Who can do what
 
@@ -1237,7 +1237,7 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
 | `ble` | The printer's Bluetooth address, such as `7C:2F:80:A1:B2:C3`, then optionally `?service=…&write=…&notify=…&ack=…&protocol=…` | A Bluetooth LE printer in range of the BAM server, on Linux. The address must match a pattern in the server's `[printers] bluetooth` setting, which is empty by default. See [Bluetooth](#bluetooth). |
 | `browser` | Empty, or `?service=…&write=…&notify=…&ack=…&protocol=…&chunk=…` | A Bluetooth LE printer beside whoever prints, printed to from their browser over its own Bluetooth, so the server needs none. Never through a relay, and never from the spool. See [From a browser](#from-a-browser). |
-| `openepaperlink`, `pull`, `webhook` | See [Displays](#connections) | E-paper displays only. |
+| `openepaperlink`, `pull`, `webhook`, `paperlesspaper` | See [Displays](#connections) | E-paper displays only. |
 
 A connection may also name a relay, as `"relay": "front-desk"`: BAM! run beside the printer on its
 own network, for a BAM! hosted elsewhere. The address is then on the relay's network, and the
@@ -1612,6 +1612,7 @@ nothing new to learn. Nothing here has been tried on real hardware yet.
 | `display` | Panels by size: 1.54-inch 152 × 152, 2.13-inch 250 × 122, 2.9-inch 296 × 128, 4.2-inch 400 × 300 and 7.5-inch 800 × 480, each black and white or with red; 4.2-inch with red and yellow; 5.65-inch 600 × 448 in seven colors (ACeP); and 7.3-inch 800 × 480 Spectra 6 | `pull`, `webhook` | PNG (default) or BMP |
 | `openepaperlink` | OpenEPaperLink tags: 1.54-inch 152 × 152, 2.6-inch 296 × 152, 2.9-inch 296 × 128, 4.2-inch 400 × 300 and 7.4-inch 640 × 384, with red | `openepaperlink` | JPEG |
 | `trmnl` | TRMNL (`og`, 800 × 480) and TRMNL X (`x`, 1872 × 1404), in black and white | `pull`, by its MAC address | PNG (default) or BMP |
+| `paperlesspaper` | OpenPaper 7 (`epd7`, 800 × 480) and OpenPaper L (`openpaper13`, 1200 × 1600), in Spectra 6 | `pull`, `paperlesspaper` | OpenPaper's own BMP (below) |
 
 Each model's resolution is its panel's, near enough: its diagonal in pixels over its diagonal in
 inches. PNGs are paletted, a bit a dot for black and white; BMPs are uncompressed with a palette, a
@@ -1625,9 +1626,10 @@ TRMNL read them. JPEGs are baseline at the highest quality, in gray for black an
 | `openepaperlink` | The access point, `host`, `host:port` or `http(s)://host[:port]`, then `?tag=` and the tag's MAC address, 6 or 8 bytes, such as `192.168.1.50?tag=0000021E3D6F1234` | Push: uploaded to the access point (below). It may go through a [relay](relays.md), whose allowlist lists the access point's URL. |
 | `pull` | None; for a `trmnl` display, its MAC address | Pull: kept for the display to fetch with its own token (below). |
 | `webhook` | A webhook [notification channel](notifications.md)'s ID | Push: posted through the channel (below). The channel must be a webhook, and on. |
+| `paperlesspaper` | A paperlesspaper paper's ID, 24 hexadecimal digits | Push: uploaded to paperlesspaper's cloud ([paperlesspaper](#paperlesspaper)). |
 
-A display driver takes only its own connections, and a printer's driver none of these. `pull` and
-`webhook` are the server's own, never through a relay.
+A display driver takes only its own connections, and a printer's driver none of these. `pull`,
+`webhook` and `paperlesspaper` are the server's own, never through a relay.
 
 ### OpenEPaperLink
 
@@ -1692,6 +1694,35 @@ its media type (`image/png` or `image/bmp`), the channel's own headers, `BAM-Eve
 when the channel has a secret, as its events are ([Notifications](notifications.md)). A body
 template is for events, and is not used. Any answer but 2xx fails the job.
 
+### paperlesspaper
+
+A `paperlesspaper` display is one of paperlesspaper's OpenPaper frames: Spectra 6 e-paper, in six
+inks, on a microcontroller that sleeps between wakes. Its image is a 4-bit bitmap, uncompressed and
+top down, whose every dot is the panel's code for its ink: black 0, blue 1, green 2, red 3, yellow 5
+and white 6. The frame shows such a bitmap as it is, where it would dither any other; its color
+table is right too, for viewing it elsewhere. The 7-inch frame takes 800 × 480, the 13.3-inch 1200 ×
+1600, upright, so a template the other way up is turned onto it, as on a roll. These facts are from
+paperlesspaper's documentation and its offline firmware, and have not been tried on a frame.
+
+- **Pulled,** on paperlesspaper's offline firmware: give the frame the display's pull URL, with HTTP
+  authentication, any user name and a display token as its password, which is all the frame can send.
+  The frame takes a URL of at most 128 characters, so the token is not in it. It fetches as it wakes,
+  and sleeps for what `X-OpenPaper-Sleep-Seconds` says: the display's refresh.
+- **Pushed** through paperlesspaper's cloud, for a frame on its stock firmware: a `paperlesspaper`
+  connection, whose address is the paper's ID, the 24 hexadecimal digits at the end of its address in
+  paperlesspaper's web app. BAM! uploads the image as a PNG to `/papers/uploadSingleImage/{paper}`,
+  with the instance's API key as `x-api-key`, as `picture` and `pictureDevice`, with
+  `forceUpload=true` so that a small change is not taken for the last image, and its orientation. The
+  cloud keeps it, and the frame shows it when it next wakes. A refusal (401, 403, 404 or another 4xx)
+  fails the job with what it said; 429 and 5xx are tried again, after any `Retry-After` of up to 10
+  seconds, three times in all.
+
+The API and its key are the instance's, under **Admin › Displays**, or `paperlesspaper_base_url` and
+`paperlesspaper_api_key` in `PUT /api/v1/settings/displays`. The key is sealed with `[auth]
+secret_key`, so setting one needs it, and is never answered: only `paperlesspaper_api_key_set`. The
+address defaults to `https://api.paperlesspaper.de/v1`, for a self-hosted install of
+paperlesspaper's API to change.
+
 ### Keeping displays current
 
 When the asset a display shows changes, or something it is in does, a hook can refresh the display
@@ -1714,6 +1745,8 @@ categories of the assets shown and of their containers.
 |---|---|---|
 | `refresh_window_seconds` | 30 | 0 to 3600 |
 | `pull_refresh_seconds` | 900 | 60 to 86400 |
+| `paperlesspaper_base_url` | `https://api.paperlesspaper.de/v1` | An http(s) URL |
+| `paperlesspaper_api_key` | Unset | Write-only, sealed; `paperlesspaper_api_key_set` says whether it is set |
 
 ## Lasers
 

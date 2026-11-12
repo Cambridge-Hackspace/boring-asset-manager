@@ -86,6 +86,54 @@ describe('DisplaysPage', () => {
     await vi.waitFor(() => expect(sent.find((s) => s.method === 'PUT')?.body).toEqual({ refresh_window_seconds: 60, pull_refresh_seconds: 900 }));
   });
 
+  it('gives an OpenPaper frame its token as a password, and keeps paperlesspaper’s API key sealed', async () => {
+    const openPaper: DisplayView = { ...shelf, id: 'd3', name: 'Front desk', driver: 'paperlesspaper', model: 'epd7', shown: null };
+    const pushed: DisplayView = { ...tag, id: 'd4', name: 'Hall', driver: 'paperlesspaper', model: 'openpaper13', connection: { type: 'paperlesspaper', address: '65a1f0c2e4b3d5a6b7c8d9e0' } };
+    let keySet = true;
+    const { sent } = fakeApi({
+      'GET /displays': () => ({ displays: [openPaper, pushed] }),
+      'GET /settings/displays': () => ({ refresh_window_seconds: 30, pull_refresh_seconds: 900, paperlesspaper_base_url: 'https://api.paperlesspaper.de/v1', paperlesspaper_api_key_set: keySet }),
+      'GET /displays/d3/tokens': () => ({ tokens: [] }),
+      'POST /displays/d3/tokens': () => ({
+        status: 201,
+        body: { token: { ...frame, id: 'k3', name: 'Front desk' }, secret: 'bamd_xyz', url: 'https://bam.example/api/v1/displays/d3/image', username: 'bam' },
+      }),
+      'PUT /settings/displays': (body) => {
+        const b = body as { paperlesspaper_api_key?: string };
+        if (b.paperlesspaper_api_key !== undefined) keySet = b.paperlesspaper_api_key !== '';
+        return { ...(body as object), paperlesspaper_api_key: undefined, paperlesspaper_api_key_set: keySet };
+      },
+    });
+    render(DisplaysPage, { params: {} });
+
+    const hall = within(await screen.findByRole('article', { name: 'Hall' }));
+    expect(hall.getByText(/Pushed through paperlesspaper’s cloud, to paper 65a1f0c2e4b3d5a6b7c8d9e0/)).toBeTruthy();
+
+    const desk = within(screen.getByRole('article', { name: 'Front desk' }));
+    await fireEvent.submit(desk.getByRole('button', { name: 'Make a token' }));
+    expect(((await screen.findByLabelText('Address')) as HTMLInputElement).value).toBe('https://bam.example/api/v1/displays/d3/image');
+    expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('bamd_xyz');
+    expect(screen.getByRole('button', { name: 'Copy the password' })).toBeTruthy();
+
+    // The key is sent only when typed, and shown only as set.
+    const key = screen.getByLabelText('API key') as HTMLInputElement;
+    expect(key.placeholder).toMatch(/^Set/);
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((s) => s.method === 'PUT')).toHaveLength(1));
+    expect(sent.find((s) => s.method === 'PUT')!.body).not.toHaveProperty('paperlesspaper_api_key');
+    await fireEvent.input(key, { target: { value: ' pk_live ' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((s) => s.method === 'PUT')).toHaveLength(2));
+    expect(sent.filter((s) => s.method === 'PUT')[1]!.body).toMatchObject({ paperlesspaper_api_key: 'pk_live', paperlesspaper_base_url: 'https://api.paperlesspaper.de/v1' });
+    expect(key.value).toBe('');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear paperlesspaper’s API key' }));
+    await vi.waitFor(() => expect(sent.filter((s) => s.method === 'PUT')).toHaveLength(3));
+    expect(sent.filter((s) => s.method === 'PUT')[2]!.body).toMatchObject({ paperlesspaper_api_key: '' });
+    expect(await screen.findByText('Cleared paperlesspaper’s API key.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Clear paperlesspaper’s API key' })).toBeNull();
+  });
+
   it('shows those who only print what displays show, without tokens or settings', async () => {
     session.permissions = ['labels.print'];
     fakeApi({
