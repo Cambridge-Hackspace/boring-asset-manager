@@ -134,6 +134,44 @@ describe('DisplaysPage', () => {
     expect(screen.queryByRole('button', { name: 'Clear paperlesspaper’s API key' })).toBeNull();
   });
 
+  it('says which SoluM label a display is, and keeps the AIMS password sealed', async () => {
+    const bin: DisplayView = { ...tag, id: 'd5', name: 'Bin C2', driver: 'solum', model: '2.9in-296x128-bwr', connection: { type: 'solum', address: '04507B0AC391' } };
+    let passwordSet = true;
+    const account = { solum_base_url: 'https://eu.common.solumesl.com', solum_company: 'TST', solum_store: 'S001', solum_username: 'ops@example.org' };
+    const { sent } = fakeApi({
+      'GET /displays': () => ({ displays: [bin] }),
+      'GET /settings/displays': () => ({ refresh_window_seconds: 30, pull_refresh_seconds: 900, ...account, solum_password_set: passwordSet }),
+      'PUT /settings/displays': (body) => {
+        const b = body as { solum_password?: string };
+        if (b.solum_password !== undefined) passwordSet = b.solum_password !== '';
+        return { ...(body as object), solum_password: undefined, solum_password_set: passwordSet };
+      },
+    });
+    render(DisplaysPage, { params: {} });
+
+    const card = within(await screen.findByRole('article', { name: 'Bin C2' }));
+    expect(card.getByText(/Pushed through SoluM’s AIMS, to label 04507B0AC391/)).toBeTruthy();
+    expect(card.queryByRole('button', { name: 'Make a token' })).toBeNull();
+
+    // The password is sent only when typed, and shown only as set.
+    const password = screen.getByLabelText('AIMS password') as HTMLInputElement;
+    expect(password.placeholder).toMatch(/^Set/);
+    await fireEvent.input(screen.getByLabelText('Store code'), { target: { value: 'S002' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((s) => s.method === 'PUT')).toHaveLength(1));
+    expect(sent.find((s) => s.method === 'PUT')!.body).toEqual({ refresh_window_seconds: 30, pull_refresh_seconds: 900, ...account, solum_store: 'S002' });
+    await fireEvent.input(password, { target: { value: 's3cret' } });
+    await fireEvent.submit(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(sent.filter((s) => s.method === 'PUT')).toHaveLength(2));
+    expect(sent.filter((s) => s.method === 'PUT')[1]!.body).toMatchObject({ solum_password: 's3cret' });
+    expect(password.value).toBe('');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear SoluM’s password' }));
+    await vi.waitFor(() => expect(sent.filter((s) => s.method === 'PUT')).toHaveLength(3));
+    expect(sent.filter((s) => s.method === 'PUT')[2]!.body).toMatchObject({ solum_password: '' });
+    expect(await screen.findByText('Cleared SoluM’s password.')).toBeTruthy();
+  });
+
   it('shows those who only print what displays show, without tokens or settings', async () => {
     session.permissions = ['labels.print'];
     fakeApi({

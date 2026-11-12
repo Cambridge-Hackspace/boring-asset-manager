@@ -36,6 +36,9 @@ const (
 	// DriverPaperlessPaper drives paperlesspaper's OpenPaper frames, which
 	// pull on its offline firmware or are pushed through its cloud.
 	DriverPaperlessPaper = "paperlesspaper"
+	// DriverSolum drives SoluM's electronic shelf labels, pushed through
+	// SoluM's AIMS.
+	DriverSolum = "solum"
 )
 
 // Image formats a display takes.
@@ -88,7 +91,7 @@ func IsDisplay(driver string) bool {
 // isDisplayConnection reports whether a connection type reaches only
 // displays.
 func isDisplayConnection(t string) bool {
-	return t == ConnPull || t == ConnWebhook || t == ConnOpenEPaperLink || t == ConnPaperlessPaper
+	return t == ConnPull || t == ConnWebhook || t == ConnOpenEPaperLink || t == ConnPaperlessPaper || t == ConnSolum
 }
 
 // checkDisplayConnection checks a driver takes a connection: a display
@@ -177,6 +180,28 @@ var (
 		{ID: "epd7", Name: "OpenPaper 7, 800 × 480", Width: 800, Height: 480, DPI: 128, Palette: labels.PaletteBWRYGB},
 		{ID: "openpaper13", Name: "OpenPaper L, 1200 × 1600", Width: 1200, Height: 1600, DPI: 150, Palette: labels.PaletteBWRYGB},
 	}
+	// SoluM's labels, by their screens' sizes and inks, as AIMS reports
+	// each label's: a push checks the label is its model's.
+	solumPanels = func() []Panel {
+		var out []Panel
+		for _, s := range []struct {
+			inch          string
+			width, height int
+			dpi           int
+		}{
+			{"1.6", 152, 152, 134}, {"2.2", 212, 104, 107}, {"2.13", 250, 122, 130}, {"2.6", 296, 152, 128}, {"2.9", 296, 128, 111},
+			{"4.2", 400, 300, 119}, {"7.4", 640, 384, 101}, {"7.5", 800, 480, 124},
+		} {
+			for _, inks := range []struct {
+				id, name string
+				palette  labels.Palette
+			}{{"bw", "", labels.PaletteBW}, {"bwr", ", red", labels.PaletteBWR}, {"bwy", ", yellow", labels.PaletteBWY}, {"bwry", ", red and yellow", labels.PaletteBWRY}} {
+				out = append(out, Panel{ID: fmt.Sprintf("%sin-%dx%d-%s", s.inch, s.width, s.height, inks.id), Name: fmt.Sprintf("%s-inch, %d × %d%s", s.inch, s.width, s.height, inks.name),
+					Width: s.width, Height: s.height, DPI: s.dpi, Palette: inks.palette})
+			}
+		}
+		return out
+	}()
 )
 
 // displayDriver drives a family of displays, each model a panel.
@@ -197,6 +222,7 @@ var (
 	oeplDisplay      = displayDriver{name: DriverOpenEPaperLink, panels: oeplPanels, connections: []string{ConnOpenEPaperLink}, formats: []string{FormatJPEG}}
 	trmnlDisplay     = displayDriver{name: DriverTRMNL, panels: trmnlPanels, connections: []string{ConnPull}, formats: []string{FormatPNG, FormatBMP}, byMAC: true}
 	paperlessDisplay = displayDriver{name: DriverPaperlessPaper, panels: paperlessPanels, connections: []string{ConnPull, ConnPaperlessPaper}, formats: []string{FormatOpenPaper}}
+	solumDisplay     = displayDriver{name: DriverSolum, panels: solumPanels, connections: []string{ConnSolum}, formats: []string{FormatPNG}}
 )
 
 // displayOptions are a display driver's options.
@@ -253,6 +279,19 @@ func (d displayDriver) CheckConnection(c Connection) error {
 		return fmt.Errorf("a %s display that pulls has no address: it fetches its image from its URL with its own token", d.name)
 	}
 	return nil
+}
+
+// DisplayPanel is a display driver's model's panel.
+func DisplayPanel(driver, model string) (Panel, bool) {
+	d, err := Lookup(driver)
+	if err != nil {
+		return Panel{}, false
+	}
+	dd, ok := d.(displayDriver)
+	if !ok {
+		return Panel{}, false
+	}
+	return dd.panel(model)
 }
 
 func (d displayDriver) panel(model string) (Panel, bool) {
