@@ -828,6 +828,8 @@ export interface BLEProfile {
   notify?: string;
   /** Each write waits for the printer to acknowledge it. */
   ack?: boolean;
+  /** The conversation the job is sent in, reading the printer's answers, such as niimbot. */
+  protocol?: string;
 }
 
 export interface Role {
