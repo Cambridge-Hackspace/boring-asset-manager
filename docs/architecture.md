@@ -303,9 +303,38 @@ These were checked against what each platform documents, as of late 2026, not ye
   ([Notifications](notifications.md)): a channel that sends to the devices of the people
   subscribed. Safari's Declarative Web Push shows a notification without the worker.
 - **What else differs.** iOS offers no install prompt (hence Share › Add to Home Screen), no Web
-  Bluetooth and no Web NFC, which Chrome on Android has. BAM!'s Bluetooth printers are the
-  server's to reach, so that costs nothing yet; reading NFC tags would be Android's alone.
-  App badges work on both. Nothing is in the app stores (#215).
+  Bluetooth and no Web NFC, which Chrome on Android has. A Bluetooth printer the server or a relay
+  reaches prints from any phone, but one reached through the browser's own Bluetooth
+  ([Printing](printing.md#from-a-browser)) can't be printed to from an iPhone; reading NFC tags
+  would be Android's alone. App badges work on both.
+
+### Decision: no app-store wrapper, for now (#215)
+
+Nothing is in the app stores. #215 asked for a wrapper only if the installed web app fell short,
+and of what it falls short in above, a wrapper fixes little, at a cost every instance pays:
+
+- **One app serves every instance, which a store app can't do well.** A wrapper bundles a release
+  of the web app, but each instance runs its own release, so the app would have to speak every
+  release's API, where the installed web app is always its own instance's. Its pages would be
+  another origin from the instance's API, so it couldn't sign in with the session cookie, and would
+  need OAuth with PKCE and tokens (the authorization server MCP already has would serve).
+- **Links can't open the app for every instance.** Universal links on iOS and verified app links on
+  Android are listed per domain, in the app's build and in a file on each domain, so a label
+  scanned with the Camera opens a self-hosted instance in the browser either way. A Trusted Web
+  Activity is verified by a file on its one origin too, and without it shows the browser's address
+  bar, so it fits a single hosted instance, not an app for all of them.
+- **On Android, the installed web app has nothing to add.** Chrome gives it the camera, barcode
+  detection, Web Bluetooth, Web NFC, background sync and push.
+- **On iOS, the gaps are Bluetooth, NFC and background sync.** A Capacitor app with a Bluetooth
+  plugin would print to a browser-reached printer from an iPhone. Apple's review refuses apps that
+  are little more than a website, a developer account costs a yearly fee, and each release would
+  wait on review.
+
+Revisit this if an organization needs a store listing or device management, if printing from
+iPhones over Bluetooth is wanted where no server or relay can reach the printer, or if one hosted
+BAM! comes to serve many organizations, where a single origin would make links and a Trusted Web
+Activity work. A wrapper would then be Capacitor around the same Svelte app, as #215 set out, never
+a separate Swift or Kotlin one.
 
 ## Accessibility
 
