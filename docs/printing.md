@@ -23,9 +23,10 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Eight printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`,
-`dymo_labelmanager`, `tspl`, `zpl` and `epl2`; and three for e-paper displays, which are printers too: `display`,
-`openepaperlink` and `trmnl` (see [Displays](#displays)). Option values are listed by the drivers endpoint, and unknown options are
+Eleven printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`, `dymo_labelwriter`,
+`dymo_labelmanager`, `tspl`, `zpl`, `epl2`, `escpos`, `phomemo` and `niimbot`; and three for e-paper
+displays, which are printers too: `display`, `openepaperlink` and `trmnl` (see
+[Displays](#displays)). Option values are listed by the drivers endpoint, and unknown options are
 refused.
 
 ### Who can do what
