@@ -12,6 +12,7 @@
   import PrinterForm from './PrinterForm.svelte';
   import PoolsSection from './PoolsSection.svelte';
   import StockSection from './StockSection.svelte';
+  import RFIDSettings from './RFIDSettings.svelte';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -207,4 +208,5 @@
 {#if !loading}
   <PoolsSection {printers} />
   <StockSection {stock} onchange={load} />
+  {#if canManage}<RFIDSettings />{/if}
 {/if}

@@ -925,6 +925,14 @@ Brother's TD series in ZPL mode, and inexpensive 4-inch printers. The driver fol
 - `calibrate`: default `false`; set it to measure the labels before each job (`~JC`), as after
   loading a new roll.
 - `compress`: default `true`; turn it off for an emulator that mishandles Zebra's compression.
+- `rfid`: default `false`; set it on an RFID model, such as the ZD621R or ZT411 RFID, to write
+  each label's long-range tag with its asset's EPC as it prints ([RFID tags](rfid.md)). Choose
+  the model the RFID one is a version of.
+- `rfid_tries`: 1–10, how many labels the printer tries, printing VOID over each, when a tag won't
+  take its EPC (`^RS`).
+- `rfid_on_failure`: `skip` drops the label and goes on, `pause` pauses the printer, and `error`
+  stops it with an error, when every try fails (`^RS`). Either of the last two keeps the label
+  queued until someone cancels it at the printer.
 
 **Media.** Zebra media is given by its size, so the catalog lists the same common sizes as
 [`tspl`](#tspl), with 4 × 1 in too. Any other size is [custom stock](#custom-label-stock). The fit
@@ -937,10 +945,15 @@ printed around its middle.
 2. `^MNY` for die-cut labels, found by their gaps, or `^MNN` for continuous media;
 3. `^MT`, `^MM` and `^PR`, when set;
 4. `^PW` and `^LL`, the label's width and length in dots, and `^LH0,0`;
-5. the label as graphics, `^FO` then `^GFA`, centered across the label. Each graphic is at most
+5. with `rfid` on, for a label of an asset: `^RS8`, for Gen 2 tags, with `rfid_tries` and
+   `rfid_on_failure` when set, then `^RFW,H^FD` and the EPC in hexadecimal, `^FS`. A 96-bit EPC
+   goes to the memory bank's default, `E`, which older RFID printers take too. Any other length
+   adds `,,,A`, which sets the tag's PC bits to the length written. Zebra's guide lists `A` for
+   the ZD500R and the ZT400 and ZT600 series;
+6. the label as graphics, `^FO` then `^GFA`, centered across the label. Each graphic is at most
    99,999 bytes, so a large label is sent in bands, one under the other. They use ZPL's ASCII
    compression unless `compress` is off;
-6. `^PQ` with the copies, and `^XZ`.
+7. `^PQ` with the copies, and `^XZ`.
 
 None of the printer's own fonts or barcode commands are used, so output matches the SVG and PDF
 exports.
