@@ -404,6 +404,19 @@ modules are. The rest are outlines, filled with the 50% coverage threshold in 1-
 On an adaptive template, a shape left without room on the label is left off by default. Its
 corners round in proportion to its box, and its stroke keeps its width.
 
+#### The NFC mark
+
+The editor's **Add the NFC mark** adds a `path` shape named `NFC mark`, filled black with no
+stroke, 8 mm square or the label's shorter side if less: a dot with three arcs spreading from
+it, to say that an NFC tag lies under the label and where. Phones read a tag only from 2–4 cm.
+Its path data is `NFC_MARK_D` in `web/src/lib/template.ts`.
+
+It is BAM!'s own drawing. The NFC Forum's N-Mark is free to use but only under a click-through
+trademark license agreement, with usage guidelines that come with it, so BAM! does not ship it
+([NFC Forum: the N-Mark](https://nfc-forum.org/n-mark),
+[N-Mark guidelines](https://nfc-forum.org/uploads/Branding-and-Marks/NFC_N_Mark_Guidelines.pdf)).
+A template may still carry the N-Mark imported as artwork, under its owner's own license.
+
 #### Importing SVG artwork
 
 Artwork is imported with `POST /api/v1/templates/import-svg` (`templates.manage`). It takes
