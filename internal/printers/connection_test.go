@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -57,7 +58,17 @@ func TestNormalizeConnection(t *testing.T) {
 	}
 }
 
+// skipDevicesOnWindows skips the rest of a test that stands a temporary file
+// in for a device: device addresses are Unix paths, and a temporary directory
+// on Windows is not one. Windows printers use the windows connection.
+func skipDevicesOnWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("device addresses are Unix paths; Windows printers use the windows connection")
+	}
+}
+
 func TestDeviceConnections(t *testing.T) {
+	skipDevicesOnWindows(t)
 	dir := t.TempDir()
 	device := filepath.ToSlash(filepath.Join(dir, "lp0"))
 	if err := os.WriteFile(device, nil, 0o600); err != nil {
@@ -110,6 +121,7 @@ func TestRFCOMMDeviceConnections(t *testing.T) {
 
 	// Written to as any device, standing in for the serial port a bound
 	// rfcomm device is.
+	skipDevicesOnWindows(t)
 	dir := filepath.ToSlash(t.TempDir())
 	rfcomm := Connection{Type: ConnDevice, Address: dir + "/rfcomm1"}
 	if err := os.WriteFile(rfcomm.Address, nil, 0o600); err != nil {
