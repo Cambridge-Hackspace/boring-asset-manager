@@ -155,8 +155,27 @@ type browserLink struct {
 	done chan struct{}
 }
 
+// Write sends a piece of the job. Once the job stops it sends no more, but
+// a write under way runs on to ctx's deadline rather than ending with it:
+// the WebSocket closes itself when a write's context ends, which would cut
+// off the message saying why the job stopped.
 func (b *browserLink) Write(ctx context.Context, data []byte) error {
-	return b.ws.Write(ctx, websocket.MessageBinary, data)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	wctx, cancel := uncancelled(ctx)
+	defer cancel()
+	return b.ws.Write(wctx, websocket.MessageBinary, data)
+}
+
+// uncancelled is ctx without its cancellation but with its deadline, or
+// browserTimeout from now where it has none.
+func uncancelled(ctx context.Context) (context.Context, context.CancelFunc) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		deadline = time.Now().Add(browserTimeout)
+	}
+	return context.WithDeadline(context.WithoutCancel(ctx), deadline)
 }
 
 func (b *browserLink) Received() <-chan []byte { return b.received }
@@ -206,7 +225,10 @@ func (b *browserLink) stream(ctx context.Context, job []byte) error {
 			return err
 		}
 	}
-	if err := writeBrowserMessage(ctx, b.ws, map[string]string{"type": "sent"}); err != nil {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := writeBrowserMessage(context.WithoutCancel(ctx), b.ws, map[string]string{"type": "sent"}); err != nil {
 		return err
 	}
 	select {
