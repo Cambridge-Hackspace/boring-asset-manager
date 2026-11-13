@@ -130,7 +130,7 @@ describe('ScanPage', () => {
     expect(screen.getByRole('alert').textContent).toContain('No asset has that code');
   });
 
-  it('adds the label to the print queue, for those who print labels', async () => {
+  it('adds the label to the print queue, and offers to write a tag, for those who print labels', async () => {
     session.permissions = ['assets.scan', 'labels.print'];
     const { sent } = fakeApi({
       'GET /scan/BIN-A3': () => scanOf(10, []),
@@ -140,6 +140,7 @@ describe('ScanPage', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Add its label to the print queue' }));
     expect(await screen.findByText('Added 1 label to the print queue.')).toBeTruthy();
     expect(sent.find((r) => r.path === '/spool')!.body).toEqual({ asset_ids: ['b1'] });
+    expect(screen.getByRole('button', { name: 'Write tag' })).toBeTruthy();
     session.permissions = [];
   });
 

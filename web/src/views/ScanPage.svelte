@@ -8,6 +8,7 @@
   import { scanActionLabel } from '../lib/scan';
   import { session } from '../lib/session.svelte';
   import AddToSpool from '../components/AddToSpool.svelte';
+  import WriteTag from '../components/WriteTag.svelte';
   import HookButtons from '../components/HookButtons.svelte';
   import AssetIcon from '../components/AssetIcon.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
@@ -177,6 +178,7 @@
   {#if session.can('labels.print')}
     {@const assetId = scan.asset.id}
     <p class="mt-4"><AddToSpool what={() => ({ asset_ids: [assetId] })} label="Add its label to the print queue" /></p>
+    <div class="mt-4"><WriteTag {assetId} /></div>
   {/if}
 {:else if !session.user}
   <SignInToSee />
