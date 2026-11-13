@@ -28,17 +28,31 @@ step "Go suites (-race), on SQLite in REAPER_STATE"
 # the largest (internal/assetcsv's seeded imports) takes a third of that on
 # a workstation, and reaper's guest is several times slower; 30 minutes
 # still catches a test that hangs.
+#
+# Its output is kept, and if it fails, recap.sh repeats what failed at the
+# end, where reaper's comment, which keeps only the last lines, shows it.
 mkdir -p "$REAPER_STATE/uploads"
-"$CONTAINER" run --rm \
-  -e BAM_REQUIRE_ISOLEX=1 \
-  -v "$ROOT:/src" -w /src \
-  -v "$REAPER_CACHE_GOCACHE:/root/.cache/go-build" \
-  -v "$REAPER_CACHE_GOPATH:/go" \
-  -v "$REAPER_STATE:/state" \
-  -e BAM_DB_PATH=/state/bam_test.db \
-  -e BAM_STORAGE_PATH=/state/uploads \
-  "$GO_IMAGE" \
-  go test -race -timeout 30m ./...
+GO_LOG="$REAPER_STATE/go-test.log"
+GO_STATUS="$REAPER_STATE/go-test.status"
+echo 0 > "$GO_STATUS"
+{
+  "$CONTAINER" run --rm \
+    -e BAM_REQUIRE_ISOLEX=1 \
+    -v "$ROOT:/src" -w /src \
+    -v "$REAPER_CACHE_GOCACHE:/root/.cache/go-build" \
+    -v "$REAPER_CACHE_GOPATH:/go" \
+    -v "$REAPER_STATE:/state" \
+    -e BAM_DB_PATH=/state/bam_test.db \
+    -e BAM_STORAGE_PATH=/state/uploads \
+    "$GO_IMAGE" \
+    go test -race -timeout 30m ./... || echo $? > "$GO_STATUS"
+} 2>&1 | tee "$GO_LOG"
+status=$(cat "$GO_STATUS")
+if [ "$status" != 0 ]; then
+  step "Go suites failed: what failed, again"
+  "$ROOT/tools/reaper/recap.sh" "$GO_LOG"
+  exit "$status"
+fi
 
 # The web scripts keep node_modules, the npm cache and Go's caches in
 # reaper's caches rather than in named volumes on the guest's small root disk.
