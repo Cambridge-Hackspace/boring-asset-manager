@@ -136,6 +136,26 @@ podman run -d --pod bamdb --name bams3 --entrypoint sh docker.io/versity/versity
 BAM_TEST_S3_ENDPOINT=http://localhost:9000 BAM_TEST_S3_BUCKET=bam BAM_TEST_S3_ACCESS_KEY_ID=bamtest BAM_TEST_S3_SECRET_ACCESS_KEY=bamtest-secret-key   go test ./internal/filestore/ ./internal/api/
 ```
 
+## Running on Windows
+
+The suites run on Linux, but the `windows` connection prints only on Windows. The printers
+package's tests run there too, built for Windows from anywhere:
+
+```bash
+GOOS=windows go test -c -o internal/printers/printers.test.exe ./internal/printers/
+```
+
+Run on Windows, from `internal/printers`, `printers.test.exe` checks that a printer that is not
+there is reported as unreachable. With `BAM_TEST_WINDOWS_PRINTER` naming a printer, it also sends
+a job of a little over a megabyte through the spooler, as `RAW`, and checks that every byte was
+taken. A queue on the `nul:` port, such as `OneNote (Desktop)`, takes it and prints nothing:
+
+```powershell
+$env:BAM_TEST_WINDOWS_PRINTER = 'OneNote (Desktop)'; .\printers.test.exe '-test.run=Spool' '-test.v'
+```
+
+The device-connection tests are skipped there, since device addresses are Unix paths.
+
 ## The testing portfolio
 
 Testing follows the "Portfolio of Oracles" methodology. The tiers:
