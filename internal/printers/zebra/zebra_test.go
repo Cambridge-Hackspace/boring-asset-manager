@@ -354,3 +354,71 @@ func TestBadJobsAreRefused(t *testing.T) {
 		t.Error("density 16 was taken")
 	}
 }
+
+// An RFID printer writes each label's EPC before printing it: a 96-bit
+// one to the EPC bank's default, which every RFID printer takes, any other
+// length with the PC bits adjusted to it (Zebra's ZPL programming guide,
+// ^RS and ^RF).
+func TestZPLWritesEachLabelsTag(t *testing.T) {
+	mo, _ := LookupModel(ZPL, "Generic ZPL 203 DPI")
+	media, _ := LookupMedia("2x1")
+	a, b := testPage(mo, media), testPage(mo, media)
+	const giai, text = "3400001D6F345400075BCD15", "48532D313035"
+	pages := []*image.Gray{a, a, a, b, b}
+	epcs := []string{giai, giai, text, "", ""}
+	for _, c := range []struct {
+		opts ZPLOptions
+		rs   string
+	}{
+		{ZPLOptions{}, "^RS8"},
+		{ZPLOptions{RFIDTries: 2}, "^RS8,,,2"},
+		{ZPLOptions{RFIDOnFailure: "pause"}, "^RS8,,,,P"},
+		{ZPLOptions{RFIDTries: 10, RFIDOnFailure: "error"}, "^RS8,,,10,E"},
+	} {
+		stream, err := EncodeZPLTagged(mo, media, pages, epcs, c.opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var tags []string
+		for _, line := range strings.Split(string(stream), "\n") {
+			if strings.HasPrefix(line, "^XA") || strings.HasPrefix(line, "^R") || strings.HasPrefix(line, "^PQ") {
+				tags = append(tags, line)
+			}
+		}
+		want := []string{
+			"^XA", c.rs, "^RFW,H^FD" + giai + "^FS", "^PQ2",
+			"^XA", c.rs, "^RFW,H,,,A^FD" + text + "^FS", "^PQ1",
+			"^XA", "^PQ2",
+		}
+		if strings.Join(tags, " ") != strings.Join(want, " ") {
+			t.Errorf("%+v:\n got %q\nwant %q", c.opts, tags, want)
+		}
+		job, err := DecodeZPL(stream)
+		if err != nil || len(job.Labels) != 3 {
+			t.Fatalf("%+v: %v", c.opts, err)
+		}
+		samePrint(t, "tagged", job.Labels[0].Image, a, (job.Labels[0].Width-a.Rect.Dx())/2)
+	}
+	// Without EPCs it is the job it always was.
+	plain, _ := EncodeZPL(mo, media, pages, ZPLOptions{})
+	untagged, _ := EncodeZPLTagged(mo, media, pages, nil, ZPLOptions{})
+	if !bytes.Equal(plain, untagged) || strings.Contains(string(plain), "^R") {
+		t.Error("a job without EPCs changed")
+	}
+}
+
+func TestBadEPCsAndRFIDOptionsAreRefused(t *testing.T) {
+	mo, _ := LookupModel(ZPL, "Generic ZPL 203 DPI")
+	media, _ := LookupMedia("2x1")
+	page := testPage(mo, media)
+	for _, epc := range []string{"ABC", "41", "3400001d6f345400075bcd15", "34Z0", strings.Repeat("4142", 32)} {
+		if _, err := EncodeZPLTagged(mo, media, []*image.Gray{page}, []string{epc}, ZPLOptions{}); err == nil {
+			t.Errorf("EPC %q was taken", epc)
+		}
+	}
+	for _, o := range []ZPLOptions{{RFIDTries: 11}, {RFIDTries: -1}, {RFIDOnFailure: "void"}} {
+		if _, err := EncodeZPLTagged(mo, media, []*image.Gray{page}, []string{"4142"}, o); err == nil {
+			t.Errorf("%+v was taken", o)
+		}
+	}
+}

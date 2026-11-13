@@ -116,6 +116,15 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(ids) == 0 {
+		// An RFID reader types the EPC of the tag it read (docs/rfid.md).
+		if held, ok := s.codeFromEPC(code); ok {
+			if ids, err = s.store.AssetsByCode(held); err != nil {
+				writeServerError(w, err, "find the code")
+				return
+			}
+		}
+	}
+	if len(ids) == 0 {
 		ids = []string{code}
 	}
 	var found []*models.AssetWithDetails

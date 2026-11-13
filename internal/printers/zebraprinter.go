@@ -30,6 +30,10 @@ type zplOptions struct {
 	PrintMode *string `json:"print_mode,omitempty"`
 	Calibrate *bool   `json:"calibrate,omitempty"`
 	Compress  *bool   `json:"compress,omitempty"`
+	// RFID writes each label's tag (docs/rfid.md).
+	RFID          *bool   `json:"rfid,omitempty"`
+	RFIDTries     *int    `json:"rfid_tries,omitempty"`
+	RFIDOnFailure *string `json:"rfid_on_failure,omitempty"`
 }
 
 // epl2Options are the epl2 driver options.
@@ -58,6 +62,15 @@ func (d zebraDriver) Info() DriverInfo {
 		}, {
 			Name: "compress", Type: "bool", Default: true,
 			Description: "Send labels with Zebra's compression; turn it off for a printer that emulates ZPL and mishandles it.",
+		}, {
+			Name: "rfid", Type: "bool", Default: false,
+			Description: "Write each label's RFID tag with its asset's EPC as it prints, on an RFID model such as the ZD621R or ZT411 RFID; the scheme is set under RFID tags.",
+		}, {
+			Name: "rfid_tries", Type: "int", Default: nil,
+			Description: "How many labels to try, voiding each, when a tag will not take its EPC, 1 to 10; unset keeps the printer's own setting.",
+		}, {
+			Name: "rfid_on_failure", Type: "string", Default: nil, Values: []string{"skip", "pause", "error"},
+			Description: "What the printer does when every try fails: skip the label, pause, or stop with an error; unset keeps the printer's own setting.",
 		}}
 	} else {
 		info.Options = []OptionInfo{{
@@ -85,6 +98,8 @@ type zebraSettings struct {
 	media zebra.Media
 	zpl   zebra.ZPLOptions
 	epl2  zebra.EPL2Options
+	// rfid writes each label's tag.
+	rfid bool
 }
 
 func (d zebraDriver) settings(s Settings) (zebraSettings, error) {
@@ -145,6 +160,16 @@ func (d zebraDriver) settings(s Settings) (zebraSettings, error) {
 	if o.Compress != nil {
 		z.Uncompressed = !*o.Compress
 	}
+	if o.RFIDTries != nil {
+		if *o.RFIDTries < 1 {
+			return out, fmt.Errorf("options: rfid_tries must be 1-%d", zebra.MaxRFIDTries)
+		}
+		z.RFIDTries = *o.RFIDTries
+	}
+	if o.RFIDOnFailure != nil {
+		z.RFIDOnFailure = *o.RFIDOnFailure
+	}
+	out.rfid = o.RFID != nil && *o.RFID
 	if err := z.Check(); err != nil {
 		return out, fmt.Errorf("options: %w", err)
 	}
@@ -186,6 +211,18 @@ type zebraPlan struct {
 }
 
 func (p zebraPlan) Encode(labels []*image.Gray) ([]byte, error) {
+	return p.EncodeTagged(labels, nil)
+}
+
+// EncodesTags says whether the printer is set to write each label's tag.
+func (p zebraPlan) EncodesTags() bool { return p.lang == zebra.ZPL && p.s.rfid }
+
+// EncodeTagged is Encode, writing each label's EPC to its tag when the
+// printer is set to.
+func (p zebraPlan) EncodeTagged(labels []*image.Gray, epcs []string) ([]byte, error) {
+	if !p.EncodesTags() {
+		epcs = nil
+	}
 	// Copies repeat the same image; prepare each one once, so the encoder
 	// can also print them as copies.
 	prepared := map[*image.Gray]*image.Gray{}
@@ -199,5 +236,5 @@ func (p zebraPlan) Encode(labels []*image.Gray) ([]byte, error) {
 	if p.lang == zebra.EPL2 {
 		return zebra.EncodeEPL2(p.s.model, p.s.media, pages, p.s.epl2)
 	}
-	return zebra.EncodeZPL(p.s.model, p.s.media, pages, p.s.zpl)
+	return zebra.EncodeZPLTagged(p.s.model, p.s.media, pages, epcs, p.s.zpl)
 }

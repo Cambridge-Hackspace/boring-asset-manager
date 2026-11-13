@@ -342,6 +342,7 @@ Changing printers, label stock and pools needs `settings.manage`. See [Printing]
 | `check_fit` | `labels.print` or `settings.manage` or `templates.manage` | |
 | `save_printer` | `settings.manage` | Changes only what is given. A change affecting labels waiting is not saved until called again with `confirm`. |
 | `delete_printer` | `settings.manage` | |
+| `get_rfid_settings`, `set_rfid_settings` | `settings.manage` | How asset codes are written to long-range RFID tags, and read back ([RFID tags](rfid.md)). |
 | `list_label_stock`, `list_printer_pools`, `get_printer_pool` | `labels.print` or `settings.manage` or `templates.manage` | |
 | `save_label_stock`, `delete_label_stock`, `save_printer_pool`, `delete_printer_pool` | `settings.manage` | |
 | `list_displays`, `get_display` | `labels.print` or `settings.manage` or `templates.manage` | E-paper displays, which are printers ([Displays](printing.md#displays)): what each shows, a refresh waiting, and where one that pulls fetches its image. A display is added with `save_printer`, and shown an asset's label with `print_labels`. |

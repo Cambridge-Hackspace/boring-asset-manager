@@ -26,13 +26,26 @@ type ZPLOptions struct {
 	// Uncompressed sends graphics as plain hexadecimal, for an emulator
 	// that mishandles Zebra's compression.
 	Uncompressed bool
+	// RFIDTries is how many labels an RFID printer tries in turn when a
+	// tag will not take its EPC, voiding each, 1-10 (^RS); 0 keeps the
+	// printer's own setting.
+	RFIDTries int
+	// RFIDOnFailure is what an RFID printer does when every try fails:
+	// "skip" the label, "pause", or stop with an "error" (^RS); "" keeps
+	// the printer's own setting.
+	RFIDOnFailure string
 }
 
-// MediaTypes, PrintModes, and the commands they send.
+// MediaTypes, PrintModes, RFIDFailures, and the commands they send.
 var (
 	MediaTypes = map[string]string{"direct": "^MTD", "transfer": "^MTT"}
 	PrintModes = map[string]string{"tear_off": "^MMT", "peel_off": "^MMP", "cutter": "^MMC"}
+	// RFIDFailures are ^RS's error handling actions.
+	RFIDFailures = map[string]string{"skip": "N", "pause": "P", "error": "E"}
 )
+
+// MaxRFIDTries is the most labels ^RS tries a tag on.
+const MaxRFIDTries = 10
 
 // MaxGraphicBytes is the most one ^GF takes: a label larger is sent in
 // bands, one under the other.
@@ -52,6 +65,12 @@ func (o ZPLOptions) Check() error {
 	if o.Speed != nil && (*o.Speed < 1 || *o.Speed > 14) {
 		return fmt.Errorf("speed must be 1-14")
 	}
+	if o.RFIDTries < 0 || o.RFIDTries > MaxRFIDTries {
+		return fmt.Errorf("rfid_tries must be 1-%d", MaxRFIDTries)
+	}
+	if _, ok := RFIDFailures[o.RFIDOnFailure]; o.RFIDOnFailure != "" && !ok {
+		return fmt.Errorf("rfid_on_failure must be skip, pause or error")
+	}
 	return nil
 }
 
@@ -59,11 +78,29 @@ func (o ZPLOptions) Check() error {
 // (see Prepare) and dark wherever a pixel is below 50% gray. A run of the
 // same page is printed as copies of one label.
 func EncodeZPL(mo Model, m Media, pages []*image.Gray, o ZPLOptions) ([]byte, error) {
+	return EncodeZPLTagged(mo, m, pages, nil, o)
+}
+
+// EncodeZPLTagged is EncodeZPL for an RFID printer: it also writes each
+// page's EPC, in hexadecimal, to the tag in its label as it prints it
+// (^RF). A page with no EPC, or beyond epcs, leaves its tag as it is.
+func EncodeZPLTagged(mo Model, m Media, pages []*image.Gray, epcs []string, o ZPLOptions) ([]byte, error) {
 	if err := o.Check(); err != nil {
 		return nil, fmt.Errorf("zpl: %w", err)
 	}
 	if err := checkPages(mo, pages); err != nil {
 		return nil, err
+	}
+	epc := func(i int) string {
+		if i < len(epcs) {
+			return epcs[i]
+		}
+		return ""
+	}
+	for i := range pages {
+		if err := checkEPC(epc(i)); err != nil {
+			return nil, fmt.Errorf("zpl: page %d: %w", i, err)
+		}
 	}
 	var buf bytes.Buffer
 	// Commands that act at once, before any label.
@@ -73,7 +110,9 @@ func EncodeZPL(mo Model, m Media, pages []*image.Gray, o ZPLOptions) ([]byte, er
 	if o.Darkness != nil {
 		fmt.Fprintf(&buf, "~SD%02d\n", *o.Darkness)
 	}
-	err := runs(pages, func(page *image.Gray, copies int) error {
+	same := func(a, b int) bool { return pages[a] == pages[b] && epc(a) == epc(b) }
+	err := runsBy(len(pages), same, func(i, copies int) error {
+		page := pages[i]
 		width, length := labelSize(mo, m, page)
 		buf.WriteString("^XA\n")
 		// Die-cut labels are found by their gaps; continuous media is cut
@@ -93,6 +132,16 @@ func EncodeZPL(mo Model, m Media, pages []*image.Gray, o ZPLOptions) ([]byte, er
 			fmt.Fprintf(&buf, "^PR%d\n", *o.Speed)
 		}
 		fmt.Fprintf(&buf, "^PW%d\n^LL%d\n^LH0,0\n", width, length)
+		if e := epc(i); e != "" {
+			buf.WriteString(rfidSetup(o) + "\n")
+			// The EPC bank's default, E, writes 96 bits, on older printers
+			// too; A writes any length, setting the tag's PC bits to it.
+			if len(e) == 24 {
+				fmt.Fprintf(&buf, "^RFW,H^FD%s^FS\n", e)
+			} else {
+				fmt.Fprintf(&buf, "^RFW,H,,,A^FD%s^FS\n", e)
+			}
+		}
 
 		// Centered across the label, in bands of at most MaxGraphicBytes.
 		x := max(0, (width-page.Rect.Dx())/2)
@@ -115,6 +164,33 @@ func EncodeZPL(mo Model, m Media, pages []*image.Gray, o ZPLOptions) ([]byte, er
 		return nil
 	})
 	return buf.Bytes(), err
+}
+
+// rfidSetup is the ^RS that sets a label's tag type, Gen 2, and what the
+// printer does when the tag will not take its EPC.
+func rfidSetup(o ZPLOptions) string {
+	fields := []string{"8", "", "", "", ""}
+	if o.RFIDTries > 0 {
+		fields[3] = strconv.Itoa(o.RFIDTries)
+	}
+	fields[4] = RFIDFailures[o.RFIDOnFailure]
+	return "^RS" + strings.TrimRight(strings.Join(fields, ","), ",")
+}
+
+// checkEPC refuses an EPC that is not whole 16-bit words of uppercase
+// hexadecimal, as Gen 2 tags hold them, or is longer than the 31 words a
+// tag's PC bits can declare.
+func checkEPC(epc string) error {
+	if epc == "" {
+		return nil
+	}
+	if len(epc)%4 != 0 || len(epc) > 124 {
+		return fmt.Errorf("an EPC of %d hexadecimal digits is not 1 to 31 whole words", len(epc))
+	}
+	if _, err := hex.DecodeString(epc); err != nil || strings.ToUpper(epc) != epc {
+		return fmt.Errorf("an EPC must be uppercase hexadecimal, not %q", epc)
+	}
+	return nil
 }
 
 // compressZPL writes rows in the ASCII compression of ZPL's ^GF: a run of

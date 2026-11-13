@@ -86,6 +86,17 @@ type InkPlan interface {
 	EncodeInks(labels []*image.Paletted) ([]byte, error)
 }
 
+// TagPlan is a Plan for a printer that can write an RFID tag in each label
+// as it prints it (docs/rfid.md).
+type TagPlan interface {
+	Plan
+	// EncodesTags says whether the printer is set to write tags.
+	EncodesTags() bool
+	// EncodeTagged is Encode, writing each label's EPC, in uppercase
+	// hexadecimal, to its tag; "" leaves a label's tag as it is.
+	EncodeTagged(labels []*image.Gray, epcs []string) ([]byte, error)
+}
+
 // ErrDoesNotFit is wrapped when a template cannot print on the loaded media.
 var ErrDoesNotFit = errors.New("template does not fit the printer's media")
 

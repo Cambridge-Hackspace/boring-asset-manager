@@ -176,6 +176,14 @@ type rangeIn struct {
 	DPI      int            `json:"dpi"`
 }
 
+// rfidSettingsIn are the RFID settings (docs/rfid.md).
+type rfidSettingsIn struct {
+	Scheme        string `json:"scheme" jsonschema:"text (the code's own characters), giai-96 (numeric codes) or giai-202 (letters and digits); GIAI needs a GS1 company prefix"`
+	CompanyPrefix string `json:"company_prefix,omitempty" jsonschema:"the GS1 company prefix, 6 to 12 digits, for GIAI"`
+	Filter        int    `json:"filter,omitempty" jsonschema:"the GIAI filter value, 0 to 7; 0 is all others"`
+	CodeType      string `json:"code_type,omitempty" jsonschema:"the code type a tag holds: qr, micro_qr or code128; empty for an asset's first code"`
+}
+
 type fitIn struct {
 	PrinterID string           `json:"printer_id"`
 	WidthMM   float64          `json:"width_mm"`
@@ -662,6 +670,18 @@ func labelTools() []tool {
 			Annotations: readOnly("List printers")}, "GET /api/v1/printers", seePrinters,
 			func(none) (request, error) { return request{path: "/api/v1/printers"}, nil },
 			func(_ none, out map[string]any) string { return fmt.Sprintf("%d printers.", count(out, "printers")) }),
+		simple(&mcp.Tool{Name: "get_rfid_settings", Description: "How asset codes are written to long-range RFID tags by printers with rfid on, " +
+			"and read back from what a reader types: the scheme (text, giai-96 or giai-202), the GS1 company prefix and filter for GIAI, and which code type a tag holds.",
+			Annotations: readOnly("RFID settings")}, "GET /api/v1/settings/rfid", []string{rbac.PermSettingsManage},
+			func(none) (request, error) { return request{path: "/api/v1/settings/rfid"}, nil },
+			func(_ none, out map[string]any) string { return fmt.Sprintf("Scheme %v.", out["scheme"]) }),
+		simple(&mcp.Tool{Name: "set_rfid_settings", Description: "Set how asset codes are written to long-range RFID tags. Changing the scheme " +
+			"changes what tags already written are read as, so assets are found by them only under the scheme they were written with.",
+			Annotations: changes("Set RFID settings", true)}, "PUT /api/v1/settings/rfid", []string{rbac.PermSettingsManage},
+			func(in rfidSettingsIn) (request, error) { return request{path: "/api/v1/settings/rfid", body: in}, nil },
+			func(_ rfidSettingsIn, out map[string]any) string {
+				return fmt.Sprintf("Saved: scheme %v.", out["scheme"])
+			}),
 		simple(&mcp.Tool{Name: "get_printer", Description: "One label printer.", Annotations: readOnly("Get a printer")}, "GET /api/v1/printers/{id}", seePrinters,
 			func(in idIn) (request, error) {
 				return request{path: pathOf("/api/v1/printers/{id}", in.ID)}, need(in.ID, "id")
