@@ -748,6 +748,40 @@ export function newShape(kind: ShapeKind, doc: TemplateDoc, box?: { x: number; y
   };
 }
 
+/**
+ * The NFC mark, as path data in fractions of a square box: a dot with three
+ * arcs spreading from it, saying a tag lies under the label. It is BAM!'s
+ * own drawing, not the NFC Forum's N-Mark, which is licensed under an
+ * agreement of its own. internal/render's tests draw it from this line.
+ */
+export const NFC_MARK_D =
+  'M0.11 0.5A0.09 0.09 0 1 1 0.29 0.5A0.09 0.09 0 1 1 0.11 0.5Z' +
+  'M0.4528 0.2879A0.33 0.33 0 0 1 0.4528 0.7121L0.3839 0.6543A0.24 0.24 0 0 0 0.3839 0.3457Z' +
+  'M0.5983 0.1658A0.52 0.52 0 0 1 0.5983 0.8342L0.5294 0.7764A0.43 0.43 0 0 0 0.5294 0.2236Z' +
+  'M0.7439 0.0436A0.71 0.71 0 0 1 0.7439 0.9564L0.6749 0.8985A0.62 0.62 0 0 0 0.6749 0.1015Z';
+
+/**
+ * The NFC mark as a new shape, filled black: 8 mm square, or less on a
+ * smaller label, in the middle of it.
+ */
+export function newNFCMark(doc: TemplateDoc): TemplateElement {
+  const step = gridStep(doc.units);
+  const side = Math.max(step, snap(Math.min(fromMM(8, doc.units), doc.width, doc.height), step, doc.units));
+  return {
+    type: 'shape',
+    shape: 'path',
+    name: 'NFC mark',
+    x: tidy((doc.width - side) / 2, doc.units),
+    y: tidy((doc.height - side) / 2, doc.units),
+    width: side,
+    height: side,
+    d: NFC_MARK_D,
+    stroke: 'none',
+    stroke_width: 0,
+    fill: 'black',
+  };
+}
+
 /** Whether a shape's stroke is thinner than one printer dot, and so printed one dot wide. */
 export function hairline(e: TemplateElement, doc: TemplateDoc): boolean {
   return e.type === 'shape' && e.stroke !== 'none' && toMM(e.stroke_width ?? 0, doc.units) * (doc.dpi / MM_PER_INCH) < 1;
