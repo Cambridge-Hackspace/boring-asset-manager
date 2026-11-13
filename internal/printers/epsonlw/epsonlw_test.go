@@ -43,6 +43,7 @@ func TestTapes(t *testing.T) {
 		"LW-600P":  "lk-6 lk-9 lk-12 lk-18 lk-24",
 		"LW-PX400": "lk-4 lk-6 lk-9 lk-12 lk-18 lk-24",
 		"LW-C410":  "lk-4 lk-6 lk-9 lk-12 lk-18",
+		"LW-PX800": "lk-4 lk-6 lk-9 lk-12 lk-18 lk-24",
 	}
 	for name, want := range takes {
 		mo := model(t, name)
@@ -61,14 +62,23 @@ func TestTapes(t *testing.T) {
 		if strings.Join(got, " ") != want {
 			t.Errorf("%s takes %v, want %s", name, got, want)
 		}
-		if mo.DPI != 180 {
+		if want := map[bool]int{false: 180, true: 360}[name == "LW-PX800"]; mo.DPI != want {
 			t.Errorf("%s at %d DPI", name, mo.DPI)
+		}
+		if mo.HalfCut != (name == "LW-PX800") {
+			t.Errorf("%s: half cutter %v", name, mo.HalfCut)
 		}
 	}
 	if l := layout(t, "LW-600P", "lk-12"); l.PrintableDots != 72 {
 		t.Errorf("12 mm tape prints %d dots, want 72", l.PrintableDots)
 	}
-	if got := len(Models()); got != 3 {
+	// At 360 DPI, the dots hikalium/sr5900p measured on the SR5900P.
+	for id, want := range map[string]int{"lk-4": 40, "lk-6": 72, "lk-9": 104, "lk-12": 144, "lk-18": 216, "lk-24": 288} {
+		if l := layout(t, "LW-PX800", id); l.PrintableDots != want {
+			t.Errorf("%s on the LW-PX800 prints %d dots, want %d", id, l.PrintableDots, want)
+		}
+	}
+	if got := len(Models()); got != 4 {
 		t.Errorf("%d models", got)
 	}
 }
@@ -168,8 +178,8 @@ func TestEncodeJobGoldens(t *testing.T) {
 			}
 		}
 	}
-	if n != 5+6+5 {
-		t.Errorf("%d goldens, want 16", n)
+	if n != 5+6+5+6 {
+		t.Errorf("%d goldens, want 22", n)
 	}
 }
 
@@ -249,6 +259,45 @@ func TestCuts(t *testing.T) {
 		if c := job.Setup[4]; c.Letter != 'C' || !bytes.Equal(c.Params, want) {
 			t.Errorf("%s: %q % X, want C % X", cut, c.Letter, c.Params, want)
 		}
+	}
+}
+
+// TestHalfCuts checks the cut command with a half cut, on the LW-PX800 at
+// 360 DPI: 2 where a full cut sends 1, and the PX800's raster lines carry
+// its 360-DPI dots, with the level-3 page commands.
+func TestHalfCuts(t *testing.T) {
+	l := layout(t, "LW-PX800", "lk-12")
+	for cut, want := range map[Cut][]byte{CutEach: {2, 2, 1, 1}, CutEnd: {2, 0, 1, 1}} {
+		opts := DefaultOptions(l.Model)
+		opts.Cut, opts.HalfCut = cut, true
+		stream, err := EncodeJob(l, []*image.Gray{checkerPage(144, 40)}, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		job, err := l.DecodeJob(stream)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c := job.Setup[4]; c.Letter != 'C' || !bytes.Equal(c.Params, want) {
+			t.Errorf("%s: %q % X, want C % X", cut, c.Letter, c.Params, want)
+		}
+		p := job.Pages[0]
+		if got := letters(p.Setup); got != "QLTHs" {
+			t.Errorf("%s: page setup %s", cut, got)
+		}
+		// 2 mm of margin is 28 lines at 360 DPI, before and after.
+		if len(p.Lines) != 40+2*28 || len(p.Lines[0]) != 18 {
+			t.Errorf("%s: %d lines of %d bytes", cut, len(p.Lines), len(p.Lines[0]))
+		}
+	}
+	opts := DefaultOptions(l.Model)
+	opts.HalfCut = true
+	if _, err := EncodeJob(layout(t, "LW-PX400", "lk-12"), []*image.Gray{checkerPage(72, 40)}, opts); err == nil {
+		t.Error("a half cut on the LW-PX400")
+	}
+	opts.Cut = CutNever
+	if _, err := EncodeJob(l, []*image.Gray{checkerPage(144, 40)}, opts); err == nil {
+		t.Error("a half cut that never cuts")
 	}
 }
 

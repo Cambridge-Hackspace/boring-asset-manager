@@ -281,7 +281,7 @@ func (r *Relay) reach(ctx context.Context, d relay.Destination) error {
 	switch c.Type {
 	case printers.ConnTCP:
 		dialer := net.Dialer{Timeout: probeTimeout}
-		conn, err := dialer.DialContext(ctx, "tcp", c.Address)
+		conn, err := dialer.DialContext(ctx, "tcp", printers.TCPHostPort(c.Address))
 		if err != nil {
 			return err
 		}

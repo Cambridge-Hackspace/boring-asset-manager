@@ -16,6 +16,7 @@ import (
 const (
 	// ConnTCP sends the job to a raw TCP port, host[:port] (default 9100):
 	// a network printer, or a print server such as p910nd sharing a USB one.
+	// ?protocol=tprt after it sends the job after a handshake (tprt.go).
 	ConnTCP = "tcp"
 	// ConnDevice writes the job to a device on the BAM server, such as
 	// /dev/usb/lp0, or sends it in a conversation when ?protocol= follows
@@ -130,8 +131,12 @@ func NormalizeConnection(c Connection) (Connection, error) {
 	}
 	switch c.Type {
 	case ConnTCP:
-		host, port := c.Address, DefaultPort
-		if h, p, err := net.SplitHostPort(c.Address); err == nil {
+		a, err := ParseTCPAddress(c.Address)
+		if err != nil {
+			return bad("%v", err)
+		}
+		host, port := a.HostPort, DefaultPort
+		if h, p, err := net.SplitHostPort(a.HostPort); err == nil {
 			n, err := strconv.Atoi(p)
 			if err != nil || n < 1 || n > 65535 {
 				return bad("port must be 1-65535")
@@ -141,7 +146,8 @@ func NormalizeConnection(c Connection) (Connection, error) {
 		if net.ParseIP(host) == nil && (len(host) > 253 || !hostnameRegex.MatchString(host)) {
 			return bad("tcp address must be host or host:port, with an IP address or hostname")
 		}
-		c.Address = net.JoinHostPort(host, strconv.Itoa(port))
+		a.HostPort = net.JoinHostPort(host, strconv.Itoa(port))
+		c.Address = a.String()
 	case ConnDevice:
 		// Printer devices are Unix paths; on Windows use ConnWindows.
 		a, err := ParseDeviceAddress(c.Address)

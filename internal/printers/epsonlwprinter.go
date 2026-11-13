@@ -22,7 +22,12 @@ type epsonLWOptions struct {
 	CutAfter *string `json:"cut_after,omitempty"`
 	Density  *int    `json:"density,omitempty"`
 	MarginMM *int    `json:"margin_mm,omitempty"`
+	HalfCut  *bool   `json:"half_cut,omitempty"`
 }
+
+// TCPProtocols implements TCPProtocolDriver: a networked LabelWorks printer
+// may need the TPRT handshake (tprt.go).
+func (epsonLabelWorks) TCPProtocols() []string { return []string{ProtocolTPRT} }
 
 func (epsonLabelWorks) Info() DriverInfo {
 	names := epsonlw.Models()
@@ -37,6 +42,9 @@ func (epsonLabelWorks) Info() DriverInfo {
 		}, {
 			Name: "margin_mm", Type: "int", Default: epsonlw.DefaultMarginMM,
 			Description: fmt.Sprintf("Tape fed before and after each label, in millimeters: 0-%d.", epsonlw.MaxMarginMM),
+		}, {
+			Name: "half_cut", Type: "bool", Default: false,
+			Description: "Cut the tape but not its backing, on models with a half cutter such as the LW-PX800.",
 		}},
 	}
 	for _, n := range names {
@@ -92,6 +100,9 @@ func (epsonLabelWorks) settings(s Settings) (epsonlw.Layout, epsonlw.JobOptions,
 		}
 		if o.Density != nil {
 			opts.Density = *o.Density
+		}
+		if o.HalfCut != nil {
+			opts.HalfCut = *o.HalfCut
 		}
 		if o.MarginMM != nil {
 			if *o.MarginMM < 0 || *o.MarginMM > epsonlw.MaxMarginMM {

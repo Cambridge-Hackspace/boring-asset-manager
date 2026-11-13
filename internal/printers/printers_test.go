@@ -91,6 +91,9 @@ func TestValidate(t *testing.T) {
 	bad("LabelWorks density", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-12", `{"density":6}`))
 	bad("LabelWorks margin", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-12", `{"margin_mm":128}`))
 	bad("LabelWorks unknown option", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-600P", "lk-12", `{"mirror":true}`))
+	ok("LW-PX800 half cutting", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-PX800", "lk-24", `{"half_cut":true,"cut_after":"last_label"}`))
+	bad("half cut on the LW-PX400", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-PX400", "lk-12", `{"half_cut":true}`))
+	bad("half cut that never cuts", "P", DriverEpsonLabelWorks, "lw.lan", 9100, brother("LW-PX800", "lk-12", `{"half_cut":true,"cut_after":"never"}`))
 	ok("TD-2", DriverBrotherTD, "td.lan", 9100, brother("TD-2130N", "rd-51x26", ""))
 	ok("TD-4 with its cutter", DriverBrotherTD, "td.lan", 9100, brother("TD-4420DN", "rd-102x152", `{"cut":true}`))
 	bad("TD model", "P", DriverBrotherTD, "td.lan", 9100, brother("QL-810W", "rd-58", ""))
@@ -236,15 +239,15 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 		}
 	}
 	lw := by[DriverEpsonLabelWorks]
-	if len(lw.Media) != len(epsonlw.MediaIDs()) || len(lw.Options) != 3 || lw.CustomStock != nil || len(lw.Options[0].Values) != 3 ||
-		lw.ModelDPI["LW-600P"] != 180 || lw.ModelDPI["LW-C410"] != 180 || len(lw.Models) != 3 {
+	if len(lw.Media) != len(epsonlw.MediaIDs()) || len(lw.Options) != 4 || lw.CustomStock != nil || len(lw.Options[0].Values) != 3 ||
+		lw.ModelDPI["LW-600P"] != 180 || lw.ModelDPI["LW-C410"] != 180 || lw.ModelDPI["LW-PX800"] != 360 || len(lw.Models) != 4 {
 		t.Fatalf("Epson LabelWorks driver info = %+v", lw)
 	}
 	for _, m := range lw.Media {
-		if m.ID == "lk-4" && strings.Join(m.Models, ",") != "LW-C410,LW-PX400" {
+		if m.ID == "lk-4" && strings.Join(m.Models, ",") != "LW-C410,LW-PX400,LW-PX800" {
 			t.Errorf("4 mm tape is for %v", m.Models)
 		}
-		if m.ID == "lk-24" && strings.Join(m.Models, ",") != "LW-600P,LW-PX400" {
+		if m.ID == "lk-24" && strings.Join(m.Models, ",") != "LW-600P,LW-PX400,LW-PX800" {
 			t.Errorf("24 mm tape is for %v", m.Models)
 		}
 		if m.ID == "lk-12" && m.Models != nil {

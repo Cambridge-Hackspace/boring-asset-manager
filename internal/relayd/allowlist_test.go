@@ -24,6 +24,9 @@ func TestAllowlist(t *testing.T) {
 	}{
 		{printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.40:9100"}, true},
 		{printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.40:22"}, false},
+		// A handshake does not change the host and port matched.
+		{printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.40:9100?protocol=tprt"}, true},
+		{printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.41:9100?protocol=tprt"}, false},
 		{printers.Connection{Type: printers.ConnTCP, Address: "192.168.1.41:9100"}, false},
 		{printers.Connection{Type: printers.ConnTCP, Address: "10.0.0.7:631"}, true},
 		{printers.Connection{Type: printers.ConnTCP, Address: "10.0.1.7:9100"}, false},
