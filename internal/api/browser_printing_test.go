@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -263,5 +264,56 @@ func TestAConversationIsHeldThroughTheBrowser(t *testing.T) {
 			t.Fatalf("a silent printer: %v", m)
 		}
 		break
+	}
+}
+
+// TestAJobStoppedMidWriteStillSaysWhy stops a job while the server is
+// writing it to a browser that isn't reading yet, as when the browser says
+// it can't write to the printer while pieces are still on their way. The
+// connection must outlast the stop, so that the browser is told why: a
+// write whose context ends closes the WebSocket.
+func TestAJobStoppedMidWriteStillSaysWhy(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer ws.CloseNow()
+		link := &browserLink{ws: ws, received: make(chan []byte, 64), done: make(chan struct{})}
+		job, stop := context.WithCancelCause(context.Background())
+		// Far more than the connection buffers, so that a write is under
+		// way, waiting on the browser, when the job stops.
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			stop(errors.New("the browser could not write to the printer: GATT operation failed"))
+		}()
+		if err := link.stream(job, make([]byte, 64<<20)); err == nil {
+			t.Error("a stopped job was streamed whole")
+		}
+		_ = writeBrowserMessage(context.Background(), ws, map[string]any{"type": "error", "message": context.Cause(job).Error()})
+		ws.Close(websocket.StatusNormalClosure, "")
+	}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(ts.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	time.Sleep(400 * time.Millisecond) // the browser, busy, reads nothing until the job has stopped
+	for {
+		typ, data, err := c.Read(ctx)
+		if err != nil {
+			t.Fatalf("the connection ended before the browser was told why: %v", err)
+		}
+		if typ == websocket.MessageBinary {
+			continue
+		}
+		if !strings.Contains(string(data), "GATT operation failed") {
+			t.Fatalf("told %s", data)
+		}
+		return
 	}
 }
