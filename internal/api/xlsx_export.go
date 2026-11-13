@@ -40,7 +40,7 @@ func (s *Server) handleExportAssetsXLSX(w http.ResponseWriter, r *http.Request) 
 		writeServerError(w, err, "list fields")
 		return
 	}
-	sheets, err := assetcsv.Workbook(assets, cats, generators.AllowedGeneratorTypes(), refs, fields, s.store.GetEffectiveCategoryFields)
+	sheets, err := assetcsv.Workbook(assets, cats, generators.CodeTypes(), refs, fields, s.store.GetEffectiveCategoryFields)
 	if err != nil {
 		writeServerError(w, err, "read the categories' fields")
 		return

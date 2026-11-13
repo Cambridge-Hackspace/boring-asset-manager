@@ -495,6 +495,8 @@ export interface GeneratorInfo {
   name: string;
   error_correction_levels: string[];
   code_rules: string;
+  /** False for an NFC tag's serial number, which finds an asset but no label prints. */
+  printable: boolean;
 }
 
 /** The parts of a label template lists and pickers need. */

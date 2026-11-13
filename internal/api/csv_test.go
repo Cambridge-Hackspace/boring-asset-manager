@@ -61,7 +61,7 @@ func TestExportAssetsCSV(t *testing.T) {
 		t.Errorf("disposition %s", cd)
 	}
 	rows := readCSV(t, rec.Body.String())
-	wantHeader := "id,name,categories,code.qr,code.micro_qr,code.code128,field.serial"
+	wantHeader := "id,name,categories,code.qr,code.micro_qr,code.code128,code.nfc,field.serial"
 	if strings.Join(rows[0], ",") != wantHeader || len(rows) != 3 {
 		t.Fatalf("rows %q", rows)
 	}
@@ -69,7 +69,7 @@ func TestExportAssetsCSV(t *testing.T) {
 	for _, r := range rows[1:] {
 		byName[r[1]] = r
 	}
-	if r := byName["'=Drill"]; r == nil || r[0] != drill.Asset.ID || r[2] != "Tools > Drills" || r[5] != "D1" || r[6] != "SN-1" {
+	if r := byName["'=Drill"]; r == nil || r[0] != drill.Asset.ID || r[2] != "Tools > Drills" || r[5] != "D1" || r[6] != "" || r[7] != "SN-1" {
 		t.Errorf("drill row %q", r)
 	}
 	if r := byName["Hammer"]; r == nil || r[2] != "" {
