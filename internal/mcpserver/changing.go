@@ -15,7 +15,7 @@ import (
 )
 
 type codeIn struct {
-	Type string `json:"type" jsonschema:"the code type: qr, micro_qr or code128"`
+	Type string `json:"type" jsonschema:"the code type: qr, micro_qr, code128, or nfc for an NFC tag's serial number"`
 	Code string `json:"code"`
 }
 

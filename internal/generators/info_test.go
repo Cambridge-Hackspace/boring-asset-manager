@@ -7,10 +7,13 @@ import (
 
 func TestDescribeCoversEveryGenerator(t *testing.T) {
 	infos := Describe()
-	if len(infos) != len(AllowedGeneratorTypes()) {
-		t.Fatalf("%d descriptions for %d generators", len(infos), len(AllowedGeneratorTypes()))
+	if len(infos) != len(CodeTypes()) {
+		t.Fatalf("%d descriptions for %d code types", len(infos), len(CodeTypes()))
 	}
 	for _, info := range infos {
+		if !info.Printable {
+			continue // an NFC tag's serial number, which no generator draws
+		}
 		g, err := Lookup(info.Type)
 		if err != nil {
 			t.Fatal(err)

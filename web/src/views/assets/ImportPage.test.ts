@@ -59,7 +59,7 @@ describe('ImportPage', () => {
     const previews: unknown[] = [];
     const { sent } = fakeApi({
       'GET /fields': () => ({ fields: [{ id: 'f1', key: 'color', label: 'Color', validation_type: 'text', created_at: '', updated_at: '' }] }),
-      'GET /generators': () => ({ generators: [{ type: 'qr', name: 'QR Code', error_correction_levels: [], code_rules: '' }] }),
+      'GET /generators': () => ({ generators: [{ type: 'qr', name: 'QR Code', error_correction_levels: [], code_rules: '', printable: true }] }),
       'POST /assets/import/preview': (body) => {
         const mapping = mappingOf(body);
         previews.push(mapping);

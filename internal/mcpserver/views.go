@@ -20,7 +20,7 @@ type assetSummary struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	URL           string            `json:"url,omitempty" jsonschema:"its page in the web app, to give the person"`
-	Codes         map[string]string `json:"codes,omitempty" jsonschema:"its codes, by code type (qr, micro_qr, code128)"`
+	Codes         map[string]string `json:"codes,omitempty" jsonschema:"its codes, by code type (qr, micro_qr, code128, and nfc for an NFC tag's serial number)"`
 	Categories    []string          `json:"categories,omitempty" jsonschema:"its categories, by name"`
 	Where         string            `json:"where,omitempty" jsonschema:"where it is, outermost first, such as Shelf A › Bin 3"`
 	Condition     string            `json:"condition" jsonschema:"ok, needs_maintenance or out_of_service"`

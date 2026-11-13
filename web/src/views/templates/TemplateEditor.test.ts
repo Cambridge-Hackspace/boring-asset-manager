@@ -17,7 +17,7 @@ const template: TemplateDoc = {
 
 function api(extra: Record<string, (b: unknown) => unknown> = {}) {
   return fakeApi({
-    'GET /generators': () => ({ generators: [{ type: 'qr', name: 'QR Code', error_correction_levels: ['M', 'L', 'Q', 'H'], code_rules: '' }] }),
+    'GET /generators': () => ({ generators: [{ type: 'qr', name: 'QR Code', error_correction_levels: ['M', 'L', 'Q', 'H'], code_rules: '', printable: true }] }),
     'GET /fields': () => ({ fields: [] }),
     'GET /templates/ql90': () => ({ template }),
     'GET /printers': () => ({ printers: [] }),
@@ -872,5 +872,25 @@ describe('TemplateEditor', () => {
     await loaded();
     await fireEvent.change(document.querySelector('#tpl-dpi')!, { target: { value: '203' } });
     expect(await saved(sent)).toMatchObject({ dpi: 203, guides: { x: [45] }, elements: [{ group: 'group-1' }] });
+  });
+});
+
+describe('TemplateEditor codes', () => {
+  it('offers only the codes a label can print, not an NFC tag’s serial number', async () => {
+    const { sent } = api({
+      'GET /generators': () => ({
+        generators: [
+          { type: 'nfc', name: 'NFC tag', error_correction_levels: [], code_rules: '', printable: false },
+          { type: 'qr', name: 'QR Code', error_correction_levels: ['M'], code_rules: '', printable: true },
+        ],
+      }),
+      'PUT /templates/ql90': (b) => ({ template: b }),
+    });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Barcode or QR code' }), { detail: 0 });
+    expect(screen.queryByRole('option', { name: 'NFC tag' })).toBeNull();
+    const body = await saved(sent);
+    expect(body.elements[1]).toMatchObject({ type: 'generator', generator_type: 'qr' });
   });
 });

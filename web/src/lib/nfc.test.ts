@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lockTag, nfcMessage, scanLink, webNFC, writeLink, type NDEFWriter } from './nfc';
+import { lockTag, nfcAvailable, nfcMessage, normalizeUID, readTagSerial, scanLink, webNFC, writeLink, type NDEFWriter } from './nfc';
 
 describe('nfc', () => {
   afterEach(() => {
@@ -37,5 +37,79 @@ describe('nfc', () => {
     expect(nfcMessage(new DOMException('x', 'NetworkError'))).toMatch(/moved away/);
     expect(nfcMessage(new Error('Something else'))).toBe('Something else');
     expect(nfcMessage('?')).toBe('The tag couldn’t be written.');
+  });
+});
+
+describe('NFC tag serial numbers', () => {
+  it('writes them one way, however they come', () => {
+    expect(normalizeUID('04:a2:3b:1c:5d:80:00')).toBe('04:A2:3B:1C:5D:80:00');
+    expect(normalizeUID(' 04A23B1C5D8000 ')).toBe('04:A2:3B:1C:5D:80:00');
+    expect(normalizeUID('04 a2 3b 1c 5d 80 00')).toBe('04:A2:3B:1C:5D:80:00');
+    expect(normalizeUID('de-ad-be-ef')).toBe('DE:AD:BE:EF');
+    expect(normalizeUID('4:a2:3b:1c')).toBe('04:A2:3B:1C');
+  });
+
+  it('refuses what no tag has', () => {
+    expect(normalizeUID('')).toBe('');
+    expect(normalizeUID('04A23B1C5')).toBe('');
+    expect(normalizeUID('04:A2:3B')).toBe('');
+    expect(normalizeUID('ZZ:A2:3B:1C')).toBe('');
+    expect(normalizeUID('HS-106')).toBe('');
+  });
+});
+
+type Listener = (e: { serialNumber: string }) => void;
+
+class FakeReader {
+  static last: FakeReader | undefined;
+  listeners: Record<string, Listener[]> = {};
+  signal: AbortSignal | undefined;
+  constructor() {
+    FakeReader.last = this;
+  }
+  scan(options?: { signal?: AbortSignal }) {
+    this.signal = options?.signal;
+    return Promise.resolve();
+  }
+  addEventListener(type: string, l: Listener) {
+    (this.listeners[type] ??= []).push(l);
+  }
+  emit(type: string, serialNumber = '') {
+    for (const l of this.listeners[type] ?? []) l({ serialNumber });
+  }
+}
+
+describe('reading a tag', () => {
+  const g = globalThis as { NDEFReader?: unknown };
+  afterEach(() => {
+    delete g.NDEFReader;
+  });
+
+  it('is offered only where Web NFC is', async () => {
+    expect(nfcAvailable()).toBe(false);
+    await expect(readTagSerial()).rejects.toThrow('type the serial number');
+    g.NDEFReader = FakeReader;
+    expect(nfcAvailable()).toBe(true);
+  });
+
+  it('gives the serial number of the tag held to it, and stops listening', async () => {
+    g.NDEFReader = FakeReader;
+    const read = readTagSerial();
+    await Promise.resolve();
+    FakeReader.last!.emit('reading', '04:a2:3b:1c:5d:80:00');
+    await expect(read).resolves.toBe('04:A2:3B:1C:5D:80:00');
+    expect(FakeReader.last!.signal?.aborted).toBe(true);
+  });
+
+  it('says when a tag cannot be read, or listening stops', async () => {
+    g.NDEFReader = FakeReader;
+    const bad = readTagSerial();
+    FakeReader.last!.emit('readingerror');
+    await expect(bad).rejects.toThrow('could not be read');
+
+    const stop = new AbortController();
+    const stopped = readTagSerial(stop.signal);
+    stop.abort();
+    await expect(stopped).rejects.toThrow('Stopped listening');
   });
 });

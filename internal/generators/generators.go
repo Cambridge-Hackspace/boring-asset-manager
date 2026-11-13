@@ -23,6 +23,9 @@ const (
 var (
 	ErrEmptyCode              = errors.New("assigned code cannot be empty")
 	ErrInvalidGeneratorType   = errors.New("unsupported generator type: must be 'qr', 'micro_qr', or 'code128'")
+	// ErrInvalidCodeType is returned for a code of a type no asset may
+	// have.
+	ErrInvalidCodeType        = errors.New("unsupported code type: must be 'qr', 'micro_qr', 'code128' or 'nfc'")
 	ErrInvalidCodeLength      = errors.New("code length violates generator type capacity constraints")
 	ErrInvalidCharacterSet    = errors.New("code contains invalid characters for generator type")
 	ErrInvalidErrorCorrection = errors.New("unsupported error correction level for generator type")
@@ -89,6 +92,12 @@ func ValidateGeneratorCode(genType, code string) error {
 	}
 	if err := textcheck.Check("code", code, textcheck.MaxName); err != nil {
 		return err
+	}
+	if genType == TypeNFC {
+		return validateNFC(code)
+	}
+	if !IsValidGeneratorType(genType) {
+		return fmt.Errorf("%w: %q", ErrInvalidCodeType, genType)
 	}
 	g, err := Lookup(genType)
 	if err != nil {

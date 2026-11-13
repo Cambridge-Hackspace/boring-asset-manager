@@ -3,6 +3,7 @@
   import { ApiError, request } from '../../lib/api';
   import { assetPayload, type AssetCopy, type CopiedLink, errorTarget, inputType, keptValues, placeLink, placeOf, stockDraft, type StockDraft } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
+  import { nfcAvailable, readTagSerial } from '../../lib/nfc';
   import { attachmentUrl, UNCATEGORIZED, type Attachment, type AssetWithDetails, type Category, type EffectiveField, type Field, type GeneratorInfo, type PurchaseRequest, type RelationType, type Vendor } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
@@ -84,6 +85,9 @@
   const hasPurchaseDraft = $derived(Object.values(purchase).some((v) => v.trim() !== ''));
   // Suggesting codes, and why one could not be.
   let codeNotes = $state<Record<string, string>>({});
+  // Listening for an NFC tag to fill its code, while it is.
+  let tagListening = $state<AbortController | null>(null);
+  const canReadTags = nfcAvailable();
   // New assets' labels join the print queue (docs/printing.md), as each person last chose.
   const canSpool = isNew && session.can('labels.print');
   // Where its categories use review states (docs/review.md), it is a draft
@@ -229,6 +233,25 @@
       else codeNotes = { ...codeNotes, [genType]: 'No code of this type ends in a number yet: type the first, such as HS-001, and the next follow it.' };
     } catch (err) {
       codeNotes = { ...codeNotes, [genType]: messageOf(err) };
+    }
+  }
+
+  // Fills the NFC tag code from a tag held to the phone.
+  async function addTag(genType: string) {
+    if (tagListening) {
+      tagListening.abort();
+      return;
+    }
+    const stop = new AbortController();
+    tagListening = stop;
+    codeNotes = { ...codeNotes, [genType]: 'Hold the tag to the back of the phone.' };
+    try {
+      codes[genType] = await readTagSerial(stop.signal);
+      codeNotes = { ...codeNotes, [genType]: '' };
+    } catch (err) {
+      codeNotes = { ...codeNotes, [genType]: stop.signal.aborted ? '' : messageOf(err) };
+    } finally {
+      if (tagListening === stop) tagListening = null;
     }
   }
 
@@ -655,7 +678,11 @@
               aria-describedby={describedBy(target, `${target}-help`)}
               bind:value={codes[g.type]}
             />
-            {#if !codes[g.type]?.trim()}
+            {#if !g.printable}
+              {#if canReadTags}
+                <button type="button" class="btn-secondary whitespace-nowrap" onclick={() => addTag(g.type)}>{tagListening ? 'Stop' : 'Add tag'}</button>
+              {/if}
+            {:else if !codes[g.type]?.trim()}
               <button type="button" class="btn-secondary whitespace-nowrap" onclick={() => nextCode(g.type)}>Assign the next code</button>
             {/if}
           </div>
