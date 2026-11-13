@@ -10,6 +10,12 @@ Other browsers, including every browser on an iPhone, can't write tags. There, *
 
 A tag holds the server's address, as a QR code does. If BAM! moves to a new address, write its tags again, as its QR codes must be printed again.
 
+## Reading tags in BAM!
+
+A phone opens a tag's link by itself, but in Chrome on Android the **Scan** page reads tags too, and then the asset opens in BAM!, even from the copy kept on the phone when there's no signal. Tap **Read NFC tags** once and allow NFC: from then on, the Scan page listens for tags whenever it's open and on screen, and stops when it's closed or hidden. Other browsers don't offer it.
+
+A tag opens an asset here when it holds this BAM!'s scan link for it, or when its serial number is one of the asset's codes (see [Assets](/help/assets)). A tag holding another site's link, or nothing BAM! knows, says so.
+
 ## Which tags to buy
 
 - **NTAG213, NTAG215 or NTAG216** stickers, which every phone that reads NFC reads. An NTAG213, the smallest and cheapest, holds a scan link easily.

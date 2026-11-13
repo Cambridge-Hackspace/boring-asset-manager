@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lockTag, nfcAvailable, nfcMessage, normalizeUID, readTagSerial, scanLink, webNFC, writeLink, type NDEFWriter } from './nfc';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { listenForTags, lockTag, nfcAvailable, nfcMessage, normalizeUID, ownTagPath, readTagSerial, scanLink, tagLinks, webNFC, writeLink, type NDEFWriter } from './nfc';
 
 describe('nfc', () => {
   afterEach(() => {
@@ -111,5 +111,130 @@ describe('reading a tag', () => {
     const stopped = readTagSerial(stop.signal);
     stop.abort();
     await expect(stopped).rejects.toThrow('Stopped listening');
+  });
+});
+
+const text = (s: string) => new DataView(new TextEncoder().encode(s).buffer);
+
+describe('what a tag holds', () => {
+  it('reads links from URL and text records, and nothing else', () => {
+    expect(
+      tagLinks([
+        { recordType: 'url', data: text('https://bam.test/scan/a1') },
+        { recordType: 'text', data: text('HS-105'), encoding: 'utf-8' },
+        { recordType: 'text', data: text(' https://bam.test/assets/a2 '), encoding: 'utf-8' },
+        { recordType: 'mime', data: text('https://bam.test/scan/a3') },
+        { recordType: 'empty' },
+      ]),
+    ).toEqual(['https://bam.test/scan/a1', 'https://bam.test/assets/a2']);
+    expect(tagLinks(undefined)).toEqual([]);
+  });
+
+  it('opens only links to this instance, at its address or this page’s', () => {
+    const bases = ['https://bam.example.org/bam/', 'http://localhost:5173'];
+    expect(ownTagPath('https://bam.example.org/bam/scan/a1', bases)).toBe('/scan/a1');
+    expect(ownTagPath('https://bam.example.org/bam/assets/a1/', bases)).toBe('/assets/a1');
+    expect(ownTagPath('http://localhost:5173/scan/HS-105', bases)).toBe('/scan/HS-105');
+    expect(ownTagPath('https://other.example.org/scan/a1', bases)).toBeNull();
+    expect(ownTagPath('https://bam.example.org/scan/a1', bases)).toBeNull();
+    expect(ownTagPath('https://bam.example.org/bam/settings', bases)).toBeNull();
+    expect(ownTagPath('not a link', bases)).toBeNull();
+  });
+});
+
+type Reading = { serialNumber?: string; message?: { records: { recordType: string; data?: DataView }[] } };
+
+class ListeningReader {
+  static all: ListeningReader[] = [];
+  static refuse: Error | null = null;
+  listeners: Record<string, ((e: Reading) => void)[]> = {};
+  signal: AbortSignal | undefined;
+  constructor() {
+    ListeningReader.all.push(this);
+  }
+  scan(options?: { signal?: AbortSignal }) {
+    this.signal = options?.signal;
+    return ListeningReader.refuse ? Promise.reject(ListeningReader.refuse) : Promise.resolve();
+  }
+  addEventListener(type: string, l: (e: Reading) => void) {
+    (this.listeners[type] ??= []).push(l);
+  }
+  emit(type: string, e: Reading = {}) {
+    for (const l of this.listeners[type] ?? []) l(e);
+  }
+}
+
+describe('listening for tags', () => {
+  const g = globalThis as { NDEFReader?: unknown };
+  let visibility: DocumentVisibilityState = 'visible';
+  beforeEach(() => {
+    ListeningReader.all = [];
+    ListeningReader.refuse = null;
+    visibility = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    g.NDEFReader = ListeningReader;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete g.NDEFReader;
+  });
+  const show = (state: DocumentVisibilityState) => {
+    visibility = state;
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+
+  it('passes on each tag read, with its serial number and links', () => {
+    const read = vi.fn();
+    const l = listenForTags(read, vi.fn());
+    ListeningReader.all[0]!.emit('reading', { serialNumber: '04:a2:3b:1c', message: { records: [{ recordType: 'url', data: text('https://bam.test/scan/a1') }] } });
+    expect(read).toHaveBeenCalledWith({ serial: '04:A2:3B:1C', links: ['https://bam.test/scan/a1'] });
+    l.stop();
+  });
+
+  it('stops while the page is hidden, starts again when shown, and stops for good', () => {
+    const read = vi.fn();
+    const l = listenForTags(read, vi.fn());
+    const first = ListeningReader.all[0]!;
+    show('hidden');
+    expect(first.signal?.aborted).toBe(true);
+    first.emit('reading', { serialNumber: '04:a2:3b:1c' });
+    expect(read).not.toHaveBeenCalled();
+    show('visible');
+    expect(ListeningReader.all).toHaveLength(2);
+    expect(ListeningReader.all[1]!.signal?.aborted).toBe(false);
+    l.stop();
+    expect(ListeningReader.all[1]!.signal?.aborted).toBe(true);
+    show('hidden');
+    show('visible');
+    expect(ListeningReader.all).toHaveLength(2);
+  });
+
+  it('waits to start until the page is shown', () => {
+    visibility = 'hidden';
+    const l = listenForTags(vi.fn(), vi.fn());
+    expect(ListeningReader.all).toHaveLength(0);
+    show('visible');
+    expect(ListeningReader.all).toHaveLength(1);
+    l.stop();
+  });
+
+  it('says when a tag can’t be read, or listening is refused', async () => {
+    const failed = vi.fn();
+    const l = listenForTags(vi.fn(), failed);
+    ListeningReader.all[0]!.emit('readingerror');
+    expect(failed.mock.calls[0]![0].message).toMatch(/could not be read/);
+    l.stop();
+
+    ListeningReader.refuse = Object.assign(new Error('no'), { name: 'NotAllowedError' });
+    const refused = listenForTags(vi.fn(), failed);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(failed.mock.calls[1]![0].name).toBe('NotAllowedError');
+    refused.stop();
+  });
+
+  it('is not offered where Web NFC is missing', () => {
+    delete g.NDEFReader;
+    expect(() => listenForTags(vi.fn(), vi.fn())).toThrow('cannot read NFC tags');
   });
 });
