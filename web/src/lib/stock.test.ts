@@ -86,6 +86,9 @@ describe('printer words', () => {
     expect(optionValueLabel('last_label')).toBe('After the last label');
     expect(optionValueLabel('right_side')).toBe('right side');
     expect(driverName('epson_labelworks')).toBe('Epson LabelWorks');
+    expect(driverName('brady')).toBe('Brady');
+    expect(optionLabel('part')).toBe('Cartridge part number');
+    expect(optionValueLabel('printer')).toBe('As the printer’s menu says');
     expect(optionValueLabel('never')).toBe('Never');
     expect(driverName('xtool')).toBe('xTool');
     expect(driverName('dymo_labelmanager')).toBe('DYMO LabelManager');

@@ -110,7 +110,7 @@ where the image is transparent. In PDF, that transparency is kept as a soft mask
 - `width` and `height` are positive.
 - `dpi` is 72–600. Brother QL and DYMO LabelWriter printers print at 300, Brother TD printers at 203
   or 300, Brother P-touch printers at 180 or 360, DYMO LabelManagers at 180 or 300, Epson LabelWorks
-  at 180, Rollo and most TSPL printers at 203, ESC/POS and Phomemo printers at 203, Niimbots at 203,
+  at 180, the Brady M611 at 300, Rollo and most TSPL printers at 203, ESC/POS and Phomemo printers at 203, Niimbots at 203,
   Zebras and the industrial printers (DPL, SBPL and EZPL) at 203, 300 or 600, and e-paper displays
   at their panel's own, 101 to 227 (see [Displays](printing.md#displays)).
 - Positions and sizes use the template's units, with the origin at the top-left corner.
