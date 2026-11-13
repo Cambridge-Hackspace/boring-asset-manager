@@ -57,6 +57,26 @@ The instance serves both itself, never a CDN. The installed app keeps them once 
 camera reads codes offline after the first scan. A browser with no camera to offer says so, and
 the code is typed instead.
 
+## NFC tags
+
+An NFC tag can hold an asset's scan link, `{{scan_url}}`, as its QR code does, so that a phone
+held to it opens the scan page with no app: iPhones from the XS on, and Android phones with NFC
+turned on, read such tags by themselves. The **NFC tags** help topic
+says which tags to buy.
+
+**Write tag**, on an asset's page and its scan page, writes the link. Where the browser has Web
+NFC (Chrome on Android), it writes it as one NDEF URI record (`NDEFReader.write`) to the tag
+next held to the phone, then offers to lock the tag (`NDEFReader.makeReadOnly`), which can't be
+undone. Elsewhere, it shows the link with **Copy**, for an app that writes tags, such as NFC
+Tools.
+
+The link is `[server] base_url` followed by `/scan/` and the asset's ID, or the address the page
+was opened at where `base_url` is not set. Like a printed QR code, a tag goes on holding the
+address it was written with: when the server moves, write its tags again.
+
+A tag holds only a link, which anyone can read and copy. It identifies an asset; signing in is
+what protects what the scan page shows.
+
 ## Scan templates
 
 A scan template is a saved report of kind `scan` ([Reports](reports.md)) that lays out the one
