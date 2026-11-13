@@ -23,9 +23,9 @@ Each printer is stored with:
 - the media currently loaded;
 - driver `options`, as a JSON object.
 
-Fifteen printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`,
-`dymo_labelwriter`, `dymo_labelmanager`, `epson_labelworks`, `tspl`, `zpl`, `epl2`, `dpl`, `sbpl`,
-`ezpl`, `escpos`, `phomemo` and `niimbot`; and five for e-paper displays, which are printers too:
+Sixteen printer drivers ship today: `brother_ql`, `brother_td`, `brother_ptouch`,
+`dymo_labelwriter`, `dymo_labelmanager`, `epson_labelworks`, `brady`, `tspl`, `zpl`, `epl2`, `dpl`,
+`sbpl`, `ezpl`, `escpos`, `phomemo` and `niimbot`; and five for e-paper displays, which are printers too:
 `display`, `openepaperlink`, `trmnl`, `paperlesspaper` and `solum` (see [Displays](#displays)).
 Option values are listed by the drivers endpoint, and unknown options are refused.
 
@@ -788,6 +788,69 @@ checksum (the low byte of their sum) and `}`. Each raster line is `ESC .`, `00 0
 - whether the LW-C410 cuts by itself;
 - the longest label.
 
+### `brady`
+
+For Brady's M611, over its network connection, in the format Brady's own apps send it.
+
+**Untested.** This driver has not been checked on a real M611. Brady publishes no description of
+the format, and its SDK is not used (see [`zpl`](#zpl)). The format was reconstructed, as facts
+only, from [ggiesen/pybrady](https://gitlab.com/ggiesen/pybrady) (MPL-2.0), whose
+`docs/brady_specification.md` (§2.1, §4 and §7) describes what its author recovered from Brady's
+Express Labels app. pybrady does not itself send these jobs yet. No code, text, data or test vectors are taken from it, so BAM
+stays MIT-licensed; the tests are worked out from the description and from LZ4's own description of
+its block format.
+
+**Models.** The M611: 300 DPI, labels up to 2 in (50.8 mm) wide, from 0.375 in to 40 in (9.5 to
+1,016 mm) long, as Brady's technical specifications and pybrady's §7.1 give them.
+
+**Media.** Brady's cartridges are many, and its list of them is its own, so none is built in. Add
+the cartridge loaded under **Label stock** by its labels' width, and for die-cut labels their
+length; the printer is refused without one.
+
+**Options:**
+
+- **`cut_after`:** `each_label` (default) cuts each label off; `last_label` cuts only after the
+  job's last; `printer` leaves it to the printer's own menu.
+- **`part`:** the Brady part number on the cartridge loaded, such as `M6-11-427`, sent as the job's
+  substrate. Empty, the default, sends none.
+
+**Fit.** Templates use 300 DPI. A template's width runs across the cartridge and its height along
+it, or the other way about when it fits only turned. A die-cut label is its cartridge's size; a
+continuous label's length is the template's, within the M611's.
+
+**Encoding.** Each job is sent in packets, each the same 16 bytes
+(`7F 42 EE 41 A9 1D 40 90 9B EC FF 7A 66 14 CC 22`), the length of its JSON as 4 bytes
+little-endian, and the JSON:
+
+1. the job's header: its ID (32 hex digits, drawn from what it prints and when), name, creator
+   (`BAM!`), time, number of pages, `SubstratePart` (the `part` option), `JobType` `Print`,
+   `JobSource` `Mobile`, a client ID, and `UserPostPrintOperation`: `Cut;1` to cut each label,
+   `Cut;0` to cut after the job, or `SetByPrinter`;
+2. then a page for each label: its number from 0, its width and length in thousandths of an inch,
+   and one layer holding its image, with `{"Cut": "Shear"}` after each page that is cut, or
+   `{"SetByPrinter": "SetByPrinter"}` when the printer decides.
+
+Each image is a Windows BMP of 1 bit per pixel, top-down (a negative height), with black as color
+0 and white as color 1 and rows padded to 4 bytes, at the printer's resolution. The whole file,
+headers included, is compressed in LZ4's block format, not its frame format, and sent in base64.
+
+**Connections.** `tcp` on port 9100, the M611's port for jobs, over Wi-Fi or Ethernet. Each job is
+sent on a connection of its own, which BAM! closes when it is sent. The printer's other port, 9102,
+which Brady's apps use to read its status and loaded cartridge, is not used.
+
+**Not yet known,** and the first things to watch on a real printer:
+
+- whether the printer checks `SubstratePart` against the cartridge loaded, refusing or warning when
+  it differs or is empty. The sources send Brady's part number, as `part` does;
+- whether it minds a job's creator, source or client ID being other than Brady's apps';
+- which way up and round a label comes out. The image is sent with its width across the cartridge,
+  as BAM! sends it to other printers, and its rows top-down, as the sources require;
+- what Brady's apps send to never cut, which the M611 also offers; it is not offered here until it
+  is known;
+- the one byte the printer may answer a job with (1 for success), which BAM! does not read;
+- the i5300, S3700, i7500, i4311, C1-30 and MJ811, which pybrady says take the same format on the
+  same port. They can be added once one is checked; the M611 comes first.
+
 ### `tspl`
 
 For printers that speak TSPL, the label language of TSC printers that many inexpensive 4-inch
@@ -890,7 +953,8 @@ and its Script Emulator FAQ.
 
 - **Natively:** the i3311, i4311, i5311 and i7500 take ZPL, `^GFA` included.
 - **Through Brady's Script Emulator for ZPL,** a paid box cabled to the printer: the M410, M510,
-  M511, M610, M611, M710, i3300, i5300 and S3700.
+  M511, M610, M611, M710, i3300, i5300 and S3700. An M611 on the network needs no box: the
+  [`brady`](#brady) driver speaks its own format.
 - **Model:** choose the generic 203 DPI model whatever the head. Brady scales a 203 DPI script to its
   300 and 600 DPI heads.
 - **`calibrate`** has no effect: Brady's printers don't support `~JC`.
