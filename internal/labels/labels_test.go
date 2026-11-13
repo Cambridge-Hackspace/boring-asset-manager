@@ -102,6 +102,10 @@ func TestValidateReportsEveryProblemWithItsPath(t *testing.T) {
 		{"generator type", func(t *Template) {
 			t.Elements = []Element{{Type: ElementGenerator, GeneratorType: "ean13", Width: 5, Height: 5}}
 		}, []string{"elements[0].generator_type"}},
+		// An NFC tag's serial number is a code, but no label can print one.
+		{"nfc as a barcode", func(t *Template) {
+			t.Elements = []Element{{Type: ElementGenerator, GeneratorType: "nfc", Width: 5, Height: 5}}
+		}, []string{"elements[0].generator_type"}},
 		{"error correction", func(t *Template) {
 			t.Elements = []Element{
 				{Type: ElementGenerator, GeneratorType: "micro_qr", ErrorCorrection: "H", Width: 5, Height: 5},
@@ -182,6 +186,7 @@ func TestParseBinding(t *testing.T) {
 		{"{{ asset.name }}!", []Ref{{Kind: RefAssetName}}},
 		{"{{base_url}}/a/{{asset.id}}", []Ref{{Kind: RefBaseURL}, {Kind: RefAssetID}}},
 		{"{{asset.code.micro_qr}}", []Ref{{Kind: RefAssetCode, Arg: "micro_qr"}}},
+		{"Tag {{asset.code.nfc}}", []Ref{{Kind: RefAssetCode, Arg: "nfc"}}},
 		{"Room {{field.room_no}}", []Ref{{Kind: RefField, Arg: "room_no"}}},
 		{"a }} b", nil},
 	}

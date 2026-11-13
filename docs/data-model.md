@@ -393,9 +393,29 @@ type's limits:
 | Micro QR | `micro_qr` | Constrained by physical matrix bounds and version capacity (M2–M4). Custom IDs use only the QR alphanumeric character set (`0-9`, `A-Z`, space, `$%*+-./:`) and are capped at the largest symbol's (M4-L) payload: 35 characters for purely numeric codes, 21 otherwise. |
 | Standard QR | `qr` | Arbitrary UTF-8 payloads up to 2953 encoded bytes (version 40-L byte mode), and dynamic URL templates (`{base_url}/a/{asset_uuid}` or a custom slug). |
 | Code 128 | `code128` | Printable ASCII (32–126) only, at most 80 characters, so labels stay scannable. |
+| NFC tag | `nfc` | An NFC tag's serial number (UID): 4, 7 or 10 bytes in hex. |
 
 The pair of generator type and code must be unique across all active assets, so scanning any
 generated code resolves to a single asset. Archiving an asset releases its codes.
+
+#### NFC tags
+
+Every NFC tag has a serial number, fixed by its maker and readable even when the tag is locked
+or holds something else. Recording it as the asset's `nfc` code lets a tag already stuck on
+something, or one that can't be written, find the asset. It is a code no label prints: templates
+can't draw it as a barcode, though `{{asset.code.nfc}}` puts it in text, and
+`GET /api/v1/generators` lists it with `"printable": false`.
+
+The serial number is kept as upper-case hex bytes joined by colons (`04:A2:3B:1C:5D:80:00`),
+however it was written: run together, in either case, or with colons, spaces or dashes between
+the bytes. Looking up a code (`GET /api/v1/scan/{code}`, hooks, the assistant) finds it in any
+of those forms, as a phone reports it (`04:a2:3b:...`) or as a tag app shows it. Serial numbers
+don't run in series, so **Assign the next code** isn't offered for them, and **Duplicate…**
+leaves the new asset without one.
+
+In Chrome on Android, **Add tag** on the asset form reads the serial number of a tag held to the
+phone (Web NFC); elsewhere it is typed. A serial number can be copied onto another tag, so it
+identifies an asset and never authorizes anything.
 
 Codes are compared exactly. `Drill` and `drill` are different codes, and so are `é` written as
 one character and `e` followed by a combining accent, on every database (see
@@ -649,7 +669,7 @@ each asset's `cut`.
 | `asset_categories` | Which categories each asset is in | |
 | `assets` | Assets | `id` (UUIDv4), `created_at`, `updated_at`, `archived_at`, `stock_quantity`, `stock_unit`, `low_stock_threshold`, `is_running_low`, `icon_name` |
 | `asset_field_values` | Field values, stored as text, including values orphaned when an asset leaves a category | |
-| `asset_generator_keys` | Asset codes | `asset_id` (UUID), `generator_type` (string: `"qr"`, `"micro_qr"` or `"code128"`), `assigned_code` (string, unique per `generator_type`) |
+| `asset_generator_keys` | Asset codes | `asset_id` (UUID), `generator_type` (string: `"qr"`, `"micro_qr"`, `"code128"` or `"nfc"`), `assigned_code` (string, unique per `generator_type`) |
 | `relation_types` | Relation types | `name`, `inverse_name`, `is_symmetric`, `is_single`, `is_location` |
 | `asset_links` | Links between assets | |
 | `asset_purchases` | Where each asset came from, a row for an asset with any | `asset_id`, `vendor_id` (nullable; `NULL` once the vendor is deleted), `order_date`, `received_date`, `warranty_end` (`YYYY-MM-DD`, nullable), `price_minor` (minor units, nullable), `currency` (ISO 4217, or empty), `order_number`, `invoice_attachment_id` (one of the asset's attachments, nullable; `NULL` once removed) |

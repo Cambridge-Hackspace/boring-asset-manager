@@ -8,7 +8,7 @@ Star an asset you use often, beside its name on its page or in the list, to find
 
 ## Adding and editing
 
-Choose **New asset**, give it a name and its categories, say where it is (find the shelf, box or room it is in), and fill in the fields its categories ask for. Fields marked as required must be filled in. Codes for its labels are under **Codes**: type one, choose **Assign the next code** to take the one after the highest of that kind (after HS-105, HS-106), or leave them for later.
+Choose **New asset**, give it a name and its categories, say where it is (find the shelf, box or room it is in), and fill in the fields its categories ask for. Fields marked as required must be filled in. Codes for its labels are under **Codes**: type one, choose **Assign the next code** to take the one after the highest of that kind (after HS-105, HS-106), or leave them for later. **NFC tag** records the serial number of an NFC tag stuck on it, so that the tag finds it: in Chrome on Android, choose **Add tag** and hold the tag to the back of the phone; elsewhere, type the number, such as 04:A2:3B:1C:5D:80:00. A tag's serial number can be copied onto another tag, so it tells you which asset this is but never proves anything or lets anyone in.
 
 **Duplicate…**, under **More** on an asset's page, starts a new asset like it, such as one more spool of the same filament: the form is filled in with its categories, fields, stock and place, and the next code in its series (after SP-014, SP-015). Its links are listed to keep or untick, though not what it contains, which stays where it is, and so are its photos, copied unless unticked. Change what differs, and nothing is saved until you choose **Create asset**. Its condition and history are its own.
 

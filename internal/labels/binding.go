@@ -160,7 +160,7 @@ func parseRef(name string) (Ref, error) {
 	switch {
 	case strings.HasPrefix(name, "asset.code."):
 		genType := strings.TrimPrefix(name, "asset.code.")
-		if !generators.IsValidGeneratorType(genType) {
+		if !generators.IsCodeType(genType) {
 			return Ref{}, fmt.Errorf("%w: unknown generator type in {{%s}}", ErrInvalidBinding, name)
 		}
 		return Ref{Kind: RefAssetCode, Arg: genType}, nil

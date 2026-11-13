@@ -7,7 +7,7 @@ const field = (key: string, label: string): Field => ({ id: key, key, label, val
 describe('importing helpers', () => {
   it('lists targets by group, fields by label', () => {
     const opts = targetOptions([field('serial', 'Serial'), field('color', 'Color')], [
-      { type: 'qr', name: 'QR Code', error_correction_levels: [], code_rules: '' },
+      { type: 'qr', name: 'QR Code', error_correction_levels: [], code_rules: '', printable: true },
     ]);
     expect(opts.map((o) => o.value)).toEqual(['id', 'name', 'categories', 'links', 'quantity', 'unit', 'low_stock_threshold', 'code.qr', 'field.color', 'field.serial']);
     expect(opts.find((o) => o.value === 'field.serial')).toMatchObject({ label: 'Serial (serial)', group: 'Fields' });

@@ -459,7 +459,7 @@ func (s *Server) handleExportAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="assets-%s.csv"`, time.Now().UTC().Format("20060102")))
-	if err := assetcsv.Export(w, assets, cats, generators.AllowedGeneratorTypes(), refs); err != nil {
+	if err := assetcsv.Export(w, assets, cats, generators.CodeTypes(), refs); err != nil {
 		// Headers are gone; all that is left is to stop.
 		return
 	}

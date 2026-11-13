@@ -60,7 +60,9 @@
   const doc = $derived(editor.doc);
 
   let saved = $state(''); // the last saved document, as JSON
-  let generators = $state<GeneratorInfo[]>([]);
+  let codeTypes = $state<GeneratorInfo[]>([]);
+  // The codes a label can print, of all an asset can have.
+  const generators = $derived(codeTypes.filter((g) => g.printable));
   let fields = $state<Field[]>([]);
   let loading = $state(true);
   let error = $state('');
@@ -81,7 +83,7 @@
   let printArea = $state<PrintArea | null>(null);
 
   const dirty = $derived(JSON.stringify(doc) !== saved);
-  const placeholderList = $derived(placeholders(fields.map((f) => f.key), generators.map((g) => g.type)));
+  const placeholderList = $derived(placeholders(fields.map((f) => f.key), codeTypes.map((g) => g.type)));
   const allProblems = $derived([...problems, ...previewProblems]);
   const problemElements = $derived(new Set(allProblems.map((p) => elementIndex(p.path)).filter((i): i is number => i !== null)));
   const labelProblems = $derived(Object.fromEntries(allProblems.filter((p) => elementIndex(p.path) === null && p.path).map((p) => [p.path, p.message])));
@@ -90,7 +92,7 @@
 
   onMount(async () => {
     try {
-      [generators, fields] = await Promise.all([
+      [codeTypes, fields] = await Promise.all([
         request<{ generators: GeneratorInfo[] }>('GET', '/generators').then((r) => r.generators ?? []),
         request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? []),
       ]);

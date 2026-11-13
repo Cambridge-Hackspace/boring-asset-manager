@@ -68,14 +68,14 @@ func TestExportAssetsAsAWorkbook(t *testing.T) {
 		t.Fatalf("sheets: %v", book.Sheets)
 	}
 	all, _ := book.Rows("All")
-	if strings.Join(all[0], ",") != "id,name,categories,code.qr,code.micro_qr,code.code128,field.bought,field.serial,field.watts" || len(all) != 3 {
+	if strings.Join(all[0], ",") != "id,name,categories,code.qr,code.micro_qr,code.code128,code.nfc,field.bought,field.serial,field.watts" || len(all) != 3 {
 		t.Fatalf("All: %q", all)
 	}
 	// The drill is on each of its categories' sheets, with only their
 	// fields; Drills' include those it inherits from Tools.
 	for sheet, want := range map[string][]string{
-		"Drills": {"id", "name", "categories", "code.qr", "code.micro_qr", "code.code128", "field.serial", "field.watts"},
-		"Saws":   {"id", "name", "categories", "code.qr", "code.micro_qr", "code.code128", "field.bought"},
+		"Drills": {"id", "name", "categories", "code.qr", "code.micro_qr", "code.code128", "code.nfc", "field.serial", "field.watts"},
+		"Saws":   {"id", "name", "categories", "code.qr", "code.micro_qr", "code.code128", "code.nfc", "field.bought"},
 	} {
 		rows, _ := book.Rows(sheet)
 		if len(rows) != 2 || !reflect.DeepEqual(rows[0], want) || rows[1][0] != drill.Asset.ID || rows[1][1] != evil {

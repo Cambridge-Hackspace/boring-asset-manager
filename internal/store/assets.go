@@ -47,13 +47,14 @@ func (s *Store) normalizeCategories(categoryIDs []string) ([]string, error) {
 	return normalized, nil
 }
 
-// normalizeGeneratorKeys trims assigned codes, rejects duplicate generator types and
+// normalizeGeneratorKeys trims assigned codes, writes NFC tags' serial
+// numbers in one form, rejects duplicate generator types and
 // validates each code against its generator's character set and capacity constraints.
 func normalizeGeneratorKeys(keys []models.AssetGeneratorKey) ([]models.AssetGeneratorKey, error) {
 	normalized := make([]models.AssetGeneratorKey, 0, len(keys))
 	genTypeSeen := make(map[string]bool)
 	for _, gk := range keys {
-		gk.AssignedCode = strings.TrimSpace(gk.AssignedCode)
+		gk.AssignedCode = generators.NormalizeCode(gk.GeneratorType, gk.AssignedCode)
 		if genTypeSeen[gk.GeneratorType] {
 			return nil, fmt.Errorf("%w: %s", ErrDuplicateGenType, gk.GeneratorType)
 		}

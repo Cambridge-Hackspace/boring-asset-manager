@@ -170,7 +170,7 @@ func Suggest(header []string, corpus []models.Field) []string {
 		byName[strings.ToLower(f.Key)] = FieldPrefix + f.Key
 		byName[strings.ToLower(FieldPrefix+f.Key)] = FieldPrefix + f.Key
 	}
-	for _, t := range generators.AllowedGeneratorTypes() {
+	for _, t := range generators.CodeTypes() {
 		byName[t] = CodePrefix + t
 		byName[CodePrefix+t] = CodePrefix + t
 	}
@@ -333,7 +333,7 @@ func checkMapping(plan *Plan, fieldsByKey map[string]models.Field) bool {
 			hasName = true
 		case t == ColumnCategories, t == ColumnQuantity, t == ColumnUnit, t == ColumnThreshold, t == ColumnLinks, t == ColumnIcon:
 		case isPurchaseColumn(t):
-		case strings.HasPrefix(t, CodePrefix) && generators.IsValidGeneratorType(strings.TrimPrefix(t, CodePrefix)):
+		case strings.HasPrefix(t, CodePrefix) && generators.IsCodeType(strings.TrimPrefix(t, CodePrefix)):
 		case strings.HasPrefix(t, FieldPrefix):
 			if _, ok := fieldsByKey[strings.TrimPrefix(t, FieldPrefix)]; !ok {
 				plan.problem(1, c.Header, "no field has the key %q", strings.TrimPrefix(t, FieldPrefix))
@@ -539,7 +539,7 @@ func (p *planner) row(rec record, seenIDs map[string]int) error {
 			plan.problem(line, c.Header, "%v", err)
 			continue
 		}
-		change.Codes[t] = code
+		change.Codes[t] = generators.NormalizeCode(t, code)
 	}
 
 	// Stock: a blank cell keeps what the asset has.

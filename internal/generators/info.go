@@ -11,9 +11,12 @@ type Info struct {
 	ErrorCorrectionLevels []string `json:"error_correction_levels"`
 	// CodeRules says which codes an asset may be assigned, in a sentence.
 	CodeRules string `json:"code_rules"`
+	// Printable says whether labels can print it: false for an NFC tag's
+	// serial number, which only finds an asset.
+	Printable bool `json:"printable"`
 }
 
-// Describe lists every generator type, in AllowedGeneratorTypes order.
+// Describe lists every code type, in CodeTypes order.
 func Describe() []Info {
 	names := map[string]string{TypeQR: "QR Code", TypeMicroQR: "Micro QR Code", TypeCode128: "Code 128"}
 	rules := map[string]string{
@@ -29,7 +32,10 @@ func Describe() []Info {
 		if levels == nil {
 			levels = []string{}
 		}
-		out = append(out, Info{Type: t, Name: names[t], ErrorCorrectionLevels: levels, CodeRules: rules[t]})
+		out = append(out, Info{Type: t, Name: names[t], ErrorCorrectionLevels: levels, CodeRules: rules[t], Printable: true})
 	}
-	return out
+	return append(out, Info{
+		Type: TypeNFC, Name: "NFC tag", ErrorCorrectionLevels: []string{},
+		CodeRules: "The serial number of an NFC tag stuck on it, 4, 7 or 10 bytes in hex, such as 04:A2:3B:1C:5D:80:00.",
+	})
 }

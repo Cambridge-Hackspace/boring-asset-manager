@@ -13,7 +13,7 @@ const field = (key: string, label: string, required = false, type: 'text' | 'num
   field: { id: key, key, label, validation_type: type, created_at: '', updated_at: '' },
   is_required: required,
 });
-const generators = [{ type: 'qr', name: 'QR Code', error_correction_levels: ['M'], code_rules: 'Any text.' }];
+const generators = [{ type: 'qr', name: 'QR Code', error_correction_levels: ['M'], code_rules: 'Any text.', printable: true }];
 
 beforeEach(() => {
   session.permissions = ['assets.read', 'assets.write'];
@@ -277,6 +277,57 @@ describe('AssetForm', () => {
       [{ generator_type: 'qr', assigned_code: 'SP-015' }],
       [{ generator_type: 'qr', assigned_code: 'SP-016' }],
     ]);
+  });
+
+  it('reads an NFC tag’s serial number where the browser can, and never numbers one in a series', async () => {
+    const nfc = { type: 'nfc', name: 'NFC tag', error_correction_levels: [], code_rules: 'Its serial number.', printable: false };
+    let reading: ((e: { serialNumber: string }) => void) | undefined;
+    vi.stubGlobal(
+      'NDEFReader',
+      class {
+        scan() {
+          return Promise.resolve();
+        }
+        addEventListener(type: string, l: (e: { serialNumber: string }) => void) {
+          if (type === 'reading') reading = l;
+        }
+      },
+    );
+    const { sent } = fakeApi({
+      'GET /categories': () => ({ categories: [] }),
+      'GET /generators': () => ({ generators: [...generators, nfc] }),
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+      'POST /assets': () => ({ status: 201, body: { asset: { asset: { id: 'new-id' } } } }),
+    });
+    render(AssetForm, { params: {} });
+
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'Drill' } });
+    expect(screen.getAllByRole('button', { name: 'Assign the next code' })).toHaveLength(1);
+    await fireEvent.click(screen.getByRole('button', { name: 'Add tag' }));
+    expect(await screen.findByText('Hold the tag to the back of the phone.')).toBeTruthy();
+    reading!({ serialNumber: '04:a2:3b:1c:5d:80:00' });
+    await vi.waitFor(() => expect((screen.getByLabelText('NFC tag') as HTMLInputElement).value).toBe('04:A2:3B:1C:5D:80:00'));
+    await fireEvent.submit(screen.getByRole('button', { name: 'Create asset' }));
+
+    await vi.waitFor(() => expect(router.path).toBe('/assets/new-id'));
+    expect((sent.find((r) => r.method === 'POST' && r.path === '/assets')!.body as { generator_keys: unknown }).generator_keys).toEqual([
+      { generator_type: 'nfc', assigned_code: '04:A2:3B:1C:5D:80:00' },
+    ]);
+  });
+
+  it('has a serial number typed where the browser cannot read tags', async () => {
+    const nfc = { type: 'nfc', name: 'NFC tag', error_correction_levels: [], code_rules: 'Its serial number.', printable: false };
+    fakeApi({
+      'GET /categories': () => ({ categories: [] }),
+      'GET /generators': () => ({ generators: [nfc] }),
+      'GET /relation-types': () => ({ relation_types: [] }),
+      'POST /categories/effective-fields': () => ({ fields: [] }),
+    });
+    render(AssetForm, { params: {} });
+    expect(await screen.findByLabelText('NFC tag')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add tag' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Assign the next code' })).toBeNull();
   });
 
   it('shows a server error beside the input it is about', async () => {

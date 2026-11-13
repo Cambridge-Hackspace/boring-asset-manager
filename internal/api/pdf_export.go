@@ -257,7 +257,7 @@ func (s *Server) handleExportAssetsPDF(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Photos and labels are drawn for at most %d assets, and the list has %d: leave them out, or narrow the list", maxPictureRows, len(assets)))
 		return
 	}
-	names, rows := assetcsv.Table(assets, cats, generators.AllowedGeneratorTypes(), refs)
+	names, rows := assetcsv.Table(assets, cats, generators.CodeTypes(), refs)
 	index := map[string]int{}
 	for i, n := range names {
 		index[n] = i

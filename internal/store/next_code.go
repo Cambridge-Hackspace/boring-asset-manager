@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 )
 
 // trailingNumber splits a code into what comes before its last run of
@@ -39,6 +41,9 @@ func (s *Store) nextCode(generatorType string, only *string) (string, error) {
 // nextCodeIn is nextCode, reading the codes through q, such as a
 // transaction's.
 func nextCodeIn(q vendorQuerier, generatorType string, only *string) (string, error) {
+	if !generators.HasSeries(generatorType) {
+		return "", nil
+	}
 	rows, err := q.Query("SELECT assigned_code FROM asset_generator_keys WHERE generator_type = ?", generatorType)
 	if err != nil {
 		return "", fmt.Errorf("reading codes: %w", err)

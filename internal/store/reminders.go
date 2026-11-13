@@ -126,7 +126,7 @@ func (r LoanReminder) Overdue() bool { return r.Reminder != "due" }
 // reminders off.
 func (s *Store) DueLoanReminders(now time.Time, set LoanReminderSettings) ([]LoanReminder, error) {
 	rows, err := s.Query(`SELECT l.id, l.asset_id, a.name, l.checked_out_at, l.due_at, b.id, b.email, b.name, lb.id, lb.email, lb.name,
-		(SELECT MIN(g.assigned_code) FROM asset_generator_keys g WHERE g.asset_id = a.id)
+		(SELECT MIN(g.assigned_code) FROM asset_generator_keys g WHERE g.asset_id = a.id AND g.generator_type <> 'nfc')
 		FROM asset_loans l
 		JOIN assets a ON a.id = l.asset_id
 		JOIN users b ON b.id = l.borrower_id

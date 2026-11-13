@@ -155,7 +155,7 @@ func TestListGenerators(t *testing.T) {
 		} `json:"generators"`
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-	if rec.Code != http.StatusOK || len(resp.Generators) != 3 || resp.Generators[0].Type != "qr" ||
+	if rec.Code != http.StatusOK || len(resp.Generators) != 4 || resp.Generators[3].Type != "nfc" || resp.Generators[0].Type != "qr" ||
 		strings.Join(resp.Generators[0].Levels, "") != "MLQH" || resp.Generators[2].Levels == nil {
 		t.Errorf("generators: %d %s", rec.Code, rec.Body.String())
 	}
