@@ -62,6 +62,9 @@ func Validate(name, driver string, conn Connection, settings Settings) error {
 	if err := checkDisplayConnection(d, conn); err != nil {
 		return err
 	}
+	if err := checkTCPProtocol(d, conn); err != nil {
+		return err
+	}
 	if od, ok := d.(OneShotDriver); ok {
 		if err := checkOneShot(od, conn, settings); err != nil {
 			return err
@@ -114,6 +117,8 @@ type Dispatcher struct {
 	DialBLE BLEDialer
 	// conversationTiming replaces a conversation's timing in tests.
 	conversationTiming *niimbot.Timing
+	// tprtTiming replaces a TPRT job's timing in tests.
+	tprtTiming *TPRTTiming
 
 	mu    sync.Mutex
 	slots map[Connection]chan struct{}
@@ -196,7 +201,14 @@ func (d *Dispatcher) Send(ctx context.Context, c Connection, job []byte) error {
 	var err error
 	switch c.Type {
 	case ConnTCP:
-		err = d.sendTCP(ctx, c.Address, job)
+		var a TCPAddress
+		if a, err = ParseTCPAddress(c.Address); err == nil {
+			if a.Protocol == ProtocolTPRT {
+				err = d.sendTPRT(ctx, a.HostPort, job)
+			} else {
+				err = d.sendTCP(ctx, a.HostPort, job)
+			}
+		}
 	case ConnDevice:
 		err = d.sendDevice(ctx, c.Address, job)
 	case ConnIPP:

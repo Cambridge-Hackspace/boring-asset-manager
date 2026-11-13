@@ -655,15 +655,21 @@ None of this has yet been checked on a real LabelManager.
 
 For Epson's LabelWorks tape printers, which print LK tape (sold as LC tape in the Americas):
 
-| Model | Resolution | Capability level | Tape | Connections |
-|---|---|---|---|---|
-| LW-600P | 180 DPI | 1 | 6–24 mm | USB, Bluetooth |
-| LW-PX400 | 180 DPI | 3 | 4–24 mm | USB, Bluetooth |
-| LW-C410 | 180 DPI | 5 | 4–18 mm | Bluetooth |
+| Model | Resolution | Capability level | Tape | Half cutter | Connections |
+|---|---|---|---|---|---|
+| LW-600P | 180 DPI | 1 | 6–24 mm | No | USB, Bluetooth |
+| LW-PX400 | 180 DPI | 3 | 4–24 mm | No | USB, Bluetooth |
+| LW-C410 | 180 DPI | 5 | 4–18 mm | No | Bluetooth |
+| LW-PX800 | 360 DPI | 3 | 4–24 mm | Yes | USB, Ethernet, Wi-Fi |
 
-**Untested.** This driver has not been checked on a real LabelWorks printer. Epson publishes no
-command reference, and its LabelWorks SDK is not used: it is a mobile library whose license forbids
-reverse engineering and binds end users to terms of its own. The protocol was reconstructed, as
+The LW-PX800's capability level, resolution and half cutter are from Epson's app, as
+tyalie/RE-epson-label-printer tabulates it; the table there gives it tapes to 36 mm, but Epson sells
+it for tapes to 24 mm.
+
+**Untested.** This driver has not been checked on a real LabelWorks printer, and the LW-PX800 not
+on any printer at all. Epson publishes no command reference, and its LabelWorks SDK is not used: it
+is a mobile library whose license forbids reverse engineering and binds end users to terms of its
+own. The protocol was reconstructed, as
 facts only, from these community descriptions, which between them have printed on all three models:
 
 - [tyalie/RE-epson-label-printer](https://github.com/tyalie/RE-epson-label-printer) (MIT): the
@@ -675,7 +681,8 @@ facts only, from these community descriptions, which between them have printed o
 - [igrbtn/LW700Print](https://github.com/igrbtn/LW700Print) (MIT): the framing, and the 72 dots of
   12 mm tape, measured on an LW-700 over USB;
 - [hikalium/sr5900p](https://github.com/hikalium/sr5900p) (MIT): the same framing on KING JIM's
-  Epson-built TEPRA PRO SR5900P;
+  Epson-built TEPRA PRO SR5900P, at 360 DPI: the half cut, the printable dots of each width it
+  measured, and the handshake it takes jobs over the network with;
 - [oxplot/nospero](https://github.com/oxplot/nospero) (no license, so read for facts only): the
   LW-600P over Bluetooth, on RFCOMM channel 1, and the printable dots of each width;
 - [elliotmatson/epson-labelworks-mcp](https://github.com/elliotmatson/epson-labelworks-mcp) (no
@@ -693,28 +700,32 @@ worked out from the descriptions.
   to 3; the command takes -5 to 5.
 - **`margin_mm`** is the tape fed before and after each label, 0–127 mm; default 2. How much the
   printer feeds of its own, between its head and its cutter, is not known.
+- **`half_cut`:** on a model with a half cutter, the LW-PX800, cuts the tape but not its backing
+  where `cut_after` would cut it through; default false. It needs `cut_after` to be `each_label` or
+  `last_label`, and is refused on other models.
 
 **Media.** LK tape, `lk-4` to `lk-24`, with each width's printable dots:
 
-| Tape | Dots |
-|---|---|
-| 4 mm | 22 |
-| 6 mm | 36 |
-| 9 mm | 54 |
-| 12 mm | 72 |
-| 18 mm | 108 |
-| 24 mm | 128 |
+| Tape | Dots at 180 DPI | Dots at 360 DPI |
+|---|---|---|
+| 4 mm | 22 | 40 |
+| 6 mm | 36 | 72 |
+| 9 mm | 54 | 104 |
+| 12 mm | 72 | 144 |
+| 18 mm | 108 | 216 |
+| 24 mm | 128 | 288 |
 
-**These are provisional.** Only 12 mm's 72 has been measured on a printer, an LW-700. The others are
-the figures nospero and epson-labelworks-mcp use; LW700Print estimates 32, 48 and 112 for 6, 9
-and 18 mm. A printer is refused with a tape its model does not take, and the printer form offers
-each model only those. Custom stock is refused.
+**These are provisional.** At 180 DPI, only 12 mm's 72 has been measured on a printer, an LW-700.
+The others are the figures nospero and epson-labelworks-mcp use; LW700Print estimates 32, 48 and
+112 for 6, 9 and 18 mm. At 360 DPI, they are what sr5900p measured on the SR5900P, on KING JIM's
+own tape, not on an Epson printer. A printer is refused with a tape its model does not take, and
+the printer form offers each model only those. Custom stock is refused.
 
-**Fit.** Templates use 180 DPI. A template's height is the tape's width (the template is turned, so
-its width runs along the tape). Its other side is the label's length, up to 1,000 mm: no source
-gives Epson's limit, and that is Brother's tape printers'. Only the middle of the tape prints, by
-the printable dots above: 72 of 12 mm tape's 85, for example. The fit check warns of anything
-beyond them.
+**Fit.** Templates use the model's resolution: 180 DPI, or 360 on the LW-PX800. A template's
+height is the tape's width (the template is turned, so its width runs along the tape). Its other
+side is the label's length, up to 1,000 mm: no source gives Epson's limit, and that is Brother's
+tape printers'. Only the middle of the tape prints, by the printable dots above: 72 of 12 mm tape's
+85 at 180 DPI, for example. The fit check warns of anything beyond them.
 
 **Placement.** Each raster line carries only the tape's printable dots, and the printer places it
 on the tape. A label is sent from its left edge, its bottom edge first in each line, as the
@@ -727,7 +738,8 @@ checksum (the low byte of their sum) and `}`. Each raster line is `ESC .`, `00 0
 
 1. a reset (`!`) and a request for status (`Q`);
 2. the job's setup: a print end (`@`), the signature (`{`), the cut (`C`), the density plus 5 (`D`)
-   and `G`;
+   and `G`. The cut is `01 01 01 01` to cut each label off, `01 00 01 01` to cut after the last,
+   and `00 00 00 00` never to cut; a half cut sends `02` in place of each `01` in the first two;
 3. then for each label:
    - a request for status;
    - its length in lines, margins included (`L`), and the margin (`T`);
@@ -740,12 +752,34 @@ checksum (the low byte of their sum) and `}`. Each raster line is `ESC .`, `00 0
 - **USB,** on the LW-600P and LW-PX400: a printer-class device (USB `04B8:0705`, which the LW-700
   shares). Use `device` on Linux, such as `/dev/usb/lp0`, or `windows` with Epson's driver
   installed (BAM! prints `RAW`, so the driver never changes the job).
-- **Bluetooth Classic,** on all three: a serial port, on RFCOMM channel 1 on the LW-600P. Use
+- **USB,** on the LW-PX800 too, by the same means; its USB ID is not known.
+- **Bluetooth Classic,** on the other three: a serial port, on RFCOMM channel 1 on the LW-600P. Use
   `device` (`/dev/rfcomm0`) on Linux or `windows`; see [Bluetooth](#bluetooth). The LW-C410 has no
   USB port.
+- **Network,** on the LW-PX800: `tcp`, on port 9100. Epson does not publish how it takes jobs
+  over the network. KING JIM's Epson-built SR5900P takes the same stream on TCP 9100, but only after a
+  handshake over UDP on the same port, and the LW-PX800 may need it too. Try the plain address,
+  such as `lw.lan`, first; if the printer prints nothing, use `lw.lan?protocol=tprt`, which sends
+  the handshake as sr5900p describes it:
+
+  1. Each message over UDP is a 32-byte header of eight big-endian words: `TPRT` (the printer
+     answers `tprt`), 0, 1, 0x20, the command, the length of the data after the header, and two
+     words that are 0 in requests (an IP address and a token). Data follows the header.
+  2. BAM asks for status (command 1), and fails the job if the printer has no tape (byte 2 is
+     `06`), its cover is open (`21`), it reports another error, or it is printing (byte 1 is `02`).
+  3. It starts a job (2), which answers `02 00 00`; connects over TCP; sends command `0x0101`, then
+     `0x0100`, which answers `10` (or `00`); and writes the job over TCP. Half a second passes
+     after starting, after connecting and before writing, as sr5900p waits.
+  4. It asks for status every half second until the printer is no longer printing, and then stops
+     the job (3), which answers `03 00 00`. A job that fails after starting is stopped too.
+
+  The job counts as printed once the printer stops printing, not once it has taken the stream.
 
 **Not yet known,** and the first things to watch on a real printer:
 
+- whether the LW-PX800 takes jobs over plain `tcp`, or needs `?protocol=tprt`, and whether its
+  status is laid out as the SR5900P's;
+- the LW-PX800's printable dots, and what its half cut does with each `cut_after`;
 - the printable dots of every width but 12 mm;
 - whether a Bluetooth job needs its status read. BAM! asks for status, as Epson's app does, but
   reads none;
@@ -1231,7 +1265,7 @@ Each printer has a `connection`, `{"type": ..., "address": ...}`, saying how BAM
 
 | Type | Address | Use |
 |---|---|---|
-| `tcp` | `host` or `host:port` (default 9100) | Network printers, and USB printers shared by a raw print server such as `p910nd`. |
+| `tcp` | `host` or `host:port` (default 9100), then optionally `?protocol=tprt` | Network printers, and USB printers shared by a raw print server such as `p910nd`. The `tprt` protocol sends the job after a handshake over UDP, for Epson's LabelWorks printers that need one (see [`epson_labelworks`](#epson_labelworks)); only that driver takes it. |
 | `device` | A device path on the BAM server, such as `/dev/usb/lp0` (Linux) or `/dev/ulpt0` (FreeBSD), then optionally `?protocol=niimbot` | A USB printer plugged into the BAM server. The path must match a pattern in the server's `[printers] devices` setting, which is empty by default: otherwise anyone who can manage printers could make BAM write to any file it can open. BAM never creates the file, and needs permission to write the device (on Linux, usually membership of the `lp` group). A protocol sends the job in a conversation with the printer, reading its answers ([`niimbot`](#niimbot)); a driver that needs one fills it in. |
 | `ipp` | `ipp://host[:port]/path`, or `ipps`, `http`, `https` | A queue on CUPS or another IPP server, such as a USB printer shared from another machine. The job is sent as `application/octet-stream`, so the queue must be raw (CUPS: `lpadmin -m raw`; CUPS 2.x still supports raw queues though it marks them deprecated). CUPS can also forward a raw queue to a Windows shared printer through its `smb://` backend. |
 | `windows` | A Windows printer name or `\\host\share` | When BAM runs on Windows: a local or shared printer, printed through the spooler with the `RAW` datatype. Windows has no device paths for USB printers, so this covers both. |
