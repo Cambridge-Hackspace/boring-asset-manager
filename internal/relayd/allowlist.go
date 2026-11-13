@@ -165,7 +165,7 @@ func (a *Allowlist) Allows(c printers.Connection) error {
 	}
 	switch c.Type {
 	case printers.ConnTCP:
-		host, portText, err := net.SplitHostPort(c.Address)
+		host, portText, err := net.SplitHostPort(printers.TCPHostPort(c.Address))
 		if err != nil {
 			return refuse()
 		}

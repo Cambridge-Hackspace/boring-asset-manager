@@ -534,11 +534,15 @@ func TestEpsonLabelWorksPrintableArea(t *testing.T) {
 		{"LW-C410", "lk-9", 9, 54},
 		{"LW-C410", "lk-12", 12, 72},
 		{"LW-C410", "lk-18", 18, 108},
+		{"LW-PX800", "lk-4", 4, 40},
+		{"LW-PX800", "lk-12", 12, 144},
+		{"LW-PX800", "lk-24", 24, 288},
 	}
 	for _, c := range cases {
-		reach := float64(c.dots) / 180 * 25.4
+		mo, _ := epsonlw.LookupModel(c.model)
+		reach := float64(c.dots) / float64(mo.DPI) * 25.4
 		// Landscape, as tape labels are: 60 mm along the tape, turned.
-		label := LabelSpec{WidthMM: 60, HeightMM: c.width, DPI: 180,
+		label := LabelSpec{WidthMM: 60, HeightMM: c.width, DPI: mo.DPI,
 			Content: []RectMM{{X: 5, Y: 0, Width: 10, Height: c.width}, {X: 20, Y: (c.width - reach) / 2, Width: 10, Height: reach}}}
 		_, f, err := PlanLabel(DriverEpsonLabelWorks, Settings{Model: c.model, Media: c.media}, label)
 		if err != nil {

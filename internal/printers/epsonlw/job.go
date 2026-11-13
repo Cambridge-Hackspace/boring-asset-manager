@@ -52,13 +52,19 @@ const (
 // Cuts lists the cuts.
 func Cuts() []Cut { return []Cut{CutEach, CutEnd, CutNever} }
 
-// bytes are the cut command's parameters, for models without a half cutter.
-func (c Cut) bytes() ([]byte, bool) {
+// bytes are the cut command's parameters. A half cut sends 2 where a full
+// cut sends 1, as tyalie/RE-epson-label-printer reads Epson's app and
+// hikalium/sr5900p sends to the SR5900P.
+func (c Cut) bytes(half bool) ([]byte, bool) {
+	cut := byte(1)
+	if half {
+		cut = 2
+	}
 	switch c {
 	case CutEach:
-		return []byte{1, 1, 1, 1}, true
+		return []byte{cut, cut, 1, 1}, true
 	case CutEnd:
-		return []byte{1, 0, 1, 1}, true
+		return []byte{cut, 0, 1, 1}, true
 	case CutNever:
 		return []byte{0, 0, 0, 0}, true
 	}
@@ -72,6 +78,9 @@ type JobOptions struct {
 	Density int
 	// MarginLines is the tape fed before and after each label.
 	MarginLines int
+	// HalfCut cuts the tape but not its backing, on models with a half
+	// cutter.
+	HalfCut bool
 }
 
 // MinDensity and MaxDensity bound the density, as the command encodes it.
@@ -91,8 +100,14 @@ func DefaultOptions(mo Model) JobOptions {
 
 // Check reports whether the model takes the options.
 func (o JobOptions) Check(mo Model) error {
-	if _, ok := o.Cut.bytes(); !ok {
+	if _, ok := o.Cut.bytes(o.HalfCut); !ok {
 		return fmt.Errorf("cut_after must be %s, %s or %s", CutEach, CutEnd, CutNever)
+	}
+	if o.HalfCut && !mo.HalfCut {
+		return fmt.Errorf("the %s has no half cutter", mo.Name)
+	}
+	if o.HalfCut && o.Cut == CutNever {
+		return fmt.Errorf("half_cut needs cut_after %s or %s", CutEach, CutEnd)
 	}
 	if o.Density < MinDensity || o.Density > MaxDensity {
 		return fmt.Errorf("density must be %d to %d", MinDensity, MaxDensity)
@@ -141,7 +156,7 @@ func EncodeJob(l Layout, pages []*image.Gray, opts JobOptions) ([]byte, error) {
 			return nil, fmt.Errorf("epsonlw: page %d is %d lines long, the %s prints 1-%d", i, b.Dy(), mo.Name, mo.MaxLines())
 		}
 	}
-	cut, _ := opts.Cut.bytes()
+	cut, _ := opts.Cut.bytes(opts.HalfCut)
 
 	var buf bytes.Buffer
 	command(&buf, cmdReset)

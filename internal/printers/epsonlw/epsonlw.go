@@ -31,16 +31,21 @@ type Media struct {
 	WidthMM float64
 }
 
-// printableDots is how many dots print across each width of tape, at 180
-// DPI. Only 12 mm (72 dots) has been measured on a printer, an LW-700; the
-// others are the figures community drivers use, and are provisional until
-// checked on hardware.
-var printableDots = map[float64]int{4: 22, 6: 36, 9: 54, 12: 72, 18: 108, 24: 128}
+// printableDots is how many dots print across each width of tape, at each
+// resolution. At 180 DPI only 12 mm (72 dots) has been measured on a
+// printer, an LW-700; the others are the figures community drivers use. At
+// 360 DPI they are what hikalium/sr5900p measured on KING JIM's Epson-built
+// SR5900P, on its own tape; none has been measured on an Epson printer. All
+// are provisional until checked on hardware.
+var printableDots = map[int]map[float64]int{
+	180: {4: 22, 6: 36, 9: 54, 12: 72, 18: 108, 24: 128},
+	360: {4: 40, 6: 72, 9: 104, 12: 144, 18: 216, 24: 288},
+}
 
 var catalog = map[string]Media{}
 
 func init() {
-	for w := range printableDots {
+	for w := range printableDots[180] {
 		m := Media{ID: fmt.Sprintf("lk-%g", w), Name: fmt.Sprintf("LK tape %g mm", w), WidthMM: w}
 		catalog[m.ID] = m
 	}
@@ -71,17 +76,22 @@ type Model struct {
 	Level int
 	// MinTapeMM and MaxTapeMM bound the tapes it takes.
 	MinTapeMM, MaxTapeMM float64
+	// HalfCut says whether it has a half cutter, which cuts the tape but
+	// not its backing.
+	HalfCut bool
 }
 
 var models = map[string]Model{}
 
 func init() {
-	// Epson's capability levels, resolutions and tapes for each model, as
-	// tyalie/RE-epson-label-printer tabulates them.
+	// Epson's capability levels, resolutions, tapes and half cutters for
+	// each model, as tyalie/RE-epson-label-printer tabulates them. Its table
+	// gives the LW-PX800 tapes to 36 mm; Epson sells it for tapes to 24 mm.
 	for _, m := range []Model{
 		{Name: "LW-600P", DPI: 180, Level: 1, MinTapeMM: 6, MaxTapeMM: 24},
 		{Name: "LW-PX400", DPI: 180, Level: 3, MinTapeMM: 4, MaxTapeMM: 24},
 		{Name: "LW-C410", DPI: 180, Level: 5, MinTapeMM: 4, MaxTapeMM: 18},
+		{Name: "LW-PX800", DPI: 360, Level: 3, MinTapeMM: 4, MaxTapeMM: 24, HalfCut: true},
 	} {
 		models[m.Name] = m
 	}
@@ -119,7 +129,7 @@ func (mo Model) MaxLines() int { return mo.Dots(MaxLengthMM) }
 
 // Takes reports whether the model takes the cartridge, and if not, why.
 func (mo Model) Takes(m Media) error {
-	if _, ok := printableDots[m.WidthMM]; !ok || m.WidthMM < mo.MinTapeMM || m.WidthMM > mo.MaxTapeMM {
+	if _, ok := printableDots[mo.DPI][m.WidthMM]; !ok || m.WidthMM < mo.MinTapeMM || m.WidthMM > mo.MaxTapeMM {
 		return fmt.Errorf("the %s does not take %s", mo.Name, m.Name)
 	}
 	return nil
@@ -139,7 +149,7 @@ func (mo Model) Layout(m Media) (Layout, error) {
 	if err := mo.Takes(m); err != nil {
 		return Layout{}, err
 	}
-	return Layout{Model: mo, Media: m, PrintableDots: printableDots[m.WidthMM]}, nil
+	return Layout{Model: mo, Media: m, PrintableDots: printableDots[mo.DPI][m.WidthMM]}, nil
 }
 
 // Prepare turns a rendered label into a page: rotated if the placement says
