@@ -3,9 +3,11 @@
   import { navigate } from '../lib/router.svelte';
   import { scanTarget } from '../lib/scan';
   import CodeScanner from '../components/CodeScanner.svelte';
+  import TagReader from '../components/TagReader.svelte';
 
   // /scan: looking a code up, by the camera where the browser can read
-  // codes, or typed, pasted or from a USB scanner (docs/scanning.md).
+  // codes, from an NFC tag where it can read those, or typed, pasted or
+  // from a USB scanner (docs/scanning.md).
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let code = $state('');
@@ -33,6 +35,8 @@
       unsupported="This browser cannot read codes with the camera. A phone’s own camera app opens labels whose QR codes link to their scan page."
     />
   </section>
+
+  <TagReader onfound={navigate} />
 
   <form class="space-y-2" onsubmit={lookUp}>
     <label class="label" for="scan-code">Or type the code</label>

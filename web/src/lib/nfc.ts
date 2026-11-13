@@ -121,3 +121,126 @@ export async function readTagSerial(signal?: AbortSignal): Promise<string> {
     signal?.removeEventListener('abort', stop);
   }
 }
+
+/** An NDEF record as Web NFC reads it. */
+export interface TagRecord {
+  recordType: string;
+  data?: DataView | ArrayBuffer | null;
+  encoding?: string | null;
+}
+
+/** A tag held to the phone: its serial number, normalized ('' if none), and the links it holds. */
+export interface TagRead {
+  serial: string;
+  links: string[];
+}
+
+/** The links among a tag's records: URL records, and text records that are links. */
+export function tagLinks(records: readonly TagRecord[] | undefined): string[] {
+  const links: string[] = [];
+  for (const r of records ?? []) {
+    if (!r.data || !['url', 'absolute-url', 'text'].includes(r.recordType)) continue;
+    const bytes = r.data instanceof DataView ? new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength) : new Uint8Array(r.data);
+    let text: string;
+    try {
+      text = new TextDecoder(r.recordType === 'text' && r.encoding ? r.encoding : 'utf-8').decode(bytes).trim();
+    } catch {
+      continue;
+    }
+    if (/^https?:\/\//i.test(text)) links.push(text);
+  }
+  return links;
+}
+
+/**
+ * Where a link read from a tag leads in this instance: the path of the scan
+ * or asset page it names, when it is at one of bases (the server's address,
+ * this page's). Null for a link elsewhere, such as another instance's.
+ */
+export function ownTagPath(link: string, bases: readonly string[]): string | null {
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    return null;
+  }
+  for (const b of bases) {
+    let base: URL;
+    try {
+      base = new URL(b);
+    } catch {
+      continue;
+    }
+    if (url.origin !== base.origin) continue;
+    const prefix = base.pathname.replace(/\/+$/, '');
+    if (!url.pathname.startsWith(prefix + '/')) continue;
+    const m = /^\/(scan|assets)\/([^/]+)\/?$/.exec(url.pathname.slice(prefix.length));
+    if (m) return `/${m[1]}/${m[2]}`;
+  }
+  return null;
+}
+
+/** Listening for tags, and how to stop. */
+export interface TagListener {
+  stop(): void;
+}
+
+type ListeningReader = Omit<Reader, 'addEventListener'> & {
+  addEventListener(type: 'reading', listener: (e: { serialNumber?: string; message?: { records: TagRecord[] } }) => void): void;
+  addEventListener(type: 'readingerror', listener: () => void): void;
+};
+
+/**
+ * Listens for tags while doc is visible: it stops when the page is hidden
+ * and starts again when it is shown, until stop. Each tag read goes to
+ * onread; a tag that can't be read, or listening refused, to onerror.
+ */
+export function listenForTags(onread: (tag: TagRead) => void, onerror: (err: unknown) => void, doc: Document = document): TagListener {
+  const Ctor = readerClass() as (new () => ListeningReader) | undefined;
+  if (!Ctor) throw new Error('This browser cannot read NFC tags.');
+  let running: AbortController | null = null;
+  let stopped = false;
+
+  const start = () => {
+    if (stopped || running || doc.visibilityState === 'hidden') return;
+    const ctl = new AbortController();
+    running = ctl;
+    const reader = new Ctor();
+    reader.addEventListener('reading', (e) => {
+      if (!ctl.signal.aborted) onread({ serial: normalizeUID(e.serialNumber ?? ''), links: tagLinks(e.message?.records) });
+    });
+    reader.addEventListener('readingerror', () => {
+      if (!ctl.signal.aborted) onerror(new Error('That tag could not be read: hold it still against the back of the phone.'));
+    });
+    reader.scan({ signal: ctl.signal }).catch((err: unknown) => {
+      if (ctl.signal.aborted) return;
+      if (running === ctl) running = null;
+      onerror(err);
+    });
+  };
+  const pause = () => {
+    running?.abort();
+    running = null;
+  };
+  const onVisibility = () => (doc.visibilityState === 'hidden' ? pause() : start());
+
+  doc.addEventListener('visibilitychange', onVisibility);
+  start();
+  return {
+    stop() {
+      stopped = true;
+      pause();
+      doc.removeEventListener('visibilitychange', onVisibility);
+    },
+  };
+}
+
+/** Whether this site may already use NFC, so listening needs no prompt. */
+export async function nfcAllowed(): Promise<boolean> {
+  try {
+    const status = await navigator.permissions.query({ name: 'nfc' as PermissionName });
+    return status.state === 'granted';
+  } catch {
+    return false;
+  }
+}
