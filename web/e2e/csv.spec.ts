@@ -24,14 +24,14 @@ test('export assets, edit the file, and import it back', async ({ signedIn: page
   expect(exported.charCodeAt(0)).toBe(0xfeff);
   const lines = exported.slice(1).trim().split('\r\n');
   expect(lines).toHaveLength(2);
-  expect(lines[0]).toBe(`id,name,categories,code.qr,code.micro_qr,code.code128,field.${fieldKey}`);
-  expect(lines[1]).toBe(`${saw.asset.asset.id},Saw ${tag},Shop ${tag} > Saws,,,,sharp`);
+  expect(lines[0]).toBe(`id,name,categories,code.qr,code.micro_qr,code.code128,code.nfc,field.${fieldKey}`);
+  expect(lines[1]).toBe(`${saw.asset.asset.id},Saw ${tag},Shop ${tag} > Saws,,,,,sharp`);
 
   // Change the saw, add a row, and a column the importer does not know.
   const edited =
     `${lines[0]},Notes\r\n` +
-    `${saw.asset.asset.id},,,,,,blunt,ignored\r\n` +
-    `,File ${tag},Shop ${tag} > Saws,,,F-${tag},,ignored\r\n`;
+    `${saw.asset.asset.id},,,,,,,blunt,ignored\r\n` +
+    `,File ${tag},Shop ${tag} > Saws,,,F-${tag},,,ignored\r\n`;
 
   await page.getByRole('link', { name: 'Import CSV' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Import assets');
