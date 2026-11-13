@@ -267,7 +267,7 @@ func TestDriversDescribeEveryRoll(t *testing.T) {
 		t.Fatalf("Niimbot driver info = %+v", nb)
 	}
 	zpl, epl2 := by[DriverZPL], by[DriverEPL2]
-	if len(zpl.Media) != len(zebra.MediaIDs()) || len(zpl.Options) != 6 || len(zpl.Models) != len(zebra.Models(zebra.ZPL)) || zpl.ModelDPI["Zebra GX430t"] != 300 {
+	if len(zpl.Media) != len(zebra.MediaIDs()) || len(zpl.Options) != 9 || len(zpl.Models) != len(zebra.Models(zebra.ZPL)) || zpl.ModelDPI["Zebra GX430t"] != 300 {
 		t.Fatalf("ZPL driver info = %+v", zpl)
 	}
 	if len(epl2.Options) != 1 || len(epl2.Models) != len(zebra.Models(zebra.EPL2)) || epl2.ModelDPI["Zebra LP 2824"] != 203 {

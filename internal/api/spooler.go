@@ -197,6 +197,10 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 
 	out := store.SpoolOutcome{Printer: p.Name, Problems: map[string]string{}, Moves: map[string]string{}}
 	images := s.newLabelImages(ctx)
+	tags, err := s.tagWriterFor(plan)
+	if err != nil {
+		return store.SpoolOutcome{Failure: "The RFID settings could not be read: " + err.Error()}
+	}
 	rendered := newLabelJob(plan)
 	// The asset of the last label laid out, which a display shows.
 	var last string
@@ -219,7 +223,15 @@ func (s *Server) printBatch(ctx context.Context, b *store.SpoolBatch) store.Spoo
 			}
 			continue
 		}
-		rendered.add(scene, e.Copies)
+		epc, err := tags.epc(e.AssetID)
+		if isTagError(err) {
+			out.Problems[e.ID] = "Could not be produced: " + err.Error()
+			continue
+		}
+		if err != nil {
+			return store.SpoolOutcome{Failure: "These labels' RFID tags could not be made: " + err.Error()}
+		}
+		rendered.add(scene, e.Copies, epc)
 		out.Printed = append(out.Printed, e.ID)
 		last = e.AssetID
 	}

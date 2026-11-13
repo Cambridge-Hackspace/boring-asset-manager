@@ -205,6 +205,14 @@ export interface ReviewSummary {
   to_verify: number;
 }
 
+/** How asset codes are written to long-range RFID tags (docs/rfid.md). */
+export interface RFIDSettings {
+  scheme: 'text' | 'giai-96' | 'giai-202';
+  company_prefix: string;
+  filter: number;
+  code_type: string;
+}
+
 /** The instance's review settings. */
 export interface ReviewSettings {
   assistant_drafts: boolean;

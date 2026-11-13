@@ -516,6 +516,8 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/settings/loan-reminders", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetLoanReminderSettings)))
 	handle("GET /api/v1/settings/review", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleReviewSettings)))
 	handle("PUT /api/v1/settings/review", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetReviewSettings)))
+	handle("GET /api/v1/settings/rfid", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleRFIDSettings)))
+	handle("PUT /api/v1/settings/rfid", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetRFIDSettings)))
 	handle("GET /api/v1/settings/lasers", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleLaserCameraSettings)))
 	handle("PUT /api/v1/settings/lasers", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetLaserCameraSettings)))
 	// The installed app (docs/installing.md#on-a-phone): its settings, read by

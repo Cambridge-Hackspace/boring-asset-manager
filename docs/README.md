@@ -20,6 +20,7 @@ These pages describe how BAM! works, for people running it and for people workin
 - [Labels](labels.md): label templates, content bindings, codes and output formats.
 - [Template editor](template-editor.md): the label editor, its tools and shortcuts.
 - [Printing](printing.md): printers, label stock, printer drivers and connections, and the print queue.
+- [RFID tags](rfid.md): writing long-range tags while printing, and finding assets by them.
 - [Icons](icons.md): isometric icons written in isolex, and how BAM! compiles and draws them.
 - [Stock and lending](stock-and-lending.md): running low, quantities and weights, asset history, and loans.
 - [Review states](review.md): draft, confirmed and verified assets, dates to review by, and assistants' changes landing as drafts.

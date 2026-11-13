@@ -254,12 +254,19 @@ func checkPages(mo Model, pages []*image.Gray) error {
 // runs groups a job's pages: a run of the same page is printed as copies
 // of one.
 func runs(pages []*image.Gray, each func(page *image.Gray, copies int) error) error {
-	for i := 0; i < len(pages); {
+	same := func(a, b int) bool { return pages[a] == pages[b] }
+	return runsBy(len(pages), same, func(i, copies int) error { return each(pages[i], copies) })
+}
+
+// runsBy groups n labels into runs of those the same as the first, each
+// given by its first's index.
+func runsBy(n int, same func(a, b int) bool, each func(first, copies int) error) error {
+	for i := 0; i < n; {
 		copies := 1
-		for i+copies < len(pages) && pages[i+copies] == pages[i] {
+		for i+copies < n && same(i, i+copies) {
 			copies++
 		}
-		if err := each(pages[i], copies); err != nil {
+		if err := each(i, copies); err != nil {
 			return err
 		}
 		i += copies

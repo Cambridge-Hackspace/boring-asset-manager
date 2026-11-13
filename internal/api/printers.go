@@ -330,9 +330,24 @@ func (s *Server) preparePrint(w http.ResponseWriter, r *http.Request, printerID 
 	if !ok {
 		return nil, false
 	}
+	tags, err := s.tagWriterFor(plan)
+	if err != nil {
+		writeServerError(w, err, "read the RFID settings")
+		return nil, false
+	}
 	rendered := newLabelJob(plan)
-	for _, scene := range scenes {
-		rendered.add(scene, req.Copies)
+	for i, scene := range scenes {
+		// layoutBatch answers itself unless every asset laid out, in order.
+		epc, err := tags.epc(req.AssetIDs[i])
+		if isTagError(err) {
+			writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+			return nil, false
+		}
+		if err != nil {
+			writeServerError(w, err, "find the RFID tag's EPC")
+			return nil, false
+		}
+		rendered.add(scene, req.Copies, epc)
 	}
 	data, err := rendered.encode()
 	if err != nil {
@@ -483,8 +498,22 @@ func (s *Server) handleTestPrint(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, err, "render the test print")
 		return
 	}
+	tags, err := s.tagWriterFor(plan)
+	if err != nil {
+		writeServerError(w, err, "read the RFID settings")
+		return
+	}
+	epc, err := tags.epc(req.AssetID)
+	if isTagError(err) {
+		writeJSONError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	if err != nil {
+		writeServerError(w, err, "find the RFID tag's EPC")
+		return
+	}
 	one := newLabelJob(plan)
-	one.add(scene, 1)
+	one.add(scene, 1, epc)
 	job, err := one.encode()
 	if err != nil {
 		writeServerError(w, err, "encode the test print")
@@ -511,6 +540,9 @@ type labelJob struct {
 	inks  printers.InkPlan
 	gray  []*image.Gray
 	color []*image.Paletted
+	// epcs are each gray label's RFID tag's EPC (docs/rfid.md), "" for
+	// none.
+	epcs []string
 }
 
 func newLabelJob(plan printers.Plan) *labelJob {
@@ -521,8 +553,9 @@ func newLabelJob(plan printers.Plan) *labelJob {
 	return j
 }
 
-// add draws a label, to print copies of.
-func (j *labelJob) add(scene *render.Scene, copies int) {
+// add draws a label, to print copies of, each with its RFID tag written
+// with epc where the printer writes tags.
+func (j *labelJob) add(scene *render.Scene, copies int, epc string) {
 	if j.inks != nil {
 		img := scene.RasterInks(j.inks.Palette())
 		for range copies {
@@ -533,6 +566,7 @@ func (j *labelJob) add(scene *render.Scene, copies int) {
 	img := scene.Raster(true)
 	for range copies {
 		j.gray = append(j.gray, img)
+		j.epcs = append(j.epcs, epc)
 	}
 }
 
@@ -543,6 +577,9 @@ func (j *labelJob) len() int { return len(j.gray) + len(j.color) }
 func (j *labelJob) encode() ([]byte, error) {
 	if j.inks != nil {
 		return j.inks.EncodeInks(j.color)
+	}
+	if p, ok := j.plan.(printers.TagPlan); ok && p.EncodesTags() {
+		return p.EncodeTagged(j.gray, j.epcs)
 	}
 	return j.plan.Encode(j.gray)
 }
