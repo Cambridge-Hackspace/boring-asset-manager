@@ -4,7 +4,7 @@ Scanning an asset's label opens its **scan page**: what it is, where it is, what
 
 A phone's camera opens a label whose QR code holds its scan link, `{{scan_url}}`. New QR codes in the template editor hold it already, and the editor warns about a QR code that does not hold a link: a phone scanning it sees only the code. Each asset's page links to its scan page too.
 
-The **Scan** page, in the menu, looks a code up: type or paste it (or its scan link), let a USB scanner type it, or, in browsers that can read codes, scan it with the camera. The home page has a box for it as well. Installed on a phone, BAM! offers **Scan** from its icon (see [Installing on a phone](/help/install)).
+The **Scan** page, in the menu, looks a code up: type or paste it (or its scan link), let a USB scanner type it, or, in browsers that can read codes, scan it with the camera. In Chrome on Android it reads NFC tags too (see [NFC tags](/help/nfc)). The home page has a box for it as well. Installed on a phone, BAM! offers **Scan** from its icon (see [Installing on a phone](/help/install)).
 
 ## Scan templates
 

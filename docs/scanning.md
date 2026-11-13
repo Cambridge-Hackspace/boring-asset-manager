@@ -74,6 +74,20 @@ The link is `[server] base_url` followed by `/scan/` and the asset's ID, or the 
 was opened at where `base_url` is not set. Like a printed QR code, a tag goes on holding the
 address it was written with: when the server moves, write its tags again.
 
+The **Scan** page reads tags as well, where the browser has Web NFC. **Read NFC tags** starts
+listening (`NDEFReader.scan`), which asks the person to allow NFC; where the browser says NFC is
+allowed already (`navigator.permissions`), the page listens as soon as it opens. It listens only
+while the page is open and visible: it stops when the page is hidden or left, and starts again
+when it is shown. Elsewhere the page doesn't offer it. For each tag held to the phone it opens:
+
+1. the asset or scan page a URL record (or a text record holding a link) names, when the link is
+   at `base_url` or the address the page was opened at, in the app, so that the offline copy
+   answers with no connection;
+2. else the scan page for the tag's serial number, when that is an asset's `nfc` code (looked up
+   on the server, or in the offline copy with no connection).
+
+Any other tag, such as one holding another instance's link, says so and opens nothing.
+
 A tag holds only a link, which anyone can read and copy. It identifies an asset; signing in is
 what protects what the scan page shows.
 
