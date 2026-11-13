@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/sve
 import TemplateEditor from './TemplateEditor.svelte';
 import { fakeApi } from '../../test/fetch';
 import { session } from '../../lib/session.svelte';
-import type { TemplateDoc } from '../../lib/template';
+import { NFC_MARK_D, type TemplateDoc } from '../../lib/template';
 
 const template: TemplateDoc = {
   id: 'ql90',
@@ -669,6 +669,19 @@ describe('TemplateEditor', () => {
     expect(screen.getByRole('menuitem', { name: 'Copy ID' }).hasAttribute('disabled')).toBe(true);
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Find an action… (Ctrl+Enter)' }));
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('adds the NFC mark from the action search', async () => {
+    const { sent } = api();
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'Template menu' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Find an action… (Ctrl+Enter)' }));
+    await fireEvent.input(screen.getByRole('combobox', { name: 'Search actions' }), { target: { value: 'contactless' } });
+    await fireEvent.pointerDown(screen.getByRole('option', { name: 'Add the NFC mark' }));
+    const body = await saved(sent);
+    expect(body.elements[1]).toMatchObject({ type: 'shape', shape: 'path', name: 'NFC mark', d: NFC_MARK_D, fill: 'black', stroke: 'none' });
+    expect(body.elements[1]!.width).toBe(body.elements[1]!.height);
   });
 
   it('saves, and shows save errors on the element they name', async () => {

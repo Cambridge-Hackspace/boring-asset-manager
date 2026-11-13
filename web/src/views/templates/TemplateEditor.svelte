@@ -15,6 +15,7 @@
     inListOrder,
     moveElements,
     newElement,
+    newNFCMark,
     newShape,
     placeholders,
     turnTemplate,
@@ -525,6 +526,7 @@
       ...(Object.keys(toolNames) as Tool[])
         .filter((t) => t !== 'path')
         .map((t) => ({ name: `${toolNames[t]} tool`, keywords: 'tool draw add', run: () => (editor.tool = t) })),
+      { name: 'Add the NFC mark', keywords: 'nfc tag contactless symbol n-mark add', run: () => editor.add(newNFCMark(doc)) },
       { name: 'Save', run: () => void save() },
       editor.canUndo && { name: 'Undo', keys: 'Ctrl+Z', run: () => editor.undo() },
       editor.canRedo && { name: 'Redo', keys: 'Ctrl+Shift+Z', run: () => editor.redo() },
