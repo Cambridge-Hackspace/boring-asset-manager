@@ -18,6 +18,7 @@
   import ConditionBadge from '../../components/ConditionBadge.svelte';
   import ConflictMark from '../../components/ConflictMark.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
+  import WriteTag from '../../components/WriteTag.svelte';
   import ReportProblemForm from '../../components/ReportProblemForm.svelte';
   import SignInToSee from '../../components/SignInToSee.svelte';
   import HookButtons from '../../components/HookButtons.svelte';
@@ -415,6 +416,7 @@
             <dt class="text-zinc-600 dark:text-zinc-400">Scan page</dt>
             <dd>
               <a class="inline-flex min-h-11 items-center underline" href="/scan/{encodeURIComponent(asset.asset.id)}">What scanning it shows</a>
+              {#if !archived && session.can('labels.print')}<div class="mt-1"><WriteTag assetId={asset.asset.id} /></div>{/if}
               {#if asset.scan_template?.conflict}
                 <span class="block"><ConflictMark /> Its template was chosen by a tie between categories as close to it as each other.
                 <a class="underline" href="/categories">Name a template on one of them</a> to settle it.</span>
