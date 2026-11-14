@@ -28,6 +28,10 @@
   let { params: _params }: { params: Record<string, string> } = $props();
 
   let assets = $state<AssetWithDetails[]>([]);
+  // Why each asset matched the search other than as typed, by ID, and
+  // related terms to search for instead (docs/data-model.md#related-terms).
+  let matched = $state<Record<string, string>>({});
+  let suggestions = $state<string[]>([]);
   let categories = $state<Category[]>([]);
   let loading = $state(true);
   let error = $state('');
@@ -115,15 +119,19 @@
     applied = { search, categoryId };
     shownFilter = filterParams();
     try {
-      const found = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
+      const res = await request<{ assets: AssetWithDetails[]; matched?: Record<string, string>; suggestions?: string[] }>('GET', `/assets?${q}`);
       if (mine !== loads) return;
-      assets = found;
+      assets = res.assets ?? [];
+      matched = res.matched ?? {};
+      suggestions = res.suggestions ?? [];
       problem = null;
       selected = selected.filter((id) => assets.some((a) => a.asset.id === id));
     } catch (err) {
       if (mine !== loads) return;
       problem = err instanceof ApiError ? queryProblemOf(err.body) : null;
       problemQuery = search.trim();
+      matched = {};
+      suggestions = [];
       if (problem) assets = [];
       else error = messageOf(err);
     } finally {
@@ -297,6 +305,13 @@
   </p>
 {/if}
 
+{#if !loading && suggestions.length}
+  <p class="mb-3 text-sm" data-testid="search-suggestions">
+    Related:
+    {#each suggestions as s, i (s)}{#if i > 0},{' '}{/if}<button type="button" class="underline" onclick={() => ((search = s), applyFilters())}>{s}</button>{/each}
+  </p>
+{/if}
+
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading assets…</p>
 {:else if assets.length === 0}
@@ -339,6 +354,7 @@
             <td class="py-2 pr-4 font-medium">
               <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.review}{' '}<span class={a.review.overdue ? 'chip-red' : reviewChip(a.review.state)} title={dueText(a.review) || undefined}>{reviewLabel(a.review.state)}{a.review.overdue ? ', review overdue' : a.review.due ? ', review due' : ''}</span>{/if}{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
+              {#if matched[a.asset.id]}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400" data-testid="match-why">Found as {matched[a.asset.id]}</span>{/if}
             </td>
             <td class="py-2 pr-4">
               {#if a.location.length}

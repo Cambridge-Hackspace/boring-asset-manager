@@ -52,6 +52,7 @@ import ScanPage from './views/ScanPage.svelte';
 import ScanLookupPage from './views/ScanLookupPage.svelte';
 import HelpPage from './views/HelpPage.svelte';
 import RelationsPage from './views/RelationsPage.svelte';
+import TermsPage from './views/TermsPage.svelte';
 import HooksPage from './views/HooksPage.svelte';
 import IconsPage from './views/icons/IconsPage.svelte';
 import FlowsPage from './views/flows/FlowsPage.svelte';
@@ -123,6 +124,7 @@ export const routes: Route[] = [
   { pattern: '/orders/:id/receive', component: ReceivePage, title: 'Receive an order', permissions: ['assets.read'] },
   { pattern: '/fields', component: FieldsPage, title: 'Fields', permissions: ['categories.manage'], nav: 'Fields', group: 'Catalog' },
   { pattern: '/relations', component: RelationsPage, title: 'Link types', permissions: ['categories.manage'], nav: 'Link types', group: 'Catalog' },
+  { pattern: '/terms', component: TermsPage, title: 'Search terms', permissions: ['terms.manage'], nav: 'Search terms', group: 'Catalog' },
   { pattern: '/hooks', component: HooksPage, title: 'Hooks', permissions: ['categories.manage'], nav: 'Hooks', group: 'Catalog' },
   { pattern: '/icons', component: IconsPage, title: 'Icons', permissions: ['categories.manage', 'icons.manage'], nav: 'Icons', group: 'Catalog' },
   { pattern: '/templates', component: TemplatesPage, title: 'Templates', permissions: ['templates.manage'], nav: 'Templates', group: 'Labels' },

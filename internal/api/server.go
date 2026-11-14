@@ -299,6 +299,20 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("DELETE /api/v1/tokens/{id}", seeTokens(s.handleRevokeToken))
 	handle("GET /api/v1/tokens/connections", seeTokens(s.handleLiveConnections))
 
+	// Related terms, which search expands through (docs/data-model.md#related-terms)
+	readTerms := RequirePermission(rbac.PermAssetsRead)
+	manageTerms := RequirePermission(rbac.PermTermsManage)
+	handle("GET /api/v1/terms", readTerms(http.HandlerFunc(s.handleListTerms)))
+	handle("GET /api/v1/terms/expand", readTerms(http.HandlerFunc(s.handleExpandTerms)))
+	handle("POST /api/v1/terms", manageTerms(http.HandlerFunc(s.handleCreateTerm)))
+	handle("GET /api/v1/terms/{id}", readTerms(http.HandlerFunc(s.handleGetTerm)))
+	handle("PUT /api/v1/terms/{id}", manageTerms(http.HandlerFunc(s.handleUpdateTerm)))
+	handle("DELETE /api/v1/terms/{id}", manageTerms(http.HandlerFunc(s.handleDeleteTerm)))
+	handle("PUT /api/v1/terms/{id}/links/{relation}/{other}", manageTerms(http.HandlerFunc(s.handleLinkTerms)))
+	handle("DELETE /api/v1/terms/{id}/links/{relation}/{other}", manageTerms(http.HandlerFunc(s.handleUnlinkTerms)))
+	handle("POST /api/v1/terms/imports", manageTerms(http.HandlerFunc(s.handleImportTerms)))
+	handle("DELETE /api/v1/terms/imports/{id}", manageTerms(http.HandlerFunc(s.handleDeleteTermImport)))
+
 	// Field Corpus endpoints
 	handle("GET /api/v1/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListFields)))
 	handle("POST /api/v1/fields", RequirePermission(rbac.PermCategoriesManage)(http.HandlerFunc(s.handleCreateField)))

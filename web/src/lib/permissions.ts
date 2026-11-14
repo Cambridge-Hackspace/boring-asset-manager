@@ -26,6 +26,7 @@ export const permissions: { key: Permission; label: string; description: string 
   { key: 'flows.manage', label: 'Manage flows', description: 'Make and change flows, offering no more than they may do themselves.' },
   { key: 'categories.manage', label: 'Manage categories', description: 'Create and edit categories and fields, and draw their icons.' },
   { key: 'vendors.manage', label: 'Manage vendors', description: 'Create and edit vendors, their contacts and their attachments, in the scopes they are in.' },
+  { key: 'terms.manage', label: 'Manage search terms', description: 'Add, change and remove the related terms search expands through, and imports of them, themselves or through their own assistant.' },
   { key: 'icons.manage', label: 'Manage icons', description: 'Change what every icon is drawn with: the shared icon library, the palette and the icon settings.' },
   { key: 'templates.manage', label: 'Manage templates', description: 'Design label templates and upload their images.' },
   { key: 'reports.manage', label: 'Manage reports', description: 'Create, edit and delete saved reports; anyone who reads assets can run them.' },

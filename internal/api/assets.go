@@ -124,19 +124,33 @@ type RestockConflict struct {
 const historyPage = 50
 
 func (s *Server) handleListAssets(w http.ResponseWriter, r *http.Request) {
-	assets, ok := s.filterAssets(w, r, r.URL.Query())
+	var notes searchNotes
+	assets, ok := s.filterAssetsNoted(w, r, r.URL.Query(), &notes)
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"assets": assets,
-	})
+	out := map[string]any{"assets": assets}
+	// Why each asset matched other than as typed, and related terms to
+	// try (docs/data-model.md#related-terms), when there are any.
+	if len(notes.Matched) > 0 {
+		out["matched"] = notes.Matched
+	}
+	if len(notes.Suggestions) > 0 {
+		out["suggestions"] = notes.Suggestions
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // filterAssets lists the assets a query selects, as GET /api/v1/assets
 // takes it, keeping those the request may read. On a bad query or a
 // failure it answers the request itself.
 func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Values) ([]models.AssetWithDetails, bool) {
+	return s.filterAssetsNoted(w, r, q, nil)
+}
+
+// filterAssetsNoted lists assets as filterAssets does, telling notes, when
+// not nil, why each matched the search other than as typed.
+func (s *Server) filterAssetsNoted(w http.ResponseWriter, r *http.Request, q url.Values, notes *searchNotes) ([]models.AssetWithDetails, bool) {
 	// The search is matched once the assets are as the request may see
 	// them, so where they are counts only as far as it may read.
 	search := q.Get("search")
@@ -220,7 +234,7 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	// A search also finds assets by their comments' text, and their
 	// loans' and filings' (docs/comments.md); the assets are already
 	// those the request may read, and so their comments.
-	if assets, err = s.search(r, assets, search, plan, true); err != nil {
+	if assets, err = s.searchNoted(r, assets, search, plan, true, notes); err != nil {
 		searchFailed(w, err)
 		return nil, false
 	}

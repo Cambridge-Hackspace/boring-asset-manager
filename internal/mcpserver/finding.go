@@ -14,7 +14,7 @@ import (
 )
 
 type searchIn struct {
-	Search      string `json:"search,omitempty" jsonschema:"plain words, found as one phrase in an asset's name, codes, field values or comments, or the name of a place it is in at any depth; or a query: comparisons joined by AND, OR, NOT and parentheses, then an optional ORDER BY key [ASC|DESC], such as category = Filament AND field.diameter >= 1.75 AND in ~ 'shelf a' ORDER BY name. Keys: name; code, or code.qr, code.micro_qr, code.code128, code.nfc; category (also finds those below it); in (a place, at any depth); condition (ok, needs_maintenance, out_of_service, problem); loan (open, overdue); assigned (a person's name, or me); favorite and archived (true or false); created, updated; quantity; field.KEY for any field (list_fields gives the keys). Operators: = and != compare whole values, ~ and !~ look for part of one, < <= > >= compare numbers and dates, key IN (a, b), key IS EMPTY, key IS NOT EMPTY. Text ignores case; quote values with spaces. Dates are 2026-03-01, today, now, or a time from now such as -30d (h, d, w, m for months, y). A bare word or quoted phrase inside a query matches as plain words do. A mistake comes back saying what is wrong and where"`
+	Search      string `json:"search,omitempty" jsonschema:"plain words, found as one phrase in an asset's name, codes, field values or comments, or the name of a place it is in at any depth, and then through the related terms (list_terms) they expand to, or, when nothing matches, despite a typing mistake; or a query: comparisons joined by AND, OR, NOT and parentheses, then an optional ORDER BY key [ASC|DESC], such as category = Filament AND field.diameter >= 1.75 AND in ~ 'shelf a' ORDER BY name. Keys: name; code, or code.qr, code.micro_qr, code.code128, code.nfc; category (also finds those below it); in (a place, at any depth); condition (ok, needs_maintenance, out_of_service, problem); loan (open, overdue); assigned (a person's name, or me); favorite and archived (true or false); created, updated; quantity; field.KEY for any field (list_fields gives the keys). Operators: = and != compare whole values, ~ and !~ look for part of one, ~~ does too and also through related terms and despite typing mistakes, < <= > >= compare numbers and dates, key IN (a, b), key IS EMPTY, key IS NOT EMPTY. Text ignores case; quote values with spaces. Dates are 2026-03-01, today, now, or a time from now such as -30d (h, d, w, m for months, y). A bare word or quoted phrase inside a query matches as plain words do. A mistake comes back saying what is wrong and where"`
 	CategoryID  string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
 	Condition   string `json:"condition,omitempty" jsonschema:"ok, needs_maintenance, out_of_service, or problem for either of the last two"`
 	Loan        string `json:"loan,omitempty" jsonschema:"open for assets lent out, overdue for those past due"`
@@ -34,6 +34,9 @@ type searchOut struct {
 	Total  int            `json:"total" jsonschema:"how many assets match"`
 	Assets []assetSummary `json:"assets"`
 	More   int            `json:"more" jsonschema:"how many more match after these; call again with a larger offset"`
+	// Matched and Suggestions come from related terms (list_terms).
+	Matched     map[string]string `json:"matched,omitempty" jsonschema:"why each asset listed matched other than as typed, by its ID, such as TPU, narrower than flexible filament"`
+	Suggestions []string          `json:"suggestions,omitempty" jsonschema:"related terms to search for instead, which were not searched"`
 }
 
 func (in searchIn) query() string {
@@ -124,7 +127,9 @@ func findingTools() []tool {
 			Annotations: readOnly("Search assets"),
 		}, []string{"GET /api/v1/assets"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in searchIn) (reply[searchOut], error) {
 			var res struct {
-				Assets []models.AssetWithDetails `json:"assets"`
+				Assets      []models.AssetWithDetails `json:"assets"`
+				Matched     map[string]string         `json:"matched"`
+				Suggestions []string                  `json:"suggestions"`
 			}
 			if err := e.call(ctx, http.MethodGet, "/api/v1/assets"+in.query(), nil, &res); err != nil {
 				return reply[searchOut]{}, err
@@ -142,12 +147,18 @@ func findingTools() []tool {
 			if err != nil {
 				return reply[searchOut]{}, err
 			}
-			out := searchOut{Total: len(found), More: more, Assets: []assetSummary{}}
+			out := searchOut{Total: len(found), More: more, Assets: []assetSummary{}, Suggestions: res.Suggestions}
 			base := e.baseURL(ctx)
 			var names []string
 			for i := range shown {
 				s := summarize(&shown[i], base)
 				out.Assets = append(out.Assets, s)
+				if why := res.Matched[shown[i].Asset.ID]; why != "" {
+					if out.Matched == nil {
+						out.Matched = map[string]string{}
+					}
+					out.Matched[shown[i].Asset.ID] = why
+				}
 				if len(names) < 10 {
 					names = append(names, describe(s))
 				}
@@ -158,6 +169,9 @@ func findingTools() []tool {
 				if len(found) > len(names) {
 					text += ", …"
 				}
+			}
+			if len(out.Suggestions) > 0 {
+				text += ". Related terms, not searched: " + strings.Join(out.Suggestions, ", ")
 			}
 			return say(out, "%s.", text)
 		}),

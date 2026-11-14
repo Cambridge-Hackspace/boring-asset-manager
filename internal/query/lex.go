@@ -54,8 +54,8 @@ func (t token) keyword(kw string) bool {
 }
 
 // operators are the comparisons, longest first so that `<=` is not read
-// as `<` then `=`. `~~` is kept for matching through related terms (#386),
-// and refused for now.
+// as `<` then `=`. `~~` matches through related terms, and despite typing
+// mistakes (#386).
 var operators = []string{"!=", "!~", "<=", ">=", "~~", "=", "~", "<", ">"}
 
 // wordBreak reports whether r ends a word: space, or a character with a

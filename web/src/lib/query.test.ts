@@ -65,7 +65,9 @@ describe('query', () => {
     expect(byKey['field.keeper']!.kind).toBe('person');
     expect(byKey.favorite).toBeUndefined();
     expect(opsFor(byKey['field.diameter']!).map((o) => o.op)).toEqual(['=', '!=', '<', '<=', '>', '>=', 'IS EMPTY', 'IS NOT EMPTY']);
-    expect(opsFor(byKey.name!).map((o) => o.op)).toEqual(['~', '=', '!=', '!~']);
+    expect(opsFor(byKey.name!).map((o) => o.op)).toEqual(['~', '=', '!=', '!~', '~~']);
+    expect(opsFor(byKey['field.keeper']!).map((o) => o.op)).not.toContain('~~');
+    expect(writeCondition({ key: 'name', op: '~~', value: 'flexible filament' })).toBe('name ~~ "flexible filament"');
     expect(queryKeys([], [], true).some((k) => k.key === 'favorite')).toBe(true);
   });
 
