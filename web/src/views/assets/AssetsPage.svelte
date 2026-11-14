@@ -7,6 +7,7 @@
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type AssetWithDetails, type Category, type Field } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
+  import { configuredPage, searchDirect, straightTo } from '../../lib/search';
   import { session } from '../../lib/session.svelte';
   import { exportUrl } from '../../lib/importing';
   import { graphUrl } from '../../lib/graph';
@@ -67,6 +68,9 @@
   // The filters the list shows, which adding them all to the print queue follows.
   let shownFilter = $state<Record<string, string>>({});
   const canSpool = session.can('labels.print');
+  // Each result offers its configured page, its scan page, beside its own.
+  const canScan = session.can('assets.scan');
+  const scanColumn = $derived(canScan && !archived && assets.some((a) => configuredPage(a)));
 
   const categoryChoices = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const uncategorized = $derived(categories.find((c) => c.id === UNCATEGORIZED));
@@ -81,7 +85,9 @@
     } catch (err) {
       error = messageOf(err);
     }
-    await load();
+    // A search handed here, from the home page or a link, may go straight
+    // to its one result; all=1 lists them, as the way back from it does.
+    await load(router.query.get('all') !== '1');
   });
 
   // Each load is numbered, so a slow answer to an older one cannot replace
@@ -107,7 +113,9 @@
     return q;
   }
 
-  async function load() {
+  // straight: a search just made, which goes straight to its one result
+  // when the person goes straight there (docs/data-model.md#search).
+  async function load(straight = false) {
     const mine = ++loads;
     loading = true;
     error = '';
@@ -117,6 +125,11 @@
     try {
       const found = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
       if (mine !== loads) return;
+      if (straight && found.length === 1 && search.trim() && !archived && (await searchDirect())) {
+        if (mine !== loads) return;
+        navigate(straightTo(found[0]!, search), true);
+        return;
+      }
       assets = found;
       problem = null;
       selected = selected.filter((id) => assets.some((a) => a.asset.id === id));
@@ -150,7 +163,7 @@
     }
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
-    void load();
+    void load(!!event);
   }
 
   // A query from the builder goes in the search box, and is searched for.
@@ -320,6 +333,7 @@
           {/if}
           {#if session.user}<th scope="col" class="w-8 py-2 pr-1"><span class="sr-only">Favorite</span></th>{/if}
           <th scope="col" class="py-2 pr-4">Name</th>
+          {#if scanColumn}<th scope="col" class="py-2 pr-4"><span class="sr-only">Scan page</span></th>{/if}
           <th scope="col" class="py-2 pr-4">Where</th>
           <th scope="col" class="py-2 pr-4">Categories</th>
           <th scope="col" class="py-2 pr-4">Stock</th>
@@ -340,6 +354,8 @@
               <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.review}{' '}<span class={a.review.overdue ? 'chip-red' : reviewChip(a.review.state)} title={dueText(a.review) || undefined}>{reviewLabel(a.review.state)}{a.review.overdue ? ', review overdue' : a.review.due ? ', review due' : ''}</span>{/if}{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
             </td>
+            <!-- The scan page has a column of its own too, for the same reason. -->
+            {#if scanColumn}<td class="py-2 pr-4">{#if configuredPage(a)}<a class="-my-2 inline-flex min-h-11 items-center text-sm underline" href={configuredPage(a)} title="Open {a.asset.name} on its scan page">Scan page</a>{/if}</td>{/if}
             <td class="py-2 pr-4">
               {#if a.location.length}
                 {@const place = a.location[a.location.length - 1]!}

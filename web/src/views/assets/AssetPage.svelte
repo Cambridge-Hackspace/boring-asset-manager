@@ -11,6 +11,7 @@
   import { navigate, router } from '../../lib/router.svelte';
   import { session } from '../../lib/session.svelte';
   import AssetIcon from '../../components/AssetIcon.svelte';
+  import BackToResults from '../../components/BackToResults.svelte';
   import { paramsNote, plainIcon, stateNote, textsNote } from '../../lib/iconStates';
   import CategoryBadge from '../../components/CategoryBadge.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
@@ -303,6 +304,7 @@
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
 {:else if asset}
+  <BackToResults />
   <div class="mb-4 flex flex-wrap items-end justify-between gap-4">
     <div>
       <div class="flex items-center gap-1">

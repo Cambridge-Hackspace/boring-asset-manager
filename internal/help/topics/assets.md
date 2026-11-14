@@ -52,4 +52,8 @@ Attach files under **Attachments** on the asset's page: photos (JPEG or PNG), do
 
 **Archive** an asset you no longer have. It leaves the lists and its codes become free, but its history stays, and it can be restored.
 
+## Going straight to one result
+
+Where a scan template sets up an asset's scan page (see [Scanning](/help/scanning)), the list offers **Scan page** beside its name, to those who may scan it. A search that finds exactly one asset can open it straight away instead of listing it: on its scan page, or its own page where it has none. That page has a link back to **All results**. Whether it does is up to your space, under **Reports**, and you can choose for yourself under **Searching** on [Your account](/account). Changing a filter always shows the list.
+
 See also [Stock](/help/stock), [Lending](/help/loans) and [Importing and exporting](/help/import).

@@ -300,7 +300,8 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     ['/reports', 'Reports'],
     ['/reports/new', 'New report'],
     ['/scan-templates/new', 'New scan template'],
-    [`/reports/${reports[0].id}`, ''],
+    // A report, not a scan template, which another spec may have made and which sorts first.
+    [`/reports/${reports.find((r: { kind: string }) => r.kind !== 'scan').id}`, ''],
     [`/reports/${charts.report.id}`, ''],
     ['/account', 'Your account'],
     ['/help/scanning', 'Scanning'],

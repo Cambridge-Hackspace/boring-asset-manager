@@ -5,6 +5,7 @@
   import { messageOf } from '../../lib/errors';
   import type { Report } from '../../lib/models';
   import { navigate } from '../../lib/router.svelte';
+  import SearchSettings from './SearchSettings.svelte';
   import { session } from '../../lib/session.svelte';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
@@ -124,3 +125,5 @@
     </ul>
   </section>
 {/if}
+
+{#if !loading && session.can('settings.manage')}<SearchSettings />{/if}
