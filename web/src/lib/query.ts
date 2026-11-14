@@ -62,14 +62,42 @@ export function opsFor(k: QueryKey): QueryOp[] {
 }
 
 /**
+ * The categories as choices, each once: by name, or by its path (as
+ * "Shop > Saws", which the server also matches) where categories share a
+ * name, so that each choice says which category it means.
+ */
+export function categoryChoices(categories: Category[]): [string, string][] {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const path = (c: Category): string => {
+    const parts = [c.name];
+    for (let p = c.parent_id ? byId.get(c.parent_id) : undefined, d = 0; p && d < 100; p = p.parent_id ? byId.get(p.parent_id) : undefined, d++) {
+      parts.unshift(p.name);
+    }
+    return parts.join(' > ');
+  };
+  const named = new Map<string, number>();
+  for (const c of categories) named.set(c.name, (named.get(c.name) ?? 0) + 1);
+  const seen = new Set<string>();
+  const out: [string, string][] = [];
+  for (const c of categories) {
+    const value = named.get(c.name)! > 1 ? path(c) : c.name;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    out.push([value, value]);
+  }
+  return out;
+}
+
+/**
  * What a query can search by: the keys every asset has, then each field,
- * by its key. Categories are offered by name; signedIn adds favorites.
+ * by its key. Categories are offered as categoryChoices; signedIn adds
+ * favorites.
  */
 export function queryKeys(fields: Field[], categories: Category[], signedIn: boolean): QueryKey[] {
   const keys: QueryKey[] = [
     { key: 'name', label: 'Name', kind: 'text', emptiable: false },
     { key: 'code', label: 'Code', kind: 'text', emptiable: true },
-    { key: 'category', label: 'Category', kind: 'choice', emptiable: false, choices: categories.map((c) => [c.name, c.name]) },
+    { key: 'category', label: 'Category', kind: 'choice', emptiable: false, choices: categoryChoices(categories) },
     { key: 'in', label: 'Where it is', kind: 'text', emptiable: true },
     {
       key: 'condition',
