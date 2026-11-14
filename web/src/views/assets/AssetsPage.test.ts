@@ -208,6 +208,9 @@ describe('AssetsPage', () => {
     const scanLinks = screen.getAllByRole('link', { name: 'Scan page' });
     expect(scanLinks.map((l) => l.getAttribute('href'))).toEqual(['/scan/a1']);
     expect(scanLinks[0]!.closest('tr')!.textContent).toContain('Drill');
+    // In a column of its own, so the name's cell is named by the name alone.
+    expect(screen.getByRole('cell', { name: 'Drill' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Scan page' })).toBeTruthy();
   });
 
   describe('a search that finds one asset', () => {
