@@ -14,7 +14,7 @@ import "strings"
 //	           | key IS [ NOT ] EMPTY
 //	term       = word | string           (plain search, as the search box)
 //	order      = key [ ASC | DESC ]
-//	op         = "=" | "!=" | "~" | "!~" | "<" | ">" | "<=" | ">="
+//	op         = "=" | "!=" | "~" | "!~" | "~~" | "<" | ">" | "<=" | ">="
 //
 // Keywords are unquoted words in any case. A word or string followed by an
 // operator, IN or IS is a key; otherwise it is a term.
@@ -241,9 +241,6 @@ func (p *parser) primary() (Node, error) {
 	switch n := p.peek(); {
 	case n.kind == tokOp:
 		p.next()
-		if n.text == "~~" {
-			return nil, errAt(n.span, "~~, matching through related words, isn't supported yet: use ~")
-		}
 		v, err := p.value("a value after " + n.text)
 		if err != nil {
 			return nil, err

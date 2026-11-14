@@ -4,7 +4,7 @@ import { routes } from '../routes';
 
 describe('help', () => {
   it('has every topic, titled, in order', () => {
-    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'contracts', 'orders', 'review', 'comments', 'icons', 'links', 'import', 'labels', 'spool', 'rfid', 'displays', 'lasers', 'scanning', 'nfc', 'install', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants']);
+    expect(helpTopics.map((t) => t.slug)).toEqual(['start', 'assets', 'stock', 'loans', 'categories', 'vendors', 'contracts', 'orders', 'review', 'comments', 'icons', 'links', 'terms', 'import', 'labels', 'spool', 'rfid', 'displays', 'lasers', 'scanning', 'nfc', 'install', 'flows', 'hooks', 'reports', 'people', 'notifications', 'relays', 'account', 'assistants']);
     for (const t of helpTopics) expect(t.title, t.slug).not.toBe('');
   });
 
@@ -15,6 +15,7 @@ describe('help', () => {
     }
     expect(helpFor('/assets/import')).toBe('import');
     expect(helpFor('/assets/graph')).toBe('links');
+    expect(helpFor('/terms')).toBe('terms');
     expect(helpFor('/oauth/consent')).toBe('assistants');
     expect(helpFor('/assistant-settings')).toBe('assistants');
     expect(helpFor('/g/workshop')).toBe('assistants');

@@ -75,6 +75,11 @@ const (
 	// machine. An assistant, a flow or an incoming hook never may, whatever
 	// it holds. It is not scopable.
 	PermLasersRun = "lasers.run"
+	// PermTermsManage adds, changes and removes the related terms search
+	// expands through, their links, and imports of them
+	// (docs/data-model.md#related-terms), from the web app or a person's
+	// own assistant over MCP. It is not scopable.
+	PermTermsManage = "terms.manage"
 )
 
 var (
@@ -114,6 +119,7 @@ func AllPermissions() []string {
 		PermAssetsVerify,
 		PermAssistantUse,
 		PermLasersRun,
+		PermTermsManage,
 	}
 }
 

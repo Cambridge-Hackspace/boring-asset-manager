@@ -212,6 +212,25 @@ Reading needs `assets.read`; changing needs `categories.manage`. Deleting is mar
 | `set_category_review` | `categories.manage` | A category's own review settings; each left out takes its parent's. See [Review states](review.md#category-settings). |
 | `set_category_links` | `categories.manage` | The categories a category's members also count in (`implies`), or whose members count in it (`included_by`); each list given replaces that side. See [Pools](stock-and-lending.md#pools). |
 
+### Related terms
+
+The terms search expands through ([Related terms](data-model.md#related-terms)). BAM! runs no
+assistant of its own to fill them in; yours can, as you, and each term and link records that it
+came through it. Ask it to "look through our filament categories and add the terms people might
+search for", then check with `expand_search`.
+
+| Tool | Permission | What it does |
+| :--- | :--- | :--- |
+| `list_terms` | `assets.read` | Every term, its other names and note, the links between them, and where each came from; with `terms.manage`, who added each and the imports. |
+| `get_term` | `assets.read` | |
+| `expand_search` | `assets.read` | What a search for some words also looks for, each with why, and the related terms suggested in its place. |
+| `save_term`, `delete_term` | `terms.manage` | `save_term` adds a term, or changes only what is given of one. |
+| `link_terms`, `unlink_terms` | `terms.manage` | `broader`, `narrower` or `related`. |
+| `import_terms`, `delete_term_import` | `terms.manage` | Many terms and links at once, each naming the terms broader than it and related to it by label, as one import a person can review and remove as one. |
+
+`search_assets` returns `matched`, why each asset listed matched other than as typed, and
+`suggestions`, related terms it did not search. Its query language's `~~` expands through the terms.
+
 ### Vendors
 
 See [Vendors](vendors.md). Reading needs `assets.read`, and shows only the vendors the caller sees;
