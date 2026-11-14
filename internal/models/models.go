@@ -34,6 +34,10 @@ type User struct {
 	// MentionEmails is whether they are emailed when a comment mentions
 	// them (docs/comments.md#mentions). It is on until they turn it off.
 	MentionEmails bool `json:"mention_emails"`
+	// SearchDirect is whether a search that finds exactly one asset opens
+	// it straight away (docs/data-model.md#search): their own choice, or nil
+	// to follow the instance's setting.
+	SearchDirect *bool `json:"search_direct"`
 	// CanSignIn is false for a person without an account
 	// (docs/data-model.md#person-fields): a name to put in fields, with no
 	// password, no identity and no roles, until they first sign in through
