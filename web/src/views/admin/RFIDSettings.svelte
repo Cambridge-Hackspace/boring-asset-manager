@@ -105,7 +105,7 @@
       </div>
     {/if}
     <div class="flex items-center gap-3">
-      <button type="submit" class="btn-secondary" disabled={busy || !loaded}>Save</button>
+      <button type="submit" class="btn-secondary" disabled={busy || !loaded}>Save tag settings</button>
       {#if status}<p role="status" class="text-sm text-green-700 dark:text-green-400">{status}</p>{/if}
     </div>
   </form>

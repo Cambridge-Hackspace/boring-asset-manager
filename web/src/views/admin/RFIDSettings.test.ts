@@ -16,7 +16,7 @@ describe('RFID settings', () => {
     });
     render(RFIDSettings);
     const section = await screen.findByRole('region', { name: 'RFID tags' });
-    const save = within(section).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    const save = within(section).getByRole('button', { name: 'Save tag settings' }) as HTMLButtonElement;
     await vi.waitFor(() => expect(save.disabled).toBe(false));
     expect(within(section).queryByLabelText('GS1 company prefix')).toBeNull();
 
@@ -36,7 +36,7 @@ describe('RFID settings', () => {
     });
     render(RFIDSettings);
     const section = await screen.findByRole('region', { name: 'RFID tags' });
-    const save = within(section).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    const save = within(section).getByRole('button', { name: 'Save tag settings' }) as HTMLButtonElement;
     await vi.waitFor(() => expect(save.disabled).toBe(false));
     expect((within(section).getByLabelText('GS1 company prefix') as HTMLInputElement).value).toBe('0614141');
     await fireEvent.click(save);
