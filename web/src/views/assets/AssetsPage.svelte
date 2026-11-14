@@ -70,6 +70,7 @@
   const canSpool = session.can('labels.print');
   // Each result offers its configured page, its scan page, beside its own.
   const canScan = session.can('assets.scan');
+  const scanColumn = $derived(canScan && !archived && assets.some((a) => configuredPage(a)));
 
   const categoryChoices = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const uncategorized = $derived(categories.find((c) => c.id === UNCATEGORIZED));
@@ -332,6 +333,7 @@
           {/if}
           {#if session.user}<th scope="col" class="w-8 py-2 pr-1"><span class="sr-only">Favorite</span></th>{/if}
           <th scope="col" class="py-2 pr-4">Name</th>
+          {#if scanColumn}<th scope="col" class="py-2 pr-4"><span class="sr-only">Scan page</span></th>{/if}
           <th scope="col" class="py-2 pr-4">Where</th>
           <th scope="col" class="py-2 pr-4">Categories</th>
           <th scope="col" class="py-2 pr-4">Stock</th>
@@ -349,9 +351,11 @@
             <!-- The star has a column of its own, so the name's cell is named by the name alone. -->
             {#if session.user}<td class="py-2 pr-1"><span class="-my-2 inline-block align-middle"><FavoriteStar kind="asset" id={a.asset.id} name={a.asset.name} /></span></td>{/if}
             <td class="py-2 pr-4 font-medium">
-              <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a>{#if canScan && !archived && configuredPage(a)}{' '}<a class="ml-1 inline-flex min-h-11 items-center align-middle text-xs font-normal underline" href={configuredPage(a)} title="Open {a.asset.name} on its scan page">Scan page</a>{/if} <ConditionBadge condition={a.asset.condition} />{#if a.review}{' '}<span class={a.review.overdue ? 'chip-red' : reviewChip(a.review.state)} title={dueText(a.review) || undefined}>{reviewLabel(a.review.state)}{a.review.overdue ? ', review overdue' : a.review.due ? ', review due' : ''}</span>{/if}{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
+              <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.review}{' '}<span class={a.review.overdue ? 'chip-red' : reviewChip(a.review.state)} title={dueText(a.review) || undefined}>{reviewLabel(a.review.state)}{a.review.overdue ? ', review overdue' : a.review.due ? ', review due' : ''}</span>{/if}{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
               {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
             </td>
+            <!-- The scan page has a column of its own too, for the same reason. -->
+            {#if scanColumn}<td class="py-2 pr-4">{#if configuredPage(a)}<a class="-my-2 inline-flex min-h-11 items-center text-sm underline" href={configuredPage(a)} title="Open {a.asset.name} on its scan page">Scan page</a>{/if}</td>{/if}
             <td class="py-2 pr-4">
               {#if a.location.length}
                 {@const place = a.location[a.location.length - 1]!}
