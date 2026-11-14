@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildQuery, opsFor, queryKeys, queryProblemOf, quote, writeCondition } from './query';
-import type { Field } from './models';
+import { buildQuery, categoryChoices, opsFor, queryKeys, queryProblemOf, quote, writeCondition } from './query';
+import type { Category, Field } from './models';
 
 const field = (key: string, label: string, validation_type: Field['validation_type'], options: Field['options'] = null): Field => ({
   id: key,
@@ -67,6 +67,19 @@ describe('query', () => {
     expect(opsFor(byKey['field.diameter']!).map((o) => o.op)).toEqual(['=', '!=', '<', '<=', '>', '>=', 'IS EMPTY', 'IS NOT EMPTY']);
     expect(opsFor(byKey.name!).map((o) => o.op)).toEqual(['~', '=', '!=', '!~']);
     expect(queryKeys([], [], true).some((k) => k.key === 'favorite')).toBe(true);
+  });
+
+  it('offers each category once, by its path where categories share a name', () => {
+    const cat = (id: string, name: string, parent_id: string | null = null) => ({ id, name, parent_id }) as Category;
+    const choices = categoryChoices([cat('a', 'Shop'), cat('b', 'Store'), cat('c', 'Shelf', 'a'), cat('d', 'Shelf', 'b'), cat('e', 'Saws', 'a'), cat('f', 'Bin'), cat('g', 'Bin')]);
+    expect(choices).toEqual([
+      ['Shop', 'Shop'],
+      ['Store', 'Store'],
+      ['Shop > Shelf', 'Shop > Shelf'],
+      ['Store > Shelf', 'Store > Shelf'],
+      ['Saws', 'Saws'],
+      ['Bin', 'Bin'],
+    ]);
   });
 
   it('reads where a query went wrong from an error', () => {
