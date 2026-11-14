@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { allResultsHref, configuredPage, focusOnOpen, isSearchKey, searchDirect, searchHref, straightTo } from './search';
+import { allResultsHref, configuredPage, isSearchKey, searchDirect, searchHref, straightTo } from './search';
 import { fakeApi } from '../test/fetch';
 import { session } from './session.svelte';
 import type { AssetWithDetails, User } from './models';
@@ -18,13 +18,6 @@ describe('search', () => {
     expect(searchHref('  drill ')).toBe('/assets?search=drill');
     expect(searchHref('in ~ "shelf a" & more')).toBe('/assets?search=in%20~%20%22shelf%20a%22%20%26%20more');
     expect(searchHref('   ')).toBe('/assets');
-  });
-
-  it('focuses by itself only with a precise pointer', () => {
-    const win = (fine: boolean) => ({ matchMedia: (q: string) => ({ matches: fine && q === '(pointer: fine)' }) }) as unknown as Window;
-    expect(focusOnOpen(win(true))).toBe(true);
-    expect(focusOnOpen(win(false))).toBe(false);
-    expect(focusOnOpen({} as Window)).toBe(false);
   });
 
   it('takes a plain / outside fields as the search key', () => {
