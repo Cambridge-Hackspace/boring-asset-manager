@@ -16,6 +16,7 @@ export const kindLabels: Record<StepKind, string> = {
   change: 'Change',
   confirm: 'Confirm',
   done: 'Done',
+  search: 'Search',
 };
 
 export const kindHelp: Record<StepKind, string> = {
@@ -29,6 +30,7 @@ export const kindHelp: Record<StepKind, string> = {
   change: 'Archives it, sets its condition, lends or returns it, moves it to a place or another category, triggers a hook, or confirms it where review states are on.',
   confirm: 'Shows what will happen, and asks to go ahead.',
   done: 'Says what was done, with Start again for the next person.',
+  search: 'A search box over the flow’s categories, whose results show as the asset list shows them.',
 };
 
 /**
@@ -83,6 +85,7 @@ const stepBases: Record<StepKind, string> = {
   change: 'change',
   confirm: 'confirm',
   done: 'done',
+  search: 'search',
 };
 
 /** An ID for a new step of a kind, unique among these. */
@@ -380,7 +383,9 @@ export interface FlowCatalog {
 export function checkFlow(d: Definition, catalog?: FlowCatalog): FlowProblem[] {
   const out: FlowProblem[] = [];
   if (!d.category_ids.length) out.push({ message: 'Choose at least one category to file into or take from.' });
-  if (!d.steps.length || d.steps[d.steps.length - 1]!.kind !== 'done') out.push({ message: 'A flow ends with a Done step.' });
+  const searching = d.steps.length === 1 && d.steps[0]!.kind === 'search';
+  if (!searching && (!d.steps.length || d.steps[d.steps.length - 1]!.kind !== 'done')) out.push({ message: 'A flow ends with a Done step.' });
+  if (d.public && !searching) out.push({ message: 'Only a flow that searches can be open to signed-out visitors.' });
   let category = d.category_ids.length === 1;
   let asset = false;
   let filing = d.category_ids;
@@ -521,10 +526,20 @@ export function checkFlow(d: Definition, catalog?: FlowCatalog): FlowProblem[] {
       case 'done':
         if (i !== d.steps.length - 1) bad('Done is the last step.');
         break;
+      case 'search': {
+        if (d.steps.length !== 1) bad('A Search is its flow’s only step.');
+        const wait = s.reset_after ?? 0;
+        if (wait !== 0 && (wait < minResetAfter || wait > maxResetAfter)) bad(`It clears after ${minResetAfter} to ${maxResetAfter} seconds unused, or never (0).`);
+        break;
+      }
     }
   });
   return out;
 }
+
+/** The least and most a Search step waits, unused, before it clears, as the server allows (flows.MinResetAfter). */
+export const minResetAfter = 10;
+export const maxResetAfter = 86400;
 
 /** Whether a template, such as {owner}: {what}, names a value. */
 function names(template: string | undefined, key: string): boolean {

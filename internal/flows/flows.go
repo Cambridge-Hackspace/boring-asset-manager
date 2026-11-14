@@ -35,10 +35,11 @@ const (
 	KindChange         = "change"
 	KindConfirm        = "confirm"
 	KindDone           = "done"
+	KindSearch         = "search"
 )
 
 // Kinds lists the kinds of step, in the order an editor offers them.
-var Kinds = []string{KindChooseCategory, KindForm, KindSetFields, KindFind, KindCreate, KindLink, KindLabel, KindChange, KindConfirm, KindDone}
+var Kinds = []string{KindChooseCategory, KindForm, KindSetFields, KindFind, KindCreate, KindLink, KindLabel, KindChange, KindConfirm, KindDone, KindSearch}
 
 // Definition is what a flow does: the categories it files into or takes
 // from, and its steps, in order.
@@ -51,7 +52,28 @@ type Definition struct {
 	// LeaveUntil is the key of a date field: what the flow files is
 	// overdue once that date has passed, and announced as such once.
 	LeaveUntil string `json:"leave_until,omitempty"`
+	// Public lets signed-out visitors run it, as the public role, such as
+	// on a kiosk (#397). Only a flow that only searches may be public.
+	Public bool `json:"public,omitempty"`
 }
+
+// SearchOnly is the Search step of a flow whose one step it is, or nil.
+func (d *Definition) SearchOnly() *Step {
+	if len(d.Steps) == 1 && d.Steps[0].Kind == KindSearch {
+		return &d.Steps[0]
+	}
+	return nil
+}
+
+// ResultColumns are what a Search step's results may show beside each
+// asset's name, in the order the asset list shows them.
+var ResultColumns = []string{"where", "categories", "stock", "codes"}
+
+// The least and most time a Search step waits, unused, before it clears.
+const (
+	MinResetAfter = 10
+	MaxResetAfter = 86400
+)
 
 // Step is one step of a flow. Which of its settings apply depends on its
 // kind; the others are ignored.
@@ -118,6 +140,16 @@ type Step struct {
 
 	// Change: what happens to the asset, in order.
 	Changes []Change `json:"changes,omitempty"`
+
+	// Search (#397): a search box over the flow's categories, whose
+	// results are the asset list's. Filter, plain words or a query
+	// (docs/data-model.md#queries), narrows every search; Columns are what
+	// the results show beside each name (where and categories when none
+	// are chosen); ResetAfter, in seconds, clears the search after that
+	// long unused, for a kiosk, and 0 never does.
+	Filter     string   `json:"filter,omitempty"`
+	Columns    []string `json:"columns,omitempty"`
+	ResetAfter int      `json:"reset_after,omitempty"`
 }
 
 // Condition holds when a value of the run is, is not, is set or is not
@@ -475,6 +507,8 @@ func (d *Definition) Permissions() []string {
 	set := map[string]bool{}
 	for _, s := range d.Steps {
 		switch s.Kind {
+		case KindSearch:
+			set[rbac.PermAssetsRead] = true
 		case KindFind:
 			set[rbac.PermAssetsRead] = true
 			if slices.Contains(s.FindBy, FindScan) {
@@ -1004,12 +1038,31 @@ func (d *Definition) Check(c Catalog) []Problem {
 			if i != len(d.Steps)-1 {
 				bad("Done is the last step")
 			}
+		case KindSearch:
+			if len(d.Steps) != 1 {
+				bad("a Search step is its flow's only step")
+			}
+			seen := map[string]bool{}
+			for _, col := range s.Columns {
+				if !slices.Contains(ResultColumns, col) {
+					bad("its results show where, categories, stock or codes, not %q", col)
+				} else if seen[col] {
+					bad("its results show %s once", col)
+				}
+				seen[col] = true
+			}
+			if s.ResetAfter != 0 && (s.ResetAfter < MinResetAfter || s.ResetAfter > MaxResetAfter) {
+				bad("it clears after %d to %d seconds unused, or never", MinResetAfter, MaxResetAfter)
+			}
 		default:
 			bad("%q is not a kind of step", s.Kind)
 		}
 	}
-	if n := len(d.Steps); n > 0 && d.Steps[n-1].Kind != KindDone {
+	if n := len(d.Steps); n > 0 && d.Steps[n-1].Kind != KindDone && d.SearchOnly() == nil {
 		flowWide("a flow ends with a Done step")
+	}
+	if d.Public && d.SearchOnly() == nil {
+		flowWide("only a flow whose one step is a Search can be open to signed-out visitors")
 	}
 	return out
 }

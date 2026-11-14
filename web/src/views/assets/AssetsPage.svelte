@@ -1,22 +1,17 @@
 <script lang="ts">
-  import { stack } from '../../lib/stack';
-  import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { onMount } from 'svelte';
   import { ApiError, request } from '../../lib/api';
-  import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type AssetWithDetails, type Category, type Field } from '../../lib/models';
   import { navigate, router } from '../../lib/router.svelte';
-  import { configuredPage, searchDirect, straightTo } from '../../lib/search';
+  import { searchDirect, straightTo } from '../../lib/search';
   import { session } from '../../lib/session.svelte';
   import { exportUrl } from '../../lib/importing';
   import { graphUrl } from '../../lib/graph';
-  import { personName } from '../../lib/people';
   import { flattenTree } from '../../lib/tree';
-  import { dueText, reviewChip, reviewFilters, reviewLabel } from '../../lib/review';
-  import AssetThumb from '../../components/AssetThumb.svelte';
-  import CategoryBadge from '../../components/CategoryBadge.svelte';
-  import ConditionBadge from '../../components/ConditionBadge.svelte';
+  import { reviewFilters } from '../../lib/review';
+  import AssetResults from '../../components/AssetResults.svelte';
+  import SearchSuggestions from '../../components/SearchSuggestions.svelte';
   import ConflictMark from '../../components/ConflictMark.svelte';
   import ErrorMessage from '../../components/ErrorMessage.svelte';
   import LabelActions from '../../components/LabelActions.svelte';
@@ -74,13 +69,11 @@
   const canSpool = session.can('labels.print');
   // Each result offers its configured page, its scan page, beside its own.
   const canScan = session.can('assets.scan');
-  const scanColumn = $derived(canScan && !archived && assets.some((a) => configuredPage(a)));
 
   const categoryChoices = $derived(flattenTree(categories.filter((c) => c.id !== UNCATEGORIZED)));
   const uncategorized = $derived(categories.find((c) => c.id === UNCATEGORIZED));
   // The review filter shows where a category uses review states, or one is chosen.
   const reviewing = $derived(!!review || categories.some((c) => c.effective_review?.enabled));
-  const allSelected = $derived(assets.length > 0 && assets.every((a) => selected.includes(a.asset.id)));
 
   onMount(async () => {
     try {
@@ -186,10 +179,6 @@
   function switchList() {
     selected = [];
     applyFilters();
-  }
-
-  function toggleAll() {
-    selected = allSelected ? [] : assets.map((a) => a.asset.id);
   }
 
   // On a phone, the filters beyond search fold away until wanted.
@@ -319,12 +308,7 @@
   </p>
 {/if}
 
-{#if !loading && suggestions.length}
-  <p class="mb-3 text-sm" data-testid="search-suggestions">
-    Related:
-    {#each suggestions as s, i (s)}{#if i > 0},{' '}{/if}<button type="button" class="underline" onclick={() => ((search = s), applyFilters())}>{s}</button>{/each}
-  </p>
-{/if}
+{#if !loading}<SearchSuggestions {suggestions} onpick={(s) => ((search = s), applyFilters())} />{/if}
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading assets…</p>
@@ -338,68 +322,15 @@
   {#if canSpool && !archived}
     <p class="mb-3"><AddToSpool what={() => ({ filter: shownFilter })} label="Add all {assets.length} to the print queue" /></p>
   {/if}
-  <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm" use:stack>
-      <thead class="border-b border-zinc-300 dark:border-zinc-700">
-        <tr>
-          {#if !archived}
-            <th scope="col" class="w-8 py-2 pr-2">
-              <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select all assets" checked={allSelected} onchange={toggleAll} /></label>
-            </th>
-          {/if}
-          {#if session.user}<th scope="col" class="w-8 py-2 pr-1"><span class="sr-only">Favorite</span></th>{/if}
-          <th scope="col" class="py-2 pr-4">Name</th>
-          {#if scanColumn}<th scope="col" class="py-2 pr-4"><span class="sr-only">Scan page</span></th>{/if}
-          <th scope="col" class="py-2 pr-4">Where</th>
-          <th scope="col" class="py-2 pr-4">Categories</th>
-          <th scope="col" class="py-2 pr-4">Stock</th>
-          <th scope="col" class="py-2">{archived ? 'Archived' : 'Codes'}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each assets as a (a.asset.id)}
-          <tr class="border-b border-zinc-200 dark:border-zinc-800">
-            {#if !archived}
-              <td class="py-2 pr-2">
-                <label class="-my-2 inline-flex min-h-11 min-w-11 items-center justify-center"><input type="checkbox" class="h-5 w-5" aria-label="Select {a.asset.name}" value={a.asset.id} bind:group={selected} /></label>
-              </td>
-            {/if}
-            <!-- The star has a column of its own, so the name's cell is named by the name alone. -->
-            {#if session.user}<td class="py-2 pr-1"><span class="-my-2 inline-block align-middle"><FavoriteStar kind="asset" id={a.asset.id} name={a.asset.name} /></span></td>{/if}
-            <td class="py-2 pr-4 font-medium">
-              <span class="mr-2 inline-block align-middle empty:hidden"><AssetThumb asset={a} /></span><a class="inline-flex min-h-11 items-center align-middle hover:underline" href="/assets/{encodeURIComponent(a.asset.id)}">{a.asset.name}</a> <ConditionBadge condition={a.asset.condition} />{#if a.review}{' '}<span class={a.review.overdue ? 'chip-red' : reviewChip(a.review.state)} title={dueText(a.review) || undefined}>{reviewLabel(a.review.state)}{a.review.overdue ? ', review overdue' : a.review.due ? ', review due' : ''}</span>{/if}{#if a.scan_template?.conflict}<ConflictMark />{/if}{#if a.label_template?.conflict}<ConflictMark label="Label template chosen by a tie between categories" />{/if}
-              {#if a.loan}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400">{a.loan.borrower.id ? `Lent to ${personName(a.loan.borrower)}` : 'Lent out'}{a.loan.overdue ? ', overdue' : ''}</span>{/if}
-              {#if matched[a.asset.id]}<span class="block text-xs font-normal text-zinc-600 dark:text-zinc-400" data-testid="match-why">Found as {matched[a.asset.id]}</span>{/if}
-            </td>
-            <!-- The scan page has a column of its own too, for the same reason. -->
-            {#if scanColumn}<td class="py-2 pr-4">{#if configuredPage(a)}<a class="-my-2 inline-flex min-h-11 items-center text-sm underline" href={configuredPage(a)} title="Open {a.asset.name} on its scan page">Scan page</a>{/if}</td>{/if}
-            <td class="py-2 pr-4">
-              {#if a.location.length}
-                {@const place = a.location[a.location.length - 1]!}
-                <a class="inline-flex min-h-11 items-center hover:underline" href="/assets/{encodeURIComponent(place.id)}" title={a.location.map((p) => p.name).join(' › ')}>{place.name}</a>
-              {/if}
-            </td>
-            <td class="py-2 pr-4">
-              <span class="flex flex-wrap gap-1">
-                {#each a.categories as c (c.id)}<CategoryBadge category={c} />{/each}
-              </span>
-            </td>
-            <td class="py-2 pr-4 whitespace-nowrap">
-              {#if a.asset.stock}
-                {amount(a.asset.stock.quantity, a.asset.stock.unit)}
-                {#if a.asset.stock.is_running_low}<span class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Running low</span>{/if}
-              {/if}
-            </td>
-            {#if archived}
-              <td class="py-2 whitespace-nowrap">{a.asset.archived_at ? new Date(a.asset.archived_at).toLocaleDateString() : ''}</td>
-            {:else}
-              <td class="py-2 font-mono text-xs">{a.generator_keys.map((k) => k.assigned_code).join(', ')}</td>
-            {/if}
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
+  <AssetResults
+    {assets}
+    {matched}
+    columns={archived ? ['where', 'categories', 'stock', 'archived'] : ['where', 'categories', 'stock', 'codes']}
+    bind:selected
+    selectable={!archived}
+    star={!!session.user}
+    scanLinks={canScan && !archived}
+  />
 
   {#if selected.length && !archived}
     <div class="mt-6">

@@ -779,10 +779,12 @@ they apply only to an asset's own page:
 
 - `GET /api/v1/assets/{id}`, the asset's photos and attachments, and its history, without people (see
   [Stock and lending](stock-and-lending.md));
-- `GET /api/v1/generators`.
+- `GET /api/v1/generators`;
+- a public flow's search page, `GET /api/v1/flows/{slug}/search`, which finds among the flow's
+  categories only what the public role may read there ([Flows](flows.md#open-to-signed-out-visitors)).
 
 The catalog (the asset list, categories, fields, templates, reports and the rest) answers `401`.
-The web app opens only the asset page, with a link to sign in. `GET /api/v1/auth/me` answers
+The web app opens only the asset page and a public flow's search page, with a link to sign in. `GET /api/v1/auth/me` answers
 signed-out visitors with `{"user": null}` and the public role's permissions.
 
 A role or scope already named `public` before migration `021` is renamed `public (renamed)` or
