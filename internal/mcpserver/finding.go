@@ -14,7 +14,7 @@ import (
 )
 
 type searchIn struct {
-	Search      string `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in at any depth"`
+	Search      string `json:"search,omitempty" jsonschema:"plain words, found as one phrase in an asset's name, codes, field values or comments, or the name of a place it is in at any depth; or a query: comparisons joined by AND, OR, NOT and parentheses, then an optional ORDER BY key [ASC|DESC], such as category = Filament AND field.diameter >= 1.75 AND in ~ 'shelf a' ORDER BY name. Keys: name; code, or code.qr, code.micro_qr, code.code128, code.nfc; category (also finds those below it); in (a place, at any depth); condition (ok, needs_maintenance, out_of_service, problem); loan (open, overdue); assigned (a person's name, or me); favorite and archived (true or false); created, updated; quantity; field.KEY for any field (list_fields gives the keys). Operators: = and != compare whole values, ~ and !~ look for part of one, < <= > >= compare numbers and dates, key IN (a, b), key IS EMPTY, key IS NOT EMPTY. Text ignores case; quote values with spaces. Dates are 2026-03-01, today, now, or a time from now such as -30d (h, d, w, m for months, y). A bare word or quoted phrase inside a query matches as plain words do. A mistake comes back saying what is wrong and where"`
 	CategoryID  string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
 	Condition   string `json:"condition,omitempty" jsonschema:"ok, needs_maintenance, out_of_service, or problem for either of the last two"`
 	Loan        string `json:"loan,omitempty" jsonschema:"open for assets lent out, overdue for those past due"`
@@ -59,7 +59,7 @@ func (in searchIn) query() string {
 type graphIn struct {
 	Asset      string   `json:"asset,omitempty" jsonschema:"the asset whose links to follow: its ID, or one of its codes; leave it out for a map"`
 	CategoryID string   `json:"category_id,omitempty" jsonschema:"for a map: the assets in this category or below it"`
-	Search     string   `json:"search,omitempty" jsonschema:"for a map: the assets whose name or codes hold these words"`
+	Search     string   `json:"search,omitempty" jsonschema:"for a map: the assets a search finds, plain words or a query, as search_assets takes it"`
 	Types      []string `json:"types,omitempty" jsonschema:"the followed link types to follow, by ID (list_link_types marks them is_followed); all of them if not given"`
 	Direction  string   `json:"direction,omitempty" jsonschema:"from an asset: out for what it needs, in for what needs it, or both (the default)"`
 	Depth      int      `json:"depth,omitempty" jsonschema:"from an asset: how many hops to follow, 1 to 10 (5 if not given)"`
@@ -119,7 +119,7 @@ func findingTools() []tool {
 	return []tool{
 		define(&mcp.Tool{
 			Name: "search_assets",
-			Description: "Find assets: by words in their name, codes or the place they are in, by category, condition, loan, stock or review state. " +
+			Description: "Find assets: by words in their name, codes, field values or the place they are in, or by a query over any of their fields (see search), and by category, condition, loan, stock or review state. " +
 				"Each comes with its codes, where it is, its condition, stock and loan. Use get_asset for everything about one.",
 			Annotations: readOnly("Search assets"),
 		}, []string{"GET /api/v1/assets"}, []string{rbac.PermAssetsRead}, func(ctx context.Context, e *env, in searchIn) (reply[searchOut], error) {

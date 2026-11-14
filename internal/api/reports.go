@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/query"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/reports"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 )
@@ -42,6 +44,21 @@ func (s *Server) parseSpecOf(kind string, raw json.RawMessage) (*reports.Spec, [
 	if err != nil {
 		return nil, nil, err
 	}
+	// A search that is a query must name what the instance has; who runs
+	// the report is only known then, so `me` is taken on trust.
+	if search := spec.Filter.Search; query.IsQuery(search) {
+		list, err := s.store.ListFields()
+		if err != nil {
+			return nil, nil, err
+		}
+		fields := make(map[string]models.Field, len(list))
+		for _, f := range list {
+			fields[f.Key] = f
+		}
+		if _, err := query.Compile(search, query.Schema{Fields: fields, SignedIn: true}); err != nil {
+			return nil, nil, fmt.Errorf("%w: filter.search: %s", reports.ErrInvalidSpec, err.Error())
+		}
+	}
 	canonical, err := json.Marshal(spec)
 	return spec, canonical, err
 }
@@ -57,7 +74,13 @@ func (s *Server) runSpec(r *http.Request, spec *reports.Spec) (*reports.Result, 
 	if err != nil {
 		return nil, err
 	}
-	assets = searched(assets, f.Search)
+	plan, err := s.compileSearch(r, f.Search)
+	if err == nil {
+		assets, err = s.search(r, assets, f.Search, plan, false)
+	}
+	if err != nil {
+		return nil, err
+	}
 	// A report naming "me" finds whoever runs it in its person fields;
 	// one run by no one, no one.
 	if f.Person == reports.PersonMe {
@@ -225,6 +248,12 @@ func (s *Server) savedReport(w http.ResponseWriter, r *http.Request, id string) 
 		return nil, nil, false
 	}
 	result, err := s.runSpec(r, spec)
+	var qe *query.Error
+	if errors.As(err, &qe) {
+		// A field its search names was deleted since it was saved.
+		writeJSONError(w, http.StatusConflict, "The report's search no longer works: "+qe.Message+". Edit it to fix this.")
+		return nil, nil, false
+	}
 	if err != nil {
 		writeServerError(w, err, "run the report")
 		return nil, nil, false
@@ -278,6 +307,11 @@ func (s *Server) handlePreviewReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := s.runSpec(r, spec)
+	var qe *query.Error
+	if errors.As(err, &qe) {
+		writeQueryError(w, qe)
+		return
+	}
 	if err != nil {
 		writeServerError(w, err, "run the report")
 		return

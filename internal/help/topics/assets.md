@@ -1,6 +1,18 @@
 # Assets
 
-An asset is anything you keep track of. Open **Assets** to list them; search by name, code, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition, loan or favorites. **Assigned to: Me** lists the assets whose person fields name you. The **Where** column says what each is in.
+An asset is anything you keep track of. Open **Assets** to list them; search by name, code, a field's value, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition, loan or favorites. **Assigned to: Me** lists the assets whose person fields name you. The **Where** column says what each is in.
+
+## Queries
+
+For more than words, type a query into the search box, or choose **Build a query** to pick one from lists and see it written out. A query compares what assets have:
+
+- `field.diameter >= 1.75` compares a field by its key; `name ~ spool` finds part of a name; `in = "shelf a"` finds what is somewhere, at any depth.
+- Join comparisons with `AND`, `OR` and `NOT`, and group them with parentheses: `category = Filament AND (field.material = TPU OR field.material = TPE)`.
+- `condition = problem`, `loan = overdue`, `assigned = me`, `favorite = true`, `quantity < 5` and `created > -30d` (the last 30 days) use what every asset has.
+- `field.serial IS EMPTY` finds assets with no serial number; `field.material IN (PLA, PETG)` either of two.
+- End with `ORDER BY name`, or `ORDER BY field.bought DESC` for the latest first.
+
+Text ignores case, and a value with spaces goes in quotes. When a query has a mistake, the part at fault is underlined under the search box, with what is wrong. An assistant or agent connected to BAM! can search with queries too.
 
 ## Favorites
 

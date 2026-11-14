@@ -2,7 +2,7 @@
   import { stack } from '../../lib/stack';
   import FavoriteStar from '../../components/FavoriteStar.svelte';
   import { onMount } from 'svelte';
-  import { request } from '../../lib/api';
+  import { ApiError, request } from '../../lib/api';
   import { amount } from '../../lib/assets';
   import { messageOf } from '../../lib/errors';
   import { UNCATEGORIZED, type AssetWithDetails, type Category, type Field } from '../../lib/models';
@@ -21,6 +21,9 @@
   import LabelActions from '../../components/LabelActions.svelte';
   import AddToSpool from '../../components/AddToSpool.svelte';
   import PdfDownload from '../../components/PdfDownload.svelte';
+  import QueryBuilder from '../../components/QueryBuilder.svelte';
+  import QueryProblem from '../../components/QueryProblem.svelte';
+  import { queryProblemOf, type QueryProblem as Problem } from '../../lib/query';
 
   let { params: _params }: { params: Record<string, string> } = $props();
 
@@ -51,7 +54,13 @@
   // (docs/data-model.md#person-fields): '' for any, 'me' in any person
   // field, or 'me:' and a field's key.
   let person = $state(router.query.get('person') === 'me' ? (router.query.get('person_field') ? `me:${router.query.get('person_field')}` : 'me') : '');
-  let personFields = $state<Field[]>([]);
+  let fields = $state<Field[]>([]);
+  const personFields = $derived(session.user ? fields.filter((f) => f.validation_type === 'person') : []);
+  // A query's mistake (docs/data-model.md#queries), with the search it was
+  // in, and whether the query builder is open.
+  let problem = $state<Problem | null>(null);
+  let problemQuery = $state('');
+  let building = $state(false);
   let selected = $state<string[]>([]);
   // The filters the list shows, which the export follows.
   let applied = $state({ search: router.query.get('search') ?? '', categoryId: router.query.get('category') ?? '' });
@@ -68,9 +77,7 @@
   onMount(async () => {
     try {
       categories = (await request<{ categories: Category[] }>('GET', '/categories')).categories ?? [];
-      if (session.user) {
-        personFields = await request<{ fields: Field[] }>('GET', '/fields').then((r) => (r.fields ?? []).filter((f) => f.validation_type === 'person'), () => []);
-      }
+      fields = await request<{ fields: Field[] }>('GET', '/fields').then((r) => r.fields ?? [], () => []);
     } catch (err) {
       error = messageOf(err);
     }
@@ -111,9 +118,14 @@
       const found = (await request<{ assets: AssetWithDetails[] }>('GET', `/assets?${q}`)).assets ?? [];
       if (mine !== loads) return;
       assets = found;
+      problem = null;
       selected = selected.filter((id) => assets.some((a) => a.asset.id === id));
     } catch (err) {
-      if (mine === loads) error = messageOf(err);
+      if (mine !== loads) return;
+      problem = err instanceof ApiError ? queryProblemOf(err.body) : null;
+      problemQuery = search.trim();
+      if (problem) assets = [];
+      else error = messageOf(err);
     } finally {
       if (mine === loads) loading = false;
     }
@@ -139,6 +151,13 @@
     const query = q.toString();
     navigate('/assets' + (query ? `?${query}` : ''), true);
     void load();
+  }
+
+  // A query from the builder goes in the search box, and is searched for.
+  function useQuery(q: string) {
+    search = q;
+    building = false;
+    applyFilters();
   }
 
   // Switching between active and archived assets clears the selection.
@@ -175,8 +194,18 @@
 <form class="mb-4 flex flex-wrap items-end gap-3" role="search" onsubmit={applyFilters}>
   <div class="min-w-48 flex-1">
     <label class="label" for="asset-search">Search</label>
-    <input id="asset-search" class="input" type="search" placeholder="Name, code, or where it is" bind:value={search} />
+    <input
+      id="asset-search"
+      class="input"
+      type="search"
+      placeholder="Words, or a query such as field.size > 2"
+      aria-invalid={problem ? 'true' : undefined}
+      aria-describedby={problem ? 'asset-search-problem' : undefined}
+      bind:value={search}
+    />
+    {#if problem}<QueryProblem id="asset-search-problem" query={problemQuery} {problem} />{/if}
   </div>
+  <button type="button" class="btn-secondary" aria-expanded={building} aria-controls="query-builder" onclick={() => (building = !building)}>Build a query</button>
   <button type="button" class="btn-secondary sm:hidden" aria-expanded={filtersOpen} aria-controls="asset-filters" onclick={() => (filtersOpen = !filtersOpen)}>
     Filters{activeFilters ? ` (${activeFilters})` : ''}
   </button>
@@ -247,6 +276,10 @@
   </div>
   <button type="submit" class="btn-secondary">Search</button>
 </form>
+
+{#if building}
+  <div id="query-builder"><QueryBuilder {fields} {categories} signedIn={!!session.user} onuse={useQuery} /></div>
+{/if}
 
 <ErrorMessage {error} />
 {#if conflict === 'scan_template' || conflict === 'label_template'}
