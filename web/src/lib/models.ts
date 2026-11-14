@@ -64,6 +64,8 @@ export interface User {
   loan_reminders?: boolean;
   /** Whether they are emailed when a comment mentions them. */
   mention_emails?: boolean;
+  /** Whether a search that finds exactly one asset opens it straight away (docs/data-model.md#search): their own choice, or null to follow the instance's. */
+  search_direct?: boolean | null;
   /** False for a person without an account: a name for person fields, who cannot sign in (docs/data-model.md#person-fields). */
   can_sign_in?: boolean;
   is_active: boolean;
@@ -214,6 +216,12 @@ export interface RFIDSettings {
 }
 
 /** The instance's review settings. */
+/** The instance's settings for searching (docs/data-model.md#search). */
+export interface SearchSettings {
+  /** A search's one result opens straight away, for those who have not chosen. */
+  direct: boolean;
+}
+
 export interface ReviewSettings {
   assistant_drafts: boolean;
   due_days: number;

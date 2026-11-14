@@ -11,7 +11,7 @@ What you see depends on your roles: the menu at the top shows the parts you can 
 
 Setting BAM! up for the first time, the home page lists the steps, ticking each off as it is done: naming yourself, adding a printer, creating categories, a role for members and the people who use it, and, if you like, making some categories public and adding a notification channel.
 
-The home page opens with a **Search** field, which finds assets as the asset list does and shows them there. With a mouse it is ready to type in straight away; elsewhere on the home page, press `/` to get back to it.
+The home page opens with a **Search** field, which finds assets as the asset list does and shows them there. With a mouse it is ready to type in straight away; elsewhere on the home page, press `/` to get back to it. A search that finds exactly one asset can open it straight away instead, on its scan page or its own page, as [the asset list](/help/assets) explains.
 
 Every page has a **Help** link at the top that opens the help for that page.
 

@@ -203,6 +203,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/auth/email", RequirePerson(http.HandlerFunc(s.handleSetOwnEmailNotifications)))
 	handle("PUT /api/v1/auth/loan-reminders", RequirePerson(http.HandlerFunc(s.handleSetOwnLoanReminders)))
 	handle("PUT /api/v1/auth/mention-emails", RequirePerson(http.HandlerFunc(s.handleSetOwnMentionEmails)))
+	handle("PUT /api/v1/auth/search-direct", RequirePerson(http.HandlerFunc(s.handleSetOwnSearchDirect)))
 	// Favorites, each person's own (docs/favorites.md).
 	handle("GET /api/v1/auth/me/favorites", RequirePerson(http.HandlerFunc(s.handleListFavorites)))
 	handle("PUT /api/v1/auth/me/favorites/{kind}/{id}", RequirePerson(http.HandlerFunc(s.handleAddFavorite)))
@@ -531,6 +532,10 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/shopping", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleShoppingList)))
 	handle("GET /api/v1/settings/offline", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleOfflineSettings)))
 	handle("PUT /api/v1/settings/offline", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetOfflineSettings)))
+	// Searching (docs/data-model.md#search): whether a search's one result
+	// opens straight away, read by those who search.
+	handle("GET /api/v1/settings/search", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleSearchSettings)))
+	handle("PUT /api/v1/settings/search", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetSearchSettings)))
 	// The assistant beside the page (docs/assistant.md): settings.manage
 	// sets it up and writes its guides; assistant.use talks with it, as a
 	// person signed in. Conversations are each person's own.

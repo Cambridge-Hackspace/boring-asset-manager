@@ -195,4 +195,74 @@ describe('AssetsPage', () => {
     expect(searched.at(-1)).toBe('field.size > 2');
     expect(screen.queryByRole('alert')).toBeNull();
   });
+
+  it('offers each result’s scan page beside its own, to those who scan', async () => {
+    navigate('/assets', true);
+    session.permissions = ['assets.read', 'assets.scan'];
+    fakeApi({
+      'GET /categories': () => ({ categories: [category] }),
+      'GET /assets': () => ({ assets: [asset('a1', 'Drill'), { ...asset('a2', 'Saw'), scan_template: { template_id: '' } }] }),
+    });
+    render(AssetsPage, { params: {} });
+    await screen.findByRole('link', { name: 'Drill' });
+    const scanLinks = screen.getAllByRole('link', { name: 'Scan page' });
+    expect(scanLinks.map((l) => l.getAttribute('href'))).toEqual(['/scan/a1']);
+    expect(scanLinks[0]!.closest('tr')!.textContent).toContain('Drill');
+  });
+
+  describe('a search that finds one asset', () => {
+    const one = () => ({
+      'GET /categories': () => ({ categories: [category] }),
+      'GET /assets': () => ({ assets: [asset('a1', 'Drill')] }),
+    });
+
+    it('opens it on its scan page, as the instance chooses, with the way back', async () => {
+      session.permissions = ['assets.read', 'assets.scan'];
+      navigate('/assets?search=drill', true);
+      fakeApi({ ...one(), 'GET /settings/search': () => ({ direct: true }) });
+      render(AssetsPage, { params: {} });
+      await vi.waitFor(() => expect(location.pathname).toBe('/scan/a1'));
+      expect(location.search).toBe('?search=drill');
+    });
+
+    it('opens its own page where no scan template applies, or the viewer cannot scan', async () => {
+      navigate('/assets?search=drill', true);
+      fakeApi({ ...one(), 'GET /settings/search': () => ({ direct: true }) });
+      render(AssetsPage, { params: {} });
+      await vi.waitFor(() => expect(location.pathname).toBe('/assets/a1'));
+    });
+
+    it('lists it when asked for all the results, or the person chose to list', async () => {
+      navigate('/assets?search=drill&all=1', true);
+      fakeApi({ ...one(), 'GET /settings/search': () => ({ direct: true }) });
+      render(AssetsPage, { params: {} });
+      expect(await screen.findByRole('link', { name: 'Drill' })).toBeTruthy();
+      cleanup();
+
+      session.user = { id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '', search_direct: false };
+      navigate('/assets?search=drill', true);
+      const { sent } = fakeApi({ ...one(), 'GET /settings/search': () => ({ direct: true }) });
+      render(AssetsPage, { params: {} });
+      expect(await screen.findByRole('link', { name: 'Drill' })).toBeTruthy();
+      expect(location.pathname).toBe('/assets');
+      expect(sent.some((r) => r.path === '/settings/search')).toBe(false);
+      session.user = null;
+    });
+
+    it('goes straight there from a search typed in the list, but not from a filter', async () => {
+      session.user = { id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '', search_direct: true };
+      navigate('/assets', true);
+      fakeApi(one());
+      render(AssetsPage, { params: {} });
+      await screen.findByRole('link', { name: 'Drill' });
+      await fireEvent.input(screen.getByLabelText('Search'), { target: { value: 'dri' } });
+      await fireEvent.change(screen.getByLabelText('Condition'), { target: { value: 'ok' } });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(location.pathname).toBe('/assets');
+      await fireEvent.submit(screen.getByRole('search'));
+      await vi.waitFor(() => expect(location.pathname).toBe('/assets/a1'));
+      expect(location.search).toBe('?search=dri');
+      session.user = null;
+    });
+  });
 });

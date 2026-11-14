@@ -124,6 +124,24 @@ describe('ReportsPage', () => {
     await screen.findByRole('link', { name: 'Running low' });
     expect(screen.queryByRole('link', { name: 'New report' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Copy/ })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Searching' })).toBeNull();
+  });
+
+  it('sets whether a search’s one result opens straight away, for those who manage settings', async () => {
+    session.permissions = ['assets.read', 'settings.manage'];
+    const { sent } = fakeApi({
+      'GET /reports': () => ({ reports: [] }),
+      'GET /settings/search': () => ({ direct: false }),
+      'PUT /settings/search': (body) => body,
+    });
+    render(ReportsPage, { params: {} });
+    const box = await screen.findByRole('checkbox', { name: "Open a search's one result straight away" });
+    await vi.waitFor(() => expect((box as HTMLInputElement).disabled).toBe(false));
+    expect((box as HTMLInputElement).checked).toBe(false);
+    await fireEvent.click(box);
+    await fireEvent.click(screen.getByRole('button', { name: 'Save search settings' }));
+    expect(await screen.findByText('Saved.')).toBeTruthy();
+    expect(sent.find((r) => r.method === 'PUT')!.body).toEqual({ direct: true });
   });
 });
 
