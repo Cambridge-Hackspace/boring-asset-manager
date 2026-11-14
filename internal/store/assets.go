@@ -694,8 +694,9 @@ func pointersTo(assets []models.AssetWithDetails) []*models.AssetWithDetails {
 	return out
 }
 
-// MatchesSearch reports whether an asset's name, one of its codes, or the
-// name of a place it is in holds search, ignoring case. The search is
+// MatchesSearch reports whether an asset's name, one of its codes, the
+// name of a place it is in, or one of its fields' values holds search,
+// ignoring case. The search is
 // matched here rather than with LIKE, which treats % and _ as wildcards
 // and, on some databases, backslash as an escape, and whose LOWER() folds
 // only ASCII letters on SQLite. Here every letter folds, the same way
@@ -714,7 +715,47 @@ func MatchesSearch(a *models.AssetWithDetails, search string) bool {
 			return true
 		}
 	}
+	for _, v := range FieldTexts(a) {
+		if strings.Contains(strings.ToLower(v), term) {
+			return true
+		}
+	}
 	return false
+}
+
+// FieldTexts are an asset's field values as a person reads them, for the
+// fields its categories give it: a choice's label as well as its value,
+// and the names of the people a person field names that the asset shows
+// (the API has taken out those the requester may not see). A value kept
+// from a category the asset has left is not among them.
+func FieldTexts(a *models.AssetWithDetails) []string {
+	var out []string
+	for _, ef := range a.EffectiveFields {
+		f := ef.Field
+		v := strings.TrimSpace(a.FieldValues[f.Key])
+		if v == "" {
+			continue
+		}
+		switch f.ValidationType {
+		case fields.TypePerson:
+			for _, id := range fields.PersonIDs(v) {
+				if p, ok := a.People[id]; ok {
+					out = append(out, p.Name)
+				}
+			}
+			continue
+		case fields.TypeSelect:
+			if opts, err := fields.ValidateSelectOptions(f.Options); err == nil {
+				for _, c := range opts.Choices {
+					if c.Value == v {
+						out = append(out, c.Label)
+					}
+				}
+			}
+		}
+		out = append(out, v)
+	}
+	return out
 }
 
 func matchesNameOrCode(a *models.AssetWithDetails, search string) bool {

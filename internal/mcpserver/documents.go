@@ -93,7 +93,7 @@ func documentTools() []tool {
 		define(&mcp.Tool{Name: "assets_pdf", Description: "The assets a search selects as a PDF table, as people download it, " +
 			"with the columns chosen from export_assets' columns.", Annotations: readOnly("Assets as PDF")}, []string{"GET /api/v1/assets/export.pdf"}, read,
 			func(ctx context.Context, e *env, in struct {
-				Search     string   `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in"`
+				Search     string   `json:"search,omitempty" jsonschema:"the assets a search finds: plain words or a query, as search_assets takes it"`
 				CategoryID string   `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
 				Columns    []string `json:"columns,omitempty" jsonschema:"export_assets' columns to show, such as name, categories, quantity, code.qr or field.serial; name, categories and quantity if not given"`
 				documentIn
@@ -113,7 +113,7 @@ func documentTools() []tool {
 			Annotations: readOnly("Asset sheets")}, []string{"GET /api/v1/assets/{id}/sheet.pdf", "GET /api/v1/assets/sheets.pdf"}, read,
 			func(ctx context.Context, e *env, in struct {
 				ID         string `json:"id,omitempty" jsonschema:"one asset's sheet"`
-				Search     string `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in"`
+				Search     string `json:"search,omitempty" jsonschema:"the assets a search finds: plain words or a query, as search_assets takes it"`
 				CategoryID string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
 				pageIn
 			}) (reply[map[string]any], error) {
@@ -128,7 +128,7 @@ func documentTools() []tool {
 			"they are in, outermost first, in order to walk the rooms, each with a box to tick, the quantity expected and a blank for the count.",
 			Annotations: readOnly("Stocktake checklist")}, []string{"GET /api/v1/assets/stocktake.pdf"}, read,
 			func(ctx context.Context, e *env, in struct {
-				Search     string `json:"search,omitempty" jsonschema:"words to find in an asset's name, its codes, or the name of a place it is in"`
+				Search     string `json:"search,omitempty" jsonschema:"the assets a search finds: plain words or a query, as search_assets takes it"`
 				CategoryID string `json:"category_id,omitempty" jsonschema:"only assets in this category or below it"`
 				pageIn
 			}) (reply[map[string]any], error) {

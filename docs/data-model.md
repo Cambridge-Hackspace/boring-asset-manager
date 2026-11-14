@@ -576,16 +576,74 @@ as `e` with a combining accent, are different codes and different channel names.
 
 ### Search
 
-Search (`search` on the asset list, the export and reports) finds the term anywhere in:
+Search (`search` on the asset list, the map, the exports, the PDFs and reports) is plain words or
+a [query](#queries). Plain words are found, as one phrase, anywhere in:
 
 - an asset's name;
 - its codes;
 - the name of a place it is in, at any depth. "shelf a" finds what is on Shelf A, and what is in
-  the boxes on it.
+  the boxes on it;
+- the values of the fields its categories give it: a choice's label as well as its value, and the
+  names of the people a person field names. A value kept from a category the asset has left is
+  not searched;
+- on the asset list, its comments ([Comments](comments.md)).
 
 Search ignores case for every letter, not just ASCII. `%`, `_` and `\` have no special meaning.
-Places count only as far as the requester may read them, so an asset is never found by the name
-of a place hidden from them.
+Places and people count only as far as the requester may see them, so an asset is never found by
+the name of a place, or a person, hidden from them.
+
+### Queries
+
+A search is a query when it holds a comparison (`=`, `!=`, `~`, `!~`, `<`, `<=`, `>`, `>=`) or
+`ORDER BY` outside quotes; anything else is plain words. In the spirit of Jira's JQL:
+
+```
+category = Filament AND field.diameter >= 1.75 AND in ~ "shelf a" ORDER BY name
+field.bought < -1y OR condition = problem ORDER BY field.bought DESC
+assigned = me AND loan IS EMPTY
+"red box" OR code.nfc = 04A23B1C
+```
+
+| Key | Is | Finds |
+| --- | --- | --- |
+| `name` | text | The asset's name. |
+| `code`, `code.qr`, `code.micro_qr`, `code.code128`, `code.nfc` | text | Any of its codes, or its code of one type. An NFC tag's serial number is found however it is written. |
+| `category` | text | A category it is in, or one above it, or one it counts in ([Pools](stock-and-lending.md#pools)): by name, by path (`"Shop > Saws"`), or by ID. |
+| `in` | text | A place it is in, at any depth. `in IS EMPTY` finds what is in nothing. |
+| `condition` | `ok`, `needs_maintenance`, `out_of_service`, or `problem` for either of the last two | Its condition. |
+| `loan` | `open`, `overdue` | Whether it is lent out, or overdue. `loan IS EMPTY` finds what is not lent. |
+| `assigned` | a person's name, or `me` | Someone its person fields name. `me` needs someone signed in. |
+| `favorite` | `true`, `false` | Whether the person searching has starred it. |
+| `archived` | `true`, `false` | Whether it is archived. A query naming `archived` looks among active and archived assets alike, unless the request chose one with `archived`. |
+| `created`, `updated` | date | When it was added, and last changed. |
+| `quantity` | number | Its stock, where it is counted. |
+| `field.KEY` | the field's type | The value of the field keyed `KEY`, where its categories give it the field. A choice is matched by its value or its label; a person field like `assigned`. |
+
+Comparisons:
+
+- `=` and `!=` compare whole values; `~` and `!~` look for part of one. Text ignores case.
+- `<`, `<=`, `>` and `>=` compare numbers and dates.
+- `key IN (a, b)` and `key NOT IN (a, b)`; `key IS EMPTY` and `key IS NOT EMPTY`.
+- `!=`, `!~` and `NOT IN` also find assets with no value.
+- `AND` binds before `OR`; `NOT` and parentheses group. Keywords are in any case.
+- A value with spaces or `( ) = ! ~ < > , " '` goes in double or single quotes, with `\` before a
+  quote inside. Quoted, `me` is only a name.
+- A word or a quoted phrase standing alone matches as plain words do: `"red box" AND condition = ok`.
+- Dates are a day (`2026-03-01`, the whole day in UTC), an instant (RFC 3339), `today`, `now`, or a
+  time from now: `-30d`, `+2w`, with `h` hours, `d` days, `w` weeks, `m` months and `y` years. With
+  `=`, a time from now means its day.
+- `ORDER BY key [ASC | DESC], ...` sorts by text, numbers, dates or the first category. Assets
+  without a value come last either way. Without it, the list keeps its usual order.
+
+A query that can't be run is refused with `400` and where the mistake is:
+`{"error": "...", "query_error": {"message": "no field has the key \"colour\"", "start": 0, "end": 12}}`,
+counting characters as a browser does (UTF-16 code units), so a page can underline it. A report
+whose query names a field that has since been deleted answers `409` when run.
+
+Queries are matched against the assets as the requester may see them, the same way as plain
+words, so they can't search by, or find out about, places or people hidden from the requester.
+The Assets page's **Build a query** writes one from conditions picked from lists, and shows it.
+`~~`, matching through related words, is kept for a later version and refused for now.
 
 ## Databases
 

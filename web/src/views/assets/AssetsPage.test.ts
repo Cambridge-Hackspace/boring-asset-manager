@@ -156,4 +156,43 @@ describe('AssetsPage', () => {
     await screen.findByRole('link', { name: 'Drill' });
     expect(screen.queryByRole('button', { name: /to the print queue/ })).toBeNull();
   });
+  it('underlines a query mistake under the search box, and builds queries', async () => {
+    navigate('/assets', true);
+    const searched: string[] = [];
+    fakeApi({
+      'GET /categories': () => ({ categories: [category] }),
+      'GET /fields': () => ({ fields: [{ id: 'f1', key: 'size', label: 'Size', validation_type: 'number', created_at: '', updated_at: '' }] }),
+      'GET /assets': (_body, path) => {
+        void path;
+        const search = new URLSearchParams(location.search).get('search') ?? '';
+        searched.push(search);
+        if (search === 'field.colour = red') {
+          return { status: 400, body: { error: 'The search can\'t be run: no field has the key "colour"', query_error: { message: 'no field has the key "colour"', start: 0, end: 12 } } };
+        }
+        return { assets: [asset('a1', 'Drill')] };
+      },
+    });
+    render(AssetsPage, { params: {} });
+    await screen.findByRole('link', { name: 'Drill' });
+    const box = screen.getByLabelText('Search');
+    await fireEvent.input(box, { target: { value: 'field.colour = red' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('no field has the key "colour"');
+    expect(document.querySelector('mark.query-fault')?.textContent).toBe('field.colour');
+    expect(box.getAttribute('aria-invalid')).toBe('true');
+    expect(box.getAttribute('aria-describedby')).toBe('asset-search-problem');
+    expect(screen.queryByRole('link', { name: 'Drill' })).toBeNull();
+
+    // The builder writes a query into the box, and searches with it.
+    await fireEvent.click(screen.getByRole('button', { name: 'Build a query' }));
+    await fireEvent.change(await screen.findByLabelText('Condition 1: what to search by'), { target: { value: 'field.size' } });
+    await fireEvent.change(screen.getByLabelText('Condition 1: how to compare'), { target: { value: '>' } });
+    await fireEvent.input(screen.getByLabelText('Condition 1: value'), { target: { value: '2' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Search with this query' }));
+    await screen.findByRole('link', { name: 'Drill' });
+    expect((box as HTMLInputElement).value).toBe('field.size > 2');
+    expect(searched.at(-1)).toBe('field.size > 2');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });
