@@ -177,7 +177,7 @@
         <label class="label" for="home-search">Search</label>
         <input id="home-search" class="input text-base" type="search" autocomplete="off" placeholder="Name, code, or where it is" aria-keyshortcuts="/" bind:value={words} bind:this={searchField} />
       </div>
-      <button type="submit" class="btn-primary">Search</button>
+      <button type="submit" class="btn-secondary">Search</button>
     </form>
   {/if}
   {#if session.can('assets.scan')}
