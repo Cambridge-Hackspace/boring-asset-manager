@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
+import { navigate, router } from '../lib/router.svelte';
 import Home from './Home.svelte';
 import { fakeApi } from '../test/fetch';
 import { session } from '../lib/session.svelte';
@@ -117,5 +118,55 @@ describe('Home', () => {
     render(Home, { params: {} });
     await screen.findByRole('link', { name: 'Glue' });
     expect(sent.some((r) => r.path === '/vendors')).toBe(false);
+  });
+});
+
+describe('searching from the home page', () => {
+  const fine = (matches: boolean) => vi.stubGlobal('matchMedia', (q: string) => ({ matches: matches && q === '(pointer: fine)' }));
+
+  it('hands the search to the asset list', async () => {
+    api([]);
+    navigate('/');
+    render(Home, { params: {} });
+    const field = screen.getByRole('searchbox', { name: 'Search' });
+    await fireEvent.input(field, { target: { value: '  drill  bits ' } });
+    await fireEvent.submit(screen.getByRole('search', { name: 'Search assets' }));
+    await vi.waitFor(() => expect(router.path).toBe('/assets'));
+    expect(router.query.get('search')).toBe('drill  bits');
+  });
+
+  it('is offered only to those who may read assets', () => {
+    session.permissions = ['assets.scan'];
+    api([]);
+    render(Home, { params: {} });
+    expect(screen.queryByRole('search', { name: 'Search assets' })).toBeNull();
+  });
+
+  it('takes focus when the page opens with a mouse, not on a touch screen', async () => {
+    api([]);
+    fine(true);
+    render(Home, { params: {} });
+    const field = screen.getByRole('searchbox', { name: 'Search' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(field));
+    cleanup();
+
+    fine(false);
+    render(Home, { params: {} });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(document.activeElement).not.toBe(screen.getByRole('searchbox', { name: 'Search' }));
+  });
+
+  it('is focused by /, except while typing elsewhere', async () => {
+    session.permissions = ['assets.read', 'assets.scan'];
+    api([]);
+    render(Home, { params: {} });
+    const field = screen.getByRole('searchbox', { name: 'Search' });
+    const codeField = screen.getByLabelText('Look up a code');
+    codeField.focus();
+    await fireEvent.keyDown(codeField, { key: '/' });
+    expect(document.activeElement).toBe(codeField);
+    (document.activeElement as HTMLElement).blur();
+    await fireEvent.keyDown(document.body, { key: '/' });
+    expect(document.activeElement).toBe(field);
   });
 });
