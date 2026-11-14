@@ -1,7 +1,7 @@
 <script lang="ts">
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
-  import type { PublicProviders, User } from '../lib/models';
+  import type { PublicProviders, SearchSettings, User } from '../lib/models';
   import { describeAssignment, describeHeld } from '../lib/permissions';
   import { offline } from '../lib/offline/offline.svelte';
   import { session } from '../lib/session.svelte';
@@ -67,6 +67,28 @@
       emailStatus = on ? 'You will be emailed when someone mentions you.' : 'You will no longer be emailed when someone mentions you.';
     } catch (err) {
       emailError = messageOf(err);
+    }
+  }
+
+  // Whether a search that finds one asset opens it straight away
+  // (docs/data-model.md#search): their own choice, or the instance's.
+  let instanceDirect = $state<boolean | null>(null);
+  request<SearchSettings>('GET', '/settings/search').then(
+    (r) => (instanceDirect = r.direct),
+    () => {},
+  );
+  const directChoice = $derived(session.user?.search_direct === true ? 'on' : session.user?.search_direct === false ? 'off' : 'instance');
+  let searchError = $state('');
+  let searchStatus = $state('');
+
+  async function setDirect(choice: string) {
+    searchError = searchStatus = '';
+    const direct = choice === 'on' ? true : choice === 'off' ? false : null;
+    try {
+      session.user = (await request<{ user: User }>('PUT', '/auth/search-direct', { direct })).user;
+      searchStatus = 'Saved.';
+    } catch (err) {
+      searchError = messageOf(err);
     }
   }
 
@@ -179,6 +201,25 @@
       <ErrorMessage error={emailError} />
       {#if emailStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{emailStatus}</p>{/if}
     </section>
+
+    {#if session.can('assets.read')}
+      <section class="card space-y-2" aria-labelledby="search-heading">
+        <h2 id="search-heading" class="text-lg font-semibold">Searching</h2>
+        <div>
+          <label class="label" for="search-direct">When a search finds exactly one thing</label>
+          <select id="search-direct" class="input w-auto" value={directChoice} aria-describedby="search-direct-help" onchange={(event) => setDirect(event.currentTarget.value)}>
+            <option value="instance">As the space chooses{instanceDirect === null ? '' : instanceDirect ? ': open it' : ': list it'}</option>
+            <option value="on">Open it straight away</option>
+            <option value="off">List it</option>
+          </select>
+        </div>
+        <p id="search-direct-help" class="text-xs text-zinc-600 dark:text-zinc-400">
+          It opens on its scan page where one is set up for it, or its own page. The page leads back to all the results.
+        </p>
+        <ErrorMessage error={searchError} />
+        {#if searchStatus}<p class="text-sm text-green-700 dark:text-green-400" role="status">{searchStatus}</p>{/if}
+      </section>
+    {/if}
 
     {#if session.can('assets.read')}
       <section class="card space-y-2" aria-labelledby="offline-heading">

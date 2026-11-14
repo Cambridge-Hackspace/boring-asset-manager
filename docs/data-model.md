@@ -645,6 +645,24 @@ words, so they can't search by, or find out about, places or people hidden from 
 The Assets page's **Build a query** writes one from conditions picked from lists, and shows it.
 `~~`, matching through related words, is kept for a later version and refused for now.
 
+#### Going straight to one result
+
+In the web interface, each result in the asset list offers its **configured page** beside its
+own: its scan page (`/scan/{id}`), laid out by the scan template its categories choose
+([scanning](scanning.md)), to those who may scan it. A search that finds exactly one asset can
+open that page straight away instead of listing it, or the asset's own page where no scan template
+applies. The page it opens carries the search (`?search=`) and leads back to all the results
+(`/assets?search=…&all=1`, which lists them without going straight to one again). Only a search
+someone makes goes straight there: the home page's search field, a search typed in the asset list,
+or a link with `search=`. Changing a filter, and archived assets, always list.
+
+Whether it does is the instance's setting, off until an admin turns it on (`search.direct`;
+`GET /api/v1/settings/search` with `assets.read`, `PUT` with `settings.manage`,
+`{"direct": true}`), under **Reports**. Each person may choose otherwise on **Your account**
+(`PUT /api/v1/auth/search-direct` with `{"direct": true}`, `false`, or `null` to follow the
+instance's setting; `search_direct` on their user, `null` until they choose). Signed-out visitors
+follow the instance's setting.
+
 ## Databases
 
 PostgreSQL databases must use the `UTF8` encoding. BAM! refuses to start on any other, including

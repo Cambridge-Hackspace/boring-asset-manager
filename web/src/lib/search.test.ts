@@ -1,5 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { focusOnOpen, isSearchKey, searchHref } from './search';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { allResultsHref, configuredPage, focusOnOpen, isSearchKey, searchDirect, searchHref, straightTo } from './search';
+import { fakeApi } from '../test/fetch';
+import { session } from './session.svelte';
+import type { AssetWithDetails, User } from './models';
+
+const found = (template_id: string) => ({ asset: { id: 'a 1', name: 'Drill' }, scan_template: { template_id } }) as unknown as AssetWithDetails;
+const ada = (search_direct?: boolean | null) => ({ id: 'ada', email: 'ada@hackspace.org', name: 'Ada', is_active: true, created_at: '', updated_at: '', search_direct }) as User;
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  session.user = null;
+  session.permissions = [];
+});
 
 describe('search', () => {
   it('sends a search to the asset list', () => {
@@ -28,5 +40,35 @@ describe('search', () => {
     const editable = document.createElement('div');
     editable.setAttribute('contenteditable', 'true');
     expect(isSearchKey(key({ key: '/' }, editable))).toBe(false);
+  });
+
+  it('lists all the results without going straight to one again', () => {
+    expect(allResultsHref(' drill ')).toBe('/assets?search=drill&all=1');
+    expect(allResultsHref('')).toBe('/assets');
+  });
+
+  it('opens a one result on its scan page where a scan template applies and the viewer scans', () => {
+    expect(configuredPage(found('t'))).toBe('/scan/a%201');
+    expect(configuredPage(found(''))).toBeNull();
+    session.permissions = ['assets.read', 'assets.scan'];
+    expect(straightTo(found('t'), ' dri ')).toBe('/scan/a%201?search=dri');
+    expect(straightTo(found(''), 'dri')).toBe('/assets/a%201?search=dri');
+    session.permissions = ['assets.read'];
+    expect(straightTo(found('t'), 'dri')).toBe('/assets/a%201?search=dri');
+  });
+
+  it('goes straight there as the person chose, or else as the instance does', async () => {
+    const { sent } = fakeApi({ 'GET /settings/search': () => ({ direct: true }) });
+    session.user = ada(false);
+    expect(await searchDirect()).toBe(false);
+    session.user = ada(true);
+    expect(await searchDirect()).toBe(true);
+    expect(sent).toHaveLength(0);
+    session.user = ada(null);
+    expect(await searchDirect()).toBe(true);
+    session.user = null;
+    expect(await searchDirect()).toBe(true);
+    fakeApi({});
+    expect(await searchDirect()).toBe(false);
   });
 });

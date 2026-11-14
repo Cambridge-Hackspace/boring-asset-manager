@@ -102,6 +102,10 @@ func richSeed(t *testing.T, st *store.Store, blobs filestore.Blobs) seeded {
 	if _, err := st.SetUserTheme(s.user.ID, "dark"); err != nil {
 		t.Fatal(err)
 	}
+	off := false
+	if _, err := st.SetUserSearchDirect(s.user.ID, &off); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := st.Exec("INSERT INTO templates (id, name, units, width, height, dpi, layout_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		uuid.NewString(), awkwardText[2], "mm", 62.5, 29.125, 300, layoutJSON(awkwardText[4]),
 		time.Date(2026, 1, 2, 3, 4, 5, 123456000, time.UTC), time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)); err != nil {
@@ -515,6 +519,10 @@ func TestAThemeIsRestored(t *testing.T) {
 	if got := themeOf(dst); got != "dark" {
 		t.Errorf("restored with %q", got)
 	}
+	// A search preference, NULL until chosen, comes back as chosen.
+	if u, err := dst.GetUserByID(s.user.ID); err != nil || u.SearchDirect == nil || *u.SearchDirect {
+		t.Errorf("restored search preference: %v %v", u.SearchDirect, err)
+	}
 
 	// The same archive as v0.16.0 wrote it: no theme in its users' rows.
 	ms := unpack(t, b)
@@ -534,12 +542,13 @@ func TestAThemeIsRestored(t *testing.T) {
 			}
 			// Nor the email preference, which came later still (052), nor
 			// loan reminders (064), nor mention emails (071), nor whether
-			// they can sign in (078).
+			// they can sign in (078), nor their search preference (085).
 			delete(row, "theme")
 			delete(row, "email_notifications")
 			delete(row, "loan_reminders")
 			delete(row, "mention_emails")
 			delete(row, "can_sign_in")
+			delete(row, "search_direct")
 			stripped++
 			data, _ := json.Marshal(row)
 			out.Write(append(data, '\n'))

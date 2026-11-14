@@ -13,6 +13,7 @@
   import AssetIcon from '../components/AssetIcon.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
   import ReportProblemForm from '../components/ReportProblemForm.svelte';
+  import BackToResults from '../components/BackToResults.svelte';
   import ScanResult from '../components/ScanResult.svelte';
   import PoolsSection from '../components/PoolsSection.svelte';
   import SignInToSee from '../components/SignInToSee.svelte';
@@ -118,6 +119,7 @@
 {:else if kept}
   <OfflineAssetCard asset={kept} />
 {:else if scan}
+  <BackToResults />
   <h1 class="mb-4 flex items-center gap-3 text-3xl font-bold"><AssetIcon icon={scan.asset.icon} height={44} />{scan.asset.name}</h1>
   {#if status}<p class="mb-3 text-sm text-green-700 dark:text-green-400" role="status">{status}</p>{/if}
   <ErrorMessage {error} />
