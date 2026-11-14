@@ -5,6 +5,11 @@ test('search by a field, with a query, and build one from lists', async ({ signe
   const tag = unique('query');
   const key = `width_${tag.replace(/[^a-z0-9]/g, '_')}`;
   const shelf = await api.call('POST', '/categories', { name: `Shelf ${tag}` });
+  // Categories that share a name, under different parents, are each offered once.
+  for (const parent of ['Upstairs', 'Downstairs']) {
+    const p = await api.call('POST', '/categories', { name: `${parent} ${tag}` });
+    await api.call('POST', '/categories', { name: `Bin ${tag}`, parent_id: p.category.id });
+  }
   const field = await api.call('POST', '/fields', { key, label: `Width ${tag}`, validation_type: 'number' });
   await api.call('POST', `/categories/${shelf.category.id}/fields`, { field_id: field.field.id, is_required: false });
   for (const [name, width] of [
