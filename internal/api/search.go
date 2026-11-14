@@ -188,7 +188,8 @@ func plainSearch(assets []models.AssetWithDetails, search string, commented map[
 	if len(exact)+len(expanded) > 0 {
 		return append(exact, expanded...)
 	}
-	var near []models.AssetWithDetails
+	// Empty, not nil: finding nothing is "assets": [], never null.
+	near := []models.AssetWithDetails{}
 	for i := range assets {
 		a := &assets[i]
 		if w, ok := terms.Near(search, searchTexts(a)); ok {
