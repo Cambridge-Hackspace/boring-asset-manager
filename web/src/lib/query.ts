@@ -30,6 +30,8 @@ const textOps: QueryOp[] = [
   { op: '!=', label: 'is not' },
   { op: '!~', label: 'does not contain' },
 ];
+// Text also matches through related terms and despite typing mistakes (docs/data-model.md#related-terms).
+const wordOps: QueryOp[] = [...textOps, { op: '~~', label: 'contains, or a related word' }];
 const numberOps: QueryOp[] = [
   { op: '=', label: '=' },
   { op: '!=', label: '≠' },
@@ -57,7 +59,7 @@ const emptyOps: QueryOp[] = [
 
 /** The comparisons a key takes. */
 export function opsFor(k: QueryKey): QueryOp[] {
-  const base = { text: textOps, person: textOps, number: numberOps, date: dateOps, choice: choiceOps, bool: boolOps }[k.kind];
+  const base = { text: wordOps, person: textOps, number: numberOps, date: dateOps, choice: choiceOps, bool: boolOps }[k.kind];
   return k.emptiable ? [...base, ...emptyOps] : base;
 }
 

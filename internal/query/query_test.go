@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/terms"
 )
 
 func TestTellsQueriesFromPlainWords(t *testing.T) {
@@ -126,7 +127,6 @@ func TestSaysWhereAMistakeIs(t *testing.T) {
 		{"AND name = a", "AND", "before AND"},
 		{"condition IN ok", "ok", "list in parentheses"},
 		{"loan IS FULL", "FULL", "EMPTY"},
-		{"name ~~ tpu", "~~", "isn't supported yet"},
 		{"name ! a", "!", "write NOT"},
 		{"name = a ORDER name", "ORDER", "BY"},
 	} {
@@ -349,4 +349,63 @@ func TestNotesArchivedAndTerms(t *testing.T) {
 	if !p.Archived || strings.Join(p.Terms, "|") != "shelf a|drill" {
 		t.Fatalf("archived %v, terms %q", p.Archived, p.Terms)
 	}
+}
+
+func TestDoubleTildeMatchesThroughRelatedTermsAndDespiteTypos(t *testing.T) {
+	g := terms.New([]models.Term{
+		{ID: "flex", Label: "Flexible filament"},
+		{ID: "tpu", Label: "TPU", AltLabels: []string{"thermoplastic polyurethane"}},
+		{ID: "tool", Label: "Tool"},
+		{ID: "drill", Label: "Drill"},
+	}, []models.TermLink{
+		{TermID: "tpu", OtherID: "flex", Relation: models.TermBroader},
+		{TermID: "drill", OtherID: "tool", Relation: models.TermBroader},
+	})
+	assets := shelf()
+	assets[0].Asset.Name = "TPU spool"
+	for q, want := range map[string]struct{ names, why string }{
+		// As typed, it finds what ~ does, with no reason to give.
+		`name ~~ spool`: {"TPU spool,Thick spool", ""},
+		// Through a narrower term.
+		`name ~~ "flexible filament"`: {"TPU spool", "TPU, narrower than Flexible filament"},
+		// Through another name.
+		`name ~~ "thermoplastic polyurethane"`: {"TPU spool", "TPU, another name for thermoplastic polyurethane"},
+		// Broader terms aren't searched: TPU doesn't find flexible filament's other things.
+		`name ~~ tpu`: {"TPU spool", ""},
+		// Despite a typing mistake.
+		`name ~~ dirll`:                   {"Drill", "drill, close to dirll"},
+		`category ~~ tool`:                {"Drill", ""},
+		`category ~~ fillament`:           {"TPU spool,Thick spool", "filament, close to fillament;filament, close to fillament"},
+		`NOT name ~~ "flexible filament"`: {"Thick spool,Drill", ""},
+		// ~ stays exact.
+		`name ~ "flexible filament"`: {"", ""},
+	} {
+		p, err := Compile(q, schema(t))
+		if err != nil {
+			t.Fatalf("Compile(%q): %v", q, err)
+		}
+		e := env()
+		e.Terms, e.Why = g, map[string]string{}
+		var names, why []string
+		for i := range assets {
+			if p.Match(&assets[i], e) {
+				names = append(names, assets[i].Asset.Name)
+				if w := e.Why[assets[i].Asset.ID]; w != "" {
+					why = append(why, w)
+				}
+			}
+		}
+		if got := strings.Join(names, ","); got != want.names {
+			t.Errorf("%s found %q, want %q", q, got, want.names)
+		}
+		if got := strings.Join(why, ";"); got != want.why {
+			t.Errorf("%s said why %q, want %q", q, got, want.why)
+		}
+	}
+	// Without terms, ~~ still forgives typing mistakes.
+	if got := found(t, "name ~~ dirll", shelf()); got != "Drill" {
+		t.Errorf("without terms: %q", got)
+	}
+	_, err := Compile("field.diameter ~~ 2", schema(t))
+	at(t, "field.diameter ~~ 2", err, "field.diameter ~~ 2", "compare it with")
 }

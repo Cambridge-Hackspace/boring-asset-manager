@@ -31,7 +31,8 @@ export type Permission =
   | 'assets.confirm'
   | 'assets.verify'
   | 'assistant.use'
-  | 'lasers.run';
+  | 'lasers.run'
+  | 'terms.manage';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;
@@ -1250,6 +1251,61 @@ export interface Loan {
 }
 
 /** A kind of link between assets, named from each end. */
+/** Who added a related term or link (docs/data-model.md#related-terms), and from where. */
+export interface TermSource {
+  /** person: a person, or an API token, directly; agent: through an assistant over MCP; import: in an import. */
+  source: 'person' | 'agent' | 'import';
+  /** With terms.manage only. */
+  added_by?: string;
+  added_by_token?: boolean;
+  added_by_name?: string;
+  /** The assistant it came through, by the name its MCP client gives. */
+  via?: string;
+  import_id?: string;
+}
+
+/** A thing as people call it: its preferred label, the other names it goes by, and what it means. */
+export interface Term extends TermSource {
+  id: string;
+  label: string;
+  alt_labels: string[];
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A link between terms: term_id narrower than other_id (broader), or the two related. */
+export interface TermLink extends TermSource {
+  term_id: string;
+  other_id: string;
+  relation: 'broader' | 'related';
+  created_at: string;
+}
+
+/** Terms and links added together, to review and remove as one. */
+export interface TermImport extends Omit<TermSource, 'source' | 'import_id'> {
+  id: string;
+  name: string;
+  terms: number;
+  links: number;
+  created_at: string;
+}
+
+/** A term in an import, naming the terms broader than it and related to it by label. */
+export interface TermImportItem {
+  label: string;
+  alt_labels: string[];
+  note: string;
+  broader: string[];
+  related: string[];
+}
+
+/** Another name a search also looks for, and why. */
+export interface TermExpansion {
+  label: string;
+  why: string;
+}
+
 export interface RelationType {
   id: string;
   name: string;

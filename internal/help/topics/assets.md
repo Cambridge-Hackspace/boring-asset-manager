@@ -2,11 +2,14 @@
 
 An asset is anything you keep track of. Open **Assets** to list them; search by name, code, a field's value, or where it is (searching "shelf a" finds what is on Shelf A), or filter by category, condition, loan or favorites. **Assigned to: Me** lists the assets whose person fields name you. The **Where** column says what each is in.
 
+Searching also finds things by what they are, through the [search terms](/help/terms) your space keeps: searching "flexible filament" finds the TPU, with a line saying why ("TPU, narrower than Flexible filament"), after what matches as typed. Related terms are offered under the search, to try instead. When nothing matches, a typing mistake is forgiven: "filamnet" finds filament.
+
 ## Queries
 
 For more than words, type a query into the search box, or choose **Build a query** to pick one from lists and see it written out. A query compares what assets have:
 
 - `field.diameter >= 1.75` compares a field by its key; `name ~ spool` finds part of a name; `in = "shelf a"` finds what is somewhere, at any depth.
+- `name ~~ "flexible filament"` finds part of a name through the search terms, and despite typing mistakes, where `~` finds only what is typed.
 - Join comparisons with `AND`, `OR` and `NOT`, and group them with parentheses: `category = Filament AND (field.material = TPU OR field.material = TPE)`.
 - `condition = problem`, `loan = overdue`, `assigned = me`, `favorite = true`, `quantity < 5` and `created > -30d` (the last 30 days) use what every asset has.
 - `field.serial IS EMPTY` finds assets with no serial number; `field.material IN (PLA, PETG)` either of two.

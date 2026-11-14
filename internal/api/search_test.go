@@ -82,6 +82,25 @@ func TestSearchingByFieldValuesAndQueries(t *testing.T) {
 	}
 }
 
+// A search that finds nothing, not even near its words, answers with an
+// empty list rather than null, which clients read as a list.
+func TestASearchThatFindsNothingListsNothing(t *testing.T) {
+	srv, admin, _ := setupTestServer(t)
+	cookie := sessionCookie(t, srv, admin.ID)
+	filamentShelf(t, srv)
+	for _, search := range []string{"qqqqzzzzxx", `name ~~ "qqqqzzzzxx"`} {
+		rec := doJSON(t, srv, cookie, http.MethodGet, searchPath(search), "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", search, rec.Code, rec.Body)
+		}
+		var resp map[string]json.RawMessage
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if got := string(resp["assets"]); got != "[]" {
+			t.Errorf("%s answered assets %s, want []", search, got)
+		}
+	}
+}
+
 func TestAQueryMistakeSaysWhere(t *testing.T) {
 	srv, admin, _ := setupTestServer(t)
 	cookie := sessionCookie(t, srv, admin.ID)

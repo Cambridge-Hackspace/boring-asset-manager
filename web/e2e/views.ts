@@ -38,6 +38,9 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
   }
   // In a box, so its page shows a location and links.
   const box = await post('/assets', { name: unique('Box') });
+  const broadTerm = await post('/terms', { label: unique('A11y filament'), alt_labels: [unique('a11y strand')], note: 'Wound on a spool.' });
+  const narrowTerm = await post('/terms', { label: unique('A11y TPU') });
+  await request.put(`/api/v1/terms/${narrowTerm.term.id}/links/broader/${broadTerm.term.id}`);
   const { relation_types } = await (await request.get('/api/v1/relation-types')).json();
   const contains = relation_types.find((r: { name: string }) => r.name === 'contains');
   await post(`/assets/${box.asset.asset.id}/links`, { type_id: contains.id, asset_id: asset.asset.asset.id, outgoing: true });
@@ -296,6 +299,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/f/${askSlug}`, ''],
     ['/spool', 'Print queue'],
     ['/relations', 'Link types'],
+    ['/terms', 'Search terms'],
     ['/hooks', 'Hooks'],
     ['/reports', 'Reports'],
     ['/reports/new', 'New report'],

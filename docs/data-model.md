@@ -592,9 +592,51 @@ Search ignores case for every letter, not just ASCII. `%`, `_` and `\` have no s
 Places and people count only as far as the requester may see them, so an asset is never found by
 the name of a place, or a person, hidden from them.
 
+After what matches as typed, plain words also find what matches a [related term](#related-terms)
+they expand to: "flexible filament" finds the TPU. When neither finds anything, they find what
+matches despite a typing mistake: "filamnet" finds filament. A word of five to eight letters may
+have one mistake (a letter added, missing, changed, or two swapped), and a longer one two;
+shorter words, and codes, match only as typed. On the asset list, `matched` says why each asset
+found these ways matched, by its ID, and `suggestions` lists related terms to search for instead,
+which were not searched:
+`{"assets": [...], "matched": {"<id>": "TPU, narrower than Flexible filament"}, "suggestions": ["TPE"]}`.
+Each is left out when empty.
+
+### Related terms
+
+The instance keeps a graph of what things are called, shaped like [W3C
+SKOS](https://www.w3.org/TR/skos-reference/), so that people find things by what they are, not
+only by what they're named:
+
+- a **term** has a preferred label ("TPU"), no two terms' alike ignoring case, and other names it
+  goes by ("thermoplastic polyurethane"), with a note on what it means;
+- terms link as **broader** and **narrower** ("TPU" is narrower than "flexible filament"), or as
+  **related** ("TPU" and "TPE").
+
+A search for a term's label, or any of its other names, also looks for its other names and for
+every name of every term narrower than it, however far down: "flexible filament" finds the TPU
+and the TPE. Broader terms are not looked for (a search for "TPU" doesn't find all filament), and
+related terms are only suggested. Each asset found this way says why, along the path it was
+reached by: "TPU 95A, narrower than TPU, narrower than Flexible filament". Names are matched as
+plain words are, and also against the names of the asset's categories. Nothing leaves the server
+when searching.
+
+Each term and link records who added it (a person, or an API token), the assistant it was added
+through over MCP, if any, and the import it came in, if any. An **import** is many terms and links
+added at once, from a file or by an assistant (`import_terms`), which can be reviewed, and removed
+as one: removing it removes the terms and links it added, and any link to its terms. A term whose
+label another has already is not added again by an import; its links are added to that one.
+Links already there, or that would make a term narrower than itself, are left out.
+
+**Search terms** (under Catalog) shows and edits the terms, with `terms.manage`. BAM! runs no
+assistant of its own to fill them in: a person's own assistant, through [MCP](mcp.md) as that
+person, can, under the same permission ("look through our filament categories and add the terms
+people might search for"). Terms are backed up and restored with the catalog
+([Backups](backups.md)).
+
 ### Queries
 
-A search is a query when it holds a comparison (`=`, `!=`, `~`, `!~`, `<`, `<=`, `>`, `>=`) or
+A search is a query when it holds a comparison (`=`, `!=`, `~`, `!~`, `~~`, `<`, `<=`, `>`, `>=`) or
 `ORDER BY` outside quotes; anything else is plain words. In the spirit of Jira's JQL:
 
 ```
@@ -602,6 +644,7 @@ category = Filament AND field.diameter >= 1.75 AND in ~ "shelf a" ORDER BY name
 field.bought < -1y OR condition = problem ORDER BY field.bought DESC
 assigned = me AND loan IS EMPTY
 "red box" OR code.nfc = 04A23B1C
+name ~~ "flexible filament" AND condition = ok
 ```
 
 | Key | Is | Finds |
@@ -622,18 +665,23 @@ assigned = me AND loan IS EMPTY
 Comparisons:
 
 - `=` and `!=` compare whole values; `~` and `!~` look for part of one. Text ignores case.
+- `~~` looks for part of one too, and also through the [related terms](#related-terms) it expands
+  to, and despite a typing mistake, as plain words do, saying why in `matched`. `~` stays exact.
+  `NOT key ~~ value` finds the rest.
 - `<`, `<=`, `>` and `>=` compare numbers and dates.
 - `key IN (a, b)` and `key NOT IN (a, b)`; `key IS EMPTY` and `key IS NOT EMPTY`.
 - `!=`, `!~` and `NOT IN` also find assets with no value.
 - `AND` binds before `OR`; `NOT` and parentheses group. Keywords are in any case.
 - A value with spaces or `( ) = ! ~ < > , " '` goes in double or single quotes, with `\` before a
   quote inside. Quoted, `me` is only a name.
-- A word or a quoted phrase standing alone matches as plain words do: `"red box" AND condition = ok`.
+- A word or a quoted phrase standing alone matches as plain words do, as typed:
+  `"red box" AND condition = ok`. Write `name ~~ ...` to expand it.
 - Dates are a day (`2026-03-01`, the whole day in UTC), an instant (RFC 3339), `today`, `now`, or a
   time from now: `-30d`, `+2w`, with `h` hours, `d` days, `w` weeks, `m` months and `y` years. With
   `=`, a time from now means its day.
 - `ORDER BY key [ASC | DESC], ...` sorts by text, numbers, dates or the first category. Assets
-  without a value come last either way. Without it, the list keeps its usual order.
+  without a value come last either way. Without it, the list keeps its usual order, with what
+  `~~` found other than as typed after the rest.
 
 A query that can't be run is refused with `400` and where the mistake is:
 `{"error": "...", "query_error": {"message": "no field has the key \"colour\"", "start": 0, "end": 12}}`,
@@ -643,7 +691,6 @@ whose query names a field that has since been deleted answers `409` when run.
 Queries are matched against the assets as the requester may see them, the same way as plain
 words, so they can't search by, or find out about, places or people hidden from the requester.
 The Assets page's **Build a query** writes one from conditions picked from lists, and shows it.
-`~~`, matching through related words, is kept for a later version and refused for now.
 
 ## Databases
 
@@ -659,6 +706,14 @@ versions, which took the database's default (often `latin1`, with a case-insensi
 
 | Method and route | Permission | Purpose |
 |---|---|---|
+| `GET /api/v1/terms` | `assets.read` | The [related terms](#related-terms), by label, as `terms`, with each one's `alt_labels`, `note` and `source` (`person`, `agent` or `import`), the `links` between them (`term_id` narrower than `other_id` for `broader`), and, with `terms.manage`, who added each and the `imports`. |
+| `GET /api/v1/terms/expand?q=` | `assets.read` | What a search for `q` also looks for, as `expansion` (`label` and `why`), and the `related` terms suggested in its place. |
+| `GET /api/v1/terms/{id}` | `assets.read` | One term, as `term`. |
+| `POST /api/v1/terms`, `PUT /api/v1/terms/{id}` | `terms.manage` | Add a term, or change one, with `{"label", "alt_labels", "note"}`. A label another term has already answers `409` with its `term_id`. |
+| `DELETE /api/v1/terms/{id}` | `terms.manage` | Remove a term, with its links. |
+| `PUT`, `DELETE /api/v1/terms/{id}/links/{relation}/{other}` | `terms.manage` | Link two terms, or unlink them: `broader`, `narrower` or `related`. Linking them again changes nothing; a link that would make a term narrower than itself is refused. |
+| `POST /api/v1/terms/imports` | `terms.manage` | Import terms as one, with `{"name", "terms": [{"label", "alt_labels", "note", "broader": [labels], "related": [labels]}]}`, at most 50,000. Answers `201` with `import`, counting the `terms` and `links` it added. |
+| `DELETE /api/v1/terms/imports/{id}` | `terms.manage` | Remove an import: the terms and links it added, and links to its terms. |
 | `POST /api/v1/categories/{id}/clone` | `categories.manage` | Duplicate a category. Optional body `{"name"}`. Answers `201` with the copy. |
 | `GET /api/v1/categories/{id}/relation-types` | `assets.read` | The relation types a category suggests. |
 | `PUT /api/v1/categories/{id}/relation-types` | `categories.manage` | Set them, with `{"relation_type_ids": [...]}`. |

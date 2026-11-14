@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import AssetsPage from './AssetsPage.svelte';
 import { fakeApi } from '../../test/fetch';
 import { navigate } from '../../lib/router.svelte';
@@ -67,6 +67,29 @@ describe('AssetsPage', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole('link', { name: 'Saw' })).toBeNull();
     expect(screen.getAllByRole('row')).toHaveLength(2);
+  });
+
+  it('says why an asset matched through a related term, and offers related terms to search for', async () => {
+    let calls = 0;
+    fakeApi({
+      'GET /categories': () => ({ categories: [category] }),
+      'GET /assets': () => {
+        calls++;
+        return calls === 1
+          ? { assets: [asset('a1', 'Black TPU'), asset('a2', 'Flexible filament sampler')], matched: { a1: 'TPU, narrower than Flexible filament' }, suggestions: ['TPE'] }
+          : { assets: [asset('a3', 'TPE spool')] };
+      },
+    });
+    render(AssetsPage, { params: {} });
+    const why = await screen.findByTestId('match-why');
+    expect(why.textContent).toBe('Found as TPU, narrower than Flexible filament');
+    expect(why.closest('tr')!.textContent).toContain('Black TPU');
+    expect(screen.getAllByTestId('match-why')).toHaveLength(1);
+
+    await fireEvent.click(within(screen.getByTestId('search-suggestions')).getByRole('button', { name: 'TPE' }));
+    expect(await screen.findByRole('link', { name: 'TPE spool' })).toBeTruthy();
+    expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('TPE');
+    expect(screen.queryByTestId('search-suggestions')).toBeNull();
   });
 
   it('marks assets whose scan template was chosen by a tie', async () => {
