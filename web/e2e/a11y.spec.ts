@@ -52,9 +52,14 @@ test('keyboard only: sign in, find the assets, and create one', async ({ page })
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome');
 
-  // The skip link comes first, then the navigation.
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
+  // The home page opens ready to search; the skip link and the navigation
+  // come before it.
+  await expect(page.getByRole('searchbox', { name: 'Search' })).toBeFocused();
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  for (let i = 0; i < 20 && !(await skip.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press('Shift+Tab');
+  }
+  await expect(skip).toBeFocused();
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Assets' })).toBeFocused();

@@ -10,6 +10,7 @@
   import { navSections, type NavLink } from '../lib/nav';
   import { navigate } from '../lib/router.svelte';
   import { scanTarget } from '../lib/scan';
+  import { focusOnOpen, isSearchKey, searchHref } from '../lib/search';
   import { displayName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
@@ -93,6 +94,25 @@
     if (to) navigate(to);
   }
 
+  // Search (docs/data-model.md#search), handed to the asset list.
+  let words = $state('');
+  let searchField = $state<HTMLInputElement>();
+  function search(event: SubmitEvent) {
+    event.preventDefault();
+    navigate(searchHref(words));
+  }
+  function searchKey(e: KeyboardEvent) {
+    if (!searchField || !isSearchKey(e)) return;
+    e.preventDefault();
+    searchField.focus();
+  }
+
+  onMount(() => {
+    // After the page is in place, so that moving focus to the page on
+    // arrival doesn't take it straight back.
+    if (searchField && focusOnOpen()) setTimeout(() => searchField?.focus());
+  });
+
   onMount(async () => {
     favorites
       .load(true)
@@ -141,6 +161,8 @@
   });
 </script>
 
+<svelte:window onkeydown={searchKey} />
+
 <div class="space-y-8">
   <div>
     <h1 class="text-3xl font-bold tracking-tight">Welcome</h1>
@@ -149,6 +171,15 @@
 
   <ErrorMessage {error} />
   {#if session.canAny('users.manage', 'settings.manage')}<SetupChecklist />{/if}
+  {#if session.can('assets.read')}
+    <form class="flex max-w-2xl flex-wrap items-end gap-3" role="search" aria-label="Search assets" onsubmit={search}>
+      <div class="min-w-60 grow">
+        <label class="label" for="home-search">Search</label>
+        <input id="home-search" class="input text-base" type="search" autocomplete="off" placeholder="Name, code, or where it is" aria-keyshortcuts="/" bind:value={words} bind:this={searchField} />
+      </div>
+      <button type="submit" class="btn-primary">Search</button>
+    </form>
+  {/if}
   {#if session.can('assets.scan')}
     <form class="flex max-w-2xl flex-wrap items-end gap-3" role="search" onsubmit={lookUp}>
       <div class="min-w-60 grow">
