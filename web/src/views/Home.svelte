@@ -10,7 +10,7 @@
   import { navSections, type NavLink } from '../lib/nav';
   import { navigate } from '../lib/router.svelte';
   import { scanTarget } from '../lib/scan';
-  import { focusOnOpen, isSearchKey, searchHref } from '../lib/search';
+  import { isSearchKey, searchHref } from '../lib/search';
   import { displayName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
@@ -106,12 +106,6 @@
     e.preventDefault();
     searchField.focus();
   }
-
-  onMount(() => {
-    // After the page is in place, so that moving focus to the page on
-    // arrival doesn't take it straight back.
-    if (searchField && focusOnOpen()) setTimeout(() => searchField?.focus());
-  });
 
   onMount(async () => {
     favorites

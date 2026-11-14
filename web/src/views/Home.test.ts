@@ -122,8 +122,6 @@ describe('Home', () => {
 });
 
 describe('searching from the home page', () => {
-  const fine = (matches: boolean) => vi.stubGlobal('matchMedia', (q: string) => ({ matches: matches && q === '(pointer: fine)' }));
-
   it('hands the search to the asset list', async () => {
     api([]);
     navigate('/');
@@ -142,15 +140,9 @@ describe('searching from the home page', () => {
     expect(screen.queryByRole('search', { name: 'Search assets' })).toBeNull();
   });
 
-  it('takes focus when the page opens with a mouse, not on a touch screen', async () => {
+  it("doesn't take focus when the page opens, even with a mouse", async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
     api([]);
-    fine(true);
-    render(Home, { params: {} });
-    const field = screen.getByRole('searchbox', { name: 'Search' });
-    await vi.waitFor(() => expect(document.activeElement).toBe(field));
-    cleanup();
-
-    fine(false);
     render(Home, { params: {} });
     await new Promise((r) => setTimeout(r, 10));
     expect(document.activeElement).not.toBe(screen.getByRole('searchbox', { name: 'Search' }));
