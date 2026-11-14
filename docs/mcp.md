@@ -134,7 +134,7 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 
 | Tool | Permission | What it does |
 | :--- | :--- | :--- |
-| `search_assets` | `assets.read` | Every filter the asset list takes, favorites and the vendor bought from among them, and running low; 25 at a time, up to 200, with `offset`. |
+| `search_assets` | `assets.read` | Every filter the asset list takes, favorites and the vendor bought from among them, and running low; 25 at a time, up to 200, with `offset`. Its `search` takes plain words or a [query](data-model.md#queries), whose language the tool describes; a query's mistake comes back saying what is wrong. |
 | `get_asset` | `assets.read` | Its fields (a person field's names and user IDs, as the caller may see them), codes, place, contents, links, photos, hooks and icon, and where the icon comes from; and where it came from, its `purchase`, its price, order number and invoice only with `purchases.read`; the categories it `counts_in` through links, and the `pools` its stock counts in, with where else theirs is. |
 | `look_up_code` | `assets.scan` | Its scan page ([Scanning](scanning.md)). |
 | `asset_history` | `assets.read` | |

@@ -140,6 +140,11 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	// The search is matched once the assets are as the request may see
 	// them, so where they are counts only as far as it may read.
 	search := q.Get("search")
+	plan, err := s.compileSearch(r, search)
+	if err != nil {
+		searchFailed(w, err)
+		return nil, false
+	}
 	f := store.AssetFilter{CategoryID: q.Get("category_id"), Condition: q.Get("condition"), Loan: q.Get("loan"), Icon: q.Get("icon"), VendorID: q.Get("vendor_id"),
 		Person: q.Get("person"), PersonField: q.Get("person_field"), Review: q.Get("review")}
 	// ?person=me finds the assets whose person fields name the requester
@@ -179,6 +184,15 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 		return nil, false
 	}
 	assets, err := s.store.FilterAssets(f)
+	// A query asking whether assets are archived looks among both, unless
+	// the request chose one.
+	if err == nil && plan != nil && plan.Archived && q.Get("archived") == "" {
+		var archived []models.AssetWithDetails
+		f.Archived = true
+		if archived, err = s.store.FilterAssets(f); err == nil {
+			assets = append(assets, archived...)
+		}
+	}
 	if errors.Is(err, store.ErrInvalidCondition) {
 		writeJSONError(w, http.StatusBadRequest, "condition must be ok, needs_maintenance, out_of_service or problem")
 		return nil, false
@@ -206,12 +220,10 @@ func (s *Server) filterAssets(w http.ResponseWriter, r *http.Request, q url.Valu
 	// A search also finds assets by their comments' text, and their
 	// loans' and filings' (docs/comments.md); the assets are already
 	// those the request may read, and so their comments.
-	commented, err := s.store.CommentedAssets(search)
-	if err != nil {
-		writeServerError(w, err, "search the comments")
+	if assets, err = s.search(r, assets, search, plan, true); err != nil {
+		searchFailed(w, err)
 		return nil, false
 	}
-	assets = searchedOrCommented(assets, search, commented)
 	// ?favorite=true keeps those the person has starred (docs/favorites.md).
 	switch q.Get("favorite") {
 	case "", "false":
@@ -478,7 +490,15 @@ func (s *Server) exportedAssets(w http.ResponseWriter, r *http.Request) ([]model
 		writeServerError(w, err, "read the assets' links")
 		return nil, nil, nil, false
 	}
-	assets = searched(assets, r.URL.Query().Get("search"))
+	search := r.URL.Query().Get("search")
+	plan, err := s.compileSearch(r, search)
+	if err == nil {
+		assets, err = s.search(r, assets, search, plan, false)
+	}
+	if err != nil {
+		searchFailed(w, err)
+		return nil, nil, nil, false
+	}
 	cats, err := s.store.ListAllCategories()
 	if err != nil {
 		writeServerError(w, err, "list categories")
