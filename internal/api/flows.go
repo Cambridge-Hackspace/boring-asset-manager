@@ -239,7 +239,20 @@ func (s *Server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeStoreError(w, err, "save the flow")
 	default:
-		writeJSON(w, status, map[string]any{"flow": f})
+		out := map[string]any{"flow": f}
+		// Saved, but a public flow the public role can find nothing with
+		// says so (#397): its page, opened signed out, would stay empty.
+		if f.Definition.Public {
+			none, err := s.publicReadsNone(&f.Definition)
+			if err != nil {
+				writeServerError(w, err, "read the public role")
+				return
+			}
+			if none {
+				out["warnings"] = []string{"The public role may read assets in none of this flow's categories, so signed out, it finds nothing. Give the public role assets.read in their scopes, under Roles."}
+			}
+		}
+		writeJSON(w, status, out)
 	}
 }
 

@@ -7,7 +7,7 @@ import { scanTarget } from './scan';
 /** The version of the definition this interface reads and writes (#174). */
 export const definitionVersion = 2;
 
-export type StepKind = 'choose_category' | 'form' | 'set_fields' | 'find' | 'create' | 'link' | 'label' | 'change' | 'confirm' | 'done';
+export type StepKind = 'choose_category' | 'form' | 'set_fields' | 'find' | 'create' | 'link' | 'label' | 'change' | 'confirm' | 'done' | 'search';
 
 export interface Condition {
   value: string;
@@ -116,6 +116,35 @@ export interface Step {
   required?: boolean;
   allow_create?: boolean;
   create_category?: string;
+  /**
+   * Search (#397): plain words or a query that narrows every search; what
+   * the results show beside each name; and how many seconds unused before
+   * it clears, 0 for never.
+   */
+  filter?: string;
+  columns?: SearchColumn[];
+  reset_after?: number;
+}
+
+/** What a Search step's results may show beside each asset's name. */
+export type SearchColumn = 'where' | 'categories' | 'stock' | 'codes';
+
+/** A Search step's wait before it clears, when it is first added: two minutes. */
+export const defaultResetAfter = 120;
+
+/** A Search flow's page as whoever opens it sees it (GET /flows/:slug/search). */
+export interface FlowSearchView {
+  name: string;
+  title?: string;
+  text?: string;
+  columns: SearchColumn[];
+  reset_after: number;
+  public: boolean;
+}
+
+/** The one Search step of a flow that only searches, or null. */
+export function searchStepOf(d: Pick<Definition, 'steps'>): Step | null {
+  return d.steps.length === 1 && d.steps[0]!.kind === 'search' ? d.steps[0]! : null;
 }
 
 export interface Definition {
@@ -125,6 +154,8 @@ export interface Definition {
   steps: Step[];
   /** The key of a date field: what the flow files is overdue once it has passed. */
   leave_until?: string;
+  /** Signed-out visitors may open it, as the public role: only a flow that only searches (#397). */
+  public?: boolean;
 }
 
 /** Something a flow filed that is past its date to collect by. */

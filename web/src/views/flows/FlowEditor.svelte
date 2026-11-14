@@ -7,7 +7,7 @@
   import { messageOf } from '../../lib/errors';
   import { navigate } from '../../lib/router.svelte';
   import type { AssetHook, Category, EffectiveField, Field, Printer, PrinterPool, RelationType, TemplateSummary } from '../../lib/models';
-  import { definitionVersion, type Definition, type Flow, type FlowProblem, type Starter, type StepKind } from '../../lib/flows';
+  import { defaultResetAfter, definitionVersion, searchStepOf, type Definition, type Flow, type FlowProblem, type Starter, type Step, type StepKind } from '../../lib/flows';
   import {
     addStep,
     addableKinds,
@@ -26,6 +26,7 @@
   import MenuButton from '../../components/MenuButton.svelte';
   import FlowStepEditor from './FlowStepEditor.svelte';
   import FlowPreview from './FlowPreview.svelte';
+  import FlowSearchSettings from './FlowSearchSettings.svelte';
 
   let { params }: { params: Record<string, string> } = $props();
   const editing = $derived(params.slug ?? '');
@@ -33,6 +34,8 @@
   let loading = $state(true);
   let error = $state('');
   let saved = $state('');
+  // What saving said to look at, such as a public flow the public role finds nothing with.
+  let warnings = $state<string[]>([]);
   let problems = $state<FlowProblem[]>([]);
 
   let name = $state('');
@@ -41,6 +44,22 @@
   let enabled = $state(true);
   let def = $state<Definition>({ version: definitionVersion, category_ids: [], steps: [{ id: 'done', kind: 'done', title: 'Done' }] });
   let selected = $state(0);
+  // A flow that only searches (#397) has one Search step and its own
+  // settings; its steps, if it had any, wait in case it goes back.
+  const searching = $derived(!!searchStepOf(def));
+  let stashed: Step[] | null = null;
+
+  function setMode(search: boolean) {
+    if (search === searching) return;
+    if (search) {
+      stashed = def.steps;
+      def.steps = [{ id: 'search', kind: 'search', title: 'Find something', columns: ['where', 'categories'], reset_after: defaultResetAfter }];
+    } else {
+      def.steps = stashed ?? [{ id: 'done', kind: 'done', title: 'Done' }];
+      def.public = false;
+    }
+    selected = 0;
+  }
 
   // A new flow starts from a starter, over the categories chosen.
   let starters = $state<Starter[]>([]);
@@ -171,6 +190,7 @@
   async function save(event: SubmitEvent) {
     event.preventDefault();
     saved = error = '';
+    warnings = [];
     problems = checkFlow(def, catalog);
     if (problems.length) {
       error = 'The flow cannot be saved yet: see what is said beside each step.';
@@ -179,9 +199,10 @@
     const body = { slug, name, enabled, definition: def };
     try {
       const res = editing
-        ? await request<{ flow: Flow }>('PUT', `/flows/${encodeURIComponent(editing)}`, body)
-        : await request<{ flow: Flow }>('POST', '/flows', body);
+        ? await request<{ flow: Flow; warnings?: string[] }>('PUT', `/flows/${encodeURIComponent(editing)}`, body)
+        : await request<{ flow: Flow; warnings?: string[] }>('POST', '/flows', body);
       saved = `Saved ${res.flow.name}.`;
+      warnings = res.warnings ?? [];
       // A new flow, or a new address, opens at its address; it says so there.
       if (res.flow.slug !== editing) navigate(`/flows/${encodeURIComponent(res.flow.slug)}/edit?saved=1`);
     } catch (err) {
@@ -207,6 +228,7 @@
 </div>
 <ErrorMessage {error} />
 {#if saved}<p class="mb-2 text-sm text-green-700 dark:text-green-400" role="status">{saved}</p>{/if}
+{#each warnings as w, i (i)}<p class="notice mb-2 text-sm" role="status">{w}</p>{/each}
 
 {#if loading}
   <p role="status" class="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
@@ -236,6 +258,14 @@
           <CategoryPicker id="flow-categories" label="Files into, or takes from" categories={allCategories} bind:value={def.category_ids} />
           <p class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">A Choose category step offers these as buttons. Open a category with › to choose ones under it.</p>
         </div>
+        <fieldset>
+          <legend class="label">What it does</legend>
+          <div class="flex flex-wrap gap-x-4">
+            <label class="inline-flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="flow-mode" checked={!searching} onchange={() => setMode(false)} /> Steps, one screen at a time</label>
+            <label class="inline-flex min-h-11 items-center gap-2 text-sm"><input type="radio" name="flow-mode" checked={searching} onchange={() => setMode(true)} /> A search page, for a kiosk or the shop’s tablet</label>
+          </div>
+        </fieldset>
+        {#if !searching}
         <div>
           <label class="label" for="flow-until">A date to collect by</label>
           <select id="flow-until" class="input" bind:value={def.leave_until} aria-describedby="flow-until-help">
@@ -246,9 +276,10 @@
             What it files is overdue the day after this date, listed here, and announced once to the channels that follow it.
           </p>
         </div>
+        {/if}
         <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={enabled} /> Turned on: listed, and runnable</label>
         {#each flowProblems as m, i (i)}<p class="error-text">{m}</p>{/each}
-        {#if !editing}
+        {#if !editing && !searching}
           <div class="flex flex-wrap items-end gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
             <div>
               <label class="label" for="flow-starter">Start from</label>
@@ -263,6 +294,10 @@
         {/if}
       </section>
 
+      {#if searching}
+        <FlowSearchSettings bind:step={() => def.steps[0]!, (v) => (def.steps[0] = v)} bind:public={() => def.public ?? false, (v) => (def.public = v)} />
+        {#each problemsOf(problems, def.steps[0]?.id) as m, j (j)}<p class="error-text" role="alert">{m}</p>{/each}
+      {:else}
       <section aria-labelledby="flow-steps" class="space-y-2">
         <h2 id="flow-steps" class="text-lg font-semibold">Steps</h2>
         <p class="text-sm text-zinc-600 dark:text-zinc-400">What a person sees, one screen at a time. Choose a step to edit it and see it in the preview.</p>
@@ -334,6 +369,7 @@
         <MenuButton id="flow-add" label="Add a step" items={addableKinds.map((k) => ({ label: kindLabels[k], description: kindHelp[k], run: () => add(k) }))} />
         <p class="text-xs text-zinc-600 dark:text-zinc-400">It goes in before Done.</p>
       </div>
+      {/if}
 
       <div class="flex flex-wrap items-center justify-between gap-2 border-t-2 border-zinc-900 pt-4 dark:border-zinc-400">
         <a class="inline-flex min-h-11 items-center underline underline-offset-4" href="/flows">Back to flows</a>
@@ -342,11 +378,20 @@
     </div>
 
     <aside class="space-y-2 lg:sticky lg:top-4 lg:self-start" aria-label="Preview">
+      {#if searching}
+        <p class="font-mono text-xs tracking-wide text-zinc-600 uppercase dark:text-zinc-400">Preview</p>
+        <div class="card space-y-2 text-sm">
+          <p class="text-2xl font-bold">{def.steps[0]?.title || name || 'Find something'}</p>
+          {#if def.steps[0]?.text}<p>{def.steps[0].text}</p>{/if}
+          <p class="text-zinc-600 dark:text-zinc-400">A search box, and what it finds as the asset list shows it. Try it to search for real.</p>
+        </div>
+      {:else}
       <p class="font-mono text-xs tracking-wide text-zinc-600 uppercase dark:text-zinc-400">
         Preview ·
         {#if shownProgress}step {shownProgress.step} of {shownProgress.of}{:else if def.steps[selected]?.kind === 'done'}the end{:else}asks nothing, so a run does it and moves on{/if}
       </p>
       <FlowPreview step={def.steps[selected] ?? null} flowName={name} categories={flowCategories} progress={shownProgress} {allCategories} {relationTypes} />
+      {/if}
     </aside>
   </form>
 {/if}

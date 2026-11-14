@@ -152,6 +152,10 @@ func (f *flowRunner) startRun() (*models.FlowRun, error) {
 	} else if !may || !f.flow.Enabled {
 		return nil, &flowError{Status: http.StatusNotFound, Message: "Flow not found"}
 	}
+	if f.flow.Definition.SearchOnly() != nil {
+		// It has nothing to run: its page searches (#397).
+		return nil, &flowError{Status: http.StatusConflict, Message: "This flow searches, and has no run to start: open its page to search"}
+	}
 	st := store.FlowRunState{Values: f.startValues(), Done: []models.FlowDone{}}
 	st.Step = f.flow.Definition.Next(0, st.Values)
 	run, err := f.s.store.CreateFlowRun(f.flow.ID, u.ID, st)
@@ -1124,6 +1128,13 @@ func (s *Server) checkFlow(r *http.Request, d *flows.Definition) ([]flows.Proble
 		return nil, err
 	}
 	problems := d.Check(catalog)
+	// A Search step's filter names fields and keys as the instance has
+	// them now (docs/data-model.md#queries).
+	if step := d.SearchOnly(); step != nil {
+		if _, err := s.compileSearch(r, step.Filter); err != nil {
+			problems = append(problems, flows.Problem{Step: step.ID, Message: "its filter is not a query that runs: " + err.Error()})
+		}
+	}
 	for _, p := range d.Permissions() {
 		if !HasPermission(r.Context(), p) {
 			problems = append(problems, flows.Problem{Message: fmt.Sprintf("its steps use %s, which you do not hold", p)})

@@ -602,6 +602,9 @@ which were not searched:
 `{"assets": [...], "matched": {"<id>": "TPU, narrower than Flexible filament"}, "suggestions": ["TPE"]}`.
 Each is left out when empty.
 
+A flow's [search page](flows.md#a-search-page), such as one on a kiosk, searches the same way among
+the flow's categories, with its own filter, and shows its results as the asset list does.
+
 ### Related terms
 
 The instance keeps a graph of what things are called, shaped like [W3C

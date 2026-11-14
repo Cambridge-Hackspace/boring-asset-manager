@@ -56,7 +56,7 @@ import TermsPage from './views/TermsPage.svelte';
 import HooksPage from './views/HooksPage.svelte';
 import IconsPage from './views/icons/IconsPage.svelte';
 import FlowsPage from './views/flows/FlowsPage.svelte';
-import FlowRunPage from './views/flows/FlowRunPage.svelte';
+import FlowPage from './views/flows/FlowPage.svelte';
 import FlowEditor from './views/flows/FlowEditor.svelte';
 import FlowPosterPage from './views/flows/FlowPosterPage.svelte';
 import AssistantPage from './views/admin/AssistantPage.svelte';
@@ -75,6 +75,8 @@ export interface Route {
   group?: NavGroup;
   /** Signed-out visitors may open it too, when the public role allows (docs/access.md). */
   public?: boolean;
+  /** Signed out, a kiosk's page: no navigation, help or footer, only signing in (#397). */
+  kiosk?: boolean;
   /** A workspace, such as the template editor: the whole window below the header, and no footer. */
   workspace?: boolean;
   /** It works from the offline copy, opened with no connection (docs/installing.md#offline). */
@@ -96,7 +98,8 @@ export const routes: Route[] = [
   { pattern: '/flows/new', component: FlowEditor, title: 'New flow', permissions: ['flows.manage'] },
   { pattern: '/flows/:slug/edit', component: FlowEditor, title: 'Edit flow', permissions: ['flows.manage'] },
   { pattern: '/flows/:slug/poster', component: FlowPosterPage, title: 'Flow poster', permissions: ['flows.manage', 'flows.run'] },
-  { pattern: '/f/:slug', component: FlowRunPage, title: 'Flow', permissions: ['flows.run'] },
+  // A flow that only searches is open to signed-out visitors where it is public (#397).
+  { pattern: '/f/:slug', component: FlowPage, title: 'Flow', permissions: ['flows.run', 'flows.manage', 'assets.read'], public: true, kiosk: true },
   { pattern: '/loans', component: LoansPage, title: 'Loans', permissions: ['assets.track'], nav: 'Loans' },
   // The installed app's Shopping list shortcut (docs/installing.md#shortcuts).
   { pattern: '/shopping', component: ShoppingListPage, title: 'Shopping list', permissions: ['assets.read'], offline: true },

@@ -28,6 +28,7 @@ could do:
 | Borrow to oneself, or return | `assets.borrow` |
 | Trigger a hook | `assets.hook` |
 | Find | `assets.read`, and `assets.scan` to find by scanning |
+| Search | `assets.read` |
 | Link | `assets.write`; and, to find what to link to, `assets.read`, and `assets.scan` to find by scanning |
 
 A Link step also needs its creator to hold `assets.read` in the scopes of each category it finds in,
@@ -50,6 +51,37 @@ Each type of question has its own control:
 - photo: a photo to take or choose
 
 The page shows progress, such as "step 2 of 3". See [Progress](#progress).
+
+### A search page
+
+A flow whose one step is a [Search](#search-search) has no steps to follow: `/f/<slug>` is a search
+page, for a kiosk or the shop's tablet (#397). It has a search box, and its results are the asset
+list's, shown by the same component, so what search does there it does here: plain words or a
+[query](data-model.md#queries), why each result matched, related terms to try, and going straight
+to a search's one result where that is chosen ([Search](data-model.md#search)). It finds the
+active assets in the flow's categories or below them that its filter and the search both match.
+Nothing is listed until something is searched for.
+
+A result opens on the same page, laid out by its [scan template](scanning.md) where it may be
+scanned, without its quick actions, and **Back to the results** returns; history moves between
+them too. Places show as text, not links, and nothing else on the page leads away from it.
+
+After the number of seconds the step sets with nothing touched, the page starts over for the next
+person: the search cleared, nothing opened. It is set per flow, by whoever makes it, from 10
+seconds to a day, or never.
+
+#### Open to signed-out visitors
+
+A search page can be **public** (`"public": true` on the definition): anyone may open it, signed
+out, as on a kiosk left open in the shop. Signed out, it searches as the public role
+([Access](access.md)), so it finds only what a signed-out visitor could already read in the flow's
+categories, and searches assets alone, not their comments. Signed out, the page has no navigation,
+help or footer: only **Sign in**. Signed in, it searches with the person's own permissions.
+
+Only a flow that only searches can be public: flows that change things need someone signed in.
+Saving a public flow over categories in which the public role may read nothing saves it, and
+says so (`warnings` beside the flow), since it would find nothing signed out. A flow that isn't
+public is for those who may run it, as any flow is.
 
 ### What a run does
 
@@ -313,6 +345,18 @@ Does, in order, any of:
 Archiving is how bam removes an asset: it is kept, out of the lists, and restorable. Setting its
 fields is a Set fields step's job.
 
+#### Search (`search`)
+
+A search box over the flow's categories, as [A search page](#a-search-page) describes. It is its
+flow's only step, and such a flow needs no Done. `filter` is plain words or a query that every
+search keeps to, joined to what is typed, such as `condition = ok`; it is checked as the flow is
+saved, and a field it names deleted since says so when searched. `columns` are what the results
+show beside each name, of `where`, `categories`, `stock` and `codes` (`where` and `categories`
+when empty). `reset_after` is how many seconds unused before the page starts over, 10 to 86400, or
+0 for never.
+
+A search flow has no runs: starting one is refused (`409`).
+
 #### Confirm and Done (`confirm`, `done`)
 
 `confirm` shows what will happen, including Set fields' values and each link a Link to named
@@ -420,11 +464,23 @@ starts again.
 | `DELETE` | `/api/v1/flows/{slug}` | `flows.manage` | Delete a flow. |
 | `GET` | `/api/v1/flow-starters?category_ids=…` | `flows.manage` | The starters over those categories, to adjust and save. |
 | `GET` | `/api/v1/flows/{slug}/qr.svg` | | The QR code for the flow's poster. |
+| `GET` | `/api/v1/flows/{slug}/search?search=…` | Anyone, for a public flow; else `flows.run` | Search as a search page does. |
 | `GET` | `/api/v1/assets/{id}/flows` | `flows.run` | The flows the requester may start from an asset. |
 | `POST` | `/api/v1/flows/{slug}/runs` | `flows.run` | Start a run. |
 | `GET` | `/api/v1/flows/{slug}/runs/{id}` | The run's starter | Read a run. |
 | `POST` | `/api/v1/flows/{slug}/runs/{id}` | The run's starter | Answer the step the run is on. |
 | `DELETE` | `/api/v1/flows/{slug}/runs/{id}` | The run's starter | Give the run up. |
+
+### Searching
+
+`GET /api/v1/flows/{slug}/search?search=…` searches as a [search page](#a-search-page) does, for a
+flow that only searches and is turned on (`404` otherwise). It answers with the page, and, for a
+search, what it found, as the asset list answers:
+`{"flow": {"name", "title", "text", "columns", "reset_after", "public"}, "assets": [...], "matched": {...}, "suggestions": [...]}`.
+`assets` is empty, never `null`, when nothing is searched for or nothing matches. A mistake in what
+is typed is a `400` with `query_error`, as on the asset list; a filter that no longer runs is a
+`409`. A public flow answers anyone, signed out as the public role; any other asks those signed out
+to sign in (`401`), and tells those who may not run it there is none (`404`).
 
 ### Managing flows
 

@@ -94,6 +94,7 @@ var Refused = map[string]string{
 	"GET /api/v1/assets/{id}/graph.pdf":              "a drawing of an asset's graph, for people to print or save; over MCP, asset_graph gives the same graph",
 	"GET /api/v1/assets/graph.svg":                   "a drawing of a category's or a search's graph, for people to print or save; over MCP, asset_graph gives the same graph",
 	"GET /api/v1/assets/graph.pdf":                   "a drawing of a category's or a search's graph, for people to print or save; over MCP, asset_graph gives the same graph",
+	"GET /api/v1/flows/{slug}/search":                "a Search flow's page, for a kiosk or the shop's tablet; over MCP, search_assets searches with the same queries and related terms",
 	"GET /api/v1/flows/{slug}/qr.svg":                "the picture on a flow's printed poster; over MCP, a flow is reached at /f/<slug>, and run with run_flow",
 	"POST /api/v1/markdown":                          "the comment editor's preview, in a browser; the comments list_comments and add_comment answer carry their HTML",
 	"POST /api/v1/incoming/{id}":                     "an incoming hook's address, for a sender outside BAM! holding its secret; an assistant does what it does with the tools themselves",
