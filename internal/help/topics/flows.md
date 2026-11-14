@@ -40,6 +40,18 @@ A flow cannot be saved while a kind of thing it files would be missing a field t
 
 Flows made before forms asked their own questions were converted when BAM! was updated: each form now asks what it asked before, in the same words, and a **Set fields** step before **Create** puts the answers into the same fields as before.
 
+## A search page, for a kiosk
+
+A flow can be a **search page** instead of steps: in **What it does**, choose **A search page, for a kiosk or the shop's tablet**. Its page at `/f/` and its address is a search box, whose results show as the asset list shows them, with why each matched and related terms to try. A result opens on the same page, laid out as its scan page is but without its buttons, and **Back to the results** returns.
+
+- **Heading** and **What to tell people** are what the page says above the box.
+- **Always keep to** is plain words or a query that every search keeps to, such as `condition = ok`, joined to whatever is typed. See [Assets](/help/assets) for how queries work.
+- **Results show** picks the columns beside each name: where it is, its categories, its stock, its codes.
+- **Clears after this many seconds unused** starts the page over for the next person: the search emptied, nothing opened. Leave it at 0 to never clear.
+- **Open to signed-out visitors** lets anyone use it without signing in, as on a kiosk left open in the shop. Signed out, it finds only what the public role may read in the flow's categories, and the page shows nothing but itself and **Sign in**. Saving says so when the public role can read nothing there, so the page would stay empty. Signed in, people search with their own permissions.
+
+Only a search page can be open to signed-out visitors: a flow that files, changes or lends things needs someone signed in.
+
 ## Left past its date
 
 A flow can name a date to collect by, such as **Leave until**. Once that date has passed, what was left is listed on the **Flows** page as past its date, marked when someone looks for it, and announced once to the notification channels that follow it. Moving the date on clears it.

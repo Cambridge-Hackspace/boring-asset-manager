@@ -481,6 +481,9 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("PUT /api/v1/flows/{slug}", manageFlows(http.HandlerFunc(s.handleSaveFlow)))
 	handle("DELETE /api/v1/flows/{slug}", manageFlows(http.HandlerFunc(s.handleDeleteFlow)))
 	handle("GET /api/v1/flows/{slug}/qr.svg", seeFlows(http.HandlerFunc(s.handleFlowQR)))
+	// A Search flow's page (#397): a public one for anyone, signed in or
+	// not, as the public role signed out; any other for its runners.
+	handle("GET /api/v1/flows/{slug}/search", OpenToPublic(http.HandlerFunc(s.handleFlowSearch)))
 	handle("GET /api/v1/assets/{id}/flows", runFlows(http.HandlerFunc(s.handleAssetFlows)))
 	handle("POST /api/v1/flows/{slug}/runs", runFlows(http.HandlerFunc(s.handleStartFlowRun)))
 	handle("GET /api/v1/flows/{slug}/runs/{id}", runFlows(http.HandlerFunc(s.handleGetFlowRun)))

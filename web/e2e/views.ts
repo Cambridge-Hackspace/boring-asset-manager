@@ -136,6 +136,13 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
       ],
     },
   });
+  // A search page over the category (#397), searched, for the kiosk page.
+  const kioskSlug = unique('a11y-kiosk').toLowerCase();
+  await post('/flows', {
+    slug: kioskSlug,
+    name: unique('Find it'),
+    definition: { version: 2, public: true, category_ids: [cat.category.id], steps: [{ id: 'search', kind: 'search', title: 'Find something', columns: ['where', 'categories', 'stock', 'codes'], reset_after: 0 }] },
+  });
   // A vendor with a contact, notes and a document, that the running-low
   // category is bought from, for the vendor pages, the category's Vendors
   // tab and the home page's reorder link.
@@ -297,6 +304,7 @@ export async function seedViews(page: Page): Promise<[string, string][]> {
     [`/flows/${flowSlug}/poster`, ''],
     [`/f/${flowSlug}`, ''],
     [`/f/${askSlug}`, ''],
+    [`/f/${kioskSlug}?search=${encodeURIComponent(asset.asset.asset.name)}`, ''],
     ['/spool', 'Print queue'],
     ['/relations', 'Link types'],
     ['/terms', 'Search terms'],

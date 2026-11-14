@@ -544,4 +544,36 @@ describe('FlowEditor', () => {
     body = sent.filter((r) => r.method === 'PUT')[1]!.body as { definition: Flow['definition'] };
     expect(body.definition.steps[1]).toEqual({ id: 'link', kind: 'link', title: 'Which kit?', relation_type: 'contains', outgoing: true, assets: ['k1'] });
   });
+
+  it('makes a search page for a kiosk, open to signed-out visitors, and says when the public role finds nothing (#397)', async () => {
+    const { sent } = api(() => ({ flow, warnings: ['The public role may read assets in none of this flow’s categories.'] }));
+    render(FlowEditor, { params: { slug: 'leave' } });
+    await screen.findByRole('list', { name: 'Steps' });
+    await fireEvent.click(screen.getByRole('radio', { name: /A search page/ }));
+    // Its own settings, in place of steps.
+    expect(screen.queryByRole('list', { name: 'Steps' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add a step' })).toBeNull();
+    expect(screen.queryByLabelText('A date to collect by')).toBeNull();
+    await fireEvent.input(screen.getByLabelText('Always keep to'), { target: { value: 'condition = ok' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Stock' }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Categories' }));
+    await fireEvent.input(screen.getByLabelText('Clears after this many seconds unused'), { target: { value: '5' } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Open to signed-out visitors/ }));
+    // Too short a wait is caught before saving, as the server would.
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    expect(await screen.findByText(/It clears after 10 to 86400 seconds unused/)).toBeTruthy();
+    expect(sent.some((r) => r.method === 'PUT')).toBe(false);
+    await fireEvent.input(screen.getByLabelText('Clears after this many seconds unused'), { target: { value: '60' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save flow' }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'PUT')).toBe(true));
+    const body = sent.find((r) => r.method === 'PUT')!.body as { definition: Flow['definition'] };
+    expect(body.definition.public).toBe(true);
+    expect(body.definition.steps).toEqual([{ id: 'search', kind: 'search', title: 'Find something', filter: 'condition = ok', columns: ['where', 'stock'], reset_after: 60 }]);
+    expect(await screen.findByText(/The public role may read assets in none/)).toBeTruthy();
+
+    // Back to steps, its steps come back, and it is no longer public.
+    await fireEvent.click(screen.getByRole('radio', { name: /Steps, one screen at a time/ }));
+    expect(await screen.findByRole('list', { name: 'Steps' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /4\. Create/ })).toBeTruthy();
+  });
 });

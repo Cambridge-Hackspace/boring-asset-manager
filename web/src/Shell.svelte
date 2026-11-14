@@ -17,7 +17,9 @@
   // the header, rather than a column of the page: the header's height
   // counted with its border, and positioned, so that nothing placed
   // absolutely inside it (a screen reader's label, say) lengthens the page.
-  let { children, workspace = false }: { children: Snippet; workspace?: boolean } = $props();
+  // A kiosk (#397), signed out, offers nothing beyond its page but signing
+  // in: no navigation, help or links out.
+  let { children, workspace = false, kiosk = false }: { children: Snippet; workspace?: boolean; kiosk?: boolean } = $props();
 
   const sections = $derived(
     // Signed out, nothing: the public see single pages, not the catalog.
@@ -88,6 +90,10 @@
 </a>
 <header bind:offsetHeight={headerHeight} class="border-b-2 border-zinc-900 bg-zinc-50 print:hidden dark:border-zinc-600 dark:bg-zinc-950">
   <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2">
+    {#if kiosk}
+      <span class="inline-flex min-h-11 items-center"><img src={logo} alt="BAM!" width="72" height="45" /></span>
+      <a class="btn-secondary ml-auto" href={signInPath(router.path + router.search)}>Sign in</a>
+    {:else}
     <a href="/" class="inline-flex min-h-11 items-center rounded"><img src={logo} alt="BAM!" width="72" height="45" /></a>
     {#if panel.available}
       <button
@@ -133,8 +139,9 @@
         <a class="btn-secondary" href={signInPath(router.path + router.search)}>Sign in</a>
       {/if}
     </div>
+    {/if}
   </div>
-  {#if menuOpen}
+  {#if menuOpen && !kiosk}
     <nav id="phone-menu" aria-label="Main" class="space-y-4 border-t border-zinc-200 px-4 py-3 sm:hidden dark:border-zinc-800">
       {#each sections as section (section.group ?? '')}
         <div>
@@ -165,7 +172,7 @@
       </div>
     </nav>
   {/if}
-  {#if row}
+  {#if row && !kiosk}
     <nav aria-label={row.group} class="border-t border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900">
       <ul class="mx-auto flex max-w-7xl flex-wrap gap-x-1 px-4">
         {#each row.links as link (link.href)}

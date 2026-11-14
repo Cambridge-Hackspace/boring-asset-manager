@@ -108,6 +108,8 @@
   const workspace = $derived(allowed && !!match?.route.workspace);
   // Signed out, a page is open when the public role allows it (docs/access.md).
   const openToPublic = $derived(!!match?.route.public && allowed);
+  // A kiosk's page (#397), signed out, without the way to the rest of BAM!.
+  const kiosk = $derived(!session.user && openToPublic && !!match?.route.kiosk);
 
   // A page that moved is opened where it is now, in place of the old
   // address in history.
@@ -146,7 +148,7 @@
 {:else if session.user && session.factorSetup}
   <FactorSetupPage />
 {:else if session.user || openToPublic}
-  <Shell {workspace}>
+  <Shell {workspace} {kiosk}>
     {#if !match}
       <NotFound />
     {:else if !allowed}
@@ -164,7 +166,7 @@
   </Shell>
 {/if}
 
-{#if !workspace}<Footer />{/if}
+{#if !workspace && !kiosk}<Footer />{/if}
 <!-- the colors icons paint with (docs/icons.md), once there are icons -->
 {#if iconset.palette.length}<IconPaletteStyle palette={iconset.palette} />{/if}
 <!-- a new release, waiting for Reload to update (docs/installing.md#updates) -->
