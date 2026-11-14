@@ -46,7 +46,7 @@ test('search by a field, with a query, and build one from lists', async ({ signe
   await page.getByLabel('Condition 1: value').fill('50');
   await page.getByRole('button', { name: 'Add a condition' }).click();
   await page.getByLabel('Condition 2: what to search by').selectOption({ label: 'Category' });
-  await page.getByLabel('Condition 2: value').selectOption({ label: `Shelf ${tag}` });
+  await page.getByRole('combobox', { name: 'Condition 2: value' }).selectOption({ label: `Shelf ${tag}` });
   await expect(page.getByTestId('built-query')).toHaveText(`field.${key} < 50 AND category = "Shelf ${tag}"`);
   const built = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
   expect(built.violations.map((v) => v.id)).toEqual([]);
