@@ -10,6 +10,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/fields"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/generators"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/models"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/terms"
 )
 
 // Schema is what a query may name: the instance's fields, by key, and
@@ -21,14 +22,46 @@ type Schema struct {
 
 // Env is what matching needs beyond the asset: the time relative dates
 // count from, who `me` is, their favorites, every category by ID (to
-// match an asset by the categories above its own), and Plain, which
-// matches a term as the search box does.
+// match an asset by the categories above its own), Plain, which matches
+// a term as the search box does, and Terms, the related terms `~~`
+// expands through (docs/data-model.md#related-terms).
 type Env struct {
 	Now        time.Time
 	Me         string
 	Favorites  map[string]bool
 	Categories map[string]models.Category
 	Plain      func(a *models.AssetWithDetails, term string) bool
+	Terms      *terms.Graph
+	// Why is written as `~~` matches an asset other than as typed: why,
+	// by the asset's ID ("TPU, narrower than flexible filament"). It may
+	// be nil.
+	Why map[string]string
+
+	expanded map[string][]terms.Expansion
+}
+
+// noteWhy records why an asset matched other than as typed, keeping the
+// first reason.
+func (e *Env) noteWhy(a *models.AssetWithDetails, why string) {
+	if e.Why != nil && e.Why[a.Asset.ID] == "" {
+		e.Why[a.Asset.ID] = why
+	}
+}
+
+// expansions are what `~~` also looks for, for each text, once per
+// environment.
+func (e *Env) expansions(text string) []terms.Expansion {
+	if e.Terms.Empty() {
+		return nil
+	}
+	if x, ok := e.expanded[text]; ok {
+		return x
+	}
+	if e.expanded == nil {
+		e.expanded = map[string][]terms.Expansion{}
+	}
+	e.expanded[text] = e.Terms.Expand(text)
+	return e.expanded[text]
 }
 
 type matcher func(a *models.AssetWithDetails, env *Env) bool
@@ -43,6 +76,9 @@ type Plan struct {
 	// must be among those it is matched against.
 	Archived bool
 }
+
+// Ordered reports whether the query says how to sort what it finds.
+func (p *Plan) Ordered() bool { return len(p.order) > 0 }
 
 // Match reports whether an asset matches.
 func (p *Plan) Match(a *models.AssetWithDetails, env *Env) bool {
@@ -474,8 +510,33 @@ func textKey(k Key, values func(a *models.AssetWithDetails, e *Env) []string) *k
 				}
 				return false
 			}
+		case "~~":
+			// As typed, then through related terms, then despite typing
+			// mistakes, saying why when not as typed.
+			m = func(a *models.AssetWithDetails, e *Env) bool {
+				have := values(a, e)
+				for _, h := range have {
+					if strings.Contains(fold(h), want) {
+						return true
+					}
+				}
+				for _, x := range e.expansions(v.Text) {
+					label := fold(x.Label)
+					for _, h := range have {
+						if strings.Contains(fold(h), label) {
+							e.noteWhy(a, x.Why)
+							return true
+						}
+					}
+				}
+				if near, ok := terms.Near(v.Text, have); ok {
+					e.noteWhy(a, terms.NearWhy(near, v.Text))
+					return true
+				}
+				return false
+			}
 		default:
-			return nil, errAt(span{k.s.start, v.s.end}, "%s is text: compare it with =, !=, ~ or !~, not %s", k.Name, op)
+			return nil, errAt(span{k.s.start, v.s.end}, "%s is text: compare it with =, !=, ~, !~ or ~~, not %s", k.Name, op)
 		}
 		if strings.HasPrefix(op, "!") {
 			return func(a *models.AssetWithDetails, e *Env) bool { return !m(a, e) }, nil
