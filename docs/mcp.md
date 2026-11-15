@@ -228,6 +228,7 @@ search for", then check with `expand_search`.
 | `expand_search` | `assets.read` | What a search for some words also looks for, each with why, and the related terms suggested in its place. |
 | `save_term`, `delete_term` | `terms.manage` | `save_term` adds a term, or changes only what is given of one. |
 | `link_terms`, `unlink_terms` | `terms.manage` | `broader`, `narrower` or `related`. |
+| `wordnet_status`, `seed_terms_from_wordnet` | `terms.manage` | Whether WordNet is kept on the server yet, and its license; and seeding related terms from it, as one import, for the nouns the asset and category names use ([Seeding from WordNet](data-model.md#seeding-from-wordnet)). |
 | `import_terms`, `delete_term_import` | `terms.manage` | Many terms and links at once, each naming the terms broader than it and related to it by label, as one import a person can review and remove as one. |
 
 `search_assets` returns `matched`, why each asset listed matched other than as typed, and

@@ -637,6 +637,51 @@ person, can, under the same permission ("look through our filament categories an
 people might search for"). Terms are backed up and restored with the catalog
 ([Backups](backups.md)).
 
+#### Seeding from WordNet
+
+Terms can be seeded from [WordNet](https://wordnet.princeton.edu/) 3.1, Princeton University's
+dictionary of English, on **Search terms** (`POST /api/v1/terms/wordnet/seed`, with `terms.manage`;
+`seed_terms_from_wordnet` over MCP):
+
+- The database is downloaded once, the first time it is needed, from
+  `https://wordnetcode.princeton.edu/wn3.1.dict.tar.gz` (16,358,468 bytes). It must have the SHA-256
+  `3f7d8be8ef6ecc7167d39b10d66954ec734280b5bdcd57f7d9eafe429d11c22a`, taken from that file; anything
+  else is refused. It is kept, as published, in the instance's storage
+  ([Configuration](configuration.md)) under `thesauri/`, outside what a sweep removes, so later
+  seeds download nothing. Nothing is fetched to search.
+- An admin (`settings.manage`) can point the download at another address, such as a mirror on the
+  instance's own network (`PUT /api/v1/terms/wordnet` with `{"source_url": "..."}`; empty is
+  Princeton's), and anyone who manages terms can upload the file by hand
+  (`PUT /api/v1/terms/wordnet/file`, the file as the body). Either way it must be the same file, by
+  its SHA-256. `GET /api/v1/terms/wordnet` says where it comes from and whether it is kept yet.
+- Only the nouns the instance uses are seeded: the words of the active assets' and the categories'
+  names, each alone and each two side by side (WordNet joins a collocation such as
+  `soldering_iron`), lowercase, made singular as WordNet's morphy does ("drills" is *drill*, "dice"
+  is *die*). Words shorter than three letters, and those with digits, are left out.
+- Each meaning (synset) of such a word becomes a term: its first word the preferred label, its
+  other words other names ("flashlight", also "torch"), and its definition the note. A seed can take
+  only each word's most used meanings (`{"senses": 3}`; 0 takes them all, which for a common word
+  such as *head* is 33 of them). The page starts at three: enough for "torch" to reach the
+  flashlight, its third meaning. Two meanings
+  whose first word is the same are told apart by what each is a kind of, as "drill (tool)" and
+  "drill (activity)", each keeping the word as another name.
+- Each term is narrower than the nearest of its hypernyms (what it is a kind, or an instance, of)
+  that is also seeded: "cordless drill" narrower than "drill (tool)", which is narrower than
+  "tool".
+- It arrives as one import, named for WordNet and its version ("WordNet 3.1"), removable as one.
+  Seeding again adds only what names added since bring; with nothing new, no import is made.
+
+The files are read as WordNet documents them: [wndb(5WN)](https://wordnet.princeton.edu/documentation/wndb5wn)
+for `index.noun` and `data.noun`, and [morphy(7WN)](https://wordnet.princeton.edu/documentation/morphy7wn)
+for `noun.exc` and the noun detachment rules.
+
+WordNet's [license](https://wordnet.princeton.edu/license-and-commercial-use) allows its use and
+modification without fee, provided its copyright notice and disclaimer appear with every copy,
+including modifications. The copy kept in storage is the published file, which holds the notice;
+**Search terms** shows it beside the seed, and `GET /api/v1/terms/wordnet` returns it:
+
+> WordNet 3.1 Copyright 2011 by Princeton University. All rights reserved.
+
 ### Queries
 
 A search is a query when it holds a comparison (`=`, `!=`, `~`, `!~`, `~~`, `<`, `<=`, `>`, `>=`) or

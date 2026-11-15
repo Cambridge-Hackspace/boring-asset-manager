@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/sve
 import TermsPage from './TermsPage.svelte';
 import { fakeApi } from '../test/fetch';
 import { session } from '../lib/session.svelte';
-import type { Term, TermImport, TermLink } from '../lib/models';
+import type { Term, TermImport, TermLink, WordNetStatus } from '../lib/models';
 
 const term = (id: string, label: string, extra: Partial<Term> = {}): Term => ({
   id, label, alt_labels: [], note: '', source: 'person', added_by_name: 'Ada', created_at: '', updated_at: '', ...extra,
@@ -79,5 +79,91 @@ describe('TermsPage', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Remove import' }));
     await screen.findByText('Removed the import Filament words.');
     expect(await screen.findByText('No terms yet.')).toBeTruthy();
+  });
+
+  describe('seeding from WordNet', () => {
+    const status = (extra: Partial<WordNetStatus> = {}): WordNetStatus => ({
+      name: 'WordNet 3.1',
+      source_url: 'https://wordnetcode.princeton.edu/wn3.1.dict.tar.gz',
+      default_source_url: 'https://wordnetcode.princeton.edu/wn3.1.dict.tar.gz',
+      sha256: 'abc',
+      size: 16358468,
+      cached: false,
+      notice: 'WordNet 3.1 Copyright 2011 by Princeton University.',
+      ...extra,
+    });
+
+    it('says it downloads once, seeds the meanings asked for, and shows the license', async () => {
+      let kept = false;
+      let imports: TermImport[] = [];
+      const { sent } = fakeApi({
+        'GET /terms': () => ({ terms: [], links: [], imports }),
+        'GET /terms/wordnet': () => status({ cached: kept }),
+        'POST /terms/wordnet/seed': () => {
+          kept = true;
+          const imp: TermImport = { id: 'w1', name: 'WordNet 3.1', terms: 12, links: 4, added_by_name: 'Ada', created_at: '' };
+          imports = [imp];
+          return { status: 201, body: { import: imp, downloaded: true } };
+        },
+      });
+      render(TermsPage, { params: {} });
+      const kept1 = await screen.findByTestId('wordnet-kept');
+      expect(kept1.textContent).toContain('seeding downloads it once (16 MB) from https://wordnetcode.princeton.edu/wn3.1.dict.tar.gz');
+      // Only an admin sets where it comes from.
+      expect(screen.queryByLabelText('Download it from')).toBeNull();
+      expect(screen.getByText('WordNet 3.1 Copyright 2011 by Princeton University.')).toBeTruthy();
+
+      // The three most used, to start with.
+      expect((screen.getByLabelText('Meanings of each word') as HTMLSelectElement).value).toBe('3');
+      await fireEvent.change(screen.getByLabelText('Meanings of each word'), { target: { value: '2' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Seed from WordNet' }));
+      await screen.findByText('Seeded 12 terms and 4 links from WordNet 3.1.');
+      expect(sent.find((r) => r.path === '/terms/wordnet/seed')!.body).toEqual({ senses: 2 });
+      await vi.waitFor(() => expect(screen.getByTestId('wordnet-kept').textContent).toContain('Kept on this server.'));
+      expect(screen.queryByLabelText('Or upload it')).toBeNull();
+      expect(await screen.findByText('WordNet 3.1')).toBeTruthy();
+    });
+
+    it('says when there is nothing new', async () => {
+      fakeApi({
+        'GET /terms': () => ({ terms: [], links: [], imports: [] }),
+        'GET /terms/wordnet': () => status({ cached: true }),
+        'POST /terms/wordnet/seed': () => ({ import: null, downloaded: false, message: 'Nothing new: every term WordNet has for these names is here already' }),
+      });
+      render(TermsPage, { params: {} });
+      await fireEvent.click(await screen.findByRole('button', { name: 'Seed from WordNet' }));
+      expect(await screen.findByText('Nothing new: every term WordNet has for these names is here already.')).toBeTruthy();
+    });
+
+    it('lets an admin point it at a mirror, and anyone who manages terms upload it', async () => {
+      session.permissions = ['terms.manage', 'settings.manage'];
+      let source = 'https://wordnetcode.princeton.edu/wn3.1.dict.tar.gz';
+      const { sent } = fakeApi({
+        'GET /terms': () => ({ terms: [], links: [], imports: [] }),
+        'GET /terms/wordnet': () => status({ source_url: source }),
+        'PUT /terms/wordnet': (body) => {
+          source = (body as { source_url: string }).source_url || status().default_source_url;
+          return status({ source_url: source });
+        },
+        'PUT /terms/wordnet/file': () => status({ cached: true }),
+      });
+      render(TermsPage, { params: {} });
+      await fireEvent.input(await screen.findByLabelText('Download it from'), { target: { value: ' http://mirror.lan/wn.tar.gz ' } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Save address' }));
+      await screen.findByText('WordNet is downloaded from http://mirror.lan/wn.tar.gz.');
+      expect(sent.find((r) => r.method === 'PUT' && r.path === '/terms/wordnet')!.body).toEqual({ source_url: 'http://mirror.lan/wn.tar.gz' });
+
+      const file = new File([new Uint8Array([0x1f, 0x8b])], 'wn3.1.dict.tar.gz');
+      await fireEvent.change(screen.getByLabelText('Or upload it'), { target: { files: [file] } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Upload WordNet' }));
+      await screen.findByText('WordNet 3.1 is kept on this server.');
+    });
+
+    it("says so in its place when its status can't be read", async () => {
+      fakeApi({ 'GET /terms': () => ({ terms: [], links: [], imports: [] }) });
+      render(TermsPage, { params: {} });
+      expect(await screen.findByText(/Seeding from WordNet isn't available/)).toBeTruthy();
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
   });
 });
