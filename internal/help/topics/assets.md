@@ -17,6 +17,10 @@ For more than words, type a query into the search box, or choose **Build a query
 
 Text ignores case, and a value with spaces goes in quotes. When a query has a mistake, the part at fault is underlined under the search box, with what is wrong. An assistant or agent connected to BAM! can search with queries too.
 
+## Saved searches
+
+After searching, choose **Save as…** beside the search box and give it a title, such as "Filament under 200 g", to run it again later from **Saved searches** there, or from the home page. Plain words and queries are kept alike. A saved search is yours alone; with the permission to share them, tick **Share with everyone who can read assets** to list it for them too. Delete your own from the list. When a saved query no longer runs, say because a field it names was deleted, it is marked **needs fixing**, and opening it underlines the part at fault: search again with it fixed and save that. An assistant or agent connected to BAM! can list and run your saved searches, and save new ones for you.
+
 ## Favorites
 
 Star an asset you use often, beside its name on its page or in the list, to find it on the home page under **Favorites**, and with **Only favorites** in the list. Categories, reports and flows have a star too. Your favorites are yours alone; one you can no longer see is hidden until you can again.

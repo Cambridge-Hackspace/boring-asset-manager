@@ -14,6 +14,7 @@
   import { displayName } from '../lib/people';
   import { session } from '../lib/session.svelte';
   import { routes } from '../routes';
+  import SavedSearchesCard from '../components/SavedSearchesCard.svelte';
   import { reorderHref } from '../lib/vendors';
   import CategoryBadge from '../components/CategoryBadge.svelte';
   import ConditionBadge from '../components/ConditionBadge.svelte';
@@ -208,6 +209,7 @@
             </div>
           {/if}
         </section>
+        <SavedSearchesCard />
       {/if}
       {#if low}
         <section class="card" aria-labelledby="low-heading">

@@ -19,6 +19,7 @@
   import PdfDownload from '../../components/PdfDownload.svelte';
   import QueryBuilder from '../../components/QueryBuilder.svelte';
   import QueryProblem from '../../components/QueryProblem.svelte';
+  import SavedSearches from '../../components/SavedSearches.svelte';
   import { queryProblemOf, type QueryProblem as Problem } from '../../lib/query';
 
   let { params: _params }: { params: Record<string, string> } = $props();
@@ -287,6 +288,8 @@
   </div>
   <button type="submit" class="btn-secondary">Search</button>
 </form>
+
+<SavedSearches search={applied.search} onopen={useQuery} />
 
 {#if building}
   <div id="query-builder"><QueryBuilder {fields} {categories} signedIn={!!session.user} onuse={useQuery} /></div>
