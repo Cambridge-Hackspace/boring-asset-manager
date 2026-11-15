@@ -713,6 +713,33 @@ Whether it does is the instance's setting, off until an admin turns it on (`sear
 instance's setting; `search_direct` on their user, `null` until they choose). Signed-out visitors
 follow the instance's setting.
 
+### Saved searches
+
+A search, plain words or a query, can be kept under a name to run again (`saved_searches`, #390):
+**Save as…** beside the asset list's search box saves the search the list shows, and
+saved searches are listed there, under **Saved searches**, and on the home page.
+
+- A saved search is its person's own. One **shared** is listed for everyone who can read assets
+  too, and only `searches.share` shares one; saving one for oneself needs only `assets.read`.
+  Only its person changes or deletes one, shared or not; it stays when they are archived.
+- Names are unique among a person's own, ignoring case, up to 100 characters; a search is up to
+  2000.
+- A query is checked when it is saved, and one with a mistake is refused as a search is, with
+  `query_error`. It is kept as typed and checked again each time it is listed or run, so one that
+  no longer runs, such as one naming a field since deleted, is listed with `problem`
+  (`{message, start, end}`, as `query_error`) rather than vanishing; run, it answers `400` with
+  `query_error`, and the asset list underlines the part at fault.
+
+| Route | Needs | |
+| --- | --- | --- |
+| `GET /api/v1/searches` | `assets.read` | The requester's own, then those shared, each by name, as `saved_searches`; signed out, those shared. Each has `id`, `name`, `search`, `shared`, `mine`, `owner` (`id`, `name`) and, when it no longer runs, `problem`. |
+| `POST /api/v1/searches` | a person, and `assets.read` | Saves `{name, search, shared}`; `shared` needs `searches.share`. `409` for a name already theirs. |
+| `PUT /api/v1/searches/{id}` | a person, and `assets.read` | Changes one of their own, as `POST` takes it; one already shared may stay so. Another's is `404`. |
+| `DELETE /api/v1/searches/{id}` | a person, and `assets.read` | Deletes one of their own. Another's is `404`. |
+| `GET /api/v1/searches/{id}/assets` | `assets.read` | Runs it, as `GET /api/v1/assets` with its `search` and any other filters given, answering `saved_search` and `assets`. |
+
+Saved searches are backed up with the people they belong to.
+
 ## Databases
 
 PostgreSQL databases must use the `UTF8` encoding. BAM! refuses to start on any other, including

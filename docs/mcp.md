@@ -129,6 +129,8 @@ Assets are named by their ID or any of their codes, looked up as scanning does.
 | `set_my_mention_emails` | Anyone signed in | Whether the caller is emailed when a comment mentions them ([Comments](comments.md#mentions)); for a person only. |
 | `set_my_name` | Anyone signed in | Sets the caller's name; for a person only. |
 | `list_favorites`, `add_favorite`, `remove_favorite` | Anyone signed in | The caller's favorites, and starring or unstarring an asset, category, report or flow; for a person only (see [Favorites](favorites.md)). |
+| `list_saved_searches`, `run_saved_search` | `assets.read` | The caller's saved searches and those shared, each with a `problem` when its query no longer runs, and running one, as `search_assets` answers (see [Saved searches](data-model.md#saved-searches)). |
+| `save_search`, `change_saved_search`, `delete_saved_search` | `assets.read` | Saving a search under a name for the caller, and changing or deleting one of their own; sharing needs `searches.share`. For a person only. |
 
 ### Finding assets
 

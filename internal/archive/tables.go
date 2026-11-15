@@ -139,6 +139,10 @@ var Tables = []Table{
 	{Name: "user_favorites", Kind: KindPeople, Since: 56, Key: []string{"user_id", "kind", "object_id"},
 		Columns: []Column{{"user_id", Text}, {"kind", Text}, {"object_id", Text}, {"created_at", Time}},
 	},
+	// Saved searches (docs/data-model.md#saved-searches), each its person's own.
+	{Name: "saved_searches", Kind: KindPeople, Since: 87, Key: []string{"id"},
+		Columns: []Column{{"id", Text}, {"user_id", Text}, {"name", Text}, {"search_text", Text}, {"is_shared", Bool}, {"created_at", Time}, {"updated_at", Time}},
+	},
 	{Name: "comment_mentions", Kind: KindPeople, Since: 71, Key: []string{"comment_id", "user_id"},
 		Columns: []Column{{"comment_id", Text}, {"user_id", Text}, {"mentioned_at", Time}, {"notified_at", Time}},
 	},

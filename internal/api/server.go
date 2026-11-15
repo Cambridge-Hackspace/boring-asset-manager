@@ -553,6 +553,14 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	// opens straight away, read by those who search.
 	handle("GET /api/v1/settings/search", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleSearchSettings)))
 	handle("PUT /api/v1/settings/search", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetSearchSettings)))
+	// Saved searches (docs/data-model.md#saved-searches): each its
+	// person's own, and those shared listed for all who read assets.
+	readsAssets := RequirePermission(rbac.PermAssetsRead)
+	handle("GET /api/v1/searches", readsAssets(http.HandlerFunc(s.handleListSavedSearches)))
+	handle("POST /api/v1/searches", RequirePerson(readsAssets(http.HandlerFunc(s.handleCreateSavedSearch))))
+	handle("PUT /api/v1/searches/{id}", RequirePerson(readsAssets(http.HandlerFunc(s.handleUpdateSavedSearch))))
+	handle("DELETE /api/v1/searches/{id}", RequirePerson(readsAssets(http.HandlerFunc(s.handleDeleteSavedSearch))))
+	handle("GET /api/v1/searches/{id}/assets", readsAssets(http.HandlerFunc(s.handleRunSavedSearch)))
 	// The assistant beside the page (docs/assistant.md): settings.manage
 	// sets it up and writes its guides; assistant.use talks with it, as a
 	// person signed in. Conversations are each person's own.

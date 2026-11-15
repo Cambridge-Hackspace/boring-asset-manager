@@ -625,6 +625,7 @@ renamed them, so that a key can carry a scope (`tools:assets.write`).
 | `assistant.use` | Seeing the assistant beside the page, and talking with it, which acts as the person with their own permissions, once an admin turns it on (see [The assistant beside the page](assistant.md)). | No |
 | `lasers.run` | Starting a laser's job with BAM!'s *Start*, tracing its outline on the workpiece, and resuming it (see [Lasers](printing.md#lasers)). Preparing a job is `labels.print`, and anyone with it may pause or cancel one. An assistant over MCP, a flow or an incoming hook never starts a laser, whatever it holds, and an API token only with `lasers.run`. | No |
 | `terms.manage` | Adding, changing and removing the related terms search expands through, their links, and imports of them, in the web app or through a person's own assistant over MCP (see [Related terms](data-model.md#related-terms)). Reading them is `assets.read`. | No |
+| `searches.share` | Sharing a saved search with everyone who can read assets (see [Saved searches](data-model.md#saved-searches)). Saving searches for oneself needs only `assets.read`. | No |
 
 ### Scopes
 
@@ -1033,6 +1034,7 @@ is an RFC 3339 time, or `null` for never.
 | `081` | Adds `assistant.use`, which goes to the admin role only. |
 | `083` | Adds `lasers.run`, which goes to the admin role only. |
 | `086` | Adds `terms.manage`, and grants it to every role that manages categories. |
+| `087` | Adds `searches.share`, which goes to the admin role only. |
 | `048` | Users' themes. |
 | `051` | Counting wrong passwords (`sign_in_throttles`). |
 | `052` | Whether email sent to a user's roles reaches them (`email_notifications`). |
