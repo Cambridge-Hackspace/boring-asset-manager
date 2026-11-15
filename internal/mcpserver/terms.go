@@ -41,6 +41,10 @@ type importTermIn struct {
 	Related   []string `json:"related,omitempty" jsonschema:"labels of the terms related to it; one no term has yet is added"`
 }
 
+type seedTermsIn struct {
+	Senses int `json:"senses,omitempty" jsonschema:"how many meanings of each word to take, most used first, such as 3; 0 or left out takes them all, which for a common word such as head is dozens"`
+}
+
 type importTermsIn struct {
 	Name  string         `json:"name" jsonschema:"what the import is, such as Filament words, so that a person can review it and remove it as one"`
 	Terms []importTermIn `json:"terms"`
@@ -127,6 +131,28 @@ func termTools() []tool {
 			func(_ importTermsIn, out map[string]any) string {
 				imp, _ := out["import"].(map[string]any)
 				return fmt.Sprintf("Imported %v terms and %v links.", imp["terms"], imp["links"])
+			}),
+		simple(&mcp.Tool{Name: "wordnet_status", Description: "Whether WordNet, the general thesaurus related terms can be seeded from, is kept on the server yet, where it is downloaded from, and its license, which asks that its notice go with what is made from it.",
+			Annotations: readOnly("WordNet's status")}, "GET /api/v1/terms/wordnet", manage,
+			func(struct{}) (request, error) { return request{path: "/api/v1/terms/wordnet"}, nil },
+			func(_ struct{}, out map[string]any) string {
+				if out["cached"] == true {
+					return fmt.Sprintf("%v is kept on the server.", out["name"])
+				}
+				return fmt.Sprintf("%v is not kept on the server yet; seeding downloads it from %v.", out["name"], out["source_url"])
+			}),
+		simple(&mcp.Tool{Name: "seed_terms_from_wordnet", Description: "Seed related terms from WordNet, as one import a person can review and remove as one: each meaning of the nouns in the asset and category names, as a term named by its words, narrower than the nearest of its broader meanings also seeded. " +
+			"The server downloads WordNet once and keeps it, so this can take a minute the first time. Seeding again adds only what names added since bring.",
+			Annotations: changes("Seed related terms from WordNet", false)}, "POST /api/v1/terms/wordnet/seed", manage,
+			func(in seedTermsIn) (request, error) {
+				return request{path: "/api/v1/terms/wordnet/seed", body: in}, nil
+			},
+			func(_ seedTermsIn, out map[string]any) string {
+				imp, ok := out["import"].(map[string]any)
+				if !ok {
+					return "Nothing new: every term WordNet has for these names is here already."
+				}
+				return fmt.Sprintf("Seeded %v terms and %v links from %v.", imp["terms"], imp["links"], imp["name"])
 			}),
 		simple(&mcp.Tool{Name: "delete_term_import", Description: "Remove an import of related terms (list_terms gives them to those who manage terms): the terms and links it added, and links to its terms.",
 			Annotations: destroys("Remove an import of related terms", true)}, "DELETE /api/v1/terms/imports/{id}", manage,

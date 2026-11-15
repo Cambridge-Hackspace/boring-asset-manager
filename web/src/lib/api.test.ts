@@ -24,6 +24,16 @@ describe('request', () => {
     expect(init.credentials).toBe('same-origin');
   });
 
+  it('sends a file as it is', async () => {
+    const fetchMock = respond(200, { cached: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const file = new File([new Uint8Array([0x1f, 0x8b, 0])], 'wn3.1.dict.tar.gz');
+    await request('PUT', '/terms/wordnet/file', file);
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(init.body).toBe(file);
+    expect(init.headers['Content-Type']).toBe('application/octet-stream');
+  });
+
   it('turns error responses into ApiError with details', async () => {
     vi.stubGlobal('fetch', respond(400, { error: 'Invalid template', details: [{ path: 'elements[0].x', message: 'too big' }] }));
     const err = (await request('PUT', '/templates/x', {}).catch((e) => e)) as ApiError;

@@ -30,3 +30,15 @@ Many terms at once come in as an **import**: a file of terms on the **Search ter
 ```
 
 A term named only as broader or related, such as *Filament*, is added too. A term whose label is already there isn't added again; its links are added to the one there.
+
+## Seeding from WordNet
+
+WordNet is a dictionary of English from Princeton University. **Seed from WordNet**, on the **Search terms** page, adds each meaning of the nouns your asset and category names use, as one import:
+
+- each meaning is a term, named by its words: the *flashlight* term has *torch* as another name, so a search for "flashlight" finds your head torch;
+- each term is narrower than what it's a kind of, where that's seeded too: *cordless drill* is narrower than *drill (tool)*;
+- two meanings of one word are told apart by what each is a kind of, such as *drill (tool)* and *drill (activity)*.
+
+**Meanings of each word** keeps it to each word's most used meanings, three to start with: WordNet has dozens of meanings for a common word such as *head*, most of them nothing to do with your things. Choose **All of them** to take every one. Seeding again adds only what names added since bring. If the import isn't what you wanted, **Remove import** takes it all away.
+
+The first seed downloads WordNet, about 16 MB, and keeps it on the server, so later seeds download nothing, and searching never does. An admin can have it downloaded from a mirror instead, or anyone who manages search terms can upload the file. Either way it has to be the same file as Princeton's, which is checked. WordNet's license, shown beside the seed, asks that its notice go with what's made from it.
