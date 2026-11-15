@@ -32,7 +32,8 @@ export type Permission =
   | 'assets.verify'
   | 'assistant.use'
   | 'lasers.run'
-  | 'terms.manage';
+  | 'terms.manage'
+  | 'searches.share';
 
 /** A permission held in every scope, or in one as scope:permission (docs/access.md). */
 export type PermissionKey = Permission | `${string}:${Permission}`;

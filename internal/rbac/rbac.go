@@ -80,6 +80,10 @@ const (
 	// (docs/data-model.md#related-terms), from the web app or a person's
 	// own assistant over MCP. It is not scopable.
 	PermTermsManage = "terms.manage"
+	// PermSearchesShare shares a person's saved search with everyone who
+	// can read assets (docs/data-model.md#saved-searches). Saving one for
+	// themselves needs only assets.read. It is not scopable.
+	PermSearchesShare = "searches.share"
 )
 
 var (
@@ -120,6 +124,7 @@ func AllPermissions() []string {
 		PermAssistantUse,
 		PermLasersRun,
 		PermTermsManage,
+		PermSearchesShare,
 	}
 }
 
