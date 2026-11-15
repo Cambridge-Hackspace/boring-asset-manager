@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"runtime/debug"
@@ -23,6 +24,7 @@ import (
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/relay"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/store"
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/webui"
+	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/wordnet"
 )
 
 // Version is the version of this build: a release's tag, such as v1.2.0, or
@@ -90,6 +92,11 @@ type Server struct {
 	// turns lets one turn at a time run in each conversation with the
 	// assistant (docs/assistant.md).
 	turns turnLocks
+	// thesaurus is the WordNet database terms are seeded from, and
+	// fetchThesaurus downloads it (wordnet.go); tests set both, and
+	// otherwise they are WordNet 3.1 and an HTTP GET.
+	thesaurus      wordnet.Source
+	fetchThesaurus func(ctx context.Context, url string) (io.ReadCloser, error)
 }
 
 // NewServer initializes a new Server with route registration and middleware chaining.
@@ -313,6 +320,12 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("DELETE /api/v1/terms/{id}/links/{relation}/{other}", manageTerms(http.HandlerFunc(s.handleUnlinkTerms)))
 	handle("POST /api/v1/terms/imports", manageTerms(http.HandlerFunc(s.handleImportTerms)))
 	handle("DELETE /api/v1/terms/imports/{id}", manageTerms(http.HandlerFunc(s.handleDeleteTermImport)))
+	// Seeding them from WordNet (docs/data-model.md#seeding-from-wordnet);
+	// where it is downloaded from is an instance setting.
+	handle("GET /api/v1/terms/wordnet", manageTerms(http.HandlerFunc(s.handleWordNetStatus)))
+	handle("PUT /api/v1/terms/wordnet", RequirePermission(rbac.PermSettingsManage)(http.HandlerFunc(s.handleSetWordNetSource)))
+	handle("PUT /api/v1/terms/wordnet/file", manageTerms(http.HandlerFunc(s.handleUploadWordNet)))
+	handle("POST /api/v1/terms/wordnet/seed", manageTerms(http.HandlerFunc(s.handleSeedWordNet)))
 
 	// Field Corpus endpoints
 	handle("GET /api/v1/fields", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListFields)))

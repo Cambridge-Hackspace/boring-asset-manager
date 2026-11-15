@@ -71,6 +71,8 @@ var Refused = map[string]string{
 	"PUT /api/v1/auth/theme":                         "whether the web interface is light or dark for a person, chosen in the browser; an assistant sees no interface (#168)",
 	"PUT /api/v1/auth/search-direct":                 "whether the web interface opens a search's one result straight away for a person (#389); an assistant sees no interface, and search_assets lists what it finds",
 	"GET /api/v1/settings/search":                    "whether the web interface opens a search's one result straight away (#389); an assistant sees no interface",
+	"PUT /api/v1/terms/wordnet":                      "where the server downloads WordNet from, an instance setting an admin sets in the web app; seed_terms_from_wordnet uses it",
+	"PUT /api/v1/terms/wordnet/file":                 "a copy of WordNet uploaded by hand from the web app, for a server that cannot download it; an assistant has no file to send, and seed_terms_from_wordnet downloads it",
 	"PUT /api/v1/settings/search":                    "whether the web interface opens a search's one result straight away, set by an admin in the web app (#389); an assistant sees no interface",
 	"POST /api/v1/tokens":                            "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",
 	"POST /api/v1/auth/tokens":                       "tokens are made from a signed-in session, so a misled assistant cannot leave itself a way back in (#43)",

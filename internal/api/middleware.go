@@ -336,6 +336,10 @@ func LimitRequestBodies(next http.Handler) http.Handler {
 		} else if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/api/v1/uploads/") {
 			// A part of an upload, which its handler holds to its size.
 			limit = MaxUploadSize
+		} else if r.Method == http.MethodPut && r.URL.Path == "/api/v1/terms/wordnet/file" {
+			// WordNet, uploaded by hand, which its handler holds to the
+			// published file's size.
+			limit = wordnetUploadLimit
 		} else if incomingDelivery(r) {
 			limit = incomingBodyLimit
 		} else if r.Method == http.MethodPost {

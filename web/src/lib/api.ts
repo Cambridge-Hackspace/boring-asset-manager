@@ -34,6 +34,10 @@ async function send(method: Method, path: string, body?: unknown): Promise<Respo
   const init: RequestInit = { method, credentials: 'same-origin', headers: { Accept: 'application/json' } };
   if (body instanceof FormData) {
     init.body = body;
+  } else if (body instanceof Blob) {
+    // A file sent as it is, such as WordNet uploaded by hand.
+    init.body = body;
+    (init.headers as Record<string, string>)['Content-Type'] = 'application/octet-stream';
   } else if (body !== undefined) {
     init.body = JSON.stringify(body);
     (init.headers as Record<string, string>)['Content-Type'] = 'application/json';

@@ -5,7 +5,8 @@
   import { onMount } from 'svelte';
   import { request } from '../lib/api';
   import { messageOf } from '../lib/errors';
-  import type { Term, TermExpansion, TermImport, TermLink } from '../lib/models';
+  import type { Term, TermExpansion, TermImport, TermLink, WordNetStatus } from '../lib/models';
+  import { session } from '../lib/session.svelte';
   import { neighborsOf, parseImport, sourceOf, splitNames, termMatches } from '../lib/terms';
   import ConfirmButton from '../components/ConfirmButton.svelte';
   import ErrorMessage from '../components/ErrorMessage.svelte';
@@ -37,6 +38,16 @@
   let importName = $state('');
   let importFile = $state<File | null>(null);
 
+  // Seeding from WordNet (docs/data-model.md#seeding-from-wordnet).
+  let wordnet = $state<WordNetStatus | null>(null);
+  let wordnetError = $state('');
+  // Every meaning of a common word is a lot: WordNet has 33 of head.
+  let senses = $state('3');
+  let seeding = $state(false);
+  let sourceDraft = $state('');
+  let wordnetFile = $state<File | null>(null);
+  const canSetSource = session.can('settings.manage');
+
   const byId = $derived(new Map(terms.map((t) => [t.id, t])));
   const shown = $derived(terms.filter((t) => termMatches(t, filter)));
   const current = $derived(editing ? byId.get(editing) : undefined);
@@ -55,6 +66,60 @@
     }
   }
   onMount(load);
+  onMount(loadWordNet);
+
+  async function loadWordNet() {
+    try {
+      wordnet = await request<WordNetStatus>('GET', '/terms/wordnet');
+      sourceDraft = wordnet.source_url === wordnet.default_source_url ? '' : wordnet.source_url;
+      wordnetError = '';
+    } catch (err) {
+      wordnetError = messageOf(err);
+    }
+  }
+
+  async function seed() {
+    error = status = '';
+    seeding = true;
+    try {
+      const out = await request<{ import: TermImport | null; message?: string }>('POST', '/terms/wordnet/seed', { senses: Number(senses) });
+      status = out.import ? `Seeded ${counted(out.import.terms, 'term')} and ${counted(out.import.links, 'link')} from ${out.import.name}.` : `${out.message ?? 'Nothing new'}.`;
+      await Promise.all([load(), loadWordNet()]);
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      seeding = false;
+    }
+  }
+
+  async function saveSource(event: SubmitEvent) {
+    event.preventDefault();
+    error = status = '';
+    try {
+      wordnet = await request<WordNetStatus>('PUT', '/terms/wordnet', { source_url: sourceDraft.trim() });
+      sourceDraft = wordnet.source_url === wordnet.default_source_url ? '' : wordnet.source_url;
+      status = `WordNet is downloaded from ${wordnet.source_url}.`;
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  async function uploadWordNet(event: SubmitEvent) {
+    event.preventDefault();
+    if (!wordnetFile) return;
+    error = status = '';
+    try {
+      wordnet = await request<WordNetStatus>('PUT', '/terms/wordnet/file', wordnetFile);
+      wordnetFile = null;
+      status = `${wordnet.name} is kept on this server.`;
+    } catch (err) {
+      error = messageOf(err);
+    }
+  }
+
+  function megabytes(n: number): string {
+    return `${Math.round(n / 1e6)} MB`;
+  }
 
   function labelOf(id: string): string {
     return byId.get(id)?.label ?? 'a removed term';
@@ -328,4 +393,58 @@
       <button type="submit" class="btn-secondary" disabled={!importFile}>Import</button>
     </form>
   </section>
+
+  {#if wordnet}
+    <section class="card mt-6 max-w-2xl space-y-3" aria-labelledby="wordnet-heading">
+      <h2 id="wordnet-heading" class="text-lg font-semibold">Seed from WordNet</h2>
+      <p class="text-sm text-zinc-600 dark:text-zinc-400">
+        {wordnet.name} is a dictionary of English from Princeton University. Seeding adds each meaning of the nouns your asset and category names use, with the other words for it, narrower than what it is a
+        kind of, as one import you can remove. Seeding again adds only what names added since bring.
+      </p>
+      <p class="text-sm" data-testid="wordnet-kept">
+        {#if wordnet.cached}
+          Kept on this server.
+        {:else}
+          Not on this server yet: seeding downloads it once ({megabytes(wordnet.size)}) from {wordnet.source_url}.
+        {/if}
+      </p>
+      <div class="flex flex-wrap items-end gap-2">
+        <div>
+          <label class="label" for="wordnet-senses">Meanings of each word</label>
+          <select id="wordnet-senses" class="input w-auto" bind:value={senses}>
+            <option value="1">The most used</option>
+            <option value="2">The two most used</option>
+            <option value="3">The three most used</option>
+            <option value="0">All of them</option>
+          </select>
+        </div>
+        <button type="button" class="btn-secondary" disabled={seeding} onclick={seed}>{seeding ? 'Seeding…' : 'Seed from WordNet'}</button>
+      </div>
+      {#if canSetSource}
+        <form class="flex flex-wrap items-end gap-2" onsubmit={saveSource}>
+          <div class="min-w-0 flex-1">
+            <label class="label" for="wordnet-source">Download it from</label>
+            <input id="wordnet-source" class="input w-full" type="url" placeholder={wordnet.default_source_url} bind:value={sourceDraft} aria-describedby="wordnet-source-hint" />
+            <p id="wordnet-source-hint" class="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Empty is Princeton's. A mirror must hold the same file: it is checked by its SHA-256.</p>
+          </div>
+          <button type="submit" class="btn-secondary">Save address</button>
+        </form>
+      {/if}
+      {#if !wordnet.cached}
+        <form class="flex flex-wrap items-end gap-2" onsubmit={uploadWordNet}>
+          <div>
+            <label class="label" for="wordnet-file">Or upload it</label>
+            <input id="wordnet-file" class="input" type="file" accept=".gz,application/gzip" onchange={(e) => (wordnetFile = e.currentTarget.files?.[0] ?? null)} />
+          </div>
+          <button type="submit" class="btn-secondary" disabled={!wordnetFile}>Upload WordNet</button>
+        </form>
+      {/if}
+      <details>
+        <summary class="cursor-pointer text-sm">WordNet's license</summary>
+        <pre class="mt-2 text-xs whitespace-pre-wrap">{wordnet.notice}</pre>
+      </details>
+    </section>
+  {:else if wordnetError}
+    <p class="mt-6 max-w-2xl text-sm text-red-700 dark:text-red-400">Seeding from WordNet isn't available: {wordnetError}</p>
+  {/if}
 {/if}

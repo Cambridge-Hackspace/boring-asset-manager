@@ -1300,6 +1300,17 @@ export interface TermImport extends Omit<TermSource, 'source' | 'import_id'> {
   created_at: string;
 }
 
+/** WordNet, which related terms can be seeded from: where it comes from, whether the server keeps it yet, and its license. */
+export interface WordNetStatus {
+  name: string;
+  source_url: string;
+  default_source_url: string;
+  sha256: string;
+  size: number;
+  cached: boolean;
+  notice: string;
+}
+
 /** A term in an import, naming the terms broader than it and related to it by label. */
 export interface TermImportItem {
   label: string;
