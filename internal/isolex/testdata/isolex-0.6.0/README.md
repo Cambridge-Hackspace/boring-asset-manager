@@ -5,7 +5,7 @@ sample, transforms and text are as they were at `0.4.0` (commit
 the SVG isolex's reference renderer draws from that IR with its built-in
 palette; and its palette lexicon, which carries its own colors in a
 `palette` block, with the SVG `isolex render` draws from them. They are
-the work of Axonibyte Innovations, LLC, under the Apache License 2.0
+the work of Axonibyte Innovations, LLC, under the Blue Oak Model License 1.0.0
 (`../../NOTICE`).
 
 Package svg must draw each IR golden to exactly its SVG golden:

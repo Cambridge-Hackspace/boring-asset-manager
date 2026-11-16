@@ -1,6 +1,6 @@
 // Package isolex runs the isolex compiler (docs/architecture.md, "Icon compiler"):
 // icon sources in, shape IR and located diagnostics out. isolex is the
-// work of Axonibyte Innovations, LLC, under the Apache License 2.0 (see
+// work of Axonibyte Innovations, LLC, under the Blue Oak Model License 1.0.0 (see
 // NOTICE and LICENSE-isolex in this directory). The compiler is isolex's
 // own, built to WebAssembly and fetched at build time against the
 // checksum in wasm.lock; it runs in-process under wazero, which needs no

@@ -1,7 +1,7 @@
 `sample.ilx` and `sample.ir.golden.json` are isolex's own parser fixture
 and its IR golden, copied unmodified from isolex at tag `0.3.1` (commit
 `6ee4eecaf4`, `tests/fixtures/`). They are the work of Axonibyte
-Innovations, LLC, under the Apache License 2.0 (`../NOTICE`). They are
+Innovations, LLC, under the Blue Oak Model License 1.0.0 (`../NOTICE`). They are
 kept as IR version 1, which bam still reads: a build an older isolex
 made is drawn until a new one replaces it.
 
