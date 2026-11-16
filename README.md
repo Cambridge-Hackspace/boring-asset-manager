@@ -81,4 +81,6 @@ For working on it:
 
 ## License
 
-See [LICENSE](LICENSE). The icon compiler, isolex, is by Axonibyte Innovations, LLC, under the Apache License 2.0 (`internal/isolex/NOTICE`). The code reader packaged for browsers without one of their own, such as Safari on iOS, is the `barcode-detector` and `zxing-wasm` npm packages, by Ze-Zheng Wu, under the MIT License, over zxing-cpp, under the Apache License 2.0, built with Emscripten and musl, under the MIT License (`internal/webui/NOTICE`).
+BAM! is under the [PolyForm Shield License 1.0.0](LICENSE): free to use, change and share, except to build a product that competes with it. Required Notice: Copyright Axonibyte Innovations, LLC (https://axonibyte.com). The name and logo are trademarks, and the logo isn't covered by that license: see [TRADEMARKS.md](TRADEMARKS.md).
+
+The bundled third-party code keeps its own licenses. The icon compiler, isolex, is by Axonibyte Innovations, LLC, under the Apache License 2.0 (`internal/isolex/NOTICE`). The code reader packaged for browsers without one of their own, such as Safari on iOS, is the `barcode-detector` and `zxing-wasm` npm packages, by Ze-Zheng Wu, under the MIT License, over zxing-cpp, under the Apache License 2.0, built with Emscripten and musl, under the MIT License (`internal/webui/NOTICE`). The IBM Plex and Space Grotesk fonts are under the SIL Open Font License 1.1 (`web/src/fonts`).

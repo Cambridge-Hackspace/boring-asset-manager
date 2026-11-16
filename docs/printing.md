@@ -486,7 +486,7 @@ For DYMO LabelWriter printers, which speak one of two raster languages:
 The first language is implemented from DYMO's *LabelWriter 450 Series Technical Reference Manual*,
 and its tests are worked out from that manual. DYMO has published no reference for the second. Its
 command format was learned by reading DYMO's open-source (GPL) Linux drivers. No code or test data
-is taken from those drivers, so BAM stays MIT-licensed.
+is taken from those drivers, so none of their licenses reaches BAM.
 
 **Options:**
 
@@ -553,8 +553,8 @@ The commands are those of DYMO's tape printers, documented in Appendix B of DYMO
 Series Technical Reference Manual* (2009) for the tape side of the LabelWriter Duo. DYMO has
 published no reference for the LabelManagers themselves. Each model's head, the printable dots on
 each tape, the feed to the cutter, and the 500TS's framing were learned by reading DYMO's
-open-source (GPL) Linux drivers and their PPDs. No code or test data is taken from them, so BAM
-stays MIT-licensed.
+open-source (GPL) Linux drivers and their PPDs. No code or test data is taken from them, so none of their licenses
+reaches BAM.
 
 Those drivers know the PnP, 420P, 500TS and Wireless PnP, but ship PPDs only for the PnP and
 Wireless PnP. The 420P's printable dots are those of DYMO's PPD for the LabelManager 450, the other
@@ -689,7 +689,7 @@ facts only, from these community descriptions, which between them have printed o
   license, read for facts only): the LW-PX400 over USB on 12 mm tape, confirming the level-3
   commands, the cut parameters and the bit order.
 
-No code, text or test vectors are taken from any of them, so BAM stays MIT-licensed. The tests are
+No code, text or test vectors are taken from any of them, so none of their licenses reaches BAM. The tests are
 worked out from the descriptions.
 
 **Options:**
@@ -796,8 +796,8 @@ For Brady's M611, over its network connection, in the format Brady's own apps se
 the format, and its SDK is not used (see [`zpl`](#zpl)). The format was reconstructed, as facts
 only, from [ggiesen/pybrady](https://gitlab.com/ggiesen/pybrady) (MPL-2.0), whose
 `docs/brady_specification.md` (§2.1, §4 and §7) describes what its author recovered from Brady's
-Express Labels app. pybrady does not itself send these jobs yet. No code, text, data or test vectors are taken from it, so BAM
-stays MIT-licensed; the tests are worked out from the description and from LZ4's own description of
+Express Labels app. pybrady does not itself send these jobs yet. No code, text, data or test vectors are taken from it, so none of their licenses
+reaches BAM; the tests are worked out from the description and from LZ4's own description of
 its block format.
 
 **Models.** The M611: 300 DPI, labels up to 2 in (50.8 mm) wide, from 0.375 in to 40 in (9.5 to
