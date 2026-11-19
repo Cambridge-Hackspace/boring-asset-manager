@@ -91,6 +91,11 @@ A template's `id` is a UUID the server assigns when the template is created. An 
 out, but cannot change it. Templates created by earlier versions keep the slugs their authors
 chose.
 
+`POST /api/v1/templates/{id}/clone` (`templates.manage`) copies a template, as saved, under a
+new ID. It takes an optional `name`; without one, the copy is named for the original, with
+"copy" after it. Categories that use the original keep using it. The editor's **Save as…**
+instead posts what is in the editor, with the name given, to `POST /api/v1/templates`.
+
 ### Layering
 
 Elements are drawn in the order they are listed, each over those before it, so the first is at

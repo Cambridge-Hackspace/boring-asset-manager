@@ -95,6 +95,31 @@ func (s *Server) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"template": updated})
 }
 
+// CloneTemplateRequest names a template's copy; an empty or absent name names
+// it "<name> copy".
+type CloneTemplateRequest struct {
+	Name string `json:"name"`
+}
+
+// handleCloneTemplate: POST /api/v1/templates/{id}/clone copies a template,
+// as saved, under a new ID.
+func (s *Server) handleCloneTemplate(w http.ResponseWriter, r *http.Request) {
+	var req CloneTemplateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		writeJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	t, err := s.store.CloneTemplate(r.PathValue("id"), req.Name)
+	if errors.Is(err, store.ErrTemplateNotFound) {
+		writeJSONError(w, http.StatusNotFound, "Template not found")
+		return
+	}
+	if writeTemplateError(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"template": t})
+}
+
 func (s *Server) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	err := s.store.DeleteTemplate(r.PathValue("id"))
 	if errors.Is(err, store.ErrTemplateNotFound) {

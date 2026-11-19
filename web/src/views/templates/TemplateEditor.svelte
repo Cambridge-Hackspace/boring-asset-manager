@@ -384,6 +384,49 @@
     }
   }
 
+  // Save as: what is in the editor, unsaved changes too, as a new template,
+  // which the editor then opens. This one stays as it was last saved.
+  let saveAsDialog = $state<HTMLDialogElement | null>(null);
+  let saveAsName = $state('');
+  let saveMenu = $state<{ x: number; y: number } | null>(null);
+  function openSaveMenu(event: MouseEvent) {
+    if (saveMenu) return void (saveMenu = null);
+    const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    saveMenu = { x: r.right - 192, y: r.bottom + 2 };
+  }
+  function askSaveAs() {
+    saveMenu = null;
+    saveAsName = doc.name ? `${doc.name} copy` : '';
+    saveAsDialog?.showModal();
+  }
+  async function saveAs(event: SubmitEvent) {
+    event.preventDefault();
+    error = status = '';
+    problems = [];
+    saving = true;
+    const body = { ...$state.snapshot(editor.doc), name: saveAsName.trim() };
+    try {
+      const id = (await request<{ template: TemplateDoc }>('POST', '/templates', body)).template.id;
+      saveAsDialog?.close();
+      // The changes went to the copy; none are left here to keep.
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        // ignore
+      }
+      saved = JSON.stringify(editor.doc);
+      navigate(`/templates/${encodeURIComponent(id)}/edit`);
+    } catch (err) {
+      saveAsDialog?.close();
+      error = messageOf(err);
+      if (err instanceof ApiError) problems = err.details;
+      const first = problems.map((p) => elementIndex(p.path)).find((i) => i !== null);
+      if (first !== undefined && first !== null) editor.selected = [first];
+    } finally {
+      saving = false;
+    }
+  }
+
   let canvas = $state<ReturnType<typeof Canvas> | null>(null);
 
   function typing(target: EventTarget | null): boolean {
@@ -530,6 +573,7 @@
         .map((t) => ({ name: `${toolNames[t]} tool`, keywords: 'tool draw add', run: () => (editor.tool = t) })),
       { name: 'Add the NFC mark', keywords: 'nfc tag contactless symbol n-mark add', run: () => editor.add(newNFCMark(doc)) },
       { name: 'Save', run: () => void save() },
+      { name: 'Save as…', keywords: 'copy duplicate clone new template', run: askSaveAs },
       editor.canUndo && { name: 'Undo', keys: 'Ctrl+Z', run: () => editor.undo() },
       editor.canRedo && { name: 'Redo', keys: 'Ctrl+Shift+Z', run: () => editor.redo() },
       { name: 'Select all', keys: 'Ctrl+A', run: () => editor.selectAll() },
@@ -683,7 +727,20 @@
             onpointerdown={(e) => templateMenu && e.stopPropagation()}
             onclick={openTemplateMenu}><Icon name="menu" size={16} /></button
           >
-          <button type="button" class="btn-primary ml-2 px-3 py-1" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
+          <div class="ml-2 flex items-stretch" role="group" aria-label="Saving">
+            <button type="button" class="btn-primary rounded-r-none px-3 py-1" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
+            <button
+              type="button"
+              class="btn-primary rounded-l-none border-l border-white/30 px-1.5 py-1"
+              aria-label="More ways to save"
+              title="More ways to save"
+              aria-haspopup="menu"
+              aria-expanded={saveMenu !== null}
+              disabled={saving}
+              onpointerdown={(e) => saveMenu && e.stopPropagation()}
+              onclick={openSaveMenu}><Icon name="chevron" size={14} /></button
+            >
+          </div>
         </div>
       </div>
 
@@ -778,6 +835,25 @@
 
     <div class="contents" hidden={editor.canvasOnly}><StatusBar {liveState} /></div>
   </div>
+  {#if saveMenu}
+    <ContextMenu x={saveMenu.x} y={saveMenu.y} label="Save" items={[{ label: 'Save as…', run: askSaveAs }]} onclose={() => (saveMenu = null)} />
+  {/if}
+  <dialog bind:this={saveAsDialog} class="m-auto rounded-lg border border-zinc-300 bg-white p-4 text-sm text-zinc-900 backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" aria-labelledby="save-as-heading">
+    <form class="space-y-3" onsubmit={saveAs}>
+      <h2 id="save-as-heading" class="font-semibold">Save as a new template</h2>
+      <p class="max-w-sm text-xs text-zinc-600 dark:text-zinc-400">
+        What is in the editor, unsaved changes too, is saved as a new template, which opens here. {isNew ? '' : `“${doc.name}” stays as it was last saved.`}
+      </p>
+      <label class="block text-xs" for="save-as-name">
+        Name of the copy
+        <input id="save-as-name" class="input-sm mt-1 w-full" bind:value={saveAsName} required />
+      </label>
+      <div class="flex gap-2">
+        <button type="submit" class="btn-sm" disabled={saving}>Save the copy</button>
+        <button type="button" class="btn-sm" onclick={() => saveAsDialog?.close()}>Cancel</button>
+      </div>
+    </form>
+  </dialog>
   {#if templateMenu}
     <ContextMenu x={templateMenu.x} y={templateMenu.y} label="Template" items={templateMenuItems} onclose={() => (templateMenu = null)} />
   {/if}

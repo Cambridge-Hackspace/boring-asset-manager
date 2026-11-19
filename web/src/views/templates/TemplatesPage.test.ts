@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import TemplatesPage from './TemplatesPage.svelte';
 import { fakeApi } from '../../test/fetch';
+import { router } from '../../lib/router.svelte';
 
 afterEach(() => {
   cleanup();
@@ -17,5 +18,18 @@ describe('TemplatesPage', () => {
     });
     render(TemplatesPage, { params: {} });
     expect(await screen.findByText('67.13 × 29.03 mm, 112 DPI')).toBeTruthy();
+  });
+
+  it('duplicates a template beside Delete, and opens the copy', async () => {
+    const { sent } = fakeApi({
+      'GET /templates': () => ({ templates: [{ id: 't1', name: 'Shelf', units: 'mm', width: 62, height: 29, dpi: 300 }] }),
+      'POST /templates/t1/clone': () => ({ status: 201, body: { template: { id: 't2', name: 'Shelf copy', units: 'mm', width: 62, height: 29, dpi: 300 } } }),
+    });
+    render(TemplatesPage, { params: {} });
+    const button = await screen.findByRole('button', { name: 'Duplicate Shelf' });
+    expect(button.nextElementSibling?.textContent).toBe('Delete');
+    await fireEvent.click(button);
+    await waitFor(() => expect(router.path).toBe('/templates/t2/edit'));
+    expect(sent.some((r) => r.method === 'POST' && r.path === '/templates/t1/clone')).toBe(true);
   });
 });
