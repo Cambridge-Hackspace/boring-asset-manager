@@ -894,14 +894,14 @@ describe('TemplateEditor codes', () => {
     expect(body.elements[1]).toMatchObject({ type: 'generator', generator_type: 'qr' });
   });
 
-  it('saves as a new template from the Save menu, unsaved changes too, and opens it', async () => {
+  it('saves as a new template from the template menu, unsaved changes too, and opens it', async () => {
     const id = '7d1e4b2a-5c3f-4a8e-9b6d-0f2c8e1a4d57';
     const { sent } = api({ 'POST /templates': (b) => ({ status: 201, body: { template: { ...(b as TemplateDoc), id } } }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
     await loaded();
     await fireEvent.input(document.querySelector('#tpl-name')!, { target: { value: 'QL 90x29 wide' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'More ways to save' }));
-    await fireEvent.click(within(screen.getByRole('menu', { name: 'Save' })).getByRole('menuitem', { name: 'Save as…' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Template menu' }));
+    await fireEvent.click(within(screen.getByRole('menu', { name: 'Template' })).getByRole('menuitem', { name: 'Save as…' }));
     const name = document.querySelector('#save-as-name') as HTMLInputElement;
     expect(name.value).toBe('QL 90x29 wide copy');
     await fireEvent.input(name, { target: { value: '  Bin tag  ' } });
@@ -918,7 +918,7 @@ describe('TemplateEditor codes', () => {
     const { sent } = api({ 'POST /templates': () => ({ status: 400, body: { error: 'Template is invalid', details: [{ path: 'name', message: 'must be 1-255 characters' }] } }) });
     render(TemplateEditor, { params: { id: 'ql90' } });
     await loaded();
-    await fireEvent.click(screen.getByRole('button', { name: 'More ways to save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Template menu' }));
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Save as…' }));
     const before = window.location.pathname;
     await fireEvent.click(screen.getByRole('button', { name: 'Save the copy', hidden: true }));

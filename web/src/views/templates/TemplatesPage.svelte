@@ -95,9 +95,11 @@
               {/if}
             </td>
           {/if}
-          <td class="py-2 text-right">
-            <button type="button" class="btn-secondary" disabled={duplicating !== ''} aria-label="Duplicate {t.name}" onclick={() => duplicate(t)}>Duplicate</button>
-            <ConfirmButton label="Delete" question="Delete the “{t.name}” template?" onconfirm={() => remove(t)} />
+          <td class="py-2">
+            <div class="flex flex-wrap justify-end gap-2">
+              <button type="button" class="btn-secondary" disabled={duplicating !== ''} aria-label="Duplicate {t.name}" onclick={() => duplicate(t)}>Duplicate</button>
+              <ConfirmButton label="Delete" question="Delete the “{t.name}” template?" onconfirm={() => remove(t)} />
+            </div>
           </td>
         </tr>
       {/each}
