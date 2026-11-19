@@ -1247,3 +1247,16 @@ test("draw an icon on the label: each asset's, or one chosen, drawn as it prints
     { type: 'icon', icon: '{{asset.icon}}', state: true, rendition: 'screen' },
   ]);
 });
+
+test('the template list fits a phone, with a long name, and Duplicate opens the copy', async ({ signedIn: page, api }) => {
+  const name = unique('Shelf-labels-for-the-back-room-under-the-stairs');
+  await api.call('POST', '/templates', { name, units: 'mm', width: 62, height: 29, dpi: 300, elements: [] });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/templates');
+  const duplicate = page.getByRole('button', { name: `Duplicate ${name}`, exact: true });
+  await expect(duplicate).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
+  await duplicate.click();
+  await expect(page).toHaveURL(/\/templates\/[^/]+\/edit$/);
+  await expect(page.locator('#tpl-name')).toHaveValue(`${name} copy`);
+});

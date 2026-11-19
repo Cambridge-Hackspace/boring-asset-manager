@@ -17,7 +17,7 @@ describe('TemplatesPage', () => {
       }),
     });
     render(TemplatesPage, { params: {} });
-    expect(await screen.findByText('67.13 × 29.03 mm, 112 DPI')).toBeTruthy();
+    expect(await screen.findAllByText('67.13 × 29.03 mm, 112 DPI')).toHaveLength(2);
   });
 
   it('duplicates a template beside Delete, and opens the copy', async () => {
