@@ -76,7 +76,7 @@
     <thead class="border-b border-zinc-300 dark:border-zinc-700">
       <tr>
         <th scope="col" class="py-2 pr-4">Name</th>
-        <th scope="col" class="py-2 pr-4">Size</th>
+        <th scope="col" class="hidden py-2 pr-4 sm:table-cell">Size</th>
         {#if suits}<th scope="col" class="py-2 pr-4">Prints on</th>{/if}
         <th scope="col" class="py-2"><span class="sr-only">Actions</span></th>
       </tr>
@@ -84,8 +84,12 @@
     <tbody>
       {#each templates as t (t.id)}
         <tr class="border-b border-zinc-200 dark:border-zinc-800">
-          <td class="py-2 pr-4 font-medium"><a class="inline-flex min-h-11 items-center hover:underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a></td>
-          <td class="py-2 pr-4">{size(t.width)} × {size(t.height)} {t.units}, {t.dpi} DPI</td>
+          <td class="py-2 pr-4 font-medium">
+            <a class="inline-flex min-h-11 items-center [overflow-wrap:anywhere] hover:underline" href="/templates/{encodeURIComponent(t.id)}/edit">{t.name}</a>
+            <!-- On a phone, the size goes under the name, leaving room for the buttons. -->
+            <span class="block text-xs font-normal text-zinc-600 sm:hidden dark:text-zinc-400">{size(t.width)} × {size(t.height)} {t.units}, {t.dpi} DPI</span>
+          </td>
+          <td class="hidden py-2 pr-4 sm:table-cell">{size(t.width)} × {size(t.height)} {t.units}, {t.dpi} DPI</td>
           {#if suits}
             <td class="py-2 pr-4">
               {#if suits[t.id]?.length}
