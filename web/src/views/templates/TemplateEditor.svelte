@@ -388,14 +388,8 @@
   // which the editor then opens. This one stays as it was last saved.
   let saveAsDialog = $state<HTMLDialogElement | null>(null);
   let saveAsName = $state('');
-  let saveMenu = $state<{ x: number; y: number } | null>(null);
-  function openSaveMenu(event: MouseEvent) {
-    if (saveMenu) return void (saveMenu = null);
-    const r = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    saveMenu = { x: r.right - 192, y: r.bottom + 2 };
-  }
   function askSaveAs() {
-    saveMenu = null;
+    templateMenu = null;
     saveAsName = doc.name ? `${doc.name} copy` : '';
     saveAsDialog?.showModal();
   }
@@ -630,6 +624,9 @@
     templateMenu = { x: r.left, y: r.bottom + 2 };
   }
   const templateMenuItems = $derived<MenuItem[]>([
+    // As a drawing program's File menu has it.
+    { label: 'Save as…', run: askSaveAs, disabled: saving },
+    'separator',
     // The API names a template by its ID (#171), which it has once saved.
     { label: 'Copy ID', run: () => void copyID(), disabled: isNew },
     'separator',
@@ -727,20 +724,7 @@
             onpointerdown={(e) => templateMenu && e.stopPropagation()}
             onclick={openTemplateMenu}><Icon name="menu" size={16} /></button
           >
-          <div class="ml-2 flex items-stretch" role="group" aria-label="Saving">
-            <button type="button" class="btn-primary rounded-r-none px-3 py-1" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
-            <button
-              type="button"
-              class="btn-primary rounded-l-none border-l border-white/30 px-1.5 py-1"
-              aria-label="More ways to save"
-              title="More ways to save"
-              aria-haspopup="menu"
-              aria-expanded={saveMenu !== null}
-              disabled={saving}
-              onpointerdown={(e) => saveMenu && e.stopPropagation()}
-              onclick={openSaveMenu}><Icon name="chevron" size={14} /></button
-            >
-          </div>
+          <button type="button" class="btn-primary ml-2 px-3 py-1" onclick={save} disabled={saving || (!dirty && !isNew)}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
 
@@ -835,14 +819,11 @@
 
     <div class="contents" hidden={editor.canvasOnly}><StatusBar {liveState} /></div>
   </div>
-  {#if saveMenu}
-    <ContextMenu x={saveMenu.x} y={saveMenu.y} label="Save" items={[{ label: 'Save as…', run: askSaveAs }]} onclose={() => (saveMenu = null)} />
-  {/if}
   <dialog bind:this={saveAsDialog} class="m-auto rounded-lg border border-zinc-300 bg-white p-4 text-sm text-zinc-900 backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100" aria-labelledby="save-as-heading">
     <form class="space-y-3" onsubmit={saveAs}>
       <h2 id="save-as-heading" class="font-semibold">Save as a new template</h2>
       <p class="max-w-sm text-xs text-zinc-600 dark:text-zinc-400">
-        What is in the editor, unsaved changes too, is saved as a new template, which opens here. {isNew ? '' : `“${doc.name}” stays as it was last saved.`}
+        What the editor shows now, changes not yet saved included, becomes a new template, which opens here. {isNew ? '' : `“${doc.name}” stays as it was last saved.`}
       </p>
       <label class="block text-xs" for="save-as-name">
         Name of the copy
