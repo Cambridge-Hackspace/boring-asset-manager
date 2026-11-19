@@ -893,4 +893,37 @@ describe('TemplateEditor codes', () => {
     const body = await saved(sent);
     expect(body.elements[1]).toMatchObject({ type: 'generator', generator_type: 'qr' });
   });
+
+  it('saves as a new template from the Save menu, unsaved changes too, and opens it', async () => {
+    const id = '7d1e4b2a-5c3f-4a8e-9b6d-0f2c8e1a4d57';
+    const { sent } = api({ 'POST /templates': (b) => ({ status: 201, body: { template: { ...(b as TemplateDoc), id } } }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.input(document.querySelector('#tpl-name')!, { target: { value: 'QL 90x29 wide' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'More ways to save' }));
+    await fireEvent.click(within(screen.getByRole('menu', { name: 'Save' })).getByRole('menuitem', { name: 'Save as…' }));
+    const name = document.querySelector('#save-as-name') as HTMLInputElement;
+    expect(name.value).toBe('QL 90x29 wide copy');
+    await fireEvent.input(name, { target: { value: '  Bin tag  ' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save the copy', hidden: true }));
+    await vi.waitFor(() => expect(window.location.pathname).toBe(`/templates/${id}/edit`));
+    const body = sent.find((r) => r.method === 'POST' && r.path === '/templates')!.body as TemplateDoc;
+    expect(body).toMatchObject({ name: 'Bin tag', width: 90, height: 29, elements: template.elements });
+    // The original is left as it was saved.
+    expect(sent.some((r) => r.method === 'PUT')).toBe(false);
+    expect(localStorage.getItem('bam.template-draft.ql90')).toBeNull();
+  });
+
+  it('keeps the editor where it is when Save as is refused, and says why', async () => {
+    const { sent } = api({ 'POST /templates': () => ({ status: 400, body: { error: 'Template is invalid', details: [{ path: 'name', message: 'must be 1-255 characters' }] } }) });
+    render(TemplateEditor, { params: { id: 'ql90' } });
+    await loaded();
+    await fireEvent.click(screen.getByRole('button', { name: 'More ways to save' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Save as…' }));
+    const before = window.location.pathname;
+    await fireEvent.click(screen.getByRole('button', { name: 'Save the copy', hidden: true }));
+    await vi.waitFor(() => expect(sent.some((r) => r.method === 'POST' && r.path === '/templates')).toBe(true));
+    expect(await screen.findByText('Template is invalid')).toBeTruthy();
+    expect(window.location.pathname).toBe(before);
+  });
 });

@@ -171,6 +171,11 @@ type adaptIn struct {
 	PrinterID string         `json:"printer_id,omitempty" jsonschema:"in place of a size and DPI: that printer's roll"`
 }
 
+type cloneTemplateIn struct {
+	ID   string `json:"id" jsonschema:"the template to copy"`
+	Name string `json:"name,omitempty" jsonschema:"the copy's name; empty for the original's, with copy after it"`
+}
+
 type rangeIn struct {
 	Template map[string]any `json:"template"`
 	DPI      int            `json:"dpi"`
@@ -382,6 +387,15 @@ func labelTools() []tool {
 					summary += fmt.Sprintf(" Left out: %v.", skipped)
 				}
 				return say(out, "%s", summary)
+			}),
+		simple(&mcp.Tool{Name: "clone_template", Description: "Copy a label template, as saved, under a new ID. Named \"<name> copy\" unless named. " +
+			"Categories that use the original keep using it.",
+			Annotations: changes("Copy a template", false)}, "POST /api/v1/templates/{id}/clone", design,
+			func(in cloneTemplateIn) (request, error) {
+				return request{path: pathOf("/api/v1/templates/{id}/clone", in.ID), body: map[string]string{"name": in.Name}}, need(in.ID, "id")
+			},
+			func(_ cloneTemplateIn, out map[string]any) string {
+				return fmt.Sprintf("Made %q.", nameOf(out, "template"))
 			}),
 		simple(&mcp.Tool{Name: "delete_template", Description: "Delete a label template no category names.",
 			Annotations: destroys("Delete a template", true)}, "DELETE /api/v1/templates/{id}", design,

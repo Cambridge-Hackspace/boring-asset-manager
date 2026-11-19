@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Cambridge-Hackspace/boring-asset-manager/internal/labels"
@@ -69,6 +70,21 @@ func (s *Store) GetTemplate(id string) (*labels.Template, error) {
 		return nil, ErrTemplateNotFound
 	}
 	return t, err
+}
+
+// CloneTemplate stores a copy of a template, as saved, under a new ID. An
+// empty name names it "<name> copy". Categories that use the original keep
+// using it.
+func (s *Store) CloneTemplate(id, name string) (*labels.Template, error) {
+	src, err := s.GetTemplate(id)
+	if err != nil {
+		return nil, err
+	}
+	if name = strings.TrimSpace(name); name == "" {
+		name = src.Name + " copy"
+	}
+	src.Name = name
+	return s.CreateTemplate(src)
 }
 
 // ListTemplates returns every template ordered by name.

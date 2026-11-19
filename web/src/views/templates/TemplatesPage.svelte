@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { request } from '../../lib/api';
+  import { navigate } from '../../lib/router.svelte';
   import { messageOf } from '../../lib/errors';
   import type { TemplateSummary } from '../../lib/models';
   import ConfirmButton from '../../components/ConfirmButton.svelte';
@@ -32,6 +33,21 @@
     }
   }
   onMount(load);
+
+  // A copy, as saved, opened in the editor.
+  let duplicating = $state('');
+  async function duplicate(t: TemplateSummary) {
+    error = '';
+    duplicating = t.id;
+    try {
+      const r = await request<{ template: TemplateSummary }>('POST', `/templates/${encodeURIComponent(t.id)}/clone`);
+      navigate(`/templates/${encodeURIComponent(r.template.id)}/edit`);
+    } catch (err) {
+      error = messageOf(err);
+    } finally {
+      duplicating = '';
+    }
+  }
 
   async function remove(t: TemplateSummary) {
     error = '';
@@ -80,6 +96,7 @@
             </td>
           {/if}
           <td class="py-2 text-right">
+            <button type="button" class="btn-secondary" disabled={duplicating !== ''} aria-label="Duplicate {t.name}" onclick={() => duplicate(t)}>Duplicate</button>
             <ConfirmButton label="Delete" question="Delete the “{t.name}” template?" onconfirm={() => remove(t)} />
           </td>
         </tr>

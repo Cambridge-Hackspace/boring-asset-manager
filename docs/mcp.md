@@ -335,6 +335,7 @@ A save that comes back as a draft says so, listing the compiler's errors as
 | `import_svg` | `templates.manage` | Turns SVG artwork into shapes fitted into a box, to add with `save_template`. |
 | `save_template` | `templates.manage` | Makes a template or changes one, whole or by elements. See below. |
 | `list_templates`, `get_template` | `assets.read` | |
+| `clone_template` | `templates.manage` | Copies a template, as saved, named "<name> copy" unless named. |
 | `delete_template`, `adapt_template`, `template_size_range` | `templates.manage` | |
 | `test_print` | `labels.print` | |
 | `render_label` | `assets.read` | An image, or a PDF or SVG file. |

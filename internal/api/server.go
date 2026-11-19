@@ -674,6 +674,7 @@ func NewServer(cfg *config.Config, st *store.Store) *Server {
 	handle("GET /api/v1/templates/{id}", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleGetTemplate)))
 	handle("PUT /api/v1/templates/{id}", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleUpdateTemplate)))
 	handle("DELETE /api/v1/templates/{id}", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleDeleteTemplate)))
+	handle("POST /api/v1/templates/{id}/clone", RequirePermission(rbac.PermTemplatesManage)(http.HandlerFunc(s.handleCloneTemplate)))
 
 	// Images placed on labels
 	handle("GET /api/v1/images", RequirePermission(rbac.PermAssetsRead)(http.HandlerFunc(s.handleListImages)))
